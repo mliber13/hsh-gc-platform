@@ -325,10 +325,10 @@ export function getProjectsByClient(clientId: string): Project[] {
  */
 export function searchProjects(searchTerm: string): Project[] {
   const term = searchTerm.toLowerCase()
-  return projectStorage.filter(project => 
-    project.name.toLowerCase().includes(term) ||
-    project.projectNumber?.toLowerCase().includes(term)
-  )
+  return projectStorage.filter(project => {
+    return project.name.toLowerCase().includes(term) ||
+      (project.projectNumber?.toLowerCase().includes(term) ?? false)
+  })
 }
 
 // ----------------------------------------------------------------------------

@@ -52,8 +52,21 @@ export interface Project {
   createdAt: Date
   updatedAt: Date
   startDate?: Date
+  endDate?: Date  // Expected end date
   estimatedCompletionDate?: Date
   actualCompletionDate?: Date
+  
+  // Custom metadata for plan tracking
+  metadata?: {
+    planId?: string
+    planOptions?: string[]
+    [key: string]: any
+  }
+  
+  // Convenience fields (duplicated from address for easier access)
+  city?: string
+  state?: string
+  zipCode?: string
   
   // Notes
   notes?: string
@@ -89,6 +102,15 @@ export interface Estimate {
   profit: number            // $ amount or %
   contingency: number       // $ amount or %
   totalEstimate: number     // Final bid amount
+  
+  // Detailed totals for UI display
+  totals?: {
+    basePriceTotal: number
+    contingency: number
+    grossProfitTotal: number
+    totalEstimated: number
+    marginOfProfit: number
+  }
   
   // Metadata
   createdAt: Date
@@ -201,6 +223,7 @@ export interface TakeoffItem {
 // ----------------------------------------------------------------------------
 
 export interface ProjectActuals {
+  id: string
   projectId: string
   
   // Cost tracking

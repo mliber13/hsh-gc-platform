@@ -57,7 +57,11 @@ export function ProjectDetailView({
                     {project.status.replace('-', ' ').toUpperCase()}
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-gray-600">{project.address}</p>
+                <p className="text-xs sm:text-sm text-gray-600">
+                  {typeof project.address === 'string' ? project.address : project.address?.street || 'No address'}
+                  {project.city && `, ${project.city}`}
+                  {project.state && `, ${project.state}`}
+                </p>
               </div>
             </div>
             <Button

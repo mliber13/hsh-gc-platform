@@ -301,32 +301,6 @@ export function calculateVolume(length: number, width: number, height: number): 
 // Cost Calculations
 // ----------------------------------------------------------------------------
 
-/**
- * Calculate labor cost from hours and rate
- */
-export function calculateLaborCost(hours: number, rate: number): number {
-  return hours * rate
-}
-
-/**
- * Calculate material cost with waste factor
- */
-export function calculateMaterialCostWithWaste(
-  quantity: number,
-  unitCost: number,
-  wasteFactor: number
-): number {
-  const wasteMultiplier = 1 + wasteFactor / 100
-  return quantity * unitCost * wasteMultiplier
-}
-
-/**
- * Calculate cost per unit (for rates)
- */
-export function calculateCostPerUnit(totalCost: number, quantity: number): number {
-  return quantity > 0 ? totalCost / quantity : 0
-}
-
 // ----------------------------------------------------------------------------
 // Historical Rate Suggestions
 // ----------------------------------------------------------------------------

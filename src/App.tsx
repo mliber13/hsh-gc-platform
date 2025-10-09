@@ -25,7 +25,12 @@ function App() {
     const newProject = createProject({
       name: formData.name,
       type: formData.type,
-      address: formData.address,
+      address: {
+        street: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zip: formData.zipCode,
+      },
       city: formData.city,
       state: formData.state,
       zipCode: formData.zipCode,

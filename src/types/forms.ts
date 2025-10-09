@@ -36,8 +36,17 @@ export interface CreateProjectInput {
     state: string
     zip: string
   }
+  city?: string
+  state?: string
+  zipCode?: string
   startDate?: Date
+  endDate?: Date
   estimatedCompletionDate?: Date
+  metadata?: {
+    planId?: string
+    planOptions?: string[]
+    [key: string]: any
+  }
   notes?: string
 }
 

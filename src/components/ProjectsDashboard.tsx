@@ -32,7 +32,8 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
   const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     project.client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.address.toLowerCase().includes(searchQuery.toLowerCase())
+    project.address?.street?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    project.city?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const formatCurrency = (amount: number) =>
@@ -205,7 +206,11 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                             <Building2 className="w-4 h-4" />
                             {project.client.name}
                           </p>
-                          <p className="ml-6">{project.address}</p>
+                          <p className="ml-6">
+                            {typeof project.address === 'string' ? project.address : project.address?.street || 'No address'}
+                            {project.city && `, ${project.city}`}
+                            {project.state && `, ${project.state}`}
+                          </p>
                           <p className="flex items-center gap-2">
                             <Calendar className="w-4 h-4" />
                             Created: {project.createdAt.toLocaleDateString()}

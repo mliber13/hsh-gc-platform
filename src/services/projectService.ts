@@ -85,11 +85,24 @@ export function createProject(input: CreateProjectInput): Project {
  * Update existing project
  */
 export function updateProject(id: string, updates: Partial<UpdateProjectInput>): Project | null {
-  const updated = projectStorage.update(id, {
+  const project = projectStorage.getById(id)
+  if (!project) return null
+
+  // Convert ClientInput to Client if provided
+  const updateData: any = {
     ...updates,
     updatedAt: new Date(),
-  })
+  }
 
+  // If client is being updated, ensure it has an id
+  if (updates.client && !('id' in updates.client)) {
+    updateData.client = {
+      ...updates.client,
+      id: project.client.id, // Preserve existing client id
+    }
+  }
+
+  const updated = projectStorage.update(id, updateData as Partial<Project>)
   return updated
 }
 
@@ -175,6 +188,7 @@ export function changeProjectStatus(
   // Initialize actuals when project is awarded
   if (newStatus === 'awarded' && !project.actuals) {
     updates.actuals = {
+      id: uuidv4(),
       projectId,
       laborEntries: [],
       materialEntries: [],

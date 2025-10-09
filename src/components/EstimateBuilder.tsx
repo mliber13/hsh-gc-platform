@@ -173,22 +173,15 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         // Update existing trade
         if (!editingTrade.id) return
         
-        updatedTrade = updateTrade(editingTrade.id, editingTrade)
-        if (updatedTrade) {
-          setTrades(prev => prev.map(t => t.id === editingTrade.id ? updatedTrade : t))
-        }
+        const result = updateTrade(editingTrade.id, editingTrade)
+        if (!result) return
+        updatedTrade = result
+        setTrades(prev => prev.map(t => t.id === editingTrade.id ? updatedTrade! : t))
       }
 
-      // Update project data
-      const updatedProject = updateProject(projectData.id, {
-        estimate: { ...projectData.estimate, trades: [...trades, updatedTrade] },
-        updatedAt: new Date(),
-      })
-
-      if (updatedProject) {
-        setProjectData(updatedProject)
-        onSave?.(updatedProject)
-      }
+      // Project data will be updated through trade storage
+      // Just refresh the local state
+      setProjectData({ ...projectData, updatedAt: new Date() })
 
       setEditingTrade(null)
       setIsAddingTrade(false)
@@ -205,15 +198,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       setTrades(prev => prev.filter(t => t.id !== tradeId))
       
       // Update project data
-      const updatedProject = updateProject(projectData.id, {
-        estimate: { ...projectData.estimate, trades: trades.filter(t => t.id !== tradeId) },
-        updatedAt: new Date(),
-      })
-
-      if (updatedProject) {
-        setProjectData(updatedProject)
-        onSave?.(updatedProject)
-      }
+      // Update local state
+      setProjectData({ ...projectData, updatedAt: new Date() })
     }
   }
 
@@ -232,7 +218,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       'interior-finishes', 'kitchen', 'bath', 'appliances'
     ]
 
-    const newTrades: Trade[] = defaultCategories.map(category => {
+    const newTrades: Trade[] = defaultCategories.map((category, index) => {
       const tradeId = uuidv4()
       return {
         id: tradeId,
@@ -251,6 +237,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         isSubcontracted: false,
         wasteFactor: DEFAULT_VALUES.WASTE_FACTOR,
         totalCost: 0,
+        sortOrder: index,
         notes: '',
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -260,16 +247,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     const updatedTrades = [...trades, ...newTrades]
     setTrades(updatedTrades)
 
-    // Update project data
-    const updatedProject = updateProject(projectData.id, {
-      estimate: { ...projectData.estimate, trades: updatedTrades },
-      updatedAt: new Date(),
-    })
-
-    if (updatedProject) {
-      setProjectData(updatedProject)
-      onSave?.(updatedProject)
-    }
+    // Update local state
+    setProjectData({ ...projectData, updatedAt: new Date() })
   }
 
   // ----------------------------------------------------------------------------
@@ -359,7 +338,9 @@ function ProjectHeader({ project, onUpdate, onBack }: ProjectHeaderProps) {
   const [formData, setFormData] = useState({
     name: project.name,
     planId: project.metadata?.planId || '',
-    address: `${project.address || ''}, ${project.city || ''}, ${project.state || ''} ${project.zipCode || ''}`,
+    address: project.address?.street 
+      ? `${project.address.street}, ${project.address.city}, ${project.address.state} ${project.address.zip}`
+      : `${project.city || ''}, ${project.state || ''} ${project.zipCode || ''}`.trim(),
     type: project.type,
     startDate: project.startDate ? project.startDate.toISOString().split('T')[0] : '',
     endDate: project.endDate ? project.endDate.toISOString().split('T')[0] : '',
@@ -376,7 +357,12 @@ function ProjectHeader({ project, onUpdate, onBack }: ProjectHeaderProps) {
     onUpdate({
       name: formData.name,
       type: formData.type,
-      address: street,
+      address: {
+        street: street,
+        city: city,
+        state: state || '',
+        zip: zipCode || '',
+      },
       city: city,
       state: state || '',
       zipCode: zipCode || '',
@@ -541,7 +527,7 @@ function ProjectHeader({ project, onUpdate, onBack }: ProjectHeaderProps) {
             <div>
               <Label className="text-[#E65133]">Project Location</Label>
               <p className="text-gray-900 font-semibold text-sm">
-                {project.address || 'Not set'}
+                {project.address?.street || 'Not set'}
                 {project.city && `, ${project.city}`}
                 {project.state && `, ${project.state}`}
                 {project.zipCode && ` ${project.zipCode}`}
@@ -939,7 +925,7 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
               <div>
                 <Label htmlFor="name">Item Name</Label>
                 <div className="space-y-2">
-                  {DEFAULT_CATEGORY_ITEMS[formData.category] && DEFAULT_CATEGORY_ITEMS[formData.category].length > 0 ? (
+                  {DEFAULT_CATEGORY_ITEMS[formData.category as keyof typeof DEFAULT_CATEGORY_ITEMS] && DEFAULT_CATEGORY_ITEMS[formData.category as keyof typeof DEFAULT_CATEGORY_ITEMS].length > 0 ? (
                     <div className="space-y-2">
                       <Select 
                         value={formData.name} 
@@ -949,7 +935,7 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
                           <SelectValue placeholder="Select or type custom name..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {DEFAULT_CATEGORY_ITEMS[formData.category].map((item) => (
+                          {DEFAULT_CATEGORY_ITEMS[formData.category as keyof typeof DEFAULT_CATEGORY_ITEMS].map((item: string) => (
                             <SelectItem key={item} value={item}>
                               {item}
                             </SelectItem>
