@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear HSH Projects</title>
+</head>
+<body>
+    <h1>Clear All Projects</h1>
+    <button onclick="clearProjects()">Clear All Projects from LocalStorage</button>
+    <p id="result"></p>
+    
+    <script>
+        function clearProjects() {
+            // Clear all HSH project-related data
+            const keys = [
+                'hsh-projects',
+                'hsh-estimates',
+                'hsh-trades',
+                'hsh-takeoffs'
+            ];
+            
+            keys.forEach(key => {
+                localStorage.removeItem(key);
+            });
+            
+            document.getElementById('result').textContent = 'All projects cleared! Refresh your app.';
+            console.log('Cleared all project data from localStorage');
+        }
+    </script>
+</body>
+</html>
+

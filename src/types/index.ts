@@ -15,6 +15,19 @@ export type {
 } from './project'
 
 export type {
+  // Plan types
+  Plan,
+  PlanDocument,
+  PlanOption,
+  CreatePlanInput,
+  UpdatePlanInput,
+  PlanDocumentInput,
+  PlanOptionInput,
+  PlanSortField,
+  PlanFilterStatus,
+} from './plan'
+
+export type {
   ProjectType,
   ProjectStatus,
   TradeCategory,
@@ -155,6 +168,7 @@ export type {
 // Export constants and helpers
 export {
   TRADE_CATEGORIES,
+  DEFAULT_CATEGORY_ITEMS,
   UNIT_TYPES,
   PROJECT_TYPES,
   PROJECT_STATUS,

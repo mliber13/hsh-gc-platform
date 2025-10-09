@@ -6,25 +6,26 @@
 
 // Temporary type definitions to avoid import issues
 export type TradeCategory = 
-  | 'sitework'
-  | 'concrete'
-  | 'masonry'
-  | 'framing'
-  | 'roofing'
-  | 'siding'
+  | 'planning'
+  | 'site-prep'
+  | 'excavation-foundation'
+  | 'utilities'
+  | 'water-sewer'
+  | 'rough-framing'
   | 'windows-doors'
+  | 'exterior-finishes'
+  | 'roofing'
+  | 'masonry-paving'
+  | 'porches-decks'
   | 'insulation'
-  | 'drywall'
-  | 'painting'
-  | 'flooring'
-  | 'tile'
-  | 'cabinets'
-  | 'countertops'
-  | 'electrical'
   | 'plumbing'
+  | 'electrical'
   | 'hvac'
-  | 'landscaping'
-  | 'cleanup'
+  | 'drywall'
+  | 'interior-finishes'
+  | 'kitchen'
+  | 'bath'
+  | 'appliances'
   | 'other'
 
 export type UnitType = 
@@ -52,26 +53,66 @@ export type ProjectStatus =
 // ----------------------------------------------------------------------------
 
 export const TRADE_CATEGORIES: Record<TradeCategory, { label: string; icon: string }> = {
-  'sitework': { label: 'Sitework', icon: '🚜' },
-  'concrete': { label: 'Concrete', icon: '🏗️' },
-  'masonry': { label: 'Masonry', icon: '🧱' },
-  'framing': { label: 'Framing', icon: '🔨' },
+  'planning': { label: 'Planning', icon: '📋' },
+  'site-prep': { label: 'Site Prep', icon: '🚜' },
+  'excavation-foundation': { label: 'Excavation/Foundation', icon: '🏗️' },
+  'utilities': { label: 'Utilities', icon: '⚡' },
+  'water-sewer': { label: 'Water + Sewer', icon: '🚰' },
+  'rough-framing': { label: 'Rough Framing', icon: '🔨' },
+  'windows-doors': { label: 'Windows + Doors', icon: '🚪' },
+  'exterior-finishes': { label: 'Exterior Finishes', icon: '🏘️' },
   'roofing': { label: 'Roofing', icon: '🏠' },
-  'siding': { label: 'Siding', icon: '🏘️' },
-  'windows-doors': { label: 'Windows & Doors', icon: '🚪' },
+  'masonry-paving': { label: 'Masonry/Paving', icon: '🧱' },
+  'porches-decks': { label: 'Porches + Decks', icon: '🏡' },
   'insulation': { label: 'Insulation', icon: '🧊' },
-  'drywall': { label: 'Drywall', icon: '📐' },
-  'painting': { label: 'Painting', icon: '🎨' },
-  'flooring': { label: 'Flooring', icon: '📏' },
-  'tile': { label: 'Tile', icon: '⬜' },
-  'cabinets': { label: 'Cabinets', icon: '🗄️' },
-  'countertops': { label: 'Countertops', icon: '▪️' },
-  'electrical': { label: 'Electrical', icon: '⚡' },
   'plumbing': { label: 'Plumbing', icon: '🚰' },
+  'electrical': { label: 'Electrical', icon: '⚡' },
   'hvac': { label: 'HVAC', icon: '❄️' },
-  'landscaping': { label: 'Landscaping', icon: '🌳' },
-  'cleanup': { label: 'Cleanup', icon: '🧹' },
+  'drywall': { label: 'Drywall', icon: '📐' },
+  'interior-finishes': { label: 'Interior Finishes', icon: '🎨' },
+  'kitchen': { label: 'Kitchen', icon: '🍳' },
+  'bath': { label: 'Bath', icon: '🛁' },
+  'appliances': { label: 'Appliances', icon: '🔌' },
   'other': { label: 'Other', icon: '📦' },
+}
+
+// ----------------------------------------------------------------------------
+// Default Items for Each Category
+// ----------------------------------------------------------------------------
+
+export const DEFAULT_CATEGORY_ITEMS: Record<TradeCategory, string[]> = {
+  'planning': [
+    'Admin Fees',
+    'Engineering',
+    'Finance Costs',
+    'Legal',
+    'Permit - Building',
+    'Permit - Environmental',
+    'Permit - Zoning',
+    'Plans + Specs',
+    'Review',
+    'Survey'
+  ],
+  'site-prep': [],
+  'excavation-foundation': [],
+  'utilities': [],
+  'water-sewer': [],
+  'rough-framing': [],
+  'windows-doors': [],
+  'exterior-finishes': [],
+  'roofing': [],
+  'masonry-paving': [],
+  'porches-decks': [],
+  'insulation': [],
+  'plumbing': [],
+  'electrical': [],
+  'hvac': [],
+  'drywall': [],
+  'interior-finishes': [],
+  'kitchen': [],
+  'bath': [],
+  'appliances': [],
+  'other': [],
 }
 
 // ----------------------------------------------------------------------------
