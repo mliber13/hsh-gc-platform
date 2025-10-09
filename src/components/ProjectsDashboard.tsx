@@ -11,7 +11,7 @@ import { getAllProjects } from '@/services/projectService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText } from 'lucide-react'
+import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Download, Upload } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface ProjectsDashboardProps {
@@ -51,6 +51,61 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
 
+  // Export all localStorage data
+  const handleExportData = () => {
+    try {
+      const data = {
+        projects: localStorage.getItem('hsh-projects'),
+        estimates: localStorage.getItem('hsh-estimates'),
+        plans: localStorage.getItem('hsh-plans'),
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+      }
+
+      const jsonString = JSON.stringify(data, null, 2)
+      const blob = new Blob([jsonString], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `hsh-backup-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      alert('✅ Data exported successfully!')
+    } catch (error) {
+      console.error('Export failed:', error)
+      alert('❌ Failed to export data. Please try again.')
+    }
+  }
+
+  // Import data from JSON file
+  const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string
+        const data = JSON.parse(content)
+
+        if (data.projects) localStorage.setItem('hsh-projects', data.projects)
+        if (data.estimates) localStorage.setItem('hsh-estimates', data.estimates)
+        if (data.plans) localStorage.setItem('hsh-plans', data.plans)
+
+        alert('✅ Data imported successfully! Refreshing page...')
+        window.location.reload()
+      } catch (error) {
+        console.error('Import failed:', error)
+        alert('❌ Failed to import data. Please check the file format.')
+      }
+    }
+    reader.readAsText(file)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
@@ -63,6 +118,40 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Projects Dashboard</h1>
                 <p className="text-xs sm:text-sm text-gray-600 mt-1 hidden sm:block">Manage your construction projects</p>
               </div>
+            </div>
+            
+            {/* Data Management Buttons */}
+            <div className="hidden sm:flex items-center gap-3">
+              <Button
+                onClick={handleExportData}
+                variant="outline"
+                size="sm"
+                className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export Data
+              </Button>
+              <label htmlFor="import-file" className="cursor-pointer">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    document.getElementById('import-file')?.click()
+                  }}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import Data
+                </Button>
+              </label>
+              <input
+                id="import-file"
+                type="file"
+                accept=".json"
+                onChange={handleImportData}
+                className="hidden"
+              />
             </div>
           </div>
         </div>
@@ -235,22 +324,58 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
         </Card>
 
         {/* Mobile Action Buttons - Fixed at bottom */}
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg z-40">
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              onClick={onCreateProject}
-              className="bg-gradient-to-r from-[#0E79C9] to-[#0A5A96] hover:from-[#0A5A96] hover:to-[#084577] text-white h-12"
-            >
-              <PlusCircle className="w-5 h-5 mr-2" />
-              New Project
-            </Button>
-            <Button
-              onClick={onOpenPlanLibrary}
-              className="bg-gradient-to-r from-[#D95C00] to-[#B34C00] hover:from-[#B34C00] hover:to-[#8A3900] text-white h-12"
-            >
-              <FileText className="w-5 h-5 mr-2" />
-              Plan Library
-            </Button>
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
+          <div className="space-y-2">
+            {/* Primary Actions */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                onClick={onCreateProject}
+                className="bg-gradient-to-r from-[#0E79C9] to-[#0A5A96] hover:from-[#0A5A96] hover:to-[#084577] text-white h-12"
+              >
+                <PlusCircle className="w-5 h-5 mr-2" />
+                New Project
+              </Button>
+              <Button
+                onClick={onOpenPlanLibrary}
+                className="bg-gradient-to-r from-[#D95C00] to-[#B34C00] hover:from-[#B34C00] hover:to-[#8A3900] text-white h-12"
+              >
+                <FileText className="w-5 h-5 mr-2" />
+                Plan Library
+              </Button>
+            </div>
+            {/* Data Management */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                onClick={handleExportData}
+                variant="outline"
+                size="sm"
+                className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white h-10"
+              >
+                <Download className="w-4 h-4 mr-1" />
+                Export
+              </Button>
+              <label htmlFor="import-file-mobile" className="cursor-pointer">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white w-full h-10"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    document.getElementById('import-file-mobile')?.click()
+                  }}
+                >
+                  <Upload className="w-4 h-4 mr-1" />
+                  Import
+                </Button>
+              </label>
+              <input
+                id="import-file-mobile"
+                type="file"
+                accept=".json"
+                onChange={handleImportData}
+                className="hidden"
+              />
+            </div>
           </div>
         </div>
       </main>
