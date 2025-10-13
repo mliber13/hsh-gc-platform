@@ -22,6 +22,9 @@ function App() {
   const handleProjectCreated = (formData: ProjectFormData) => {
     // Create the project with the form data
     // For spec homes, we'll create a placeholder client
+    // Use customPlanId if it's a custom plan, otherwise use the selected planId
+    const finalPlanId = formData.planId === 'custom' ? formData.customPlanId : formData.planId
+    
     const newProject = createProject({
       name: formData.name,
       type: formData.type,
@@ -42,8 +45,9 @@ function App() {
       startDate: formData.startDate,
       endDate: formData.endDate,
       metadata: {
-        planId: formData.planId,
+        planId: finalPlanId,
         planOptions: formData.planOptions,
+        isCustomPlan: formData.planId === 'custom',
       },
     })
 

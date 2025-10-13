@@ -25,6 +25,7 @@ export interface ProjectFormData {
   name: string
   type: ProjectType
   planId: string
+  customPlanId?: string
   planOptions?: string[]
   address: string
   city: string
@@ -37,8 +38,9 @@ export interface ProjectFormData {
 export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) {
   const [formData, setFormData] = useState<ProjectFormData>({
     name: '',
-    type: 'new-build',
+    type: 'residential-new-build',
     planId: '',
+    customPlanId: '',
     planOptions: [],
     address: '',
     city: '',
@@ -55,6 +57,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
   }, [])
 
   const selectedPlan = availablePlans.find(p => p.id === formData.planId)
+  const isCustomPlan = formData.planId === 'custom'
   
   const handlePlanOptionToggle = (option: string) => {
     setFormData(prev => {
@@ -145,36 +148,50 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                   <Label htmlFor="planId">Plan ID *</Label>
                   <Select 
                     value={formData.planId} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, planId: value, planOptions: [] }))}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, planId: value, planOptions: [], customPlanId: '' }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a plan..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {availablePlans.length === 0 ? (
+                      <SelectItem value="custom">
+                        <span className="font-medium text-[#0E79C9]">✏️ Custom Plan (Enter ID)</span>
+                      </SelectItem>
+                      {availablePlans.length > 0 && (
+                        <>
+                          <div className="px-2 py-1 text-xs text-gray-500 font-semibold">FROM PLAN LIBRARY:</div>
+                          {availablePlans.map((plan) => (
+                            <SelectItem key={plan.id} value={plan.id}>
+                              {plan.name} ({plan.planId})
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {availablePlans.length === 0 && (
                         <SelectItem value="none" disabled>
-                          No plans available - Create one in Plan Library
+                          No plans in library - Use custom or create one
                         </SelectItem>
-                      ) : (
-                        availablePlans.map((plan) => (
-                          <SelectItem key={plan.id} value={plan.id}>
-                            {plan.name} ({plan.planId})
-                          </SelectItem>
-                        ))
                       )}
                     </SelectContent>
                   </Select>
                   {formData.planId === '' && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Select the floor plan this project is based on
+                      Select a plan from the library or enter a custom plan ID
                     </p>
                   )}
-                  {formData.planId === 'custom' && (
-                    <Input
-                      className="mt-2"
-                      placeholder="Enter custom plan ID (e.g., 2024A)"
-                      onChange={(e) => setFormData(prev => ({ ...prev, planId: e.target.value }))}
-                    />
+                  {isCustomPlan && (
+                    <div className="mt-2 space-y-2">
+                      <Input
+                        value={formData.customPlanId}
+                        placeholder="Enter custom plan ID (e.g., 1416CN, Custom Apartment)"
+                        onChange={(e) => setFormData(prev => ({ ...prev, customPlanId: e.target.value }))}
+                        required
+                        className="border-[#0E79C9] focus:ring-[#0E79C9]"
+                      />
+                      <p className="text-xs text-gray-600 italic">
+                        💡 For one-off projects or plans not in your library
+                      </p>
+                    </div>
                   )}
                   {selectedPlan && selectedPlan.options.length > 0 && (
                     <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">

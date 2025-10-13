@@ -6,15 +6,12 @@
 // Project & Core Types
 // ----------------------------------------------------------------------------
 
-export type ProjectType = 'residential' | 'commercial' | 'remodel' | 'new-build' | 'addition'
+export type ProjectType = 'residential-renovation' | 'residential-new-build' | 'commercial-renovation' | 'commercial-new-build'
 
 export type ProjectStatus = 
   | 'estimating'      // Building estimate/bid
-  | 'bidding'         // Submitted, waiting for award
-  | 'awarded'         // Won the bid
   | 'in-progress'     // Active construction
   | 'complete'        // Project finished
-  | 'archived'        // Historical project
 
 export interface Project {
   id: string
@@ -175,6 +172,9 @@ export interface Trade {
   
   // Waste factors
   wasteFactor: number       // Percentage (e.g., 10 = 10%)
+  
+  // Markup
+  markupPercent?: number    // Percentage markup for this line item
   
   // Total for this trade
   totalCost: number         // labor + material + sub

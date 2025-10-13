@@ -27,6 +27,7 @@ import {
   updateTrade,
   deleteTrade,
   recalculateEstimate,
+  getTradesForEstimate,
 } from '@/services'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -87,6 +88,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   const [trades, setTrades] = useState<Trade[]>([])
   const [editingTrade, setEditingTrade] = useState<TradeFormData | null>(null)
   const [isAddingTrade, setIsAddingTrade] = useState(false)
+  const [markupPercent, setMarkupPercent] = useState(11.1)
+  const [contingencyPercent, setContingencyPercent] = useState(10)
 
   // Initialize project if none provided
   useEffect(() => {
@@ -94,7 +97,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       const newProject = createProject({
         name: 'New Project',
         client: { name: 'New Client' },
-        type: 'residential',
+        type: 'residential-new-build',
       })
       setProjectData(newProject)
     }
@@ -103,7 +106,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   // Load trades when project changes
   useEffect(() => {
     if (projectData) {
-      setTrades(projectData.estimate.trades || [])
+      const loadedTrades = getTradesForEstimate(projectData.estimate.id)
+      setTrades(loadedTrades)
     }
   }, [projectData])
 
@@ -123,15 +127,16 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
 
   const handleAddTrade = () => {
     setEditingTrade({
-      category: 'other',
+      category: 'planning' as any,
       name: '',
-      quantity: 0,
+      quantity: 1,
       unit: 'each',
       laborCost: 0,
       materialCost: 0,
       subcontractorCost: 0,
       isSubcontracted: false,
       wasteFactor: DEFAULT_VALUES.WASTE_FACTOR,
+      markupPercent: markupPercent,
       isEditing: true,
     })
     setIsAddingTrade(true)
@@ -153,31 +158,52 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       subcontractorCost: trade.subcontractorCost,
       isSubcontracted: trade.isSubcontracted,
       wasteFactor: trade.wasteFactor,
+      markupPercent: trade.markupPercent || markupPercent,
       notes: trade.notes,
       isEditing: true,
     })
     setIsAddingTrade(false)
   }
 
-  const handleSaveTrade = async () => {
-    if (!editingTrade || !projectData) return
+  const handleSaveTrade = async (tradeData: TradeFormData) => {
+    if (!projectData) {
+      console.error('No project data available')
+      return
+    }
+
+    console.log('Saving trade:', tradeData)
 
     try {
       let updatedTrade: Trade
 
       if (isAddingTrade) {
         // Add new trade
-        updatedTrade = addTrade(projectData.estimate.id, editingTrade)
+        console.log('Adding new trade to estimate:', projectData.estimate.id)
+        updatedTrade = addTrade(projectData.estimate.id, tradeData)
+        console.log('Trade added successfully:', updatedTrade)
         setTrades(prev => [...prev, updatedTrade])
       } else {
         // Update existing trade
-        if (!editingTrade.id) return
+        if (!tradeData.id) {
+          console.error('No trade ID for update')
+          return
+        }
         
-        const result = updateTrade(editingTrade.id, editingTrade)
-        if (!result) return
+        console.log('Updating trade:', tradeData.id)
+        const result = updateTrade(tradeData.id, tradeData)
+        if (!result) {
+          console.error('Failed to update trade')
+          return
+        }
         updatedTrade = result
-        setTrades(prev => prev.map(t => t.id === editingTrade.id ? updatedTrade! : t))
+        console.log('Trade updated successfully:', updatedTrade)
+        setTrades(prev => prev.map(t => t.id === tradeData.id ? updatedTrade! : t))
       }
+
+      // Reload trades from storage to ensure we have the latest
+      const reloadedTrades = getTradesForEstimate(projectData.estimate.id)
+      console.log('Reloaded trades from storage:', reloadedTrades)
+      setTrades(reloadedTrades)
 
       // Project data will be updated through trade storage
       // Just refresh the local state
@@ -257,10 +283,11 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
 
   const calculateTotals = () => {
     const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
-    const contingency = basePriceTotal * 0.10 // 10% contingency
+    const contingency = basePriceTotal * (contingencyPercent / 100)
     const grossProfitTotal = trades.reduce((sum, trade) => {
-      // Calculate gross profit for each trade (11.1% markup)
-      const markup = trade.totalCost * 0.111
+      // Calculate gross profit for each trade using per-item markup
+      const itemMarkup = trade.markupPercent || markupPercent
+      const markup = trade.totalCost * (itemMarkup / 100)
       return sum + markup
     }, 0)
     const totalEstimated = basePriceTotal + contingency + grossProfitTotal
@@ -272,6 +299,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       grossProfitTotal,
       totalEstimated,
       marginOfProfit,
+      markupPercent,
+      contingencyPercent,
     }
   }
 
@@ -286,7 +315,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-20 sm:pb-0">
       <div className="p-2 sm:p-4 lg:p-6">
         <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
           {/* Header Section with integrated back button */}
@@ -297,7 +326,10 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           />
 
         {/* Summary Section */}
-        <SummarySection totals={totals} />
+        <SummarySection 
+          totals={totals} 
+          onContingencyChange={setContingencyPercent}
+        />
 
         {/* Main Trade Table */}
         <TradeTable
@@ -306,6 +338,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           onDeleteTrade={handleDeleteTrade}
           onAddTrade={handleAddTrade}
           onAddDefaultCategories={handleAddDefaultCategories}
+          defaultMarkupPercent={markupPercent}
         />
 
         {/* Trade Form Modal */}
@@ -319,6 +352,20 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         )}
         </div>
       </div>
+      
+      {/* Mobile Back Button - Fixed at bottom */}
+      {onBack && (
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
+          <Button
+            onClick={onBack}
+            variant="outline"
+            className="border-gray-300 hover:bg-gray-50 w-full"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            {project ? 'Back to Project Detail' : 'Back to Projects'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -334,53 +381,45 @@ interface ProjectHeaderProps {
 }
 
 function ProjectHeader({ project, onUpdate, onBack }: ProjectHeaderProps) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [formData, setFormData] = useState({
-    name: project.name,
-    planId: project.metadata?.planId || '',
-    address: project.address?.street 
-      ? `${project.address.street}, ${project.address.city}, ${project.address.state} ${project.address.zip}`
-      : `${project.city || ''}, ${project.state || ''} ${project.zipCode || ''}`.trim(),
-    type: project.type,
-    startDate: project.startDate ? project.startDate.toISOString().split('T')[0] : '',
-    endDate: project.endDate ? project.endDate.toISOString().split('T')[0] : '',
-  })
-
-  const handleSave = () => {
-    // Parse address back into components
-    const addressParts = formData.address.split(',').map(s => s.trim())
-    const street = addressParts[0] || ''
-    const city = addressParts[1] || ''
-    const stateZip = addressParts[2] || ''
-    const [state, zipCode] = stateZip.split(' ').filter(Boolean)
-    
-    onUpdate({
-      name: formData.name,
-      type: formData.type,
-      address: {
-        street: street,
-        city: city,
-        state: state || '',
-        zip: zipCode || '',
-      },
-      city: city,
-      state: state || '',
-      zipCode: zipCode || '',
-      startDate: formData.startDate ? new Date(formData.startDate) : undefined,
-      endDate: formData.endDate ? new Date(formData.endDate) : undefined,
-      metadata: {
-        ...project.metadata,
-        planId: formData.planId,
-      },
-    })
-    setIsEditing(false)
+  const getStatusColor = (status: string) => {
+    const colors = {
+      estimating: 'bg-blue-100 text-blue-800',
+      'in-progress': 'bg-orange-100 text-orange-800',
+      complete: 'bg-green-100 text-green-800',
+    }
+    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
 
   return (
-    <Card className="bg-gradient-to-br from-gray-50 to-white text-gray-900 border border-gray-200 shadow-lg">
-      <CardHeader>
-        <div className="space-y-4">
-          <div className="flex items-center justify-center gap-3 sm:gap-4 lg:gap-6">
+    <>
+      {/* Mobile Header - Matches Project Detail Style */}
+      <header className="sm:hidden bg-white shadow-md border-b border-gray-200">
+        <div className="px-4 py-4">
+          <div className="flex items-center space-x-3">
+            <img src={hshLogo} alt="HSH Contractor" className="h-16 w-auto" />
+            <div className="flex-1">
+              <div className="flex flex-col gap-2 mb-1">
+                <h1 className="text-lg font-bold text-gray-900">{project.name}</h1>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)} w-fit`}>
+                  {project.status.replace('-', ' ').toUpperCase()}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600">
+                Plan: {project.metadata?.planId || 'N/A'}
+                {project.metadata?.isCustomPlan && (
+                  <span className="ml-1 text-xs bg-[#0E79C9] text-white px-1.5 py-0.5 rounded">Custom</span>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Desktop Header - Card Style with Full Details */}
+      <Card className="hidden sm:block bg-gradient-to-br from-gray-50 to-white text-gray-900 border border-gray-200 shadow-lg">
+        <CardHeader className="pb-3 sm:pb-6">
+          <div className="space-y-2 sm:space-y-4">
+            <div className="flex items-center justify-center gap-2 sm:gap-4 lg:gap-6">
             {/* HSH Logo */}
             <div className="flex-shrink-0">
               <img 
@@ -392,19 +431,20 @@ function ProjectHeader({ project, onUpdate, onBack }: ProjectHeaderProps) {
             
             {/* Estimate Book Title */}
             <div className="flex-shrink-0">
-              <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold text-gray-900">Estimate Book</h2>
+                <h2 className="text-xl sm:text-4xl lg:text-5xl font-bold text-gray-900">Estimate Book</h2>
             </div>
           </div>
           
-          {/* Back Button - Full Width Centered */}
+            {/* Back Button - Desktop Only */}
           {onBack && (
-            <div className="flex justify-center">
+              <div className="hidden sm:flex justify-center">
               <Button
                 onClick={onBack}
                 variant="outline"
-                className="border-gray-300 hover:bg-gray-50 w-full max-w-md"
+                  size="sm"
+                  className="border-gray-300 hover:bg-gray-50 w-full max-w-md text-xs sm:text-sm"
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
+                  <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                 {project ? 'Back to Project Detail' : 'Back to Projects'}
               </Button>
             </div>
@@ -413,106 +453,29 @@ function ProjectHeader({ project, onUpdate, onBack }: ProjectHeaderProps) {
       </CardHeader>
       
       <CardContent>
-        {isEditing ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2 sm:space-y-3">
+            {/* Row 1: Project Name | Plan ID | Project Type | Project Location */}
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-x-2 sm:gap-x-4 gap-y-2 sm:gap-y-3">
             <div>
-              <Label htmlFor="projectName" className="text-gray-700">Project Name</Label>
-              <Input
-                id="projectName"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className="bg-white border-[#E65133] text-gray-900 focus:border-[#66A3FF]"
-              />
+                <Label className="text-[#E65133] text-xs sm:text-sm">Project Name</Label>
+                <p className="text-gray-900 font-semibold text-xs sm:text-sm">{project.name}</p>
             </div>
             <div>
-              <Label htmlFor="planId" className="text-gray-700">Plan ID</Label>
-              <Input
-                id="planId"
-                value={formData.planId}
-                onChange={(e) => setFormData(prev => ({ ...prev, planId: e.target.value }))}
-                className="bg-white border-[#E65133] text-gray-900 focus:border-[#66A3FF]"
-              />
+                <Label className="text-[#E65133] text-xs sm:text-sm">Plan ID</Label>
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <p className="text-gray-900 font-semibold text-xs sm:text-sm">{project.metadata?.planId || 'Not set'}</p>
+                  {project.metadata?.isCustomPlan && (
+                    <span className="text-xs bg-[#0E79C9] text-white px-1 sm:px-2 py-0.5 rounded">
+                      Custom
+                    </span>
+                  )}
             </div>
-            <div>
-              <Label htmlFor="projectType" className="text-gray-700">Project Type</Label>
-              <Select 
-                value={formData.type} 
-                onValueChange={(value) => setFormData(prev => ({ ...prev, type: value as any }))}
-              >
-                <SelectTrigger className="bg-white border-[#E65133] text-gray-900 focus:border-[#66A3FF]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(PROJECT_TYPES).map(([key, value]) => (
-                    <SelectItem key={key} value={key}>
-                      {value.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="location" className="text-gray-700">Project Location</Label>
-              <Input
-                id="location"
-                value={formData.address}
-                onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                className="bg-white border-[#E65133] text-gray-900 focus:border-[#66A3FF]"
-              />
-            </div>
-            <div>
-              <Label htmlFor="startDate" className="text-gray-700">Start Date</Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={formData.startDate}
-                onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
-                className="bg-white border-[#E65133] text-gray-900 focus:border-[#66A3FF]"
-              />
-            </div>
-            <div>
-              <Label htmlFor="endDate" className="text-gray-700">End Date</Label>
-              <Input
-                id="endDate"
-                type="date"
-                value={formData.endDate}
-                onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
-                className="bg-white border-[#E65133] text-gray-900 focus:border-[#66A3FF]"
-              />
-            </div>
-            <div className="col-span-1 sm:col-span-2 flex gap-2">
-              <Button 
-                onClick={handleSave} 
-                size="sm"
-                className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226] text-white border-none shadow-lg"
-              >
-                Save
-              </Button>
-              <Button 
-                onClick={() => setIsEditing(false)} 
-                variant="outline" 
-                size="sm"
-                className="border-[#66A3FF] text-[#66A3FF] hover:bg-[#66A3FF] hover:text-white"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-            <div>
-              <Label className="text-[#E65133]">Project Name</Label>
-              <p className="text-gray-900 font-semibold">{project.name}</p>
-            </div>
-            <div>
-              <Label className="text-[#E65133]">Plan ID</Label>
-              <p className="text-gray-900 font-semibold">{project.metadata?.planId || 'Not set'}</p>
               {project.metadata?.planOptions && project.metadata.planOptions.length > 0 && (
                 <div className="mt-1">
                   {project.metadata.planOptions.map((option: string) => (
                     <span 
                       key={option}
-                      className="inline-block text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded mr-1"
+                        className="inline-block text-xs bg-purple-50 text-purple-700 px-1 sm:px-2 py-0.5 sm:py-1 rounded mr-1"
                     >
                       {option}
                     </span>
@@ -521,53 +484,48 @@ function ProjectHeader({ project, onUpdate, onBack }: ProjectHeaderProps) {
               )}
             </div>
             <div>
-              <Label className="text-[#E65133]">Project Type</Label>
-              <p className="text-gray-900 font-semibold capitalize">{project.type.replace('-', ' ')}</p>
+                <Label className="text-[#E65133] text-xs sm:text-sm">Type</Label>
+                <p className="text-gray-900 font-semibold text-xs sm:text-sm capitalize">{project.type.replace('-', ' ')}</p>
             </div>
             <div>
-              <Label className="text-[#E65133]">Project Location</Label>
-              <p className="text-gray-900 font-semibold text-sm">
+                <Label className="text-[#E65133] text-xs sm:text-sm">Location</Label>
+                <p className="text-gray-900 font-semibold text-xs sm:text-sm">
                 {project.address?.street || 'Not set'}
                 {project.city && `, ${project.city}`}
                 {project.state && `, ${project.state}`}
                 {project.zipCode && ` ${project.zipCode}`}
               </p>
             </div>
+            </div>
+            
+            {/* Row 2: Start Date | End Date | Status | Created */}
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-x-2 sm:gap-x-4 gap-y-2 sm:gap-y-3">
             <div>
-              <Label className="text-[#E65133]">Start Date</Label>
-              <p className="text-gray-900 font-semibold">
+                <Label className="text-[#E65133] text-xs sm:text-sm">Start Date</Label>
+                <p className="text-gray-900 font-semibold text-xs sm:text-sm">
                 {project.startDate ? project.startDate.toLocaleDateString() : 'Not set'}
               </p>
             </div>
             <div>
-              <Label className="text-[#E65133]">End Date</Label>
-              <p className="text-gray-900 font-semibold">
+                <Label className="text-[#E65133] text-xs sm:text-sm">End Date</Label>
+                <p className="text-gray-900 font-semibold text-xs sm:text-sm">
                 {project.endDate ? project.endDate.toLocaleDateString() : 'Not set'}
               </p>
             </div>
             <div>
-              <Label className="text-[#E65133]">Status</Label>
-              <p className="text-gray-900 font-semibold capitalize">{project.status.replace('-', ' ')}</p>
+                <Label className="text-[#E65133] text-xs sm:text-sm">Status</Label>
+                <p className="text-gray-900 font-semibold text-xs sm:text-sm capitalize">{project.status.replace('-', ' ')}</p>
             </div>
             <div>
-              <Label className="text-[#E65133]">Created</Label>
-              <p className="text-gray-900 font-semibold">{project.createdAt.toLocaleDateString()}</p>
+                <Label className="text-[#E65133] text-xs sm:text-sm">Created</Label>
+                <p className="text-gray-900 font-semibold text-xs sm:text-sm">{project.createdAt.toLocaleDateString()}</p>
             </div>
-            <div className="col-span-2">
-              <Button 
-                onClick={() => setIsEditing(true)} 
-                variant="outline" 
-                size="sm"
-                className="border-[#66A3FF] text-[#66A3FF] hover:bg-[#66A3FF] hover:text-white shadow-lg w-full sm:w-auto"
-              >
-                <Edit className="w-4 h-4 mr-2" />
-                Edit Project Info
-              </Button>
             </div>
+
           </div>
-        )}
       </CardContent>
     </Card>
+    </>
   )
 }
 
@@ -582,14 +540,25 @@ interface SummarySectionProps {
     grossProfitTotal: number
     totalEstimated: number
     marginOfProfit: number
+    markupPercent: number
+    contingencyPercent: number
   }
+  onContingencyChange: (value: number) => void
 }
 
-function SummarySection({ totals }: SummarySectionProps) {
+function SummarySection({ totals, onContingencyChange }: SummarySectionProps) {
+  const [isEditingContingency, setIsEditingContingency] = useState(false)
+  const [tempContingency, setTempContingency] = useState(totals.contingencyPercent)
+  
   const formatCurrency = (amount: number) => 
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
   const formatPercent = (percent: number) => `${percent.toFixed(1)}%`
+  
+  const handleContingencySave = () => {
+    onContingencyChange(tempContingency)
+    setIsEditingContingency(false)
+  }
 
   return (
     <Card>
@@ -602,10 +571,59 @@ function SummarySection({ totals }: SummarySectionProps) {
             <p className="text-xs sm:text-sm opacity-90">Base Price Total</p>
             <p className="text-xl sm:text-2xl font-bold">{formatCurrency(totals.basePriceTotal)}</p>
           </div>
-          <div className="bg-[#D95C00] text-white p-4 rounded-lg text-center shadow-lg">
-            <p className="text-xs sm:text-sm opacity-90">Contingency</p>
-            <p className="text-xl sm:text-2xl font-bold">{formatPercent(10)}</p>
+          <div 
+            className="bg-[#D95C00] text-white p-4 rounded-lg text-center shadow-lg cursor-pointer hover:bg-[#C04F00] transition-colors"
+            onClick={() => {
+              setIsEditingContingency(true)
+              setTempContingency(totals.contingencyPercent)
+            }}
+          >
+            <p className="text-xs sm:text-sm opacity-90">
+              Contingency ({formatPercent(totals.contingencyPercent)})
+              <span className="ml-1">✏️</span>
+            </p>
+            <p className="text-xl sm:text-2xl font-bold">{formatCurrency(totals.contingency)}</p>
           </div>
+          
+          {/* Contingency Edit Dialog */}
+          {isEditingContingency && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <Card className="w-full max-w-sm">
+                <CardHeader>
+                  <CardTitle>Edit Contingency %</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="mobile-contingency">Contingency Percentage</Label>
+                    <Input
+                      id="mobile-contingency"
+                      type="number"
+                      step="0.1"
+                      value={tempContingency}
+                      onChange={(e) => setTempContingency(parseFloat(e.target.value) || 0)}
+                      className="text-lg"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={handleContingencySave}
+                      className="flex-1 bg-[#D95C00] hover:bg-[#C04F00]"
+                    >
+                      Save
+                    </Button>
+                    <Button 
+                      onClick={() => setIsEditingContingency(false)}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
           <div className="bg-[#D95C00] text-white p-4 rounded-lg text-center shadow-lg">
             <p className="text-xs sm:text-sm opacity-90">Gross Profit Total</p>
             <p className="text-xl sm:text-2xl font-bold">{formatCurrency(totals.grossProfitTotal)}</p>
@@ -634,9 +652,10 @@ interface TradeTableProps {
   onDeleteTrade: (tradeId: string) => void
   onAddTrade: () => void
   onAddDefaultCategories: () => void
+  defaultMarkupPercent: number
 }
 
-function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefaultCategories }: TradeTableProps) {
+function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefaultCategories, defaultMarkupPercent }: TradeTableProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   
   const formatCurrency = (amount: number) => 
@@ -684,7 +703,7 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
               className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226] text-white border-none shadow-lg w-full sm:w-auto"
             >
               <PlusCircle className="w-4 h-4 mr-2" />
-              Add Trade
+              Add Cost Item
             </Button>
           </div>
         </div>
@@ -694,12 +713,13 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
         <div className="md:hidden space-y-2">
           {Object.entries(groupedTrades).length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              No trades added yet. Click "Add Trade" to get started.
+              No cost items added yet. Click "Add Cost Item" to get started.
             </div>
           ) : (
             Object.entries(groupedTrades).map(([category, categoryTrades]) => {
               const categoryTotal = categoryTrades.reduce((sum, t) => sum + t.totalCost, 0)
-              const categoryEstimated = categoryTotal * 1.111
+              const categoryMarkup = categoryTrades.reduce((sum, t) => sum + t.totalCost * ((t.markupPercent || defaultMarkupPercent) / 100), 0)
+              const categoryEstimated = categoryTotal + categoryMarkup
               const isExpanded = expandedCategories.has(category)
 
               return (
@@ -822,10 +842,21 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
               </tr>
             </thead>
             <tbody>
-              {Object.entries(groupedTrades).map(([category, categoryTrades]) => (
+              {Object.entries(groupedTrades).map(([category, categoryTrades]) => {
+                const isExpanded = expandedCategories.has(category)
+                
+                return (
                 <React.Fragment key={category}>
-                  <tr className="bg-gray-50 font-semibold">
-                    <td className="p-3 border-b border-r-2 border-gray-300">{TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}</td>
+                  <tr 
+                    className="bg-gray-50 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                    onClick={() => toggleCategory(category)}
+                  >
+                    <td className="p-3 border-b border-r-2 border-gray-300">
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
+                        {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                      </div>
+                    </td>
                     <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
                     <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
                     <td className="p-3 text-center border-b"></td>
@@ -833,13 +864,13 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                     <td className="p-3 text-center border-b"></td>
                     <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.laborCost, 0))}</td>
                     <td className="p-3 text-center border-b font-bold border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.totalCost, 0))}</td>
-                    <td className="p-3 text-center border-b border-r-2 border-gray-300">11.1%</td>
-                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.totalCost * 0.111, 0))}</td>
-                    <td className="p-3 text-center border-b border-r-2 border-gray-300">10.0%</td>
-                    <td className="p-3 text-center border-b font-bold border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.totalCost * 1.111, 0))}</td>
+                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500">-</td>
+                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.totalCost * ((t.markupPercent || defaultMarkupPercent) / 100), 0))}</td>
+                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500">-</td>
+                    <td className="p-3 text-center border-b font-bold border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.totalCost * (1 + (t.markupPercent || defaultMarkupPercent) / 100), 0))}</td>
                     <td className="p-3 text-center border-b"></td>
                   </tr>
-                  {categoryTrades.map((trade) => (
+                  {isExpanded && categoryTrades.map((trade) => (
                     <tr key={trade.id} className="hover:bg-gray-50">
                       <td className="p-3 border-b pl-6 border-r-2 border-gray-300">{trade.name}</td>
                       <td className="p-3 text-center border-b border-r-2 border-gray-300">{trade.quantity}</td>
@@ -849,10 +880,10 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                       <td className="p-3 text-center border-b">{trade.laborRate ? formatCurrency(trade.laborRate) : '-'}</td>
                       <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.laborCost)}</td>
                       <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost)}</td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300">11.1%</td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * 0.111)}</td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300">10.0%</td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * 1.111)}</td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300">{(trade.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * ((trade.markupPercent || defaultMarkupPercent) / 100))}</td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300">{(((trade.markupPercent || defaultMarkupPercent) / (100 + (trade.markupPercent || defaultMarkupPercent))) * 100).toFixed(1)}%</td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * (1 + (trade.markupPercent || defaultMarkupPercent) / 100))}</td>
                       <td className="p-3 text-center border-b">
                         <div className="flex gap-1">
                           <Button size="sm" variant="outline" onClick={() => onEditTrade(trade)}>Edit</Button>
@@ -862,11 +893,11 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                     </tr>
                   ))}
                 </React.Fragment>
-              ))}
+              )})}
               {trades.length === 0 && (
                 <tr>
                   <td colSpan={13} className="p-8 text-center text-gray-500">
-                    No trades added yet. Click "Add Trade" to get started.
+                    No cost items added yet. Click "Add Cost Item" to get started.
                   </td>
                 </tr>
               )}
@@ -885,24 +916,25 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
 
 interface TradeFormProps {
   trade: TradeFormData
-  onSave: () => void
+  onSave: (data: TradeFormData) => void
   onCancel: () => void
   isAdding: boolean
 }
 
 function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
   const [formData, setFormData] = useState<TradeFormData>(trade)
+  const [subcontractorEntryMode, setSubcontractorEntryMode] = useState<'lump-sum' | 'breakdown'>('lump-sum')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSave()
+    onSave(formData)
   }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
       <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <CardHeader>
-          <CardTitle className="text-lg sm:text-xl">{isAdding ? 'Add Trade' : 'Edit Trade'}</CardTitle>
+          <CardTitle className="text-lg sm:text-xl">{isAdding ? 'Add Cost Item' : 'Edit Cost Item'}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -929,7 +961,264 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
                     <div className="space-y-2">
                       <Select 
                         value={formData.name} 
-                        onValueChange={(value) => setFormData(prev => ({ ...prev, name: value }))}
+                        onValueChange={(value) => {
+                          // Check for special cases first - Lump sum categories
+                          if (value === 'Full Scope' && (formData.category === 'insulation' || formData.category === 'plumbing' || formData.category === 'drywall')) {
+                            // Insulation/Plumbing/Drywall Full Scope - set unit to lot, no default costs
+                            setFormData(prev => ({
+                              ...prev,
+                              name: value,
+                              unit: 'lot',
+                              materialRate: undefined,
+                              laborRate: undefined,
+                            }))
+                            return
+                          }
+                          
+                          // Auto-populate costs based on item selection
+                          const itemDefaults: Record<string, { unit: string, materialRate: number, laborRate: number }> = {
+                            'Wood Framing': { unit: 'sqft', materialRate: 11.44, laborRate: 5.50 },
+                            'Interior Doors': { unit: 'each', materialRate: 350, laborRate: 100 },
+                            'Exterior Doors': { unit: 'each', materialRate: 1400, laborRate: 150 },
+                            'Garage Doors': { unit: 'each', materialRate: 1500, laborRate: 600 },
+                            'Sliding Doors/French Door': { unit: 'each', materialRate: 1800, laborRate: 150 },
+                            'Windows': { unit: 'each', materialRate: 1000, laborRate: 125 },
+                            'Front Door': { unit: 'each', materialRate: 2400, laborRate: 150 },
+                            'Siding': { unit: 'sqft', materialRate: 5.00, laborRate: 1.25 },
+                            'Soffit/Fascia': { unit: 'linear_ft', materialRate: 10.00, laborRate: 3.00 },
+                            'Exterior Paint': { unit: 'sqft', materialRate: 3.00, laborRate: 3.00 },
+                            'Rough': { unit: 'sqft', materialRate: 5.00, laborRate: 10.00 },
+                            'Finishes': { unit: 'sqft', materialRate: 1.00, laborRate: 2.00 },
+                            'Closet Hardware': { unit: 'each', materialRate: 500, laborRate: 250 },
+                            'Closet Shelving': { unit: 'each', materialRate: 500, laborRate: 250 },
+                            'Flooring': { unit: 'sqft', materialRate: 2.00, laborRate: 2.00 },
+                            'Interior Paint': { unit: 'sqft', materialRate: 2.00, laborRate: 2.00 },
+                            'Backsplash': { unit: 'sqft', materialRate: 5.00, laborRate: 5.00 },
+                            'Countertops': { unit: 'sqft', materialRate: 50, laborRate: 25 },
+                            'Kitchen Faucet': { unit: 'each', materialRate: 200, laborRate: 0 },
+                            'Cooktop': { unit: 'each', materialRate: 600, laborRate: 75 },
+                            'Dishwasher': { unit: 'each', materialRate: 250, laborRate: 75 },
+                            'Microwave Oven': { unit: 'each', materialRate: 250, laborRate: 25 },
+                            'Oven': { unit: 'each', materialRate: 600, laborRate: 75 },
+                            'Range Hood': { unit: 'each', materialRate: 600, laborRate: 75 },
+                            'Refrigerator': { unit: 'each', materialRate: 600, laborRate: 75 },
+                            'Washer+Dryer': { unit: 'each', materialRate: 1200, laborRate: 150 },
+                          }
+                          
+                          // Handle category-specific items with same names
+                          if (formData.category === 'kitchen' as any) {
+                            if (value === 'Cabinets') {
+                              setFormData(prev => {
+                                const qty = prev.quantity || 1
+                                return {
+                                  ...prev,
+                                  name: value,
+                                  unit: 'each',
+                                  materialRate: 300,
+                                  laborRate: 75,
+                                  materialCost: qty * 300,
+                                  laborCost: qty * 75,
+                                }
+                              })
+                              return
+                            }
+                            if (value === 'Accessories') {
+                              setFormData(prev => {
+                                const qty = prev.quantity || 1
+                                return {
+                                  ...prev,
+                                  name: value,
+                                  unit: 'lot',
+                                  materialRate: 750,
+                                  laborRate: 250,
+                                  materialCost: qty * 750,
+                                  laborCost: qty * 250,
+                                }
+                              })
+                              return
+                            }
+                          }
+                          
+                          if (formData.category === 'bath' as any) {
+                            if (value === 'Accessories') {
+                              setFormData(prev => {
+                                const qty = prev.quantity || 1
+                                return {
+                                  ...prev,
+                                  name: value,
+                                  unit: 'lot',
+                                  materialRate: 500,
+                                  laborRate: 250,
+                                  materialCost: qty * 500,
+                                  laborCost: qty * 250,
+                                }
+                              })
+                              return
+                            }
+                            if (value === 'Cabinets') {
+                              setFormData(prev => {
+                                const qty = prev.quantity || 1
+                                return {
+                                  ...prev,
+                                  name: value,
+                                  unit: 'each',
+                                  materialRate: 300,
+                                  laborRate: 75,
+                                  materialCost: qty * 300,
+                                  laborCost: qty * 75,
+                                }
+                              })
+                              return
+                            }
+                            if (value === 'Cabinets-Hardware') {
+                              setFormData(prev => {
+                                const qty = prev.quantity || 1
+                                return {
+                                  ...prev,
+                                  name: value,
+                                  unit: 'lot',
+                                  materialRate: 250,
+                                  laborRate: 50,
+                                  materialCost: qty * 250,
+                                  laborCost: qty * 50,
+                                }
+                              })
+                              return
+                            }
+                            if (value === 'Countertops') {
+                              setFormData(prev => {
+                                const qty = prev.quantity || 1
+                                return {
+                                  ...prev,
+                                  name: value,
+                                  unit: 'sqft',
+                                  materialRate: 50,
+                                  laborRate: 25,
+                                  materialCost: qty * 50,
+                                  laborCost: qty * 25,
+                                }
+                              })
+                              return
+                            }
+                            if (value === 'Mirrors') {
+                              setFormData(prev => {
+                                const qty = prev.quantity || 1
+                                return {
+                                  ...prev,
+                                  name: value,
+                                  unit: 'each',
+                                  materialRate: 150,
+                                  laborRate: 50,
+                                  materialCost: qty * 150,
+                                  laborCost: qty * 50,
+                                }
+                              })
+                              return
+                            }
+                            if (value === 'Tub/Shower Enclosure') {
+                              setFormData(prev => {
+                                const qty = prev.quantity || 1
+                                return {
+                                  ...prev,
+                                  name: value,
+                                  unit: 'each',
+                                  materialRate: 1600,
+                                  laborRate: 0,
+                                  materialCost: qty * 1600,
+                                  laborCost: 0,
+                                }
+                              })
+                              return
+                            }
+                            if (value === 'Toilet') {
+                              setFormData(prev => {
+                                const qty = prev.quantity || 1
+                                return {
+                                  ...prev,
+                                  name: value,
+                                  unit: 'each',
+                                  materialRate: 250,
+                                  laborRate: 0,
+                                  materialCost: qty * 250,
+                                  laborCost: 0,
+                                }
+                              })
+                              return
+                            }
+                            if (value === 'Bath Faucet') {
+                              setFormData(prev => {
+                                const qty = prev.quantity || 1
+                                return {
+                                  ...prev,
+                                  name: value,
+                                  unit: 'each',
+                                  materialRate: 150,
+                                  laborRate: 0,
+                                  materialCost: qty * 150,
+                                  laborCost: 0,
+                                }
+                              })
+                              return
+                            }
+                            // Medicine Cabinets - no defaults, just set name
+                            if (value === 'Medicine Cabinets') {
+                              setFormData(prev => ({ ...prev, name: value }))
+                              return
+                            }
+                          }
+                          
+                          // HVAC Full Scope has different defaults
+                          if (value === 'Full Scope' && formData.category === 'hvac') {
+                            setFormData(prev => {
+                              const qty = prev.quantity || 1
+                              return {
+                                ...prev,
+                                name: value,
+                                unit: 'sqft',
+                                materialRate: 10.00,
+                                laborRate: 2.00,
+                                materialCost: qty * 10.00,
+                                laborCost: qty * 2.00,
+                              }
+                            })
+                            return
+                          }
+                          
+                          // Roofing Full Scope has different defaults
+                          if (value === 'Full Scope' && formData.category === 'roofing') {
+                            setFormData(prev => {
+                              const qty = prev.quantity || 1
+                              return {
+                                ...prev,
+                                name: value,
+                                unit: 'sqft',
+                                materialRate: 2.00,
+                                laborRate: 1.00,
+                                materialCost: qty * 2.00,
+                                laborCost: qty * 1.00,
+                              }
+                            })
+                            return
+                          }
+                          
+                          const defaults = itemDefaults[value]
+                          if (defaults) {
+                            setFormData(prev => {
+                              const qty = prev.quantity || 1
+                              return {
+                                ...prev,
+                                name: value,
+                                unit: defaults.unit as any,
+                                materialRate: defaults.materialRate,
+                                laborRate: defaults.laborRate,
+                                materialCost: qty * defaults.materialRate,
+                                laborCost: qty * defaults.laborRate,
+                              }
+                            })
+                          } else {
+                            setFormData(prev => ({ ...prev, name: value }))
+                          }
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select or type custom name..." />
@@ -962,14 +1251,28 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="quantity">Quantity</Label>
                 <Input
                   id="quantity"
                   type="number"
                   value={formData.quantity}
-                  onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+                  onChange={(e) => {
+                    const qty = parseFloat(e.target.value) || 0
+                    setFormData(prev => {
+                      // Recalculate costs if rates are already set
+                      const newMaterialCost = prev.materialRate ? qty * prev.materialRate : prev.materialCost
+                      const newLaborCost = prev.laborRate ? qty * prev.laborRate : prev.laborCost
+                      
+                      return {
+                        ...prev,
+                        quantity: qty,
+                        materialCost: newMaterialCost,
+                        laborCost: newLaborCost,
+                      }
+                    })
+                  }}
                   required
                 />
               </div>
@@ -988,18 +1291,52 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="wasteFactor">Waste Factor (%)</Label>
-                <Input
-                  id="wasteFactor"
-                  type="number"
-                  value={formData.wasteFactor}
-                  onChange={(e) => setFormData(prev => ({ ...prev, wasteFactor: parseFloat(e.target.value) || 0 }))}
-                />
-              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="isSubcontracted">Work Performed By</Label>
+                <Select 
+                  value={formData.isSubcontracted ? 'yes' : 'no'} 
+                  onValueChange={(value) => setFormData(prev => ({ 
+                    ...prev, 
+                    isSubcontracted: value === 'yes',
+                    // Clear subcontractor cost when switching to self-performed
+                    subcontractorCost: value === 'yes' ? prev.subcontractorCost : 0
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no">Self-Performed</SelectItem>
+                    <SelectItem value="yes">Subcontracted</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {formData.isSubcontracted && (
+                <div>
+                  <Label htmlFor="subEntryMode">Subcontractor Entry Type</Label>
+                  <Select 
+                    value={subcontractorEntryMode} 
+                    onValueChange={(value: 'lump-sum' | 'breakdown') => setSubcontractorEntryMode(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lump-sum">Lump Sum Quote</SelectItem>
+                      <SelectItem value="breakdown">Material + Labor Breakdown</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            {/* Material fields - hide when subcontracted with lump sum */}
+            {(!formData.isSubcontracted || subcontractorEntryMode === 'breakdown') && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="materialRate">Material Unit Cost</Label>
                 <Input
@@ -1028,21 +1365,61 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
                   }}
                 />
               </div>
-              <div>
-                <Label htmlFor="isSubcontracted">Subcontracted?</Label>
-                <Select value={formData.isSubcontracted ? 'yes' : 'no'} onValueChange={(value) => setFormData(prev => ({ ...prev, isSubcontracted: value === 'yes' }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="no">Self-performed</SelectItem>
-                    <SelectItem value="yes">Subcontracted</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
-            </div>
+            )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {formData.isSubcontracted ? (
+              subcontractorEntryMode === 'lump-sum' ? (
+              <div>
+                  <Label htmlFor="subcontractorCost">Subcontractor Lump Sum Cost</Label>
+                  <Input
+                    id="subcontractorCost"
+                    type="number"
+                    step="0.01"
+                    value={formData.subcontractorCost}
+                    onChange={(e) => setFormData(prev => ({ 
+                      ...prev, 
+                      subcontractorCost: parseFloat(e.target.value) || 0,
+                      materialCost: 0,
+                      laborCost: 0,
+                    }))}
+                    placeholder="Enter total quoted price"
+                  />
+              </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="laborRate">Labor Unit Cost</Label>
+                    <Input
+                      id="laborRate"
+                      type="number"
+                      step="0.01"
+                      value={formData.laborRate || ''}
+                      onChange={(e) => {
+                        const rate = parseFloat(e.target.value) || 0
+                        const cost = rate * formData.quantity
+                        setFormData(prev => ({ ...prev, laborRate: rate, laborCost: cost, subcontractorCost: 0 }))
+                      }}
+                    />
+            </div>
+                  <div>
+                    <Label htmlFor="laborCost">Labor Cost</Label>
+                    <Input
+                      id="laborCost"
+                      type="number"
+                      step="0.01"
+                      value={formData.laborCost}
+                      onChange={(e) => {
+                        const cost = parseFloat(e.target.value) || 0
+                        const rate = formData.quantity > 0 ? cost / formData.quantity : 0
+                        setFormData(prev => ({ ...prev, laborCost: cost, laborRate: rate, subcontractorCost: 0 }))
+                      }}
+                    />
+                  </div>
+                </div>
+              )
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="laborRate">Labor Unit Cost</Label>
                 <Input
@@ -1071,16 +1448,22 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
                   }}
                 />
               </div>
-              <div>
-                <Label htmlFor="subcontractorCost">Subcontractor Cost</Label>
-                <Input
-                  id="subcontractorCost"
-                  type="number"
-                  step="0.01"
-                  value={formData.subcontractorCost}
-                  onChange={(e) => setFormData(prev => ({ ...prev, subcontractorCost: parseFloat(e.target.value) || 0 }))}
-                />
               </div>
+            )}
+
+              <div>
+              <Label htmlFor="markupPercent">Markup % (for this item)</Label>
+                <Input
+                id="markupPercent"
+                  type="number"
+                step="0.1"
+                value={formData.markupPercent || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, markupPercent: parseFloat(e.target.value) || 0 }))}
+                placeholder="e.g., 11.1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Leave blank to use default markup percentage
+              </p>
             </div>
 
             <div>
@@ -1114,7 +1497,7 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
                 type="submit"
                 className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226] text-white border-none shadow-lg"
               >
-                {isAdding ? 'Add Trade' : 'Save Changes'}
+                {isAdding ? 'Add Cost Item' : 'Save Changes'}
               </Button>
             </div>
           </form>

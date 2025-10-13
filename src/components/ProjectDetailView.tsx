@@ -5,11 +5,17 @@
 // Main view for a selected project with navigation to Estimate and Actuals
 //
 
-import React from 'react'
-import { Project } from '@/types'
+import React, { useState, useEffect } from 'react'
+import { Project, ProjectType, ProjectStatus } from '@/types'
+import { updateProject, deleteProject } from '@/services/projectService'
+import { getTradesForEstimate } from '@/services'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PROJECT_TYPES, PROJECT_STATUS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BookOpen, ClipboardList, BarChart3, Building2, Calendar, DollarSign } from 'lucide-react'
+import { ArrowLeft, BookOpen, ClipboardList, BarChart3, Building2, Calendar, DollarSign, Edit, Trash2 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface ProjectDetailViewProps {
@@ -27,23 +33,86 @@ export function ProjectDetailView({
   onViewActuals,
   onViewVariance,
 }: ProjectDetailViewProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedProject, setEditedProject] = useState(project)
+  const [estimateTotals, setEstimateTotals] = useState({
+    basePriceTotal: 0,
+    grossProfitTotal: 0,
+    totalEstimated: 0,
+    itemCount: 0,
+  })
+  
+  // Calculate estimate totals from trades
+  useEffect(() => {
+    const trades = getTradesForEstimate(project.estimate.id)
+    const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
+    const grossProfitTotal = trades.reduce((sum, trade) => {
+      const markup = trade.markupPercent || 11.1
+      return sum + (trade.totalCost * (markup / 100))
+    }, 0)
+    const contingency = basePriceTotal * 0.10 // 10% default
+    const totalEstimated = basePriceTotal + grossProfitTotal + contingency
+    
+    setEstimateTotals({
+      basePriceTotal,
+      grossProfitTotal,
+      totalEstimated,
+      itemCount: trades.length,
+    })
+  }, [project])
+  
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
   const getStatusColor = (status: string) => {
     const colors = {
       estimating: 'bg-blue-100 text-blue-800',
-      bidding: 'bg-yellow-100 text-yellow-800',
-      awarded: 'bg-green-100 text-green-800',
       'in-progress': 'bg-orange-100 text-orange-800',
-      complete: 'bg-gray-100 text-gray-800',
-      archived: 'bg-slate-100 text-slate-800',
+      complete: 'bg-green-100 text-green-800',
     }
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
 
+  const handleSaveEdit = () => {
+    const updated = updateProject(project.id, {
+      name: editedProject.name,
+      type: editedProject.type,
+      status: editedProject.status,
+      address: editedProject.address,
+      city: editedProject.city,
+      state: editedProject.state,
+      zipCode: editedProject.zipCode,
+      startDate: editedProject.startDate,
+      endDate: editedProject.endDate,
+      metadata: editedProject.metadata,
+      client: editedProject.client,
+    })
+    
+    if (updated) {
+      setIsEditing(false)
+      // Reload the page to show updated data
+      window.location.reload()
+    }
+  }
+
+  const handleDelete = () => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${project.name}"?\n\nThis action cannot be undone. All project data including estimates will be permanently deleted.`
+    )
+
+    if (confirmed) {
+      const success = deleteProject(project.id)
+      if (success) {
+        alert('✅ Project deleted successfully!')
+        onBack() // Return to dashboard
+      } else {
+        alert('❌ Failed to delete project. Please try again.')
+      }
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20 sm:pb-0">
       {/* Header */}
       <header className="bg-white shadow-md border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
@@ -64,30 +133,56 @@ export function ProjectDetailView({
                 </p>
               </div>
             </div>
-            <Button
-              onClick={onBack}
-              variant="outline"
-              className="border-gray-300 hover:bg-gray-50"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Projects
-            </Button>
+            {/* Desktop Buttons */}
+            <div className="hidden sm:flex gap-3">
+              <Button
+                onClick={() => setIsEditing(true)}
+                variant="outline"
+                className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Project
+              </Button>
+              <Button
+                onClick={handleDelete}
+                variant="outline"
+                className="border-red-600 text-red-600 hover:bg-red-600 hover:text-white"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Project
+              </Button>
+              <Button
+                onClick={onBack}
+                variant="outline"
+                className="border-gray-300 hover:bg-gray-50"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Projects
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-        {/* Project Info Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        {/* Project Info Cards - Hidden on Mobile */}
+        <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <Card className="bg-white shadow-lg">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <p className="text-sm text-gray-600">Plan ID</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1">
-                    {project.metadata?.planId || 'N/A'}
-                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-xl font-bold text-gray-900">
+                      {project.metadata?.planId || 'N/A'}
+                    </p>
+                    {project.metadata?.isCustomPlan && (
+                      <span className="text-xs bg-[#0E79C9] text-white px-2 py-0.5 rounded">
+                        Custom
+                      </span>
+                    )}
+                  </div>
                   {project.metadata?.planOptions && project.metadata.planOptions.length > 0 && (
                     <div className="mt-2">
                       {project.metadata.planOptions.map((option: string) => (
@@ -146,7 +241,7 @@ export function ProjectDetailView({
                 <div>
                   <p className="text-sm text-gray-600">Estimated Value</p>
                   <p className="text-xl font-bold text-gray-900 mt-1">
-                    {formatCurrency(project.estimate?.totals?.totalEstimated || 0)}
+                    {formatCurrency(estimateTotals.totalEstimated)}
                   </p>
                 </div>
                 <div className="bg-green-100 rounded-full p-3">
@@ -169,7 +264,7 @@ export function ProjectDetailView({
                   </div>
                   <div className="text-right">
                     <p className="text-sm opacity-80">Budget Items</p>
-                    <p className="text-3xl font-bold">{project.estimate?.trades?.length || 0}</p>
+                    <p className="text-3xl font-bold">{estimateTotals.itemCount}</p>
                   </div>
                 </div>
               </CardHeader>
@@ -181,15 +276,15 @@ export function ProjectDetailView({
                 <div className="bg-white/10 rounded-lg p-3 mb-4">
                   <div className="flex justify-between text-sm mb-1">
                     <span>Base Price</span>
-                    <span className="font-semibold">{formatCurrency(project.estimate?.totals?.basePriceTotal || 0)}</span>
+                    <span className="font-semibold">{formatCurrency(estimateTotals.basePriceTotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm mb-1">
                     <span>Gross Profit</span>
-                    <span className="font-semibold">{formatCurrency(project.estimate?.totals?.grossProfitTotal || 0)}</span>
+                    <span className="font-semibold">{formatCurrency(estimateTotals.grossProfitTotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm font-bold pt-2 border-t border-white/20">
                     <span>Total</span>
-                    <span>{formatCurrency(project.estimate?.totals?.totalEstimated || 0)}</span>
+                    <span>{formatCurrency(estimateTotals.totalEstimated)}</span>
                   </div>
                 </div>
                 <div className="flex items-center text-sm text-white/60">
@@ -266,6 +361,208 @@ export function ProjectDetailView({
           </button>
         </Card>
       </main>
+      
+      {/* Edit Project Modal */}
+      {isEditing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <CardHeader>
+              <CardTitle>Edit Project Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="projectName">Project Name</Label>
+                  <Input
+                    id="projectName"
+                    value={editedProject.name}
+                    onChange={(e) => setEditedProject(prev => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="planId">Plan ID</Label>
+                    <Input
+                      id="planId"
+                      value={editedProject.metadata?.planId || ''}
+                      onChange={(e) => setEditedProject(prev => ({ 
+                        ...prev, 
+                        metadata: { ...prev.metadata, planId: e.target.value }
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="projectType">Project Type</Label>
+                    <Select 
+                      value={editedProject.type} 
+                      onValueChange={(value) => setEditedProject(prev => ({ ...prev, type: value as ProjectType }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(PROJECT_TYPES).map(([key, value]) => (
+                          <SelectItem key={key} value={key}>
+                            {value.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="projectStatus">Status</Label>
+                    <Select 
+                      value={editedProject.status} 
+                      onValueChange={(value) => setEditedProject(prev => ({ ...prev, status: value as ProjectStatus }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(PROJECT_STATUS).map(([key, value]) => (
+                          <SelectItem key={key} value={key}>
+                            {value.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="address">Street Address</Label>
+                  <Input
+                    id="address"
+                    value={editedProject.address?.street || ''}
+                    onChange={(e) => setEditedProject(prev => ({ 
+                      ...prev, 
+                      address: { ...prev.address!, street: e.target.value }
+                    }))}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      value={editedProject.city || ''}
+                      onChange={(e) => setEditedProject(prev => ({ 
+                        ...prev, 
+                        city: e.target.value,
+                        address: { ...prev.address!, city: e.target.value }
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="state">State</Label>
+                    <Input
+                      id="state"
+                      value={editedProject.state || ''}
+                      onChange={(e) => setEditedProject(prev => ({ 
+                        ...prev, 
+                        state: e.target.value,
+                        address: { ...prev.address!, state: e.target.value }
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="zipCode">ZIP Code</Label>
+                    <Input
+                      id="zipCode"
+                      value={editedProject.zipCode || ''}
+                      onChange={(e) => setEditedProject(prev => ({ 
+                        ...prev, 
+                        zipCode: e.target.value,
+                        address: { ...prev.address!, zip: e.target.value }
+                      }))}
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="startDate">Start Date</Label>
+                    <Input
+                      id="startDate"
+                      type="date"
+                      value={editedProject.startDate ? new Date(editedProject.startDate).toISOString().split('T')[0] : ''}
+                      onChange={(e) => setEditedProject(prev => ({ 
+                        ...prev, 
+                        startDate: e.target.value ? new Date(e.target.value) : undefined
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="endDate">End Date</Label>
+                    <Input
+                      id="endDate"
+                      type="date"
+                      value={editedProject.endDate ? new Date(editedProject.endDate).toISOString().split('T')[0] : ''}
+                      onChange={(e) => setEditedProject(prev => ({ 
+                        ...prev, 
+                        endDate: e.target.value ? new Date(e.target.value) : undefined
+                      }))}
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex gap-2 pt-4">
+                  <Button 
+                    onClick={handleSaveEdit}
+                    className="flex-1 bg-gradient-to-r from-[#0E79C9] to-[#0A5A96] hover:from-[#0A5A96] hover:to-[#084577]"
+                  >
+                    Save Changes
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      setIsEditing(false)
+                      setEditedProject(project)
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      
+      {/* Mobile Action Buttons - Fixed at bottom */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              onClick={() => setIsEditing(true)}
+              variant="outline"
+              className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
+            >
+              <Edit className="w-4 h-4 mr-2" />
+              Edit Project
+            </Button>
+            <Button
+              onClick={handleDelete}
+              variant="outline"
+              className="border-red-600 text-red-600 hover:bg-red-600 hover:text-white"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+          </div>
+          <Button
+            onClick={onBack}
+            variant="outline"
+            className="border-gray-300 hover:bg-gray-50 w-full"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Projects
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

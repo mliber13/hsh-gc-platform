@@ -144,6 +144,7 @@ export function addTrade(estimateId: string, input: TradeInput): Trade {
     subcontractorCost: input.subcontractorCost,
     isSubcontracted: input.isSubcontracted,
     wasteFactor: input.wasteFactor || DEFAULT_VALUES.WASTE_FACTOR,
+    markupPercent: input.markupPercent,
     totalCost,
     sortOrder: 0, // Will be set based on existing trades
     notes: input.notes,

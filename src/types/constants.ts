@@ -38,15 +38,12 @@ export type UnitType =
   | 'day'
   | 'load'
 
-export type ProjectType = 'residential' | 'commercial' | 'remodel' | 'new-build' | 'addition'
+export type ProjectType = 'residential-renovation' | 'residential-new-build' | 'commercial-renovation' | 'commercial-new-build'
 
 export type ProjectStatus = 
   | 'estimating'
-  | 'bidding'
-  | 'awarded'
   | 'in-progress'
   | 'complete'
-  | 'archived'
 
 // ----------------------------------------------------------------------------
 // Trade Categories with Display Names
@@ -93,25 +90,128 @@ export const DEFAULT_CATEGORY_ITEMS: Record<TradeCategory, string[]> = {
     'Review',
     'Survey'
   ],
-  'site-prep': [],
-  'excavation-foundation': [],
-  'utilities': [],
-  'water-sewer': [],
-  'rough-framing': [],
-  'windows-doors': [],
-  'exterior-finishes': [],
-  'roofing': [],
+  'site-prep': [
+    'Dumpster',
+    'Equipment Rental',
+    'Lot Clearing',
+    'Portable Restrooms',
+    'Site Security',
+    'Site Storage',
+    'Temporary Heat',
+    'Temporary Power',
+    'Tool Rental'
+  ],
+  'excavation-foundation': [
+    'Backfill',
+    'Dig and Install Sanitary Sewer',
+    'Dig and Install Water Line',
+    'Dig and Install Downspouts',
+    'Form and Pour Foundation Walls',
+    'Gravel Work',
+    'Finish Grade',
+    'Foundation-Excavation',
+    'Retaining Walls',
+    'Flat Work - Porch, Garage, Patio, Crawl',
+    'Flat Work - Driveway',
+    'Dig and Install Driveway'
+  ],
+  'utilities': [
+    'Electrical-Connections',
+    'Electrical - Install',
+    'Electrical -Permit',
+    'Gas-Connection',
+    'Gas-Hookup',
+    'Gas-Permit',
+    'Sewer-Tap Fees & Hookup',
+    'Water -Tap Fees & Hookup'
+  ],
+  'water-sewer': [
+    'High Water Table Detwatering',
+    'Perc Test',
+    'Plumbing to House',
+    'Pressure Tank',
+    'Pump',
+    'Septic-Design',
+    'Septic-Fees',
+    'Septic-Inspection',
+    'Septic-Permits',
+    'Septic-Tie to House',
+    'Soil Test',
+    'Well',
+    'Well-Fees',
+    'Well-Permits'
+  ],
+  'rough-framing': [
+    'Wood Framing',
+    'Metal Framing'
+  ],
+  'windows-doors': [
+    'Interior Doors',
+    'Exterior Doors',
+    'Garage Doors',
+    'Sliding Doors/French Door',
+    'Windows',
+    'Front Door'
+  ],
+  'exterior-finishes': [
+    'Siding',
+    'Soffit/Fascia',
+    'Exterior Paint'
+  ],
+  'roofing': [
+    'Full Scope'
+  ],
   'masonry-paving': [],
   'porches-decks': [],
-  'insulation': [],
-  'plumbing': [],
-  'electrical': [],
-  'hvac': [],
-  'drywall': [],
-  'interior-finishes': [],
-  'kitchen': [],
-  'bath': [],
-  'appliances': [],
+  'insulation': [
+    'Full Scope'
+  ],
+  'plumbing': [
+    'Full Scope'
+  ],
+  'electrical': [
+    'Rough',
+    'Finishes'
+  ],
+  'hvac': [
+    'Full Scope'
+  ],
+  'drywall': [
+    'Full Scope'
+  ],
+  'interior-finishes': [
+    'Closet Hardware',
+    'Closet Shelving',
+    'Flooring',
+    'Interior Paint'
+  ],
+  'kitchen': [
+    'Backsplash',
+    'Cabinets',
+    'Countertops',
+    'Kitchen Faucet',
+    'Accessories'
+  ],
+  'bath': [
+    'Accessories',
+    'Cabinets',
+    'Cabinets-Hardware',
+    'Countertops',
+    'Medicine Cabinets',
+    'Mirrors',
+    'Tub/Shower Enclosure',
+    'Toilet',
+    'Bath Faucet'
+  ],
+  'appliances': [
+    'Cooktop',
+    'Dishwasher',
+    'Microwave Oven',
+    'Oven',
+    'Range Hood',
+    'Refrigerator',
+    'Washer+Dryer'
+  ],
   'other': [],
 }
 
@@ -135,25 +235,21 @@ export const UNIT_TYPES: Record<UnitType, { label: string; abbreviation: string 
 // ----------------------------------------------------------------------------
 
 export const PROJECT_TYPES: Record<ProjectType, { label: string; description: string }> = {
-  'residential': { 
-    label: 'Residential', 
-    description: 'Single-family homes and residential properties' 
+  'residential-renovation': { 
+    label: 'Residential - Renovation', 
+    description: 'Residential remodeling and renovation projects' 
   },
-  'commercial': { 
-    label: 'Commercial', 
-    description: 'Office buildings, retail, and commercial spaces' 
+  'residential-new-build': { 
+    label: 'Residential - New Build', 
+    description: 'New residential construction from the ground up' 
   },
-  'remodel': { 
-    label: 'Remodel', 
-    description: 'Renovation and remodeling projects' 
+  'commercial-renovation': { 
+    label: 'Commercial - Renovation', 
+    description: 'Commercial remodeling and renovation projects' 
   },
-  'new-build': { 
-    label: 'New Build', 
-    description: 'Ground-up construction projects' 
-  },
-  'addition': { 
-    label: 'Addition', 
-    description: 'Room additions and expansions' 
+  'commercial-new-build': { 
+    label: 'Commercial - New Build', 
+    description: 'New commercial construction from the ground up' 
   },
 }
 
@@ -171,16 +267,6 @@ export const PROJECT_STATUS: Record<ProjectStatus, {
     color: 'blue',
     description: 'Building estimate and preparing bid'
   },
-  'bidding': {
-    label: 'Bidding',
-    color: 'yellow',
-    description: 'Bid submitted, awaiting decision'
-  },
-  'awarded': {
-    label: 'Awarded',
-    color: 'green',
-    description: 'Project awarded, preparing to start'
-  },
   'in-progress': {
     label: 'In Progress',
     color: 'orange',
@@ -188,13 +274,8 @@ export const PROJECT_STATUS: Record<ProjectStatus, {
   },
   'complete': {
     label: 'Complete',
-    color: 'gray',
+    color: 'green',
     description: 'Project finished'
-  },
-  'archived': {
-    label: 'Archived',
-    color: 'slate',
-    description: 'Historical project'
   },
 }
 

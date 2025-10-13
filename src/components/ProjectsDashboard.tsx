@@ -31,7 +31,6 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
 
   const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     project.address?.street?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     project.city?.toLowerCase().includes(searchQuery.toLowerCase())
   )
@@ -42,11 +41,8 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
   const getStatusColor = (status: string) => {
     const colors = {
       estimating: 'bg-blue-100 text-blue-800',
-      bidding: 'bg-yellow-100 text-yellow-800',
-      awarded: 'bg-green-100 text-green-800',
       'in-progress': 'bg-orange-100 text-orange-800',
-      complete: 'bg-gray-100 text-gray-800',
-      archived: 'bg-slate-100 text-slate-800',
+      complete: 'bg-green-100 text-green-800',
     }
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
@@ -203,7 +199,7 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                 <div>
                   <p className="text-sm text-gray-600">Active Projects</p>
                   <p className="text-3xl font-bold text-gray-900 mt-1">
-                    {projects.filter(p => p.status === 'in-progress' || p.status === 'awarded').length}
+                    {projects.filter(p => p.status === 'in-progress').length}
                   </p>
                 </div>
                 <div className="bg-orange-100 rounded-full p-3">
@@ -235,7 +231,7 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
                 type="text"
-                placeholder="Search projects by name, client, or address..."
+                placeholder="Search projects by name or address..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 h-12 text-lg"
@@ -293,13 +289,21 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                         <div className="space-y-1 text-sm text-gray-600">
                           <p className="flex items-center gap-2">
                             <Building2 className="w-4 h-4" />
-                            {project.client.name}
-                          </p>
-                          <p className="ml-6">
                             {typeof project.address === 'string' ? project.address : project.address?.street || 'No address'}
                             {project.city && `, ${project.city}`}
                             {project.state && `, ${project.state}`}
                           </p>
+                          {project.metadata?.planId && (
+                            <p className="flex items-center gap-2">
+                              <FileText className="w-4 h-4" />
+                              Plan: {project.metadata.planId}
+                              {project.metadata.isCustomPlan && (
+                                <span className="text-xs bg-[#0E79C9] text-white px-1.5 py-0.5 rounded">
+                                  Custom
+                                </span>
+                              )}
+                            </p>
+                          )}
                           <p className="flex items-center gap-2">
                             <Calendar className="w-4 h-4" />
                             Created: {project.createdAt.toLocaleDateString()}

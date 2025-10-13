@@ -185,8 +185,8 @@ export function changeProjectStatus(
     updates.actualCompletionDate = new Date()
   }
 
-  // Initialize actuals when project is awarded
-  if (newStatus === 'awarded' && !project.actuals) {
+  // Initialize actuals when project is started
+  if (newStatus === 'in-progress' && !project.actuals) {
     updates.actuals = {
       id: uuidv4(),
       projectId,
@@ -208,16 +208,9 @@ export function changeProjectStatus(
 }
 
 /**
- * Award project (move from bidding to awarded)
- */
-export function awardProject(projectId: string): Project | null {
-  return changeProjectStatus(projectId, 'awarded')
-}
-
-/**
  * Start project (move to in-progress)
  */
-export function startProject(projectId: string): Project | null {
+export function beginProject(projectId: string): Project | null {
   return changeProjectStatus(projectId, 'in-progress')
 }
 
@@ -226,13 +219,6 @@ export function startProject(projectId: string): Project | null {
  */
 export function completeProject(projectId: string): Project | null {
   return changeProjectStatus(projectId, 'complete')
-}
-
-/**
- * Archive project
- */
-export function archiveProject(projectId: string): Project | null {
-  return changeProjectStatus(projectId, 'archived')
 }
 
 // ----------------------------------------------------------------------------
@@ -275,7 +261,7 @@ export function getDashboardStats() {
   
   const activeProjects = allProjects.filter(p => p.status === 'in-progress')
   const totalValue = allProjects
-    .filter(p => ['awarded', 'in-progress'].includes(p.status))
+    .filter(p => p.status === 'in-progress')
     .reduce((sum, p) => sum + p.estimate.totalEstimate, 0)
 
   const projectsByStatus = allProjects.reduce((acc, project) => {
@@ -289,8 +275,6 @@ export function getDashboardStats() {
     totalValue,
     projectsByStatus,
     estimatingCount: projectsByStatus.estimating || 0,
-    biddingCount: projectsByStatus.bidding || 0,
-    awardedCount: projectsByStatus.awarded || 0,
     inProgressCount: projectsByStatus['in-progress'] || 0,
     completeCount: projectsByStatus.complete || 0,
   }
