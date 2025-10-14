@@ -53,6 +53,7 @@ export interface CreateProjectInput {
 export interface UpdateProjectInput extends Partial<CreateProjectInput> {
   id: string
   status?: Project['status']
+  estimate?: Estimate
 }
 
 export interface ClientInput {

@@ -116,27 +116,9 @@ export interface Estimate {
   notes?: string
 }
 
-export type TradeCategory = 
-  | 'sitework'
-  | 'concrete'
-  | 'masonry'
-  | 'framing'
-  | 'roofing'
-  | 'siding'
-  | 'windows-doors'
-  | 'insulation'
-  | 'drywall'
-  | 'painting'
-  | 'flooring'
-  | 'tile'
-  | 'cabinets'
-  | 'countertops'
-  | 'electrical'
-  | 'plumbing'
-  | 'hvac'
-  | 'landscaping'
-  | 'cleanup'
-  | 'other'
+// Import TradeCategory from constants to avoid duplication
+import type { TradeCategory } from './constants'
+export type { TradeCategory }
 
 export type UnitType = 
   | 'sqft'          // Square feet
