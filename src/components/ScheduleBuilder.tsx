@@ -100,7 +100,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
 
         // Move to next item (add 1 day buffer between items)
         currentDate = new Date(endDate)
-        currentDate.setDate(currentDate.setDate(1))
+        currentDate.setDate(currentDate.getDate() + 1)
       })
     })
 
@@ -317,7 +317,9 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                                 <Input
                                   id={`start-${item.id}`}
                                   type="date"
-                                  value={item.startDate.toISOString().split('T')[0]}
+                                  value={item.startDate instanceof Date && !isNaN(item.startDate.getTime()) 
+                                    ? item.startDate.toISOString().split('T')[0] 
+                                    : new Date().toISOString().split('T')[0]}
                                   onChange={(e) => handleUpdateScheduleItem(item.id, { 
                                     startDate: new Date(e.target.value) 
                                   })}
@@ -379,7 +381,11 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                               {item.status.replace('-', ' ').toUpperCase()}
                             </div>
                             <div className="text-sm text-gray-600">
-                              <p className="font-semibold">End: {item.endDate.toLocaleDateString()}</p>
+                              <p className="font-semibold">
+                                End: {item.endDate instanceof Date && !isNaN(item.endDate.getTime()) 
+                                  ? item.endDate.toLocaleDateString() 
+                                  : 'N/A'}
+                              </p>
                             </div>
                           </div>
                         </div>

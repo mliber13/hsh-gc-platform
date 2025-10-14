@@ -22,7 +22,9 @@ import {
   getActiveProjects,
   getProjectsByStatus,
   searchProjects,
+  getTradesForEstimate,
 } from './storage'
+import { addTrade } from './estimateService'
 
 // ----------------------------------------------------------------------------
 // Project CRUD Operations
@@ -323,24 +325,45 @@ export function duplicateProject(
     client: source.client,
     type: source.type,
     address: source.address,
+    city: source.city,
+    state: source.state,
+    zipCode: source.zipCode,
+    metadata: source.metadata,
   }
 
   const newProject = createProject(input)
 
-  // Copy estimate structure (but reset to estimating status)
-  const newEstimate: Estimate = {
-    ...source.estimate,
-    id: uuidv4(),
-    projectId: newProject.id,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  }
+  // Copy all trades from source estimate
+  const sourceTrades = getTradesForEstimate(source.estimate.id)
+  
+  sourceTrades.forEach((trade) => {
+    addTrade(newProject.estimate.id, {
+      category: trade.category,
+      name: trade.name,
+      description: trade.description,
+      quantity: trade.quantity,
+      unit: trade.unit,
+      laborCost: trade.laborCost,
+      laborRate: trade.laborRate,
+      laborHours: trade.laborHours,
+      materialCost: trade.materialCost,
+      materialRate: trade.materialRate,
+      subcontractorCost: trade.subcontractorCost,
+      isSubcontracted: trade.isSubcontracted,
+      wasteFactor: trade.wasteFactor,
+      markupPercent: trade.markupPercent,
+      notes: trade.notes,
+    })
+  })
 
-  estimateStorage.update(newProject.estimate.id, newEstimate)
+  // Get the updated project with all trades
+  const updatedProject = projectStorage.getById(newProject.id)
+  
+  // Reset to estimating status (no actuals)
   projectStorage.update(newProject.id, {
-    estimate: newEstimate,
     status: 'estimating',
+    actuals: undefined,
+    schedule: undefined,
   })
 
   return projectStorage.getById(newProject.id)
