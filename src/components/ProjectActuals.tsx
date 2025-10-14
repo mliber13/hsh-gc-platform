@@ -15,6 +15,12 @@ import {
   addLaborEntry,
   addMaterialEntry,
   addSubcontractorEntry,
+  updateLaborEntry,
+  updateMaterialEntry,
+  updateSubcontractorEntry,
+  deleteLaborEntry,
+  deleteMaterialEntry,
+  deleteSubcontractorEntry,
 } from '@/services'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,7 +41,9 @@ import {
   FileText,
   Users,
   Package,
-  HardHat
+  HardHat,
+  Edit,
+  Trash2
 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
@@ -80,6 +88,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [showEntryForm, setShowEntryForm] = useState(false)
   const [entryType, setEntryType] = useState<EntryType>('labor')
+  const [editingEntry, setEditingEntry] = useState<ActualEntry | null>(null)
 
   // Load trades for the estimate
   useEffect(() => {
@@ -230,6 +239,78 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
       case 'labor': return 'bg-blue-50 border-blue-200'
       case 'material': return 'bg-green-50 border-green-200'
       case 'subcontractor': return 'bg-orange-50 border-orange-200'
+    }
+  }
+
+  const handleEditEntry = (entry: ActualEntry) => {
+    setEditingEntry(entry)
+    setEntryType(entry.type)
+    setShowEntryForm(true)
+  }
+
+  const handleDeleteEntry = (entry: ActualEntry) => {
+    if (!confirm(`Delete this ${entry.type} entry for ${formatCurrency(entry.amount)}?`)) {
+      return
+    }
+
+    let deleted = false
+    if (entry.type === 'labor') {
+      deleted = deleteLaborEntry(entry.id)
+    } else if (entry.type === 'material') {
+      deleted = deleteMaterialEntry(entry.id)
+    } else if (entry.type === 'subcontractor') {
+      deleted = deleteSubcontractorEntry(entry.id)
+    }
+
+    if (deleted) {
+      // Reload actuals
+      const actuals = getProjectActuals(project.id)
+      if (actuals) {
+        const entries: ActualEntry[] = []
+        
+        actuals.laborEntries?.forEach(labor => {
+          entries.push({
+            id: labor.id,
+            type: 'labor',
+            date: labor.date,
+            amount: labor.totalCost,
+            description: labor.description,
+            category: labor.trade,
+            tradeId: labor.tradeId,
+            payrollPeriod: labor.date.toLocaleDateString(),
+          })
+        })
+        
+        actuals.materialEntries?.forEach(material => {
+          entries.push({
+            id: material.id,
+            type: 'material',
+            date: material.date,
+            amount: material.totalCost,
+            description: material.materialName,
+            category: material.category,
+            tradeId: material.tradeId,
+            vendor: material.vendor,
+            invoiceNumber: material.invoiceNumber,
+          })
+        })
+        
+        actuals.subcontractorEntries?.forEach(sub => {
+          entries.push({
+            id: sub.id,
+            type: 'subcontractor',
+            date: sub.createdAt,
+            amount: sub.totalPaid,
+            description: sub.scopeOfWork,
+            category: sub.trade,
+            tradeId: sub.tradeId,
+            subcontractorName: sub.subcontractor.name,
+          })
+        })
+        
+        entries.sort((a, b) => b.date.getTime() - a.date.getTime())
+        setActualEntries(entries)
+      }
     }
   }
 
@@ -522,9 +603,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                         key={entry.id}
                                         className={`flex items-center justify-between p-2 rounded border ${getEntryColor(entry.type)}`}
                                       >
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-1">
                                           {getEntryIcon(entry.type)}
-                                          <div>
+                                          <div className="flex-1">
                                             <p className="text-sm font-medium text-gray-900">{entry.description}</p>
                                             <p className="text-xs text-gray-600">
                                               {entry.date.toLocaleDateString()}
@@ -534,7 +615,33 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                             </p>
                                           </div>
                                         </div>
-                                        <p className="font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
+                                        <div className="flex items-center gap-2">
+                                          <p className="font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
+                                          <div className="flex gap-1">
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                handleEditEntry(entry)
+                                              }}
+                                              className="h-7 px-2"
+                                            >
+                                              <Edit className="w-3 h-3" />
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                handleDeleteEntry(entry)
+                                              }}
+                                              className="h-7 px-2"
+                                            >
+                                              <Trash2 className="w-3 h-3" />
+                                            </Button>
+                                          </div>
+                                        </div>
                                       </div>
                                     ))}
                                   </div>
@@ -569,35 +676,62 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           type={entryType}
           project={project}
           trades={trades}
+          editingEntry={editingEntry}
           onSave={(entry) => {
             // Save to storage based on entry type
-            if (entry.type === 'labor') {
-              addLaborEntry(project.id, {
-                date: entry.date,
-                description: entry.description,
-                totalCost: entry.amount,
-                trade: entry.category as any,
-                tradeId: entry.tradeId,
-              })
-            } else if (entry.type === 'material') {
-              addMaterialEntry(project.id, {
-                date: entry.date,
-                materialName: entry.description,
-                totalCost: entry.amount,
-                category: entry.category as any,
-                tradeId: entry.tradeId,
-                vendor: entry.vendor,
-                invoiceNumber: entry.invoiceNumber,
-              })
-            } else if (entry.type === 'subcontractor') {
-              addSubcontractorEntry(project.id, {
-                subcontractorName: entry.subcontractorName || 'Unknown',
-                scopeOfWork: entry.description,
-                contractAmount: entry.amount,
-                totalPaid: entry.amount,
-                trade: entry.category as any,
-                tradeId: entry.tradeId,
-              })
+            if (editingEntry) {
+              // Update existing entry
+              if (entry.type === 'labor') {
+                updateLaborEntry(entry.id, {
+                  date: entry.date,
+                  description: entry.description,
+                  totalCost: entry.amount,
+                })
+              } else if (entry.type === 'material') {
+                updateMaterialEntry(entry.id, {
+                  date: entry.date,
+                  materialName: entry.description,
+                  totalCost: entry.amount,
+                  vendor: entry.vendor,
+                  invoiceNumber: entry.invoiceNumber,
+                })
+              } else if (entry.type === 'subcontractor') {
+                updateSubcontractorEntry(entry.id, {
+                  subcontractorName: entry.subcontractorName || 'Unknown',
+                  scopeOfWork: entry.description,
+                  totalPaid: entry.amount,
+                })
+              }
+            } else {
+              // Add new entry
+              if (entry.type === 'labor') {
+                addLaborEntry(project.id, {
+                  date: entry.date,
+                  description: entry.description,
+                  totalCost: entry.amount,
+                  trade: entry.category as any,
+                  tradeId: entry.tradeId,
+                })
+              } else if (entry.type === 'material') {
+                addMaterialEntry(project.id, {
+                  date: entry.date,
+                  materialName: entry.description,
+                  totalCost: entry.amount,
+                  category: entry.category as any,
+                  tradeId: entry.tradeId,
+                  vendor: entry.vendor,
+                  invoiceNumber: entry.invoiceNumber,
+                })
+              } else if (entry.type === 'subcontractor') {
+                addSubcontractorEntry(project.id, {
+                  subcontractorName: entry.subcontractorName || 'Unknown',
+                  scopeOfWork: entry.description,
+                  contractAmount: entry.amount,
+                  totalPaid: entry.amount,
+                  trade: entry.category as any,
+                  tradeId: entry.tradeId,
+                })
+              }
             }
             
             // Reload actuals to reflect changes
@@ -650,8 +784,12 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             }
             
             setShowEntryForm(false)
+            setEditingEntry(null)
           }}
-          onCancel={() => setShowEntryForm(false)}
+          onCancel={() => {
+            setShowEntryForm(false)
+            setEditingEntry(null)
+          }}
         />
       )}
 
@@ -753,34 +891,35 @@ interface ActualEntryFormProps {
   type: EntryType
   project: Project
   trades: Trade[]
+  editingEntry: ActualEntry | null
   onSave: (entry: ActualEntry) => void
   onCancel: () => void
 }
 
-function ActualEntryForm({ type, project, trades, onSave, onCancel }: ActualEntryFormProps) {
+function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel }: ActualEntryFormProps) {
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
-    amount: '',
-    description: '',
-    category: '',
-    tradeId: '',
+    date: editingEntry?.date ? new Date(editingEntry.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    amount: editingEntry?.amount?.toString() || '',
+    description: editingEntry?.description || '',
+    category: editingEntry?.category || '',
+    tradeId: editingEntry?.tradeId || '',
     
     // Labor
-    payrollPeriod: '',
+    payrollPeriod: editingEntry?.payrollPeriod || '',
     
     // Material
-    vendor: '',
-    invoiceNumber: '',
+    vendor: editingEntry?.vendor || '',
+    invoiceNumber: editingEntry?.invoiceNumber || '',
     
     // Subcontractor
-    subcontractorName: '',
+    subcontractorName: editingEntry?.subcontractorName || '',
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
     const entry: ActualEntry = {
-      id: uuidv4(),
+      id: editingEntry?.id || uuidv4(),
       type,
       date: new Date(formData.date),
       amount: parseFloat(formData.amount),
@@ -802,10 +941,11 @@ function ActualEntryForm({ type, project, trades, onSave, onCancel }: ActualEntr
   }
 
   const getTitle = () => {
+    const action = editingEntry ? 'Edit' : 'Add'
     switch (type) {
-      case 'labor': return 'Add Labor Entry'
-      case 'material': return 'Add Material Entry'
-      case 'subcontractor': return 'Add Subcontractor Entry'
+      case 'labor': return `${action} Labor Entry`
+      case 'material': return `${action} Material Entry`
+      case 'subcontractor': return `${action} Subcontractor Entry`
     }
   }
 
@@ -917,6 +1057,7 @@ function ActualEntryForm({ type, project, trades, onSave, onCancel }: ActualEntr
               <Select 
                 value={formData.category} 
                 onValueChange={(value) => setFormData(prev => ({ ...prev, category: value, tradeId: '' }))}
+                disabled={!!editingEntry}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select category..." />
@@ -930,6 +1071,9 @@ function ActualEntryForm({ type, project, trades, onSave, onCancel }: ActualEntr
                   ))}
                 </SelectContent>
               </Select>
+              {editingEntry && (
+                <p className="text-xs text-gray-500 mt-1">Category cannot be changed when editing</p>
+              )}
             </div>
 
             {formData.category && filteredTrades.length > 0 && (
@@ -966,7 +1110,7 @@ function ActualEntryForm({ type, project, trades, onSave, onCancel }: ActualEntr
                 type="submit"
                 className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226]"
               >
-                Save Entry
+                {editingEntry ? 'Save Changes' : 'Save Entry'}
               </Button>
             </div>
           </form>

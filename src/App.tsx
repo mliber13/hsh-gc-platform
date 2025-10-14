@@ -4,13 +4,15 @@ import { ProjectsDashboard } from './components/ProjectsDashboard'
 import { ProjectDetailView } from './components/ProjectDetailView'
 import { EstimateBuilder } from './components/EstimateBuilder'
 import { ProjectActuals } from './components/ProjectActuals'
+import { ScheduleBuilder } from './components/ScheduleBuilder'
+import { ChangeOrders } from './components/ChangeOrders'
 import { CreateProjectForm, ProjectFormData } from './components/CreateProjectForm'
 import { PlanLibrary } from './components/PlanLibrary'
 import { PlanEditor } from './components/PlanEditor'
 import { ItemLibrary } from './components/ItemLibrary'
 import { createProject, getProject } from './services/projectService'
 
-type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'plan-library' | 'plan-editor' | 'item-library'
+type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library'
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard')
@@ -19,7 +21,7 @@ function App() {
 
   // Refresh project data when viewing project-related screens
   useEffect(() => {
-    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate')) {
+    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'schedule' || currentView === 'change-orders')) {
       const refreshedProject = getProject(selectedProject.id)
       if (refreshedProject) {
         setSelectedProject(refreshedProject)
@@ -89,6 +91,14 @@ function App() {
     setCurrentView('actuals')
   }
 
+  const handleViewSchedule = () => {
+    setCurrentView('schedule')
+  }
+
+  const handleViewChangeOrders = () => {
+    setCurrentView('change-orders')
+  }
+
   const handleOpenPlanLibrary = () => {
     setCurrentView('plan-library')
   }
@@ -141,6 +151,12 @@ function App() {
           onBack={handleBackToDashboard}
           onViewEstimate={handleViewEstimate}
           onViewActuals={handleViewActuals}
+          onViewSchedule={handleViewSchedule}
+          onViewChangeOrders={handleViewChangeOrders}
+          onProjectDuplicated={(newProject) => {
+            setSelectedProject(newProject)
+            // Stay on project detail view to see the new project
+          }}
         />
       )}
 
@@ -153,6 +169,20 @@ function App() {
 
       {currentView === 'actuals' && selectedProject && (
         <ProjectActuals
+          project={selectedProject}
+          onBack={handleBackToProjectDetail}
+        />
+      )}
+
+      {currentView === 'schedule' && selectedProject && (
+        <ScheduleBuilder
+          project={selectedProject}
+          onBack={handleBackToProjectDetail}
+        />
+      )}
+
+      {currentView === 'change-orders' && selectedProject && (
+        <ChangeOrders
           project={selectedProject}
           onBack={handleBackToProjectDetail}
         />

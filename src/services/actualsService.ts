@@ -123,6 +123,48 @@ export function getProjectLaborEntries(projectId: string): LaborEntry[] {
   return getLaborEntriesForProject(projectId)
 }
 
+/**
+ * Update labor entry
+ */
+export function updateLaborEntry(
+  entryId: string,
+  updates: Partial<{
+    date: Date
+    description: string
+    totalCost: number
+    totalHours: number
+    laborRate: number
+  }>
+): LaborEntry | null {
+  const entry = laborStorage.getById(entryId)
+  if (!entry) return null
+
+  const updated = laborStorage.update(entryId, updates)
+  
+  if (updated) {
+    recalculateActuals(entry.projectId)
+  }
+  
+  return updated
+}
+
+/**
+ * Delete labor entry
+ */
+export function deleteLaborEntry(entryId: string): boolean {
+  const entry = laborStorage.getById(entryId)
+  if (!entry) return false
+
+  const projectId = entry.projectId
+  const deleted = laborStorage.delete(entryId)
+  
+  if (deleted) {
+    recalculateActuals(projectId)
+  }
+  
+  return deleted
+}
+
 // ----------------------------------------------------------------------------
 // Material Entry Operations
 // ----------------------------------------------------------------------------
@@ -179,6 +221,50 @@ export function addMaterialEntry(
  */
 export function getProjectMaterialEntries(projectId: string): MaterialEntry[] {
   return getMaterialEntriesForProject(projectId)
+}
+
+/**
+ * Update material entry
+ */
+export function updateMaterialEntry(
+  entryId: string,
+  updates: Partial<{
+    date: Date
+    materialName: string
+    totalCost: number
+    vendor: string
+    invoiceNumber: string
+    quantity: number
+    unitCost: number
+  }>
+): MaterialEntry | null {
+  const entry = materialStorage.getById(entryId)
+  if (!entry) return null
+
+  const updated = materialStorage.update(entryId, updates)
+  
+  if (updated) {
+    recalculateActuals(entry.projectId)
+  }
+  
+  return updated
+}
+
+/**
+ * Delete material entry
+ */
+export function deleteMaterialEntry(entryId: string): boolean {
+  const entry = materialStorage.getById(entryId)
+  if (!entry) return false
+
+  const projectId = entry.projectId
+  const deleted = materialStorage.delete(entryId)
+  
+  if (deleted) {
+    recalculateActuals(projectId)
+  }
+  
+  return deleted
 }
 
 // ----------------------------------------------------------------------------
@@ -239,6 +325,65 @@ export function addSubcontractorEntry(
  */
 export function getProjectSubcontractorEntries(projectId: string): SubcontractorEntry[] {
   return getSubcontractorEntriesForProject(projectId)
+}
+
+/**
+ * Update subcontractor entry
+ */
+export function updateSubcontractorEntry(
+  entryId: string,
+  updates: Partial<{
+    subcontractorName: string
+    scopeOfWork: string
+    contractAmount: number
+    totalPaid: number
+    company: string
+  }>
+): SubcontractorEntry | null {
+  const entry = subcontractorStorage.getById(entryId)
+  if (!entry) return null
+
+  // Update subcontractor info if name or company changed
+  const updateData: any = { ...updates }
+  if (updates.subcontractorName || updates.company) {
+    updateData.subcontractor = {
+      ...entry.subcontractor,
+      name: updates.subcontractorName || entry.subcontractor.name,
+      company: updates.company || entry.subcontractor.company,
+    }
+  }
+
+  // Recalculate balance if amounts changed
+  if (updates.contractAmount !== undefined || updates.totalPaid !== undefined) {
+    const contractAmount = updates.contractAmount ?? entry.contractAmount
+    const totalPaid = updates.totalPaid ?? entry.totalPaid
+    updateData.balance = contractAmount - totalPaid
+  }
+
+  const updated = subcontractorStorage.update(entryId, updateData)
+  
+  if (updated) {
+    recalculateActuals(entry.projectId)
+  }
+  
+  return updated
+}
+
+/**
+ * Delete subcontractor entry
+ */
+export function deleteSubcontractorEntry(entryId: string): boolean {
+  const entry = subcontractorStorage.getById(entryId)
+  if (!entry) return false
+
+  const projectId = entry.projectId
+  const deleted = subcontractorStorage.delete(entryId)
+  
+  if (deleted) {
+    recalculateActuals(projectId)
+  }
+  
+  return deleted
 }
 
 // ----------------------------------------------------------------------------

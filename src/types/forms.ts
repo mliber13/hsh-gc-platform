@@ -54,6 +54,8 @@ export interface UpdateProjectInput extends Partial<CreateProjectInput> {
   id: string
   status?: Project['status']
   estimate?: Estimate
+  actuals?: any // ProjectActuals type
+  schedule?: any // ProjectSchedule type
 }
 
 export interface ClientInput {

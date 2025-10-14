@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { Project, ProjectType, ProjectStatus } from '@/types'
-import { updateProject, deleteProject } from '@/services/projectService'
+import { updateProject, deleteProject, duplicateProject } from '@/services/projectService'
 import { getTradesForEstimate, getProjectActuals } from '@/services'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PROJECT_TYPES, PROJECT_STATUS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2 } from 'lucide-react'
+import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface ProjectDetailViewProps {
@@ -23,6 +23,9 @@ interface ProjectDetailViewProps {
   onBack: () => void
   onViewEstimate: () => void
   onViewActuals: () => void
+  onViewSchedule?: () => void
+  onViewChangeOrders?: () => void
+  onProjectDuplicated?: (newProject: Project) => void
 }
 
 export function ProjectDetailView({
@@ -30,6 +33,9 @@ export function ProjectDetailView({
   onBack,
   onViewEstimate,
   onViewActuals,
+  onViewSchedule,
+  onViewChangeOrders,
+  onProjectDuplicated,
 }: ProjectDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editedProject, setEditedProject] = useState(project)
@@ -128,6 +134,22 @@ export function ProjectDetailView({
     }
   }
 
+  const handleDuplicate = () => {
+    const newName = prompt(`Enter name for the duplicated project:`, `${project.name} (Copy)`)
+    
+    if (newName && newName.trim()) {
+      const newProject = duplicateProject(project.id, newName.trim())
+      if (newProject) {
+        alert('✅ Project duplicated successfully!')
+        if (onProjectDuplicated) {
+          onProjectDuplicated(newProject)
+        }
+      } else {
+        alert('❌ Failed to duplicate project. Please try again.')
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20 sm:pb-0">
       {/* Header */}
@@ -159,6 +181,14 @@ export function ProjectDetailView({
               >
                 <Edit className="w-4 h-4 mr-2" />
                 Edit Project
+              </Button>
+              <Button
+                onClick={handleDuplicate}
+                variant="outline"
+                className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Duplicate Project
               </Button>
               <Button
                 onClick={handleDelete}
@@ -270,7 +300,7 @@ export function ProjectDetailView({
         </div>
 
         {/* Main Navigation Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* Estimate Book Card */}
           <Card className="bg-gradient-to-br from-[#213069] to-[#1a2550] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
             <button onClick={onViewEstimate} className="w-full text-left">
@@ -354,7 +384,63 @@ export function ProjectDetailView({
               </CardContent>
             </button>
           </Card>
+
+          {/* Project Schedule Card */}
+          <Card className="bg-gradient-to-br from-[#34AB8A] to-[#2a8d6f] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
+            <button onClick={onViewSchedule} className="w-full text-left">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
+                    <Calendar className="w-8 h-8" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm opacity-80">Duration</p>
+                    <p className="text-2xl font-bold">
+                      {project.schedule?.duration || '--'} days
+                    </p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <h3 className="text-2xl font-bold mb-3">Project Schedule</h3>
+                <p className="text-white/80 mb-4">
+                  Manage project timeline, set dates for each task, and track progress against schedule.
+                </p>
+                <div className="bg-white/10 rounded-lg p-3 mb-4">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Schedule Items</span>
+                    <span className="font-semibold">{project.schedule?.items?.length || 0}</span>
+                  </div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Progress</span>
+                    <span className="font-semibold">{project.schedule?.percentComplete?.toFixed(0) || 0}%</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold pt-2 border-t border-white/20">
+                    <span>Status</span>
+                    <span>{project.schedule?.isOnSchedule ? 'On Track' : 'Needs Review'}</span>
+                  </div>
+                </div>
+                <div className="flex items-center text-sm text-white/60">
+                  <span>Click to manage schedule →</span>
+                </div>
+              </CardContent>
+            </button>
+          </Card>
         </div>
+
+        {/* Secondary Action - Change Orders */}
+        {onViewChangeOrders && (
+          <div className="mb-6 sm:mb-8">
+            <Button
+              onClick={onViewChangeOrders}
+              variant="outline"
+              className="w-full border-purple-600 text-purple-600 hover:bg-purple-600 hover:text-white"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Manage Change Orders ({project.actuals?.changeOrders?.length || 0})
+            </Button>
+          </div>
+        )}
       </main>
       
       {/* Edit Project Modal */}
@@ -536,26 +622,36 @@ export function ProjectDetailView({
               variant="outline"
               className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
             >
-              <Edit className="w-4 h-4 mr-2" />
-              Edit Project
+              <Edit className="w-4 h-4 mr-1" />
+              Edit
             </Button>
+            <Button
+              onClick={handleDuplicate}
+              variant="outline"
+              className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
+            >
+              <Copy className="w-4 h-4 mr-1" />
+              Duplicate
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <Button
               onClick={handleDelete}
               variant="outline"
               className="border-red-600 text-red-600 hover:bg-red-600 hover:text-white"
             >
-              <Trash2 className="w-4 h-4 mr-2" />
+              <Trash2 className="w-4 h-4 mr-1" />
               Delete
             </Button>
+            <Button
+              onClick={onBack}
+              variant="outline"
+              className="border-gray-300 hover:bg-gray-50"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              Back
+            </Button>
           </div>
-          <Button
-            onClick={onBack}
-            variant="outline"
-            className="border-gray-300 hover:bg-gray-50 w-full"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Projects
-          </Button>
         </div>
       </div>
     </div>
