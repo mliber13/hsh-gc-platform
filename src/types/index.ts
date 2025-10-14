@@ -129,6 +129,12 @@ export type {
   ScheduleTemplate,
 } from './forms'
 
+// Export item template types
+export type {
+  ItemTemplate,
+  ItemTemplateInput,
+} from './itemTemplate'
+
 // Export all API types
 export type {
   // Generic responses

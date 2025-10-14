@@ -1,19 +1,31 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Project, Plan } from './types'
 import { ProjectsDashboard } from './components/ProjectsDashboard'
 import { ProjectDetailView } from './components/ProjectDetailView'
 import { EstimateBuilder } from './components/EstimateBuilder'
+import { ProjectActuals } from './components/ProjectActuals'
 import { CreateProjectForm, ProjectFormData } from './components/CreateProjectForm'
 import { PlanLibrary } from './components/PlanLibrary'
 import { PlanEditor } from './components/PlanEditor'
-import { createProject } from './services/projectService'
+import { ItemLibrary } from './components/ItemLibrary'
+import { createProject, getProject } from './services/projectService'
 
-type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'variance' | 'plan-library' | 'plan-editor'
+type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'plan-library' | 'plan-editor' | 'item-library'
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard')
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
+
+  // Refresh project data when viewing project-related screens
+  useEffect(() => {
+    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate')) {
+      const refreshedProject = getProject(selectedProject.id)
+      if (refreshedProject) {
+        setSelectedProject(refreshedProject)
+      }
+    }
+  }, [currentView])
 
   const handleCreateProject = () => {
     setCurrentView('create-project')
@@ -77,12 +89,12 @@ function App() {
     setCurrentView('actuals')
   }
 
-  const handleViewVariance = () => {
-    setCurrentView('variance')
-  }
-
   const handleOpenPlanLibrary = () => {
     setCurrentView('plan-library')
+  }
+
+  const handleOpenItemLibrary = () => {
+    setCurrentView('item-library')
   }
 
   const handleCreatePlan = () => {
@@ -112,6 +124,7 @@ function App() {
           onCreateProject={handleCreateProject}
           onSelectProject={handleSelectProject}
           onOpenPlanLibrary={handleOpenPlanLibrary}
+          onOpenItemLibrary={handleOpenItemLibrary}
         />
       )}
 
@@ -128,7 +141,6 @@ function App() {
           onBack={handleBackToDashboard}
           onViewEstimate={handleViewEstimate}
           onViewActuals={handleViewActuals}
-          onViewVariance={handleViewVariance}
         />
       )}
 
@@ -140,33 +152,10 @@ function App() {
       )}
 
       {currentView === 'actuals' && selectedProject && (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Project Actuals</h1>
-            <p className="text-gray-600 mb-8">Coming Soon - Track real costs and revenue</p>
-            <button
-              onClick={handleBackToProjectDetail}
-              className="px-6 py-3 bg-[#0E79C9] text-white rounded-lg hover:bg-[#0A5A96]"
-            >
-              Back to Project
-            </button>
-          </div>
-        </div>
-      )}
-
-      {currentView === 'variance' && selectedProject && (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Variance Report</h1>
-            <p className="text-gray-600 mb-8">Coming Soon - Compare Estimate vs Actuals</p>
-            <button
-              onClick={handleBackToProjectDetail}
-              className="px-6 py-3 bg-[#34AB8A] text-white rounded-lg hover:bg-[#2a8d6f]"
-            >
-              Back to Project
-            </button>
-          </div>
-        </div>
+        <ProjectActuals
+          project={selectedProject}
+          onBack={handleBackToProjectDetail}
+        />
       )}
 
       {currentView === 'plan-library' && (
@@ -182,6 +171,12 @@ function App() {
           plan={selectedPlan}
           onBack={handleBackToPlanLibrary}
           onSave={handlePlanSaved}
+        />
+      )}
+
+      {currentView === 'item-library' && (
+        <ItemLibrary
+          onBack={handleBackToDashboard}
         />
       )}
     </div>

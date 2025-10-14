@@ -394,6 +394,8 @@ export interface ExportData {
   historicalRates: HistoricalRate[]
   estimateTemplates: EstimateTemplate[]
   scheduleTemplates: ScheduleTemplate[]
+  plans: any[] // Plan type from plan.ts
+  itemTemplates: any[] // ItemTemplate type from itemTemplate.ts
   userPreferences: UserPreferences | null
 }
 
@@ -401,6 +403,14 @@ export interface ExportData {
  * Export all data as JSON
  */
 export function exportAllData(): ExportData {
+  // Get item templates from their separate storage
+  const itemTemplatesData = localStorage.getItem('hsh_gc_item_templates')
+  const itemTemplates = itemTemplatesData ? JSON.parse(itemTemplatesData) : []
+  
+  // Get plans from their separate storage (uses old key format)
+  const plansData = localStorage.getItem('hsh-plans')
+  const plans = plansData ? JSON.parse(plansData) : []
+  
   return {
     version: '1.0.0',
     exportDate: new Date(),
@@ -418,6 +428,8 @@ export function exportAllData(): ExportData {
     historicalRates: historicalRateStorage.getAll(),
     estimateTemplates: estimateTemplateStorage.getAll(),
     scheduleTemplates: scheduleTemplateStorage.getAll(),
+    plans: plans,
+    itemTemplates: itemTemplates,
     userPreferences: getUserPreferences(),
   }
 }
@@ -432,26 +444,53 @@ export function importAllData(data: ExportData, merge: boolean = false): void {
       clearAllData()
     }
 
-    // Import all collections
-    if (data.projects) projectStorage.saveAll(data.projects)
-    if (data.estimates) estimateStorage.saveAll(data.estimates)
-    if (data.trades) tradeStorage.saveAll(data.trades)
-    if (data.takeoffItems) takeoffStorage.saveAll(data.takeoffItems)
-    if (data.actuals) actualsStorage.saveAll(data.actuals)
-    if (data.laborEntries) laborStorage.saveAll(data.laborEntries)
-    if (data.materialEntries) materialStorage.saveAll(data.materialEntries)
-    if (data.subcontractorEntries) subcontractorStorage.saveAll(data.subcontractorEntries)
-    if (data.dailyLogs) dailyLogStorage.saveAll(data.dailyLogs)
-    if (data.changeOrders) changeOrderStorage.saveAll(data.changeOrders)
-    if (data.timeClockEntries) timeClockStorage.saveAll(data.timeClockEntries)
-    if (data.historicalRates) historicalRateStorage.saveAll(data.historicalRates)
-    if (data.estimateTemplates) estimateTemplateStorage.saveAll(data.estimateTemplates)
-    if (data.scheduleTemplates) scheduleTemplateStorage.saveAll(data.scheduleTemplates)
-    if (data.userPreferences) saveUserPreferences(data.userPreferences)
+    console.log('Starting import...')
 
-    console.log('Data imported successfully')
+    // Import all collections - use empty arrays as defaults
+    projectStorage.saveAll(data.projects || [])
+    console.log('Projects imported:', data.projects?.length || 0)
+    
+    estimateStorage.saveAll(data.estimates || [])
+    console.log('Estimates imported:', data.estimates?.length || 0)
+    
+    tradeStorage.saveAll(data.trades || [])
+    console.log('Trades imported:', data.trades?.length || 0)
+    
+    takeoffStorage.saveAll(data.takeoffItems || [])
+    actualsStorage.saveAll(data.actuals || [])
+    laborStorage.saveAll(data.laborEntries || [])
+    console.log('Labor entries imported:', data.laborEntries?.length || 0)
+    
+    materialStorage.saveAll(data.materialEntries || [])
+    console.log('Material entries imported:', data.materialEntries?.length || 0)
+    
+    subcontractorStorage.saveAll(data.subcontractorEntries || [])
+    console.log('Subcontractor entries imported:', data.subcontractorEntries?.length || 0)
+    
+    dailyLogStorage.saveAll(data.dailyLogs || [])
+    changeOrderStorage.saveAll(data.changeOrders || [])
+    timeClockStorage.saveAll(data.timeClockEntries || [])
+    historicalRateStorage.saveAll(data.historicalRates || [])
+    estimateTemplateStorage.saveAll(data.estimateTemplates || [])
+    scheduleTemplateStorage.saveAll(data.scheduleTemplates || [])
+    
+    if (data.itemTemplates) {
+      localStorage.setItem('hsh_gc_item_templates', JSON.stringify(data.itemTemplates))
+      console.log('Item templates imported:', data.itemTemplates?.length || 0)
+    }
+    
+    if (data.plans) {
+      localStorage.setItem('hsh-plans', JSON.stringify(data.plans))
+      console.log('Plans imported:', data.plans?.length || 0)
+    }
+    
+    if (data.userPreferences) {
+      saveUserPreferences(data.userPreferences)
+    }
+
+    console.log('✅ All data imported successfully')
   } catch (error) {
-    console.error('Error importing data:', error)
+    console.error('❌ Error importing data:', error)
     throw new Error('Failed to import data')
   }
 }
@@ -479,6 +518,9 @@ export function clearAllData(): void {
   Object.values(STORAGE_KEYS).forEach(key => {
     localStorage.removeItem(key)
   })
+  // Also clear item templates and plans (separate storage keys)
+  localStorage.removeItem('hsh_gc_item_templates')
+  localStorage.removeItem('hsh-plans')
   console.log('All data cleared')
 }
 

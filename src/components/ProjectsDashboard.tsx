@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react'
 import { Project } from '@/types'
 import { getAllProjects } from '@/services/projectService'
+import { getTradesForEstimate, exportAllData, importAllData } from '@/services'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,9 +19,10 @@ interface ProjectsDashboardProps {
   onCreateProject: () => void
   onSelectProject: (project: Project) => void
   onOpenPlanLibrary: () => void
+  onOpenItemLibrary: () => void
 }
 
-export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlanLibrary }: ProjectsDashboardProps) {
+export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlanLibrary, onOpenItemLibrary }: ProjectsDashboardProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -28,6 +30,23 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
     const allProjects = getAllProjects()
     setProjects(allProjects)
   }, [])
+
+  // Calculate estimated value for a project from its trades
+  const calculateEstimatedValue = (project: Project): number => {
+    const trades = getTradesForEstimate(project.estimate.id)
+    const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
+    const grossProfitTotal = trades.reduce((sum, trade) => {
+      const markup = trade.markupPercent || 11.1
+      return sum + (trade.totalCost * (markup / 100))
+    }, 0)
+    const contingency = basePriceTotal * 0.10 // 10% default
+    return basePriceTotal + grossProfitTotal + contingency
+  }
+
+  const calculateTradeCount = (project: Project): number => {
+    const trades = getTradesForEstimate(project.estimate.id)
+    return trades.length
+  }
 
   const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -50,13 +69,7 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
   // Export all localStorage data
   const handleExportData = () => {
     try {
-      const data = {
-        projects: localStorage.getItem('hsh-projects'),
-        estimates: localStorage.getItem('hsh-estimates'),
-        plans: localStorage.getItem('hsh-plans'),
-        exportDate: new Date().toISOString(),
-        version: '1.0'
-      }
+      const data = exportAllData()
 
       const jsonString = JSON.stringify(data, null, 2)
       const blob = new Blob([jsonString], { type: 'application/json' })
@@ -86,17 +99,41 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string
-        const data = JSON.parse(content)
+        
+        // Parse with date reviver
+        const data = JSON.parse(content, (key, value) => {
+          if (typeof value === 'string') {
+            const dateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
+            if (dateRegex.test(value)) {
+              return new Date(value)
+            }
+          }
+          return value
+        })
 
-        if (data.projects) localStorage.setItem('hsh-projects', data.projects)
-        if (data.estimates) localStorage.setItem('hsh-estimates', data.estimates)
-        if (data.plans) localStorage.setItem('hsh-plans', data.plans)
+        console.log('Importing data:', {
+          projects: data.projects?.length || 0,
+          estimates: data.estimates?.length || 0,
+          trades: data.trades?.length || 0,
+          actuals: data.actuals?.length || 0,
+          laborEntries: data.laborEntries?.length || 0,
+          materialEntries: data.materialEntries?.length || 0,
+          itemTemplates: data.itemTemplates?.length || 0,
+        })
 
-        alert('✅ Data imported successfully! Refreshing page...')
-        window.location.reload()
+        // Import all data (replace existing)
+        importAllData(data, false)
+
+        console.log('Import complete, data saved to localStorage')
+
+        // Small delay to ensure localStorage is written
+        setTimeout(() => {
+          alert('✅ Data imported successfully! Refreshing page...')
+          window.location.reload()
+        }, 100)
       } catch (error) {
         console.error('Import failed:', error)
-        alert('❌ Failed to import data. Please check the file format.')
+        alert(`❌ Failed to import data: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
     }
     reader.readAsText(file)
@@ -187,6 +224,23 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                   </div>
                   <h3 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">Plan Library</h3>
                   <p className="text-white/80 text-center text-sm sm:text-base hidden sm:block">Manage plan templates</p>
+                </div>
+              </button>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-[#34AB8A] to-[#2a8d6f] text-white hover:shadow-xl transition-shadow cursor-pointer border-none hidden sm:block">
+            <CardContent className="pt-6">
+              <button
+                onClick={onOpenItemLibrary}
+                className="w-full text-left"
+              >
+                <div className="flex flex-col items-center justify-center py-3 sm:py-8">
+                  <div className="bg-white/20 rounded-full p-2 sm:p-4 mb-2 sm:mb-4">
+                    <DollarSign className="w-8 sm:w-12 h-8 sm:h-12" />
+                  </div>
+                  <h3 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">Item Library</h3>
+                  <p className="text-white/80 text-center text-sm sm:text-base hidden sm:block">Manage default rates</p>
                 </div>
               </button>
             </CardContent>
@@ -313,10 +367,10 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                       <div className="text-left sm:text-right sm:ml-4">
                         <p className="text-sm text-gray-600">Estimated Value</p>
                         <p className="text-xl sm:text-2xl font-bold text-[#0E79C9]">
-                          {formatCurrency(project.estimate?.totals?.totalEstimated || 0)}
+                          {formatCurrency(calculateEstimatedValue(project))}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
-                          {project.estimate?.trades?.length || 0} {project.estimate?.trades?.length === 1 ? 'item' : 'items'}
+                          {calculateTradeCount(project)} {calculateTradeCount(project) === 1 ? 'item' : 'items'}
                         </p>
                       </div>
                     </div>
@@ -345,6 +399,16 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
               >
                 <FileText className="w-5 h-5 mr-2" />
                 Plan Library
+              </Button>
+            </div>
+            {/* Library Management */}
+            <div className="grid grid-cols-1 gap-2">
+              <Button
+                onClick={onOpenItemLibrary}
+                className="bg-gradient-to-r from-[#34AB8A] to-[#2a8d6f] hover:from-[#2a8d6f] hover:to-[#1f7053] text-white h-12"
+              >
+                <DollarSign className="w-5 h-5 mr-2" />
+                Item Library
               </Button>
             </div>
             {/* Data Management */}

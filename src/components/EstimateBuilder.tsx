@@ -17,7 +17,6 @@ import {
   TRADE_CATEGORIES,
   UNIT_TYPES,
   DEFAULT_VALUES,
-  DEFAULT_CATEGORY_ITEMS,
   PROJECT_TYPES,
 } from '@/types'
 import {
@@ -28,6 +27,7 @@ import {
   deleteTrade,
   recalculateEstimate,
   getTradesForEstimate,
+  getItemTemplatesByCategory,
 } from '@/services'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -110,6 +110,48 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       setTrades(loadedTrades)
     }
   }, [projectData])
+
+  // Update estimate totals whenever trades, markup, or contingency change
+  useEffect(() => {
+    if (!projectData) return
+    
+    const totals = calculateTotals()
+    
+    // Check if totals have actually changed
+    const currentTotals = projectData.estimate.totals
+    const hasChanged = !currentTotals ||
+      currentTotals.basePriceTotal !== totals.basePriceTotal ||
+      currentTotals.contingency !== totals.contingency ||
+      currentTotals.grossProfitTotal !== totals.grossProfitTotal ||
+      currentTotals.totalEstimated !== totals.totalEstimated ||
+      currentTotals.marginOfProfit !== totals.marginOfProfit
+    
+    if (hasChanged) {
+      // Update the estimate in storage with the new totals
+      const updatedEstimate = {
+        ...projectData.estimate,
+        totals: {
+          basePriceTotal: totals.basePriceTotal,
+          contingency: totals.contingency,
+          grossProfitTotal: totals.grossProfitTotal,
+          totalEstimated: totals.totalEstimated,
+          marginOfProfit: totals.marginOfProfit,
+        },
+        subtotal: totals.basePriceTotal,
+        overhead: 0,
+        profit: totals.grossProfitTotal,
+        contingency: totals.contingency,
+        totalEstimate: totals.totalEstimated,
+        updatedAt: new Date(),
+      }
+      
+      // Update project with new estimate
+      updateProject(projectData.id, {
+        estimate: updatedEstimate,
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trades, markupPercent, contingencyPercent])
 
   // ----------------------------------------------------------------------------
   // Event Handlers
@@ -924,6 +966,15 @@ interface TradeFormProps {
 function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
   const [formData, setFormData] = useState<TradeFormData>(trade)
   const [subcontractorEntryMode, setSubcontractorEntryMode] = useState<'lump-sum' | 'breakdown'>('lump-sum')
+  const [itemTemplates, setItemTemplates] = useState<any[]>([])
+
+  // Load item templates when category changes
+  React.useEffect(() => {
+    if (formData.category) {
+      const templates = getItemTemplatesByCategory(formData.category)
+      setItemTemplates(templates)
+    }
+  }, [formData.category])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -957,276 +1008,44 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
               <div>
                 <Label htmlFor="name">Item Name</Label>
                 <div className="space-y-2">
-                  {DEFAULT_CATEGORY_ITEMS[formData.category as keyof typeof DEFAULT_CATEGORY_ITEMS] && DEFAULT_CATEGORY_ITEMS[formData.category as keyof typeof DEFAULT_CATEGORY_ITEMS].length > 0 ? (
+                  {itemTemplates.length > 0 ? (
                     <div className="space-y-2">
                       <Select 
                         value={formData.name} 
                         onValueChange={(value) => {
-                          // Check for special cases first - Lump sum categories
-                          if (value === 'Full Scope' && (formData.category === 'insulation' || formData.category === 'plumbing' || formData.category === 'drywall')) {
-                            // Insulation/Plumbing/Drywall Full Scope - set unit to lot, no default costs
-                            setFormData(prev => ({
-                              ...prev,
-                              name: value,
-                              unit: 'lot',
-                              materialRate: undefined,
-                              laborRate: undefined,
-                            }))
-                            return
-                          }
+                          // Find the selected template
+                          const template = itemTemplates.find(t => t.name === value)
                           
-                          // Auto-populate costs based on item selection
-                          const itemDefaults: Record<string, { unit: string, materialRate: number, laborRate: number }> = {
-                            'Wood Framing': { unit: 'sqft', materialRate: 11.44, laborRate: 5.50 },
-                            'Interior Doors': { unit: 'each', materialRate: 350, laborRate: 100 },
-                            'Exterior Doors': { unit: 'each', materialRate: 1400, laborRate: 150 },
-                            'Garage Doors': { unit: 'each', materialRate: 1500, laborRate: 600 },
-                            'Sliding Doors/French Door': { unit: 'each', materialRate: 1800, laborRate: 150 },
-                            'Windows': { unit: 'each', materialRate: 1000, laborRate: 125 },
-                            'Front Door': { unit: 'each', materialRate: 2400, laborRate: 150 },
-                            'Siding': { unit: 'sqft', materialRate: 5.00, laborRate: 1.25 },
-                            'Soffit/Fascia': { unit: 'linear_ft', materialRate: 10.00, laborRate: 3.00 },
-                            'Exterior Paint': { unit: 'sqft', materialRate: 3.00, laborRate: 3.00 },
-                            'Rough': { unit: 'sqft', materialRate: 5.00, laborRate: 10.00 },
-                            'Finishes': { unit: 'sqft', materialRate: 1.00, laborRate: 2.00 },
-                            'Closet Hardware': { unit: 'each', materialRate: 500, laborRate: 250 },
-                            'Closet Shelving': { unit: 'each', materialRate: 500, laborRate: 250 },
-                            'Flooring': { unit: 'sqft', materialRate: 2.00, laborRate: 2.00 },
-                            'Interior Paint': { unit: 'sqft', materialRate: 2.00, laborRate: 2.00 },
-                            'Backsplash': { unit: 'sqft', materialRate: 5.00, laborRate: 5.00 },
-                            'Countertops': { unit: 'sqft', materialRate: 50, laborRate: 25 },
-                            'Kitchen Faucet': { unit: 'each', materialRate: 200, laborRate: 0 },
-                            'Cooktop': { unit: 'each', materialRate: 600, laborRate: 75 },
-                            'Dishwasher': { unit: 'each', materialRate: 250, laborRate: 75 },
-                            'Microwave Oven': { unit: 'each', materialRate: 250, laborRate: 25 },
-                            'Oven': { unit: 'each', materialRate: 600, laborRate: 75 },
-                            'Range Hood': { unit: 'each', materialRate: 600, laborRate: 75 },
-                            'Refrigerator': { unit: 'each', materialRate: 600, laborRate: 75 },
-                            'Washer+Dryer': { unit: 'each', materialRate: 1200, laborRate: 150 },
-                          }
-                          
-                          // Handle category-specific items with same names
-                          if (formData.category === 'kitchen' as any) {
-                            if (value === 'Cabinets') {
-                              setFormData(prev => {
-                                const qty = prev.quantity || 1
-                                return {
-                                  ...prev,
-                                  name: value,
-                                  unit: 'each',
-                                  materialRate: 300,
-                                  laborRate: 75,
-                                  materialCost: qty * 300,
-                                  laborCost: qty * 75,
-                                }
-                              })
-                              return
-                            }
-                            if (value === 'Accessories') {
-                              setFormData(prev => {
-                                const qty = prev.quantity || 1
-                                return {
-                                  ...prev,
-                                  name: value,
-                                  unit: 'lot',
-                                  materialRate: 750,
-                                  laborRate: 250,
-                                  materialCost: qty * 750,
-                                  laborCost: qty * 250,
-                                }
-                              })
-                              return
-                            }
-                          }
-                          
-                          if (formData.category === 'bath' as any) {
-                            if (value === 'Accessories') {
-                              setFormData(prev => {
-                                const qty = prev.quantity || 1
-                                return {
-                                  ...prev,
-                                  name: value,
-                                  unit: 'lot',
-                                  materialRate: 500,
-                                  laborRate: 250,
-                                  materialCost: qty * 500,
-                                  laborCost: qty * 250,
-                                }
-                              })
-                              return
-                            }
-                            if (value === 'Cabinets') {
-                              setFormData(prev => {
-                                const qty = prev.quantity || 1
-                                return {
-                                  ...prev,
-                                  name: value,
-                                  unit: 'each',
-                                  materialRate: 300,
-                                  laborRate: 75,
-                                  materialCost: qty * 300,
-                                  laborCost: qty * 75,
-                                }
-                              })
-                              return
-                            }
-                            if (value === 'Cabinets-Hardware') {
-                              setFormData(prev => {
-                                const qty = prev.quantity || 1
-                                return {
-                                  ...prev,
-                                  name: value,
-                                  unit: 'lot',
-                                  materialRate: 250,
-                                  laborRate: 50,
-                                  materialCost: qty * 250,
-                                  laborCost: qty * 50,
-                                }
-                              })
-                              return
-                            }
-                            if (value === 'Countertops') {
-                              setFormData(prev => {
-                                const qty = prev.quantity || 1
-                                return {
-                                  ...prev,
-                                  name: value,
-                                  unit: 'sqft',
-                                  materialRate: 50,
-                                  laborRate: 25,
-                                  materialCost: qty * 50,
-                                  laborCost: qty * 25,
-                                }
-                              })
-                              return
-                            }
-                            if (value === 'Mirrors') {
-                              setFormData(prev => {
-                                const qty = prev.quantity || 1
-                                return {
-                                  ...prev,
-                                  name: value,
-                                  unit: 'each',
-                                  materialRate: 150,
-                                  laborRate: 50,
-                                  materialCost: qty * 150,
-                                  laborCost: qty * 50,
-                                }
-                              })
-                              return
-                            }
-                            if (value === 'Tub/Shower Enclosure') {
-                              setFormData(prev => {
-                                const qty = prev.quantity || 1
-                                return {
-                                  ...prev,
-                                  name: value,
-                                  unit: 'each',
-                                  materialRate: 1600,
-                                  laborRate: 0,
-                                  materialCost: qty * 1600,
-                                  laborCost: 0,
-                                }
-                              })
-                              return
-                            }
-                            if (value === 'Toilet') {
-                              setFormData(prev => {
-                                const qty = prev.quantity || 1
-                                return {
-                                  ...prev,
-                                  name: value,
-                                  unit: 'each',
-                                  materialRate: 250,
-                                  laborRate: 0,
-                                  materialCost: qty * 250,
-                                  laborCost: 0,
-                                }
-                              })
-                              return
-                            }
-                            if (value === 'Bath Faucet') {
-                              setFormData(prev => {
-                                const qty = prev.quantity || 1
-                                return {
-                                  ...prev,
-                                  name: value,
-                                  unit: 'each',
-                                  materialRate: 150,
-                                  laborRate: 0,
-                                  materialCost: qty * 150,
-                                  laborCost: 0,
-                                }
-                              })
-                              return
-                            }
-                            // Medicine Cabinets - no defaults, just set name
-                            if (value === 'Medicine Cabinets') {
-                              setFormData(prev => ({ ...prev, name: value }))
-                              return
-                            }
-                          }
-                          
-                          // HVAC Full Scope has different defaults
-                          if (value === 'Full Scope' && formData.category === 'hvac') {
+                          if (template) {
+                            // Use template defaults
                             setFormData(prev => {
                               const qty = prev.quantity || 1
                               return {
                                 ...prev,
-                                name: value,
-                                unit: 'sqft',
-                                materialRate: 10.00,
-                                laborRate: 2.00,
-                                materialCost: qty * 10.00,
-                                laborCost: qty * 2.00,
+                                name: template.name,
+                                unit: template.defaultUnit,
+                                isSubcontracted: template.isSubcontracted,
+                                materialRate: template.defaultMaterialRate,
+                                laborRate: template.defaultLaborRate,
+                                subcontractorCost: template.defaultSubcontractorCost || 0,
+                                materialCost: (template.defaultMaterialRate || 0) * qty,
+                                laborCost: (template.defaultLaborRate || 0) * qty,
                               }
                             })
                             return
                           }
                           
-                          // Roofing Full Scope has different defaults
-                          if (value === 'Full Scope' && formData.category === 'roofing') {
-                            setFormData(prev => {
-                              const qty = prev.quantity || 1
-                              return {
-                                ...prev,
-                                name: value,
-                                unit: 'sqft',
-                                materialRate: 2.00,
-                                laborRate: 1.00,
-                                materialCost: qty * 2.00,
-                                laborCost: qty * 1.00,
-                              }
-                            })
-                            return
-                          }
-                          
-                          const defaults = itemDefaults[value]
-                          if (defaults) {
-                            setFormData(prev => {
-                              const qty = prev.quantity || 1
-                              return {
-                                ...prev,
-                                name: value,
-                                unit: defaults.unit as any,
-                                materialRate: defaults.materialRate,
-                                laborRate: defaults.laborRate,
-                                materialCost: qty * defaults.materialRate,
-                                laborCost: qty * defaults.laborRate,
-                              }
-                            })
-                          } else {
-                            setFormData(prev => ({ ...prev, name: value }))
-                          }
+                          // If no template found, just set the name (user can type custom items)
+                          setFormData(prev => ({ ...prev, name: value }))
                         }}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select or type custom name..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {DEFAULT_CATEGORY_ITEMS[formData.category as keyof typeof DEFAULT_CATEGORY_ITEMS].map((item: string) => (
-                            <SelectItem key={item} value={item}>
-                              {item}
+                          {itemTemplates.map((template) => (
+                            <SelectItem key={template.id} value={template.name}>
+                              {template.name}
                             </SelectItem>
                           ))}
                         </SelectContent>

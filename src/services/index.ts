@@ -11,7 +11,10 @@ export * from './storage'
 // Business logic services
 export * from './projectService'
 export * from './estimateService'
+export * from './actualsService'
 export * from './calculationService'
+export * from './itemTemplateService'
+
 
 
 

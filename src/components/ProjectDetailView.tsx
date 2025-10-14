@@ -8,14 +8,14 @@
 import React, { useState, useEffect } from 'react'
 import { Project, ProjectType, ProjectStatus } from '@/types'
 import { updateProject, deleteProject } from '@/services/projectService'
-import { getTradesForEstimate } from '@/services'
+import { getTradesForEstimate, getProjectActuals } from '@/services'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PROJECT_TYPES, PROJECT_STATUS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BookOpen, ClipboardList, BarChart3, Building2, Calendar, DollarSign, Edit, Trash2 } from 'lucide-react'
+import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface ProjectDetailViewProps {
@@ -23,7 +23,6 @@ interface ProjectDetailViewProps {
   onBack: () => void
   onViewEstimate: () => void
   onViewActuals: () => void
-  onViewVariance: () => void
 }
 
 export function ProjectDetailView({
@@ -31,7 +30,6 @@ export function ProjectDetailView({
   onBack,
   onViewEstimate,
   onViewActuals,
-  onViewVariance,
 }: ProjectDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editedProject, setEditedProject] = useState(project)
@@ -40,6 +38,12 @@ export function ProjectDetailView({
     grossProfitTotal: 0,
     totalEstimated: 0,
     itemCount: 0,
+  })
+  const [actualTotals, setActualTotals] = useState({
+    laborCost: 0,
+    materialCost: 0,
+    subcontractorCost: 0,
+    totalActual: 0,
   })
   
   // Calculate estimate totals from trades
@@ -60,6 +64,19 @@ export function ProjectDetailView({
       itemCount: trades.length,
     })
   }, [project])
+
+  // Load actual costs from project actuals
+  useEffect(() => {
+    const actuals = getProjectActuals(project.id)
+    if (actuals) {
+      setActualTotals({
+        laborCost: actuals.totalLaborCost,
+        materialCost: actuals.totalMaterialCost,
+        subcontractorCost: actuals.totalSubcontractorCost,
+        totalActual: actuals.totalActualCost,
+      })
+    }
+  }, [project.id])
   
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
@@ -316,15 +333,19 @@ export function ProjectDetailView({
                 <div className="bg-white/10 rounded-lg p-3 mb-4">
                   <div className="flex justify-between text-sm mb-1">
                     <span>Actual Labor</span>
-                    <span className="font-semibold">$0.00</span>
+                    <span className="font-semibold">{formatCurrency(actualTotals.laborCost)}</span>
                   </div>
                   <div className="flex justify-between text-sm mb-1">
                     <span>Actual Materials</span>
-                    <span className="font-semibold">$0.00</span>
+                    <span className="font-semibold">{formatCurrency(actualTotals.materialCost)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Actual Subcontractors</span>
+                    <span className="font-semibold">{formatCurrency(actualTotals.subcontractorCost)}</span>
                   </div>
                   <div className="flex justify-between text-sm font-bold pt-2 border-t border-white/20">
                     <span>Total Spent</span>
-                    <span>$0.00</span>
+                    <span>{formatCurrency(actualTotals.totalActual)}</span>
                   </div>
                 </div>
                 <div className="flex items-center text-sm text-white/60">
@@ -334,32 +355,6 @@ export function ProjectDetailView({
             </button>
           </Card>
         </div>
-
-        {/* Variance Report Card */}
-        <Card className="bg-gradient-to-br from-[#34AB8A] to-[#2a8d6f] text-white hover:shadow-2xl transition-all cursor-pointer border-none">
-          <button onClick={onViewVariance} className="w-full text-left">
-            <CardContent className="py-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="bg-white/20 rounded-full p-4">
-                    <BarChart3 className="w-10 h-10" />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold mb-1">Variance Report</h3>
-                    <p className="text-white/80">
-                      Compare estimated vs actual costs to see how your project is performing
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm opacity-80 mb-1">Variance</p>
-                  <p className="text-3xl font-bold">--</p>
-                  <p className="text-sm opacity-80">Coming Soon</p>
-                </div>
-              </div>
-            </CardContent>
-          </button>
-        </Card>
       </main>
       
       {/* Edit Project Modal */}
