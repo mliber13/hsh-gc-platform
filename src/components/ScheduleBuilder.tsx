@@ -23,6 +23,7 @@ import {
   CheckCircle,
   AlertCircle,
   RefreshCw,
+  Link2,
 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
@@ -139,6 +140,39 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
         return item
       })
     )
+  }
+
+  const handleAutoCalculateDates = () => {
+    if (!confirm('Auto-calculate start dates based on predecessors? This will adjust dates for items with dependencies.')) {
+      return
+    }
+
+    setScheduleItems(items => {
+      const updatedItems = [...items]
+      
+      // Process each item
+      updatedItems.forEach(item => {
+        if (item.predecessorIds.length > 0) {
+          // Find the predecessor
+          const predecessor = updatedItems.find(i => i.id === item.predecessorIds[0])
+          
+          if (predecessor && predecessor.endDate) {
+            // Start this item 1 day after predecessor ends
+            const newStartDate = new Date(predecessor.endDate)
+            newStartDate.setDate(newStartDate.getDate() + 1)
+            
+            item.startDate = newStartDate
+            
+            // Recalculate end date
+            const newEndDate = new Date(newStartDate)
+            newEndDate.setDate(newEndDate.getDate() + item.duration)
+            item.endDate = newEndDate
+          }
+        }
+      })
+      
+      return updatedItems
+    })
   }
 
   const handleSaveSchedule = () => {
@@ -271,6 +305,14 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
               Save Schedule
             </Button>
             <Button
+              onClick={handleAutoCalculateDates}
+              variant="outline"
+              className="flex-1 sm:flex-none border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
+            >
+              <Link2 className="w-4 h-4 mr-2" />
+              Auto-Calculate Dates
+            </Button>
+            <Button
               onClick={handleRegenerateSchedule}
               variant="outline"
               className="flex-1 sm:flex-none border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
@@ -303,8 +345,16 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                               <span className="text-xl">
                                 {TRADE_CATEGORIES[item.trade as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
                               </span>
-                              <div>
-                                <h4 className="font-semibold text-gray-900">{item.name}</h4>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-semibold text-gray-900">{item.name}</h4>
+                                  {item.predecessorIds.length > 0 && (
+                                    <span className="flex items-center gap-1 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
+                                      <Link2 className="w-3 h-3" />
+                                      Has Dependency
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-xs text-gray-500">
                                   {TRADE_CATEGORIES[item.trade as keyof typeof TRADE_CATEGORIES]?.label || item.trade}
                                 </p>
@@ -355,6 +405,44 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                                   </SelectContent>
                                 </Select>
                               </div>
+                            </div>
+
+                            {/* Predecessors */}
+                            <div className="mt-3">
+                              <Label htmlFor={`predecessors-${item.id}`} className="text-xs">
+                                Predecessors (must complete before this starts)
+                              </Label>
+                              <Select
+                                value={item.predecessorIds.length > 0 ? item.predecessorIds[0] : 'none'}
+                                onValueChange={(value) => {
+                                  if (value === 'none') {
+                                    handleUpdateScheduleItem(item.id, { predecessorIds: [] })
+                                  } else {
+                                    // For now, support single predecessor. Can expand to multiple later
+                                    handleUpdateScheduleItem(item.id, { predecessorIds: [value] })
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="text-sm">
+                                  <SelectValue placeholder="No predecessor" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">None - Can start immediately</SelectItem>
+                                  {scheduleItems
+                                    .filter(otherItem => otherItem.id !== item.id)
+                                    .map((otherItem) => (
+                                      <SelectItem key={otherItem.id} value={otherItem.id}>
+                                        {otherItem.name}
+                                      </SelectItem>
+                                    ))
+                                  }
+                                </SelectContent>
+                              </Select>
+                              {item.predecessorIds.length > 0 && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Depends on: {scheduleItems.find(si => si.id === item.predecessorIds[0])?.name}
+                                </p>
+                              )}
                             </div>
 
                             <div className="mt-3">
