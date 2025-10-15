@@ -261,7 +261,19 @@ export async function createEstimateInDB(projectId: string): Promise<any | null>
     return null
   }
 
-  return data
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    version: 1,
+    trades: [],
+    subtotal: 0,
+    overhead: 0,
+    profit: 0,
+    contingency: 0,
+    totalEstimate: 0,
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at),
+  }
 }
 
 export async function updateEstimateTotalsInDB(estimateId: string, totals: any): Promise<boolean> {
