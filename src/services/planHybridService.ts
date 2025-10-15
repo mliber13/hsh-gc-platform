@@ -11,14 +11,8 @@ import { isOnlineMode } from '../lib/supabase';
  * Get all plans (hybrid)
  */
 export async function getAllPlans_Hybrid(): Promise<Plan[]> {
-  if (isOnlineMode()) {
-    // TODO: Implement Supabase plan fetching when plan table is added
-    // For now, fall back to localStorage
-    console.log('Plan Supabase integration not yet implemented, using localStorage');
-    return getAllPlans();
-  } else {
-    return getAllPlans();
-  }
+  // Plans are currently only in localStorage - no Supabase table yet
+  return getAllPlans();
 }
 
 /**
@@ -33,54 +27,30 @@ export async function getActivePlans_Hybrid(): Promise<Plan[]> {
  * Get plan by ID (hybrid)
  */
 export async function getPlanById_Hybrid(planId: string): Promise<Plan | null> {
-  if (isOnlineMode()) {
-    // TODO: Implement Supabase plan fetching when plan table is added
-    // For now, fall back to localStorage
-    console.log('Plan Supabase integration not yet implemented, using localStorage');
-    return getPlanById(planId);
-  } else {
-    return getPlanById(planId);
-  }
+  // Plans are currently only in localStorage - no Supabase table yet
+  return getPlanById(planId);
 }
 
 /**
  * Create plan (hybrid)
  */
 export async function createPlan_Hybrid(input: CreatePlanInput): Promise<Plan> {
-  if (isOnlineMode()) {
-    // TODO: Implement Supabase plan creation when plan table is added
-    // For now, fall back to localStorage
-    console.log('Plan Supabase integration not yet implemented, using localStorage');
-    return createPlan(input);
-  } else {
-    return createPlan(input);
-  }
+  // Plans are currently only in localStorage - no Supabase table yet
+  return createPlan(input);
 }
 
 /**
  * Update plan (hybrid)
  */
 export async function updatePlan_Hybrid(planId: string, updates: UpdatePlanInput): Promise<Plan | null> {
-  if (isOnlineMode()) {
-    // TODO: Implement Supabase plan updating when plan table is added
-    // For now, fall back to localStorage
-    console.log('Plan Supabase integration not yet implemented, using localStorage');
-    return updatePlan(planId, updates);
-  } else {
-    return updatePlan(planId, updates);
-  }
+  // Plans are currently only in localStorage - no Supabase table yet
+  return updatePlan(planId, updates);
 }
 
 /**
  * Delete plan (hybrid)
  */
 export async function deletePlan_Hybrid(planId: string): Promise<boolean> {
-  if (isOnlineMode()) {
-    // TODO: Implement Supabase plan deletion when plan table is added
-    // For now, fall back to localStorage
-    console.log('Plan Supabase integration not yet implemented, using localStorage');
-    return deletePlan(planId);
-  } else {
-    return deletePlan(planId);
-  }
+  // Plans are currently only in localStorage - no Supabase table yet
+  return deletePlan(planId);
 }

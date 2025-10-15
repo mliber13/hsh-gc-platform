@@ -397,6 +397,7 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
   const totalCost = (updates.laborCost || 0) + (updates.materialCost || 0) + (updates.subcontractorCost || 0)
 
   const updateData: any = {}
+  if (updates.category !== undefined) updateData.category = updates.category
   if (updates.name !== undefined) updateData.name = updates.name
   if (updates.description !== undefined) updateData.description = updates.description
   if (updates.quantity !== undefined) updateData.quantity = updates.quantity
