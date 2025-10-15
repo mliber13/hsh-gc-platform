@@ -76,7 +76,7 @@ export default function ImportEstimate({
     try {
       const result = await importEstimateData(
         parsedData,
-        selectedProjectId || undefined
+        (selectedProjectId && selectedProjectId !== '__new__') ? selectedProjectId : undefined
       );
       
       setImportResult(result);
@@ -170,12 +170,12 @@ export default function ImportEstimate({
         <div>
           <Label htmlFor="project-select">Import to Project</Label>
           <div className="space-y-2 mt-2">
-            <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+            <Select value={selectedProjectId || '__new__'} onValueChange={setSelectedProjectId}>
               <SelectTrigger>
                 <SelectValue placeholder="Select existing project or create new..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Create New Project</SelectItem>
+                <SelectItem value="__new__">Create New Project</SelectItem>
                 {existingProjects.map((project) => (
                   <SelectItem key={project.id} value={project.id}>
                     {project.name}
@@ -186,7 +186,7 @@ export default function ImportEstimate({
           </div>
         </div>
 
-        {!selectedProjectId && (
+        {(!selectedProjectId || selectedProjectId === '__new__') && (
           <div>
             <Label htmlFor="new-project-name">New Project Name</Label>
             <Input
