@@ -63,21 +63,36 @@ export async function createProjectInDB(input: CreateProjectInput): Promise<Proj
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
+  // Get user's organization
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    console.error('User profile not found')
+    return null
+  }
+
   const { data, error } = await supabase
     .from('projects')
     .insert({
-      user_id: user.id,
       name: input.name,
       type: input.type,
-      status: 'planning',
-      address: input.address,
-      city: input.city,
-      state: input.state,
-      zip_code: input.zipCode,
-      client: input.client,
-      start_date: input.startDate?.toISOString(),
-      end_date: input.endDate?.toISOString(),
+      status: 'estimating',
+      client_name: input.client?.name,
+      client_email: input.client?.email,
+      client_phone: input.client?.phone,
+      address_street: input.address?.street,
+      address_city: input.address?.city || input.city,
+      address_state: input.address?.state || input.state,
+      address_zip: input.address?.zip || input.zipCode,
+      start_date: input.startDate,
+      end_date: input.endDate,
       metadata: input.metadata || {},
+      organization_id: profile.organization_id,
+      created_by: user.id,
     })
     .select()
     .single()
@@ -162,12 +177,23 @@ export async function createEstimateInDB(projectId: string): Promise<any | null>
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
+  // Get user's organization
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    console.error('User profile not found')
+    return null
+  }
+
   const { data, error } = await supabase
     .from('estimates')
     .insert({
-      user_id: user.id,
       project_id: projectId,
-      totals: {},
+      organization_id: profile.organization_id,
     })
     .select()
     .single()
@@ -223,27 +249,33 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
+  // Get user's organization
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    console.error('User profile not found')
+    return null
+  }
+
+  const totalCost = (input.laborCost || 0) + (input.materialCost || 0) + (input.subcontractorCost || 0)
+
   const { data, error } = await supabase
     .from('trades')
     .insert({
-      user_id: user.id,
       estimate_id: estimateId,
       category: input.category,
       name: input.name,
-      description: input.description,
-      quantity: input.quantity,
-      unit: input.unit,
-      labor_cost: input.laborCost || 0,
-      labor_rate: input.laborRate || 0,
-      labor_hours: input.laborHours || 0,
-      material_cost: input.materialCost || 0,
-      material_rate: input.materialRate || 0,
-      subcontractor_cost: input.subcontractorCost || 0,
-      total_cost: (input.laborCost || 0) + (input.materialCost || 0) + (input.subcontractorCost || 0),
-      is_subcontracted: input.isSubcontracted,
-      waste_factor: input.wasteFactor,
-      markup_percent: input.markupPercent,
-      notes: input.notes,
+      quantity: input.quantity || 1,
+      unit: input.unit || 'ea',
+      unit_cost: totalCost,
+      total_cost: totalCost,
+      markup_percent: input.markupPercent || 0,
+      notes: input.notes || '',
+      organization_id: profile.organization_id,
     })
     .select()
     .single()
@@ -259,25 +291,22 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
 export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInput>): Promise<Trade | null> {
   if (!isOnlineMode()) return null
 
+  const totalCost = (updates.laborCost || 0) + (updates.materialCost || 0) + (updates.subcontractorCost || 0)
+
+  const updateData: any = {}
+  if (updates.name !== undefined) updateData.name = updates.name
+  if (updates.quantity !== undefined) updateData.quantity = updates.quantity
+  if (updates.unit !== undefined) updateData.unit = updates.unit
+  if (updates.markupPercent !== undefined) updateData.markup_percent = updates.markupPercent
+  if (updates.notes !== undefined) updateData.notes = updates.notes
+  if (totalCost > 0) {
+    updateData.unit_cost = totalCost
+    updateData.total_cost = totalCost
+  }
+
   const { data, error } = await supabase
     .from('trades')
-    .update({
-      name: updates.name,
-      description: updates.description,
-      quantity: updates.quantity,
-      unit: updates.unit,
-      labor_cost: updates.laborCost,
-      labor_rate: updates.laborRate,
-      labor_hours: updates.laborHours,
-      material_cost: updates.materialCost,
-      material_rate: updates.materialRate,
-      subcontractor_cost: updates.subcontractorCost,
-      total_cost: (updates.laborCost || 0) + (updates.materialCost || 0) + (updates.subcontractorCost || 0),
-      is_subcontracted: updates.isSubcontracted,
-      waste_factor: updates.wasteFactor,
-      markup_percent: updates.markupPercent,
-      notes: updates.notes,
-    })
+    .update(updateData)
     .eq('id', tradeId)
     .select()
     .single()

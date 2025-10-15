@@ -13,6 +13,12 @@ import { ItemLibrary } from './components/ItemLibrary'
 import { AuthGate } from './components/auth/AuthGate'
 import { useAuth } from './contexts/AuthContext'
 import { createProject, getProject } from './services/projectService'
+import {
+  createProject_Hybrid,
+  getProject_Hybrid,
+  updateProject_Hybrid,
+  deleteProject_Hybrid,
+} from './services/hybridService'
 import { applyTemplateToEstimate } from './services/estimateTemplateService'
 import { getCurrentUserProfile, UserProfile } from './services/userService'
 import { UserManagement } from './components/UserManagement'
@@ -54,13 +60,13 @@ function App() {
     setCurrentView('create-project')
   }
 
-  const handleProjectCreated = (formData: ProjectFormData) => {
+  const handleProjectCreated = async (formData: ProjectFormData) => {
     // Create the project with the form data
     // For spec homes, we'll create a placeholder client
     // Use customPlanId if it's a custom plan, otherwise use the selected planId
     const finalPlanId = formData.planId === 'custom' ? formData.customPlanId : formData.planId
     
-    const newProject = createProject({
+    const newProject = await createProject_Hybrid({
       name: formData.name,
       type: formData.type,
       address: {

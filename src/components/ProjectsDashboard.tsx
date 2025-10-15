@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react'
 import { Project } from '@/types'
 import { getAllProjects } from '@/services/projectService'
+import { getProjects_Hybrid } from '@/services/hybridService'
 import { getTradesForEstimate, exportAllData, importAllData } from '@/services'
 import { usePermissions } from '@/hooks/usePermissions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,8 +30,11 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
   const { canCreate, isViewer } = usePermissions()
 
   useEffect(() => {
-    const allProjects = getAllProjects()
-    setProjects(allProjects)
+    const loadProjects = async () => {
+      const allProjects = await getProjects_Hybrid()
+      setProjects(allProjects)
+    }
+    loadProjects()
   }, [])
 
   // Calculate estimated value for a project from its trades
