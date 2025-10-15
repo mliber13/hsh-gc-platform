@@ -5,14 +5,83 @@
 
 import { Plan, CreatePlanInput, UpdatePlanInput } from '../types/plan';
 import { getAllPlans, createPlan, updatePlan, deletePlan, getPlanById } from './planService';
-import { isOnlineMode } from '../lib/supabase';
+import { isOnlineMode, supabase } from '../lib/supabase';
+
+/**
+ * Transform Supabase plan data to Plan format
+ */
+function transformPlanFromSupabase(data: any): Plan {
+  return {
+    id: data.id,
+    planId: data.plan_id,
+    name: data.name,
+    description: data.description || '',
+    squareFootage: data.square_footage,
+    bedrooms: data.bedrooms,
+    bathrooms: data.bathrooms,
+    stories: data.stories,
+    garageSpaces: data.garage_spaces,
+    notes: data.notes || '',
+    isActive: data.is_active ?? true,
+    estimateTemplateId: data.estimate_template_id,
+    options: data.options ? JSON.parse(data.options) : [],
+    documents: data.documents ? JSON.parse(data.documents) : [],
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at),
+  };
+}
+
+/**
+ * Transform Plan format to Supabase data
+ */
+function transformPlanToSupabase(plan: Plan): any {
+  return {
+    id: plan.id,
+    plan_id: plan.planId,
+    name: plan.name,
+    description: plan.description,
+    square_footage: plan.squareFootage,
+    bedrooms: plan.bedrooms,
+    bathrooms: plan.bathrooms,
+    stories: plan.stories,
+    garage_spaces: plan.garageSpaces,
+    notes: plan.notes,
+    is_active: plan.isActive,
+    estimate_template_id: plan.estimateTemplateId,
+    options: plan.options ? JSON.stringify(plan.options) : null,
+    documents: plan.documents ? JSON.stringify(plan.documents) : null,
+    created_at: plan.createdAt.toISOString(),
+    updated_at: plan.updatedAt.toISOString(),
+  };
+}
 
 /**
  * Get all plans (hybrid)
  */
 export async function getAllPlans_Hybrid(): Promise<Plan[]> {
-  // Plans are currently only in localStorage - no Supabase table yet
-  return getAllPlans();
+  if (isOnlineMode()) {
+    try {
+      const { data, error } = await supabase
+        .from('plans')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching plans from Supabase:', error);
+        // Fall back to localStorage
+        return getAllPlans();
+      }
+
+      // Transform Supabase data to Plan format
+      return data.map(plan => transformPlanFromSupabase(plan));
+    } catch (error) {
+      console.error('Error fetching plans from Supabase:', error);
+      // Fall back to localStorage
+      return getAllPlans();
+    }
+  } else {
+    return getAllPlans();
+  }
 }
 
 /**
@@ -27,8 +96,29 @@ export async function getActivePlans_Hybrid(): Promise<Plan[]> {
  * Get plan by ID (hybrid)
  */
 export async function getPlanById_Hybrid(planId: string): Promise<Plan | null> {
-  // Plans are currently only in localStorage - no Supabase table yet
-  return getPlanById(planId);
+  if (isOnlineMode()) {
+    try {
+      const { data, error } = await supabase
+        .from('plans')
+        .select('*')
+        .eq('id', planId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching plan from Supabase:', error);
+        // Fall back to localStorage
+        return getPlanById(planId);
+      }
+
+      return transformPlanFromSupabase(data);
+    } catch (error) {
+      console.error('Error fetching plan from Supabase:', error);
+      // Fall back to localStorage
+      return getPlanById(planId);
+    }
+  } else {
+    return getPlanById(planId);
+  }
 }
 
 /**

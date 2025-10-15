@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Upload, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { migrateData } from '../scripts/migrateToSupabase';
+import MigratePlans from './MigratePlans';
 
 export function DataMigration() {
   const [file, setFile] = useState<File | null>(null);
@@ -153,6 +154,11 @@ export function DataMigration() {
             </div>
           </div>
         )}
+
+        {/* Plans Migration Section */}
+        <div className="mt-8">
+          <MigratePlans />
+        </div>
 
         <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
           <h4 className="text-sm font-semibold text-yellow-900 mb-2">⚠️ Important Notes:</h4>
