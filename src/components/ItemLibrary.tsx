@@ -55,8 +55,8 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
     loadItems()
   }, [])
 
-  const loadItems = () => {
-    const allItems = getAllItemTemplates()
+  const loadItems = async () => {
+    const allItems = await getAllItemTemplates()
     setItems(allItems)
   }
 
@@ -80,28 +80,28 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
     setShowItemForm(true)
   }
 
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = async (id: string) => {
     if (confirm('Are you sure you want to delete this item template?')) {
-      deleteItemTemplate(id)
-      loadItems()
+      await deleteItemTemplate(id)
+      await loadItems()
     }
   }
 
-  const handleSaveItem = (data: ItemTemplateInput) => {
+  const handleSaveItem = async (data: ItemTemplateInput) => {
     if (editingItem) {
-      updateItemTemplate(editingItem.id, data)
+      await updateItemTemplate(editingItem.id, data)
     } else {
-      createItemTemplate(data)
+      await createItemTemplate(data)
     }
-    loadItems()
+    await loadItems()
     setShowItemForm(false)
     setEditingItem(null)
   }
 
-  const handleResetToDefaults = () => {
+  const handleResetToDefaults = async () => {
     if (confirm('This will reset all items to defaults and DELETE any custom items you added. Are you sure?')) {
       resetToDefaults()
-      loadItems()
+      await loadItems()
     }
   }
 

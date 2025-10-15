@@ -481,6 +481,138 @@ export async function createEstimateTemplateInDB(input: CreatePlanEstimateTempla
 }
 
 // ============================================================================
+// ITEM TEMPLATE OPERATIONS
+// ============================================================================
+
+export async function fetchItemTemplates(): Promise<any[]> {
+  if (!isOnlineMode()) return []
+
+  const { data, error } = await supabase
+    .from('item_templates')
+    .select('*')
+    .order('category', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching item templates:', error)
+    return []
+  }
+
+  return data.map(item => ({
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    type: item.type,
+    unit: item.unit,
+    costPerUnit: item.cost_per_unit,
+    description: item.description || '',
+    createdAt: new Date(item.created_at),
+    updatedAt: new Date(item.updated_at),
+  }))
+}
+
+export async function createItemTemplateInDB(input: any): Promise<any | null> {
+  if (!isOnlineMode()) return null
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  // Get user's organization
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    console.error('User profile not found')
+    return null
+  }
+
+  const { data, error } = await supabase
+    .from('item_templates')
+    .insert({
+      name: input.name,
+      category: input.category,
+      type: input.type,
+      unit: input.unit,
+      cost_per_unit: input.costPerUnit,
+      description: input.description || '',
+      organization_id: profile.organization_id,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating item template:', error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    category: data.category,
+    type: data.type,
+    unit: data.unit,
+    costPerUnit: data.cost_per_unit,
+    description: data.description || '',
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at),
+  }
+}
+
+export async function updateItemTemplateInDB(id: string, updates: any): Promise<any | null> {
+  if (!isOnlineMode()) return null
+
+  const updateData: any = {}
+  if (updates.name !== undefined) updateData.name = updates.name
+  if (updates.category !== undefined) updateData.category = updates.category
+  if (updates.type !== undefined) updateData.type = updates.type
+  if (updates.unit !== undefined) updateData.unit = updates.unit
+  if (updates.costPerUnit !== undefined) updateData.cost_per_unit = updates.costPerUnit
+  if (updates.description !== undefined) updateData.description = updates.description
+
+  const { data, error } = await supabase
+    .from('item_templates')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating item template:', error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    category: data.category,
+    type: data.type,
+    unit: data.unit,
+    costPerUnit: data.cost_per_unit,
+    description: data.description || '',
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at),
+  }
+}
+
+export async function deleteItemTemplateFromDB(id: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  const { error } = await supabase
+    .from('item_templates')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting item template:', error)
+    return false
+  }
+
+  return true
+}
+
+// ============================================================================
 // HELPER: Check if online mode is active
 // ============================================================================
 

@@ -7,6 +7,8 @@
 
 import { v4 as uuidv4 } from 'uuid'
 import { ItemTemplate, ItemTemplateInput } from '@/types'
+import { isOnlineMode } from '@/lib/supabase'
+import * as supabaseService from './supabaseService'
 
 const STORAGE_KEY = 'hsh_gc_item_templates'
 
@@ -17,86 +19,114 @@ const STORAGE_KEY = 'hsh_gc_item_templates'
 /**
  * Get all item templates
  */
-export function getAllItemTemplates(): ItemTemplate[] {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY)
-    if (!data) {
-      // Initialize with default templates
+export async function getAllItemTemplates(): Promise<ItemTemplate[]> {
+  if (isOnlineMode()) {
+    const items = await supabaseService.fetchItemTemplates()
+    // If no items in Supabase, initialize with defaults
+    if (items.length === 0) {
       const defaults = getDefaultItemTemplates()
-      saveAllItemTemplates(defaults)
+      // Save defaults to Supabase
+      for (const template of defaults) {
+        await supabaseService.createItemTemplateInDB(template)
+      }
       return defaults
     }
-    return JSON.parse(data, dateReviver) as ItemTemplate[]
-  } catch (error) {
-    console.error('Error reading item templates:', error)
-    return []
+    return items
+  } else {
+    try {
+      const data = localStorage.getItem(STORAGE_KEY)
+      if (!data) {
+        // Initialize with default templates
+        const defaults = getDefaultItemTemplates()
+        saveAllItemTemplates(defaults)
+        return defaults
+      }
+      return JSON.parse(data, dateReviver) as ItemTemplate[]
+    } catch (error) {
+      console.error('Error reading item templates:', error)
+      return []
+    }
   }
 }
 
 /**
  * Get item templates by category
  */
-export function getItemTemplatesByCategory(category: string): ItemTemplate[] {
-  const all = getAllItemTemplates()
+export async function getItemTemplatesByCategory(category: string): Promise<ItemTemplate[]> {
+  const all = await getAllItemTemplates()
   return all.filter(item => item.category === category)
 }
 
 /**
  * Get item template by ID
  */
-export function getItemTemplateById(id: string): ItemTemplate | null {
-  const all = getAllItemTemplates()
+export async function getItemTemplateById(id: string): Promise<ItemTemplate | null> {
+  const all = await getAllItemTemplates()
   return all.find(item => item.id === id) || null
 }
 
 /**
  * Create new item template
  */
-export function createItemTemplate(input: ItemTemplateInput): ItemTemplate {
-  const template: ItemTemplate = {
-    id: uuidv4(),
-    ...input,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+export async function createItemTemplate(input: ItemTemplateInput): Promise<ItemTemplate> {
+  if (isOnlineMode()) {
+    const created = await supabaseService.createItemTemplateInDB(input)
+    if (!created) throw new Error('Failed to create item template')
+    return created
+  } else {
+    const template: ItemTemplate = {
+      id: uuidv4(),
+      ...input,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const all = await getAllItemTemplates()
+    all.push(template)
+    saveAllItemTemplates(all)
+
+    return template
   }
-
-  const all = getAllItemTemplates()
-  all.push(template)
-  saveAllItemTemplates(all)
-
-  return template
 }
 
 /**
  * Update existing item template
  */
-export function updateItemTemplate(id: string, updates: Partial<ItemTemplateInput>): ItemTemplate | null {
-  const all = getAllItemTemplates()
-  const index = all.findIndex(item => item.id === id)
+export async function updateItemTemplate(id: string, updates: Partial<ItemTemplateInput>): Promise<ItemTemplate | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.updateItemTemplateInDB(id, updates)
+  } else {
+    const all = await getAllItemTemplates()
+    const index = all.findIndex(item => item.id === id)
 
-  if (index === -1) return null
+    if (index === -1) return null
 
-  all[index] = {
-    ...all[index],
-    ...updates,
-    updatedAt: new Date(),
+    all[index] = {
+      ...all[index],
+      ...updates,
+      updatedAt: new Date(),
+    }
+
+    saveAllItemTemplates(all)
+    return all[index]
   }
-
-  saveAllItemTemplates(all)
-  return all[index]
 }
 
 /**
  * Delete item template
  */
-export function deleteItemTemplate(id: string): boolean {
-  const all = getAllItemTemplates()
-  const filtered = all.filter(item => item.id !== id)
-
-  if (filtered.length === all.length) return false
-
-  saveAllItemTemplates(filtered)
-  return true
+export async function deleteItemTemplate(id: string): Promise<boolean> {
+  if (isOnlineMode()) {
+    return await supabaseService.deleteItemTemplateFromDB(id)
+  } else {
+    const all = await getAllItemTemplates()
+    const filtered = all.filter(item => item.id !== id)
+    
+    if (filtered.length === all.length) return false
+    
+    saveAllItemTemplates(filtered)
+    return true
+  }
 }
 
 /**
