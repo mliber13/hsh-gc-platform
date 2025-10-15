@@ -501,10 +501,13 @@ export async function fetchItemTemplates(): Promise<any[]> {
     id: item.id,
     name: item.name,
     category: item.category,
-    type: item.type,
-    unit: item.unit,
-    costPerUnit: item.cost_per_unit,
-    description: item.description || '',
+    defaultUnit: item.default_unit,
+    defaultMaterialRate: item.default_material_rate,
+    defaultLaborRate: item.default_labor_rate,
+    defaultSubcontractorCost: item.default_subcontractor_cost,
+    isSubcontracted: item.is_subcontracted,
+    notes: item.notes || '',
+    description: item.notes || '',
     createdAt: new Date(item.created_at),
     updatedAt: new Date(item.updated_at),
   }))
@@ -533,10 +536,12 @@ export async function createItemTemplateInDB(input: any): Promise<any | null> {
     .insert({
       name: input.name,
       category: input.category,
-      type: input.type,
-      unit: input.unit,
-      cost_per_unit: input.costPerUnit,
-      description: input.description || '',
+      default_unit: input.defaultUnit,
+      default_material_rate: input.defaultMaterialRate || 0,
+      default_labor_rate: input.defaultLaborRate || 0,
+      default_subcontractor_cost: input.defaultSubcontractorCost || 0,
+      is_subcontracted: input.isSubcontracted || false,
+      notes: input.notes || input.description || '',
       organization_id: profile.organization_id,
     })
     .select()
@@ -551,10 +556,13 @@ export async function createItemTemplateInDB(input: any): Promise<any | null> {
     id: data.id,
     name: data.name,
     category: data.category,
-    type: data.type,
-    unit: data.unit,
-    costPerUnit: data.cost_per_unit,
-    description: data.description || '',
+    defaultUnit: data.default_unit,
+    defaultMaterialRate: data.default_material_rate,
+    defaultLaborRate: data.default_labor_rate,
+    defaultSubcontractorCost: data.default_subcontractor_cost,
+    isSubcontracted: data.is_subcontracted,
+    notes: data.notes || '',
+    description: data.notes || '',
     createdAt: new Date(data.created_at),
     updatedAt: new Date(data.updated_at),
   }
@@ -566,10 +574,13 @@ export async function updateItemTemplateInDB(id: string, updates: any): Promise<
   const updateData: any = {}
   if (updates.name !== undefined) updateData.name = updates.name
   if (updates.category !== undefined) updateData.category = updates.category
-  if (updates.type !== undefined) updateData.type = updates.type
-  if (updates.unit !== undefined) updateData.unit = updates.unit
-  if (updates.costPerUnit !== undefined) updateData.cost_per_unit = updates.costPerUnit
-  if (updates.description !== undefined) updateData.description = updates.description
+  if (updates.defaultUnit !== undefined) updateData.default_unit = updates.defaultUnit
+  if (updates.defaultMaterialRate !== undefined) updateData.default_material_rate = updates.defaultMaterialRate
+  if (updates.defaultLaborRate !== undefined) updateData.default_labor_rate = updates.defaultLaborRate
+  if (updates.defaultSubcontractorCost !== undefined) updateData.default_subcontractor_cost = updates.defaultSubcontractorCost
+  if (updates.isSubcontracted !== undefined) updateData.is_subcontracted = updates.isSubcontracted
+  if (updates.notes !== undefined) updateData.notes = updates.notes
+  if (updates.description !== undefined) updateData.notes = updates.description
 
   const { data, error } = await supabase
     .from('item_templates')
@@ -587,10 +598,13 @@ export async function updateItemTemplateInDB(id: string, updates: any): Promise<
     id: data.id,
     name: data.name,
     category: data.category,
-    type: data.type,
-    unit: data.unit,
-    costPerUnit: data.cost_per_unit,
-    description: data.description || '',
+    defaultUnit: data.default_unit,
+    defaultMaterialRate: data.default_material_rate,
+    defaultLaborRate: data.default_labor_rate,
+    defaultSubcontractorCost: data.default_subcontractor_cost,
+    isSubcontracted: data.is_subcontracted,
+    notes: data.notes || '',
+    description: data.notes || '',
     createdAt: new Date(data.created_at),
     updatedAt: new Date(data.updated_at),
   }
