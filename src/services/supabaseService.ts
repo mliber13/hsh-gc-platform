@@ -303,14 +303,18 @@ function transformTrade(row: any): Trade {
     estimateId: row.estimate_id,
     category: row.category,
     name: row.name,
+    description: row.description || '',
     quantity: row.quantity,
     unit: row.unit,
-    laborCost: 0,
-    materialCost: 0,
-    subcontractorCost: row.total_cost || 0,
+    laborCost: row.labor_cost || 0,
+    laborRate: row.labor_rate || 0,
+    laborHours: row.labor_hours || 0,
+    materialCost: row.material_cost || 0,
+    materialRate: row.material_rate || 0,
+    subcontractorCost: row.subcontractor_cost || 0,
     totalCost: row.total_cost || 0,
-    isSubcontracted: false,
-    wasteFactor: 10,
+    isSubcontracted: row.is_subcontracted || false,
+    wasteFactor: row.waste_factor || 10,
     markupPercent: row.markup_percent || 0,
     notes: row.notes || '',
     sortOrder: 0,
@@ -360,10 +364,18 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
       estimate_id: estimateId,
       category: input.category,
       name: input.name,
+      description: input.description || '',
       quantity: input.quantity || 1,
       unit: input.unit || 'each',
-      unit_cost: totalCost,
+      labor_cost: input.laborCost || 0,
+      labor_rate: input.laborRate || 0,
+      labor_hours: input.laborHours || 0,
+      material_cost: input.materialCost || 0,
+      material_rate: input.materialRate || 0,
+      subcontractor_cost: input.subcontractorCost || 0,
       total_cost: totalCost,
+      is_subcontracted: input.isSubcontracted || false,
+      waste_factor: input.wasteFactor || 10,
       markup_percent: input.markupPercent || 0,
       notes: input.notes || '',
       organization_id: profile.organization_id,
@@ -386,14 +398,20 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
 
   const updateData: any = {}
   if (updates.name !== undefined) updateData.name = updates.name
+  if (updates.description !== undefined) updateData.description = updates.description
   if (updates.quantity !== undefined) updateData.quantity = updates.quantity
   if (updates.unit !== undefined) updateData.unit = updates.unit
+  if (updates.laborCost !== undefined) updateData.labor_cost = updates.laborCost
+  if (updates.laborRate !== undefined) updateData.labor_rate = updates.laborRate
+  if (updates.laborHours !== undefined) updateData.labor_hours = updates.laborHours
+  if (updates.materialCost !== undefined) updateData.material_cost = updates.materialCost
+  if (updates.materialRate !== undefined) updateData.material_rate = updates.materialRate
+  if (updates.subcontractorCost !== undefined) updateData.subcontractor_cost = updates.subcontractorCost
+  if (updates.isSubcontracted !== undefined) updateData.is_subcontracted = updates.isSubcontracted
+  if (updates.wasteFactor !== undefined) updateData.waste_factor = updates.wasteFactor
   if (updates.markupPercent !== undefined) updateData.markup_percent = updates.markupPercent
   if (updates.notes !== undefined) updateData.notes = updates.notes
-  if (totalCost > 0) {
-    updateData.unit_cost = totalCost
-    updateData.total_cost = totalCost
-  }
+  updateData.total_cost = totalCost
 
   const { data, error } = await supabase
     .from('trades')
