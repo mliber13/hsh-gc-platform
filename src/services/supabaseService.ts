@@ -27,16 +27,31 @@ import {
 // Helper to transform database row to Project
 async function transformProject(row: any): Promise<Project> {
   // Fetch the estimate for this project
-  const estimate = await fetchEstimateByProjectId(row.id)
+  let estimate = await fetchEstimateByProjectId(row.id)
   
   if (!estimate) {
-    console.warn(`No estimate found for project ${row.id}, will create one`)
+    console.warn(`No estimate found for project ${row.id}, creating one`)
     // Try to create an estimate if it doesn't exist
-    const newEstimate = await createEstimateInDB(row.id)
-    if (newEstimate) {
-      console.log(`Created estimate ${newEstimate.id} for project ${row.id}`)
+    estimate = await createEstimateInDB(row.id)
+    if (estimate) {
+      console.log(`Created estimate ${estimate.id} for project ${row.id}`)
     }
   }
+  
+  // Ensure we have a valid estimate with ID
+  const finalEstimate = estimate || { 
+    id: '', 
+    projectId: row.id, 
+    version: 1,
+    trades: [],
+    subtotal: 0,
+    overhead: 0,
+    profit: 0,
+    contingency: 0,
+    totalEstimate: 0,
+  }
+
+  console.log(`Project ${row.name} estimate ID: ${finalEstimate.id}`)
   
   return {
     id: row.id,
@@ -53,17 +68,7 @@ async function transformProject(row: any): Promise<Project> {
     metadata: row.metadata || {},
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
-    estimate: estimate || { 
-      id: '', 
-      projectId: row.id, 
-      version: 1,
-      trades: [],
-      subtotal: 0,
-      overhead: 0,
-      profit: 0,
-      contingency: 0,
-      totalEstimate: 0,
-    },
+    estimate: finalEstimate,
   }
 }
 
