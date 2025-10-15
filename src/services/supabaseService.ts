@@ -313,8 +313,6 @@ function transformTrade(row: any): Trade {
     wasteFactor: 10,
     markupPercent: row.markup_percent || 0,
     notes: row.notes || '',
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
   }
 }
 
