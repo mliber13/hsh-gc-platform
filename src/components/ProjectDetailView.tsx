@@ -484,17 +484,17 @@ export function ProjectDetailView({
                   <div>
                     <Label htmlFor="planId">Plan ID</Label>
                     <Select
-                      value={editedProject.metadata?.planId || ''}
+                      value={editedProject.metadata?.planId || '__none__'}
                       onValueChange={(value) => setEditedProject(prev => ({ 
                         ...prev, 
-                        metadata: { ...prev.metadata, planId: value }
+                        metadata: { ...prev.metadata, planId: value === '__none__' ? '' : value }
                       }))}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select a plan..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="__none__">None</SelectItem>
                         <SelectItem value="custom">Custom Plan</SelectItem>
                         {availablePlans.map(plan => (
                           <SelectItem key={plan.id} value={plan.planId}>
