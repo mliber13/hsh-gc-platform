@@ -336,7 +336,7 @@ function ItemLibraryHeader({ onBack }: ItemLibraryHeaderProps) {
 
 interface ItemFormProps {
   item: ItemTemplate | null
-  onSave: (data: ItemTemplateInput) => void
+  onSave: (data: ItemTemplateInput) => Promise<void> | void
   onCancel: () => void
 }
 
@@ -354,9 +354,9 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
     notes: item?.notes || '',
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    onSave(formData)
+    await onSave(formData)
   }
 
   return (
