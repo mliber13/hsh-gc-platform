@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react'
 import { Project } from '@/types'
 import { getAllProjects } from '@/services/projectService'
-import { getProjects_Hybrid } from '@/services/hybridService'
+import { getProjects_Hybrid, getTradesForEstimate_Hybrid } from '@/services/hybridService'
 import { getTradesForEstimate, exportAllData, importAllData } from '@/services'
 import { usePermissions } from '@/hooks/usePermissions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,22 +24,37 @@ interface ProjectsDashboardProps {
   onOpenItemLibrary: () => void
 }
 
+interface ProjectWithStats extends Project {
+  estimatedValue?: number
+  tradeCount?: number
+}
+
 export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlanLibrary, onOpenItemLibrary }: ProjectsDashboardProps) {
-  const [projects, setProjects] = useState<Project[]>([])
+  const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const { canCreate, isViewer } = usePermissions()
 
   useEffect(() => {
     const loadProjects = async () => {
       const allProjects = await getProjects_Hybrid()
-      setProjects(allProjects)
+      
+      // Calculate stats for each project
+      const projectsWithStats = await Promise.all(
+        allProjects.map(async (project) => {
+          const estimatedValue = await calculateEstimatedValue(project)
+          const tradeCount = await calculateTradeCount(project)
+          return { ...project, estimatedValue, tradeCount }
+        })
+      )
+      
+      setProjects(projectsWithStats)
     }
     loadProjects()
   }, [])
 
   // Calculate estimated value for a project from its trades
-  const calculateEstimatedValue = (project: Project): number => {
-    const trades = getTradesForEstimate(project.estimate.id)
+  const calculateEstimatedValue = async (project: Project): Promise<number> => {
+    const trades = await getTradesForEstimate_Hybrid(project.estimate.id)
     const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
     const grossProfitTotal = trades.reduce((sum, trade) => {
       const markup = trade.markupPercent || 11.1
@@ -49,8 +64,8 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
     return basePriceTotal + grossProfitTotal + contingency
   }
 
-  const calculateTradeCount = (project: Project): number => {
-    const trades = getTradesForEstimate(project.estimate.id)
+  const calculateTradeCount = async (project: Project): Promise<number> => {
+    const trades = await getTradesForEstimate_Hybrid(project.estimate.id)
     return trades.length
   }
 
@@ -381,10 +396,10 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                       <div className="text-left sm:text-right sm:ml-4">
                         <p className="text-sm text-gray-600">Estimated Value</p>
                         <p className="text-xl sm:text-2xl font-bold text-[#0E79C9]">
-                          {formatCurrency(calculateEstimatedValue(project))}
+                          {formatCurrency(project.estimatedValue || 0)}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
-                          {calculateTradeCount(project)} {calculateTradeCount(project) === 1 ? 'item' : 'items'}
+                          {project.tradeCount || 0} {project.tradeCount === 1 ? 'item' : 'items'}
                         </p>
                       </div>
                     </div>
