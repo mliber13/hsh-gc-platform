@@ -1,0 +1,43 @@
+name,category,type,unit,cost_per_unit,description,organization_id
+Wood Framing,rough-framing,material,sqft,16.94,Wood framing materials and labor,default-org
+Interior Doors,windows-doors,material,each,450,Standard interior door with hardware,default-org
+Exterior Doors,windows-doors,material,each,1550,Exterior door with hardware and installation,default-org
+Garage Doors,windows-doors,material,each,2100,Garage door with opener,default-org
+Sliding Doors/French Door,windows-doors,material,each,1950,Sliding or French door with installation,default-org
+Windows,windows-doors,material,each,1125,Standard window with installation,default-org
+Front Door,windows-doors,material,each,2550,Premium front door with hardware,default-org
+Siding,exterior-finishes,material,sqft,6.25,Siding materials and installation,default-org
+Soffit/Fascia,exterior-finishes,material,linear_ft,13.00,Soffit and fascia materials and labor,default-org
+Exterior Paint,exterior-finishes,material,sqft,6.00,Exterior paint and application,default-org
+Rough,electrical,labor,sqft,15.00,Rough electrical work,default-org
+Finishes,electrical,labor,sqft,3.00,Electrical finish work,default-org
+Closet Hardware,electrical,material,each,750,Closet organization hardware,default-org
+Closet Shelving,electrical,material,each,750,Closet shelving system,default-org
+Flooring,interior-finishes,material,sqft,4.00,Flooring materials and installation,default-org
+Interior Paint,interior-finishes,material,sqft,4.00,Interior paint and application,default-org
+Backsplash,kitchen,material,sqft,10.00,Kitchen backsplash tile,default-org
+Cabinets,kitchen,material,each,375,Kitchen cabinet per unit,default-org
+Countertops,kitchen,material,sqft,75,Kitchen countertops,default-org
+Kitchen Faucet,kitchen,material,each,200,Kitchen sink faucet,default-org
+Accessories,kitchen,material,lot,1000,Kitchen accessories package,default-org
+Cooktop,appliances,material,each,675,Cooktop with installation,default-org
+Dishwasher,appliances,material,each,325,Dishwasher with installation,default-org
+Microwave Oven,appliances,material,each,275,Microwave with installation,default-org
+Oven,appliances,material,each,675,Oven with installation,default-org
+Range Hood,appliances,material,each,675,Range hood with installation,default-org
+Refrigerator,appliances,material,each,675,Refrigerator with installation,default-org
+Washer+Dryer,appliances,material,each,1350,Washer and dryer set,default-org
+Accessories,bath,material,lot,750,Bathroom accessories package,default-org
+Cabinets,bath,material,each,375,Bathroom vanity cabinet,default-org
+Cabinets-Hardware,bath,material,lot,300,Bathroom cabinet hardware,default-org
+Countertops,bath,material,sqft,75,Bathroom countertops,default-org
+Mirrors,bath,material,each,200,Bathroom mirror,default-org
+Tub/Shower Enclosure,bath,material,each,1600,Tub or shower enclosure,default-org
+Toilet,bath,material,each,250,Toilet with installation,default-org
+Bath Faucet,bath,material,each,150,Bathroom sink faucet,default-org
+Full Scope,roofing,subcontractor,sqft,3.00,Complete roofing scope,default-org
+Full Scope,hvac,subcontractor,sqft,12.00,Complete HVAC scope,default-org
+Full Scope,insulation,subcontractor,lot,0,Complete insulation scope,default-org
+Full Scope,plumbing,subcontractor,lot,0,Complete plumbing scope,default-org
+Full Scope,drywall,subcontractor,lot,0,Complete drywall scope,default-org
+

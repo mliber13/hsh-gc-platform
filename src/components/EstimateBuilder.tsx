@@ -1151,8 +1151,9 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
   // Load item templates when category changes
   React.useEffect(() => {
     if (formData.category) {
-      const templates = getItemTemplatesByCategory(formData.category)
-      setItemTemplates(templates)
+      getItemTemplatesByCategory(formData.category).then(templates => {
+        setItemTemplates(templates)
+      })
     }
   }, [formData.category])
 
