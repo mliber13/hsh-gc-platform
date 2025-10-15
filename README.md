@@ -2,6 +2,17 @@
 
 **General Contractor Estimating, Budgeting & Project Management System**
 
+## 🎉 Status: Phase 1 Complete - Live in Production!
+
+**Deployment:** [Vercel](https://hsh-gc-platform.vercel.app)  
+**Database:** Supabase (Multi-user with Role-based Access)  
+**Features:** Estimates, Actuals, Schedules, Change Orders, Reports, Multi-user  
+
+📄 See [PHASE_1_COMPLETE.md](./PHASE_1_COMPLETE.md) for full details  
+🚀 See [PHASE_2_ROADMAP.md](./PHASE_2_ROADMAP.md) for upcoming features
+
+---
+
 ## Overview
 
 This application is designed to create a complete feedback loop for general contractors:
