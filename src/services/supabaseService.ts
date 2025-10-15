@@ -245,6 +245,24 @@ export async function updateEstimateTotalsInDB(estimateId: string, totals: any):
 // TRADE OPERATIONS
 // ============================================================================
 
+// Helper to transform database row to Trade
+function transformTrade(row: any): Trade {
+  return {
+    id: row.id,
+    estimateId: row.estimate_id,
+    category: row.category,
+    name: row.name,
+    quantity: row.quantity,
+    unit: row.unit,
+    unitCost: row.unit_cost,
+    totalCost: row.total_cost,
+    markupPercent: row.markup_percent || 0,
+    notes: row.notes || '',
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  }
+}
+
 export async function fetchTradesForEstimate(estimateId: string): Promise<Trade[]> {
   if (!isOnlineMode()) return []
 
@@ -259,7 +277,7 @@ export async function fetchTradesForEstimate(estimateId: string): Promise<Trade[
     return []
   }
 
-  return data as Trade[]
+  return data.map(transformTrade)
 }
 
 export async function createTradeInDB(estimateId: string, input: TradeInput): Promise<Trade | null> {
@@ -289,7 +307,7 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
       category: input.category,
       name: input.name,
       quantity: input.quantity || 1,
-      unit: input.unit || 'ea',
+      unit: input.unit || 'each',
       unit_cost: totalCost,
       total_cost: totalCost,
       markup_percent: input.markupPercent || 0,
@@ -304,7 +322,7 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
     return null
   }
 
-  return data as Trade
+  return transformTrade(data)
 }
 
 export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInput>): Promise<Trade | null> {
@@ -335,7 +353,7 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
     return null
   }
 
-  return data as Trade
+  return transformTrade(data)
 }
 
 export async function deleteTradeFromDB(tradeId: string): Promise<boolean> {
