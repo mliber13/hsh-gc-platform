@@ -6,6 +6,7 @@
 import { Plan, CreatePlanInput, UpdatePlanInput } from '../types/plan';
 import { getAllPlans, createPlan, updatePlan, deletePlan, getPlanById } from './planService';
 import { isOnlineMode, supabase } from '../lib/supabase';
+import { getCurrentUserProfile } from './userService';
 
 /**
  * Transform Supabase plan data to Plan format
@@ -125,8 +126,43 @@ export async function getPlanById_Hybrid(planId: string): Promise<Plan | null> {
  * Create plan (hybrid)
  */
 export async function createPlan_Hybrid(input: CreatePlanInput): Promise<Plan> {
-  // Plans are currently only in localStorage - no Supabase table yet
-  return createPlan(input);
+  if (isOnlineMode()) {
+    try {
+      // Get current user profile
+      const userProfile = await getCurrentUserProfile();
+      if (!userProfile) {
+        throw new Error('No user profile found. Please make sure you are logged in.');
+      }
+
+      // Create plan in localStorage first
+      const plan = createPlan(input);
+
+      // Transform and save to Supabase
+      const planData = transformPlanToSupabase(plan);
+      planData.user_id = userProfile.id; // Add user_id
+
+      const { data, error } = await supabase
+        .from('plans')
+        .insert(planData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating plan in Supabase:', error);
+        // Return localStorage plan even if Supabase fails
+        return plan;
+      }
+
+      console.log('Plan created in both localStorage and Supabase');
+      return plan;
+    } catch (error) {
+      console.error('Error creating plan in Supabase:', error);
+      // Fall back to localStorage only
+      return createPlan(input);
+    }
+  } else {
+    return createPlan(input);
+  }
 }
 
 /**

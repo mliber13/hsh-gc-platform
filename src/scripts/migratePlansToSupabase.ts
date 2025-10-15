@@ -6,6 +6,7 @@
 
 import { supabase } from '../lib/supabase';
 import { getAllPlans } from '../services/planService';
+import { getCurrentUserProfile } from '../services/userService';
 
 export async function migratePlansToSupabase(): Promise<{ success: boolean; plansMigrated: number; errors: string[] }> {
   const errors: string[] = [];
@@ -13,6 +14,12 @@ export async function migratePlansToSupabase(): Promise<{ success: boolean; plan
 
   try {
     console.log('🔄 Starting plans migration to Supabase...');
+
+    // Get current user profile to get user_id
+    const userProfile = await getCurrentUserProfile();
+    if (!userProfile) {
+      throw new Error('No user profile found. Please make sure you are logged in.');
+    }
 
     // Get all plans from localStorage
     const plans = getAllPlans();
@@ -42,6 +49,7 @@ export async function migratePlansToSupabase(): Promise<{ success: boolean; plan
           notes: plan.notes,
           is_active: plan.isActive,
           estimate_template_id: plan.estimateTemplateId,
+          user_id: userProfile.id, // Add user_id from current user
           created_at: plan.createdAt.toISOString(),
           updated_at: plan.updatedAt.toISOString(),
           // Store options as JSONB
