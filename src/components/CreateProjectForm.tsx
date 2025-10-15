@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ArrowLeft } from 'lucide-react'
 import { PROJECT_TYPES, ProjectType, Plan } from '@/types'
-import { getActivePlans, getPlanById } from '@/services/planService'
+import { getActivePlans_Hybrid, getPlanById_Hybrid } from '@/services/planHybridService'
 import { getEstimateTemplateById, applyTemplateToEstimate } from '@/services'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
@@ -54,8 +54,11 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
 
   useEffect(() => {
     // Load plans from Plan Library
-    const plans = getActivePlans()
-    setAvailablePlans(plans)
+    const loadPlans = async () => {
+      const plans = await getActivePlans_Hybrid()
+      setAvailablePlans(plans)
+    }
+    loadPlans()
   }, [])
 
   const selectedPlan = availablePlans.find(p => p.id === formData.planId)

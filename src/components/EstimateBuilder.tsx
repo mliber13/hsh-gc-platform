@@ -259,7 +259,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       }
 
       // Reload trades from storage to ensure we have the latest
-      const reloadedTrades = getTradesForEstimate(projectData.estimate.id)
+      const reloadedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
       console.log('Reloaded trades from storage:', reloadedTrades)
       setTrades(reloadedTrades)
 
