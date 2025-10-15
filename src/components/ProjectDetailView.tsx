@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react'
 import { Project, ProjectType, ProjectStatus, Plan } from '@/types'
 import { updateProject, deleteProject, duplicateProject } from '@/services/projectService'
 import { getTradesForEstimate, getProjectActuals } from '@/services'
-import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
+import { getTradesForEstimate_Hybrid, updateProject_Hybrid } from '@/services/hybridService'
 import { getActivePlans_Hybrid } from '@/services/planHybridService'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -115,8 +115,10 @@ export function ProjectDetailView({
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
 
-  const handleSaveEdit = () => {
-    const updated = updateProject(project.id, {
+  const handleSaveEdit = async () => {
+    console.log('💾 Saving project changes...');
+    const updated = await updateProject_Hybrid(project.id, {
+      id: project.id,
       name: editedProject.name,
       type: editedProject.type,
       status: editedProject.status,
@@ -129,6 +131,8 @@ export function ProjectDetailView({
       metadata: editedProject.metadata,
       client: editedProject.client,
     })
+    
+    console.log('✅ Project update result:', updated);
     
     if (updated) {
       setIsEditing(false)
