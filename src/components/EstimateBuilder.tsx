@@ -1194,66 +1194,53 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="name">Item Name</Label>
+                <Label htmlFor="name">Item Name *</Label>
                 <div className="space-y-2">
-                  {itemTemplates.length > 0 ? (
-                    <div className="space-y-2">
-                      <Select 
-                        value={formData.name} 
-                        onValueChange={(value) => {
-                          // Find the selected template
-                          const template = itemTemplates.find(t => t.name === value)
-                          
-                          if (template) {
-                            // Use template defaults
-                            setFormData(prev => {
-                              const qty = prev.quantity || 1
-                              return {
-                                ...prev,
-                                name: template.name,
-                                unit: template.defaultUnit,
-                                isSubcontracted: template.isSubcontracted,
-                                materialRate: template.defaultMaterialRate,
-                                laborRate: template.defaultLaborRate,
-                                subcontractorCost: template.defaultSubcontractorCost || 0,
-                                materialCost: (template.defaultMaterialRate || 0) * qty,
-                                laborCost: (template.defaultLaborRate || 0) * qty,
-                              }
-                            })
-                            return
-                          }
-                          
-                          // If no template found, just set the name (user can type custom items)
-                          setFormData(prev => ({ ...prev, name: value }))
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select or type custom name..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {itemTemplates.map((template) => (
-                            <SelectItem key={template.id} value={template.name}>
-                              {template.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        id="name"
-                        placeholder="Or type custom name..."
-                        value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        required
-                      />
-                    </div>
-                  ) : (
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                      required
-                    />
+                  {itemTemplates.length > 0 && (
+                    <Select 
+                      value=""
+                      onValueChange={(value) => {
+                        // Find the selected template
+                        const template = itemTemplates.find(t => t.name === value)
+                        
+                        if (template) {
+                          // Use template defaults
+                          setFormData(prev => {
+                            const qty = prev.quantity || 1
+                            return {
+                              ...prev,
+                              name: template.name,
+                              unit: template.defaultUnit,
+                              isSubcontracted: template.isSubcontracted,
+                              materialRate: template.defaultMaterialRate,
+                              laborRate: template.defaultLaborRate,
+                              subcontractorCost: template.defaultSubcontractorCost || 0,
+                              materialCost: (template.defaultMaterialRate || 0) * qty,
+                              laborCost: (template.defaultLaborRate || 0) * qty,
+                            }
+                          })
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Load from template..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {itemTemplates.map((template) => (
+                          <SelectItem key={template.id} value={template.name}>
+                            {template.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
+                  <Input
+                    id="name"
+                    placeholder="Type item name..."
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    required
+                  />
                 </div>
               </div>
             </div>
