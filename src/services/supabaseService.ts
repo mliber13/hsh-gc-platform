@@ -29,6 +29,15 @@ async function transformProject(row: any): Promise<Project> {
   // Fetch the estimate for this project
   const estimate = await fetchEstimateByProjectId(row.id)
   
+  if (!estimate) {
+    console.warn(`No estimate found for project ${row.id}, will create one`)
+    // Try to create an estimate if it doesn't exist
+    const newEstimate = await createEstimateInDB(row.id)
+    if (newEstimate) {
+      console.log(`Created estimate ${newEstimate.id} for project ${row.id}`)
+    }
+  }
+  
   return {
     id: row.id,
     name: row.name,
