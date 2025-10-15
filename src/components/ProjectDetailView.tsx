@@ -55,21 +55,24 @@ export function ProjectDetailView({
   
   // Calculate estimate totals from trades
   useEffect(() => {
-    const trades = getTradesForEstimate(project.estimate.id)
-    const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
-    const grossProfitTotal = trades.reduce((sum, trade) => {
-      const markup = trade.markupPercent || 11.1
-      return sum + (trade.totalCost * (markup / 100))
-    }, 0)
-    const contingency = basePriceTotal * 0.10 // 10% default
-    const totalEstimated = basePriceTotal + grossProfitTotal + contingency
-    
-    setEstimateTotals({
-      basePriceTotal,
-      grossProfitTotal,
-      totalEstimated,
-      itemCount: trades.length,
-    })
+    const loadTotals = async () => {
+      const trades = await getTradesForEstimate_Hybrid(project.estimate.id)
+      const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
+      const grossProfitTotal = trades.reduce((sum, trade) => {
+        const markup = trade.markupPercent || 11.1
+        return sum + (trade.totalCost * (markup / 100))
+      }, 0)
+      const contingency = basePriceTotal * 0.10 // 10% default
+      const totalEstimated = basePriceTotal + grossProfitTotal + contingency
+      
+      setEstimateTotals({
+        basePriceTotal,
+        grossProfitTotal,
+        totalEstimated,
+        itemCount: trades.length,
+      })
+    }
+    loadTotals()
   }, [project])
 
   // Load actual costs from project actuals
