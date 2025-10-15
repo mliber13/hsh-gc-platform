@@ -31,6 +31,12 @@ import {
   getItemTemplatesByCategory,
   createEstimateTemplate,
 } from '@/services'
+import {
+  addTrade_Hybrid,
+  updateTrade_Hybrid,
+  deleteTrade_Hybrid,
+  getTradesForEstimate_Hybrid,
+} from '@/services/hybridService'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -115,8 +121,9 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   // Load trades when project changes
   useEffect(() => {
     if (projectData) {
-      const loadedTrades = getTradesForEstimate(projectData.estimate.id)
-      setTrades(loadedTrades)
+      getTradesForEstimate_Hybrid(projectData.estimate.id).then(loadedTrades => {
+        setTrades(loadedTrades)
+      })
     }
   }, [projectData])
 
@@ -230,7 +237,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       if (isAddingTrade) {
         // Add new trade
         console.log('Adding new trade to estimate:', projectData.estimate.id)
-        updatedTrade = addTrade(projectData.estimate.id, tradeData)
+        updatedTrade = await addTrade_Hybrid(projectData.estimate.id, tradeData)
         console.log('Trade added successfully:', updatedTrade)
         setTrades(prev => [...prev, updatedTrade])
       } else {
@@ -267,10 +274,10 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     }
   }
 
-  const handleDeleteTrade = (tradeId: string) => {
+  const handleDeleteTrade = async (tradeId: string) => {
     if (!projectData) return
 
-    const deleted = deleteTrade(tradeId)
+    const deleted = await deleteTrade_Hybrid(tradeId)
     if (deleted) {
       setTrades(prev => prev.filter(t => t.id !== tradeId))
       
