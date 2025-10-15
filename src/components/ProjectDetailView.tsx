@@ -6,10 +6,11 @@
 //
 
 import React, { useState, useEffect } from 'react'
-import { Project, ProjectType, ProjectStatus } from '@/types'
+import { Project, ProjectType, ProjectStatus, Plan } from '@/types'
 import { updateProject, deleteProject, duplicateProject } from '@/services/projectService'
 import { getTradesForEstimate, getProjectActuals } from '@/services'
 import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
+import { getActivePlans_Hybrid } from '@/services/planHybridService'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -40,6 +41,7 @@ export function ProjectDetailView({
 }: ProjectDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editedProject, setEditedProject] = useState(project)
+  const [availablePlans, setAvailablePlans] = useState<Plan[]>([])
   const [estimateTotals, setEstimateTotals] = useState({
     basePriceTotal: 0,
     grossProfitTotal: 0,
@@ -52,6 +54,19 @@ export function ProjectDetailView({
     subcontractorCost: 0,
     totalActual: 0,
   })
+
+  // Load plans when editing mode is enabled
+  useEffect(() => {
+    if (isEditing) {
+      const loadPlans = async () => {
+        console.log('🔍 Loading plans for edit form...');
+        const plans = await getActivePlans_Hybrid();
+        console.log('📋 Plans loaded for edit:', plans.length, plans);
+        setAvailablePlans(plans);
+      };
+      loadPlans();
+    }
+  }, [isEditing])
   
   // Calculate estimate totals from trades
   useEffect(() => {
@@ -468,14 +483,26 @@ export function ProjectDetailView({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="planId">Plan ID</Label>
-                    <Input
-                      id="planId"
+                    <Select
                       value={editedProject.metadata?.planId || ''}
-                      onChange={(e) => setEditedProject(prev => ({ 
+                      onValueChange={(value) => setEditedProject(prev => ({ 
                         ...prev, 
-                        metadata: { ...prev.metadata, planId: e.target.value }
+                        metadata: { ...prev.metadata, planId: value }
                       }))}
-                    />
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a plan..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="custom">Custom Plan</SelectItem>
+                        {availablePlans.map(plan => (
+                          <SelectItem key={plan.id} value={plan.planId}>
+                            {plan.name} - {plan.planId}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label htmlFor="projectType">Project Type</Label>
