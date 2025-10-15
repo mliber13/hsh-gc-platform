@@ -60,28 +60,43 @@ function transformPlanToSupabase(plan: Plan): any {
  * Get all plans (hybrid)
  */
 export async function getAllPlans_Hybrid(): Promise<Plan[]> {
+  console.log('🔍 getAllPlans_Hybrid - Online mode:', isOnlineMode());
+  
   if (isOnlineMode()) {
     try {
+      console.log('📡 Fetching plans from Supabase...');
       const { data, error } = await supabase
         .from('plans')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching plans from Supabase:', error);
+        console.error('❌ Error fetching plans from Supabase:', error);
+        console.log('↩️ Falling back to localStorage');
         // Fall back to localStorage
-        return getAllPlans();
+        const localPlans = getAllPlans();
+        console.log('📋 localStorage plans:', localPlans.length);
+        return localPlans;
       }
 
+      console.log('✅ Supabase plans fetched:', data.length);
       // Transform Supabase data to Plan format
-      return data.map(plan => transformPlanFromSupabase(plan));
+      const transformedPlans = data.map(plan => transformPlanFromSupabase(plan));
+      console.log('📋 Transformed plans:', transformedPlans);
+      return transformedPlans;
     } catch (error) {
-      console.error('Error fetching plans from Supabase:', error);
+      console.error('❌ Error fetching plans from Supabase:', error);
+      console.log('↩️ Falling back to localStorage');
       // Fall back to localStorage
-      return getAllPlans();
+      const localPlans = getAllPlans();
+      console.log('📋 localStorage plans:', localPlans.length);
+      return localPlans;
     }
   } else {
-    return getAllPlans();
+    console.log('💾 Using localStorage (offline mode)');
+    const localPlans = getAllPlans();
+    console.log('📋 localStorage plans:', localPlans.length);
+    return localPlans;
   }
 }
 
