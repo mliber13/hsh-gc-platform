@@ -24,6 +24,27 @@ import {
 // PROJECT OPERATIONS
 // ============================================================================
 
+// Helper to transform database row to Project
+function transformProject(row: any): Project {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    status: row.status,
+    address: row.address,
+    city: row.city,
+    state: row.state,
+    zipCode: row.zip_code,
+    client: row.client,
+    startDate: row.start_date ? new Date(row.start_date) : undefined,
+    endDate: row.end_date ? new Date(row.end_date) : undefined,
+    metadata: row.metadata || {},
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+    estimate: row.estimate || { id: '', projectId: row.id, version: 1 },
+  }
+}
+
 export async function fetchProjects(): Promise<Project[]> {
   if (!isOnlineMode()) return []
 
@@ -37,7 +58,7 @@ export async function fetchProjects(): Promise<Project[]> {
     return []
   }
 
-  return data as Project[]
+  return data.map(transformProject)
 }
 
 export async function fetchProjectById(projectId: string): Promise<Project | null> {
@@ -54,7 +75,7 @@ export async function fetchProjectById(projectId: string): Promise<Project | nul
     return null
   }
 
-  return data as Project
+  return transformProject(data)
 }
 
 export async function createProjectInDB(input: CreateProjectInput): Promise<Project | null> {
@@ -100,7 +121,7 @@ export async function createProjectInDB(input: CreateProjectInput): Promise<Proj
     return null
   }
 
-  return data as Project
+  return transformProject(data)
 }
 
 export async function updateProjectInDB(projectId: string, updates: UpdateProjectInput): Promise<Project | null> {

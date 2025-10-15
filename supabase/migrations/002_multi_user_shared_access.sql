@@ -29,14 +29,24 @@ CREATE INDEX idx_profiles_role ON profiles(role);
 -- ============================================================================
 
 -- Projects: Change from user_id to organization_id
+-- First make user_id nullable, then add new columns
+ALTER TABLE projects
+ALTER COLUMN user_id DROP NOT NULL;
+
 ALTER TABLE projects
 ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT 'default-org',
 ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES auth.users;
+
+-- Set created_by to user_id for existing records
+UPDATE projects SET created_by = user_id WHERE created_by IS NULL;
 
 DROP INDEX IF EXISTS idx_projects_organization_id;
 CREATE INDEX idx_projects_organization_id ON projects(organization_id);
 
 -- Estimates
+ALTER TABLE estimates
+ALTER COLUMN user_id DROP NOT NULL;
+
 ALTER TABLE estimates
 ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT 'default-org';
 
@@ -45,6 +55,9 @@ CREATE INDEX idx_estimates_organization_id ON estimates(organization_id);
 
 -- Trades
 ALTER TABLE trades
+ALTER COLUMN user_id DROP NOT NULL;
+
+ALTER TABLE trades
 ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT 'default-org';
 
 DROP INDEX IF EXISTS idx_trades_organization_id;
@@ -52,12 +65,18 @@ CREATE INDEX idx_trades_organization_id ON trades(organization_id);
 
 -- Project Actuals
 ALTER TABLE project_actuals
+ALTER COLUMN user_id DROP NOT NULL;
+
+ALTER TABLE project_actuals
 ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT 'default-org';
 
 DROP INDEX IF EXISTS idx_project_actuals_organization_id;
 CREATE INDEX idx_project_actuals_organization_id ON project_actuals(organization_id);
 
 -- Labor Entries
+ALTER TABLE labor_entries
+ALTER COLUMN user_id DROP NOT NULL;
+
 ALTER TABLE labor_entries
 ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT 'default-org',
 ADD COLUMN IF NOT EXISTS entered_by UUID REFERENCES auth.users;
@@ -67,6 +86,9 @@ CREATE INDEX idx_labor_entries_organization_id ON labor_entries(organization_id)
 
 -- Material Entries
 ALTER TABLE material_entries
+ALTER COLUMN user_id DROP NOT NULL;
+
+ALTER TABLE material_entries
 ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT 'default-org',
 ADD COLUMN IF NOT EXISTS entered_by UUID REFERENCES auth.users;
 
@@ -74,6 +96,9 @@ DROP INDEX IF EXISTS idx_material_entries_organization_id;
 CREATE INDEX idx_material_entries_organization_id ON material_entries(organization_id);
 
 -- Subcontractor Entries
+ALTER TABLE subcontractor_entries
+ALTER COLUMN user_id DROP NOT NULL;
+
 ALTER TABLE subcontractor_entries
 ADD COLUMN IF NOT EXISTS organization_id TEXT NOT NULL DEFAULT 'default-org',
 ADD COLUMN IF NOT EXISTS entered_by UUID REFERENCES auth.users;
