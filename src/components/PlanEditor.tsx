@@ -88,16 +88,16 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
         ...formData as UpdatePlanInput,
         estimateTemplateId: selectedTemplateId,
       }
-      const updated = updatePlan(currentPlan.id, updates)
+      const updated = await updatePlan(currentPlan.id, updates)
       if (updated) {
         // Update template links
         if (selectedTemplateId && selectedTemplateId !== currentPlan.estimateTemplateId) {
-          linkTemplateToPlan(selectedTemplateId, updated.id)
+          await linkTemplateToPlan(selectedTemplateId, updated.id)
           if (currentPlan.estimateTemplateId) {
-            unlinkTemplateFromPlan(currentPlan.estimateTemplateId, currentPlan.id)
+            await unlinkTemplateFromPlan(currentPlan.estimateTemplateId, currentPlan.id)
           }
         } else if (!selectedTemplateId && currentPlan.estimateTemplateId) {
-          unlinkTemplateFromPlan(currentPlan.estimateTemplateId, currentPlan.id)
+          await unlinkTemplateFromPlan(currentPlan.estimateTemplateId, currentPlan.id)
         }
         
         setCurrentPlan(updated)
@@ -105,13 +105,13 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
       }
     } else {
       // Create new plan
-      const newPlan = createPlan(formData)
+      const newPlan = await createPlan(formData)
       
       // Link template if selected
       if (selectedTemplateId) {
-        const planWithTemplate = updatePlan(newPlan.id, { estimateTemplateId: selectedTemplateId })
+        const planWithTemplate = await updatePlan(newPlan.id, { estimateTemplateId: selectedTemplateId })
         if (planWithTemplate) {
-          linkTemplateToPlan(selectedTemplateId, planWithTemplate.id)
+          await linkTemplateToPlan(selectedTemplateId, planWithTemplate.id)
           setCurrentPlan(planWithTemplate)
           onSave(planWithTemplate)
         }

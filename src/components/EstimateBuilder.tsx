@@ -248,7 +248,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         }
         
         console.log('Updating trade:', tradeData.id)
-        const result = updateTrade(tradeData.id, tradeData)
+        const result = await updateTrade_Hybrid(tradeData.id, tradeData)
         if (!result) {
           console.error('Failed to update trade')
           return
@@ -1145,7 +1145,7 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
 
 interface TradeFormProps {
   trade: TradeFormData
-  onSave: (data: TradeFormData) => void
+  onSave: (data: TradeFormData) => Promise<void>
   onCancel: () => void
   isAdding: boolean
 }
@@ -1164,9 +1164,9 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
     }
   }, [formData.category])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    onSave(formData)
+    await onSave(formData)
   }
 
   return (
