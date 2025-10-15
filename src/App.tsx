@@ -16,10 +16,11 @@ import { createProject, getProject } from './services/projectService'
 import { applyTemplateToEstimate } from './services/estimateTemplateService'
 import { getCurrentUserProfile, UserProfile } from './services/userService'
 import { UserManagement } from './components/UserManagement'
+import { DataMigration } from './components/DataMigration'
 import { Button } from './components/ui/button'
-import { LogOut, User, Users, Crown, Pencil, Eye } from 'lucide-react'
+import { LogOut, User, Users, Crown, Pencil, Eye, Database } from 'lucide-react'
 
-type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library' | 'user-management'
+type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library' | 'user-management' | 'data-migration'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -225,13 +226,25 @@ function App() {
                       )}
                     </div>
                     {userProfile?.role === 'admin' && (
-                      <button
-                        onClick={handleOpenUserManagement}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
-                      >
-                        <Users className="w-4 h-4" />
-                        Manage Users
-                      </button>
+                      <>
+                        <button
+                          onClick={handleOpenUserManagement}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                        >
+                          <Users className="w-4 h-4" />
+                          Manage Users
+                        </button>
+                        <button
+                          onClick={() => {
+                            setCurrentView('data-migration');
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                        >
+                          <Database className="w-4 h-4" />
+                          Migrate Data
+                        </button>
+                      </>
                     )}
                     <button
                       onClick={handleSignOut}
@@ -326,6 +339,10 @@ function App() {
         <ItemLibrary
           onBack={handleBackToDashboard}
         />
+      )}
+
+      {currentView === 'data-migration' && (
+        <DataMigration />
       )}
 
       {/* User Management Modal */}
