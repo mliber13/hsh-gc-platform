@@ -135,6 +135,12 @@ export type {
   ItemTemplateInput,
 } from './itemTemplate'
 
+export type {
+  PlanEstimateTemplate,
+  CreatePlanEstimateTemplateInput,
+  UpdatePlanEstimateTemplateInput,
+} from './estimateTemplate'
+
 // Export all API types
 export type {
   // Generic responses

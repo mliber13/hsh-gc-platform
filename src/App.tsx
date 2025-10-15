@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Project, Plan } from './types'
 import { ProjectsDashboard } from './components/ProjectsDashboard'
 import { ProjectDetailView } from './components/ProjectDetailView'
@@ -10,14 +10,34 @@ import { CreateProjectForm, ProjectFormData } from './components/CreateProjectFo
 import { PlanLibrary } from './components/PlanLibrary'
 import { PlanEditor } from './components/PlanEditor'
 import { ItemLibrary } from './components/ItemLibrary'
+import { AuthGate } from './components/auth/AuthGate'
+import { useAuth } from './contexts/AuthContext'
 import { createProject, getProject } from './services/projectService'
+import { applyTemplateToEstimate } from './services/estimateTemplateService'
+import { getCurrentUserProfile, UserProfile } from './services/userService'
+import { UserManagement } from './components/UserManagement'
+import { Button } from './components/ui/button'
+import { LogOut, User, Users, Crown, Pencil, Eye } from 'lucide-react'
 
-type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library'
+type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library' | 'user-management'
 
 function App() {
+  const { user, signOut, isOnline } = useAuth()
   const [currentView, setCurrentView] = useState<View>('dashboard')
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const [showUserManagement, setShowUserManagement] = useState(false)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+
+  // Load user profile when authenticated
+  useEffect(() => {
+    if (isOnline && user) {
+      getCurrentUserProfile().then(profile => {
+        setUserProfile(profile)
+      })
+    }
+  }, [isOnline, user])
 
   // Refresh project data when viewing project-related screens
   useEffect(() => {
@@ -64,6 +84,12 @@ function App() {
         isCustomPlan: formData.planId === 'custom',
       },
     })
+
+    // Apply estimate template if one was selected via the plan
+    if (formData.estimateTemplateId && newProject.estimate) {
+      const trades = applyTemplateToEstimate(formData.estimateTemplateId, newProject.estimate.id)
+      console.log(`Applied estimate template: ${trades.length} trades added to project`)
+    }
 
     setSelectedProject(newProject)
     setCurrentView('estimate')
@@ -127,16 +153,108 @@ function App() {
     setCurrentView('plan-library')
   }
 
+  const handleSignOut = async () => {
+    await signOut()
+    setCurrentView('dashboard')
+    setSelectedProject(null)
+    setShowUserMenu(false)
+    setUserProfile(null)
+  }
+
+  const handleOpenUserManagement = () => {
+    setShowUserManagement(true)
+    setShowUserMenu(false)
+  }
+
+  const handleCloseUserManagement = () => {
+    setShowUserManagement(false)
+    // Refresh user profile in case role changed
+    if (isOnline && user) {
+      getCurrentUserProfile().then(profile => {
+        setUserProfile(profile)
+      })
+    }
+  }
+
+  const roleIcons = {
+    admin: <Crown className="w-3 h-3" />,
+    editor: <Pencil className="w-3 h-3" />,
+    viewer: <Eye className="w-3 h-3" />,
+  }
+
+  const roleColors = {
+    admin: 'bg-purple-100 text-purple-800 border-purple-200',
+    editor: 'bg-blue-100 text-blue-800 border-blue-200',
+    viewer: 'bg-gray-100 text-gray-800 border-gray-200',
+  }
+
+  const roleLabels = {
+    admin: 'Admin',
+    editor: 'Editor',
+    viewer: 'Viewer',
+  }
+
   return (
-    <div className="min-h-screen bg-background">
-      {currentView === 'dashboard' && (
-        <ProjectsDashboard
-          onCreateProject={handleCreateProject}
-          onSelectProject={handleSelectProject}
-          onOpenPlanLibrary={handleOpenPlanLibrary}
-          onOpenItemLibrary={handleOpenItemLibrary}
-        />
-      )}
+    <AuthGate>
+      <div className="min-h-screen bg-background">
+        {/* User Menu - Only show if online and authenticated */}
+        {isOnline && user && (
+          <div className="fixed top-4 right-4 z-50">
+            <div className="relative">
+              <Button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                variant="outline"
+                size="sm"
+                className="bg-white shadow-lg"
+              >
+                <User className="w-4 h-4 mr-2" />
+                {user.email}
+              </Button>
+              
+              {showUserMenu && (
+                <div className="absolute right-0 top-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg min-w-[200px]">
+                  <div className="p-2">
+                    <div className="px-3 py-2 border-b border-gray-200">
+                      <p className="text-xs text-gray-600">Signed in as</p>
+                      <p className="text-sm font-semibold truncate">{user.email}</p>
+                      {userProfile && (
+                        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium mt-1 ${roleColors[userProfile.role]}`}>
+                          {roleIcons[userProfile.role]}
+                          {roleLabels[userProfile.role]}
+                        </div>
+                      )}
+                    </div>
+                    {userProfile?.role === 'admin' && (
+                      <button
+                        onClick={handleOpenUserManagement}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                      >
+                        <Users className="w-4 h-4" />
+                        Manage Users
+                      </button>
+                    )}
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2 text-red-600"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {currentView === 'dashboard' && (
+          <ProjectsDashboard
+            onCreateProject={handleCreateProject}
+            onSelectProject={handleSelectProject}
+            onOpenPlanLibrary={handleOpenPlanLibrary}
+            onOpenItemLibrary={handleOpenItemLibrary}
+          />
+        )}
 
       {currentView === 'create-project' && (
         <CreateProjectForm
@@ -209,7 +327,13 @@ function App() {
           onBack={handleBackToDashboard}
         />
       )}
-    </div>
+
+      {/* User Management Modal */}
+      {showUserManagement && (
+        <UserManagement onClose={handleCloseUserManagement} />
+      )}
+      </div>
+    </AuthGate>
   )
 }
 

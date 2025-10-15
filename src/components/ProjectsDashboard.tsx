@@ -9,10 +9,11 @@ import React, { useState, useEffect } from 'react'
 import { Project } from '@/types'
 import { getAllProjects } from '@/services/projectService'
 import { getTradesForEstimate, exportAllData, importAllData } from '@/services'
+import { usePermissions } from '@/hooks/usePermissions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Download, Upload } from 'lucide-react'
+import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Download, Upload, Eye } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface ProjectsDashboardProps {
@@ -25,6 +26,7 @@ interface ProjectsDashboardProps {
 export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlanLibrary, onOpenItemLibrary }: ProjectsDashboardProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const { canCreate, isViewer } = usePermissions()
 
   useEffect(() => {
     const allProjects = getAllProjects()
@@ -195,22 +197,24 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
         {/* Stats Cards - Show first on mobile, with action buttons on desktop */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* Action Cards - Hidden on mobile, shown on desktop */}
-          <Card className="bg-gradient-to-br from-[#0E79C9] to-[#0A5A96] text-white hover:shadow-xl transition-shadow cursor-pointer border-none hidden sm:block">
-            <CardContent className="pt-6">
-              <button
-                onClick={onCreateProject}
-                className="w-full text-left"
-              >
-                <div className="flex flex-col items-center justify-center py-3 sm:py-8">
-                  <div className="bg-white/20 rounded-full p-2 sm:p-4 mb-2 sm:mb-4">
-                    <PlusCircle className="w-8 sm:w-12 h-8 sm:h-12" />
+          {canCreate && (
+            <Card className="bg-gradient-to-br from-[#0E79C9] to-[#0A5A96] text-white hover:shadow-xl transition-shadow cursor-pointer border-none hidden sm:block">
+              <CardContent className="pt-6">
+                <button
+                  onClick={onCreateProject}
+                  className="w-full text-left"
+                >
+                  <div className="flex flex-col items-center justify-center py-3 sm:py-8">
+                    <div className="bg-white/20 rounded-full p-2 sm:p-4 mb-2 sm:mb-4">
+                      <PlusCircle className="w-8 sm:w-12 h-8 sm:h-12" />
+                    </div>
+                    <h3 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">Create New Project</h3>
+                    <p className="text-white/80 text-center text-sm sm:text-base hidden sm:block">Start a new construction project</p>
                   </div>
-                  <h3 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">Create New Project</h3>
-                  <p className="text-white/80 text-center text-sm sm:text-base hidden sm:block">Start a new construction project</p>
-                </div>
-              </button>
-            </CardContent>
-          </Card>
+                </button>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="bg-gradient-to-br from-[#D95C00] to-[#B34C00] text-white hover:shadow-xl transition-shadow cursor-pointer border-none hidden sm:block">
             <CardContent className="pt-6">
@@ -312,9 +316,9 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                   {searchQuery ? 'No projects found' : 'No projects yet'}
                 </p>
                 <p className="text-gray-500 mb-6">
-                  {searchQuery ? 'Try adjusting your search' : 'Create your first project to get started'}
+                  {searchQuery ? 'Try adjusting your search' : canCreate ? 'Create your first project to get started' : 'No projects yet'}
                 </p>
-                {!searchQuery && (
+                {!searchQuery && canCreate && (
                   <Button
                     onClick={onCreateProject}
                     className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226]"
@@ -322,6 +326,12 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                     <PlusCircle className="w-4 h-4 mr-2" />
                     Create Project
                   </Button>
+                )}
+                {!searchQuery && isViewer && (
+                  <div className="flex items-center justify-center gap-2 text-gray-600">
+                    <Eye className="w-5 h-5" />
+                    <span>You have view-only access</span>
+                  </div>
                 )}
               </div>
             ) : (
@@ -385,14 +395,16 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
         <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
           <div className="space-y-2">
             {/* Primary Actions */}
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                onClick={onCreateProject}
-                className="bg-gradient-to-r from-[#0E79C9] to-[#0A5A96] hover:from-[#0A5A96] hover:to-[#084577] text-white h-12"
-              >
-                <PlusCircle className="w-5 h-5 mr-2" />
-                New Project
-              </Button>
+            <div className={`grid ${canCreate ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+              {canCreate && (
+                <Button
+                  onClick={onCreateProject}
+                  className="bg-gradient-to-r from-[#0E79C9] to-[#0A5A96] hover:from-[#0A5A96] hover:to-[#084577] text-white h-12"
+                >
+                  <PlusCircle className="w-5 h-5 mr-2" />
+                  New Project
+                </Button>
+              )}
               <Button
                 onClick={onOpenPlanLibrary}
                 className="bg-gradient-to-r from-[#D95C00] to-[#B34C00] hover:from-[#B34C00] hover:to-[#8A3900] text-white h-12"

@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react'
 import { Plan, PlanDocument, PlanOption, CreatePlanInput, UpdatePlanInput, PlanOptionInput } from '@/types'
 import { createPlan, updatePlan, addPlanOption, deletePlanOption, addPlanDocument, deletePlanDocument, getPlanById } from '@/services/planService'
+import { getAllEstimateTemplates, linkTemplateToPlan, unlinkTemplateFromPlan } from '@/services'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,6 +37,8 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
   })
 
   const [currentPlan, setCurrentPlan] = useState<Plan | null>(plan || null)
+  const [estimateTemplates, setEstimateTemplates] = useState<any[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(plan?.estimateTemplateId)
   const [isAddingOption, setIsAddingOption] = useState(false)
   const [newOption, setNewOption] = useState<PlanOptionInput>({
     name: '',
@@ -55,6 +58,10 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
   })
 
   useEffect(() => {
+    // Load estimate templates
+    const templates = getAllEstimateTemplates()
+    setEstimateTemplates(templates)
+
     if (plan) {
       setFormData({
         planId: plan.planId,
@@ -68,6 +75,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
         notes: plan.notes,
       })
       setCurrentPlan(plan)
+      setSelectedTemplateId(plan.estimateTemplateId)
     }
   }, [plan])
 
@@ -76,16 +84,41 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
     
     if (currentPlan) {
       // Update existing plan
-      const updated = updatePlan(currentPlan.id, formData as UpdatePlanInput)
+      const updates: UpdatePlanInput & { estimateTemplateId?: string } = {
+        ...formData as UpdatePlanInput,
+        estimateTemplateId: selectedTemplateId,
+      }
+      const updated = updatePlan(currentPlan.id, updates)
       if (updated) {
+        // Update template links
+        if (selectedTemplateId && selectedTemplateId !== currentPlan.estimateTemplateId) {
+          linkTemplateToPlan(selectedTemplateId, updated.id)
+          if (currentPlan.estimateTemplateId) {
+            unlinkTemplateFromPlan(currentPlan.estimateTemplateId, currentPlan.id)
+          }
+        } else if (!selectedTemplateId && currentPlan.estimateTemplateId) {
+          unlinkTemplateFromPlan(currentPlan.estimateTemplateId, currentPlan.id)
+        }
+        
         setCurrentPlan(updated)
         onSave(updated)
       }
     } else {
       // Create new plan
       const newPlan = createPlan(formData)
-      setCurrentPlan(newPlan)
-      onSave(newPlan)
+      
+      // Link template if selected
+      if (selectedTemplateId) {
+        const planWithTemplate = updatePlan(newPlan.id, { estimateTemplateId: selectedTemplateId })
+        if (planWithTemplate) {
+          linkTemplateToPlan(selectedTemplateId, planWithTemplate.id)
+          setCurrentPlan(planWithTemplate)
+          onSave(planWithTemplate)
+        }
+      } else {
+        setCurrentPlan(newPlan)
+        onSave(newPlan)
+      }
     }
   }
 
@@ -293,6 +326,30 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                     placeholder="2"
                   />
                 </div>
+              </div>
+
+              {/* Estimate Template Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="estimate-template">Estimate Template</Label>
+                <Select
+                  value={selectedTemplateId || 'none'}
+                  onValueChange={(value) => setSelectedTemplateId(value === 'none' ? undefined : value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an estimate template (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Template</SelectItem>
+                    {estimateTemplates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name} ({template.trades.length} items)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-600">
+                  Link an estimate template to automatically populate costs when creating projects from this plan
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

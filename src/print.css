@@ -1,0 +1,301 @@
+/* ============================================================================
+   HSH GC Platform - Print Stylesheet
+   ============================================================================
+   
+   Professional print layout for PDF reports
+*/
+
+/* Hide non-printable elements */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Print container */
+  .print-container {
+    font-family: Arial, sans-serif;
+    font-size: 11pt;
+    color: #000;
+    background: white;
+  }
+
+  /* Header styling */
+  .print-header {
+    margin-bottom: 1rem;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+  }
+
+  th, td {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+  }
+
+  th {
+    background-color: #f3f4f6;
+    font-weight: bold;
+    text-align: left;
+  }
+
+  /* Page breaks */
+  .page-break-before {
+    page-break-before: always;
+  }
+
+  .page-break-after {
+    page-break-after: always;
+  }
+
+  .page-break-inside-avoid {
+    page-break-inside: avoid;
+  }
+
+  /* Footer */
+  .print-footer {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #ccc;
+  }
+
+  /* Colors - ensure they print */
+  .text-red-600 {
+    color: #dc2626 !important;
+  }
+
+  .text-green-600 {
+    color: #16a34a !important;
+  }
+
+  .text-blue-600 {
+    color: #2563eb !important;
+  }
+
+  .bg-gray-100,
+  .bg-gray-50 {
+    background-color: #f3f4f6 !important;
+  }
+
+  .bg-blue-50 {
+    background-color: #eff6ff !important;
+  }
+
+  .bg-orange-50 {
+    background-color: #fff7ed !important;
+  }
+
+  .bg-red-50 {
+    background-color: #fef2f2 !important;
+  }
+
+  .bg-green-50 {
+    background-color: #f0fdf4 !important;
+  }
+}
+
+/* Hide print content by default (only show when printing) */
+.print-only {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  visibility: hidden;
+}
+
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}
+
+@media print {
+  /* Page setup */
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  /* Reset everything */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Hide non-printable elements */
+  #root > *:not(.print-only),
+  body > *:not(.print-only),
+  .no-print,
+  nav,
+  header,
+  footer,
+  button,
+  .sidebar,
+  .menu,
+  [class*="fixed"],
+  [class*="absolute"] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Show only print content */
+  .print-only,
+  #printable-content {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+  }
+
+  .print-only *,
+  #printable-content * {
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  /* Ensure proper layout */
+  html, body {
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* Ensure root container shows content */
+  #root {
+    display: block !important;
+    visibility: visible !important;
+    overflow: visible !important;
+  }
+
+  /* Page break rules */
+  .page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  .page-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .page-break-inside-avoid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Prevent orphans and widows */
+  p, h1, h2, h3, h4, h5, h6 {
+    orphans: 3;
+    widows: 3;
+    page-break-after: avoid !important;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid !important;
+  }
+
+  /* Table handling */
+  table {
+    page-break-inside: auto !important;
+    width: 100% !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  /* Ensure proper spacing */
+  .print-section {
+    margin-bottom: 20mm !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Fix for potential layout issues */
+  .print-container {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  /* Ensure images don't break pages */
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Force visibility for print content */
+  .print-only div,
+  .print-only p,
+  .print-only h1,
+  .print-only h2,
+  .print-only h3,
+  .print-only h4,
+  .print-only span {
+    visibility: visible !important;
+    display: block !important;
+    opacity: 1 !important;
+  }
+
+  .print-only table,
+  .print-only tbody,
+  .print-only thead {
+    display: table !important;
+    visibility: visible !important;
+  }
+
+  .print-only tr {
+    display: table-row !important;
+    visibility: visible !important;
+  }
+
+  .print-only td,
+  .print-only th {
+    display: table-cell !important;
+    visibility: visible !important;
+  }
+
+  .print-only img {
+    display: inline-block !important;
+    visibility: visible !important;
+  }
+}
+

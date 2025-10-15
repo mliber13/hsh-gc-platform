@@ -45,8 +45,13 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([])
   const [showCOForm, setShowCOForm] = useState(false)
   const [editingCO, setEditingCO] = useState<ChangeOrder | null>(null)
+  const [trades, setTrades] = useState<Trade[]>([])
 
   useEffect(() => {
+    // Load trades for linking
+    const loadedTrades = getTradesForEstimate(project.estimate.id)
+    setTrades(loadedTrades)
+    
     // Load change orders from project actuals
     if (project.actuals?.changeOrders) {
       setChangeOrders(project.actuals.changeOrders)
@@ -247,6 +252,19 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
 
                             <p className="text-sm text-gray-700 mb-3">{co.description}</p>
 
+                            {co.trades && co.trades.length > 0 && (
+                              <div className="mb-3">
+                                <p className="text-xs font-semibold text-gray-600 mb-1">Affected Items:</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {co.trades.map((trade) => (
+                                    <span key={trade.id} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                      {trade.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                               <div>
                                 <p className="text-gray-600">Requested By</p>
@@ -304,6 +322,7 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
       {showCOForm && (
         <ChangeOrderForm
           project={project}
+          trades={trades}
           changeOrder={editingCO}
           onSave={handleSaveChangeOrder}
           onCancel={() => {
@@ -405,12 +424,13 @@ function ChangeOrdersHeader({ project, onBack }: ChangeOrdersHeaderProps) {
 
 interface ChangeOrderFormProps {
   project: Project
+  trades: Trade[]
   changeOrder: ChangeOrder | null
   onSave: (co: ChangeOrder) => void
   onCancel: () => void
 }
 
-function ChangeOrderForm({ project, changeOrder, onSave, onCancel }: ChangeOrderFormProps) {
+function ChangeOrderForm({ project, trades, changeOrder, onSave, onCancel }: ChangeOrderFormProps) {
   // Generate next CO number
   const existingCOs = project.actuals?.changeOrders || []
   const nextNumber = changeOrder?.changeOrderNumber || `CO-${String(existingCOs.length + 1).padStart(3, '0')}`
@@ -424,10 +444,14 @@ function ChangeOrderForm({ project, changeOrder, onSave, onCancel }: ChangeOrder
     costImpact: changeOrder?.costImpact?.toString() || '0',
     scheduleImpact: changeOrder?.scheduleImpact?.toString() || '0',
     notes: changeOrder?.notes || '',
+    affectedTradeIds: changeOrder?.trades?.map(t => t.id) || [] as string[],
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Get the affected trades
+    const affectedTrades = trades.filter(t => formData.affectedTradeIds.includes(t.id))
 
     const co: ChangeOrder = {
       id: changeOrder?.id || uuidv4(),
@@ -438,7 +462,7 @@ function ChangeOrderForm({ project, changeOrder, onSave, onCancel }: ChangeOrder
       status: formData.status as any,
       requestedBy: formData.requestedBy,
       requestDate: changeOrder?.requestDate || new Date(),
-      trades: changeOrder?.trades || [],
+      trades: affectedTrades,
       costImpact: parseFloat(formData.costImpact) || 0,
       scheduleImpact: parseInt(formData.scheduleImpact) || 0,
       notes: formData.notes,
@@ -548,6 +572,44 @@ function ChangeOrderForm({ project, changeOrder, onSave, onCancel }: ChangeOrder
                   Use negative numbers for time savings
                 </p>
               </div>
+            </div>
+
+            <div>
+              <Label htmlFor="affectedItems">Affected Cost Items (Optional)</Label>
+              <div className="space-y-2 max-h-48 overflow-y-auto border rounded p-3">
+                {trades.length === 0 ? (
+                  <p className="text-sm text-gray-500">No estimate items available</p>
+                ) : (
+                  trades.map((trade) => (
+                    <label key={trade.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                      <input
+                        type="checkbox"
+                        checked={formData.affectedTradeIds.includes(trade.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData(prev => ({
+                              ...prev,
+                              affectedTradeIds: [...prev.affectedTradeIds, trade.id]
+                            }))
+                          } else {
+                            setFormData(prev => ({
+                              ...prev,
+                              affectedTradeIds: prev.affectedTradeIds.filter(id => id !== trade.id)
+                            }))
+                          }
+                        }}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">
+                        {trade.name} - {trade.category}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Select which estimate items are affected by this change order
+              </p>
             </div>
 
             <div>

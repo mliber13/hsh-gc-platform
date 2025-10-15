@@ -79,6 +79,7 @@ export interface UpdatePlanInput {
   garageSpaces?: number
   isActive?: boolean
   notes?: string
+  estimateTemplateId?: string
 }
 
 export interface PlanDocumentInput {

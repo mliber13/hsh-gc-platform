@@ -9,6 +9,7 @@
 import React, { useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { Project, Trade, LaborEntry, MaterialEntry, SubcontractorEntry } from '@/types'
+import { PrintableReport, ReportDepth } from './PrintableReport'
 import { 
   getTradesForEstimate,
   getProjectActuals,
@@ -43,7 +44,8 @@ import {
   Package,
   HardHat,
   Edit,
-  Trash2
+  Trash2,
+  Printer
 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
@@ -89,12 +91,24 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const [showEntryForm, setShowEntryForm] = useState(false)
   const [entryType, setEntryType] = useState<EntryType>('labor')
   const [editingEntry, setEditingEntry] = useState<ActualEntry | null>(null)
+  const [changeOrders, setChangeOrders] = useState<any[]>([])
+  const [expandedCOItems, setExpandedCOItems] = useState<Set<string>>(new Set())
+  const [showPrintReport, setShowPrintReport] = useState(false)
+  const [reportDepth, setReportDepth] = useState<ReportDepth>('full')
+  const [reportType, setReportType] = useState<'actuals' | 'comparison'>('actuals')
 
   // Load trades for the estimate
   useEffect(() => {
     if (project) {
       const loadedTrades = getTradesForEstimate(project.estimate.id)
       setTrades(loadedTrades)
+      
+      // Load change orders
+      if (project.actuals?.changeOrders) {
+        setChangeOrders(project.actuals.changeOrders.filter(co => 
+          co.status === 'approved' || co.status === 'implemented'
+        ))
+      }
     }
   }, [project])
 
@@ -183,6 +197,54 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     return actual - estimated
   }
 
+  const calculateChangeOrderImpact = () => {
+    return changeOrders.reduce((sum, co) => sum + co.costImpact, 0)
+  }
+
+  const getChangeOrdersForTrade = (tradeId: string) => {
+    return changeOrders.filter(co => 
+      co.trades?.some((t: any) => t.id === tradeId)
+    )
+  }
+
+  const hasChangeOrder = (tradeId: string) => {
+    return getChangeOrdersForTrade(tradeId).length > 0
+  }
+
+  const getVarianceType = (tradeId: string, variance: number) => {
+    if (variance <= 0) return 'under' // Under budget is always good
+    
+    const cos = getChangeOrdersForTrade(tradeId)
+    if (cos.length === 0) return 'overrun' // Over budget with no CO = problem
+    
+    const coImpact = cos.reduce((sum, co) => sum + co.costImpact, 0)
+    
+    if (Math.abs(variance - coImpact) < 100) return 'approved-change' // Variance matches CO
+    if (variance > coImpact) return 'mixed' // Part CO, part overrun
+    
+    return 'overrun'
+  }
+
+  const getVarianceColor = (type: string) => {
+    switch (type) {
+      case 'under': return 'text-green-600'
+      case 'approved-change': return 'text-blue-600' // Blue for approved changes
+      case 'mixed': return 'text-yellow-600'
+      case 'overrun': return 'text-red-600'
+      default: return 'text-gray-900'
+    }
+  }
+
+  const getVarianceIcon = (type: string) => {
+    switch (type) {
+      case 'under': return '✓'
+      case 'approved-change': return '📋' // Document icon for approved change
+      case 'mixed': return '⚠️'
+      case 'overrun': return '⚠️'
+      default: return ''
+    }
+  }
+
   const getActualsByCategory = (category: string) => {
     return actualEntries.filter(entry => entry.category === category)
   }
@@ -225,6 +287,13 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     acc[trade.category].push(trade)
     return acc
   }, {} as Record<string, Trade[]>)
+
+  // Handle print report
+  const handlePrintReport = (type: 'actuals' | 'comparison', depth: ReportDepth) => {
+    setReportType(type)
+    setReportDepth(depth)
+    setShowPrintReport(true)
+  }
 
   const getEntryIcon = (type: EntryType) => {
     switch (type) {
@@ -328,10 +397,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
       <div className="p-2 sm:p-4 lg:p-6">
         <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
           {/* Header */}
-          <ProjectActualsHeader project={project} onBack={onBack} />
+          <ProjectActualsHeader project={project} onBack={onBack} onPrintReport={handlePrintReport} />
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card className="bg-white shadow-lg">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
@@ -359,6 +428,25 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   </div>
                   <div className="bg-orange-100 rounded-full p-3">
                     <DollarSign className="w-8 h-8 text-orange-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white shadow-lg">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Change Orders</p>
+                    <p className="text-2xl font-bold text-blue-900 mt-1">
+                      {formatCurrency(Math.abs(calculateChangeOrderImpact()))}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {changeOrders.length} approved
+                    </p>
+                  </div>
+                  <div className="bg-blue-100 rounded-full p-3">
+                    <FileText className="w-8 h-8 text-blue-600" />
                   </div>
                 </div>
               </CardContent>
@@ -443,6 +531,38 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
               </div>
             </CardContent>
           </Card>
+
+          {/* Variance Legend */}
+          {changeOrders.length > 0 && (
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-3">
+                  <FileText className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-blue-900 mb-2">Variance Color Guide:</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-600 font-bold">✓ Green</span>
+                        <span className="text-gray-700">= Under budget</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-600 font-bold">📋 Blue</span>
+                        <span className="text-gray-700">= Approved change order</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-yellow-600 font-bold">⚠️ Yellow</span>
+                        <span className="text-gray-700">= Partial CO + overrun</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-red-600 font-bold">⚠️ Red</span>
+                        <span className="text-gray-700">= Cost overrun (no CO)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Actuals by Category */}
           <Card>
@@ -546,15 +666,50 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                             const tradeVariance = tradeActualTotal - tradeEstimate
                             const isTradeOver = tradeVariance > 0
 
+                            const itemCOs = getChangeOrdersForTrade(trade.id)
+                            const varianceType = getVarianceType(trade.id, tradeVariance)
+                            const hasExpanded = expandedCOItems.has(trade.id)
+
                             return (
                               <div key={trade.id} className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
                                 {/* Item Header */}
                                 <div className="mb-3">
-                                  <h4 className="font-semibold text-gray-900 text-sm sm:text-base">{trade.name}</h4>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="font-semibold text-gray-900 text-sm sm:text-base">{trade.name}</h4>
+                                    {itemCOs.length > 0 && (
+                                      <button
+                                        onClick={() => {
+                                          const newExpanded = new Set(expandedCOItems)
+                                          if (hasExpanded) {
+                                            newExpanded.delete(trade.id)
+                                          } else {
+                                            newExpanded.add(trade.id)
+                                          }
+                                          setExpandedCOItems(newExpanded)
+                                        }}
+                                        className="flex items-center gap-1 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
+                                      >
+                                        <FileText className="w-3 h-3" />
+                                        {itemCOs.length} Change Order{itemCOs.length > 1 ? 's' : ''}
+                                      </button>
+                                    )}
+                                  </div>
                                   <p className="text-xs sm:text-sm text-gray-600">
                                     {trade.quantity} {trade.unit}
                                   </p>
                                 </div>
+
+                                {/* Expanded Change Order Details */}
+                                {hasExpanded && itemCOs.length > 0 && (
+                                  <div className="mb-3 p-2 bg-blue-50 rounded border border-blue-200">
+                                    <p className="text-xs font-semibold text-blue-900 mb-2">Related Change Orders:</p>
+                                    {itemCOs.map((co: any) => (
+                                      <div key={co.id} className="text-xs text-blue-800 mb-1">
+                                        • {co.changeOrderNumber}: {co.title} ({formatCurrency(co.costImpact)})
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
 
                                 {/* Mobile: Stacked Numbers */}
                                 <div className="sm:hidden grid grid-cols-3 gap-2 text-xs mb-3">
@@ -566,11 +721,15 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     <p className="text-gray-600 mb-1">Actual</p>
                                     <p className="font-bold text-gray-900 text-xs">{formatCurrency(tradeActualTotal)}</p>
                                   </div>
-                                  <div className={`text-center rounded p-2 ${isTradeOver ? 'bg-red-50' : 'bg-green-50'}`}>
+                                  <div className={`text-center rounded p-2 ${
+                                    varianceType === 'approved-change' ? 'bg-blue-50' :
+                                    varianceType === 'mixed' ? 'bg-yellow-50' :
+                                    isTradeOver ? 'bg-red-50' : 'bg-green-50'
+                                  }`}>
                                     <p className="text-gray-600 mb-1">Var.</p>
-                                    <p className={`font-bold text-xs ${isTradeOver ? 'text-red-600' : 'text-green-600'}`}>
+                                    <p className={`font-bold text-xs ${getVarianceColor(varianceType)}`}>
                                       {formatCurrency(Math.abs(tradeVariance))}
-                                      {isTradeOver ? ' ⚠️' : ' ✓'}
+                                      {' '}{getVarianceIcon(varianceType)}
                                     </p>
                                   </div>
                                 </div>
@@ -587,10 +746,16 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                   </div>
                                   <div className="text-right min-w-[100px]">
                                     <p className="text-xs text-gray-600">Variance</p>
-                                    <p className={`font-bold ${isTradeOver ? 'text-red-600' : 'text-green-600'}`}>
+                                    <p className={`font-bold ${getVarianceColor(varianceType)}`}>
                                       {formatCurrency(Math.abs(tradeVariance))}
-                                      {isTradeOver ? ' ⚠️' : ' ✓'}
+                                      {' '}{getVarianceIcon(varianceType)}
                                     </p>
+                                    {varianceType === 'approved-change' && (
+                                      <p className="text-xs text-blue-600">Approved Change</p>
+                                    )}
+                                    {varianceType === 'mixed' && (
+                                      <p className="text-xs text-yellow-600">Partial Change</p>
+                                    )}
                                   </div>
                                 </div>
 
@@ -669,6 +834,19 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           </Card>
         </div>
       </div>
+
+      {/* Print Report */}
+      {showPrintReport && (
+        <PrintableReport
+          project={project}
+          trades={trades}
+          reportType={reportType}
+          depth={reportDepth}
+          actualEntries={actualEntries}
+          changeOrders={changeOrders}
+          onClose={() => setShowPrintReport(false)}
+        />
+      )}
 
       {/* Entry Form Modal */}
       {showEntryForm && (
@@ -817,9 +995,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 interface ProjectActualsHeaderProps {
   project: Project
   onBack?: () => void
+  onPrintReport?: (type: 'actuals' | 'comparison', depth: ReportDepth) => void
 }
 
-function ProjectActualsHeader({ project, onBack }: ProjectActualsHeaderProps) {
+function ProjectActualsHeader({ project, onBack, onPrintReport }: ProjectActualsHeaderProps) {
+  const [showPrintMenu, setShowPrintMenu] = useState(false)
   const getStatusColor = (status: string) => {
     const colors = {
       estimating: 'bg-blue-100 text-blue-800',
@@ -863,19 +1043,77 @@ function ProjectActualsHeader({ project, onBack }: ProjectActualsHeaderProps) {
               </div>
             </div>
             
-            {onBack && (
-              <div className="hidden sm:flex justify-center">
+            <div className="hidden sm:flex justify-center gap-3">
+              {onBack && (
                 <Button
                   onClick={onBack}
                   variant="outline"
                   size="sm"
-                  className="border-gray-300 hover:bg-gray-50 w-full max-w-md text-xs sm:text-sm"
+                  className="border-gray-300 hover:bg-gray-50 text-xs sm:text-sm"
                 >
                   <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                   Back to Project Detail
                 </Button>
-              </div>
-            )}
+              )}
+              
+              {onPrintReport && (
+                <div className="relative">
+                  <Button
+                    onClick={() => setShowPrintMenu(!showPrintMenu)}
+                    variant="outline"
+                    size="sm"
+                    className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
+                  >
+                    <Printer className="w-4 h-4 mr-2" />
+                    Export PDF
+                  </Button>
+                  
+                  {showPrintMenu && (
+                    <div className="absolute right-0 top-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[250px]">
+                      <div className="p-2">
+                        <p className="text-xs font-semibold text-gray-700 mb-2 px-2">Select Report Type & Detail:</p>
+                        <div className="space-y-1">
+                          <p className="text-xs text-gray-600 px-2 mt-2">Actuals Only:</p>
+                          <button
+                            onClick={() => { onPrintReport('actuals', 'summary'); setShowPrintMenu(false) }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                          >
+                            📊 Summary
+                          </button>
+                          <button
+                            onClick={() => { onPrintReport('actuals', 'category'); setShowPrintMenu(false) }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                          >
+                            📋 Category Detail
+                          </button>
+                          <button
+                            onClick={() => { onPrintReport('actuals', 'full'); setShowPrintMenu(false) }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                          >
+                            📄 Full Detail
+                          </button>
+                          
+                          <div className="border-t my-2"></div>
+                          <p className="text-xs text-gray-600 px-2">Estimate vs Actuals:</p>
+                          <button
+                            onClick={() => { onPrintReport('comparison', 'summary'); setShowPrintMenu(false) }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                          >
+                            📊 Comparison Summary
+                          </button>
+                          <button
+                            onClick={() => { onPrintReport('comparison', 'full'); setShowPrintMenu(false) }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                          >
+                            📄 Full Comparison
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </CardHeader>
       </Card>

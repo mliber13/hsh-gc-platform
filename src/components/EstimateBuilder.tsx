@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import hshLogo from '/HSH Contractor Logo - Color.png'
+import { PrintableReport, ReportDepth } from './PrintableReport'
 import {
   Project,
   Estimate,
@@ -28,6 +29,7 @@ import {
   recalculateEstimate,
   getTradesForEstimate,
   getItemTemplatesByCategory,
+  createEstimateTemplate,
 } from '@/services'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -60,7 +62,9 @@ import {
   XCircle, 
   ChevronDown, 
   ChevronUp,
-  ArrowLeft
+  ArrowLeft,
+  Printer,
+  Save
 } from 'lucide-react'
 
 // ----------------------------------------------------------------------------
@@ -90,6 +94,11 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   const [isAddingTrade, setIsAddingTrade] = useState(false)
   const [markupPercent, setMarkupPercent] = useState(11.1)
   const [contingencyPercent, setContingencyPercent] = useState(10)
+  const [showPrintReport, setShowPrintReport] = useState(false)
+  const [reportDepth, setReportDepth] = useState<ReportDepth>('full')
+  const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [templateDescription, setTemplateDescription] = useState('')
 
   // Initialize project if none provided
   useEffect(() => {
@@ -356,6 +365,41 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     return <div>Loading...</div>
   }
 
+  const handlePrintReport = (selectedDepth: ReportDepth) => {
+    setReportDepth(selectedDepth)
+    setShowPrintReport(true)
+  }
+
+  const handleSaveAsTemplate = () => {
+    if (!templateName.trim()) {
+      alert('Please enter a template name')
+      return
+    }
+
+    if (trades.length === 0) {
+      alert('Cannot save an empty estimate as a template')
+      return
+    }
+
+    try {
+      const template = createEstimateTemplate({
+        name: templateName.trim(),
+        description: templateDescription.trim() || undefined,
+        trades,
+        defaultMarkupPercent: markupPercent,
+        defaultContingencyPercent: contingencyPercent,
+      })
+
+      alert(`Template "${template.name}" saved successfully!`)
+      setShowSaveTemplateDialog(false)
+      setTemplateName('')
+      setTemplateDescription('')
+    } catch (error) {
+      console.error('Error saving template:', error)
+      alert('Failed to save template')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background pb-20 sm:pb-0">
       <div className="p-2 sm:p-4 lg:p-6">
@@ -371,6 +415,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         <SummarySection 
           totals={totals} 
           onContingencyChange={setContingencyPercent}
+          onPrintReport={handlePrintReport}
+          onSaveAsTemplate={() => setShowSaveTemplateDialog(true)}
         />
 
         {/* Main Trade Table */}
@@ -391,6 +437,75 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
             onCancel={handleCancelEdit}
             isAdding={isAddingTrade}
           />
+        )}
+
+        {/* Print Report */}
+        {showPrintReport && projectData && (
+          <PrintableReport
+            project={projectData}
+            trades={trades}
+            reportType="estimate"
+            depth={reportDepth}
+            onClose={() => setShowPrintReport(false)}
+          />
+        )}
+
+        {/* Save as Template Dialog */}
+        {showSaveTemplateDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Save Estimate as Template</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="template-name">Template Name *</Label>
+                  <Input
+                    id="template-name"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    placeholder="e.g., Standard 3BR Remodel"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="template-description">Description</Label>
+                  <Input
+                    id="template-description"
+                    value={templateDescription}
+                    onChange={(e) => setTemplateDescription(e.target.value)}
+                    placeholder="Optional description"
+                  />
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
+                  <p className="font-semibold text-blue-900 mb-1">Template Info:</p>
+                  <ul className="text-blue-800 space-y-1">
+                    <li>• {trades.length} line items will be saved</li>
+                    <li>• Default markup: {markupPercent.toFixed(1)}%</li>
+                    <li>• Default contingency: {contingencyPercent.toFixed(1)}%</li>
+                  </ul>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSaveAsTemplate}
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Template
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setShowSaveTemplateDialog(false)
+                      setTemplateName('')
+                      setTemplateDescription('')
+                    }}
+                    variant="outline"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
         </div>
       </div>
@@ -586,11 +701,14 @@ interface SummarySectionProps {
     contingencyPercent: number
   }
   onContingencyChange: (value: number) => void
+  onPrintReport: (depth: ReportDepth) => void
+  onSaveAsTemplate: () => void
 }
 
-function SummarySection({ totals, onContingencyChange }: SummarySectionProps) {
+function SummarySection({ totals, onContingencyChange, onPrintReport, onSaveAsTemplate }: SummarySectionProps) {
   const [isEditingContingency, setIsEditingContingency] = useState(false)
   const [tempContingency, setTempContingency] = useState(totals.contingencyPercent)
+  const [showPrintMenu, setShowPrintMenu] = useState(false)
   
   const formatCurrency = (amount: number) => 
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
@@ -605,7 +723,69 @@ function SummarySection({ totals, onContingencyChange }: SummarySectionProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Estimate Summary</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Estimate Summary</CardTitle>
+          <div className="flex gap-2">
+            <Button
+              onClick={onSaveAsTemplate}
+              variant="outline"
+              size="sm"
+              className="border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save as Template
+            </Button>
+            <div className="relative">
+              <Button
+                onClick={() => setShowPrintMenu(!showPrintMenu)}
+                variant="outline"
+                size="sm"
+                className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
+              >
+                <Printer className="w-4 h-4 mr-2" />
+                Export PDF
+              </Button>
+            
+            {showPrintMenu && (
+              <div className="absolute right-0 top-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[200px]">
+                <div className="p-2">
+                  <p className="text-xs font-semibold text-gray-700 mb-2 px-2">Select Detail Level:</p>
+                  <button
+                    onClick={() => {
+                      onPrintReport('summary')
+                      setShowPrintMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                  >
+                    📊 Summary Only
+                    <p className="text-xs text-gray-500">Category totals</p>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onPrintReport('category')
+                      setShowPrintMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                  >
+                    📋 Category Detail
+                    <p className="text-xs text-gray-500">Subtotals by category</p>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onPrintReport('full')
+                      setShowPrintMenu(false)
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                  >
+                    📄 Full Detail
+                    <p className="text-xs text-gray-500">Every line item</p>
+                  </button>
+                </div>
+              </div>
+            )}
+            </div>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

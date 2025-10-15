@@ -45,6 +45,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([])
   const [projectStartDate, setProjectStartDate] = useState<Date>(project.startDate || new Date())
   const [projectEndDate, setProjectEndDate] = useState<Date>(project.endDate || new Date())
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
   // Load trades and initialize schedule
   useEffect(() => {
@@ -117,12 +118,13 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
   const handleRegenerateSchedule = () => {
     if (confirm('This will regenerate the schedule from your estimate items. Any manual changes will be lost. Continue?')) {
       generateScheduleFromTrades(trades)
+      setHasUnsavedChanges(true)
     }
   }
 
   const handleUpdateScheduleItem = (itemId: string, updates: Partial<ScheduleItem>) => {
-    setScheduleItems(items =>
-      items.map(item => {
+    setScheduleItems(items => {
+      const updatedItems = items.map(item => {
         if (item.id === itemId) {
           const updated = { ...item, ...updates }
           
@@ -139,7 +141,44 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
         }
         return item
       })
+
+      // If duration or end date changed, cascade to dependent items
+      if (updates.duration !== undefined || updates.startDate !== undefined) {
+        cascadeDateChanges(updatedItems, itemId)
+      }
+
+      return updatedItems
+    })
+    
+    // Mark as having unsaved changes
+    setHasUnsavedChanges(true)
+  }
+
+  // Cascade date changes to dependent items
+  const cascadeDateChanges = (items: ScheduleItem[], changedItemId: string) => {
+    const changedItem = items.find(i => i.id === changedItemId)
+    if (!changedItem) return
+
+    // Find items that depend on this one
+    const dependentItems = items.filter(item => 
+      item.predecessorIds.includes(changedItemId)
     )
+
+    dependentItems.forEach(dependent => {
+      // Update start date to 1 day after predecessor ends
+      const newStartDate = new Date(changedItem.endDate)
+      newStartDate.setDate(newStartDate.getDate() + 1)
+      
+      dependent.startDate = newStartDate
+      
+      // Recalculate end date
+      const newEndDate = new Date(newStartDate)
+      newEndDate.setDate(newEndDate.getDate() + dependent.duration)
+      dependent.endDate = newEndDate
+
+      // Recursively cascade to items that depend on this one
+      cascadeDateChanges(items, dependent.id)
+    })
   }
 
   const handleAutoCalculateDates = () => {
@@ -173,6 +212,8 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
       
       return updatedItems
     })
+    
+    setHasUnsavedChanges(true)
   }
 
   const handleSaveSchedule = () => {
@@ -191,8 +232,20 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     }
 
     updateProject(project.id, { schedule })
+    setHasUnsavedChanges(false)
     alert('✅ Schedule saved successfully!')
   }
+
+  // Auto-save changes after a delay
+  useEffect(() => {
+    if (hasUnsavedChanges && scheduleItems.length > 0) {
+      const timer = setTimeout(() => {
+        handleSaveSchedule()
+      }, 2000) // Auto-save after 2 seconds of no changes
+
+      return () => clearTimeout(timer)
+    }
+  }, [scheduleItems, hasUnsavedChanges])
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
@@ -227,6 +280,23 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
         <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
           {/* Header */}
           <ScheduleBuilderHeader project={project} onBack={onBack} />
+
+          {/* Unsaved Changes Banner */}
+          {hasUnsavedChanges && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-yellow-600" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">
+                    Auto-saving in progress...
+                  </p>
+                  <p className="text-xs text-yellow-700">
+                    Changes will be saved automatically in 2 seconds, or click "Save Schedule" to save immediately.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -302,7 +372,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
               className="flex-1 sm:flex-none bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226]"
             >
               <CheckCircle className="w-4 h-4 mr-2" />
-              Save Schedule
+              {hasUnsavedChanges ? 'Save Schedule (Unsaved Changes)' : 'Save Schedule'}
             </Button>
             <Button
               onClick={handleAutoCalculateDates}

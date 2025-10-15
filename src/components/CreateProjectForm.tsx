@@ -13,7 +13,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ArrowLeft } from 'lucide-react'
 import { PROJECT_TYPES, ProjectType, Plan } from '@/types'
-import { getActivePlans } from '@/services/planService'
+import { getActivePlans, getPlanById } from '@/services/planService'
+import { getEstimateTemplateById, applyTemplateToEstimate } from '@/services'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface CreateProjectFormProps {
@@ -33,6 +34,7 @@ export interface ProjectFormData {
   zipCode: string
   startDate?: Date
   endDate?: Date
+  estimateTemplateId?: string // Added to pass template ID to onCreate
 }
 
 export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) {
@@ -74,7 +76,16 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onCreate(formData)
+    
+    // Check if selected plan has an estimate template
+    if (selectedPlan?.estimateTemplateId) {
+      onCreate({
+        ...formData,
+        estimateTemplateId: selectedPlan.estimateTemplateId
+      })
+    } else {
+      onCreate(formData)
+    }
   }
 
   return (
