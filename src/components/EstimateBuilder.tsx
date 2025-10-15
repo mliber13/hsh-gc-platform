@@ -1198,7 +1198,7 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
                 <div className="space-y-2">
                   {itemTemplates.length > 0 && (
                     <Select 
-                      value=""
+                      value="__template__"
                       onValueChange={(value) => {
                         // Find the selected template
                         const template = itemTemplates.find(t => t.name === value)
@@ -1226,6 +1226,7 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
                         <SelectValue placeholder="Load from template..." />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__template__">Load from template...</SelectItem>
                         {itemTemplates.map((template) => (
                           <SelectItem key={template.id} value={template.name}>
                             {template.name}
