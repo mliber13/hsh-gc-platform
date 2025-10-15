@@ -25,7 +25,10 @@ import {
 // ============================================================================
 
 // Helper to transform database row to Project
-function transformProject(row: any): Project {
+async function transformProject(row: any): Promise<Project> {
+  // Fetch the estimate for this project
+  const estimate = await fetchEstimateByProjectId(row.id)
+  
   return {
     id: row.id,
     name: row.name,
@@ -41,7 +44,17 @@ function transformProject(row: any): Project {
     metadata: row.metadata || {},
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
-    estimate: row.estimate || { id: '', projectId: row.id, version: 1 },
+    estimate: estimate || { 
+      id: '', 
+      projectId: row.id, 
+      version: 1,
+      trades: [],
+      subtotal: 0,
+      overhead: 0,
+      profit: 0,
+      contingency: 0,
+      totalEstimate: 0,
+    },
   }
 }
 
@@ -58,7 +71,7 @@ export async function fetchProjects(): Promise<Project[]> {
     return []
   }
 
-  return data.map(transformProject)
+  return await Promise.all(data.map(transformProject))
 }
 
 export async function fetchProjectById(projectId: string): Promise<Project | null> {
@@ -75,7 +88,7 @@ export async function fetchProjectById(projectId: string): Promise<Project | nul
     return null
   }
 
-  return transformProject(data)
+  return await transformProject(data)
 }
 
 export async function createProjectInDB(input: CreateProjectInput): Promise<Project | null> {
@@ -121,7 +134,7 @@ export async function createProjectInDB(input: CreateProjectInput): Promise<Proj
     return null
   }
 
-  return transformProject(data)
+  return await transformProject(data)
 }
 
 export async function updateProjectInDB(projectId: string, updates: UpdateProjectInput): Promise<Project | null> {
