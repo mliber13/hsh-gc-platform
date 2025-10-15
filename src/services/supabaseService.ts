@@ -313,6 +313,7 @@ function transformTrade(row: any): Trade {
     wasteFactor: 10,
     markupPercent: row.markup_percent || 0,
     notes: row.notes || '',
+    sortOrder: 0,
   }
 }
 
