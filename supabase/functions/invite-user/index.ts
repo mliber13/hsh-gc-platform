@@ -40,25 +40,11 @@ serve(async (req) => {
       }
     )
 
-    // Create regular client to verify the requesting user
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        },
-        global: {
-          headers: {
-            Authorization: authHeader
-          }
-        }
-      }
-    )
-
-    // Verify the requesting user is authenticated
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+    // Extract the JWT token from the Authorization header
+    const token = authHeader.replace('Bearer ', '')
+    
+    // Verify the JWT token and get the user
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token)
     if (userError) {
       console.error('Auth error:', userError)
       throw new Error(`Unauthorized: ${userError.message}`)
@@ -70,7 +56,7 @@ serve(async (req) => {
     console.log('User authenticated:', user.id, user.email)
 
     // Verify the requesting user is an admin
-    const { data: profile, error: profileError } = await supabaseClient
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('role, organization_id')
       .eq('id', user.id)

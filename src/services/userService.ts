@@ -96,7 +96,7 @@ export async function inviteUser(email: string, role: UserRole): Promise<UserInv
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
-  // Get current user's profile
+  // Get current user's profile for organization_id
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('organization_id, role')
@@ -106,87 +106,38 @@ export async function inviteUser(email: string, role: UserRole): Promise<UserInv
   if (profileError) throw profileError;
   if (profile.role !== 'admin') throw new Error('Only admins can invite users');
 
-  // Check if user already exists in the organization
-  const { data: existingUser } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('email', email.toLowerCase())
-    .eq('organization_id', profile.organization_id)
-    .single();
+  // Call the Edge Function - it handles all validation, database inserts, and email sending
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('No active session');
 
-  if (existingUser) {
-    throw new Error('User already exists in your organization');
-  }
-
-  // Check for existing pending invitation
-  const { data: existingInvite } = await supabase
-    .from('user_invitations')
-    .select('*')
-    .eq('email', email.toLowerCase())
-    .eq('organization_id', profile.organization_id)
-    .eq('status', 'pending')
-    .single();
-
-  if (existingInvite) {
-    throw new Error('Invitation already sent to this email');
-  }
-
-  // Create invitation (expires in 7 days)
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
-
-  const { data, error } = await supabase
-    .from('user_invitations')
-    .insert({
-      organization_id: profile.organization_id,
-      email: email.toLowerCase(),
-      role,
-      invited_by: user.id,
-      status: 'pending',
-      expires_at: expiresAt.toISOString(),
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  
-  // Call the Edge Function to send invitation email via Supabase Auth
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('No active session');
-
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: email.toLowerCase(),
-          role,
-          organizationId: profile.organization_id,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Edge Function error:', errorData);
-      throw new Error(errorData.error || 'Failed to send invitation email');
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email.toLowerCase(),
+        role,
+        organizationId: profile.organization_id,
+      }),
     }
+  );
 
-    const result = await response.json();
-    console.log('✅ Invitation email sent successfully:', result);
-  } catch (emailError) {
-    console.error('❌ Error sending invitation email:', emailError);
-    // Don't throw - the invitation is already created in the database
-    // The admin can resend it later if needed
+  if (!response.ok) {
+    const errorData = await response.json();
+    console.error('Edge Function error:', errorData);
+    throw new Error(errorData.error || 'Failed to send invitation');
   }
+
+  const result = await response.json();
+  console.log('✅ Invitation sent successfully:', result);
   
-  return data;
+  // Return the invitation from the Edge Function response
+  return result.invitation;
 }
 
 /**
