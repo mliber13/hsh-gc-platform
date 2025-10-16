@@ -106,54 +106,62 @@ export async function inviteUser(email: string, role: UserRole): Promise<UserInv
   if (profileError) throw profileError;
   if (profile.role !== 'admin') throw new Error('Only admins can invite users');
 
-  // Check if user already exists in the organization
-  const { data: existingUser } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('email', email.toLowerCase())
-    .eq('organization_id', profile.organization_id)
-    .single();
+  // Get current session for authorization
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('No active session');
 
-  if (existingUser) {
-    throw new Error('User already exists in your organization');
+  // Call Supabase Edge Function to send invitation
+  const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`;
+  
+  console.log(`📧 Sending invitation to ${email} with role ${role}`);
+  
+  const response = await fetch(functionUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email: email.toLowerCase(),
+      role,
+      organizationId: profile.organization_id,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to send invitation');
   }
 
-  // Check for existing pending invitation
-  const { data: existingInvite } = await supabase
+  const result = await response.json();
+  console.log('✅ Invitation sent successfully:', result);
+
+  // Fetch the created invitation from the database
+  const { data: invitation, error: fetchError } = await supabase
     .from('user_invitations')
     .select('*')
     .eq('email', email.toLowerCase())
     .eq('organization_id', profile.organization_id)
     .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(1)
     .single();
 
-  if (existingInvite) {
-    throw new Error('Invitation already sent to this email');
-  }
-
-  // Create invitation (expires in 7 days)
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
-
-  const { data, error } = await supabase
-    .from('user_invitations')
-    .insert({
+  if (fetchError || !invitation) {
+    // Return a minimal invitation object if fetch fails
+    return {
+      id: result.invitation?.id || 'pending',
       organization_id: profile.organization_id,
       email: email.toLowerCase(),
       role,
       invited_by: user.id,
-      status: 'pending',
-      expires_at: expiresAt.toISOString(),
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
+      status: 'pending' as InvitationStatus,
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+  }
   
-  // TODO: Send email invitation (can be added later with email service)
-  console.log(`📧 Invitation would be sent to: ${email} with role: ${role}`);
-  
-  return data;
+  return invitation;
 }
 
 /**
@@ -199,6 +207,57 @@ export async function cancelInvitation(invitationId: string): Promise<void> {
  * Resend an invitation (admin only)
  */
 export async function resendInvitation(invitationId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  // Get the invitation details
+  const { data: invitation, error: inviteError } = await supabase
+    .from('user_invitations')
+    .select('*')
+    .eq('id', invitationId)
+    .single();
+
+  if (inviteError || !invitation) {
+    throw new Error('Invitation not found');
+  }
+
+  // Get current user's profile to verify admin role
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role, organization_id')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError) throw profileError;
+  if (profile.role !== 'admin') throw new Error('Only admins can resend invitations');
+
+  // Get current session for authorization
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('No active session');
+
+  // Call Edge Function to resend invitation
+  const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`;
+  
+  console.log(`📧 Resending invitation to ${invitation.email}`);
+  
+  const response = await fetch(functionUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email: invitation.email,
+      role: invitation.role,
+      organizationId: invitation.organization_id,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to resend invitation');
+  }
+
   // Extend expiration by 7 days
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
@@ -213,8 +272,7 @@ export async function resendInvitation(invitationId: string): Promise<void> {
 
   if (error) throw error;
   
-  // TODO: Resend email invitation
-  console.log(`📧 Invitation resent for ID: ${invitationId}`);
+  console.log(`✅ Invitation resent to ${invitation.email}`);
 }
 
 /**
