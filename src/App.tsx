@@ -24,7 +24,8 @@ import { getCurrentUserProfile, UserProfile } from './services/userService'
 import { UserManagement } from './components/UserManagement'
 import { DataMigration } from './components/DataMigration'
 import { Button } from './components/ui/button'
-import { LogOut, User, Users, Crown, Pencil, Eye, Database } from 'lucide-react'
+import { LogOut, User, Users, Crown, Pencil, Eye, Database, Download } from 'lucide-react'
+import { backupAllData } from './services/backupService'
 
 type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library' | 'user-management' | 'data-migration'
 
@@ -36,6 +37,7 @@ function App() {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showUserManagement, setShowUserManagement] = useState(false)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [isBackingUp, setIsBackingUp] = useState(false)
 
   // Load user profile when authenticated
   useEffect(() => {
@@ -183,6 +185,25 @@ function App() {
     }
   }
 
+  const handleBackupData = async () => {
+    if (!isOnline) {
+      alert('You must be online to backup data from Supabase')
+      return
+    }
+
+    setIsBackingUp(true)
+    try {
+      await backupAllData()
+      alert('✅ Backup successful! Your data has been downloaded.')
+      setShowUserMenu(false)
+    } catch (error) {
+      console.error('Backup failed:', error)
+      alert(`❌ Backup failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsBackingUp(false)
+    }
+  }
+
   const roleIcons = {
     admin: <Crown className="w-3 h-3" />,
     editor: <Pencil className="w-3 h-3" />,
@@ -252,6 +273,14 @@ function App() {
                         </button>
                       </>
                     )}
+                    <button
+                      onClick={handleBackupData}
+                      disabled={isBackingUp}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Download className="w-4 h-4" />
+                      {isBackingUp ? 'Backing up...' : 'Backup Data'}
+                    </button>
                     <button
                       onClick={handleSignOut}
                       className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2 text-red-600"
