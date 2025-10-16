@@ -7,9 +7,9 @@
 
 import React, { useState, useEffect } from 'react'
 import { Project, ProjectType, ProjectStatus, Plan } from '@/types'
-import { updateProject, deleteProject, duplicateProject } from '@/services/projectService'
+import { duplicateProject } from '@/services/projectService'
 import { getTradesForEstimate, getProjectActuals } from '@/services'
-import { getTradesForEstimate_Hybrid, updateProject_Hybrid } from '@/services/hybridService'
+import { getTradesForEstimate_Hybrid, updateProject_Hybrid, deleteProject_Hybrid } from '@/services/hybridService'
 import { getActivePlans_Hybrid } from '@/services/planHybridService'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -141,17 +141,20 @@ export function ProjectDetailView({
     }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     const confirmed = window.confirm(
       `Are you sure you want to delete "${project.name}"?\n\nThis action cannot be undone. All project data including estimates will be permanently deleted.`
     )
 
     if (confirmed) {
-      const success = deleteProject(project.id)
+      console.log('🗑️ Deleting project:', project.id)
+      const success = await deleteProject_Hybrid(project.id)
       if (success) {
+        console.log('✅ Project deleted successfully')
         alert('✅ Project deleted successfully!')
         onBack() // Return to dashboard
       } else {
+        console.error('❌ Failed to delete project')
         alert('❌ Failed to delete project. Please try again.')
       }
     }
