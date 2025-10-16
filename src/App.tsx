@@ -21,13 +21,12 @@ import {
 } from './services/hybridService'
 import { applyTemplateToEstimate } from './services/estimateTemplateService'
 import { getCurrentUserProfile, UserProfile } from './services/userService'
-import { UserManagement } from './components/UserManagement'
 import { DataMigration } from './components/DataMigration'
 import { Button } from './components/ui/button'
-import { LogOut, User, Users, Crown, Pencil, Eye, Database, Download } from 'lucide-react'
+import { LogOut, User, Crown, Pencil, Eye, Database, Download } from 'lucide-react'
 import { backupAllData } from './services/backupService'
 
-type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library' | 'user-management' | 'data-migration'
+type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -35,7 +34,6 @@ function App() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const [showUserManagement, setShowUserManagement] = useState(false)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [isBackingUp, setIsBackingUp] = useState(false)
 
@@ -170,20 +168,6 @@ function App() {
     setUserProfile(null)
   }
 
-  const handleOpenUserManagement = () => {
-    setShowUserManagement(true)
-    setShowUserMenu(false)
-  }
-
-  const handleCloseUserManagement = () => {
-    setShowUserManagement(false)
-    // Refresh user profile in case role changed
-    if (isOnline && user) {
-      getCurrentUserProfile().then(profile => {
-        setUserProfile(profile)
-      })
-    }
-  }
 
   const handleBackupData = async () => {
     if (!isOnline) {
@@ -253,25 +237,16 @@ function App() {
                       )}
                     </div>
                     {userProfile?.role === 'admin' && (
-                      <>
-                        <button
-                          onClick={handleOpenUserManagement}
-                          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
-                        >
-                          <Users className="w-4 h-4" />
-                          Manage Users
-                        </button>
-                        <button
-                          onClick={() => {
-                            setCurrentView('data-migration');
-                            setShowUserMenu(false);
-                          }}
-                          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
-                        >
-                          <Database className="w-4 h-4" />
-                          Migrate Data
-                        </button>
-                      </>
+                      <button
+                        onClick={() => {
+                          setCurrentView('data-migration');
+                          setShowUserMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                      >
+                        <Database className="w-4 h-4" />
+                        Migrate Data
+                      </button>
                     )}
                     <button
                       onClick={handleBackupData}
@@ -380,10 +355,6 @@ function App() {
         <DataMigration />
       )}
 
-      {/* User Management Modal */}
-      {showUserManagement && (
-        <UserManagement onClose={handleCloseUserManagement} />
-      )}
       </div>
     </AuthGate>
   )
