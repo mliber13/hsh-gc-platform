@@ -40,10 +40,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     // Listen for changes on auth state (sign in, sign out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
+
+      // If user just signed in and we have a session, check for pending invitations
+      if (event === 'SIGNED_IN' && session?.user) {
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/accept-invitation`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+
+          if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Invitation processed:', result);
+          }
+        } catch (error) {
+          console.error('❌ Error processing invitation:', error);
+          // Don't throw - this shouldn't block the login process
+        }
+      }
     })
 
     return () => subscription.unsubscribe()
