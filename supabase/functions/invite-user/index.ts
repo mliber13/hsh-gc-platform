@@ -59,9 +59,15 @@ serve(async (req) => {
 
     // Verify the requesting user is authenticated
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
-    if (userError || !user) {
-      throw new Error('Unauthorized')
+    if (userError) {
+      console.error('Auth error:', userError)
+      throw new Error(`Unauthorized: ${userError.message}`)
     }
+    if (!user) {
+      throw new Error('Unauthorized: No user found')
+    }
+
+    console.log('User authenticated:', user.id, user.email)
 
     // Verify the requesting user is an admin
     const { data: profile, error: profileError } = await supabaseClient
@@ -70,12 +76,19 @@ serve(async (req) => {
       .eq('id', user.id)
       .single()
 
-    if (profileError || !profile) {
-      throw new Error('Profile not found')
+    if (profileError) {
+      console.error('Profile query error:', profileError)
+      throw new Error(`Profile not found: ${profileError.message}`)
+    }
+    
+    if (!profile) {
+      throw new Error('Profile not found: No profile exists for this user')
     }
 
+    console.log('User profile:', profile)
+
     if (profile.role !== 'admin') {
-      throw new Error('Only admins can invite users')
+      throw new Error(`Only admins can invite users. Your role: ${profile.role}`)
     }
 
     // Parse the request body
