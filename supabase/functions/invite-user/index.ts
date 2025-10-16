@@ -146,7 +146,7 @@ serve(async (req) => {
           invited_by: user.id,
           invitation_id: invitation.id
         },
-        redirectTo: `${Deno.env.get('PUBLIC_APP_URL') || 'https://hsh-gc-platform.vercel.app'}/accept-invitation`
+        redirectTo: 'https://hsh-gc-platform.vercel.app'
       }
     )
 
