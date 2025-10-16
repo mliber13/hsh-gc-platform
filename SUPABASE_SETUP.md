@@ -1,263 +1,115 @@
-# Supabase Edge Function Setup Guide
+# Supabase Setup Guide
 
-## 📧 User Invitation Email Setup
+## 🚀 Quick Start
 
-This guide explains how to deploy the Edge Function for sending invitation emails.
+### 1. Create a Supabase Project
 
----
+1. Go to [https://supabase.com](https://supabase.com)
+2. Click "Start your project"
+3. Create a new project (choose a region close to you)
+4. Wait for the project to be provisioned (~2 minutes)
 
-## 🚀 **Deployment Steps**
+### 2. Get Your Credentials
 
-### **1. Install Supabase CLI**
+1. In your Supabase dashboard, go to **Settings** → **API**
+2. Copy these values:
+   - **Project URL** (looks like: `https://xxxxx.supabase.co`)
+   - **Anon/Public Key** (starts with `eyJ...`)
 
-First, install the Supabase CLI if you haven't already:
+### 3. Configure the App
 
-```bash
-# Windows (with Scoop)
-scoop install supabase
+1. Open the `.env` file in your project root
+2. Replace the placeholder values:
+   ```env
+   VITE_SUPABASE_URL=https://YOUR_PROJECT_URL.supabase.co
+   VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   ```
 
-# Or with NPM
-npm install -g supabase
-```
+### 4. Run Database Migrations
 
-### **2. Login to Supabase**
+1. In your Supabase dashboard, go to **SQL Editor**
+2. Click "New Query"
+3. Copy the contents of `supabase/migrations/001_initial_schema.sql`
+4. Paste and click "Run"
+5. ✅ You should see "Success. No rows returned"
 
-```bash
-supabase login
-```
+### 5. Enable Email Authentication
 
-This will open your browser to authenticate with Supabase.
+1. Go to **Authentication** → **Providers**
+2. Enable **Email** provider
+3. Configure email settings (or use default Supabase emails for testing)
 
-### **3. Link Your Project**
+### 6. Test the Setup
 
-```bash
-supabase link --project-ref YOUR_PROJECT_REF
-```
+1. Run `npm run dev`
+2. You should see the **login screen**
+3. Click "Sign up" to create your first account
+4. Check your email for verification link
+5. Sign in and you're ready!
 
-**To find your project ref:**
-1. Go to https://supabase.com/dashboard
-2. Select your project
-3. Go to Settings → General
-4. Copy the "Reference ID"
+## 📊 Database Schema
 
-### **4. Deploy the Edge Function**
+The migration creates these tables:
 
-From your project root directory:
+- **profiles** - User profile information
+- **projects** - Main project records
+- **estimates** - Estimate data for projects
+- **trades** - Individual estimate line items
+- **project_actuals** - Actual cost totals
+- **labor_entries** - Labor cost entries
+- **material_entries** - Material cost entries
+- **subcontractor_entries** - Subcontractor cost entries
+- **schedules** - Project schedule data
+- **change_orders** - Change order records
+- **plans** - Plan library templates
+- **item_templates** - Default item templates
+- **estimate_templates** - Estimate templates for plans
 
-```bash
-supabase functions deploy invite-user
-```
+All tables include:
+- ✅ Row Level Security (RLS) - users only see their own data
+- ✅ Automatic timestamps (created_at, updated_at)
+- ✅ Proper foreign key relationships
+- ✅ Optimized indexes
 
-This will deploy the `invite-user` function to your Supabase project.
+## 🔄 Migrating Existing Data
 
-### **5. Set Environment Variables**
+If you have existing data in localStorage:
 
-The Edge Function needs access to these environment variables (automatically available):
-- `SUPABASE_URL` - Your project URL
-- `SUPABASE_SERVICE_ROLE_KEY` - Service role key (secret!)
-- `PUBLIC_SITE_URL` - Your app URL for redirect (set this manually)
+1. **Export your data** using the "Export Data" button
+2. **Set up Supabase** following steps 1-5 above
+3. **Sign up/Sign in** to create your user account
+4. Use the migration utility (coming soon) or contact support
 
-**Set PUBLIC_SITE_URL:**
+## 🔐 Security
 
-```bash
-# For production
-supabase secrets set PUBLIC_SITE_URL=https://hsh-gc-platform.vercel.app
+- **Row Level Security (RLS)** ensures users can only access their own data
+- **Anon key** is safe to expose in frontend (it's read-only without auth)
+- **Email verification** required for new accounts
+- **Password reset** functionality included
 
-# For local development
-supabase secrets set PUBLIC_SITE_URL=http://localhost:5173
-```
+## 🆘 Troubleshooting
 
----
+### "Cannot read property 'auth' of undefined"
+- Check that your `.env` file has the correct Supabase URL and key
+- Restart the dev server after updating `.env`
 
-## ✉️ **Configure Email Templates (Optional)**
+### "New row violates row-level security policy"
+- Make sure you're signed in
+- Check that the RLS policies were created (run migration again)
 
-Supabase uses default email templates, but you can customize them:
+### Email not sending
+- Check Authentication → Settings → SMTP in Supabase
+- For development, check the Supabase logs for the magic link
 
-### **1. Go to Authentication Settings**
-1. Open Supabase Dashboard
-2. Go to **Authentication** → **Email Templates**
+## 🎯 Next Steps
 
-### **2. Customize the "Invite User" Template**
+- The app will run in **offline mode** (localStorage) if Supabase is not configured
+- Once configured, it runs in **online mode** (Supabase) with user authentication
+- You can switch between modes by setting/unsetting environment variables
 
-**Default template works fine, but you can customize:**
+## 📝 Notes
 
-```html
-<h2>You're invited to join HSH Contractors!</h2>
+- Supabase free tier includes: 500MB database, 2GB file storage, 50,000 monthly active users
+- Production deployment: Use Vercel environment variables for Supabase credentials
+- Backup: Supabase provides automatic daily backups on paid tiers
 
-<p>Hi there,</p>
-
-<p>You've been invited to join the HSH Contractors platform. Click the link below to create your account and get started:</p>
-
-<p><a href="{{ .ConfirmationURL }}">Accept Invitation</a></p>
-
-<p>This invitation will expire in 7 days.</p>
-
-<p>If you didn't expect this invitation, you can safely ignore this email.</p>
-
-<p>Thanks,<br>HSH Contractors Team</p>
-```
-
-### **3. Configure Email Settings**
-
-Go to **Authentication** → **Settings** → **Email**:
-
-- ✅ **Enable Email Confirmations** (should be on)
-- ✅ **Enable Email Change Confirmations** (recommended)
-- ⚠️ **Double check SMTP settings** (default Supabase SMTP works for testing)
-
----
-
-## 🧪 **Testing the Invitation Flow**
-
-### **1. Send an Invitation**
-
-In your app:
-1. Go to User Management (click your email → "Manage Users")
-2. Click "Invite User"
-3. Enter email and select role
-4. Click "Send Invitation"
-
-### **2. Check Console**
-
-You should see:
-```
-📧 Sending invitation to user@example.com with role editor
-✅ Invitation sent successfully
-```
-
-### **3. Check Email**
-
-The invited user should receive an email with:
-- Subject: "You've been invited"
-- A magic link to accept the invitation
-- Link valid for 7 days
-
-### **4. Accept Invitation**
-
-When user clicks the link:
-1. Redirected to your app (with auth token)
-2. Profile automatically created with assigned role
-3. User can access the app immediately
-
----
-
-## 🔧 **Troubleshooting**
-
-### **"Failed to send invitation" Error**
-
-**Check:**
-1. Edge Function is deployed: `supabase functions list`
-2. Environment variables are set: `supabase secrets list`
-3. Service role key is correct (check dashboard)
-
-### **Email Not Received**
-
-**Check:**
-1. Spam/junk folder
-2. Email address is correct
-3. Supabase email quota not exceeded (free tier: 3 emails/hour during dev)
-4. Email confirmations are enabled in Auth settings
-
-### **"Only admins can invite users" Error**
-
-**Solution:**
-Update your profile role in Supabase:
-```sql
-UPDATE profiles 
-SET role = 'admin' 
-WHERE email = 'your-email@example.com';
-```
-
-### **CORS Errors**
-
-The Edge Function includes CORS headers. If you still see errors:
-1. Check that `PUBLIC_SITE_URL` matches your app URL
-2. Verify Supabase URL in your .env file
-
----
-
-## 🌐 **Local Development**
-
-To test Edge Functions locally:
-
-```bash
-# Start Supabase locally
-supabase start
-
-# Serve functions locally
-supabase functions serve invite-user
-
-# The function will be available at:
-# http://localhost:54321/functions/v1/invite-user
-```
-
-**Update your .env for local testing:**
-```
-VITE_SUPABASE_URL=http://localhost:54321
-```
-
----
-
-## 📊 **Email Quotas**
-
-**Free Tier:**
-- 3 emails/hour during development
-- Upgrade to Pro for production use
-
-**Pro Tier:**
-- Higher email limits
-- Custom SMTP (use your own email service)
-- Better deliverability
-
-**Recommendation:** For production, consider upgrading or using a custom SMTP provider (SendGrid, Mailgun, etc.)
-
----
-
-## 🔐 **Security Notes**
-
-1. ✅ Service role key is NEVER exposed to client
-2. ✅ Edge Function validates admin role before sending invites
-3. ✅ Only authenticated users can call the function
-4. ✅ Invitations expire after 7 days
-5. ✅ User metadata (role, organization) stored in profile
-
----
-
-## ✨ **What Happens When Someone Accepts an Invitation**
-
-1. User clicks magic link in email
-2. Redirected to your app with auth token
-3. Supabase creates auth user automatically
-4. You need to create a **profile** for the user
-
-### **Add Signup Handler (if not already present)**
-
-In your auth callback, create the profile:
-
-```typescript
-// When new user signs up via invitation
-const { organization_id, role } = user.user_metadata
-
-await supabase.from('profiles').insert({
-  id: user.id,
-  email: user.email,
-  organization_id: organization_id,
-  role: role,
-  invited_by: user.user_metadata.invited_by
-})
-```
-
----
-
-## 📝 **Next Steps**
-
-1. ✅ Deploy the Edge Function
-2. ✅ Set environment variables
-3. ✅ Test invitation flow
-4. ✅ Customize email templates (optional)
-5. ✅ Add signup handler for new users
-6. ✅ Consider upgrading for production use
-
----
-
-**Questions?** Check the Supabase docs: https://supabase.com/docs/guides/functions
