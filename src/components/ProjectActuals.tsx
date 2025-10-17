@@ -11,7 +11,6 @@ import { v4 as uuidv4 } from 'uuid'
 import { Project, Trade, LaborEntry, MaterialEntry, SubcontractorEntry } from '@/types'
 import { PrintableReport, ReportDepth } from './PrintableReport'
 import { 
-  getTradesForEstimate,
   getProjectActuals,
   addLaborEntry,
   addMaterialEntry,
@@ -23,6 +22,7 @@ import {
   deleteMaterialEntry,
   deleteSubcontractorEntry,
 } from '@/services'
+import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -100,8 +100,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   // Load trades for the estimate
   useEffect(() => {
     if (project) {
-      const loadedTrades = getTradesForEstimate(project.estimate.id)
-      setTrades(loadedTrades)
+      getTradesForEstimate_Hybrid(project.estimate.id).then(loadedTrades => {
+        setTrades(loadedTrades)
+      })
       
       // Load change orders
       if (project.actuals?.changeOrders) {
