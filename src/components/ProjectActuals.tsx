@@ -122,7 +122,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         const entries: ActualEntry[] = []
         
         // Convert labor entries
-        actuals.laborEntries?.forEach(labor => {
+        actuals.laborEntries?.forEach((labor: any) => {
           entries.push({
             id: labor.id,
             type: 'labor',
@@ -136,7 +136,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         })
         
         // Convert material entries
-        actuals.materialEntries?.forEach(material => {
+        actuals.materialEntries?.forEach((material: any) => {
           entries.push({
             id: material.id,
             type: 'material',
@@ -151,7 +151,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         })
         
         // Convert subcontractor entries
-        actuals.subcontractorEntries?.forEach(sub => {
+        actuals.subcontractorEntries?.forEach((sub: any) => {
           entries.push({
             id: sub.id,
             type: 'subcontractor',
@@ -338,7 +338,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
       if (actuals) {
         const entries: ActualEntry[] = []
         
-        actuals.laborEntries?.forEach(labor => {
+        actuals.laborEntries?.forEach((labor: any) => {
           entries.push({
             id: labor.id,
             type: 'labor',
@@ -351,7 +351,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           })
         })
         
-        actuals.materialEntries?.forEach(material => {
+        actuals.materialEntries?.forEach((material: any) => {
           entries.push({
             id: material.id,
             type: 'material',
@@ -365,7 +365,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           })
         })
         
-        actuals.subcontractorEntries?.forEach(sub => {
+        actuals.subcontractorEntries?.forEach((sub: any) => {
           entries.push({
             id: sub.id,
             type: 'subcontractor',
@@ -928,7 +928,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             if (actuals) {
               const entries: ActualEntry[] = []
               
-              actuals.laborEntries?.forEach(labor => {
+              actuals.laborEntries?.forEach((labor: any) => {
                 entries.push({
                   id: labor.id,
                   type: 'labor',
@@ -941,7 +941,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 })
               })
               
-              actuals.materialEntries?.forEach(material => {
+              actuals.materialEntries?.forEach((material: any) => {
                 entries.push({
                   id: material.id,
                   type: 'material',
@@ -955,7 +955,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 })
               })
               
-              actuals.subcontractorEntries?.forEach(sub => {
+              actuals.subcontractorEntries?.forEach((sub: any) => {
                 entries.push({
                   id: sub.id,
                   type: 'subcontractor',
