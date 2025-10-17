@@ -26,7 +26,13 @@ serve(async (req) => {
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'No authorization header' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+        { 
+          status: 401, 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          } 
+        }
       )
     }
 
@@ -42,7 +48,13 @@ serve(async (req) => {
     if (userError || !user) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+        { 
+          status: 401, 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          } 
+        }
       )
     }
 
@@ -56,7 +68,13 @@ serve(async (req) => {
     if (profileError || !profile?.qb_access_token) {
       return new Response(
         JSON.stringify({ error: 'QuickBooks not connected' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { 
+          status: 400, 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          } 
+        }
       )
     }
 
@@ -75,7 +93,13 @@ serve(async (req) => {
     if (!vendorId) {
       return new Response(
         JSON.stringify({ error: 'Failed to find or create vendor' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        { 
+          status: 500, 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          } 
+        }
       )
     }
 
@@ -122,7 +146,13 @@ serve(async (req) => {
       console.error('QB check creation failed:', error)
       return new Response(
         JSON.stringify({ error: 'Failed to create check in QuickBooks', details: error }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        { 
+          status: 500, 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          } 
+        }
       )
     }
 
@@ -142,7 +172,13 @@ serve(async (req) => {
     console.error('Error in qb-create-check:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { 
+        status: 500, 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        } 
+      }
     )
   }
 })

@@ -253,16 +253,29 @@ export async function findOrCreateQBVendor(vendorName: string): Promise<QBVendor
  */
 export async function testQBConnection(): Promise<boolean> {
   try {
+    console.log('Testing QB connection...')
     const { data, error } = await supabase.functions.invoke('qb-test-connection')
+    
+    console.log('QB test response:', { data, error })
     
     if (error) {
       console.error('QB connection test failed:', error)
+      alert(`QB Test Error: ${error.message}\n\nCheck console for details.`)
       return false
     }
     
-    return data.connected === true
+    if (data.connected) {
+      console.log('QB Company Info:', data)
+      alert(`✅ Connected to: ${data.company}\n\nBank Accounts: ${data.bankAccounts?.length || 0}\nExpense Accounts: ${data.expenseAccounts?.length || 0}`)
+      return true
+    }
+    
+    console.error('QB test failed:', data)
+    alert(`QB Test Failed: ${data.error}\n\nDetails: ${JSON.stringify(data.details)}`)
+    return false
   } catch (error) {
     console.error('QB connection test failed:', error)
+    alert(`Exception during test: ${(error as Error).message}`)
     return false
   }
 }
