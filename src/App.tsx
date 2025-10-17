@@ -50,7 +50,17 @@ function App() {
 
   // Check if we're on the QB callback route
   useEffect(() => {
-    if (window.location.pathname === '/qb-callback') {
+    const params = new URLSearchParams(window.location.search)
+    const hasQBCode = params.get('code') && params.get('realmId')
+    
+    console.log('Route check:', {
+      pathname: window.location.pathname,
+      search: window.location.search,
+      hasQBCode
+    })
+    
+    if (hasQBCode || window.location.pathname === '/qb-callback') {
+      console.log('Detected QB callback, switching to qb-callback view')
       setCurrentView('qb-callback')
     }
   }, [])
