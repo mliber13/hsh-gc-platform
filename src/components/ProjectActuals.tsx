@@ -23,6 +23,7 @@ import {
   deleteMaterialEntry_Hybrid,
   deleteSubcontractorEntry_Hybrid,
 } from '@/services/actualsHybridService'
+import { getQBVendors } from '@/services/quickbooksService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1171,6 +1172,26 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
     subcontractorName: editingEntry?.subcontractorName || '',
   })
 
+  const [qbVendors, setQbVendors] = useState<Array<{ id: string; name: string }>>([])
+  const [useNewVendor, setUseNewVendor] = useState(false)
+  const [loadingVendors, setLoadingVendors] = useState(false)
+
+  // Load QB vendors when form opens
+  useEffect(() => {
+    loadQBVendors()
+  }, [])
+
+  const loadQBVendors = async () => {
+    setLoadingVendors(true)
+    try {
+      const vendors = await getQBVendors()
+      setQbVendors(vendors)
+    } catch (error) {
+      console.error('Error loading QB vendors:', error)
+    }
+    setLoadingVendors(false)
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -1276,13 +1297,57 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
             {type === 'material' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="vendor">Vendor</Label>
-                  <Input
-                    id="vendor"
-                    placeholder="e.g., ABC Lumber"
-                    value={formData.vendor}
-                    onChange={(e) => setFormData(prev => ({ ...prev, vendor: e.target.value }))}
-                  />
+                  <Label htmlFor="vendor">Vendor {qbVendors.length > 0 && '(from QuickBooks)'}</Label>
+                  {qbVendors.length > 0 && !useNewVendor ? (
+                    <div className="space-y-2">
+                      <Select
+                        value={formData.vendor}
+                        onValueChange={(value) => {
+                          if (value === '__new__') {
+                            setUseNewVendor(true)
+                            setFormData(prev => ({ ...prev, vendor: '' }))
+                          } else {
+                            setFormData(prev => ({ ...prev, vendor: value }))
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select vendor..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__new__">
+                            <span className="text-[#0E79C9] font-medium">+ Create New Vendor</span>
+                          </SelectItem>
+                          {qbVendors.map(v => (
+                            <SelectItem key={v.id} value={v.name}>
+                              {v.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-500">
+                        Select from QuickBooks vendors or create new
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Input
+                        id="vendor"
+                        placeholder="e.g., ABC Lumber"
+                        value={formData.vendor}
+                        onChange={(e) => setFormData(prev => ({ ...prev, vendor: e.target.value }))}
+                      />
+                      {qbVendors.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setUseNewVendor(false)}
+                          className="text-xs text-[#0E79C9] hover:underline"
+                        >
+                          ← Select from QuickBooks vendors
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="invoiceNumber">Invoice Number</Label>
@@ -1298,13 +1363,57 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
 
             {type === 'subcontractor' && (
               <div>
-                <Label htmlFor="subcontractorName">Subcontractor Name</Label>
-                <Input
-                  id="subcontractorName"
-                  placeholder="e.g., Smith Electrical"
-                  value={formData.subcontractorName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, subcontractorName: e.target.value }))}
-                />
+                <Label htmlFor="subcontractorName">Subcontractor {qbVendors.length > 0 && '(from QuickBooks)'}</Label>
+                {qbVendors.length > 0 && !useNewVendor ? (
+                  <div className="space-y-2">
+                    <Select
+                      value={formData.subcontractorName}
+                      onValueChange={(value) => {
+                        if (value === '__new__') {
+                          setUseNewVendor(true)
+                          setFormData(prev => ({ ...prev, subcontractorName: '' }))
+                        } else {
+                          setFormData(prev => ({ ...prev, subcontractorName: value }))
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select subcontractor..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__new__">
+                          <span className="text-[#0E79C9] font-medium">+ Create New Vendor</span>
+                        </SelectItem>
+                        {qbVendors.map(v => (
+                          <SelectItem key={v.id} value={v.name}>
+                            {v.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500">
+                      Select from QuickBooks vendors or create new
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Input
+                      id="subcontractorName"
+                      placeholder="e.g., Smith Electrical"
+                      value={formData.subcontractorName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, subcontractorName: e.target.value }))}
+                    />
+                    {qbVendors.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setUseNewVendor(false)}
+                        className="text-xs text-[#0E79C9] hover:underline"
+                      >
+                        ← Select from QuickBooks vendors
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
