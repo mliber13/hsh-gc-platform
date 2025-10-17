@@ -9,12 +9,13 @@ import React, { useState, useEffect } from 'react'
 import { Project } from '@/types'
 import { getAllProjects } from '@/services/projectService'
 import { getProjects_Hybrid, getTradesForEstimate_Hybrid } from '@/services/hybridService'
+import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
 import { getTradesForEstimate, exportAllData, importAllData } from '@/services'
 import { usePermissions } from '@/hooks/usePermissions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Download, Upload, Eye, FileSpreadsheet } from 'lucide-react'
+import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Download, Upload, Eye, FileSpreadsheet, ChevronDown } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import ImportEstimate from './ImportEstimate'
 
@@ -27,6 +28,7 @@ interface ProjectsDashboardProps {
 
 interface ProjectWithStats extends Project {
   estimatedValue?: number
+  actualCosts?: number
   tradeCount?: number
 }
 
@@ -34,6 +36,7 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [showImportEstimate, setShowImportEstimate] = useState(false)
+  const [showMobileActions, setShowMobileActions] = useState(false)
   const { canCreate, isViewer } = usePermissions()
 
   useEffect(() => {
@@ -44,8 +47,9 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
       const projectsWithStats = await Promise.all(
         allProjects.map(async (project) => {
           const estimatedValue = await calculateEstimatedValue(project)
+          const actualCosts = await calculateActualCosts(project)
           const tradeCount = await calculateTradeCount(project)
-          return { ...project, estimatedValue, tradeCount }
+          return { ...project, estimatedValue, actualCosts, tradeCount }
         })
       )
       
@@ -69,6 +73,13 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
   const calculateTradeCount = async (project: Project): Promise<number> => {
     const trades = await getTradesForEstimate_Hybrid(project.estimate.id)
     return trades.length
+  }
+
+  // Calculate actual costs for a project from actuals entries
+  const calculateActualCosts = async (project: Project): Promise<number> => {
+    const actuals = await getProjectActuals_Hybrid(project.id)
+    if (!actuals) return 0
+    return actuals.totalActualCost || 0
   }
 
   const filteredProjects = projects.filter(project =>
@@ -171,8 +182,9 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
     const projectsWithStats = await Promise.all(
       allProjects.map(async (project) => {
         const estimatedValue = await calculateEstimatedValue(project)
+        const actualCosts = await calculateActualCosts(project)
         const tradeCount = await calculateTradeCount(project)
-        return { ...project, estimatedValue, tradeCount }
+        return { ...project, estimatedValue, actualCosts, tradeCount }
       })
     )
     
@@ -424,12 +436,22 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                           </p>
                         </div>
                       </div>
-                      <div className="text-left sm:text-right sm:ml-4">
-                        <p className="text-sm text-gray-600">Estimated Value</p>
-                        <p className="text-xl sm:text-2xl font-bold text-[#0E79C9]">
-                          {formatCurrency(project.estimatedValue || 0)}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
+                      <div className="text-left sm:text-right sm:ml-4 space-y-2">
+                        <div>
+                          <p className="text-sm text-gray-600">Estimated Value</p>
+                          <p className="text-xl sm:text-2xl font-bold text-[#0E79C9]">
+                            {formatCurrency(project.estimatedValue || 0)}
+                          </p>
+                        </div>
+                        {project.actualCosts && project.actualCosts > 0 ? (
+                          <div>
+                            <p className="text-sm text-gray-600">Actual Costs</p>
+                            <p className="text-lg sm:text-xl font-bold text-[#34AB8A]">
+                              {formatCurrency(project.actualCosts)}
+                            </p>
+                          </div>
+                        ) : null}
+                        <p className="text-xs text-gray-500">
                           {project.tradeCount || 0} {project.tradeCount === 1 ? 'item' : 'items'}
                         </p>
                       </div>
@@ -441,82 +463,127 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
           </CardContent>
         </Card>
 
-        {/* Mobile Action Buttons - Fixed at bottom */}
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
-          <div className="space-y-2">
-            {/* Primary Actions */}
-            <div className={`grid ${canCreate ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-              {canCreate && (
-                <Button
-                  onClick={onCreateProject}
-                  className="bg-gradient-to-r from-[#0E79C9] to-[#0A5A96] hover:from-[#0A5A96] hover:to-[#084577] text-white h-12"
-                >
-                  <PlusCircle className="w-5 h-5 mr-2" />
-                  New Project
-                </Button>
-              )}
-              <Button
-                onClick={onOpenPlanLibrary}
-                className="bg-gradient-to-r from-[#D95C00] to-[#B34C00] hover:from-[#B34C00] hover:to-[#8A3900] text-white h-12"
-              >
-                <FileText className="w-5 h-5 mr-2" />
-                Plan Library
-              </Button>
-            </div>
-            {/* Library Management */}
-            <div className="grid grid-cols-1 gap-2">
-              <Button
-                onClick={onOpenItemLibrary}
-                className="bg-gradient-to-r from-[#34AB8A] to-[#2a8d6f] hover:from-[#2a8d6f] hover:to-[#1f7053] text-white h-12"
-              >
-                <DollarSign className="w-5 h-5 mr-2" />
-                Item Library
-              </Button>
-            </div>
-            {/* Data Management */}
-            <div className="grid grid-cols-2 gap-2">
-              {canCreate && (
-                <Button
-                  onClick={() => setShowImportEstimate(true)}
-                  variant="outline"
-                  size="sm"
-                  className="border-[#D95C00] text-[#D95C00] hover:bg-[#D95C00] hover:text-white h-10"
-                >
-                  <FileSpreadsheet className="w-4 h-4 mr-1" />
-                  Import Est
-                </Button>
-              )}
-              <Button
-                onClick={handleExportData}
-                variant="outline"
-                size="sm"
-                className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white h-10"
-              >
-                <Download className="w-4 h-4 mr-1" />
-                Export
-              </Button>
-              <label htmlFor="import-file-mobile" className="cursor-pointer">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white w-full h-10"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    document.getElementById('import-file-mobile')?.click()
+        {/* Mobile Action Menu - Fixed at bottom */}
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
+          {showMobileActions && (
+            <div className="border-b border-gray-200 p-2 bg-gray-50 max-h-80 overflow-y-auto">
+              <div className="space-y-1">
+                {canCreate && (
+                  <button
+                    onClick={() => {
+                      onCreateProject()
+                      setShowMobileActions(false)
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
+                  >
+                    <div className="bg-[#0E79C9] text-white rounded-full p-2">
+                      <PlusCircle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">New Project</p>
+                      <p className="text-xs text-gray-500">Start a new construction project</p>
+                    </div>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    onOpenPlanLibrary()
+                    setShowMobileActions(false)
                   }}
+                  className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
                 >
-                  <Upload className="w-4 h-4 mr-1" />
-                  Import Data
-                </Button>
-              </label>
-              <input
-                id="import-file-mobile"
-                type="file"
-                accept=".json"
-                onChange={handleImportData}
-                className="hidden"
-              />
+                  <div className="bg-[#D95C00] text-white rounded-full p-2">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Plan Library</p>
+                    <p className="text-xs text-gray-500">Manage plan templates</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    onOpenItemLibrary()
+                    setShowMobileActions(false)
+                  }}
+                  className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
+                >
+                  <div className="bg-[#34AB8A] text-white rounded-full p-2">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Item Library</p>
+                    <p className="text-xs text-gray-500">Manage default rates</p>
+                  </div>
+                </button>
+                {canCreate && (
+                  <button
+                    onClick={() => {
+                      setShowImportEstimate(true)
+                      setShowMobileActions(false)
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
+                  >
+                    <div className="bg-[#D95C00] text-white rounded-full p-2">
+                      <FileSpreadsheet className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Import Estimate</p>
+                      <p className="text-xs text-gray-500">Import from Excel file</p>
+                    </div>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    handleExportData()
+                    setShowMobileActions(false)
+                  }}
+                  className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
+                >
+                  <div className="bg-[#34AB8A] text-white rounded-full p-2">
+                    <Download className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Export Data</p>
+                    <p className="text-xs text-gray-500">Download backup</p>
+                  </div>
+                </button>
+                <label htmlFor="import-file-mobile" className="block">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault()
+                      document.getElementById('import-file-mobile')?.click()
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
+                  >
+                    <div className="bg-[#0E79C9] text-white rounded-full p-2">
+                      <Upload className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Import Data</p>
+                      <p className="text-xs text-gray-500">Restore from backup</p>
+                    </div>
+                  </button>
+                </label>
+                <input
+                  id="import-file-mobile"
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportData}
+                  className="hidden"
+                />
+              </div>
             </div>
+          )}
+          <div className="p-3">
+            <Button
+              onClick={() => setShowMobileActions(!showMobileActions)}
+              className="w-full bg-gradient-to-r from-[#0E79C9] to-[#0A5A96] hover:from-[#0A5A96] hover:to-[#084577] text-white h-12"
+            >
+              <span className="flex items-center justify-center gap-2">
+                Actions
+                <ChevronDown className={`w-5 h-5 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
+              </span>
+            </Button>
           </div>
         </div>
       </main>
