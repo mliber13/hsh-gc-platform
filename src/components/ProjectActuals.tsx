@@ -1172,7 +1172,7 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
     subcontractorName: editingEntry?.subcontractorName || '',
   })
 
-  const [qbVendors, setQbVendors] = useState<Array<{ id: string; name: string }>>([])
+  const [qbVendors, setQbVendors] = useState<any[]>([])
   const [useNewVendor, setUseNewVendor] = useState(false)
   const [loadingVendors, setLoadingVendors] = useState(false)
 

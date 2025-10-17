@@ -25,8 +25,9 @@ export interface QBTokens {
 }
 
 export interface QBVendor {
-  Id: string
-  DisplayName: string
+  id: string
+  name: string
+  companyName?: string
 }
 
 export interface QBCheck {
