@@ -1,9 +1,11 @@
 /**
  * Hybrid Actuals Service
  * Routes actuals operations to either localStorage or Supabase based on online mode
+ * Includes automatic QuickBooks sync when connected
  */
 
-import { isOnlineMode } from '@/lib/supabase'
+import { isOnlineMode, supabase } from '@/lib/supabase'
+import { createQBCheck, isQBConnected } from './quickbooksService'
 import {
   addLaborEntry as addLaborEntryLS,
   updateLaborEntry as updateLaborEntryLS,
@@ -42,6 +44,14 @@ export async function addLaborEntry_Hybrid(projectId: string, entry: any): Promi
       console.warn('Failed to create labor entry in Supabase, falling back to localStorage')
       return addLaborEntryLS(projectId, entry)
     }
+    
+    // Auto-sync to QuickBooks if connected
+    if (await isQBConnected()) {
+      syncEntryToQB('labor', created, entry).catch(err => {
+        console.error('Background QB sync failed:', err)
+      })
+    }
+    
     return created
   } else {
     return addLaborEntryLS(projectId, entry)
@@ -85,6 +95,14 @@ export async function addMaterialEntry_Hybrid(projectId: string, entry: any): Pr
       console.warn('Failed to create material entry in Supabase, falling back to localStorage')
       return addMaterialEntryLS(projectId, entry)
     }
+    
+    // Auto-sync to QuickBooks if connected
+    if (await isQBConnected()) {
+      syncEntryToQB('material', created, entry).catch(err => {
+        console.error('Background QB sync failed:', err)
+      })
+    }
+    
     return created
   } else {
     return addMaterialEntryLS(projectId, entry)
@@ -128,6 +146,14 @@ export async function addSubcontractorEntry_Hybrid(projectId: string, entry: any
       console.warn('Failed to create subcontractor entry in Supabase, falling back to localStorage')
       return addSubcontractorEntryLS(projectId, entry)
     }
+    
+    // Auto-sync to QuickBooks if connected
+    if (await isQBConnected()) {
+      syncEntryToQB('subcontractor', created, entry).catch(err => {
+        console.error('Background QB sync failed:', err)
+      })
+    }
+    
     return created
   } else {
     return addSubcontractorEntryLS(projectId, entry)
@@ -200,6 +226,81 @@ export async function getProjectActuals_Hybrid(projectId: string): Promise<any |
     }
   } else {
     return getProjectActualsLS(projectId)
+  }
+}
+
+// ============================================================================
+// QUICKBOOKS SYNC HELPER
+// ============================================================================
+
+/**
+ * Sync an actuals entry to QuickBooks as a Check
+ */
+async function syncEntryToQB(entryType: 'labor' | 'material' | 'subcontractor', created: any, originalEntry: any): Promise<void> {
+  console.log(`📤 Syncing ${entryType} entry to QuickBooks...`)
+  
+  try {
+    // Determine vendor name based on entry type
+    let vendorName = 'Unknown Vendor'
+    if (entryType === 'subcontractor') {
+      vendorName = originalEntry.subcontractorName || 'Unknown Subcontractor'
+    } else if (entryType === 'material') {
+      vendorName = originalEntry.vendor || 'Material Supplier'
+    } else {
+      vendorName = 'Labor'
+    }
+    
+    // Get project name for the check note
+    const { data: project } = await supabase
+      .from('projects')
+      .select('name')
+      .eq('id', created.projectId)
+      .single()
+    
+    const projectName = project?.name || 'Unknown Project'
+    
+    // Create check in QuickBooks
+    const result = await createQBCheck({
+      vendorName,
+      amount: created.totalCost || created.totalPaid,
+      description: created.description || created.scopeOfWork,
+      date: created.date,
+      projectName,
+      category: originalEntry.trade || originalEntry.category,
+    })
+    
+    if (result.success) {
+      console.log(`✅ Synced to QuickBooks - Check ID: ${result.checkId}`)
+      
+      // Update entry with QB sync status
+      const table = entryType === 'labor' ? 'labor_entries' :
+                    entryType === 'material' ? 'material_entries' : 'subcontractor_entries'
+      
+      await supabase
+        .from(table)
+        .update({
+          qb_sync_status: 'synced',
+          qb_check_id: result.checkId,
+          qb_synced_at: new Date().toISOString(),
+        })
+        .eq('id', created.id)
+    } else {
+      console.error(`❌ QB sync failed: ${result.error}`)
+      
+      // Mark as failed with error message
+      const table = entryType === 'labor' ? 'labor_entries' :
+                    entryType === 'material' ? 'material_entries' : 'subcontractor_entries'
+      
+      await supabase
+        .from(table)
+        .update({
+          qb_sync_status: 'failed',
+          qb_sync_error: result.error,
+        })
+        .eq('id', created.id)
+    }
+  } catch (error) {
+    console.error('Error syncing to QB:', error)
   }
 }
 

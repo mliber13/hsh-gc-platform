@@ -22,11 +22,12 @@ import {
 import { applyTemplateToEstimate } from './services/estimateTemplateService'
 import { getCurrentUserProfile, UserProfile } from './services/userService'
 import { DataMigration } from './components/DataMigration'
+import { QuickBooksConnect } from './components/QuickBooksConnect'
 import { Button } from './components/ui/button'
-import { LogOut, User, Crown, Pencil, Eye, Database, Download } from 'lucide-react'
+import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2 } from 'lucide-react'
 import { backupAllData } from './services/backupService'
 
-type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration'
+type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration' | 'qb-settings'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -237,6 +238,16 @@ function App() {
                         </div>
                       )}
                     </div>
+                    <button
+                      onClick={() => {
+                        setCurrentView('qb-settings');
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                    >
+                      <Link2 className="w-4 h-4" />
+                      QuickBooks
+                    </button>
                     {userProfile?.role === 'admin' && (
                       <button
                         onClick={() => {
@@ -354,6 +365,21 @@ function App() {
 
       {currentView === 'data-migration' && (
         <DataMigration />
+      )}
+
+      {currentView === 'qb-settings' && (
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
+          <div className="max-w-2xl mx-auto">
+            <Button
+              onClick={handleBackToDashboard}
+              variant="outline"
+              className="mb-6"
+            >
+              ← Back to Dashboard
+            </Button>
+            <QuickBooksConnect />
+          </div>
+        </div>
       )}
 
       </div>
