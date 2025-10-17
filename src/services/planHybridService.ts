@@ -155,6 +155,7 @@ export async function createPlan_Hybrid(input: CreatePlanInput): Promise<Plan> {
       // Transform and save to Supabase
       const planData = transformPlanToSupabase(plan);
       planData.user_id = userProfile.id; // Add user_id
+      planData.organization_id = userProfile.organization_id || 'default-org'; // Add organization_id
 
       const { data, error } = await supabase
         .from('plans')
@@ -184,14 +185,62 @@ export async function createPlan_Hybrid(input: CreatePlanInput): Promise<Plan> {
  * Update plan (hybrid)
  */
 export async function updatePlan_Hybrid(planId: string, updates: UpdatePlanInput): Promise<Plan | null> {
-  // Plans are currently only in localStorage - no Supabase table yet
-  return updatePlan(planId, updates);
+  // Update localStorage first
+  const updatedPlan = updatePlan(planId, updates);
+  
+  if (!updatedPlan) {
+    return null;
+  }
+  
+  // If online, also update Supabase
+  if (isOnlineMode()) {
+    try {
+      const planData = transformPlanToSupabase(updatedPlan);
+      
+      const { error } = await supabase
+        .from('plans')
+        .update(planData)
+        .eq('id', planId);
+
+      if (error) {
+        console.error('Error updating plan in Supabase:', error);
+        // Still return localStorage plan even if Supabase fails
+      } else {
+        console.log('Plan updated in both localStorage and Supabase');
+      }
+    } catch (error) {
+      console.error('Error updating plan in Supabase:', error);
+      // Still return localStorage plan even if Supabase fails
+    }
+  }
+  
+  return updatedPlan;
 }
 
 /**
  * Delete plan (hybrid)
  */
 export async function deletePlan_Hybrid(planId: string): Promise<boolean> {
-  // Plans are currently only in localStorage - no Supabase table yet
-  return deletePlan(planId);
+  // Delete from localStorage first
+  const deleted = deletePlan(planId);
+  
+  // If online, also delete from Supabase
+  if (deleted && isOnlineMode()) {
+    try {
+      const { error } = await supabase
+        .from('plans')
+        .delete()
+        .eq('id', planId);
+
+      if (error) {
+        console.error('Error deleting plan from Supabase:', error);
+      } else {
+        console.log('Plan deleted from both localStorage and Supabase');
+      }
+    } catch (error) {
+      console.error('Error deleting plan from Supabase:', error);
+    }
+  }
+  
+  return deleted;
 }

@@ -7,7 +7,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { Plan, PlanDocument, PlanOption, CreatePlanInput, UpdatePlanInput, PlanOptionInput } from '@/types'
-import { createPlan, updatePlan, addPlanOption, deletePlanOption, addPlanDocument, deletePlanDocument, getPlanById } from '@/services/planService'
+import { addPlanOption, deletePlanOption, addPlanDocument, deletePlanDocument, getPlanById } from '@/services/planService'
+import { createPlan_Hybrid, updatePlan_Hybrid } from '@/services/planHybridService'
 import { getAllEstimateTemplates, linkTemplateToPlan, unlinkTemplateFromPlan } from '@/services'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -88,7 +89,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
         ...formData as UpdatePlanInput,
         estimateTemplateId: selectedTemplateId,
       }
-      const updated = await updatePlan(currentPlan.id, updates)
+      const updated = await updatePlan_Hybrid(currentPlan.id, updates)
       if (updated) {
         // Update template links
         if (selectedTemplateId && selectedTemplateId !== currentPlan.estimateTemplateId) {
@@ -105,11 +106,11 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
       }
     } else {
       // Create new plan
-      const newPlan = await createPlan(formData)
+      const newPlan = await createPlan_Hybrid(formData)
       
       // Link template if selected
       if (selectedTemplateId) {
-        const planWithTemplate = await updatePlan(newPlan.id, { estimateTemplateId: selectedTemplateId })
+        const planWithTemplate = await updatePlan_Hybrid(newPlan.id, { estimateTemplateId: selectedTemplateId })
         if (planWithTemplate) {
           await linkTemplateToPlan(selectedTemplateId, planWithTemplate.id)
           setCurrentPlan(planWithTemplate)

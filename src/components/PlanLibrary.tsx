@@ -7,7 +7,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { Plan } from '@/types'
-import { getAllPlans, deletePlan, getPlanStats } from '@/services/planService'
+import { getPlanStats } from '@/services/planService'
+import { getAllPlans_Hybrid, deletePlan_Hybrid } from '@/services/planHybridService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,15 +30,15 @@ export function PlanLibrary({ onBack, onCreatePlan, onEditPlan }: PlanLibraryPro
     loadPlans()
   }, [])
 
-  const loadPlans = () => {
-    const allPlans = getAllPlans()
+  const loadPlans = async () => {
+    const allPlans = await getAllPlans_Hybrid()
     setPlans(allPlans)
     setStats(getPlanStats())
   }
 
-  const handleDeletePlan = (planId: string) => {
+  const handleDeletePlan = async (planId: string) => {
     if (window.confirm('Are you sure you want to delete this plan? This cannot be undone.')) {
-      deletePlan(planId)
+      await deletePlan_Hybrid(planId)
       loadPlans()
     }
   }
