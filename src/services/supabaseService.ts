@@ -208,16 +208,23 @@ export async function fetchEstimateByProjectId(projectId: string): Promise<any |
     .from('estimates')
     .select('*')
     .eq('project_id', projectId)
-    .single()
+    .order('created_at', { ascending: true })
+    .limit(1)
 
   if (error) {
     console.error('Error fetching estimate:', error)
     return null
   }
 
+  if (!data || data.length === 0) {
+    return null
+  }
+
+  const estimate = data[0]
+
   return {
-    id: data.id,
-    projectId: data.project_id,
+    id: estimate.id,
+    projectId: estimate.project_id,
     version: 1,
     trades: [],
     subtotal: 0,
@@ -225,8 +232,8 @@ export async function fetchEstimateByProjectId(projectId: string): Promise<any |
     profit: 0,
     contingency: 0,
     totalEstimate: 0,
-    createdAt: new Date(data.created_at),
-    updatedAt: new Date(data.updated_at),
+    createdAt: new Date(estimate.created_at),
+    updatedAt: new Date(estimate.updated_at),
   }
 }
 
