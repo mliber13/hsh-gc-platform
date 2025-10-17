@@ -92,19 +92,35 @@ export async function handleQBOAuthCallback(code: string, state: string, realmId
   }
   
   try {
+    console.log('Calling Edge Function to exchange token...')
     // Call our Supabase Edge Function to exchange code for tokens
     // This keeps the client secret secure on the server
     const { data, error } = await supabase.functions.invoke('qb-exchange-token', {
       body: { code, redirect_uri: QB_REDIRECT_URI }
     })
     
+    console.log('Edge Function response:', { data, error })
+    
     if (error) {
       console.error('Error exchanging QB token:', error)
       return false
     }
     
+    if (!data || !data.access_token) {
+      console.error('No access token in response:', data)
+      return false
+    }
+    
+    console.log('Tokens received from Edge Function, access_token length:', data.access_token?.length)
+    
     // Store tokens in user profile (include realmId from URL)
-    await saveQBTokens({ ...data, realmId })
+    try {
+      await saveQBTokens({ ...data, realmId })
+      console.log('Tokens saved successfully')
+    } catch (saveError) {
+      console.error('Failed to save tokens:', saveError)
+      throw saveError
+    }
     
     sessionStorage.removeItem('qb_oauth_state')
     return true
