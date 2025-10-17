@@ -459,7 +459,7 @@ export async function deleteTradeFromDB(tradeId: string): Promise<boolean> {
 // ACTUAL ENTRIES OPERATIONS
 // ============================================================================
 
-export async function fetchLaborEntries(projectId: string): Promise<LaborEntry[]> {
+export async function fetchLaborEntries(projectId: string): Promise<any[]> {
   if (!isOnlineMode()) return []
 
   const { data, error } = await supabase
@@ -474,12 +474,86 @@ export async function fetchLaborEntries(projectId: string): Promise<LaborEntry[]
   }
 
   return data.map(entry => ({
-    ...entry,
+    id: entry.id,
+    projectId: entry.project_id,
+    tradeId: entry.trade_id,
     date: new Date(entry.date),
-  })) as LaborEntry[]
+    trade: entry.category,
+    description: entry.description,
+    totalHours: entry.hours,
+    laborRate: entry.hourly_rate,
+    totalCost: entry.amount,
+    crew: [],
+    createdAt: new Date(entry.created_at),
+  }))
 }
 
-export async function createLaborEntryInDB(projectId: string, actualsId: string, entry: Omit<LaborEntry, 'id'>): Promise<LaborEntry | null> {
+export async function fetchMaterialEntries(projectId: string): Promise<any[]> {
+  if (!isOnlineMode()) return []
+
+  const { data, error } = await supabase
+    .from('material_entries')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('date', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching material entries:', error)
+    return []
+  }
+
+  return data.map(entry => ({
+    id: entry.id,
+    projectId: entry.project_id,
+    tradeId: entry.trade_id,
+    date: new Date(entry.date),
+    materialName: entry.description,
+    category: entry.category,
+    quantity: entry.quantity,
+    unit: 'each',
+    unitCost: entry.unit_cost,
+    totalCost: entry.amount,
+    vendor: entry.vendor,
+    invoiceNumber: entry.invoice_number,
+    createdAt: new Date(entry.created_at),
+  }))
+}
+
+export async function fetchSubcontractorEntries(projectId: string): Promise<any[]> {
+  if (!isOnlineMode()) return []
+
+  const { data, error} = await supabase
+    .from('subcontractor_entries')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('date', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching subcontractor entries:', error)
+    return []
+  }
+
+  return data.map(entry => ({
+    id: entry.id,
+    projectId: entry.project_id,
+    tradeId: entry.trade_id,
+    subcontractor: {
+      name: entry.subcontractor_name,
+      company: entry.subcontractor_name,
+      email: '',
+      phone: '',
+    },
+    trade: entry.category,
+    scopeOfWork: entry.description,
+    contractAmount: entry.amount,
+    payments: [],
+    totalPaid: entry.amount,
+    balance: 0,
+    createdAt: new Date(entry.created_at),
+  }))
+}
+
+export async function createLaborEntryInDB(projectId: string, entry: any): Promise<any | null> {
   if (!isOnlineMode()) return null
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -497,6 +571,10 @@ export async function createLaborEntryInDB(projectId: string, actualsId: string,
     return null
   }
 
+  // Get or create project actuals
+  const actualsId = await getOrCreateActualsId(projectId)
+  if (!actualsId) return null
+
   const { data, error } = await supabase
     .from('labor_entries')
     .insert({
@@ -505,15 +583,15 @@ export async function createLaborEntryInDB(projectId: string, actualsId: string,
       entered_by: user.id,
       project_id: projectId,
       actuals_id: actualsId,
-      category: (entry as any).category,
-      trade_id: (entry as any).tradeId,
+      category: entry.trade || entry.category,
+      trade_id: entry.tradeId,
       description: entry.description,
       date: entry.date.toISOString(),
-      hours: (entry as any).hours,
-      hourly_rate: (entry as any).hourlyRate,
-      amount: (entry as any).amount,
-      worker_name: (entry as any).workerName,
-      notes: (entry as any).notes,
+      hours: entry.totalHours || 0,
+      hourly_rate: entry.laborRate || 0,
+      amount: entry.totalCost,
+      worker_name: entry.workerName || '',
+      notes: entry.notes || '',
     })
     .select()
     .single()
@@ -524,13 +602,363 @@ export async function createLaborEntryInDB(projectId: string, actualsId: string,
   }
 
   return {
-    ...data,
+    id: data.id,
+    projectId: data.project_id,
+    tradeId: data.trade_id,
     date: new Date(data.date),
-  } as LaborEntry
+    trade: data.category,
+    description: data.description,
+    totalHours: data.hours,
+    laborRate: data.hourly_rate,
+    totalCost: data.amount,
+    crew: [],
+    createdAt: new Date(data.created_at),
+  }
 }
 
-// Similar functions for Material and Subcontractor entries...
-// (I'll add these next to keep the file organized)
+export async function updateLaborEntryInDB(entryId: string, updates: any): Promise<any | null> {
+  if (!isOnlineMode()) return null
+
+  const updateData: any = {}
+  if (updates.date !== undefined) updateData.date = updates.date.toISOString()
+  if (updates.description !== undefined) updateData.description = updates.description
+  if (updates.totalCost !== undefined) updateData.amount = updates.totalCost
+  if (updates.totalHours !== undefined) updateData.hours = updates.totalHours
+  if (updates.laborRate !== undefined) updateData.hourly_rate = updates.laborRate
+
+  const { data, error } = await supabase
+    .from('labor_entries')
+    .update(updateData)
+    .eq('id', entryId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating labor entry:', error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    tradeId: data.trade_id,
+    date: new Date(data.date),
+    trade: data.category,
+    description: data.description,
+    totalHours: data.hours,
+    laborRate: data.hourly_rate,
+    totalCost: data.amount,
+    crew: [],
+    createdAt: new Date(data.created_at),
+  }
+}
+
+export async function deleteLaborEntryFromDB(entryId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  const { error } = await supabase
+    .from('labor_entries')
+    .delete()
+    .eq('id', entryId)
+
+  if (error) {
+    console.error('Error deleting labor entry:', error)
+    return false
+  }
+
+  return true
+}
+
+// Material Entries
+export async function createMaterialEntryInDB(projectId: string, entry: any): Promise<any | null> {
+  if (!isOnlineMode()) return null
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    console.error('User profile not found')
+    return null
+  }
+
+  const actualsId = await getOrCreateActualsId(projectId)
+  if (!actualsId) return null
+
+  const { data, error } = await supabase
+    .from('material_entries')
+    .insert({
+      user_id: user.id,
+      organization_id: profile.organization_id,
+      entered_by: user.id,
+      project_id: projectId,
+      actuals_id: actualsId,
+      category: entry.category,
+      trade_id: entry.tradeId,
+      description: entry.materialName,
+      date: entry.date.toISOString(),
+      quantity: entry.quantity || 0,
+      unit_cost: entry.unitCost || 0,
+      amount: entry.totalCost,
+      vendor: entry.vendor || '',
+      invoice_number: entry.invoiceNumber || '',
+      notes: entry.notes || '',
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating material entry:', error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    tradeId: data.trade_id,
+    date: new Date(data.date),
+    materialName: data.description,
+    category: data.category,
+    quantity: data.quantity,
+    unit: 'each',
+    unitCost: data.unit_cost,
+    totalCost: data.amount,
+    vendor: data.vendor,
+    invoiceNumber: data.invoice_number,
+    createdAt: new Date(data.created_at),
+  }
+}
+
+export async function updateMaterialEntryInDB(entryId: string, updates: any): Promise<any | null> {
+  if (!isOnlineMode()) return null
+
+  const updateData: any = {}
+  if (updates.date !== undefined) updateData.date = updates.date.toISOString()
+  if (updates.materialName !== undefined) updateData.description = updates.materialName
+  if (updates.totalCost !== undefined) updateData.amount = updates.totalCost
+  if (updates.quantity !== undefined) updateData.quantity = updates.quantity
+  if (updates.unitCost !== undefined) updateData.unit_cost = updates.unitCost
+  if (updates.vendor !== undefined) updateData.vendor = updates.vendor
+  if (updates.invoiceNumber !== undefined) updateData.invoice_number = updates.invoiceNumber
+
+  const { data, error } = await supabase
+    .from('material_entries')
+    .update(updateData)
+    .eq('id', entryId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating material entry:', error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    tradeId: data.trade_id,
+    date: new Date(data.date),
+    materialName: data.description,
+    category: data.category,
+    quantity: data.quantity,
+    unit: 'each',
+    unitCost: data.unit_cost,
+    totalCost: data.amount,
+    vendor: data.vendor,
+    invoiceNumber: data.invoice_number,
+    createdAt: new Date(data.created_at),
+  }
+}
+
+export async function deleteMaterialEntryFromDB(entryId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  const { error } = await supabase
+    .from('material_entries')
+    .delete()
+    .eq('id', entryId)
+
+  if (error) {
+    console.error('Error deleting material entry:', error)
+    return false
+  }
+
+  return true
+}
+
+// Subcontractor Entries
+export async function createSubcontractorEntryInDB(projectId: string, entry: any): Promise<any | null> {
+  if (!isOnlineMode()) return null
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    console.error('User profile not found')
+    return null
+  }
+
+  const actualsId = await getOrCreateActualsId(projectId)
+  if (!actualsId) return null
+
+  const { data, error } = await supabase
+    .from('subcontractor_entries')
+    .insert({
+      user_id: user.id,
+      organization_id: profile.organization_id,
+      entered_by: user.id,
+      project_id: projectId,
+      actuals_id: actualsId,
+      category: entry.trade,
+      trade_id: entry.tradeId,
+      description: entry.scopeOfWork,
+      date: new Date().toISOString(),
+      amount: entry.totalPaid,
+      subcontractor_name: entry.subcontractorName,
+      invoice_number: entry.invoiceNumber || '',
+      notes: entry.notes || '',
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating subcontractor entry:', error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    tradeId: data.trade_id,
+    subcontractor: {
+      name: data.subcontractor_name,
+      company: data.subcontractor_name,
+      email: '',
+      phone: '',
+    },
+    trade: data.category,
+    scopeOfWork: data.description,
+    contractAmount: data.amount,
+    payments: [],
+    totalPaid: data.amount,
+    balance: 0,
+    createdAt: new Date(data.created_at),
+  }
+}
+
+export async function updateSubcontractorEntryInDB(entryId: string, updates: any): Promise<any | null> {
+  if (!isOnlineMode()) return null
+
+  const updateData: any = {}
+  if (updates.scopeOfWork !== undefined) updateData.description = updates.scopeOfWork
+  if (updates.totalPaid !== undefined) updateData.amount = updates.totalPaid
+  if (updates.subcontractorName !== undefined) updateData.subcontractor_name = updates.subcontractorName
+
+  const { data, error } = await supabase
+    .from('subcontractor_entries')
+    .update(updateData)
+    .eq('id', entryId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating subcontractor entry:', error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    tradeId: data.trade_id,
+    subcontractor: {
+      name: data.subcontractor_name,
+      company: data.subcontractor_name,
+      email: '',
+      phone: '',
+    },
+    trade: data.category,
+    scopeOfWork: data.description,
+    contractAmount: data.amount,
+    payments: [],
+    totalPaid: data.amount,
+    balance: 0,
+    createdAt: new Date(data.created_at),
+  }
+}
+
+export async function deleteSubcontractorEntryFromDB(entryId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  const { error } = await supabase
+    .from('subcontractor_entries')
+    .delete()
+    .eq('id', entryId)
+
+  if (error) {
+    console.error('Error deleting subcontractor entry:', error)
+    return false
+  }
+
+  return true
+}
+
+// Helper to get or create actuals ID for a project
+async function getOrCreateActualsId(projectId: string): Promise<string | null> {
+  // Check if project actuals exists
+  const { data: existing, error: fetchError } = await supabase
+    .from('project_actuals')
+    .select('id')
+    .eq('project_id', projectId)
+    .limit(1)
+
+  if (existing && existing.length > 0) {
+    return existing[0].id
+  }
+
+  // Create new actuals
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) return null
+
+  const { data: newActuals, error: createError } = await supabase
+    .from('project_actuals')
+    .insert({
+      project_id: projectId,
+      user_id: user.id,
+      organization_id: profile.organization_id,
+      labor_cost: 0,
+      material_cost: 0,
+      subcontractor_cost: 0,
+      total_actual: 0,
+    })
+    .select()
+    .single()
+
+  if (createError || !newActuals) {
+    console.error('Error creating actuals:', createError)
+    return null
+  }
+
+  return newActuals.id
+}
 
 // ============================================================================
 // ESTIMATE TEMPLATE OPERATIONS
