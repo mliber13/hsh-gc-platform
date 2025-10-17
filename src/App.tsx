@@ -49,10 +49,11 @@ function App() {
   // Refresh project data when viewing project-related screens
   useEffect(() => {
     if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'schedule' || currentView === 'change-orders')) {
-      const refreshedProject = getProject(selectedProject.id)
-      if (refreshedProject) {
-        setSelectedProject(refreshedProject)
-      }
+      getProject_Hybrid(selectedProject.id).then(refreshedProject => {
+        if (refreshedProject) {
+          setSelectedProject(refreshedProject)
+        }
+      })
     }
   }, [currentView])
 
