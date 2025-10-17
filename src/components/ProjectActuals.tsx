@@ -1235,7 +1235,7 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
   }
 
   // Get unique categories from trades
-  const categories = Array.from(new Set(trades.map(t => t.category)))
+  const categories: string[] = Array.from(new Set(trades.map(t => t.category)))
   
   // If editing entry has a category not in current trades, add it
   if (editingEntry?.category && !categories.includes(editingEntry.category)) {
