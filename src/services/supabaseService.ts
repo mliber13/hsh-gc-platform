@@ -137,6 +137,7 @@ export async function createProjectInDB(input: CreateProjectInput): Promise<Proj
       start_date: input.startDate,
       end_date: input.endDate,
       metadata: input.metadata || {},
+      user_id: user.id,
       organization_id: profile.organization_id,
       created_by: user.id,
     })
@@ -251,6 +252,7 @@ export async function createEstimateInDB(projectId: string): Promise<any | null>
     .from('estimates')
     .insert({
       project_id: projectId,
+      user_id: user.id,
       organization_id: profile.organization_id,
     })
     .select()
@@ -378,6 +380,7 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
       waste_factor: input.wasteFactor || 10,
       markup_percent: input.markupPercent || 0,
       notes: input.notes || '',
+      user_id: user.id,
       organization_id: profile.organization_id,
     })
     .select()
@@ -475,10 +478,24 @@ export async function createLaborEntryInDB(projectId: string, actualsId: string,
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
+  // Get user's organization
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    console.error('User profile not found')
+    return null
+  }
+
   const { data, error } = await supabase
     .from('labor_entries')
     .insert({
       user_id: user.id,
+      organization_id: profile.organization_id,
+      entered_by: user.id,
       project_id: projectId,
       actuals_id: actualsId,
       category: (entry as any).category,
@@ -544,10 +561,23 @@ export async function createEstimateTemplateInDB(input: CreatePlanEstimateTempla
     return tradeData
   })
 
+  // Get user's organization
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    console.error('User profile not found')
+    return null
+  }
+
   const { data, error } = await supabase
     .from('estimate_templates')
     .insert({
       user_id: user.id,
+      organization_id: profile.organization_id,
       name: input.name,
       description: input.description,
       trades: templateTrades,
@@ -633,6 +663,7 @@ export async function createItemTemplateInDB(input: any): Promise<any | null> {
       default_subcontractor_cost: input.defaultSubcontractorCost || 0,
       is_subcontracted: input.isSubcontracted || false,
       notes: input.notes || input.description || '',
+      user_id: user.id,
       organization_id: profile.organization_id,
     })
     .select()
