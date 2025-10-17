@@ -8,9 +8,9 @@
 import React, { useState, useEffect } from 'react'
 import { Project, ProjectType, ProjectStatus, Plan } from '@/types'
 import { duplicateProject } from '@/services/projectService'
-import { getTradesForEstimate, getProjectActuals } from '@/services'
 import { getTradesForEstimate_Hybrid, updateProject_Hybrid, deleteProject_Hybrid } from '@/services/hybridService'
 import { getActivePlans_Hybrid } from '@/services/planHybridService'
+import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -92,15 +92,18 @@ export function ProjectDetailView({
 
   // Load actual costs from project actuals
   useEffect(() => {
-    const actuals = getProjectActuals(project.id)
-    if (actuals) {
-      setActualTotals({
-        laborCost: actuals.totalLaborCost,
-        materialCost: actuals.totalMaterialCost,
-        subcontractorCost: actuals.totalSubcontractorCost,
-        totalActual: actuals.totalActualCost,
-      })
+    const loadActuals = async () => {
+      const actuals = await getProjectActuals_Hybrid(project.id)
+      if (actuals) {
+        setActualTotals({
+          laborCost: actuals.totalLaborCost,
+          materialCost: actuals.totalMaterialCost,
+          subcontractorCost: actuals.totalSubcontractorCost,
+          totalActual: actuals.totalActualCost,
+        })
+      }
     }
+    loadActuals()
   }, [project.id])
   
   const formatCurrency = (amount: number) =>
