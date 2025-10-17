@@ -83,7 +83,7 @@ export function initiateQBOAuth(): void {
 /**
  * Handle OAuth callback and exchange code for tokens
  */
-export async function handleQBOAuthCallback(code: string, state: string): Promise<boolean> {
+export async function handleQBOAuthCallback(code: string, state: string, realmId: string): Promise<boolean> {
   // Verify state to prevent CSRF
   const savedState = sessionStorage.getItem('qb_oauth_state')
   if (state !== savedState) {
@@ -103,8 +103,8 @@ export async function handleQBOAuthCallback(code: string, state: string): Promis
       return false
     }
     
-    // Store tokens in user profile
-    await saveQBTokens(data)
+    // Store tokens in user profile (include realmId from URL)
+    await saveQBTokens({ ...data, realmId })
     
     sessionStorage.removeItem('qb_oauth_state')
     return true
@@ -121,15 +121,25 @@ async function saveQBTokens(tokens: any): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('No user logged in')
   
-  await supabase
+  console.log('Saving QB tokens to profile...')
+  
+  const { error } = await supabase
     .from('profiles')
     .update({
       qb_access_token: tokens.access_token,
       qb_refresh_token: tokens.refresh_token,
       qb_realm_id: tokens.realmId,
-      qb_token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+      qb_token_expires_at: new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString(),
+      qb_connected_at: new Date().toISOString(),
     })
     .eq('id', user.id)
+  
+  if (error) {
+    console.error('Error saving QB tokens:', error)
+    throw error
+  }
+  
+  console.log('QB tokens saved successfully')
 }
 
 /**

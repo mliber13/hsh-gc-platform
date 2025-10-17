@@ -23,11 +23,12 @@ import { applyTemplateToEstimate } from './services/estimateTemplateService'
 import { getCurrentUserProfile, UserProfile } from './services/userService'
 import { DataMigration } from './components/DataMigration'
 import { QuickBooksConnect } from './components/QuickBooksConnect'
+import { QuickBooksCallback } from './components/QuickBooksCallback'
 import { Button } from './components/ui/button'
 import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2 } from 'lucide-react'
 import { backupAllData } from './services/backupService'
 
-type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration' | 'qb-settings'
+type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration' | 'qb-settings' | 'qb-callback'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -46,6 +47,13 @@ function App() {
       })
     }
   }, [isOnline, user])
+
+  // Check if we're on the QB callback route
+  useEffect(() => {
+    if (window.location.pathname === '/qb-callback') {
+      setCurrentView('qb-callback')
+    }
+  }, [])
 
   // Refresh project data when viewing project-related screens
   useEffect(() => {
@@ -380,6 +388,16 @@ function App() {
             <QuickBooksConnect />
           </div>
         </div>
+      )}
+
+      {currentView === 'qb-callback' && (
+        <QuickBooksCallback 
+          onComplete={() => {
+            // Clear URL params and go to QB settings
+            window.history.replaceState({}, '', '/')
+            setCurrentView('qb-settings')
+          }}
+        />
       )}
 
       </div>
