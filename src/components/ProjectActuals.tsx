@@ -1236,6 +1236,11 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
 
   // Get unique categories from trades
   const categories = Array.from(new Set(trades.map(t => t.category)))
+  
+  // If editing entry has a category not in current trades, add it
+  if (editingEntry?.category && !categories.includes(editingEntry.category)) {
+    categories.push(editingEntry.category)
+  }
 
   // Filter trades by selected category
   const filteredTrades = formData.category 
@@ -1422,23 +1427,25 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
               <Select 
                 value={formData.category} 
                 onValueChange={(value) => setFormData(prev => ({ ...prev, category: value, tradeId: '' }))}
-                disabled={!!editingEntry}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select category..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
-                      {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                  {categories.length === 0 ? (
+                    <SelectItem value="general" disabled>
+                      No estimate items - add items to your estimate first
                     </SelectItem>
-                  ))}
+                  ) : (
+                    categories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
+                        {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
-              {editingEntry && (
-                <p className="text-xs text-gray-500 mt-1">Category cannot be changed when editing</p>
-              )}
             </div>
 
             {formData.category && filteredTrades.length > 0 && (
