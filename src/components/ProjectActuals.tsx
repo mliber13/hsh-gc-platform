@@ -857,64 +857,74 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           trades={trades}
           editingEntry={editingEntry}
           onSave={async (entry) => {
-            // Save to storage based on entry type
-            if (editingEntry) {
-              // Update existing entry
-              if (entry.type === 'labor') {
-                await updateLaborEntry_Hybrid(entry.id, {
-                  date: entry.date,
-                  description: entry.description,
-                  totalCost: entry.amount,
-                })
-              } else if (entry.type === 'material') {
-                await updateMaterialEntry_Hybrid(entry.id, {
-                  date: entry.date,
-                  materialName: entry.description,
-                  totalCost: entry.amount,
-                  vendor: entry.vendor,
-                  invoiceNumber: entry.invoiceNumber,
-                })
-              } else if (entry.type === 'subcontractor') {
-                await updateSubcontractorEntry_Hybrid(entry.id, {
-                  subcontractorName: entry.subcontractorName || 'Unknown',
-                  scopeOfWork: entry.description,
-                  totalPaid: entry.amount,
-                })
+            try {
+              console.log('💾 Saving actuals entry:', entry.type, entry)
+              
+              // Save to storage based on entry type
+              if (editingEntry) {
+                console.log('📝 Updating existing entry')
+                // Update existing entry
+                if (entry.type === 'labor') {
+                  await updateLaborEntry_Hybrid(entry.id, {
+                    date: entry.date,
+                    description: entry.description,
+                    totalCost: entry.amount,
+                  })
+                } else if (entry.type === 'material') {
+                  await updateMaterialEntry_Hybrid(entry.id, {
+                    date: entry.date,
+                    materialName: entry.description,
+                    totalCost: entry.amount,
+                    vendor: entry.vendor,
+                    invoiceNumber: entry.invoiceNumber,
+                  })
+                } else if (entry.type === 'subcontractor') {
+                  await updateSubcontractorEntry_Hybrid(entry.id, {
+                    subcontractorName: entry.subcontractorName || 'Unknown',
+                    scopeOfWork: entry.description,
+                    totalPaid: entry.amount,
+                  })
+                }
+              } else {
+                console.log('➕ Adding new entry')
+                // Add new entry
+                if (entry.type === 'labor') {
+                  const result = await addLaborEntry_Hybrid(project.id, {
+                    date: entry.date,
+                    description: entry.description,
+                    totalCost: entry.amount,
+                    trade: entry.category as any,
+                    tradeId: entry.tradeId,
+                  })
+                  console.log('✅ Labor entry created:', result)
+                } else if (entry.type === 'material') {
+                  const result = await addMaterialEntry_Hybrid(project.id, {
+                    date: entry.date,
+                    materialName: entry.description,
+                    totalCost: entry.amount,
+                    category: entry.category as any,
+                    tradeId: entry.tradeId,
+                    vendor: entry.vendor,
+                    invoiceNumber: entry.invoiceNumber,
+                  })
+                  console.log('✅ Material entry created:', result)
+                } else if (entry.type === 'subcontractor') {
+                  const result = await addSubcontractorEntry_Hybrid(project.id, {
+                    subcontractorName: entry.subcontractorName || 'Unknown',
+                    scopeOfWork: entry.description,
+                    contractAmount: entry.amount,
+                    totalPaid: entry.amount,
+                    trade: entry.category as any,
+                    tradeId: entry.tradeId,
+                  })
+                  console.log('✅ Subcontractor entry created:', result)
+                }
               }
-            } else {
-              // Add new entry
-              if (entry.type === 'labor') {
-                await addLaborEntry_Hybrid(project.id, {
-                  date: entry.date,
-                  description: entry.description,
-                  totalCost: entry.amount,
-                  trade: entry.category as any,
-                  tradeId: entry.tradeId,
-                })
-              } else if (entry.type === 'material') {
-                await addMaterialEntry_Hybrid(project.id, {
-                  date: entry.date,
-                  materialName: entry.description,
-                  totalCost: entry.amount,
-                  category: entry.category as any,
-                  tradeId: entry.tradeId,
-                  vendor: entry.vendor,
-                  invoiceNumber: entry.invoiceNumber,
-                })
-              } else if (entry.type === 'subcontractor') {
-                await addSubcontractorEntry_Hybrid(project.id, {
-                  subcontractorName: entry.subcontractorName || 'Unknown',
-                  scopeOfWork: entry.description,
-                  contractAmount: entry.amount,
-                  totalPaid: entry.amount,
-                  trade: entry.category as any,
-                  tradeId: entry.tradeId,
-                })
-              }
-            }
-            
-            // Reload actuals to reflect changes
-            const actuals = await getProjectActuals_Hybrid(project.id)
+              
+              console.log('🔄 Reloading actuals...')
+              // Reload actuals to reflect changes
+              const actuals = await getProjectActuals_Hybrid(project.id)
+              console.log('📊 Actuals reloaded:', actuals)
             if (actuals) {
               const entries: ActualEntry[] = []
               
@@ -959,11 +969,18 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
               })
               
               entries.sort((a, b) => b.date.getTime() - a.date.getTime())
+              console.log('📋 Setting entries:', entries.length, entries)
               setActualEntries(entries)
+            } else {
+              console.warn('⚠️ No actuals returned')
             }
             
             setShowEntryForm(false)
             setEditingEntry(null)
+            } catch (error) {
+              console.error('❌ Error saving actuals entry:', error)
+              alert('Failed to save entry: ' + (error as Error).message)
+            }
           }}
           onCancel={() => {
             setShowEntryForm(false)
