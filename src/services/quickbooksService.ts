@@ -244,6 +244,25 @@ export async function createQBCheck(checkData: {
 }
 
 /**
+ * Get all QB vendors
+ */
+export async function getQBVendors(): Promise<QBVendor[]> {
+  try {
+    const { data, error } = await supabase.functions.invoke('qb-get-vendors')
+    
+    if (error) {
+      console.error('Error fetching QB vendors:', error)
+      return []
+    }
+    
+    return data.vendors || []
+  } catch (error) {
+    console.error('Error fetching QB vendors:', error)
+    return []
+  }
+}
+
+/**
  * Find or create vendor in QuickBooks
  */
 export async function findOrCreateQBVendor(vendorName: string): Promise<QBVendor | null> {
