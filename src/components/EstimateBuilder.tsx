@@ -421,27 +421,46 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   }
 
   const handleApplyTemplate = async () => {
+    console.log('🔵 Apply Template clicked', { selectedTemplateToApply, projectData: projectData?.id })
+    
     if (!selectedTemplateToApply) {
       alert('Please select a template')
       return
     }
 
-    if (!projectData) return
+    if (!projectData) {
+      console.error('❌ No project data')
+      alert('Error: No project data found')
+      return
+    }
 
     // Confirm with user if there are existing trades
     if (trades.length > 0) {
       const confirmed = window.confirm(
         `This estimate currently has ${trades.length} trade(s). Applying a template will ADD the template's trades to your existing trades. Continue?`
       )
-      if (!confirmed) return
+      if (!confirmed) {
+        console.log('⚠️ User cancelled')
+        return
+      }
     }
 
     try {
+      console.log('📋 Applying template:', selectedTemplateToApply)
+      
       // Apply template creates new trades from the template
       const templateTrades = applyTemplateToEstimate(selectedTemplateToApply, projectData.estimate.id)
+      console.log('✅ Template trades created:', templateTrades.length)
       
+      if (templateTrades.length === 0) {
+        alert('Template has no trades to apply')
+        return
+      }
+
       // Add each trade to the database using hybrid service
+      console.log('💾 Adding trades to database...')
       for (const templateTrade of templateTrades) {
+        console.log('  Adding trade:', templateTrade.name)
         await addTrade_Hybrid(projectData.estimate.id, {
           category: templateTrade.category,
           name: templateTrade.name,
@@ -462,15 +481,17 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       }
 
       // Reload trades to show the new ones
+      console.log('🔄 Reloading trades...')
       const updatedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
       setTrades(updatedTrades)
+      console.log('✅ Trades reloaded:', updatedTrades.length)
 
       alert(`Successfully applied template! Added ${templateTrades.length} trade(s).`)
       setShowApplyTemplateDialog(false)
       setSelectedTemplateToApply('')
     } catch (error) {
-      console.error('Error applying template:', error)
-      alert('Failed to apply template')
+      console.error('❌ Error applying template:', error)
+      alert(`Failed to apply template: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -621,7 +642,13 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
                 </div>
                 <div className="flex gap-2">
                   <Button 
-                    onClick={handleApplyTemplate}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      console.log('🖱️ Button physically clicked')
+                      handleApplyTemplate()
+                    }}
                     disabled={!selectedTemplateToApply || availableTemplates.length === 0}
                     className="flex-1 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600"
                   >
@@ -629,6 +656,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
                     Apply Template
                   </Button>
                   <Button
+                    type="button"
                     variant="outline"
                     onClick={() => {
                       setShowApplyTemplateDialog(false)
