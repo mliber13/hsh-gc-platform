@@ -32,6 +32,10 @@ import {
   createEstimateTemplate,
 } from '@/services'
 import {
+  getAllEstimateTemplates,
+  applyTemplateToEstimate,
+} from '@/services/estimateTemplateService'
+import {
   addTrade_Hybrid,
   updateTrade_Hybrid,
   deleteTrade_Hybrid,
@@ -105,6 +109,9 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [templateDescription, setTemplateDescription] = useState('')
+  const [showApplyTemplateDialog, setShowApplyTemplateDialog] = useState(false)
+  const [availableTemplates, setAvailableTemplates] = useState<any[]>([])
+  const [selectedTemplateToApply, setSelectedTemplateToApply] = useState<string>('')
 
   // Initialize project if none provided
   useEffect(() => {
@@ -407,6 +414,66 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     }
   }
 
+  const handleOpenApplyTemplate = () => {
+    const templates = getAllEstimateTemplates()
+    setAvailableTemplates(templates)
+    setShowApplyTemplateDialog(true)
+  }
+
+  const handleApplyTemplate = async () => {
+    if (!selectedTemplateToApply) {
+      alert('Please select a template')
+      return
+    }
+
+    if (!projectData) return
+
+    // Confirm with user if there are existing trades
+    if (trades.length > 0) {
+      const confirmed = window.confirm(
+        `This estimate currently has ${trades.length} trade(s). Applying a template will ADD the template's trades to your existing trades. Continue?`
+      )
+      if (!confirmed) return
+    }
+
+    try {
+      // Apply template creates new trades from the template
+      const templateTrades = applyTemplateToEstimate(selectedTemplateToApply, projectData.estimate.id)
+      
+      // Add each trade to the database using hybrid service
+      for (const templateTrade of templateTrades) {
+        await addTrade_Hybrid(projectData.estimate.id, {
+          category: templateTrade.category,
+          name: templateTrade.name,
+          description: templateTrade.description,
+          quantity: templateTrade.quantity,
+          unit: templateTrade.unit,
+          laborCost: templateTrade.laborCost,
+          laborRate: templateTrade.laborRate,
+          laborHours: templateTrade.laborHours,
+          materialCost: templateTrade.materialCost,
+          materialRate: templateTrade.materialRate,
+          subcontractorCost: templateTrade.subcontractorCost,
+          isSubcontracted: templateTrade.isSubcontracted,
+          wasteFactor: templateTrade.wasteFactor,
+          markupPercent: templateTrade.markupPercent,
+          notes: templateTrade.notes,
+        })
+      }
+
+      // Reload trades to show the new ones
+      const updatedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
+      setTrades(updatedTrades)
+
+      alert(`Successfully applied template! Added ${templateTrades.length} trade(s).`)
+      setShowApplyTemplateDialog(false)
+      setSelectedTemplateToApply('')
+    } catch (error) {
+      console.error('Error applying template:', error)
+      alert('Failed to apply template')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background pb-20 sm:pb-0">
       <div className="p-2 sm:p-4 lg:p-6">
@@ -424,6 +491,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           onContingencyChange={setContingencyPercent}
           onPrintReport={handlePrintReport}
           onSaveAsTemplate={() => setShowSaveTemplateDialog(true)}
+          onApplyTemplate={handleOpenApplyTemplate}
         />
 
         {/* Main Trade Table */}
@@ -506,6 +574,66 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
                       setTemplateDescription('')
                     }}
                     variant="outline"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Apply Template Dialog */}
+        {showApplyTemplateDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Apply Estimate Template</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="template-select">Select Template *</Label>
+                  {availableTemplates.length === 0 ? (
+                    <p className="text-sm text-gray-500 mt-2">
+                      No estimate templates available. Create one by clicking "Save as Template" on an existing estimate.
+                    </p>
+                  ) : (
+                    <>
+                      <Select value={selectedTemplateToApply} onValueChange={setSelectedTemplateToApply}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a template..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableTemplates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name} ({template.trades.length} items)
+                              {template.description && ` - ${template.description}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-600 mt-2">
+                        The template's trades will be added to your current estimate.
+                        {trades.length > 0 && ` You currently have ${trades.length} trade(s).`}
+                      </p>
+                    </>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleApplyTemplate}
+                    disabled={!selectedTemplateToApply || availableTemplates.length === 0}
+                    className="flex-1 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Apply Template
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowApplyTemplateDialog(false)
+                      setSelectedTemplateToApply('')
+                    }}
                   >
                     Cancel
                   </Button>
@@ -710,9 +838,10 @@ interface SummarySectionProps {
   onContingencyChange: (value: number) => void
   onPrintReport: (depth: ReportDepth) => void
   onSaveAsTemplate: () => void
+  onApplyTemplate: () => void
 }
 
-function SummarySection({ totals, onContingencyChange, onPrintReport, onSaveAsTemplate }: SummarySectionProps) {
+function SummarySection({ totals, onContingencyChange, onPrintReport, onSaveAsTemplate, onApplyTemplate }: SummarySectionProps) {
   const [isEditingContingency, setIsEditingContingency] = useState(false)
   const [tempContingency, setTempContingency] = useState(totals.contingencyPercent)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
@@ -733,6 +862,15 @@ function SummarySection({ totals, onContingencyChange, onPrintReport, onSaveAsTe
         <div className="flex items-center justify-between">
           <CardTitle>Estimate Summary</CardTitle>
           <div className="flex gap-2">
+            <Button
+              onClick={onApplyTemplate}
+              variant="outline"
+              size="sm"
+              className="border-purple-500 text-purple-500 hover:bg-purple-500 hover:text-white"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Apply Template
+            </Button>
             <Button
               onClick={onSaveAsTemplate}
               variant="outline"
