@@ -449,57 +449,62 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
               </div>
             </div>
 
-            {!formData.isSubcontracted && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="defaultMaterialRate">Default Material Rate</Label>
-                  <Input
-                    id="defaultMaterialRate"
-                    type="number"
-                    step="0.01"
-                    value={formData.defaultMaterialRate || ''}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        defaultMaterialRate: parseFloat(e.target.value) || undefined,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="defaultLaborRate">Default Labor Rate</Label>
-                  <Input
-                    id="defaultLaborRate"
-                    type="number"
-                    step="0.01"
-                    value={formData.defaultLaborRate || ''}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        defaultLaborRate: parseFloat(e.target.value) || undefined,
-                      }))
-                    }
-                  />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="defaultMaterialRate">
+                  {formData.isSubcontracted ? 'Default Material Rate (optional)' : 'Default Material Rate'}
+                </Label>
+                <Input
+                  id="defaultMaterialRate"
+                  type="number"
+                  step="0.01"
+                  value={formData.defaultMaterialRate ?? ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      defaultMaterialRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                    }))
+                  }
+                />
               </div>
-            )}
+
+              <div>
+                <Label htmlFor="defaultLaborRate">
+                  {formData.isSubcontracted ? 'Default Labor Rate (optional)' : 'Default Labor Rate'}
+                </Label>
+                <Input
+                  id="defaultLaborRate"
+                  type="number"
+                  step="0.01"
+                  value={formData.defaultLaborRate ?? ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      defaultLaborRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+            </div>
 
             {formData.isSubcontracted && (
               <div>
-                <Label htmlFor="defaultSubcontractorCost">Default Subcontractor Cost</Label>
+                <Label htmlFor="defaultSubcontractorCost">Default Subcontractor Lump Sum (optional)</Label>
                 <Input
                   id="defaultSubcontractorCost"
                   type="number"
                   step="0.01"
-                  value={formData.defaultSubcontractorCost || ''}
+                  value={formData.defaultSubcontractorCost ?? ''}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
-                      defaultSubcontractorCost: parseFloat(e.target.value) || undefined,
+                      defaultSubcontractorCost: e.target.value === '' ? undefined : parseFloat(e.target.value),
                     }))
                   }
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Use this for lump sum pricing, or use the Material/Labor fields above for itemized pricing
+                </p>
               </div>
             )}
 

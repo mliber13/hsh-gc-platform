@@ -1318,7 +1318,14 @@ interface TradeFormProps {
 
 function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
   const [formData, setFormData] = useState<TradeFormData>(trade)
-  const [subcontractorEntryMode, setSubcontractorEntryMode] = useState<'lump-sum' | 'breakdown'>('lump-sum')
+  // Initialize subcontractor entry mode based on existing data
+  // If the item has material or labor rates, it was saved as a breakdown
+  const [subcontractorEntryMode, setSubcontractorEntryMode] = useState<'lump-sum' | 'breakdown'>(() => {
+    if (trade.isSubcontracted && (trade.materialRate || trade.laborRate)) {
+      return 'breakdown'
+    }
+    return 'lump-sum'
+  })
   const [itemTemplates, setItemTemplates] = useState<any[]>([])
 
   // Load item templates when category changes
