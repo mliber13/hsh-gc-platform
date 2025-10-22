@@ -946,11 +946,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   </div>
                 )}
 
-                  {Object.keys(groupedTrades).length === 0 && (
-                    <div className="text-center py-12 text-gray-500">
-                      No estimate items found. Please add items to your estimate first.
-                    </div>
-                  )}
+                {Object.keys(groupedTrades).length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    No estimate items found. Please add items to your estimate first.
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
