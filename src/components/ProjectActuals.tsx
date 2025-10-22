@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { TRADE_CATEGORIES } from '@/types'
+import { TRADE_CATEGORIES, CATEGORY_GROUPS, getCategoryGroup } from '@/types'
 import { 
   ArrowLeft, 
   PlusCircle, 
@@ -281,14 +281,18 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     setExpandedCategories(newExpanded)
   }
 
-  // Group trades by category
+  // Group trades by group, then by category
   const groupedTrades = trades.reduce((acc, trade) => {
-    if (!acc[trade.category]) {
-      acc[trade.category] = []
+    const group = trade.group || getCategoryGroup(trade.category)
+    if (!acc[group]) {
+      acc[group] = {}
     }
-    acc[trade.category].push(trade)
+    if (!acc[group][trade.category]) {
+      acc[group][trade.category] = []
+    }
+    acc[group][trade.category].push(trade)
     return acc
-  }, {} as Record<string, Trade[]>)
+  }, {} as Record<string, Record<string, Trade[]>>)
 
   // Handle print report
   const handlePrintReport = (type: 'actuals' | 'comparison', depth: ReportDepth) => {
@@ -569,100 +573,212 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           {/* Actuals by Category */}
           <Card>
             <CardHeader>
-              <CardTitle>Actuals by Category</CardTitle>
+              <CardTitle>Actuals by Group & Category</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {Object.entries(groupedTrades).map(([category, categoryTrades]) => {
-                  const isExpanded = expandedCategories.has(category)
-                  const categoryEstimate = getCategoryEstimate(category)
-                  const categoryActual = getCategoryActual(category)
-                  const categoryVariance = categoryActual - categoryEstimate
-                  const isOver = categoryVariance > 0
+                {Object.entries(groupedTrades).map(([group, groupCategories]) => {
+                  const isGroupExpanded = expandedCategories.has(group)
+                  
+                  // Calculate group totals
+                  const groupEstimate = Object.values(groupCategories).flat().reduce((sum, trade) => {
+                    return sum + (trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100))
+                  }, 0)
+                  
+                  const groupActual = Object.values(groupCategories).flat().reduce((sum, trade) => {
+                    return sum + getCategoryActual(trade.category)
+                  }, 0)
+                  
+                  const groupVariance = groupActual - groupEstimate
+                  const isGroupOver = groupVariance > 0
 
                   return (
-                    <Card key={category} className="border-2">
+                    <Card key={group} className="border-2">
+                      {/* Group Header */}
                       <button
-                        onClick={() => toggleCategory(category)}
+                        onClick={() => toggleCategory(group)}
                         className="w-full p-3 sm:p-4 hover:bg-gray-50 transition-colors"
                       >
-                        {/* Mobile Layout - Stacked */}
                         <div className="sm:hidden">
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
                               <span className="text-xl">
-                                {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
+                                {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.icon || '📦'}
                               </span>
                               <div className="text-left">
-                                <p className="font-bold text-gray-900 text-sm">
-                                  {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
-                                </p>
+                                <h3 className="font-semibold text-gray-900 text-sm">
+                                  {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
+                                </h3>
                                 <p className="text-xs text-gray-500">
-                                  {categoryTrades.length} items • {getActualsByCategory(category).length} entries
+                                  {Object.values(groupCategories).flat().length} items
                                 </p>
                               </div>
                             </div>
-                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            <div className="flex items-center gap-2">
+                              {isGroupOver ? (
+                                <TrendingUp className="w-4 h-4 text-red-500" />
+                              ) : (
+                                <TrendingDown className="w-4 h-4 text-green-500" />
+                              )}
+                              {isGroupExpanded ? (
+                                <ChevronUp className="w-4 h-4 text-gray-400" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                              )}
+                            </div>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-xs">
-                            <div className="text-center bg-blue-50 rounded p-2">
-                              <p className="text-gray-600 mb-1">Est.</p>
-                              <p className="font-bold text-gray-900">{formatCurrency(categoryEstimate)}</p>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-gray-500">Est:</span>
+                              <span className="font-semibold ml-1">${groupEstimate.toLocaleString()}</span>
                             </div>
-                            <div className="text-center bg-orange-50 rounded p-2">
-                              <p className="text-gray-600 mb-1">Actual</p>
-                              <p className="font-bold text-gray-900">{formatCurrency(categoryActual)}</p>
-                            </div>
-                            <div className={`text-center rounded p-2 ${isOver ? 'bg-red-50' : 'bg-green-50'}`}>
-                              <p className="text-gray-600 mb-1">Var.</p>
-                              <p className={`font-bold ${isOver ? 'text-red-600' : 'text-green-600'}`}>
-                                {formatCurrency(Math.abs(categoryVariance))}
-                                {isOver ? ' ⚠️' : ' ✓'}
-                              </p>
+                            <div>
+                              <span className="text-gray-500">Act:</span>
+                              <span className={`font-semibold ml-1 ${isGroupOver ? 'text-red-600' : 'text-green-600'}`}>
+                                ${groupActual.toLocaleString()}
+                              </span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Desktop Layout - Row */}
+                        {/* Desktop Layout - Side by Side */}
                         <div className="hidden sm:flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <span className="text-2xl">
-                              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
+                              {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.icon || '📦'}
                             </span>
-                            <div className="text-left">
-                              <p className="font-bold text-gray-900">
-                                {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {categoryTrades.length} items • {getActualsByCategory(category).length} entries
+                            <div>
+                              <h3 className="font-semibold text-gray-900 text-lg">
+                                {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
+                              </h3>
+                              <p className="text-sm text-gray-500">
+                                {Object.values(groupCategories).flat().length} items
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-6 text-sm">
                             <div className="text-right">
-                              <p className="text-sm text-gray-600">Estimated</p>
-                              <p className="font-bold text-gray-900">{formatCurrency(categoryEstimate)}</p>
+                              <div className="text-gray-500">Estimated</div>
+                              <div className="font-semibold">${groupEstimate.toLocaleString()}</div>
                             </div>
                             <div className="text-right">
-                              <p className="text-sm text-gray-600">Actual</p>
-                              <p className="font-bold text-gray-900">{formatCurrency(categoryActual)}</p>
+                              <div className="text-gray-500">Actual</div>
+                              <div className={`font-semibold ${isGroupOver ? 'text-red-600' : 'text-green-600'}`}>
+                                ${groupActual.toLocaleString()}
+                              </div>
                             </div>
-                            <div className="text-right min-w-[100px]">
-                              <p className="text-sm text-gray-600">Variance</p>
-                              <p className={`font-bold ${isOver ? 'text-red-600' : 'text-green-600'}`}>
-                                {formatCurrency(Math.abs(categoryVariance))}
-                                {isOver ? ' ⚠️' : ' ✓'}
-                              </p>
+                            <div className="text-right">
+                              <div className="text-gray-500">Variance</div>
+                              <div className={`font-semibold flex items-center gap-1 ${isGroupOver ? 'text-red-600' : 'text-green-600'}`}>
+                                {isGroupOver ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                ${Math.abs(groupVariance).toLocaleString()}
+                              </div>
                             </div>
-                            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            <div className="text-right">
+                              {isGroupExpanded ? (
+                                <ChevronUp className="w-5 h-5 text-gray-400" />
+                              ) : (
+                                <ChevronDown className="w-5 h-5 text-gray-400" />
+                              )}
+                            </div>
                           </div>
                         </div>
                       </button>
 
-                      {isExpanded && (
-                        <div className="border-t border-gray-200 bg-gray-50 p-4 space-y-4">
-                          {categoryTrades.map((trade) => {
-                            const tradeActuals = getActualsByTrade(trade.id)
+                      {/* Category Details */}
+                      {isGroupExpanded && (
+                        <div className="border-t border-gray-100">
+                          <div className="p-3 sm:p-4 space-y-3">
+                            {Object.entries(groupCategories).map(([category, categoryTrades]) => {
+                              const isCategoryExpanded = expandedCategories.has(category)
+                              const categoryEstimate = getCategoryEstimate(category)
+                              const categoryActual = getCategoryActual(category)
+                              const categoryVariance = categoryActual - categoryEstimate
+                              const isOver = categoryVariance > 0
+
+                              return (
+                                <div key={category} className="border border-gray-200 rounded-lg">
+                                  <button
+                                    onClick={() => toggleCategory(category)}
+                                    className="w-full p-3 hover:bg-gray-50 transition-colors"
+                                  >
+                                    {/* Mobile Layout - Stacked */}
+                                    <div className="sm:hidden">
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-lg">
+                                            {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
+                                          </span>
+                                          <div className="text-left">
+                                            <p className="font-semibold text-gray-900 text-sm">
+                                              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                              {categoryTrades.length} items • {getActualsByCategory(category).length} entries
+                                            </p>
+                                          </div>
+                                        </div>
+                                        {isCategoryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2 text-xs">
+                                        <div className="text-center bg-blue-50 rounded p-2">
+                                          <p className="text-gray-600 mb-1">Est.</p>
+                                          <p className="font-bold text-gray-900">{formatCurrency(categoryEstimate)}</p>
+                                        </div>
+                                        <div className="text-center bg-orange-50 rounded p-2">
+                                          <p className="text-gray-600 mb-1">Actual</p>
+                                          <p className="font-bold text-gray-900">{formatCurrency(categoryActual)}</p>
+                                        </div>
+                                        <div className={`text-center rounded p-2 ${isOver ? 'bg-red-50' : 'bg-green-50'}`}>
+                                          <p className="text-gray-600 mb-1">Var.</p>
+                                          <p className={`font-bold ${isOver ? 'text-red-600' : 'text-green-600'}`}>
+                                            {formatCurrency(Math.abs(categoryVariance))}
+                                            {isOver ? ' ⚠️' : ' ✓'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Desktop Layout - Row */}
+                                    <div className="hidden sm:flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-xl">
+                                          {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
+                                        </span>
+                                        <div className="text-left">
+                                          <p className="font-semibold text-gray-900">
+                                            {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                                          </p>
+                                          <p className="text-xs text-gray-500">
+                                            {categoryTrades.length} items • {getActualsByCategory(category).length} entries
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-4">
+                                        <div className="text-right">
+                                          <p className="text-sm text-gray-600">Estimated</p>
+                                          <p className="font-semibold text-gray-900">{formatCurrency(categoryEstimate)}</p>
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="text-sm text-gray-600">Actual</p>
+                                          <p className="font-semibold text-gray-900">{formatCurrency(categoryActual)}</p>
+                                        </div>
+                                        <div className="text-right min-w-[100px]">
+                                          <p className="text-sm text-gray-600">Variance</p>
+                                          <p className={`font-semibold ${isOver ? 'text-red-600' : 'text-green-600'}`}>
+                                            {formatCurrency(Math.abs(categoryVariance))}
+                                            {isOver ? ' ⚠️' : ' ✓'}
+                                          </p>
+                                        </div>
+                                        {isCategoryExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                                      </div>
+                                    </div>
+                                  </button>
+
+                                  {isCategoryExpanded && (
+                                    <div className="border-t border-gray-200 bg-gray-50 p-4 space-y-4">
+                                      {categoryTrades.map((trade) => {
+                                        const tradeActuals = getActualsByTrade(trade.id)
                             const tradeActualTotal = tradeActuals.reduce((sum, entry) => sum + entry.amount, 0)
                             const tradeEstimate = trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100)
                             const tradeVariance = tradeActualTotal - tradeEstimate
@@ -816,21 +932,23 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
                                 {tradeActuals.length === 0 && (
                                   <p className="text-sm text-gray-500 italic mt-2">No actual entries yet</p>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </Card>
-                  )
-                })}
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </Card>
+                    )
+                  })}
 
-                {Object.keys(groupedTrades).length === 0 && (
-                  <div className="text-center py-12 text-gray-500">
-                    No estimate items found. Please add items to your estimate first.
-                  </div>
-                )}
+                  {Object.keys(groupedTrades).length === 0 && (
+                    <div className="text-center py-12 text-gray-500">
+                      No estimate items found. Please add items to your estimate first.
+                    </div>
+                  )}
               </div>
             </CardContent>
           </Card>
