@@ -11,7 +11,7 @@ import { Project, Trade } from '@/types'
 import { getTradesForEstimate, getProjectActuals } from '@/services'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { TRADE_CATEGORIES } from '@/types'
+import { TRADE_CATEGORIES, CATEGORY_GROUPS, getCategoryGroup } from '@/types'
 import { 
   ArrowLeft,
   TrendingUp,
@@ -45,6 +45,15 @@ interface CategoryVariance {
   trades: Trade[]
 }
 
+interface GroupVariance {
+  group: string
+  estimated: number
+  actual: number
+  variance: number
+  variancePercent: number
+  categories: CategoryVariance[]
+}
+
 interface TradeVariance {
   trade: Trade
   estimated: number
@@ -61,6 +70,7 @@ export function VarianceReport({ project, onBack }: VarianceReportProps) {
   const [trades, setTrades] = useState<Trade[]>([])
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [categoryVariances, setCategoryVariances] = useState<CategoryVariance[]>([])
+  const [groupVariances, setGroupVariances] = useState<GroupVariance[]>([])
   const [totalEstimated, setTotalEstimated] = useState(0)
   const [totalActual, setTotalActual] = useState(0)
   const [totalVariance, setTotalVariance] = useState(0)
@@ -143,6 +153,43 @@ export function VarianceReport({ project, onBack }: VarianceReportProps) {
       })
 
       setCategoryVariances(variances)
+
+      // Group categories by group and calculate group variances
+      const groupMap = new Map<string, GroupVariance>()
+      
+      variances.forEach(categoryVariance => {
+        const category = categoryVariance.category
+        const group = loadedTrades.find(t => t.category === category)?.group || getCategoryGroup(category as any)
+        
+        if (!groupMap.has(group)) {
+          groupMap.set(group, {
+            group,
+            estimated: 0,
+            actual: 0,
+            variance: 0,
+            variancePercent: 0,
+            categories: [],
+          })
+        }
+        
+        const groupData = groupMap.get(group)!
+        groupData.estimated += categoryVariance.estimated
+        groupData.actual += categoryVariance.actual
+        groupData.categories.push(categoryVariance)
+      })
+      
+      // Calculate group variances
+      const groupVariances = Array.from(groupMap.values()).map(group => {
+        const variance = group.actual - group.estimated
+        const variancePercent = group.estimated > 0 ? (variance / group.estimated) * 100 : 0
+        return {
+          ...group,
+          variance,
+          variancePercent,
+        }
+      })
+
+      setGroupVariances(groupVariances)
     }
   }, [project])
 
@@ -278,7 +325,169 @@ export function VarianceReport({ project, onBack }: VarianceReportProps) {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {categoryVariances.map((categoryVar) => {
+                  {/* Group Rollup Section */}
+                  {groupVariances.map((groupVar) => {
+                    const isGroupExpanded = expandedCategories.has(`group_${groupVar.group}`)
+                    const isOver = groupVar.variance > 0
+                    const isUnder = groupVar.variance < 0
+
+                    return (
+                      <Card key={groupVar.group} className="border-2 border-blue-200 bg-blue-50">
+                        <button
+                          onClick={() => toggleCategory(`group_${groupVar.group}`)}
+                          className="w-full p-4 flex items-center justify-between hover:bg-blue-100 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">
+                              {CATEGORY_GROUPS[groupVar.group as keyof typeof CATEGORY_GROUPS]?.icon || '📦'}
+                            </span>
+                            <div className="text-left">
+                              <p className="font-bold text-blue-800">
+                                {CATEGORY_GROUPS[groupVar.group as keyof typeof CATEGORY_GROUPS]?.label || groupVar.group}
+                              </p>
+                              <p className="text-xs text-blue-600">
+                                {groupVar.categories.length} categories
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {/* Three Column Display */}
+                          <div className="flex items-center gap-6">
+                            <div className="text-right min-w-[120px]">
+                              <p className="text-xs text-gray-600">Estimated</p>
+                              <p className="font-bold text-blue-800">{formatCurrency(groupVar.estimated)}</p>
+                            </div>
+                            <div className="text-right min-w-[120px]">
+                              <p className="text-xs text-gray-600">Actual</p>
+                              <p className="font-bold text-blue-800">{formatCurrency(groupVar.actual)}</p>
+                            </div>
+                            <div className="text-right min-w-[140px]">
+                              <p className="text-xs text-gray-600">Variance</p>
+                              <div className="flex items-center justify-end gap-2">
+                                <p className={`font-bold ${isOver ? 'text-red-600' : isUnder ? 'text-green-600' : 'text-blue-800'}`}>
+                                  {formatCurrency(Math.abs(groupVar.variance))}
+                                </p>
+                                {isOver && <span className="text-red-600">⚠️</span>}
+                                {isUnder && <span className="text-green-600">✅</span>}
+                              </div>
+                              <p className={`text-xs font-medium ${isOver ? 'text-red-600' : isUnder ? 'text-green-600' : 'text-gray-600'}`}>
+                                {formatPercent(groupVar.variancePercent)}
+                              </p>
+                            </div>
+                            <div className="flex items-center">
+                              {isGroupExpanded ? <ChevronUp className="w-5 h-5 text-blue-600" /> : <ChevronDown className="w-5 h-5 text-blue-600" />}
+                            </div>
+                          </div>
+                        </button>
+
+                        {isGroupExpanded && (
+                          <div className="border-t border-blue-200 bg-white p-4">
+                            <div className="space-y-3">
+                              {groupVar.categories.map((categoryVar) => {
+                                const isCategoryExpanded = expandedCategories.has(categoryVar.category)
+                                const isOver = categoryVar.variance > 0
+                                const isUnder = categoryVar.variance < 0
+
+                                return (
+                                  <Card key={categoryVar.category} className="border border-gray-200">
+                                    <button
+                                      onClick={() => toggleCategory(categoryVar.category)}
+                                      className="w-full p-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-lg">
+                                          {TRADE_CATEGORIES[categoryVar.category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
+                                        </span>
+                                        <div className="text-left">
+                                          <p className="font-semibold text-gray-900">
+                                            {TRADE_CATEGORIES[categoryVar.category as keyof typeof TRADE_CATEGORIES]?.label || categoryVar.category}
+                                          </p>
+                                          <p className="text-xs text-gray-500">
+                                            {categoryVar.trades.length} items
+                                          </p>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Three Column Display */}
+                                      <div className="flex items-center gap-6">
+                                        <div className="text-right min-w-[120px]">
+                                          <p className="text-xs text-gray-600">Estimated</p>
+                                          <p className="font-semibold text-gray-900">{formatCurrency(categoryVar.estimated)}</p>
+                                        </div>
+                                        <div className="text-right min-w-[120px]">
+                                          <p className="text-xs text-gray-600">Actual</p>
+                                          <p className="font-semibold text-gray-900">{formatCurrency(categoryVar.actual)}</p>
+                                        </div>
+                                        <div className="text-right min-w-[140px]">
+                                          <p className="text-xs text-gray-600">Variance</p>
+                                          <div className="flex items-center justify-end gap-2">
+                                            <p className={`font-semibold ${isOver ? 'text-red-600' : isUnder ? 'text-green-600' : 'text-gray-900'}`}>
+                                              {formatCurrency(Math.abs(categoryVar.variance))}
+                                            </p>
+                                            {isOver && <span className="text-red-600">⚠️</span>}
+                                            {isUnder && <span className="text-green-600">✅</span>}
+                                          </div>
+                                          <p className={`text-xs font-medium ${isOver ? 'text-red-600' : isUnder ? 'text-green-600' : 'text-gray-600'}`}>
+                                            {formatPercent(categoryVar.variancePercent)}
+                                          </p>
+                                        </div>
+                                        <div className="flex items-center">
+                                          {isCategoryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                        </div>
+                                      </div>
+                                    </button>
+
+                                    {isCategoryExpanded && (
+                                      <div className="border-t border-gray-200 bg-gray-50 p-3">
+                                        <div className="space-y-2">
+                                          {categoryVar.trades.map((trade) => {
+                                            const tradeEstimated = trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100)
+                                            const tradeActual = 0 // This would need to be calculated from actuals
+                                            const tradeVariance = tradeActual - tradeEstimated
+                                            const tradeVariancePercent = tradeEstimated > 0 ? (tradeVariance / tradeEstimated) * 100 : 0
+
+                                            return (
+                                              <div key={trade.id} className="bg-white rounded-lg p-3 border border-gray-200">
+                                                <div className="flex items-center justify-between mb-2">
+                                                  <h4 className="font-medium text-gray-900">{trade.name}</h4>
+                                                  <div className="flex items-center gap-4">
+                                                    <div className="text-right">
+                                                      <p className="text-xs text-gray-600">Estimated</p>
+                                                      <p className="font-medium text-gray-900">{formatCurrency(tradeEstimated)}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <p className="text-xs text-gray-600">Actual</p>
+                                                      <p className="font-medium text-gray-900">{formatCurrency(tradeActual)}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <p className="text-xs text-gray-600">Variance</p>
+                                                      <p className={`font-medium ${tradeVariance > 0 ? 'text-red-600' : tradeVariance < 0 ? 'text-green-600' : 'text-gray-900'}`}>
+                                                        {formatCurrency(Math.abs(tradeVariance))}
+                                                      </p>
+                                                      <p className={`text-xs ${tradeVariance > 0 ? 'text-red-600' : tradeVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                                                        {formatPercent(tradeVariancePercent)}
+                                                      </p>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </Card>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </Card>
+                    )
+                  })}
+                  
+                  {/* Original Category Variances (for backward compatibility) */}
+                  {categoryVariances.filter(cv => !groupVariances.some(gv => gv.categories.includes(cv))).map((categoryVar) => {
                     const isExpanded = expandedCategories.has(categoryVar.category)
                     const isOver = categoryVar.variance > 0
                     const isUnder = categoryVar.variance < 0

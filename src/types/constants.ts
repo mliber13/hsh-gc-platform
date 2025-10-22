@@ -28,6 +28,14 @@ export type TradeCategory =
   | 'appliances'
   | 'other'
 
+export type CategoryGroup = 
+  | 'admin'
+  | 'exterior'
+  | 'structure'
+  | 'mep'
+  | 'interior'
+  | 'other'
+
 export type UnitType = 
   | 'sqft'
   | 'linear_ft'
@@ -71,6 +79,52 @@ export const TRADE_CATEGORIES: Record<TradeCategory, { label: string; icon: stri
   'bath': { label: 'Bath', icon: '🛁' },
   'appliances': { label: 'Appliances', icon: '🔌' },
   'other': { label: 'Other', icon: '📦' },
+}
+
+export const CATEGORY_GROUPS: Record<CategoryGroup, { label: string; icon: string; color: string }> = {
+  'admin': { label: 'Admin', icon: '📋', color: 'bg-gray-100' },
+  'exterior': { label: 'Exterior', icon: '🏗️', color: 'bg-blue-100' },
+  'structure': { label: 'Structure', icon: '🔨', color: 'bg-yellow-100' },
+  'mep': { label: 'MEP', icon: '⚡', color: 'bg-green-100' },
+  'interior': { label: 'Interior', icon: '🎨', color: 'bg-purple-100' },
+  'other': { label: 'Other', icon: '📦', color: 'bg-gray-100' },
+}
+
+// ----------------------------------------------------------------------------
+// Category to Group Mapping
+// ----------------------------------------------------------------------------
+
+export const CATEGORY_TO_GROUP: Record<TradeCategory, CategoryGroup> = {
+  'planning': 'admin',
+  'site-prep': 'exterior',
+  'excavation-foundation': 'exterior',
+  'utilities': 'exterior',
+  'water-sewer': 'exterior',
+  'roofing': 'exterior',
+  'masonry-paving': 'exterior',
+  'porches-decks': 'exterior',
+  'exterior-finishes': 'exterior',
+  'rough-framing': 'structure',
+  'windows-doors': 'structure',
+  'insulation': 'mep',
+  'plumbing': 'mep',
+  'electrical': 'mep',
+  'hvac': 'mep',
+  'drywall': 'interior',
+  'interior-finishes': 'interior',
+  'kitchen': 'interior',
+  'bath': 'interior',
+  'appliances': 'interior',
+  'other': 'other',
+}
+
+export const GROUP_TO_CATEGORIES: Record<CategoryGroup, TradeCategory[]> = {
+  'admin': ['planning'],
+  'exterior': ['site-prep', 'excavation-foundation', 'utilities', 'water-sewer', 'roofing', 'masonry-paving', 'porches-decks', 'exterior-finishes'],
+  'structure': ['rough-framing', 'windows-doors'],
+  'mep': ['insulation', 'plumbing', 'electrical', 'hvac'],
+  'interior': ['drywall', 'interior-finishes', 'kitchen', 'bath', 'appliances'],
+  'other': ['other'],
 }
 
 // ----------------------------------------------------------------------------
@@ -452,6 +506,14 @@ export const formatPercentage = (decimal: number): string => {
 
 export const getTradeLabel = (category: TradeCategory): string => {
   return TRADE_CATEGORIES[category]?.label || category
+}
+
+export const getCategoryGroup = (category: TradeCategory): CategoryGroup => {
+  return CATEGORY_TO_GROUP[category] || 'other'
+}
+
+export const getGroupLabel = (group: CategoryGroup): string => {
+  return CATEGORY_GROUPS[group]?.label || group
 }
 
 export const getUnitLabel = (unit: UnitType): string => {

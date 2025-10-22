@@ -21,7 +21,7 @@ import {
 } from './estimateService'
 import { getTradesForEstimate as getTradesLS } from './storage'
 import * as supabaseService from './supabaseService'
-import { Project, CreateProjectInput, UpdateProjectInput, Trade, TradeInput } from '@/types'
+import { Project, CreateProjectInput, UpdateProjectInput, Trade, TradeInput, getCategoryGroup } from '@/types'
 
 // ============================================================================
 // PROJECT OPERATIONS
@@ -88,20 +88,32 @@ export async function getTradesForEstimate_Hybrid(estimateId: string): Promise<T
 }
 
 export async function addTrade_Hybrid(estimateId: string, input: TradeInput): Promise<Trade> {
+  // Auto-populate group field based on category
+  const inputWithGroup = {
+    ...input,
+    group: getCategoryGroup(input.category)
+  }
+
   if (isOnlineMode()) {
-    const trade = await supabaseService.createTradeInDB(estimateId, input)
+    const trade = await supabaseService.createTradeInDB(estimateId, inputWithGroup)
     if (!trade) throw new Error('Failed to create trade')
     return trade
   } else {
-    return addTradeLS(estimateId, input)
+    return addTradeLS(estimateId, inputWithGroup)
   }
 }
 
 export async function updateTrade_Hybrid(tradeId: string, updates: Partial<TradeInput>): Promise<Trade | null> {
+  // Auto-populate group field if category is being updated
+  const updatesWithGroup = {
+    ...updates,
+    ...(updates.category && { group: getCategoryGroup(updates.category) })
+  }
+
   if (isOnlineMode()) {
-    return await supabaseService.updateTradeInDB(tradeId, updates)
+    return await supabaseService.updateTradeInDB(tradeId, updatesWithGroup)
   } else {
-    return updateTradeLS(tradeId, updates)
+    return updateTradeLS(tradeId, updatesWithGroup)
   }
 }
 

@@ -7,7 +7,7 @@
 
 import React from 'react'
 import { Project, Trade } from '@/types'
-import { TRADE_CATEGORIES } from '@/types'
+import { TRADE_CATEGORIES, CATEGORY_GROUPS, getCategoryGroup } from '@/types'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 export type ReportDepth = 'summary' | 'category' | 'full'
@@ -64,22 +64,29 @@ export function PrintableReport({
   const actualTotals = calculateActualTotals()
   const variance = actualTotals.total - estimateTotals.totalEstimated
 
-  // Group trades by category
+  // Group trades by group, then by category
   const groupedTrades = trades.reduce((acc, trade) => {
-    if (!acc[trade.category]) {
-      acc[trade.category] = []
+    const group = trade.group || getCategoryGroup(trade.category)
+    if (!acc[group]) {
+      acc[group] = {}
     }
-    acc[trade.category].push(trade)
+    if (!acc[group][trade.category]) {
+      acc[group][trade.category] = []
+    }
+    acc[group][trade.category].push(trade)
     return acc
-  }, {} as Record<string, Trade[]>)
+  }, {} as Record<string, Record<string, Trade[]>>)
 
   // Debug logging
   console.log('PrintableReport Data:', {
     totalTrades: trades.length,
-    categories: Object.keys(groupedTrades),
-    tradesPerCategory: Object.entries(groupedTrades).map(([cat, items]) => ({ 
-      category: TRADE_CATEGORIES[cat as keyof typeof TRADE_CATEGORIES]?.label || cat,
-      count: items.length 
+    groups: Object.keys(groupedTrades),
+    tradesPerGroup: Object.entries(groupedTrades).map(([group, groupCategories]) => ({
+      group: CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group,
+      categories: Object.entries(groupCategories).map(([cat, items]) => ({
+        category: TRADE_CATEGORIES[cat as keyof typeof TRADE_CATEGORIES]?.label || cat,
+        count: items.length
+      }))
     }))
   })
   console.log('All categories:', Object.keys(groupedTrades))
@@ -193,16 +200,23 @@ export function PrintableReport({
                 <li>• Project: <strong>{project.name}</strong></li>
                 <li>• Date: <strong>{new Date().toLocaleDateString()}</strong></li>
                 <li>• Total Line Items: <strong>{trades.length}</strong></li>
-                <li>• Categories: <strong>{Object.keys(groupedTrades).length}</strong> ({Object.keys(groupedTrades).map(cat => TRADE_CATEGORIES[cat as keyof typeof TRADE_CATEGORIES]?.label || cat).join(', ')})</li>
+                <li>• Groups: <strong>{Object.keys(groupedTrades).length}</strong> ({Object.keys(groupedTrades).map(group => CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group).join(', ')})</li>
               </ul>
             </div>
 
             <div className="bg-yellow-50 border border-yellow-200 rounded p-4 max-h-40 overflow-y-auto">
               <p className="text-sm font-semibold text-yellow-900 mb-2">Preview - Items to Print:</p>
               <div className="text-xs text-yellow-800 space-y-1">
-                {Object.entries(groupedTrades).map(([category, catTrades]) => (
-                  <div key={category}>
-                    <strong>{TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}:</strong> {catTrades.length} items
+                {Object.entries(groupedTrades).map(([group, groupCategories]) => (
+                  <div key={group}>
+                    <strong>{CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}:</strong>
+                    <div className="ml-4 space-y-1">
+                      {Object.entries(groupCategories).map(([category, catTrades]) => (
+                        <div key={category}>
+                          {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}: {catTrades.length} items
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -406,38 +420,82 @@ function CategorySummaryView({ groupedTrades, reportType, actualEntries }: any) 
           </tr>
         </thead>
         <tbody>
-          {Object.entries(groupedTrades).map(([category, categoryTrades]: [string, any]) => {
-            const categoryEstimate = categoryTrades.reduce((sum: number, t: any) => {
+          {Object.entries(groupedTrades).map(([group, groupCategories]: [string, any]) => {
+            // Calculate group totals
+            const groupEstimate = Object.values(groupCategories).flat().reduce((sum: number, t: any) => {
               const total = t.totalCost * (1 + (t.markupPercent || 11.1) / 100)
               return sum + total
             }, 0)
             
-            const categoryActual = actualEntries
-              .filter((e: any) => e.category === category)
-              .reduce((sum: number, e: any) => sum + e.amount, 0)
+            const groupActual = Object.values(groupCategories).flat().reduce((sum: number, categoryTrades: any) => {
+              return sum + actualEntries
+                .filter((e: any) => categoryTrades.some((trade: any) => trade.category === e.category))
+                .reduce((entrySum: number, e: any) => entrySum + e.amount, 0)
+            }, 0)
 
             return (
-              <tr key={category}>
-                <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', lineHeight: '1.6' }}>
-                  {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
-                </td>
-                <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', lineHeight: '1.6' }}>{categoryTrades.length}</td>
-                {reportType !== 'actuals' && (
-                  <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', lineHeight: '1.6' }}>
-                    {formatCurrency(categoryEstimate)}
+              <React.Fragment key={group}>
+                {/* Group Row */}
+                <tr style={{ background: '#EFF6FF' }}>
+                  <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', lineHeight: '1.6', fontWeight: 'bold' }}>
+                    {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
                   </td>
-                )}
-                {reportType !== 'estimate' && (
-                  <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', lineHeight: '1.6' }}>
-                    {formatCurrency(categoryActual)}
+                  <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', lineHeight: '1.6', fontWeight: 'bold' }}>
+                    {Object.values(groupCategories).flat().length}
                   </td>
-                )}
-                {reportType === 'comparison' && (
-                  <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', color: categoryActual - categoryEstimate >= 0 ? '#DC2626' : '#16A34A', lineHeight: '1.6' }}>
-                    {formatCurrency(Math.abs(categoryActual - categoryEstimate))}
-                  </td>
-                )}
-              </tr>
+                  {reportType !== 'actuals' && (
+                    <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: 'bold', lineHeight: '1.6' }}>
+                      {formatCurrency(groupEstimate)}
+                    </td>
+                  )}
+                  {reportType !== 'estimate' && (
+                    <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: 'bold', lineHeight: '1.6' }}>
+                      {formatCurrency(groupActual)}
+                    </td>
+                  )}
+                  {reportType === 'comparison' && (
+                    <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: 'bold', lineHeight: '1.6' }}>
+                      {formatCurrency(groupActual - groupEstimate)}
+                    </td>
+                  )}
+                </tr>
+                
+                {/* Category rows within group */}
+                {Object.entries(groupCategories).map(([category, categoryTrades]: [string, any]) => {
+                  const categoryEstimate = categoryTrades.reduce((sum: number, t: any) => {
+                    const total = t.totalCost * (1 + (t.markupPercent || 11.1) / 100)
+                    return sum + total
+                  }, 0)
+                  
+                  const categoryActual = actualEntries
+                    .filter((e: any) => e.category === category)
+                    .reduce((sum: number, e: any) => sum + e.amount, 0)
+
+                  return (
+                    <tr key={category}>
+                      <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px 12px 30px', lineHeight: '1.6' }}>
+                        {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                      </td>
+                      <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', lineHeight: '1.6' }}>{categoryTrades.length}</td>
+                      {reportType !== 'actuals' && (
+                        <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', lineHeight: '1.6' }}>
+                          {formatCurrency(categoryEstimate)}
+                        </td>
+                      )}
+                      {reportType !== 'estimate' && (
+                        <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', lineHeight: '1.6' }}>
+                          {formatCurrency(categoryActual)}
+                        </td>
+                      )}
+                      {reportType === 'comparison' && (
+                        <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', color: categoryActual - categoryEstimate >= 0 ? '#DC2626' : '#16A34A', lineHeight: '1.6' }}>
+                          {formatCurrency(Math.abs(categoryActual - categoryEstimate))}
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </React.Fragment>
             )
           })}
         </tbody>

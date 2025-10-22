@@ -31,6 +31,7 @@ export type {
   ProjectType,
   ProjectStatus,
   TradeCategory,
+  CategoryGroup,
   UnitType,
 } from './constants'
 
@@ -180,6 +181,9 @@ export type {
 // Export constants and helpers
 export {
   TRADE_CATEGORIES,
+  CATEGORY_GROUPS,
+  CATEGORY_TO_GROUP,
+  GROUP_TO_CATEGORIES,
   DEFAULT_CATEGORY_ITEMS,
   UNIT_TYPES,
   PROJECT_TYPES,
@@ -198,6 +202,8 @@ export {
   formatNumber,
   formatPercentage,
   getTradeLabel,
+  getCategoryGroup,
+  getGroupLabel,
   getUnitLabel,
   getStatusColor,
   calculateTotalCost,

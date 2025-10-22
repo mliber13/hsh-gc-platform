@@ -5,11 +5,12 @@
 // Types for managing default item templates and rates
 //
 
-import { TradeCategory, UnitType } from './index'
+import { TradeCategory, CategoryGroup, UnitType } from './index'
 
 export interface ItemTemplate {
   id: string
   category: TradeCategory
+  group?: CategoryGroup     // High-level grouping for rollup reporting
   name: string
   description?: string
   defaultUnit: UnitType

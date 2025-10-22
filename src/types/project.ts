@@ -116,9 +116,9 @@ export interface Estimate {
   notes?: string
 }
 
-// Import TradeCategory from constants to avoid duplication
-import type { TradeCategory } from './constants'
-export type { TradeCategory }
+// Import types from constants to avoid duplication
+import type { TradeCategory, CategoryGroup } from './constants'
+export type { TradeCategory, CategoryGroup }
 
 export type UnitType = 
   | 'sqft'          // Square feet
@@ -134,6 +134,7 @@ export interface Trade {
   id: string
   estimateId: string
   category: TradeCategory
+  group?: CategoryGroup      // High-level grouping for rollup reporting
   name: string              // e.g., "Frame exterior walls"
   description?: string
   
@@ -243,6 +244,7 @@ export interface LaborEntry {
   
   // What
   trade: TradeCategory
+  group?: CategoryGroup     // High-level grouping for rollup reporting
   description: string
   phase?: string            // e.g., "Rough-in", "Finish"
   
@@ -281,6 +283,7 @@ export interface MaterialEntry {
   // What
   materialName: string
   category: TradeCategory
+  group?: CategoryGroup     // High-level grouping for rollup reporting
   description?: string
   
   // How much
@@ -319,6 +322,7 @@ export interface SubcontractorEntry {
   
   // What
   trade: TradeCategory
+  group?: CategoryGroup     // High-level grouping for rollup reporting
   scopeOfWork: string
   
   // Contract
