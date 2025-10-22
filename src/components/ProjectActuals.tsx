@@ -930,19 +930,21 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                   </div>
                                 )}
 
-                                {tradeActuals.length === 0 && (
-                                  <p className="text-sm text-gray-500 italic mt-2">No actual entries yet</p>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </Card>
-                    )
-                  })}
+                                        {tradeActuals.length === 0 && (
+                                          <p className="text-sm text-gray-500 italic mt-2">No actual entries yet</p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
 
                   {Object.keys(groupedTrades).length === 0 && (
                     <div className="text-center py-12 text-gray-500">
