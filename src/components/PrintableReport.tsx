@@ -271,7 +271,7 @@ interface PrintableContentProps {
   estimateTotals: any
   actualTotals: any
   variance: number
-  groupedTrades: Record<string, Trade[]>
+  groupedTrades: Record<string, Record<string, Trade[]>>
   actualEntries: any[]
   changeOrders: any[]
 }
