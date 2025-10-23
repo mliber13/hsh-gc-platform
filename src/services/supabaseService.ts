@@ -311,6 +311,7 @@ function transformTrade(row: any): Trade {
     id: row.id,
     estimateId: row.estimate_id,
     category: row.category,
+    group: row.group,
     name: row.name,
     description: row.description || '',
     quantity: row.quantity,
@@ -325,6 +326,11 @@ function transformTrade(row: any): Trade {
     isSubcontracted: row.is_subcontracted || false,
     wasteFactor: row.waste_factor || 10,
     markupPercent: row.markup_percent || 0,
+    estimateStatus: row.estimate_status || 'budget',
+    quoteVendor: row.quote_vendor,
+    quoteDate: row.quote_date ? new Date(row.quote_date) : undefined,
+    quoteReference: row.quote_reference,
+    quoteFileUrl: row.quote_file_url,
     notes: row.notes || '',
     sortOrder: 0,
   }
@@ -367,7 +373,7 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
 
   const totalCost = (input.laborCost || 0) + (input.materialCost || 0) + (input.subcontractorCost || 0)
 
-  const { data, error } = await supabase
+  const { data, error} = await supabase
     .from('trades')
     .insert({
       estimate_id: estimateId,
@@ -387,6 +393,11 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
       waste_factor: input.wasteFactor || 10,
       markup_percent: input.markupPercent || 0,
       notes: input.notes || '',
+      estimate_status: (input as any).estimateStatus || 'budget',
+      quote_vendor: (input as any).quoteVendor || null,
+      quote_date: (input as any).quoteDate || null,
+      quote_reference: (input as any).quoteReference || null,
+      quote_file_url: (input as any).quoteFileUrl || null,
       user_id: user.id,
       organization_id: profile.organization_id,
     })
@@ -422,6 +433,11 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
   if (updates.wasteFactor !== undefined) updateData.waste_factor = updates.wasteFactor
   if (updates.markupPercent !== undefined) updateData.markup_percent = updates.markupPercent
   if (updates.notes !== undefined) updateData.notes = updates.notes
+  if ((updates as any).estimateStatus !== undefined) updateData.estimate_status = (updates as any).estimateStatus
+  if ((updates as any).quoteVendor !== undefined) updateData.quote_vendor = (updates as any).quoteVendor
+  if ((updates as any).quoteDate !== undefined) updateData.quote_date = (updates as any).quoteDate
+  if ((updates as any).quoteReference !== undefined) updateData.quote_reference = (updates as any).quoteReference
+  if ((updates as any).quoteFileUrl !== undefined) updateData.quote_file_url = (updates as any).quoteFileUrl
   updateData.total_cost = totalCost
 
   const { data, error } = await supabase
@@ -1181,6 +1197,140 @@ export async function deleteItemTemplateFromDB(id: string): Promise<boolean> {
   }
 
   return true
+}
+
+// ============================================================================
+// QUOTE DOCUMENT UPLOAD
+// ============================================================================
+
+/**
+ * Upload a quote PDF document to Supabase Storage
+ * Files are organized by organization/project/filename
+ */
+export async function uploadQuotePDF(
+  file: File,
+  projectId: string,
+  tradeId: string
+): Promise<string | null> {
+  if (!isOnlineMode()) {
+    console.warn('Cannot upload files in offline mode')
+    return null
+  }
+
+  try {
+    // Get current user and their organization
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      console.error('User not authenticated')
+      return null
+    }
+
+    // Fetch user profile to get organization_id
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError || !profile) {
+      console.error('Error fetching user profile:', profileError)
+      return null
+    }
+
+    // Create a unique filename with timestamp
+    const timestamp = Date.now()
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${tradeId}-${timestamp}.${fileExt}`
+    const filePath = `${profile.organization_id}/${projectId}/${fileName}`
+
+    // Upload to storage
+    const { data, error } = await supabase.storage
+      .from('quote-documents')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      })
+
+    if (error) {
+      console.error('Error uploading quote document:', error)
+      return null
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('quote-documents')
+      .getPublicUrl(filePath)
+
+    return publicUrl
+  } catch (error) {
+    console.error('Error in uploadQuotePDF:', error)
+    return null
+  }
+}
+
+/**
+ * Delete a quote PDF document from Supabase Storage
+ */
+export async function deleteQuotePDF(fileUrl: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  try {
+    // Extract the file path from the URL
+    const urlParts = fileUrl.split('/quote-documents/')
+    if (urlParts.length < 2) {
+      console.error('Invalid file URL')
+      return false
+    }
+
+    const filePath = urlParts[1]
+
+    const { error } = await supabase.storage
+      .from('quote-documents')
+      .remove([filePath])
+
+    if (error) {
+      console.error('Error deleting quote document:', error)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in deleteQuotePDF:', error)
+    return false
+  }
+}
+
+/**
+ * Get a signed URL for viewing a quote PDF document
+ * Useful for private documents that require authentication
+ */
+export async function getQuotePDFSignedUrl(fileUrl: string, expiresIn: number = 3600): Promise<string | null> {
+  if (!isOnlineMode()) return null
+
+  try {
+    // Extract the file path from the URL
+    const urlParts = fileUrl.split('/quote-documents/')
+    if (urlParts.length < 2) {
+      console.error('Invalid file URL')
+      return null
+    }
+
+    const filePath = urlParts[1]
+
+    const { data, error } = await supabase.storage
+      .from('quote-documents')
+      .createSignedUrl(filePath, expiresIn)
+
+    if (error) {
+      console.error('Error creating signed URL:', error)
+      return null
+    }
+
+    return data.signedUrl
+  } catch (error) {
+    console.error('Error in getQuotePDFSignedUrl:', error)
+    return null
+  }
 }
 
 // ============================================================================

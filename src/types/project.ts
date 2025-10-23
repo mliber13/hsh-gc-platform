@@ -130,6 +130,11 @@ export type UnitType =
   | 'day'           // Days
   | 'load'          // Truck loads
 
+export type EstimateStatus =
+  | 'budget'        // Rough/placeholder estimate
+  | 'quoted'        // Real vendor quote received
+  | 'approved'      // Quote accepted/approved
+
 export interface Trade {
   id: string
   estimateId: string
@@ -168,6 +173,13 @@ export interface Trade {
   
   // Order/grouping
   sortOrder: number
+  
+  // Estimate status tracking
+  estimateStatus?: EstimateStatus  // Track if this is budget or real quote
+  quoteVendor?: string             // Vendor/subcontractor name for quoted items
+  quoteDate?: Date                 // Date the quote was received
+  quoteReference?: string          // Quote/proposal number
+  quoteFileUrl?: string            // URL to attached quote PDF
   
   // Notes
   notes?: string

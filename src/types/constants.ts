@@ -91,6 +91,33 @@ export const CATEGORY_GROUPS: Record<CategoryGroup, { label: string; icon: strin
 }
 
 // ----------------------------------------------------------------------------
+// Estimate Status
+// ----------------------------------------------------------------------------
+
+export type EstimateStatus = 'budget' | 'quoted' | 'approved'
+
+export const ESTIMATE_STATUS: Record<EstimateStatus, { label: string; icon: string; color: string; badgeClass: string }> = {
+  'budget': { 
+    label: 'Budget', 
+    icon: '📝', 
+    color: 'bg-gray-100', 
+    badgeClass: 'bg-gray-100 text-gray-700 border-gray-300' 
+  },
+  'quoted': { 
+    label: 'Quoted', 
+    icon: '💰', 
+    color: 'bg-blue-100', 
+    badgeClass: 'bg-blue-100 text-blue-700 border-blue-300' 
+  },
+  'approved': { 
+    label: 'Approved', 
+    icon: '✓', 
+    color: 'bg-green-100', 
+    badgeClass: 'bg-green-100 text-green-700 border-green-300' 
+  },
+}
+
+// ----------------------------------------------------------------------------
 // Category to Group Mapping
 // ----------------------------------------------------------------------------
 
@@ -514,6 +541,14 @@ export const getCategoryGroup = (category: TradeCategory): CategoryGroup => {
 
 export const getGroupLabel = (group: CategoryGroup): string => {
   return CATEGORY_GROUPS[group]?.label || group
+}
+
+export const getEstimateStatusLabel = (status: EstimateStatus): string => {
+  return ESTIMATE_STATUS[status]?.label || status
+}
+
+export const getEstimateStatusBadgeClass = (status: EstimateStatus): string => {
+  return ESTIMATE_STATUS[status]?.badgeClass || ''
 }
 
 export const getUnitLabel = (unit: UnitType): string => {
