@@ -537,12 +537,13 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         />
 
         {/* Trade Form Modal */}
-        {editingTrade && (
+        {editingTrade && projectData && (
           <TradeForm
             trade={editingTrade}
             onSave={handleSaveTrade}
             onCancel={handleCancelEdit}
             isAdding={isAddingTrade}
+            projectId={projectData.id}
           />
         )}
 
@@ -1363,6 +1364,11 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                                   <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getEstimateStatusBadgeClass(trade.estimateStatus || 'budget')}`}>
                                     {ESTIMATE_STATUS[trade.estimateStatus || 'budget']?.icon} {getEstimateStatusLabel(trade.estimateStatus || 'budget')}
                                   </span>
+                                  {trade.quoteFileUrl && (
+                                    <span className="text-blue-600" title="Quote PDF attached">
+                                      <FileText className="w-4 h-4" />
+                                    </span>
+                                  )}
                                 </div>
                               </td>
                               <td className="p-3 text-center border-b border-r-2 border-gray-300">{trade.quantity}</td>
@@ -1415,9 +1421,10 @@ interface TradeFormProps {
   onSave: (data: TradeFormData) => Promise<void>
   onCancel: () => void
   isAdding: boolean
+  projectId: string
 }
 
-function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
+function TradeForm({ trade, onSave, onCancel, isAdding, projectId }: TradeFormProps) {
   const [formData, setFormData] = useState<TradeFormData>(trade)
   // Initialize subcontractor entry mode based on existing data
   // If the item has material or labor rates, it was saved as a breakdown
@@ -1670,6 +1677,55 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
                     placeholder="Enter quote number"
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Quote PDF Upload */}
+            {(formData.estimateStatus === 'quoted' || formData.estimateStatus === 'approved') && (
+              <div>
+                <Label htmlFor="quoteFile">Quote PDF Document</Label>
+                <div className="space-y-2">
+                  <Input
+                    id="quoteFile"
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        try {
+                          // Import the upload function
+                          const { uploadQuotePDF } = await import('@/services/supabaseService')
+                          const fileUrl = await uploadQuotePDF(file, projectId, formData.id || 'temp')
+                          if (fileUrl) {
+                            setFormData(prev => ({ ...prev, quoteFileUrl: fileUrl }))
+                          } else {
+                            alert('Failed to upload file. Please try again.')
+                          }
+                        } catch (error) {
+                          console.error('Error uploading file:', error)
+                          alert('Error uploading file. Please try again.')
+                        }
+                      }
+                    }}
+                  />
+                  {formData.quoteFileUrl && (
+                    <div className="flex items-center gap-2 text-sm text-green-600">
+                      <FileText className="w-4 h-4" />
+                      <span>Quote document attached</span>
+                      <a 
+                        href={formData.quoteFileUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        View PDF
+                      </a>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Upload the actual quote PDF for reference (max 10MB)
+                </p>
               </div>
             )}
 
