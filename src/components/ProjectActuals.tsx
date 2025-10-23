@@ -100,7 +100,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   // Load trades for the estimate
   useEffect(() => {
     if (project) {
+      console.log('ProjectActuals loading trades for project:', project)
+      console.log('Project estimate ID:', project.estimate?.id)
       const loadedTrades = getTradesForEstimate(project.estimate.id)
+      console.log('Loaded trades:', loadedTrades)
       setTrades(loadedTrades)
       
       // Load change orders
@@ -291,6 +294,14 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     acc[group][trade.category].push(trade)
     return acc
   }, {} as Record<string, Record<string, Trade[]>>)
+
+  // Debug logging
+  console.log('ProjectActuals Debug:', {
+    tradesCount: trades.length,
+    trades: trades,
+    groupedTradesKeys: Object.keys(groupedTrades),
+    groupedTrades: groupedTrades
+  })
 
   // Handle print report
   const handlePrintReport = (type: 'actuals' | 'comparison', depth: ReportDepth) => {
