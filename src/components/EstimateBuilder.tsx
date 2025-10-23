@@ -22,6 +22,9 @@ import {
   UNIT_TYPES,
   DEFAULT_VALUES,
   PROJECT_TYPES,
+  ESTIMATE_STATUS,
+  getEstimateStatusLabel,
+  getEstimateStatusBadgeClass,
 } from '@/types'
 import {
   createProject,
@@ -93,6 +96,11 @@ interface EstimateBuilderProps {
 interface TradeFormData extends TradeInput {
   id?: string
   isEditing?: boolean
+  estimateStatus?: 'budget' | 'quoted' | 'approved'
+  quoteVendor?: string
+  quoteDate?: Date
+  quoteReference?: string
+  quoteFileUrl?: string
 }
 
 // ----------------------------------------------------------------------------
@@ -1349,7 +1357,14 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                           </tr>
                           {isCategoryExpanded && categoryTrades.map((trade) => (
                             <tr key={trade.id} className="hover:bg-gray-50">
-                              <td className="p-3 border-b pl-12 border-r-2 border-gray-300">{trade.name}</td>
+                              <td className="p-3 border-b pl-12 border-r-2 border-gray-300">
+                                <div className="flex items-center gap-2">
+                                  <span>{trade.name}</span>
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getEstimateStatusBadgeClass(trade.estimateStatus || 'budget')}`}>
+                                    {ESTIMATE_STATUS[trade.estimateStatus || 'budget']?.icon} {getEstimateStatusLabel(trade.estimateStatus || 'budget')}
+                                  </span>
+                                </div>
+                              </td>
                               <td className="p-3 text-center border-b border-r-2 border-gray-300">{trade.quantity}</td>
                               <td className="p-3 text-center border-b border-r-2 border-gray-300">{UNIT_TYPES[trade.unit]?.abbreviation || trade.unit}</td>
                               <td className="p-3 text-center border-b">{trade.materialRate ? formatCurrency(trade.materialRate) : '-'}</td>
@@ -1587,6 +1602,76 @@ function TradeForm({ trade, onSave, onCancel, isAdding }: TradeFormProps) {
                 </div>
               )}
             </div>
+
+            {/* Estimate Status Section */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="estimateStatus">Estimate Status</Label>
+                <Select 
+                  value={formData.estimateStatus || 'budget'} 
+                  onValueChange={(value) => setFormData(prev => ({ 
+                    ...prev, 
+                    estimateStatus: value as any,
+                    // Clear quote fields when switching to budget
+                    quoteVendor: value === 'budget' ? undefined : prev.quoteVendor,
+                    quoteDate: value === 'budget' ? undefined : prev.quoteDate,
+                    quoteReference: value === 'budget' ? undefined : prev.quoteReference,
+                    quoteFileUrl: value === 'budget' ? undefined : prev.quoteFileUrl,
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(ESTIMATE_STATUS).map(([key, value]) => (
+                      <SelectItem key={key} value={key}>
+                        {value.icon} {value.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Quote fields - only show when status is quoted or approved */}
+              {(formData.estimateStatus === 'quoted' || formData.estimateStatus === 'approved') && (
+                <div>
+                  <Label htmlFor="quoteVendor">Quote Vendor/Subcontractor</Label>
+                  <Input
+                    id="quoteVendor"
+                    value={formData.quoteVendor || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, quoteVendor: e.target.value }))}
+                    placeholder="Enter vendor name"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Additional quote fields */}
+            {(formData.estimateStatus === 'quoted' || formData.estimateStatus === 'approved') && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="quoteDate">Quote Date</Label>
+                  <Input
+                    id="quoteDate"
+                    type="date"
+                    value={formData.quoteDate ? formData.quoteDate.toISOString().split('T')[0] : ''}
+                    onChange={(e) => setFormData(prev => ({ 
+                      ...prev, 
+                      quoteDate: e.target.value ? new Date(e.target.value) : undefined 
+                    }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="quoteReference">Quote Reference/Number</Label>
+                  <Input
+                    id="quoteReference"
+                    value={formData.quoteReference || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, quoteReference: e.target.value }))}
+                    placeholder="Enter quote number"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Material fields - hide when subcontracted with lump sum */}
             {(!formData.isSubcontracted || subcontractorEntryMode === 'breakdown') && (
