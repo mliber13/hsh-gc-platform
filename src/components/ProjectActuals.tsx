@@ -85,6 +85,8 @@ interface ActualEntry {
 // ----------------------------------------------------------------------------
 
 export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
+  console.log('🚀 ProjectActuals component rendered with project:', project?.name)
+  
   const [trades, setTrades] = useState<Trade[]>([])
   const [actualEntries, setActualEntries] = useState<ActualEntry[]>([])
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
