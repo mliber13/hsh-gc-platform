@@ -23,6 +23,8 @@ import {
   deleteMaterialEntry,
   deleteSubcontractorEntry,
 } from '@/services'
+import { fetchTradesForEstimate } from '@/services/supabaseService'
+import { isOnlineMode } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -101,20 +103,33 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
   // Load trades for the estimate
   useEffect(() => {
-    if (project) {
-      console.log('ProjectActuals loading trades for project:', project)
-      console.log('Project estimate ID:', project.estimate?.id)
-      const loadedTrades = getTradesForEstimate(project.estimate.id)
-      console.log('Loaded trades:', loadedTrades)
-      setTrades(loadedTrades)
-      
-      // Load change orders
-      if (project.actuals?.changeOrders) {
-        setChangeOrders(project.actuals.changeOrders.filter(co => 
-          co.status === 'approved' || co.status === 'implemented'
-        ))
+    const loadTrades = async () => {
+      if (project) {
+        console.log('ProjectActuals loading trades for project:', project)
+        console.log('Project estimate ID:', project.estimate?.id)
+        
+        let loadedTrades: Trade[] = []
+        if (isOnlineMode()) {
+          console.log('Using Supabase to fetch trades')
+          loadedTrades = await fetchTradesForEstimate(project.estimate.id)
+        } else {
+          console.log('Using local storage to fetch trades')
+          loadedTrades = getTradesForEstimate(project.estimate.id)
+        }
+        
+        console.log('Loaded trades:', loadedTrades)
+        setTrades(loadedTrades)
+        
+        // Load change orders
+        if (project.actuals?.changeOrders) {
+          setChangeOrders(project.actuals.changeOrders.filter(co => 
+            co.status === 'approved' || co.status === 'implemented'
+          ))
+        }
       }
     }
+    
+    loadTrades()
   }, [project])
 
   // Load actual entries from project.actuals
