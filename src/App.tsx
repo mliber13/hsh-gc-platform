@@ -368,6 +368,7 @@ function App() {
       {currentView === 'forms' && selectedProject && (
         <ProjectForms
           projectId={selectedProject.id}
+          onBack={handleBackToProjectDetail}
         />
       )}
 

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select } from './ui/select';
+import { ArrowLeft, FileCheck, Plus, CheckCircle, Clock, Edit } from 'lucide-react';
 
 interface FormField {
   id: string;
@@ -39,9 +40,10 @@ interface ProjectForm {
 
 interface ProjectFormsProps {
   projectId: string;
+  onBack?: () => void;
 }
 
-export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId }) => {
+export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, onBack }) => {
   const [forms, setForms] = useState<ProjectForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedForm, setSelectedForm] = useState<ProjectForm | null>(null);
@@ -105,64 +107,193 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId }) => {
   };
 
   if (loading) {
-    return <div>Loading forms...</div>;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading forms...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Project Forms</h2>
-        <div className="flex gap-2">
-          <Button onClick={() => createNewForm('architect_verification')}>
-            + Architect Verification
-          </Button>
-          <Button onClick={() => createNewForm('closing_checklist')}>
-            + Closing Checklist
-          </Button>
-          <Button onClick={() => createNewForm('due_diligence')}>
-            + Due Diligence
-          </Button>
-          <Button onClick={() => createNewForm('selections')}>
-            + Selections
-          </Button>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center">
+              {onBack && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onBack}
+                  className="mr-4"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+              )}
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Project Forms</h1>
+                <p className="text-sm text-gray-500">Manage project documentation and checklists</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {forms.length === 0 ? (
-        <Card className="p-6 text-center">
-          <p className="text-gray-500 mb-4">No forms created yet for this project.</p>
-          <p className="text-sm text-gray-400">
-            Click one of the buttons above to create a new form.
-          </p>
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {forms.map((form) => (
-            <Card key={form.id} className="p-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-semibold">{form.form_name}</h3>
-                  <p className="text-sm text-gray-500">
-                    Status: <span className="capitalize">{form.status}</span>
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Updated: {new Date(form.updated_at).toLocaleDateString()}
-                  </p>
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Create Forms Section */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Create New Form</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-blue-200">
+              <button 
+                onClick={() => createNewForm('architect_verification')}
+                className="w-full text-left p-6"
+              >
+                <div className="flex items-center mb-3">
+                  <div className="bg-blue-100 rounded-lg p-3 mr-4">
+                    <FileCheck className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Architect Verification</h3>
+                    <p className="text-sm text-gray-500">Design verification checklist</p>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setSelectedForm(form)}
-                  >
-                    {form.status === 'draft' ? 'Continue' : 'View'}
-                  </Button>
+                <div className="flex items-center text-blue-600 text-sm">
+                  <Plus className="w-4 h-4 mr-1" />
+                  Create Form
                 </div>
-              </div>
+              </button>
             </Card>
-          ))}
+
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-green-200">
+              <button 
+                onClick={() => createNewForm('closing_checklist')}
+                className="w-full text-left p-6"
+              >
+                <div className="flex items-center mb-3">
+                  <div className="bg-green-100 rounded-lg p-3 mr-4">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Site Start Checklist</h3>
+                    <p className="text-sm text-gray-500">Pre-construction setup</p>
+                  </div>
+                </div>
+                <div className="flex items-center text-green-600 text-sm">
+                  <Plus className="w-4 h-4 mr-1" />
+                  Create Form
+                </div>
+              </button>
+            </Card>
+
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-orange-200">
+              <button 
+                onClick={() => createNewForm('due_diligence')}
+                className="w-full text-left p-6"
+              >
+                <div className="flex items-center mb-3">
+                  <div className="bg-orange-100 rounded-lg p-3 mr-4">
+                    <Clock className="w-6 h-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Due Diligence</h3>
+                    <p className="text-sm text-gray-500">Property analysis checklist</p>
+                  </div>
+                </div>
+                <div className="flex items-center text-orange-600 text-sm">
+                  <Plus className="w-4 h-4 mr-1" />
+                  Create Form
+                </div>
+              </button>
+            </Card>
+
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-200">
+              <button 
+                onClick={() => createNewForm('selections')}
+                className="w-full text-left p-6"
+              >
+                <div className="flex items-center mb-3">
+                  <div className="bg-purple-100 rounded-lg p-3 mr-4">
+                    <Edit className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Selections Sheet</h3>
+                    <p className="text-sm text-gray-500">Material and finish selections</p>
+                  </div>
+                </div>
+                <div className="flex items-center text-purple-600 text-sm">
+                  <Plus className="w-4 h-4 mr-1" />
+                  Create Form
+                </div>
+              </button>
+            </Card>
+          </div>
         </div>
-      )}
+
+        {/* Existing Forms Section */}
+        {forms.length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Existing Forms</h2>
+            <div className="grid gap-4">
+              {forms.map((form) => (
+                <Card key={form.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="bg-gray-100 rounded-lg p-3 mr-4">
+                          <FileCheck className="w-6 h-6 text-gray-600" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{form.form_name}</h3>
+                          <div className="flex items-center space-x-4 text-sm text-gray-500">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              form.status === 'completed' ? 'bg-green-100 text-green-800' :
+                              form.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {form.status === 'completed' ? 'Completed' :
+                               form.status === 'in_progress' ? 'In Progress' :
+                               'Draft'}
+                            </span>
+                            <span>Updated {new Date(form.updated_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setSelectedForm(form)}
+                        >
+                          {form.status === 'draft' ? 'Continue' : 'View'}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {forms.length === 0 && (
+          <Card className="text-center py-12">
+            <CardContent>
+              <FileCheck className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No forms created yet</h3>
+              <p className="text-gray-500 mb-6">
+                Create your first project form using one of the options above.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {selectedForm && (
         <DynamicForm 
@@ -204,77 +335,94 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, onClose, onSave }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold">{form.form_name}</h2>
-            <Button variant="outline" onClick={onClose}>
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">{form.form_name}</h2>
+              <p className="text-sm text-gray-500">Section {currentSection + 1} of {sections.length}</p>
+            </div>
+            <Button variant="ghost" onClick={onClose} className="text-gray-500 hover:text-gray-700">
+              <ArrowLeft className="w-4 h-4 mr-2" />
               Close
             </Button>
           </div>
+        </div>
 
-          {/* Section Navigation */}
-          {sections.length > 1 && (
-            <div className="flex gap-2 mb-6 overflow-x-auto">
+        {/* Section Navigation */}
+        {sections.length > 1 && (
+          <div className="bg-white border-b border-gray-200 px-6 py-3">
+            <div className="flex gap-2 overflow-x-auto">
               {sections.map((section, index) => (
                 <Button
                   key={section.id}
                   variant={index === currentSection ? "default" : "outline"}
                   size="sm"
                   onClick={() => setCurrentSection(index)}
+                  className="whitespace-nowrap"
                 >
                   {section.title}
                 </Button>
               ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Current Section */}
+        {/* Form Content */}
+        <div className="p-6 overflow-y-auto max-h-[60vh]">
           {currentSectionData && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">{currentSectionData.title}</h3>
-              <div className="grid gap-4">
-                {currentSectionData.fields.map((field) => (
-                  <FormField
-                    key={field.id}
-                    field={field}
-                    value={formData[field.id]}
-                    onChange={(value) => handleFieldChange(field.id, value)}
-                  />
-                ))}
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">{currentSectionData.title}</h3>
+                <div className="grid gap-6">
+                  {currentSectionData.fields.map((field) => (
+                    <FormField
+                      key={field.id}
+                      field={field}
+                      value={formData[field.id]}
+                      onChange={(value) => handleFieldChange(field.id, value)}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           )}
+        </div>
 
-          {/* Navigation */}
-          <div className="flex justify-between mt-6 pt-4 border-t">
+        {/* Footer Navigation */}
+        <div className="bg-gray-50 border-t border-gray-200 px-6 py-4">
+          <div className="flex justify-between items-center">
             <div>
               {currentSection > 0 && (
                 <Button 
                   variant="outline"
                   onClick={() => setCurrentSection(currentSection - 1)}
                 >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
                   Previous
                 </Button>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <Button variant="outline" onClick={handleSave}>
                 Save Draft
               </Button>
               {currentSection < sections.length - 1 ? (
                 <Button onClick={() => setCurrentSection(currentSection + 1)}>
                   Next
+                  <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
                 </Button>
               ) : (
-                <Button onClick={handleSave}>
+                <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700">
+                  <CheckCircle className="w-4 h-4 mr-2" />
                   Complete Form
                 </Button>
               )}
             </div>
           </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 };
@@ -296,6 +444,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
             required={field.required}
+            className="w-full"
           />
         );
 
@@ -307,6 +456,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
             onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
             placeholder={field.placeholder}
             required={field.required}
+            className="w-full"
           />
         );
 
@@ -317,6 +467,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             required={field.required}
+            className="w-full"
           />
         );
 
@@ -338,14 +489,17 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
 
       case 'checkbox':
         return (
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border">
             <input
               type="checkbox"
               checked={value || false}
               onChange={(e) => onChange(e.target.checked)}
-              className="rounded"
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
             />
-            <Label className="text-sm">{field.label}</Label>
+            <Label className="text-sm font-medium text-gray-700 cursor-pointer">
+              {field.label}
+              {field.required && <span className="text-red-500 ml-1">*</span>}
+            </Label>
           </div>
         );
 
@@ -356,6 +510,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
             required={field.required}
+            className="w-full"
           />
         );
     }
@@ -364,7 +519,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
   return (
     <div className="space-y-2">
       {field.type !== 'checkbox' && (
-        <Label className="text-sm font-medium">
+        <Label className="text-sm font-medium text-gray-700">
           {field.label}
           {field.required && <span className="text-red-500 ml-1">*</span>}
         </Label>
