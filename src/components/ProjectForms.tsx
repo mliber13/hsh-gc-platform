@@ -2333,17 +2333,14 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
                     {getCurrentSection()?.title}
                   </h3>
                   <div className="grid gap-6">
-                    {getCurrentSection()?.fields.map((field) => {
-                      console.log('Rendering field:', field.id, field.label, field.type);
-                      return (
-                        <FormField
-                          key={field.id}
-                          field={field}
-                          value={formData[field.id]}
-                          onChange={(value) => handleFieldChange(field.id, value)}
-                        />
-                      );
-                    })}
+                    {getCurrentSection()?.fields.map((field) => (
+                      <FormField
+                        key={field.id}
+                        field={field}
+                        value={formData[field.id]}
+                        onChange={(value) => handleFieldChange(field.id, value)}
+                      />
+                    ))}
                   </div>
                 </div>
               )}

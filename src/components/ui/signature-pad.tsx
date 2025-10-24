@@ -141,9 +141,11 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
       </div>
       
       <div className="flex items-center justify-between mt-3">
-        <div className="text-sm text-gray-600">
-          {hasSignature ? 'Signature captured' : 'Sign above'}
-        </div>
+        {showLabel && (
+          <div className="text-sm text-gray-600">
+            {hasSignature ? 'Signature captured' : 'Sign above'}
+          </div>
+        )}
         <div className="flex space-x-2">
           <Button
             type="button"
