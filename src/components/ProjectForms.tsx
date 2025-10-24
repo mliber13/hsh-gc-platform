@@ -2185,12 +2185,19 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
                     <div>
                       <span className="font-medium text-gray-700">Address:</span>
                       <span className="ml-2 text-gray-900">
-                        {typeof project.address === 'string' ? project.address : project.address?.street || 'N/A'}
+                        {typeof project.address === 'string' 
+                          ? project.address 
+                          : project.address?.street || 'N/A'
+                        }
+                        {project.city && `, ${project.city}`}
+                        {project.state && `, ${project.state}`}
                       </span>
                     </div>
                     <div>
                       <span className="font-medium text-gray-700">Plan:</span>
-                      <span className="ml-2 text-gray-900">{project.plan?.name || 'N/A'}</span>
+                      <span className="ml-2 text-gray-900">
+                        {project.metadata?.planId || 'N/A'}
+                      </span>
                     </div>
                   </div>
                 </div>
