@@ -6,6 +6,7 @@ import { Label } from './ui/label';
 import { Select } from './ui/select';
 import { ArrowLeft, FileCheck, Plus, CheckCircle, Clock, Edit } from 'lucide-react';
 import hshLogo from '/HSH Contractor Logo - Color.png';
+import { supabase } from '../lib/supabase';
 
 interface FormField {
   id: string;
@@ -77,18 +78,32 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
   const createNewForm = async (formType: string) => {
     console.log('Creating new form:', formType);
     try {
-      // TODO: Implement API call to create new form
-      // const response = await supabase
-      //   .from('project_forms')
-      //   .insert({
-      //     project_id: projectId,
-      //     form_type: formType,
-      //     form_name: getFormDisplayName(formType),
-      //     form_schema: getFormTemplate(formType),
-      //     form_data: {},
-      //     status: 'draft'
-      //   });
-      // loadProjectForms();
+      const { data, error } = await supabase
+        .from('project_forms')
+        .insert({
+          project_id: projectId,
+          form_type: formType,
+          form_name: getFormDisplayName(formType),
+          form_schema: getFormTemplate(formType),
+          form_data: {},
+          status: 'draft'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating form:', error);
+        return;
+      }
+
+      console.log('Form created successfully:', data);
+      
+      // Add the new form to the local state
+      setForms(prev => [...prev, data]);
+      
+      // Open the form for editing
+      setSelectedForm(data);
+      
     } catch (error) {
       console.error('Error creating form:', error);
     }
@@ -106,10 +121,37 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
 
   const getFormTemplate = (formType: string) => {
     // This would typically come from the form_templates table
-    // For now, return a basic structure
+    // For now, return a basic structure with some sample fields
     return {
-      sections: [],
-      sign_offs: {}
+      title: getFormDisplayName(formType),
+      sections: [
+        {
+          id: 'basic_info',
+          title: 'Basic Information',
+          fields: [
+            {
+              id: 'project_name',
+              type: 'text',
+              label: 'Project Name',
+              required: true,
+              placeholder: 'Enter project name'
+            },
+            {
+              id: 'date',
+              type: 'date',
+              label: 'Date',
+              required: true
+            },
+            {
+              id: 'notes',
+              type: 'textarea',
+              label: 'Notes',
+              required: false,
+              placeholder: 'Additional notes...'
+            }
+          ]
+        }
+      ]
     };
   };
 
