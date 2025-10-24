@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select } from './ui/select';
 import { ArrowLeft, FileCheck, Plus, CheckCircle, Clock, Edit } from 'lucide-react';
+import hshLogo from '/HSH Contractor Logo - Color.png';
 
 interface FormField {
   id: string;
@@ -40,10 +41,15 @@ interface ProjectForm {
 
 interface ProjectFormsProps {
   projectId: string;
+  project?: {
+    name: string;
+    project_number?: string;
+    status: string;
+  };
   onBack?: () => void;
 }
 
-export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, onBack }) => {
+export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, onBack }) => {
   const [forms, setForms] = useState<ProjectForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedForm, setSelectedForm] = useState<ProjectForm | null>(null);
@@ -120,24 +126,59 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, onBack })
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-20">
             <div className="flex items-center">
               {onBack && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={onBack}
-                  className="mr-4"
+                  className="mr-6 text-gray-600 hover:text-gray-900"
                 >
                   <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back
+                  Back to Project
                 </Button>
               )}
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Project Forms</h1>
-                <p className="text-sm text-gray-500">Manage project documentation and checklists</p>
+              <div className="flex items-center">
+                <img src={hshLogo} alt="HSH Contractor" className="h-10 w-auto mr-4" />
+                  <div className="flex items-center space-x-3 mb-1">
+                    <h1 className="text-2xl font-bold text-gray-900">
+                      {project?.name || 'Project Forms'}
+                    </h1>
+                    {project?.project_number && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        #{project.project_number}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <p className="text-sm text-gray-500">Project Forms & Documentation</p>
+                    {project?.status && (
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        project.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        project.status === 'in-progress' ? 'bg-yellow-100 text-yellow-800' :
+                        project.status === 'planning' ? 'bg-blue-100 text-blue-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {project.status.replace('-', ' ')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="text-right">
+                <p className="text-sm text-gray-500">Forms Created</p>
+                <p className="text-2xl font-bold text-gray-900">{forms.length}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-500">Completed</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {forms.filter(f => f.status === 'completed' || f.status === 'approved').length}
+                </p>
               </div>
             </div>
           </div>
