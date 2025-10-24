@@ -2447,6 +2447,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
               width={400}
               height={150}
               className="w-full"
+              showLabel={false}
             />
           </div>
         );

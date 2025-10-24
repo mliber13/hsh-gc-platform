@@ -9,6 +9,7 @@ interface SignaturePadProps {
   height?: number;
   className?: string;
   disabled?: boolean;
+  showLabel?: boolean;
 }
 
 export const SignaturePad: React.FC<SignaturePadProps> = ({
@@ -17,7 +18,8 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
   width = 400,
   height = 200,
   className = '',
-  disabled = false
+  disabled = false,
+  showLabel = true
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
