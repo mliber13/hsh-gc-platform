@@ -296,7 +296,6 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
             required={field.required}
-            multiline={field.type === 'textarea'}
           />
         );
 
