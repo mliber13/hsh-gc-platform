@@ -7,10 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ArrowLeft, FileCheck, Plus, CheckCircle, Clock, Edit, X, Trash2, ChevronRight } from 'lucide-react';
 import hshLogo from '/HSH Contractor Logo - Color.png';
 import { supabase } from '../lib/supabase';
+import { SignaturePad } from './ui/signature-pad';
 
 interface FormField {
   id: string;
-  type: 'text' | 'number' | 'date' | 'select' | 'checkbox' | 'textarea';
+  type: 'text' | 'number' | 'date' | 'select' | 'checkbox' | 'textarea' | 'signature';
   label: string;
   required?: boolean;
   options?: string[];
@@ -665,10 +666,9 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                 },
                 {
                   id: 'project_manager_verification_signature',
-                  type: 'text',
+                  type: 'signature',
                   label: 'Project Manager Verification - Signature',
-                  required: true,
-                  placeholder: 'Enter signature'
+                  required: true
                 },
                 {
                   id: 'project_manager_verification_date',
@@ -685,10 +685,9 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                 },
                 {
                   id: 'architect_engineer_verification_signature',
-                  type: 'text',
+                  type: 'signature',
                   label: 'Architect / Engineer Verification - Signature',
-                  required: true,
-                  placeholder: 'Enter signature'
+                  required: true
                 },
                 {
                   id: 'architect_engineer_verification_date',
@@ -705,10 +704,9 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                 },
                 {
                   id: 'owner_executive_approval_signature',
-                  type: 'text',
+                  type: 'signature',
                   label: 'Owner / Executive Approval - Signature',
-                  required: true,
-                  placeholder: 'Enter signature'
+                  required: true
                 },
                 {
                   id: 'owner_executive_approval_date',
@@ -1230,10 +1228,9 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                 },
                 {
                   id: 'due_diligence_conducted_by_signature',
-                  type: 'text',
+                  type: 'signature',
                   label: 'Due Diligence Conducted By (Project Manager) - Signature',
-                  required: true,
-                  placeholder: 'Enter signature'
+                  required: true
                 },
                 {
                   id: 'due_diligence_conducted_by_date',
@@ -1250,10 +1247,9 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                 },
                 {
                   id: 'owner_executive_approval_signature',
-                  type: 'text',
+                  type: 'signature',
                   label: 'Owner / Executive Approval - Signature',
-                  required: true,
-                  placeholder: 'Enter signature'
+                  required: true
                 },
                 {
                   id: 'owner_executive_approval_date',
@@ -1826,10 +1822,9 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                 },
                 {
                   id: 'project_manager_verification_signature',
-                  type: 'text',
+                  type: 'signature',
                   label: 'Project Manager Verification - Signature',
-                  required: true,
-                  placeholder: 'Enter signature'
+                  required: true
                 },
                 {
                   id: 'project_manager_verification_date',
@@ -2437,6 +2432,23 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
               {field.label}
               {field.required && <span className="text-red-500 ml-1">*</span>}
             </Label>
+          </div>
+        );
+
+      case 'signature':
+        return (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">
+              {field.label}
+              {field.required && <span className="text-red-500 ml-1">*</span>}
+            </Label>
+            <SignaturePad
+              value={value || ''}
+              onChange={onChange}
+              width={400}
+              height={150}
+              className="w-full"
+            />
           </div>
         );
 
