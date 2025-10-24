@@ -181,27 +181,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
               title: 'Project Information',
               fields: [
                 {
-                  id: 'project_name',
-                  type: 'text',
-                  label: 'Project Name',
-                  required: true,
-                  placeholder: 'Enter project name'
-                },
-                {
-                  id: 'lot_number_address',
-                  type: 'text',
-                  label: 'Lot Number / Address',
-                  required: true,
-                  placeholder: 'Enter lot number and address'
-                },
-                {
-                  id: 'model_plan_name',
-                  type: 'text',
-                  label: 'Model / Plan Name',
-                  required: true,
-                  placeholder: 'Enter model/plan name'
-                },
-                {
                   id: 'architect_engineer',
                   type: 'text',
                   label: 'Architect / Engineer',
@@ -751,20 +730,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
               title: 'Project Information',
               fields: [
                 {
-                  id: 'property_address',
-                  type: 'text',
-                  label: 'Property Address',
-                  required: true,
-                  placeholder: 'Enter property address'
-                },
-                {
-                  id: 'owner_project',
-                  type: 'text',
-                  label: 'Owner / Project',
-                  required: true,
-                  placeholder: 'Enter owner/project name'
-                },
-                {
                   id: 'date',
                   type: 'date',
                   label: 'Date',
@@ -1014,20 +979,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
               id: 'project_info',
               title: 'Project Information',
               fields: [
-                {
-                  id: 'project_name',
-                  type: 'text',
-                  label: 'Project Name',
-                  required: true,
-                  placeholder: 'Enter project name'
-                },
-                {
-                  id: 'property_address',
-                  type: 'text',
-                  label: 'Property Address',
-                  required: true,
-                  placeholder: 'Enter property address'
-                },
                 {
                   id: 'acquisition_type',
                   type: 'select',
@@ -1323,27 +1274,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
               id: 'project_info',
               title: 'Project Information',
               fields: [
-                {
-                  id: 'project_name',
-                  type: 'text',
-                  label: 'Project Name',
-                  required: true,
-                  placeholder: 'Enter project name'
-                },
-                {
-                  id: 'lot_address',
-                  type: 'text',
-                  label: 'Lot / Address',
-                  required: true,
-                  placeholder: 'Enter lot/address'
-                },
-                {
-                  id: 'model_plan',
-                  type: 'text',
-                  label: 'Model / Plan',
-                  required: true,
-                  placeholder: 'Enter model/plan'
-                },
                 {
                   id: 'owner_buyer',
                   type: 'text',
@@ -2196,6 +2126,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
       {selectedForm && (
         <DynamicForm 
           form={selectedForm}
+          project={project}
           onClose={() => setSelectedForm(null)}
           onSave={(formData) => {
             // TODO: Implement save functionality
@@ -2210,12 +2141,13 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
 
 interface DynamicFormProps {
   form: ProjectForm;
+  project?: any;
   onClose: () => void;
   onSave: (formData: Record<string, any>) => void;
   onDelete: (formId: string) => void;
 }
 
-const DynamicForm: React.FC<DynamicFormProps> = ({ form, onClose, onSave, onDelete }) => {
+const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSave, onDelete }) => {
   const [formData, setFormData] = useState<Record<string, any>>(form.form_data);
   const [currentSection, setCurrentSection] = useState(0);
 
@@ -2242,6 +2174,27 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, onClose, onSave, onDele
             <div>
               <h2 className="text-xl font-bold text-gray-900">{form.form_name}</h2>
               <p className="text-sm text-gray-500">Section {currentSection + 1} of {sections.length}</p>
+              {/* Project Information Header */}
+              {project && (
+                <div className="mt-3 p-3 bg-white rounded-lg border">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-700">Project:</span>
+                      <span className="ml-2 text-gray-900">{project.name || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Address:</span>
+                      <span className="ml-2 text-gray-900">
+                        {typeof project.address === 'string' ? project.address : project.address?.street || 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Plan:</span>
+                      <span className="ml-2 text-gray-900">{project.plan?.name || 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <Button variant="ghost" onClick={onClose} className="text-gray-500 hover:text-gray-700">
               <ArrowLeft className="w-4 h-4 mr-2" />
