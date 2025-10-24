@@ -121,39 +121,393 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
   };
 
   const getFormTemplate = (formType: string) => {
-    // This would typically come from the form_templates table
-    // For now, return a basic structure with some sample fields
-    return {
-      title: getFormDisplayName(formType),
-      sections: [
-        {
-          id: 'basic_info',
-          title: 'Basic Information',
-          fields: [
+    // Return the actual HSH form content based on form type
+    switch (formType) {
+      case 'architect_verification':
+        return {
+          title: 'Architect Engineer Verification',
+          sections: [
             {
-              id: 'project_name',
-              type: 'text',
-              label: 'Project Name',
-              required: true,
-              placeholder: 'Enter project name'
+              id: 'project_info',
+              title: 'Project Information',
+              fields: [
+                {
+                  id: 'date',
+                  type: 'date',
+                  label: 'Date',
+                  required: true
+                },
+                {
+                  id: 'architect_name',
+                  type: 'text',
+                  label: 'Architect/Engineer Name',
+                  required: true,
+                  placeholder: 'Enter architect/engineer name'
+                },
+                {
+                  id: 'firm_name',
+                  type: 'text',
+                  label: 'Firm Name',
+                  required: true,
+                  placeholder: 'Enter firm name'
+                }
+              ]
             },
             {
-              id: 'date',
-              type: 'date',
-              label: 'Date',
-              required: true
+              id: 'foundation',
+              title: 'Foundation',
+              fields: [
+                {
+                  id: 'foundation_type',
+                  type: 'select',
+                  label: 'Foundation Type',
+                  required: true,
+                  options: ['Basement', 'Crawl Space', 'Slab on Grade', 'Other']
+                },
+                {
+                  id: 'foundation_verified',
+                  type: 'checkbox',
+                  label: 'Foundation details verified and approved',
+                  required: true
+                }
+              ]
             },
             {
-              id: 'notes',
-              type: 'textarea',
-              label: 'Notes',
-              required: false,
-              placeholder: 'Additional notes...'
+              id: 'exterior',
+              title: 'Exterior',
+              fields: [
+                {
+                  id: 'siding_type',
+                  type: 'text',
+                  label: 'Siding Type',
+                  required: false,
+                  placeholder: 'Enter siding type'
+                },
+                {
+                  id: 'roofing_type',
+                  type: 'text',
+                  label: 'Roofing Type',
+                  required: false,
+                  placeholder: 'Enter roofing type'
+                },
+                {
+                  id: 'exterior_verified',
+                  type: 'checkbox',
+                  label: 'Exterior details verified and approved',
+                  required: true
+                }
+              ]
+            },
+            {
+              id: 'sign_off',
+              title: 'Sign Off',
+              fields: [
+                {
+                  id: 'architect_signature',
+                  type: 'text',
+                  label: 'Architect/Engineer Signature',
+                  required: true,
+                  placeholder: 'Enter signature'
+                },
+                {
+                  id: 'signature_date',
+                  type: 'date',
+                  label: 'Signature Date',
+                  required: true
+                }
+              ]
             }
           ]
-        }
-      ]
-    };
+        };
+
+      case 'closing_checklist':
+        return {
+          title: 'Closing Site Start Checklist',
+          sections: [
+            {
+              id: 'utilities',
+              title: 'Utilities Setup',
+              fields: [
+                {
+                  id: 'electric_connected',
+                  type: 'checkbox',
+                  label: 'Electric service connected and meter installed',
+                  required: true
+                },
+                {
+                  id: 'water_connected',
+                  type: 'checkbox',
+                  label: 'Water service connected and meter installed',
+                  required: true
+                },
+                {
+                  id: 'sewer_connected',
+                  type: 'checkbox',
+                  label: 'Sewer service connected',
+                  required: true
+                },
+                {
+                  id: 'gas_connected',
+                  type: 'checkbox',
+                  label: 'Gas service connected (if applicable)',
+                  required: false
+                }
+              ]
+            },
+            {
+              id: 'site_readiness',
+              title: 'Site Readiness',
+              fields: [
+                {
+                  id: 'site_cleared',
+                  type: 'checkbox',
+                  label: 'Site cleared and ready for construction',
+                  required: true
+                },
+                {
+                  id: 'access_road',
+                  type: 'checkbox',
+                  label: 'Access road established',
+                  required: true
+                },
+                {
+                  id: 'temporary_facilities',
+                  type: 'checkbox',
+                  label: 'Temporary facilities (portable toilet, storage) in place',
+                  required: true
+                }
+              ]
+            },
+            {
+              id: 'documentation',
+              title: 'Documentation',
+              fields: [
+                {
+                  id: 'permits_obtained',
+                  type: 'checkbox',
+                  label: 'All required permits obtained',
+                  required: true
+                },
+                {
+                  id: 'insurance_verified',
+                  type: 'checkbox',
+                  label: 'Insurance coverage verified',
+                  required: true
+                },
+                {
+                  id: 'contracts_signed',
+                  type: 'checkbox',
+                  label: 'All contracts signed and executed',
+                  required: true
+                }
+              ]
+            }
+          ]
+        };
+
+      case 'due_diligence':
+        return {
+          title: 'Due Diligence Checklist',
+          sections: [
+            {
+              id: 'property_verification',
+              title: 'Property Verification',
+              fields: [
+                {
+                  id: 'property_address',
+                  type: 'text',
+                  label: 'Property Address',
+                  required: true,
+                  placeholder: 'Enter property address'
+                },
+                {
+                  id: 'legal_description',
+                  type: 'textarea',
+                  label: 'Legal Description',
+                  required: true,
+                  placeholder: 'Enter legal description'
+                },
+                {
+                  id: 'property_survey',
+                  type: 'checkbox',
+                  label: 'Property survey completed and reviewed',
+                  required: true
+                },
+                {
+                  id: 'title_search',
+                  type: 'checkbox',
+                  label: 'Title search completed',
+                  required: true
+                }
+              ]
+            },
+            {
+              id: 'financial_review',
+              title: 'Financial Review',
+              fields: [
+                {
+                  id: 'purchase_price',
+                  type: 'number',
+                  label: 'Purchase Price',
+                  required: true,
+                  placeholder: 'Enter purchase price'
+                },
+                {
+                  id: 'financing_approved',
+                  type: 'checkbox',
+                  label: 'Financing approved and committed',
+                  required: true
+                },
+                {
+                  id: 'closing_costs',
+                  type: 'number',
+                  label: 'Estimated Closing Costs',
+                  required: false,
+                  placeholder: 'Enter estimated closing costs'
+                }
+              ]
+            },
+            {
+              id: 'environmental',
+              title: 'Environmental Conditions',
+              fields: [
+                {
+                  id: 'environmental_assessment',
+                  type: 'checkbox',
+                  label: 'Environmental assessment completed',
+                  required: true
+                },
+                {
+                  id: 'soil_testing',
+                  type: 'checkbox',
+                  label: 'Soil testing completed',
+                  required: true
+                },
+                {
+                  id: 'wetland_delineation',
+                  type: 'checkbox',
+                  label: 'Wetland delineation completed (if applicable)',
+                  required: false
+                }
+              ]
+            }
+          ]
+        };
+
+      case 'selections':
+        return {
+          title: 'Selection Sheet & Checklist',
+          sections: [
+            {
+              id: 'exterior_selections',
+              title: 'Exterior Selections',
+              fields: [
+                {
+                  id: 'siding_color',
+                  type: 'text',
+                  label: 'Siding Color',
+                  required: false,
+                  placeholder: 'Enter siding color'
+                },
+                {
+                  id: 'trim_color',
+                  type: 'text',
+                  label: 'Trim Color',
+                  required: false,
+                  placeholder: 'Enter trim color'
+                },
+                {
+                  id: 'door_color',
+                  type: 'text',
+                  label: 'Door Color',
+                  required: false,
+                  placeholder: 'Enter door color'
+                }
+              ]
+            },
+            {
+              id: 'interior_paint',
+              title: 'Interior Paint',
+              fields: [
+                {
+                  id: 'living_room_paint',
+                  type: 'text',
+                  label: 'Living Room Paint',
+                  required: false,
+                  placeholder: 'Enter living room paint color'
+                },
+                {
+                  id: 'kitchen_paint',
+                  type: 'text',
+                  label: 'Kitchen Paint',
+                  required: false,
+                  placeholder: 'Enter kitchen paint color'
+                },
+                {
+                  id: 'bedroom_paint',
+                  type: 'text',
+                  label: 'Bedroom Paint',
+                  required: false,
+                  placeholder: 'Enter bedroom paint color'
+                }
+              ]
+            },
+            {
+              id: 'flooring',
+              title: 'Flooring',
+              fields: [
+                {
+                  id: 'main_flooring',
+                  type: 'text',
+                  label: 'Main Flooring Type',
+                  required: false,
+                  placeholder: 'Enter main flooring type'
+                },
+                {
+                  id: 'bedroom_flooring',
+                  type: 'text',
+                  label: 'Bedroom Flooring',
+                  required: false,
+                  placeholder: 'Enter bedroom flooring'
+                },
+                {
+                  id: 'bathroom_flooring',
+                  type: 'text',
+                  label: 'Bathroom Flooring',
+                  required: false,
+                  placeholder: 'Enter bathroom flooring'
+                }
+              ]
+            }
+          ]
+        };
+
+      default:
+        return {
+          title: 'Basic Form',
+          sections: [
+            {
+              id: 'basic_info',
+              title: 'Basic Information',
+              fields: [
+                {
+                  id: 'date',
+                  type: 'date',
+                  label: 'Date',
+                  required: true
+                },
+                {
+                  id: 'notes',
+                  type: 'textarea',
+                  label: 'Notes',
+                  required: false,
+                  placeholder: 'Additional notes...'
+                }
+              ]
+            }
+          ]
+        };
+    }
   };
 
   if (loading) {
