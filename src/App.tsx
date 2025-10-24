@@ -368,11 +368,7 @@ function App() {
       {currentView === 'forms' && selectedProject && (
         <ProjectForms
           projectId={selectedProject.id}
-          project={{
-            name: selectedProject.name,
-            project_number: selectedProject.projectNumber,
-            status: selectedProject.status
-          }}
+          project={selectedProject}
           onBack={handleBackToProjectDetail}
         />
       )}
