@@ -143,6 +143,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
               )}
               <div className="flex items-center">
                 <img src={hshLogo} alt="HSH Contractor" className="h-10 w-auto mr-4" />
+                <div>
                   <div className="flex items-center space-x-3 mb-1">
                     <h1 className="text-2xl font-bold text-gray-900">
                       {project?.name || 'Project Forms'}
