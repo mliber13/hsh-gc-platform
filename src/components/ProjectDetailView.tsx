@@ -108,6 +108,7 @@ export function ProjectDetailView({
           return
         }
         
+        console.log('Forms count for project:', project.id, 'is:', data?.length || 0)
         setFormsCount(data?.length || 0)
       } catch (error) {
         console.error('Error loading forms count:', error)
@@ -118,6 +119,32 @@ export function ProjectDetailView({
       loadFormsCount()
     }
   }, [project])
+
+  // Reload forms count when component becomes visible (navigation back)
+  useEffect(() => {
+    const loadFormsCount = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('project_forms')
+          .select('id')
+          .eq('project_id', project.id)
+        
+        if (error) {
+          console.error('Error loading forms count:', error)
+          return
+        }
+        
+        console.log('Reloaded forms count for project:', project.id, 'is:', data?.length || 0)
+        setFormsCount(data?.length || 0)
+      } catch (error) {
+        console.error('Error loading forms count:', error)
+      }
+    }
+    
+    if (project) {
+      loadFormsCount()
+    }
+  }, [])
 
   // Load actual costs from project actuals
   useEffect(() => {

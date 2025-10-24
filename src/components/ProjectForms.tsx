@@ -56,18 +56,36 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
   const [selectedForm, setSelectedForm] = useState<ProjectForm | null>(null);
 
   useEffect(() => {
-    loadProjectForms();
+    if (projectId) {
+      loadProjectForms();
+    }
   }, [projectId]);
+
+  // Reload forms when component mounts
+  useEffect(() => {
+    if (projectId) {
+      loadProjectForms();
+    }
+  }, []);
 
   const loadProjectForms = async () => {
     try {
       setLoading(true);
-      // TODO: Implement API call to load forms for this project
-      // const response = await supabase
-      //   .from('project_forms')
-      //   .select('*')
-      //   .eq('project_id', projectId);
-      // setForms(response.data || []);
+      console.log('Loading forms for project:', projectId);
+      
+      const { data, error } = await supabase
+        .from('project_forms')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error loading forms:', error);
+        return;
+      }
+      
+      console.log('Loaded forms:', data);
+      setForms(data || []);
     } catch (error) {
       console.error('Error loading forms:', error);
     } finally {
@@ -99,8 +117,8 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
 
       console.log('Form created successfully:', data);
       
-      // Add the new form to the local state
-      setForms(prev => [...prev, data]);
+      // Reload forms to get the latest data
+      await loadProjectForms();
       
       // Open the form for editing
       setSelectedForm(data);
@@ -128,8 +146,8 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
 
       console.log('Form deleted successfully');
       
-      // Remove the form from local state
-      setForms(prev => prev.filter(form => form.id !== formId));
+      // Reload forms to get the latest data
+      await loadProjectForms();
       
       // Close the form if it's currently selected
       if (selectedForm?.id === formId) {
