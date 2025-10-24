@@ -156,100 +156,567 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
     switch (formType) {
       case 'architect_verification':
         return {
-          title: 'Architect Engineer Verification',
+          title: 'Architect Engineer Design Verification Sheet',
           sections: [
             {
               id: 'project_info',
               title: 'Project Information',
               fields: [
                 {
-                  id: 'date',
-                  type: 'date',
-                  label: 'Date',
-                  required: true
+                  id: 'project_name',
+                  type: 'text',
+                  label: 'Project Name',
+                  required: true,
+                  placeholder: 'Enter project name'
                 },
                 {
-                  id: 'architect_name',
+                  id: 'lot_number_address',
                   type: 'text',
-                  label: 'Architect/Engineer Name',
+                  label: 'Lot Number / Address',
+                  required: true,
+                  placeholder: 'Enter lot number and address'
+                },
+                {
+                  id: 'model_plan_name',
+                  type: 'text',
+                  label: 'Model / Plan Name',
+                  required: true,
+                  placeholder: 'Enter model/plan name'
+                },
+                {
+                  id: 'architect_engineer',
+                  type: 'text',
+                  label: 'Architect / Engineer',
                   required: true,
                   placeholder: 'Enter architect/engineer name'
                 },
                 {
-                  id: 'firm_name',
-                  type: 'text',
-                  label: 'Firm Name',
-                  required: true,
-                  placeholder: 'Enter firm name'
+                  id: 'date',
+                  type: 'date',
+                  label: 'Date',
+                  required: true
                 }
               ]
             },
             {
-              id: 'foundation',
-              title: 'Foundation',
+              id: 'foundation_structure',
+              title: 'Foundation & Structure',
               fields: [
                 {
                   id: 'foundation_type',
                   type: 'select',
                   label: 'Foundation Type',
                   required: true,
-                  options: ['Basement', 'Crawl Space', 'Slab on Grade', 'Other']
+                  options: ['Full Basement', 'Crawl Space', 'Slab-on-Grade']
                 },
                 {
-                  id: 'foundation_verified',
-                  type: 'checkbox',
-                  label: 'Foundation details verified and approved',
-                  required: true
+                  id: 'foundation_walls',
+                  type: 'select',
+                  label: 'Foundation Walls',
+                  required: true,
+                  options: ['Poured Concrete', 'Block', 'ICF']
+                },
+                {
+                  id: 'basement_height',
+                  type: 'number',
+                  label: 'Basement Height (ft)',
+                  required: false,
+                  placeholder: 'Enter height in feet'
+                },
+                {
+                  id: 'floor_system',
+                  type: 'select',
+                  label: 'Floor System',
+                  required: true,
+                  options: ['Engineered Joists', 'Dimensional Lumber', 'Concrete Slab']
+                },
+                {
+                  id: 'framing_type',
+                  type: 'select',
+                  label: 'Framing Type',
+                  required: true,
+                  options: ['Wood', 'Metal Stud']
+                },
+                {
+                  id: 'exterior_walls',
+                  type: 'select',
+                  label: 'Exterior Walls',
+                  required: true,
+                  options: ['2x4', '2x6']
+                },
+                {
+                  id: 'sheathing',
+                  type: 'select',
+                  label: 'Sheathing',
+                  required: true,
+                  options: ['OSB', 'Plywood', 'Zip System']
+                },
+                {
+                  id: 'roof_framing',
+                  type: 'select',
+                  label: 'Roof Framing',
+                  required: true,
+                  options: ['Trusses', 'Rafters']
+                },
+                {
+                  id: 'roof_pitch',
+                  type: 'text',
+                  label: 'Roof Pitch',
+                  required: false,
+                  placeholder: 'e.g., 6/12'
+                },
+                {
+                  id: 'attic_type',
+                  type: 'select',
+                  label: 'Attic Type',
+                  required: true,
+                  options: ['Vented', 'Conditioned']
                 }
               ]
             },
             {
-              id: 'exterior',
-              title: 'Exterior',
+              id: 'exterior_design',
+              title: 'Exterior Design',
               fields: [
                 {
                   id: 'siding_type',
-                  type: 'text',
+                  type: 'select',
                   label: 'Siding Type',
-                  required: false,
-                  placeholder: 'Enter siding type'
+                  required: true,
+                  options: ['Vinyl', 'Cement Board', 'Brick', 'Metal', 'Other']
                 },
                 {
-                  id: 'roofing_type',
+                  id: 'siding_other',
                   type: 'text',
-                  label: 'Roofing Type',
+                  label: 'Other Siding Type',
                   required: false,
-                  placeholder: 'Enter roofing type'
+                  placeholder: 'Specify other siding type'
                 },
                 {
-                  id: 'exterior_verified',
+                  id: 'stone_masonry',
                   type: 'checkbox',
-                  label: 'Exterior details verified and approved',
+                  label: 'Stone or Masonry',
+                  required: false
+                },
+                {
+                  id: 'stone_location',
+                  type: 'text',
+                  label: 'Stone/Masonry Location(s)',
+                  required: false,
+                  placeholder: 'Enter locations'
+                },
+                {
+                  id: 'roofing_material',
+                  type: 'select',
+                  label: 'Roofing Material',
+                  required: true,
+                  options: ['Asphalt', 'Metal', 'Tile', 'Other']
+                },
+                {
+                  id: 'roofing_other',
+                  type: 'text',
+                  label: 'Other Roofing Material',
+                  required: false,
+                  placeholder: 'Specify other roofing material'
+                },
+                {
+                  id: 'roof_color',
+                  type: 'text',
+                  label: 'Roof Color',
+                  required: false,
+                  placeholder: 'Enter roof color'
+                },
+                {
+                  id: 'fascia_soffit',
+                  type: 'select',
+                  label: 'Fascia / Soffit',
+                  required: true,
+                  options: ['Aluminum', 'Vinyl', 'Wood']
+                },
+                {
+                  id: 'gutter_downspouts',
+                  type: 'checkbox',
+                  label: 'Gutter / Downspouts',
+                  required: false
+                }
+              ]
+            },
+            {
+              id: 'building_layout_site',
+              title: 'Building Layout & Site',
+              fields: [
+                {
+                  id: 'lot_layout_attached',
+                  type: 'checkbox',
+                  label: 'Lot Layout Attached',
+                  required: false
+                },
+                {
+                  id: 'zoning_requirements_reviewed',
+                  type: 'checkbox',
+                  label: 'Zoning Requirements Reviewed and Verified (Setbacks, Use, Height, Lot Coverage)',
+                  required: true
+                },
+                {
+                  id: 'front_porch',
+                  type: 'checkbox',
+                  label: 'Front Porch',
+                  required: false
+                },
+                {
+                  id: 'front_porch_dimensions',
+                  type: 'text',
+                  label: 'Front Porch Dimensions',
+                  required: false,
+                  placeholder: 'Enter dimensions'
+                },
+                {
+                  id: 'rear_porch_deck',
+                  type: 'checkbox',
+                  label: 'Rear Porch / Deck',
+                  required: false
+                },
+                {
+                  id: 'rear_porch_dimensions',
+                  type: 'text',
+                  label: 'Rear Porch / Deck Dimensions',
+                  required: false,
+                  placeholder: 'Enter dimensions'
+                },
+                {
+                  id: 'walkout_basement',
+                  type: 'checkbox',
+                  label: 'Walkout Basement',
+                  required: false
+                },
+                {
+                  id: 'retaining_walls_required',
+                  type: 'checkbox',
+                  label: 'Retaining Walls Required',
+                  required: false
+                },
+                {
+                  id: 'driveway_type',
+                  type: 'select',
+                  label: 'Driveway Type',
+                  required: true,
+                  options: ['Concrete', 'Asphalt', 'Gravel']
+                },
+                {
+                  id: 'sidewalks',
+                  type: 'checkbox',
+                  label: 'Sidewalks',
+                  required: false
+                },
+                {
+                  id: 'garage',
+                  type: 'select',
+                  label: 'Garage',
+                  required: true,
+                  options: ['Attached', 'Detached', 'None']
+                },
+                {
+                  id: 'garage_bays',
+                  type: 'select',
+                  label: 'Garage Bays',
+                  required: true,
+                  options: ['1', '2', '3', 'Other']
+                },
+                {
+                  id: 'garage_bays_other',
+                  type: 'text',
+                  label: 'Other Garage Bays',
+                  required: false,
+                  placeholder: 'Specify number'
+                },
+                {
+                  id: 'garage_door_height',
+                  type: 'number',
+                  label: 'Garage Door Height (ft)',
+                  required: false,
+                  placeholder: 'Enter height in feet'
+                },
+                {
+                  id: 'grade_elevation_drainage_verified',
+                  type: 'checkbox',
+                  label: 'Grade Elevation and Drainage Plan Verified',
                   required: true
                 }
               ]
             },
             {
-              id: 'sign_off',
-              title: 'Sign Off',
+              id: 'interior_layout_details',
+              title: 'Interior Layout & Details',
               fields: [
                 {
-                  id: 'architect_signature',
+                  id: 'ceiling_height_main',
+                  type: 'number',
+                  label: 'Ceiling Height (Main Floor) (ft)',
+                  required: false,
+                  placeholder: 'Enter height in feet'
+                },
+                {
+                  id: 'ceiling_height_second',
+                  type: 'number',
+                  label: 'Ceiling Height (Second Floor) (ft)',
+                  required: false,
+                  placeholder: 'Enter height in feet'
+                },
+                {
+                  id: 'ceiling_height_basement',
+                  type: 'number',
+                  label: 'Ceiling Height (Basement) (ft)',
+                  required: false,
+                  placeholder: 'Enter height in feet'
+                },
+                {
+                  id: 'ceiling_type',
+                  type: 'select',
+                  label: 'Ceiling Type',
+                  required: true,
+                  options: ['Flat', 'Vaulted', 'Tray']
+                },
+                {
+                  id: 'interior_wall_height_variations',
+                  type: 'checkbox',
+                  label: 'Interior Wall Height Variations',
+                  required: false
+                },
+                {
+                  id: 'stair_location_verified',
+                  type: 'checkbox',
+                  label: 'Stair Location Verified',
+                  required: true
+                },
+                {
+                  id: 'fireplace',
+                  type: 'checkbox',
+                  label: 'Fireplace',
+                  required: false
+                },
+                {
+                  id: 'fireplace_type',
+                  type: 'select',
+                  label: 'Fireplace Type',
+                  required: false,
+                  options: ['Gas', 'Electric', 'Wood']
+                },
+                {
+                  id: 'kitchen_layout_confirmed',
+                  type: 'checkbox',
+                  label: 'Kitchen Layout Confirmed',
+                  required: true
+                },
+                {
+                  id: 'bath_layout_confirmed',
+                  type: 'checkbox',
+                  label: 'Bath Layout Confirmed',
+                  required: true
+                },
+                {
+                  id: 'window_schedule_reviewed',
+                  type: 'checkbox',
+                  label: 'Window Schedule Reviewed',
+                  required: true
+                },
+                {
+                  id: 'door_schedule_reviewed',
+                  type: 'checkbox',
+                  label: 'Door Schedule Reviewed',
+                  required: true
+                }
+              ]
+            },
+            {
+              id: 'utilities_mechanical',
+              title: 'Utilities & Mechanical',
+              fields: [
+                {
+                  id: 'hvac_type',
+                  type: 'select',
+                  label: 'HVAC Type',
+                  required: true,
+                  options: ['Forced Air', 'Heat Pump', 'Radiant', 'Other']
+                },
+                {
+                  id: 'hvac_other',
                   type: 'text',
-                  label: 'Architect/Engineer Signature',
+                  label: 'Other HVAC Type',
+                  required: false,
+                  placeholder: 'Specify other HVAC type'
+                },
+                {
+                  id: 'water_heater',
+                  type: 'select',
+                  label: 'Water Heater',
+                  required: true,
+                  options: ['Gas', 'Electric', 'Tankless']
+                },
+                {
+                  id: 'electrical_service',
+                  type: 'select',
+                  label: 'Electrical Service',
+                  required: true,
+                  options: ['100 Amp', '200 Amp', 'Other']
+                },
+                {
+                  id: 'electrical_other',
+                  type: 'text',
+                  label: 'Other Electrical Service',
+                  required: false,
+                  placeholder: 'Specify other electrical service'
+                },
+                {
+                  id: 'plumbing_type',
+                  type: 'select',
+                  label: 'Plumbing Type',
+                  required: true,
+                  options: ['PEX', 'Copper', 'CPVC']
+                },
+                {
+                  id: 'energy_requirements_verified',
+                  type: 'checkbox',
+                  label: 'Energy Requirements Verified',
+                  required: true
+                },
+                {
+                  id: 'ventilation_exhaust_systems_reviewed',
+                  type: 'checkbox',
+                  label: 'Ventilation and Exhaust Systems Reviewed',
+                  required: true
+                }
+              ]
+            },
+            {
+              id: 'optional_features',
+              title: 'Optional Features',
+              fields: [
+                {
+                  id: 'dormers',
+                  type: 'checkbox',
+                  label: 'Dormers',
+                  required: false
+                },
+                {
+                  id: 'dormers_quantity_style',
+                  type: 'text',
+                  label: 'Dormers Quantity/Style',
+                  required: false,
+                  placeholder: 'Enter quantity and style'
+                },
+                {
+                  id: 'bay_bow_windows',
+                  type: 'checkbox',
+                  label: 'Bay or Bow Windows',
+                  required: false
+                },
+                {
+                  id: 'covered_patio_outdoor_living',
+                  type: 'checkbox',
+                  label: 'Covered Patio / Outdoor Living Area',
+                  required: false
+                },
+                {
+                  id: 'stone_columns_wainscot',
+                  type: 'checkbox',
+                  label: 'Stone Columns / Wainscot',
+                  required: false
+                },
+                {
+                  id: 'decorative_shutters',
+                  type: 'checkbox',
+                  label: 'Decorative Shutters',
+                  required: false
+                },
+                {
+                  id: 'skylights',
+                  type: 'checkbox',
+                  label: 'Skylights',
+                  required: false
+                },
+                {
+                  id: 'specialty_roofing',
+                  type: 'checkbox',
+                  label: 'Specialty Roofing (Metal Accent, Standing Seam, etc.)',
+                  required: false
+                },
+                {
+                  id: 'rear_deck_extension_patio_slab',
+                  type: 'checkbox',
+                  label: 'Rear Deck Extension or Patio Slab',
+                  required: false
+                },
+                {
+                  id: 'additional_notes_requests',
+                  type: 'textarea',
+                  label: 'Additional Notes / Requests',
+                  required: false,
+                  placeholder: 'Enter any additional notes or requests'
+                }
+              ]
+            },
+            {
+              id: 'final_review_sign_off',
+              title: 'Final Review & Sign-Off',
+              fields: [
+                {
+                  id: 'project_manager_verification_name',
+                  type: 'text',
+                  label: 'Project Manager Verification - Name',
+                  required: true,
+                  placeholder: 'Enter project manager name'
+                },
+                {
+                  id: 'project_manager_verification_signature',
+                  type: 'text',
+                  label: 'Project Manager Verification - Signature',
                   required: true,
                   placeholder: 'Enter signature'
                 },
                 {
-                  id: 'signature_date',
+                  id: 'project_manager_verification_date',
                   type: 'date',
-                  label: 'Signature Date',
+                  label: 'Project Manager Verification - Date',
                   required: true
                 },
                 {
-                  id: 'signature_verified',
-                  type: 'checkbox',
-                  label: 'I verify that all information above is accurate and complete',
+                  id: 'architect_engineer_verification_name',
+                  type: 'text',
+                  label: 'Architect / Engineer Verification - Name',
+                  required: true,
+                  placeholder: 'Enter architect/engineer name'
+                },
+                {
+                  id: 'architect_engineer_verification_signature',
+                  type: 'text',
+                  label: 'Architect / Engineer Verification - Signature',
+                  required: true,
+                  placeholder: 'Enter signature'
+                },
+                {
+                  id: 'architect_engineer_verification_date',
+                  type: 'date',
+                  label: 'Architect / Engineer Verification - Date',
+                  required: true
+                },
+                {
+                  id: 'owner_executive_approval_name',
+                  type: 'text',
+                  label: 'Owner / Executive Approval - Name',
+                  required: true,
+                  placeholder: 'Enter owner/executive name'
+                },
+                {
+                  id: 'owner_executive_approval_signature',
+                  type: 'text',
+                  label: 'Owner / Executive Approval - Signature',
+                  required: true,
+                  placeholder: 'Enter signature'
+                },
+                {
+                  id: 'owner_executive_approval_date',
+                  type: 'date',
+                  label: 'Owner / Executive Approval - Date',
                   required: true
                 }
               ]
