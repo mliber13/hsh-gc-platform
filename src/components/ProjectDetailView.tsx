@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PROJECT_TYPES, PROJECT_STATUS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText } from 'lucide-react'
+import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface ProjectDetailViewProps {
@@ -27,6 +27,7 @@ interface ProjectDetailViewProps {
   onViewActuals: () => void
   onViewSchedule?: () => void
   onViewChangeOrders?: () => void
+  onViewForms?: () => void
   onProjectDuplicated?: (newProject: Project) => void
 }
 
@@ -37,6 +38,7 @@ export function ProjectDetailView({
   onViewActuals,
   onViewSchedule,
   onViewChangeOrders,
+  onViewForms,
   onProjectDuplicated,
 }: ProjectDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -329,7 +331,7 @@ export function ProjectDetailView({
         </div>
 
         {/* Main Navigation Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* Estimate Book Card */}
           <Card className="bg-gradient-to-br from-[#213069] to-[#1a2550] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
             <button onClick={onViewEstimate} className="w-full text-left">
@@ -451,6 +453,50 @@ export function ProjectDetailView({
                 </div>
                 <div className="flex items-center text-sm text-white/60">
                   <span>Click to manage schedule →</span>
+                </div>
+              </CardContent>
+            </button>
+          </Card>
+
+          {/* Project Forms Card */}
+          <Card className="bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
+            <button onClick={onViewForms} className="w-full text-left">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
+                    <FileCheck className="w-8 h-8" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm opacity-80">Forms</p>
+                    <p className="text-2xl font-bold">4</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <h3 className="text-2xl font-bold mb-3">Project Forms</h3>
+                <p className="text-white/80 mb-4">
+                  Complete project documentation including architect verification, site checklists, due diligence, and selections.
+                </p>
+                <div className="bg-white/10 rounded-lg p-3 mb-4">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Architect Verification</span>
+                    <span className="font-semibold">Pending</span>
+                  </div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Site Checklist</span>
+                    <span className="font-semibold">Pending</span>
+                  </div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Due Diligence</span>
+                    <span className="font-semibold">Pending</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold pt-2 border-t border-white/20">
+                    <span>Selections</span>
+                    <span>Pending</span>
+                  </div>
+                </div>
+                <div className="flex items-center text-sm text-white/60">
+                  <span>Click to manage forms →</span>
                 </div>
               </CardContent>
             </button>

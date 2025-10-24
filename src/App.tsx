@@ -6,6 +6,7 @@ import { EstimateBuilder } from './components/EstimateBuilder'
 import { ProjectActuals } from './components/ProjectActuals'
 import { ScheduleBuilder } from './components/ScheduleBuilder'
 import { ChangeOrders } from './components/ChangeOrders'
+import { ProjectForms } from './components/ProjectForms'
 import { CreateProjectForm, ProjectFormData } from './components/CreateProjectForm'
 import { PlanLibrary } from './components/PlanLibrary'
 import { PlanEditor } from './components/PlanEditor'
@@ -28,7 +29,7 @@ import { Button } from './components/ui/button'
 import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2 } from 'lucide-react'
 import { backupAllData } from './services/backupService'
 
-type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration' | 'qb-settings' | 'qb-callback'
+type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'forms' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration' | 'qb-settings' | 'qb-callback'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -67,7 +68,7 @@ function App() {
 
   // Refresh project data when viewing project-related screens
   useEffect(() => {
-    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'schedule' || currentView === 'change-orders')) {
+    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'schedule' || currentView === 'change-orders' || currentView === 'forms')) {
       getProject_Hybrid(selectedProject.id).then(refreshedProject => {
         if (refreshedProject) {
           setSelectedProject(refreshedProject)
@@ -150,6 +151,10 @@ function App() {
 
   const handleViewChangeOrders = () => {
     setCurrentView('change-orders')
+  }
+
+  const handleViewForms = () => {
+    setCurrentView('forms')
   }
 
   const handleOpenPlanLibrary = () => {
@@ -324,6 +329,7 @@ function App() {
           onViewActuals={handleViewActuals}
           onViewSchedule={handleViewSchedule}
           onViewChangeOrders={handleViewChangeOrders}
+          onViewForms={handleViewForms}
           onProjectDuplicated={(newProject) => {
             setSelectedProject(newProject)
             // Stay on project detail view to see the new project
@@ -356,6 +362,12 @@ function App() {
         <ChangeOrders
           project={selectedProject}
           onBack={handleBackToProjectDetail}
+        />
+      )}
+
+      {currentView === 'forms' && selectedProject && (
+        <ProjectForms
+          projectId={selectedProject.id}
         />
       )}
 
