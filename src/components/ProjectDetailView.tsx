@@ -11,6 +11,7 @@ import { duplicateProject } from '@/services/projectService'
 import { getTradesForEstimate_Hybrid, updateProject_Hybrid, deleteProject_Hybrid } from '@/services/hybridService'
 import { getActivePlans_Hybrid } from '@/services/planHybridService'
 import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
+import { supabase } from '@/lib/supabase'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -50,6 +51,7 @@ export function ProjectDetailView({
     totalEstimated: 0,
     itemCount: 0,
   })
+  const [formsCount, setFormsCount] = useState(0)
   const [actualTotals, setActualTotals] = useState({
     laborCost: 0,
     materialCost: 0,
@@ -90,6 +92,31 @@ export function ProjectDetailView({
       })
     }
     loadTotals()
+  }, [project])
+
+  // Load forms count
+  useEffect(() => {
+    const loadFormsCount = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('project_forms')
+          .select('id')
+          .eq('project_id', project.id)
+        
+        if (error) {
+          console.error('Error loading forms count:', error)
+          return
+        }
+        
+        setFormsCount(data?.length || 0)
+      } catch (error) {
+        console.error('Error loading forms count:', error)
+      }
+    }
+    
+    if (project) {
+      loadFormsCount()
+    }
   }, [project])
 
   // Load actual costs from project actuals
@@ -468,7 +495,7 @@ export function ProjectDetailView({
                   </div>
                   <div className="text-right">
                     <p className="text-sm opacity-80">Forms</p>
-                    <p className="text-2xl font-bold">4</p>
+                    <p className="text-2xl font-bold">{formsCount}</p>
                   </div>
                 </div>
               </CardHeader>
