@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { ArrowLeft, FileCheck, Plus, CheckCircle, Clock, Edit } from 'lucide-react';
+import { ArrowLeft, FileCheck, Plus, CheckCircle, Clock, Edit, X, Trash2, ChevronRight } from 'lucide-react';
 import hshLogo from '/HSH Contractor Logo - Color.png';
 import { supabase } from '../lib/supabase';
 
@@ -2149,7 +2149,8 @@ interface DynamicFormProps {
 
 const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSave, onDelete }) => {
   const [formData, setFormData] = useState<Record<string, any>>(form.form_data);
-  const [currentSection, setCurrentSection] = useState(0);
+  const [currentView, setCurrentView] = useState<'overview' | 'section'>('overview');
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
 
   const handleFieldChange = (fieldId: string, value: any) => {
     setFormData(prev => ({
@@ -2162,8 +2163,31 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
     onSave(formData);
   };
 
+  const handleSectionClick = (sectionId: string) => {
+    setSelectedSection(sectionId);
+    setCurrentView('section');
+  };
+
+  const handleBackToOverview = () => {
+    setCurrentView('overview');
+    setSelectedSection(null);
+  };
+
+  const getCurrentSection = () => {
+    if (!selectedSection) return null;
+    return sections.find(s => s.id === selectedSection);
+  };
+
+  const getSectionProgress = (section: any) => {
+    const totalFields = section.fields.length;
+    const completedFields = section.fields.filter((field: any) => {
+      const value = formData[field.id];
+      return value !== undefined && value !== null && value !== '';
+    }).length;
+    return { completed: completedFields, total: totalFields };
+  };
+
   const sections = form.form_schema.sections || [];
-  const currentSectionData = sections[currentSection];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -2172,8 +2196,27 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
         <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{form.form_name}</h2>
-              <p className="text-sm text-gray-500">Section {currentSection + 1} of {sections.length}</p>
+              <div className="flex items-center space-x-3">
+                {currentView === 'section' && (
+                  <Button
+                    variant="ghost"
+                    onClick={handleBackToOverview}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back
+                  </Button>
+                )}
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">{form.form_name}</h2>
+                  <p className="text-sm text-gray-500">
+                    {currentView === 'overview' 
+                      ? `${sections.length} sections` 
+                      : `${getCurrentSection()?.title || 'Section'}`
+                    }
+                  </p>
+                </div>
+              </div>
               {/* Project Information Header */}
               {project && (
                 <div className="mt-3 p-3 bg-white rounded-lg border">
@@ -2204,94 +2247,112 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
               )}
             </div>
             <Button variant="ghost" onClick={onClose} className="text-gray-500 hover:text-gray-700">
-              <ArrowLeft className="w-4 h-4 mr-2" />
+              <X className="w-4 h-4 mr-2" />
               Close
             </Button>
           </div>
         </div>
 
-        {/* Section Navigation */}
-        {sections.length > 1 && (
-          <div className="bg-white border-b border-gray-200 px-6 py-3">
-            <div className="flex gap-2 overflow-x-auto">
-              {sections.map((section, index) => (
-                <Button
-                  key={section.id}
-                  variant={index === currentSection ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCurrentSection(index)}
-                  className="whitespace-nowrap"
-                >
-                  {section.title}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Form Content */}
         <div className="p-6 overflow-y-auto max-h-[60vh]">
-          {currentSectionData && (
+          {currentView === 'overview' ? (
+            /* Overview - Section Cards */
+            <div className="space-y-4">
+              {sections.map((section) => {
+                const progress = getSectionProgress(section);
+                const isComplete = progress.completed === progress.total;
+                
+                return (
+                  <Card 
+                    key={section.id} 
+                    className="cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => handleSectionClick(section.id)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                            {section.title}
+                          </h3>
+                          <p className="text-sm text-gray-600 mb-3">
+                            {section.fields.length} fields
+                          </p>
+                          <div className="flex items-center space-x-4">
+                            <div className="flex items-center space-x-2">
+                              <div className="w-24 bg-gray-200 rounded-full h-2">
+                                <div 
+                                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                  style={{ width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-500">
+                                {progress.completed}/{progress.total}
+                              </span>
+                            </div>
+                            {isComplete && (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                Complete
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <ChevronRight className="w-5 h-5 text-gray-400" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            /* Section Detail */
             <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">{currentSectionData.title}</h3>
-                <div className="grid gap-6">
-                  {currentSectionData.fields.map((field) => (
-                    <FormField
-                      key={field.id}
-                      field={field}
-                      value={formData[field.id]}
-                      onChange={(value) => handleFieldChange(field.id, value)}
-                    />
-                  ))}
+              {getCurrentSection() && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    {getCurrentSection()?.title}
+                  </h3>
+                  <div className="grid gap-6">
+                    {getCurrentSection()?.fields.map((field) => (
+                      <FormField
+                        key={field.id}
+                        field={field}
+                        value={formData[field.id]}
+                        onChange={(value) => handleFieldChange(field.id, value)}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Footer Navigation */}
-        <div className="bg-gray-50 border-t border-gray-200 px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              {currentSection > 0 && (
-                <Button 
-                  variant="outline"
-                  onClick={() => setCurrentSection(currentSection - 1)}
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Previous
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  if (confirm('Are you sure you want to delete this form?')) {
-                    onDelete(form.id);
-                    onClose();
-                  }
-                }}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                Delete Form
-              </Button>
-              <Button variant="outline" onClick={handleSave}>
-                Save Draft
-              </Button>
-              {currentSection < sections.length - 1 ? (
-                <Button onClick={() => setCurrentSection(currentSection + 1)}>
-                  Next
-                  <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
-                </Button>
-              ) : (
-                <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700">
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Complete Form
-                </Button>
-              )}
-            </div>
+        {/* Footer */}
+        <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (confirm('Are you sure you want to delete this form?')) {
+                  onDelete(form.id);
+                  onClose();
+                }
+              }}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Form
+            </Button>
+          </div>
+          <div className="flex items-center space-x-3">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave}>
+              Save Form
+            </Button>
           </div>
         </div>
       </div>
