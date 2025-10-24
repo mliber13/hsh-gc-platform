@@ -1239,20 +1239,20 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                   required: true
                 },
                 {
-                  id: 'owner_executive_approval_name',
+                  id: 'due_diligence_owner_executive_approval_name',
                   type: 'text',
                   label: 'Owner / Executive Approval - Name',
                   required: true,
                   placeholder: 'Enter owner/executive name'
                 },
                 {
-                  id: 'owner_executive_approval_signature',
+                  id: 'due_diligence_owner_executive_approval_signature',
                   type: 'signature',
                   label: 'Owner / Executive Approval - Signature',
                   required: true
                 },
                 {
-                  id: 'owner_executive_approval_date',
+                  id: 'due_diligence_owner_executive_approval_date',
                   type: 'date',
                   label: 'Owner / Executive Approval - Date',
                   required: true
