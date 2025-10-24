@@ -75,6 +75,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
   };
 
   const createNewForm = async (formType: string) => {
+    console.log('Creating new form:', formType);
     try {
       // TODO: Implement API call to create new form
       // const response = await supabase
@@ -126,57 +127,56 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between py-4 sm:py-6">
-            <div className="flex items-center w-full sm:w-auto">
+      <header className="bg-white shadow-md border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center space-x-3 sm:space-x-4">
               {onBack && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={onBack}
-                  className="mr-4 sm:mr-6 text-gray-600 hover:text-gray-900"
+                  className="mr-2 text-gray-600 hover:text-gray-900"
                 >
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   <span className="hidden sm:inline">Back to Project</span>
                   <span className="sm:hidden">Back</span>
                 </Button>
               )}
-              <div className="flex items-center flex-1 min-w-0">
-                <img src={hshLogo} alt="HSH Contractor" className="h-8 sm:h-10 w-auto mr-3 sm:mr-4 flex-shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-3">
-                    <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">
-                      {project?.name || 'Project Forms'}
-                    </h1>
-                    {project?.project_number && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 self-start">
-                        #{project.project_number}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 mt-1">
-                    <p className="text-xs sm:text-sm text-gray-500">Project Forms & Documentation</p>
-                    {project?.status && (
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium self-start ${
-                        project.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        project.status === 'in-progress' ? 'bg-yellow-100 text-yellow-800' :
-                        project.status === 'planning' ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {project.status.replace('-', ' ')}
-                      </span>
-                    )}
-                  </div>
+              <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto" />
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-1">
+                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
+                    {project?.name || 'Project Forms'}
+                  </h1>
+                  {project?.project_number && (
+                    <span className="px-2 sm:px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 w-fit">
+                      #{project.project_number}
+                    </span>
+                  )}
+                  {project?.status && (
+                    <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium w-fit ${
+                      project.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      project.status === 'in-progress' ? 'bg-yellow-100 text-yellow-800' :
+                      project.status === 'planning' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {project.status.replace('-', ' ').toUpperCase()}
+                    </span>
+                  )}
                 </div>
+                <p className="text-xs sm:text-sm text-gray-600">
+                  Project Forms & Documentation
+                </p>
               </div>
             </div>
-            <div className="flex items-center space-x-4 mt-4 sm:mt-0">
-              <div className="text-center sm:text-right">
+            {/* Forms Statistics */}
+            <div className="flex items-center space-x-6">
+              <div className="text-center">
                 <p className="text-xs sm:text-sm text-gray-500">Forms Created</p>
                 <p className="text-lg sm:text-2xl font-bold text-gray-900">{forms.length}</p>
               </div>
-              <div className="text-center sm:text-right">
+              <div className="text-center">
                 <p className="text-xs sm:text-sm text-gray-500">Completed</p>
                 <p className="text-lg sm:text-2xl font-bold text-green-600">
                   {forms.filter(f => f.status === 'completed' || f.status === 'approved').length}
@@ -185,7 +185,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -193,11 +193,11 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
         <div className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Create New Form</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-blue-200">
-              <button 
-                onClick={() => createNewForm('architect_verification')}
-                className="w-full text-left p-4 sm:p-6"
-              >
+            <Card 
+              className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-blue-200"
+              onClick={() => createNewForm('architect_verification')}
+            >
+              <div className="w-full text-left p-4 sm:p-6">
                 <div className="flex items-center mb-3">
                   <div className="bg-blue-100 rounded-lg p-2 sm:p-3 mr-3 sm:mr-4 flex-shrink-0">
                     <FileCheck className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
@@ -211,14 +211,14 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                   <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                   Create Form
                 </div>
-              </button>
+              </div>
             </Card>
 
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-green-200">
-              <button 
-                onClick={() => createNewForm('closing_checklist')}
-                className="w-full text-left p-4 sm:p-6"
-              >
+            <Card 
+              className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-green-200"
+              onClick={() => createNewForm('closing_checklist')}
+            >
+              <div className="w-full text-left p-4 sm:p-6">
                 <div className="flex items-center mb-3">
                   <div className="bg-green-100 rounded-lg p-2 sm:p-3 mr-3 sm:mr-4 flex-shrink-0">
                     <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
@@ -232,14 +232,14 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                   <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                   Create Form
                 </div>
-              </button>
+              </div>
             </Card>
 
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-orange-200">
-              <button 
-                onClick={() => createNewForm('due_diligence')}
-                className="w-full text-left p-4 sm:p-6"
-              >
+            <Card 
+              className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-orange-200"
+              onClick={() => createNewForm('due_diligence')}
+            >
+              <div className="w-full text-left p-4 sm:p-6">
                 <div className="flex items-center mb-3">
                   <div className="bg-orange-100 rounded-lg p-2 sm:p-3 mr-3 sm:mr-4 flex-shrink-0">
                     <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />
@@ -253,14 +253,14 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                   <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                   Create Form
                 </div>
-              </button>
+              </div>
             </Card>
 
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-200">
-              <button 
-                onClick={() => createNewForm('selections')}
-                className="w-full text-left p-4 sm:p-6"
-              >
+            <Card 
+              className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-200"
+              onClick={() => createNewForm('selections')}
+            >
+              <div className="w-full text-left p-4 sm:p-6">
                 <div className="flex items-center mb-3">
                   <div className="bg-purple-100 rounded-lg p-2 sm:p-3 mr-3 sm:mr-4 flex-shrink-0">
                     <Edit className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
@@ -274,7 +274,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                   <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                   Create Form
                 </div>
-              </button>
+              </div>
             </Card>
           </div>
         </div>
