@@ -726,35 +726,74 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
 
       case 'closing_checklist':
         return {
-          title: 'Closing Site Start Checklist',
+          title: 'Closing / Site Start Checklist',
           sections: [
             {
-              id: 'utilities',
-              title: 'Utilities Setup',
+              id: 'project_info',
+              title: 'Project Information',
               fields: [
                 {
-                  id: 'electric_connected',
-                  type: 'checkbox',
-                  label: 'Electric service connected and meter installed',
+                  id: 'property_address',
+                  type: 'text',
+                  label: 'Property Address',
+                  required: true,
+                  placeholder: 'Enter property address'
+                },
+                {
+                  id: 'owner_project',
+                  type: 'text',
+                  label: 'Owner / Project',
+                  required: true,
+                  placeholder: 'Enter owner/project name'
+                },
+                {
+                  id: 'date',
+                  type: 'date',
+                  label: 'Date',
                   required: true
                 },
                 {
-                  id: 'water_connected',
+                  id: 'prepared_by',
+                  type: 'text',
+                  label: 'Prepared By',
+                  required: true,
+                  placeholder: 'Enter preparer name'
+                }
+              ]
+            },
+            {
+              id: 'utility_setup',
+              title: 'Utility Setup',
+              fields: [
+                {
+                  id: 'request_electric_service',
                   type: 'checkbox',
-                  label: 'Water service connected and meter installed',
+                  label: 'Request electric service activation',
                   required: true
                 },
                 {
-                  id: 'sewer_connected',
+                  id: 'request_gas_service',
                   type: 'checkbox',
-                  label: 'Sewer service connected',
+                  label: 'Request gas service activation',
                   required: true
                 },
                 {
-                  id: 'gas_connected',
+                  id: 'request_water_service',
                   type: 'checkbox',
-                  label: 'Gas service connected (if applicable)',
-                  required: false
+                  label: 'Request water service activation',
+                  required: true
+                },
+                {
+                  id: 'verify_sewer_connection',
+                  type: 'checkbox',
+                  label: 'Verify sewer connection or septic setup',
+                  required: true
+                },
+                {
+                  id: 'confirm_utility_account_numbers',
+                  type: 'checkbox',
+                  label: 'Confirm utility account numbers recorded',
+                  required: true
                 }
               ]
             },
@@ -763,46 +802,186 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
               title: 'Site Readiness',
               fields: [
                 {
-                  id: 'site_cleared',
+                  id: 'portable_restroom_delivered',
                   type: 'checkbox',
-                  label: 'Site cleared and ready for construction',
+                  label: 'Portable restroom delivered and placed properly',
                   required: true
                 },
                 {
-                  id: 'access_road',
+                  id: 'dumpster_delivered',
                   type: 'checkbox',
-                  label: 'Access road established',
+                  label: 'Dumpster delivered and set on driveway or gravel area',
                   required: true
                 },
                 {
-                  id: 'temporary_facilities',
+                  id: 'verify_erosion_control',
                   type: 'checkbox',
-                  label: 'Temporary facilities (portable toilet, storage) in place',
+                  label: 'Verify erosion control (silt fence, inlet protection, etc.) in place',
+                  required: true
+                },
+                {
+                  id: 'check_clear_site_access',
+                  type: 'checkbox',
+                  label: 'Check for clear site access for equipment and deliveries',
+                  required: true
+                },
+                {
+                  id: 'confirm_address_signage',
+                  type: 'checkbox',
+                  label: 'Confirm address signage visible from road',
                   required: true
                 }
               ]
             },
             {
-              id: 'documentation',
-              title: 'Documentation',
+              id: 'documentation_files',
+              title: 'Documentation & Files',
               fields: [
                 {
-                  id: 'permits_obtained',
+                  id: 'organize_property_file',
                   type: 'checkbox',
-                  label: 'All required permits obtained',
+                  label: 'Organize property file and digital folder for new job',
                   required: true
                 },
                 {
-                  id: 'insurance_verified',
+                  id: 'include_survey_purchase_documents',
                   type: 'checkbox',
-                  label: 'Insurance coverage verified',
+                  label: 'Include survey, purchase documents, permits, and plans',
                   required: true
                 },
                 {
-                  id: 'contracts_signed',
+                  id: 'add_selections_design_guide',
                   type: 'checkbox',
-                  label: 'All contracts signed and executed',
+                  label: 'Add selections and design guide binder (if applicable)',
+                  required: false
+                },
+                {
+                  id: 'label_binder',
+                  type: 'checkbox',
+                  label: 'Label binder: \'Design & Selection Guide – [Property Address]\'',
+                  required: false
+                },
+                {
+                  id: 'file_construction_contract',
+                  type: 'checkbox',
+                  label: 'File copy of executed construction contract',
                   required: true
+                }
+              ]
+            },
+            {
+              id: 'on_site_materials',
+              title: 'On-Site Materials',
+              fields: [
+                {
+                  id: 'print_construction_drawings',
+                  type: 'checkbox',
+                  label: 'Print full-size construction drawings for job site',
+                  required: true
+                },
+                {
+                  id: 'place_drawings_waterproof_tube',
+                  type: 'checkbox',
+                  label: 'Place drawings in waterproof tube and secure inside unit or job box',
+                  required: true
+                },
+                {
+                  id: 'keep_backup_digital_set',
+                  type: 'checkbox',
+                  label: 'Keep backup digital set on company drive',
+                  required: true
+                },
+                {
+                  id: 'verify_site_plan_elevation_pages',
+                  type: 'checkbox',
+                  label: 'Verify site plan and elevation pages included',
+                  required: true
+                }
+              ]
+            },
+            {
+              id: 'notifications_communication',
+              title: 'Notifications & Communication',
+              fields: [
+                {
+                  id: 'notify_project_manager',
+                  type: 'checkbox',
+                  label: 'Notify project manager site is ready',
+                  required: true
+                },
+                {
+                  id: 'notify_superintendent',
+                  type: 'checkbox',
+                  label: 'Notify superintendent start date is confirmed',
+                  required: true
+                },
+                {
+                  id: 'confirm_vendors_updated',
+                  type: 'checkbox',
+                  label: 'Confirm all vendors have updated address and directions',
+                  required: true
+                },
+                {
+                  id: 'add_site_weekly_schedule',
+                  type: 'checkbox',
+                  label: 'Add site to weekly schedule board',
+                  required: true
+                }
+              ]
+            },
+            {
+              id: 'final_verification',
+              title: 'Final Verification',
+              fields: [
+                {
+                  id: 'utilities_active_working',
+                  type: 'checkbox',
+                  label: 'Utilities active and working',
+                  required: true
+                },
+                {
+                  id: 'portable_restroom_dumpster_place',
+                  type: 'checkbox',
+                  label: 'Portable restroom and dumpster in place',
+                  required: true
+                },
+                {
+                  id: 'prints_delivered_tube_labeled',
+                  type: 'checkbox',
+                  label: 'Prints delivered and tube labeled',
+                  required: true
+                },
+                {
+                  id: 'files_binder_organized',
+                  type: 'checkbox',
+                  label: 'Files and binder organized',
+                  required: true
+                }
+              ]
+            },
+            {
+              id: 'completion_sign_off',
+              title: 'Completion Sign-Off',
+              fields: [
+                {
+                  id: 'completed_by',
+                  type: 'text',
+                  label: 'Completed By',
+                  required: true,
+                  placeholder: 'Enter name'
+                },
+                {
+                  id: 'completion_date',
+                  type: 'date',
+                  label: 'Completion Date',
+                  required: true
+                },
+                {
+                  id: 'reviewed_by_pm',
+                  type: 'text',
+                  label: 'Reviewed By (PM)',
+                  required: true,
+                  placeholder: 'Enter project manager name'
                 }
               ]
             }
@@ -814,9 +993,16 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
           title: 'Due Diligence Checklist',
           sections: [
             {
-              id: 'property_verification',
-              title: 'Property Verification',
+              id: 'project_info',
+              title: 'Project Information',
               fields: [
+                {
+                  id: 'project_name',
+                  type: 'text',
+                  label: 'Project Name',
+                  required: true,
+                  placeholder: 'Enter project name'
+                },
                 {
                   id: 'property_address',
                   type: 'text',
@@ -825,73 +1011,286 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                   placeholder: 'Enter property address'
                 },
                 {
-                  id: 'legal_description',
-                  type: 'textarea',
-                  label: 'Legal Description',
+                  id: 'acquisition_type',
+                  type: 'select',
+                  label: 'Acquisition Type',
                   required: true,
-                  placeholder: 'Enter legal description'
+                  options: ['Purchase', 'Lease', 'Development']
                 },
                 {
-                  id: 'property_survey',
-                  type: 'checkbox',
-                  label: 'Property survey completed and reviewed',
-                  required: true
+                  id: 'prepared_by',
+                  type: 'text',
+                  label: 'Prepared By',
+                  required: true,
+                  placeholder: 'Enter preparer name'
                 },
                 {
-                  id: 'title_search',
-                  type: 'checkbox',
-                  label: 'Title search completed',
+                  id: 'date',
+                  type: 'date',
+                  label: 'Date',
                   required: true
                 }
               ]
             },
             {
-              id: 'financial_review',
-              title: 'Financial Review',
+              id: 'property_verification',
+              title: 'Property Verification',
               fields: [
                 {
-                  id: 'purchase_price',
-                  type: 'number',
-                  label: 'Purchase Price',
-                  required: true,
-                  placeholder: 'Enter purchase price'
-                },
-                {
-                  id: 'financing_approved',
+                  id: 'obtain_parcel_numbers',
                   type: 'checkbox',
-                  label: 'Financing approved and committed',
+                  label: 'Obtain parcel number(s) and legal description',
                   required: true
                 },
                 {
-                  id: 'closing_costs',
-                  type: 'number',
-                  label: 'Estimated Closing Costs',
-                  required: false,
-                  placeholder: 'Enter estimated closing costs'
+                  id: 'verify_current_ownership',
+                  type: 'checkbox',
+                  label: 'Verify current ownership and obtain title report',
+                  required: true
+                },
+                {
+                  id: 'review_deed_restrictions',
+                  type: 'checkbox',
+                  label: 'Review deed restrictions, easements, and encroachments',
+                  required: true
+                },
+                {
+                  id: 'confirm_property_boundaries',
+                  type: 'checkbox',
+                  label: 'Confirm property boundaries and access rights',
+                  required: true
+                },
+                {
+                  id: 'verify_zoning_designation',
+                  type: 'checkbox',
+                  label: 'Verify zoning designation and allowable uses',
+                  required: true
+                },
+                {
+                  id: 'confirm_flood_zone_status',
+                  type: 'checkbox',
+                  label: 'Confirm flood zone status and obtain FEMA map',
+                  required: true
+                },
+                {
+                  id: 'verify_soil_type',
+                  type: 'checkbox',
+                  label: 'Verify soil type and topographic conditions',
+                  required: true
+                },
+                {
+                  id: 'confirm_utility_availability',
+                  type: 'checkbox',
+                  label: 'Confirm utility availability (water, sewer, gas, electric, communications)',
+                  required: true
+                },
+                {
+                  id: 'photograph_site_conditions',
+                  type: 'checkbox',
+                  label: 'Photograph existing site conditions and neighboring uses',
+                  required: true
                 }
               ]
             },
             {
-              id: 'environmental',
-              title: 'Environmental Conditions',
+              id: 'financial_transaction_review',
+              title: 'Financial & Transaction Review',
               fields: [
                 {
-                  id: 'environmental_assessment',
+                  id: 'confirm_purchase_price',
                   type: 'checkbox',
-                  label: 'Environmental assessment completed',
+                  label: 'Confirm purchase price, option terms, or lease rate',
                   required: true
                 },
                 {
-                  id: 'soil_testing',
+                  id: 'verify_earnest_money',
                   type: 'checkbox',
-                  label: 'Soil testing completed',
+                  label: 'Verify earnest money, deposit schedule, and closing timeline',
                   required: true
                 },
                 {
-                  id: 'wetland_delineation',
+                  id: 'identify_closing_costs',
                   type: 'checkbox',
-                  label: 'Wetland delineation completed (if applicable)',
+                  label: 'Identify all closing costs, fees, and professional expenses',
+                  required: true
+                },
+                {
+                  id: 'obtain_appraisal',
+                  type: 'checkbox',
+                  label: 'Obtain appraisal or broker opinion of value',
+                  required: true
+                },
+                {
+                  id: 'review_property_taxes',
+                  type: 'checkbox',
+                  label: 'Review current and projected property taxes or assessments',
+                  required: true
+                },
+                {
+                  id: 'evaluate_tif_eligibility',
+                  type: 'checkbox',
+                  label: 'Evaluate TIF (Tax Increment Financing) eligibility and local programs',
+                  required: true
+                },
+                {
+                  id: 'assess_bond_financing',
+                  type: 'checkbox',
+                  label: 'Assess potential bond financing (revenue, industrial, or municipal)',
+                  required: true
+                },
+                {
+                  id: 'assemble_capital_stack',
+                  type: 'checkbox',
+                  label: 'Assemble preliminary capital stack (public, private, bank, and grant sources)',
+                  required: true
+                },
+                {
+                  id: 'verify_lender_requirements',
+                  type: 'checkbox',
+                  label: 'Verify lender and investor requirements (collateral, guarantees, reporting)',
+                  required: true
+                },
+                {
+                  id: 'develop_financial_model',
+                  type: 'checkbox',
+                  label: 'Develop preliminary financial model (costs, returns, sources/uses summary)',
+                  required: true
+                },
+                {
+                  id: 'confirm_insurance_requirements',
+                  type: 'checkbox',
+                  label: 'Confirm insurance requirements and obtain preliminary quotes',
+                  required: true
+                }
+              ]
+            },
+            {
+              id: 'environmental_site_conditions',
+              title: 'Environmental & Site Conditions',
+              fields: [
+                {
+                  id: 'conduct_wetlands_review',
+                  type: 'checkbox',
+                  label: 'Conduct wetlands review and flag protected areas',
+                  required: true
+                },
+                {
+                  id: 'order_environmental_study',
+                  type: 'checkbox',
+                  label: 'Order environmental study (Phase I ESA minimum)',
+                  required: true
+                },
+                {
+                  id: 'conduct_phase_ii_testing',
+                  type: 'checkbox',
+                  label: 'Conduct Phase II testing (if required)',
                   required: false
+                },
+                {
+                  id: 'perform_soil_borings',
+                  type: 'checkbox',
+                  label: 'Perform soil borings and full geotechnical test report',
+                  required: true
+                },
+                {
+                  id: 'identify_hazardous_materials',
+                  type: 'checkbox',
+                  label: 'Identify hazardous materials or underground tanks',
+                  required: true
+                },
+                {
+                  id: 'review_stormwater_management',
+                  type: 'checkbox',
+                  label: 'Review stormwater management and runoff control requirements',
+                  required: true
+                }
+              ]
+            },
+            {
+              id: 'planning_regulatory_compliance',
+              title: 'Planning & Regulatory Compliance',
+              fields: [
+                {
+                  id: 'verify_zoning_use_compliance',
+                  type: 'checkbox',
+                  label: 'Verify zoning and use compliance',
+                  required: true
+                },
+                {
+                  id: 'review_development_codes',
+                  type: 'checkbox',
+                  label: 'Review local development codes and setbacks',
+                  required: true
+                },
+                {
+                  id: 'confirm_parking_landscaping',
+                  type: 'checkbox',
+                  label: 'Confirm parking, landscaping, and lighting requirements',
+                  required: true
+                },
+                {
+                  id: 'review_design_review_requirements',
+                  type: 'checkbox',
+                  label: 'Review design review or architectural board requirements',
+                  required: true
+                },
+                {
+                  id: 'schedule_pre_application_meeting',
+                  type: 'checkbox',
+                  label: 'Schedule pre-application or concept meeting with city officials',
+                  required: true
+                },
+                {
+                  id: 'identify_required_permits',
+                  type: 'checkbox',
+                  label: 'Identify required permits and approval timelines',
+                  required: true
+                }
+              ]
+            },
+            {
+              id: 'final_review_sign_off',
+              title: 'Final Review & Sign-Off',
+              fields: [
+                {
+                  id: 'due_diligence_conducted_by_name',
+                  type: 'text',
+                  label: 'Due Diligence Conducted By (Project Manager) - Name',
+                  required: true,
+                  placeholder: 'Enter project manager name'
+                },
+                {
+                  id: 'due_diligence_conducted_by_signature',
+                  type: 'text',
+                  label: 'Due Diligence Conducted By (Project Manager) - Signature',
+                  required: true,
+                  placeholder: 'Enter signature'
+                },
+                {
+                  id: 'due_diligence_conducted_by_date',
+                  type: 'date',
+                  label: 'Due Diligence Conducted By (Project Manager) - Date',
+                  required: true
+                },
+                {
+                  id: 'owner_executive_approval_name',
+                  type: 'text',
+                  label: 'Owner / Executive Approval - Name',
+                  required: true,
+                  placeholder: 'Enter owner/executive name'
+                },
+                {
+                  id: 'owner_executive_approval_signature',
+                  type: 'text',
+                  label: 'Owner / Executive Approval - Signature',
+                  required: true,
+                  placeholder: 'Enter signature'
+                },
+                {
+                  id: 'owner_executive_approval_date',
+                  type: 'date',
+                  label: 'Owner / Executive Approval - Date',
+                  required: true
                 }
               ]
             }
@@ -903,83 +1302,612 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
           title: 'Selection Sheet & Checklist',
           sections: [
             {
+              id: 'project_info',
+              title: 'Project Information',
+              fields: [
+                {
+                  id: 'project_name',
+                  type: 'text',
+                  label: 'Project Name',
+                  required: true,
+                  placeholder: 'Enter project name'
+                },
+                {
+                  id: 'lot_address',
+                  type: 'text',
+                  label: 'Lot / Address',
+                  required: true,
+                  placeholder: 'Enter lot/address'
+                },
+                {
+                  id: 'model_plan',
+                  type: 'text',
+                  label: 'Model / Plan',
+                  required: true,
+                  placeholder: 'Enter model/plan'
+                },
+                {
+                  id: 'owner_buyer',
+                  type: 'text',
+                  label: 'Owner / Buyer',
+                  required: true,
+                  placeholder: 'Enter owner/buyer name'
+                },
+                {
+                  id: 'date',
+                  type: 'date',
+                  label: 'Date',
+                  required: true
+                },
+                {
+                  id: 'prepared_by',
+                  type: 'text',
+                  label: 'Prepared By (PM/Designer)',
+                  required: true,
+                  placeholder: 'Enter preparer name'
+                }
+              ]
+            },
+            {
               id: 'exterior_selections',
               title: 'Exterior Selections',
               fields: [
                 {
-                  id: 'siding_color',
+                  id: 'siding_type_color',
                   type: 'text',
-                  label: 'Siding Color',
+                  label: 'Siding Type & Color (ProVia)',
                   required: false,
-                  placeholder: 'Enter siding color'
+                  placeholder: 'Enter siding type and color'
                 },
                 {
-                  id: 'trim_color',
+                  id: 'accent_siding',
                   type: 'text',
-                  label: 'Trim Color',
+                  label: 'Accent Siding (Board & Batten / Shake, ProVia)',
                   required: false,
-                  placeholder: 'Enter trim color'
+                  placeholder: 'Enter accent siding details'
                 },
                 {
-                  id: 'door_color',
+                  id: 'stone_masonry_type_location',
                   type: 'text',
-                  label: 'Door Color',
+                  label: 'Stone / Masonry (Type & Location)',
                   required: false,
-                  placeholder: 'Enter door color'
+                  placeholder: 'Enter stone/masonry details'
+                },
+                {
+                  id: 'soffit_fascia_material_color',
+                  type: 'text',
+                  label: 'Soffit & Fascia (Material & Color)',
+                  required: false,
+                  placeholder: 'Enter soffit and fascia details'
+                },
+                {
+                  id: 'roofing_owens_corning_series_color',
+                  type: 'text',
+                  label: 'Roofing (Owens Corning – Series/Color)',
+                  required: false,
+                  placeholder: 'Enter roofing details'
+                },
+                {
+                  id: 'front_door_provia_style_color',
+                  type: 'text',
+                  label: 'Front Door (ProVia – Style/Color)',
+                  required: false,
+                  placeholder: 'Enter front door details'
+                },
+                {
+                  id: 'windows_provia_series_color',
+                  type: 'text',
+                  label: 'Windows (ProVia – Series/Color)',
+                  required: false,
+                  placeholder: 'Enter window details'
+                },
+                {
+                  id: 'garage_doors_style_color',
+                  type: 'text',
+                  label: 'Garage Doors (Style/Color)',
+                  required: false,
+                  placeholder: 'Enter garage door details'
+                },
+                {
+                  id: 'railings_deck_systems_shapes_unlimited_finish',
+                  type: 'text',
+                  label: 'Railings / Deck Systems (Shapes Unlimited – Finish)',
+                  required: false,
+                  placeholder: 'Enter railing/deck details'
+                },
+                {
+                  id: 'exterior_lighting_fixture_finish',
+                  type: 'text',
+                  label: 'Exterior Lighting (Fixture/Finish)',
+                  required: false,
+                  placeholder: 'Enter exterior lighting details'
                 }
               ]
             },
             {
-              id: 'interior_paint',
-              title: 'Interior Paint',
+              id: 'interior_paint_selections',
+              title: 'Interior Paint Selections (Room-by-Room)',
               fields: [
                 {
-                  id: 'living_room_paint',
+                  id: 'standard_finish',
                   type: 'text',
-                  label: 'Living Room Paint',
+                  label: 'Standard Finish: Walls – Eggshell | Ceilings – Flat | Trim/Doors – Satin',
                   required: false,
-                  placeholder: 'Enter living room paint color'
+                  placeholder: 'Enter standard finish details'
                 },
                 {
-                  id: 'kitchen_paint',
+                  id: 'living_room_wall_color',
                   type: 'text',
-                  label: 'Kitchen Paint',
+                  label: 'Living Room – Wall Color (Eggshell)',
                   required: false,
-                  placeholder: 'Enter kitchen paint color'
+                  placeholder: 'Enter living room wall color'
                 },
                 {
-                  id: 'bedroom_paint',
+                  id: 'living_room_ceiling_color',
                   type: 'text',
-                  label: 'Bedroom Paint',
+                  label: 'Living Room – Ceiling Color (Flat)',
                   required: false,
-                  placeholder: 'Enter bedroom paint color'
+                  placeholder: 'Enter living room ceiling color'
+                },
+                {
+                  id: 'kitchen_wall_color',
+                  type: 'text',
+                  label: 'Kitchen – Wall Color (Eggshell)',
+                  required: false,
+                  placeholder: 'Enter kitchen wall color'
+                },
+                {
+                  id: 'kitchen_ceiling_color',
+                  type: 'text',
+                  label: 'Kitchen – Ceiling Color (Flat)',
+                  required: false,
+                  placeholder: 'Enter kitchen ceiling color'
+                },
+                {
+                  id: 'dining_room_wall_ceiling',
+                  type: 'text',
+                  label: 'Dining Room – Wall (Eggshell) / Ceiling (Flat)',
+                  required: false,
+                  placeholder: 'Enter dining room colors'
+                },
+                {
+                  id: 'master_bedroom_wall_ceiling',
+                  type: 'text',
+                  label: 'Master Bedroom – Wall (Eggshell) / Ceiling (Flat)',
+                  required: false,
+                  placeholder: 'Enter master bedroom colors'
+                },
+                {
+                  id: 'bedroom_2_wall_ceiling',
+                  type: 'text',
+                  label: 'Bedroom 2 – Wall (Eggshell) / Ceiling (Flat)',
+                  required: false,
+                  placeholder: 'Enter bedroom 2 colors'
+                },
+                {
+                  id: 'bedroom_3_wall_ceiling',
+                  type: 'text',
+                  label: 'Bedroom 3 – Wall (Eggshell) / Ceiling (Flat)',
+                  required: false,
+                  placeholder: 'Enter bedroom 3 colors'
+                },
+                {
+                  id: 'hallways_wall_ceiling',
+                  type: 'text',
+                  label: 'Hallways – Wall (Eggshell) / Ceiling (Flat)',
+                  required: false,
+                  placeholder: 'Enter hallway colors'
+                },
+                {
+                  id: 'bathrooms_wall_ceiling',
+                  type: 'text',
+                  label: 'Bathrooms – Wall (Eggshell) / Ceiling (Flat)',
+                  required: false,
+                  placeholder: 'Enter bathroom colors'
+                },
+                {
+                  id: 'basement_rec_area_wall_ceiling',
+                  type: 'text',
+                  label: 'Basement / Rec Area – Wall (Eggshell) / Ceiling (Flat)',
+                  required: false,
+                  placeholder: 'Enter basement/rec area colors'
+                },
+                {
+                  id: 'accent_walls_specialty_finishes',
+                  type: 'text',
+                  label: 'Accent Walls / Specialty Finishes (Describe Location & Color)',
+                  required: false,
+                  placeholder: 'Enter accent wall details'
                 }
               ]
             },
             {
-              id: 'flooring',
-              title: 'Flooring',
+              id: 'flooring_selections',
+              title: 'Flooring Selections (Room-by-Room)',
               fields: [
                 {
-                  id: 'main_flooring',
+                  id: 'entry_flooring',
                   type: 'text',
-                  label: 'Main Flooring Type',
+                  label: 'Entry',
                   required: false,
-                  placeholder: 'Enter main flooring type'
+                  placeholder: 'Enter entry flooring'
                 },
                 {
-                  id: 'bedroom_flooring',
+                  id: 'kitchen_flooring',
                   type: 'text',
-                  label: 'Bedroom Flooring',
+                  label: 'Kitchen',
                   required: false,
-                  placeholder: 'Enter bedroom flooring'
+                  placeholder: 'Enter kitchen flooring'
                 },
                 {
-                  id: 'bathroom_flooring',
+                  id: 'dining_room_flooring',
                   type: 'text',
-                  label: 'Bathroom Flooring',
+                  label: 'Dining Room',
+                  required: false,
+                  placeholder: 'Enter dining room flooring'
+                },
+                {
+                  id: 'living_room_flooring',
+                  type: 'text',
+                  label: 'Living Room',
+                  required: false,
+                  placeholder: 'Enter living room flooring'
+                },
+                {
+                  id: 'hallways_flooring',
+                  type: 'text',
+                  label: 'Hallways',
+                  required: false,
+                  placeholder: 'Enter hallway flooring'
+                },
+                {
+                  id: 'master_bedroom_flooring',
+                  type: 'text',
+                  label: 'Master Bedroom',
+                  required: false,
+                  placeholder: 'Enter master bedroom flooring'
+                },
+                {
+                  id: 'bedroom_2_flooring',
+                  type: 'text',
+                  label: 'Bedroom 2',
+                  required: false,
+                  placeholder: 'Enter bedroom 2 flooring'
+                },
+                {
+                  id: 'bedroom_3_flooring',
+                  type: 'text',
+                  label: 'Bedroom 3',
+                  required: false,
+                  placeholder: 'Enter bedroom 3 flooring'
+                },
+                {
+                  id: 'bathrooms_flooring',
+                  type: 'text',
+                  label: 'Bathrooms',
                   required: false,
                   placeholder: 'Enter bathroom flooring'
+                },
+                {
+                  id: 'laundry_mudroom_flooring',
+                  type: 'text',
+                  label: 'Laundry / Mudroom',
+                  required: false,
+                  placeholder: 'Enter laundry/mudroom flooring'
+                },
+                {
+                  id: 'basement_rec_areas_flooring',
+                  type: 'text',
+                  label: 'Basement / Rec Areas',
+                  required: false,
+                  placeholder: 'Enter basement/rec area flooring'
+                }
+              ]
+            },
+            {
+              id: 'cabinetry_countertops',
+              title: 'Cabinetry & Countertops (Room-by-Room)',
+              fields: [
+                {
+                  id: 'kitchen_cabinets_sam_mueller_style_color',
+                  type: 'text',
+                  label: 'Kitchen Cabinets (Sam Mueller – Style/Color)',
+                  required: false,
+                  placeholder: 'Enter kitchen cabinet details'
+                },
+                {
+                  id: 'kitchen_countertops_material_color',
+                  type: 'text',
+                  label: 'Kitchen Countertops (Material/Color)',
+                  required: false,
+                  placeholder: 'Enter kitchen countertop details'
+                },
+                {
+                  id: 'laundry_mudroom_cabinets_sam_mueller_color',
+                  type: 'text',
+                  label: 'Laundry / Mudroom Cabinets (Sam Mueller – Color)',
+                  required: false,
+                  placeholder: 'Enter laundry/mudroom cabinet details'
+                },
+                {
+                  id: 'master_bath_vanity_sam_mueller_color_top',
+                  type: 'text',
+                  label: 'Master Bath Vanity (Sam Mueller – Color/Top)',
+                  required: false,
+                  placeholder: 'Enter master bath vanity details'
+                },
+                {
+                  id: 'main_bath_vanity_sam_mueller_color_top',
+                  type: 'text',
+                  label: 'Main Bath Vanity (Sam Mueller – Color/Top)',
+                  required: false,
+                  placeholder: 'Enter main bath vanity details'
+                },
+                {
+                  id: 'powder_bath_vanity_sam_mueller_color_top',
+                  type: 'text',
+                  label: 'Powder Bath Vanity (Sam Mueller – Color/Top)',
+                  required: false,
+                  placeholder: 'Enter powder bath vanity details'
+                },
+                {
+                  id: 'basement_bath_vanity_sam_mueller_color_top',
+                  type: 'text',
+                  label: 'Basement Bath Vanity (Sam Mueller – Color/Top)',
+                  required: false,
+                  placeholder: 'Enter basement bath vanity details'
+                },
+                {
+                  id: 'hardware_pulls_knobs_finish',
+                  type: 'text',
+                  label: 'Hardware (Pulls/Knobs – Finish)',
+                  required: false,
+                  placeholder: 'Enter hardware details'
+                },
+                {
+                  id: 'backsplash_material_pattern',
+                  type: 'text',
+                  label: 'Backsplash (Material / Pattern)',
+                  required: false,
+                  placeholder: 'Enter backsplash details'
+                }
+              ]
+            },
+            {
+              id: 'master_bathroom_selections',
+              title: 'Master Bathroom Selections',
+              fields: [
+                {
+                  id: 'master_vanity_sam_mueller_size_color_top',
+                  type: 'text',
+                  label: 'Vanity (Sam Mueller – Size/Color/Top)',
+                  required: false,
+                  placeholder: 'Enter master vanity details'
+                },
+                {
+                  id: 'master_mirror_size_style',
+                  type: 'text',
+                  label: 'Mirror (Size/Style)',
+                  required: false,
+                  placeholder: 'Enter master mirror details'
+                },
+                {
+                  id: 'master_faucet_sam_mueller_model_finish',
+                  type: 'text',
+                  label: 'Faucet (Sam Mueller – Model/Finish)',
+                  required: false,
+                  placeholder: 'Enter master faucet details'
+                },
+                {
+                  id: 'master_tub_shower_sam_mueller_panels_tile_fixtures',
+                  type: 'text',
+                  label: 'Tub/Shower (Sam Mueller – Panels/Tile/Fixtures)',
+                  required: false,
+                  placeholder: 'Enter master tub/shower details'
+                },
+                {
+                  id: 'master_toilet_brand_color',
+                  type: 'text',
+                  label: 'Toilet (Brand/Color)',
+                  required: false,
+                  placeholder: 'Enter master toilet details'
+                },
+                {
+                  id: 'master_hardware_towel_bars_hooks_tp_holder',
+                  type: 'text',
+                  label: 'Hardware (Towel Bars / Hooks / TP Holder)',
+                  required: false,
+                  placeholder: 'Enter master hardware details'
+                }
+              ]
+            },
+            {
+              id: 'main_bathroom_selections',
+              title: 'Main Bathroom Selections',
+              fields: [
+                {
+                  id: 'main_vanity_sam_mueller_size_color_top',
+                  type: 'text',
+                  label: 'Vanity (Sam Mueller – Size/Color/Top)',
+                  required: false,
+                  placeholder: 'Enter main vanity details'
+                },
+                {
+                  id: 'main_mirror_size_style',
+                  type: 'text',
+                  label: 'Mirror (Size/Style)',
+                  required: false,
+                  placeholder: 'Enter main mirror details'
+                },
+                {
+                  id: 'main_faucet_sam_mueller_model_finish',
+                  type: 'text',
+                  label: 'Faucet (Sam Mueller – Model/Finish)',
+                  required: false,
+                  placeholder: 'Enter main faucet details'
+                },
+                {
+                  id: 'main_tub_shower_sam_mueller_panels_tile_fixtures',
+                  type: 'text',
+                  label: 'Tub/Shower (Sam Mueller – Panels/Tile/Fixtures)',
+                  required: false,
+                  placeholder: 'Enter main tub/shower details'
+                },
+                {
+                  id: 'main_toilet_brand_color',
+                  type: 'text',
+                  label: 'Toilet (Brand/Color)',
+                  required: false,
+                  placeholder: 'Enter main toilet details'
+                },
+                {
+                  id: 'main_hardware_towel_bars_hooks_tp_holder',
+                  type: 'text',
+                  label: 'Hardware (Towel Bars / Hooks / TP Holder)',
+                  required: false,
+                  placeholder: 'Enter main hardware details'
+                }
+              ]
+            },
+            {
+              id: 'powder_bathroom_selections',
+              title: 'Powder Bathroom Selections',
+              fields: [
+                {
+                  id: 'powder_vanity_sam_mueller_size_color_top',
+                  type: 'text',
+                  label: 'Vanity (Sam Mueller – Size/Color/Top)',
+                  required: false,
+                  placeholder: 'Enter powder vanity details'
+                },
+                {
+                  id: 'powder_mirror_size_style',
+                  type: 'text',
+                  label: 'Mirror (Size/Style)',
+                  required: false,
+                  placeholder: 'Enter powder mirror details'
+                },
+                {
+                  id: 'powder_faucet_sam_mueller_model_finish',
+                  type: 'text',
+                  label: 'Faucet (Sam Mueller – Model/Finish)',
+                  required: false,
+                  placeholder: 'Enter powder faucet details'
+                },
+                {
+                  id: 'powder_tub_shower_sam_mueller_panels_tile_fixtures',
+                  type: 'text',
+                  label: 'Tub/Shower (Sam Mueller – Panels/Tile/Fixtures)',
+                  required: false,
+                  placeholder: 'Enter powder tub/shower details'
+                },
+                {
+                  id: 'powder_toilet_brand_color',
+                  type: 'text',
+                  label: 'Toilet (Brand/Color)',
+                  required: false,
+                  placeholder: 'Enter powder toilet details'
+                },
+                {
+                  id: 'powder_hardware_towel_bars_hooks_tp_holder',
+                  type: 'text',
+                  label: 'Hardware (Towel Bars / Hooks / TP Holder)',
+                  required: false,
+                  placeholder: 'Enter powder hardware details'
+                }
+              ]
+            },
+            {
+              id: 'basement_bathroom_selections',
+              title: 'Basement Bathroom Selections',
+              fields: [
+                {
+                  id: 'basement_vanity_sam_mueller_size_color_top',
+                  type: 'text',
+                  label: 'Vanity (Sam Mueller – Size/Color/Top)',
+                  required: false,
+                  placeholder: 'Enter basement vanity details'
+                },
+                {
+                  id: 'basement_mirror_size_style',
+                  type: 'text',
+                  label: 'Mirror (Size/Style)',
+                  required: false,
+                  placeholder: 'Enter basement mirror details'
+                },
+                {
+                  id: 'basement_faucet_sam_mueller_model_finish',
+                  type: 'text',
+                  label: 'Faucet (Sam Mueller – Model/Finish)',
+                  required: false,
+                  placeholder: 'Enter basement faucet details'
+                },
+                {
+                  id: 'basement_tub_shower_sam_mueller_panels_tile_fixtures',
+                  type: 'text',
+                  label: 'Tub/Shower (Sam Mueller – Panels/Tile/Fixtures)',
+                  required: false,
+                  placeholder: 'Enter basement tub/shower details'
+                },
+                {
+                  id: 'basement_toilet_brand_color',
+                  type: 'text',
+                  label: 'Toilet (Brand/Color)',
+                  required: false,
+                  placeholder: 'Enter basement toilet details'
+                },
+                {
+                  id: 'basement_hardware_towel_bars_hooks_tp_holder',
+                  type: 'text',
+                  label: 'Hardware (Towel Bars / Hooks / TP Holder)',
+                  required: false,
+                  placeholder: 'Enter basement hardware details'
+                }
+              ]
+            },
+            {
+              id: 'final_review_sign_off',
+              title: 'Final Review & Sign-Off',
+              fields: [
+                {
+                  id: 'project_manager_verification_name',
+                  type: 'text',
+                  label: 'Project Manager Verification - Name',
+                  required: true,
+                  placeholder: 'Enter project manager name'
+                },
+                {
+                  id: 'project_manager_verification_signature',
+                  type: 'text',
+                  label: 'Project Manager Verification - Signature',
+                  required: true,
+                  placeholder: 'Enter signature'
+                },
+                {
+                  id: 'project_manager_verification_date',
+                  type: 'date',
+                  label: 'Project Manager Verification - Date',
+                  required: true
+                },
+                {
+                  id: 'designer_buyer_approval_name',
+                  type: 'text',
+                  label: 'Designer / Buyer Approval - Name',
+                  required: true,
+                  placeholder: 'Enter designer/buyer name'
+                },
+                {
+                  id: 'designer_buyer_approval_signature',
+                  type: 'text',
+                  label: 'Designer / Buyer Approval - Signature',
+                  required: true,
+                  placeholder: 'Enter signature'
+                },
+                {
+                  id: 'designer_buyer_approval_date',
+                  type: 'date',
+                  label: 'Designer / Buyer Approval - Date',
+                  required: true
                 }
               ]
             }
