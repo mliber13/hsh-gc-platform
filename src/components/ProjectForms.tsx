@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Select } from './ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { ArrowLeft, FileCheck, Plus, CheckCircle, Clock, Edit } from 'lucide-react';
 import hshLogo from '/HSH Contractor Logo - Color.png';
 import { supabase } from '../lib/supabase';
@@ -110,6 +110,37 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
     }
   };
 
+  const deleteForm = async (formId: string) => {
+    if (!confirm('Are you sure you want to delete this form? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('project_forms')
+        .delete()
+        .eq('id', formId);
+
+      if (error) {
+        console.error('Error deleting form:', error);
+        return;
+      }
+
+      console.log('Form deleted successfully');
+      
+      // Remove the form from local state
+      setForms(prev => prev.filter(form => form.id !== formId));
+      
+      // Close the form if it's currently selected
+      if (selectedForm?.id === formId) {
+        setSelectedForm(null);
+      }
+      
+    } catch (error) {
+      console.error('Error deleting form:', error);
+    }
+  };
+
   const getFormDisplayName = (formType: string) => {
     const names: Record<string, string> = {
       'architect_verification': 'Architect Engineer Verification',
@@ -213,6 +244,12 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                   id: 'signature_date',
                   type: 'date',
                   label: 'Signature Date',
+                  required: true
+                },
+                {
+                  id: 'signature_verified',
+                  type: 'checkbox',
+                  label: 'I verify that all information above is accurate and complete',
                   required: true
                 }
               ]
@@ -713,6 +750,14 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                         >
                           {form.status === 'draft' ? 'Continue' : 'View'}
                         </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => deleteForm(form.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          Delete
+                        </Button>
                       </div>
                     </div>
                   </CardContent>
@@ -743,6 +788,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
             // TODO: Implement save functionality
             console.log('Saving form data:', formData);
           }}
+          onDelete={deleteForm}
         />
       )}
     </div>
@@ -753,9 +799,10 @@ interface DynamicFormProps {
   form: ProjectForm;
   onClose: () => void;
   onSave: (formData: Record<string, any>) => void;
+  onDelete: (formId: string) => void;
 }
 
-const DynamicForm: React.FC<DynamicFormProps> = ({ form, onClose, onSave }) => {
+const DynamicForm: React.FC<DynamicFormProps> = ({ form, onClose, onSave, onDelete }) => {
   const [formData, setFormData] = useState<Record<string, any>>(form.form_data);
   const [currentSection, setCurrentSection] = useState(0);
 
@@ -845,6 +892,18 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, onClose, onSave }) => {
               )}
             </div>
             <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  if (confirm('Are you sure you want to delete this form?')) {
+                    onDelete(form.id);
+                    onClose();
+                  }
+                }}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                Delete Form
+              </Button>
               <Button variant="outline" onClick={handleSave}>
                 Save Draft
               </Button>
@@ -918,12 +977,16 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
             onValueChange={onChange}
             required={field.required}
           >
-            <option value="">Select an option</option>
-            {field.options?.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select an option" />
+            </SelectTrigger>
+            <SelectContent>
+              {field.options?.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
         );
 
