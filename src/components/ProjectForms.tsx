@@ -965,6 +965,31 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                   placeholder: 'Enter project manager name'
                 }
               ]
+            },
+            {
+              id: 'final_review_sign_off',
+              title: 'Final Review & Sign-Off',
+              fields: [
+                {
+                  id: 'closing_project_manager_verification_name',
+                  type: 'text',
+                  label: 'Project Manager Verification - Name',
+                  required: true,
+                  placeholder: 'Enter project manager name'
+                },
+                {
+                  id: 'closing_project_manager_verification_signature',
+                  type: 'signature',
+                  label: 'Project Manager Verification - Signature',
+                  required: true
+                },
+                {
+                  id: 'closing_project_manager_verification_date',
+                  type: 'date',
+                  label: 'Project Manager Verification - Date',
+                  required: true
+                }
+              ]
             }
           ]
         };
