@@ -370,7 +370,7 @@ function App() {
           projectId={selectedProject.id}
           project={{
             name: selectedProject.name,
-            project_number: selectedProject.project_number,
+            project_number: selectedProject.projectNumber,
             status: selectedProject.status
           }}
           onBack={handleBackToProjectDetail}
