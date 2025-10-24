@@ -81,6 +81,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
       const { data, error } = await supabase
         .from('project_forms')
         .insert({
+          organization_id: 'default-org', // TODO: Get from user context
           project_id: projectId,
           form_type: formType,
           form_name: getFormDisplayName(formType),
