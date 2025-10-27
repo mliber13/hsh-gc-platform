@@ -87,7 +87,10 @@ interface ActualEntry {
 // ----------------------------------------------------------------------------
 
 export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
-  console.log('🚀 ProjectActuals component rendered with project:', project?.name)
+  // Generate unique component ID for debugging
+  const componentId = React.useMemo(() => Math.random().toString(36).substr(2, 9), [])
+  
+  console.log(`🚀 ProjectActuals component rendered with ID: ${componentId} for project:`, project?.name)
   
   const [trades, setTrades] = useState<Trade[]>([])
   const [actualEntries, setActualEntries] = useState<ActualEntry[]>([])
@@ -100,6 +103,14 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const [showPrintReport, setShowPrintReport] = useState(false)
   const [reportDepth, setReportDepth] = useState<ReportDepth>('full')
   const [reportType, setReportType] = useState<'actuals' | 'comparison'>('actuals')
+
+  // Component lifecycle debugging
+  React.useEffect(() => {
+    console.log(`🚀 ProjectActuals component MOUNTED with ID: ${componentId} for project: ${project.name}`)
+    return () => {
+      console.log(`🚀 ProjectActuals component UNMOUNTED with ID: ${componentId} for project: ${project.name}`)
+    }
+  }, [componentId, project.name])
 
   // Load trades for the estimate
   useEffect(() => {
@@ -461,9 +472,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     <p className="text-2xl font-bold text-gray-900 mt-1">
                       {(() => {
                         const total = calculateActualTotal()
-                        console.log('💰 Display: formatCurrency input:', total)
+                        console.log(`💰 Display [${componentId}]: formatCurrency input:`, total)
                         const formatted = formatCurrency(total)
-                        console.log('💰 Display: formatCurrency output:', formatted)
+                        console.log(`💰 Display [${componentId}]: formatCurrency output:`, formatted)
                         return formatted
                       })()}
                     </p>
