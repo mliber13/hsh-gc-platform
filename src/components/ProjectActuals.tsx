@@ -130,7 +130,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   // Load actual entries from project.actuals
   useEffect(() => {
     const loadActuals = async () => {
+      console.log('🔄 ProjectActuals useEffect: Loading actuals for project:', project.id)
       const actuals = await getProjectActuals_Hybrid(project.id)
+      console.log('📊 ProjectActuals useEffect: Received actuals:', actuals)
       
       if (actuals) {
         const entries: ActualEntry[] = []
