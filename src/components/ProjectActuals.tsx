@@ -851,6 +851,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                     <p className="text-sm font-medium text-gray-900">{entry.description}</p>
                                                     <p className="text-xs text-gray-600">
                                                       {entry.date.toLocaleDateString()}
+                                                      {entry.category && ` • ${TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category}`}
+                                                      {entry.tradeId && trades.find(t => t.id === entry.tradeId) && ` • ${trades.find(t => t.id === entry.tradeId)?.name}`}
                                                       {entry.vendor && ` • ${entry.vendor}`}
                                                       {entry.invoiceNumber && ` • Invoice: ${entry.invoiceNumber}`}
                                                       {entry.subcontractorName && ` • ${entry.subcontractorName}`}
@@ -1397,7 +1399,7 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
 
             {formData.category && filteredTrades.length > 0 && (
               <div>
-                <Label htmlFor="tradeId">Link to Specific Item (Optional)</Label>
+                <Label htmlFor="tradeId">Link to Specific Item</Label>
                 <Select 
                   value={formData.tradeId || 'none'} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, tradeId: value === 'none' ? '' : value }))}
@@ -1406,14 +1408,17 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
                     <SelectValue placeholder="Select item or leave blank..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">None - Apply to category only</SelectItem>
+                    <SelectItem value="none">Apply to entire category (recommended for general costs)</SelectItem>
                     {filteredTrades.map((trade) => (
                       <SelectItem key={trade.id} value={trade.id}>
-                        {trade.name} ({trade.quantity} {trade.unit})
+                        {trade.name} ({trade.quantity} {trade.unit}) - {formatCurrency(trade.totalCost)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 <strong>Tip:</strong> Link to specific items for detailed tracking, or apply to category for general costs like permits, cleanup, etc.
+                </p>
               </div>
             )}
 
