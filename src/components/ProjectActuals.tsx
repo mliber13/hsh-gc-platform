@@ -183,6 +183,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         // Sort by date, newest first
         entries.sort((a, b) => b.date.getTime() - a.date.getTime())
         
+        console.log('🔄 ProjectActuals useEffect: Converted entries:', entries)
+        console.log('💰 ProjectActuals useEffect: Entry amounts:', entries.map(e => ({ id: e.id, amount: e.amount })))
+        console.log('🧮 ProjectActuals useEffect: Calculated total:', entries.reduce((sum, e) => sum + e.amount, 0))
+        
         setActualEntries(entries)
       }
     }
@@ -205,7 +209,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   }
 
   const calculateActualTotal = () => {
-    return actualEntries.reduce((sum, entry) => sum + entry.amount, 0)
+    const total = actualEntries.reduce((sum, entry) => sum + entry.amount, 0)
+    console.log('🧮 calculateActualTotal: actualEntries:', actualEntries.length, 'total:', total)
+    console.log('🧮 calculateActualTotal: entry amounts:', actualEntries.map(e => ({ id: e.id, amount: e.amount })))
+    return total
   }
 
   const calculateVariance = () => {
