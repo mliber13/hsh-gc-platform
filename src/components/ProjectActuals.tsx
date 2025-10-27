@@ -459,7 +459,13 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   <div>
                     <p className="text-sm text-gray-600">Actual Spent</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">
-                      {formatCurrency(calculateActualTotal())}
+                      {(() => {
+                        const total = calculateActualTotal()
+                        console.log('💰 Display: formatCurrency input:', total)
+                        const formatted = formatCurrency(total)
+                        console.log('💰 Display: formatCurrency output:', formatted)
+                        return formatted
+                      })()}
                     </p>
                   </div>
                   <div className="bg-orange-100 rounded-full p-3">
