@@ -998,7 +998,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             if (actuals) {
               const entries: ActualEntry[] = []
               
-              actuals.laborEntries?.forEach(labor => {
+              actuals.laborEntries?.forEach((labor: LaborEntry) => {
                 entries.push({
                   id: labor.id,
                   type: 'labor',
