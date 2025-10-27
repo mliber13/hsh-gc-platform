@@ -7,8 +7,9 @@
 //
 
 import React, { useState, useEffect } from 'react'
-import { Project, Trade } from '@/types'
-import { getTradesForEstimate_Hybrid, getProjectActuals_Hybrid } from '@/services/hybridService'
+import { Project, Trade, LaborEntry, MaterialEntry, SubcontractorEntry } from '@/types'
+import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
+import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { TRADE_CATEGORIES, CATEGORY_GROUPS, getCategoryGroup } from '@/types'
@@ -115,9 +116,9 @@ export function VarianceReport({ project, onBack }: VarianceReportProps) {
         // Get actual costs for this trade
         const tradeActual = actuals 
           ? [
-              ...(actuals.laborEntries?.filter(e => e.tradeId === trade.id) || []),
-              ...(actuals.materialEntries?.filter(e => e.tradeId === trade.id) || []),
-              ...(actuals.subcontractorEntries?.filter(e => e.tradeId === trade.id) || []),
+              ...(actuals.laborEntries?.filter((e: LaborEntry) => e.tradeId === trade.id) || []),
+              ...(actuals.materialEntries?.filter((e: MaterialEntry) => e.tradeId === trade.id) || []),
+              ...(actuals.subcontractorEntries?.filter((e: SubcontractorEntry) => e.tradeId === trade.id) || []),
             ].reduce((sum, entry) => {
               if ('totalCost' in entry) return sum + entry.totalCost
               if ('totalPaid' in entry) return sum + entry.totalPaid
