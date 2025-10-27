@@ -475,7 +475,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                         console.log(`💰 Display [${componentId}]: formatCurrency input:`, total)
                         const formatted = formatCurrency(total)
                         console.log(`💰 Display [${componentId}]: formatCurrency output:`, formatted)
-                        return formatted
+                        return `${formatted} [${componentId}]`
                       })()}
                     </p>
                   </div>
