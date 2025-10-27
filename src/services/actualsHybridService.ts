@@ -210,12 +210,23 @@ export async function deleteSubcontractorEntry_Hybrid(entryId: string): Promise<
 // ============================================================================
 
 export async function getProjectActuals_Hybrid(projectId: string): Promise<any | null> {
+  console.log('🔍 getProjectActuals_Hybrid called for project:', projectId)
+  
   if (isOnlineMode()) {
+    console.log('🌐 Online mode - fetching from Supabase')
     try {
       // Fetch all entries from Supabase
+      console.log('📡 Fetching labor entries...')
       const laborEntries = await fetchLaborEntries(projectId)
+      console.log('📡 Labor entries fetched:', laborEntries.length, laborEntries)
+      
+      console.log('📡 Fetching material entries...')
       const materialEntries = await fetchMaterialEntries(projectId)
+      console.log('📡 Material entries fetched:', materialEntries.length, materialEntries)
+      
+      console.log('📡 Fetching subcontractor entries...')
       const subcontractorEntries = await fetchSubcontractorEntries(projectId)
+      console.log('📡 Subcontractor entries fetched:', subcontractorEntries.length, subcontractorEntries)
       
       // Calculate totals
       const totalLaborCost = laborEntries.reduce((sum: number, entry: any) => sum + entry.totalCost, 0)
@@ -223,7 +234,14 @@ export async function getProjectActuals_Hybrid(projectId: string): Promise<any |
       const totalSubcontractorCost = subcontractorEntries.reduce((sum: number, entry: any) => sum + entry.totalPaid, 0)
       const totalActualCost = totalLaborCost + totalMaterialCost + totalSubcontractorCost
       
-      return {
+      console.log('💰 Calculated totals:', {
+        totalLaborCost,
+        totalMaterialCost,
+        totalSubcontractorCost,
+        totalActualCost
+      })
+      
+      const result = {
         id: projectId + '_actuals',
         projectId,
         laborEntries,
@@ -238,13 +256,22 @@ export async function getProjectActuals_Hybrid(projectId: string): Promise<any |
         dailyLogs: [],
         changeOrders: [],
       }
+      
+      console.log('✅ Returning actuals result:', result)
+      return result
     } catch (error) {
-      console.error('Error fetching actuals from Supabase:', error)
+      console.error('❌ Error fetching actuals from Supabase:', error)
+      console.log('🔄 Falling back to localStorage...')
       // Fall back to localStorage
-      return getProjectActualsLS(projectId)
+      const localResult = getProjectActualsLS(projectId)
+      console.log('💾 localStorage result:', localResult)
+      return localResult
     }
   } else {
-    return getProjectActualsLS(projectId)
+    console.log('💾 Offline mode - using localStorage')
+    const localResult = getProjectActualsLS(projectId)
+    console.log('💾 localStorage result:', localResult)
+    return localResult
   }
 }
 

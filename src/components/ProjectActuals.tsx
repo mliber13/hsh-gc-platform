@@ -648,8 +648,28 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       console.log('Project ID:', project.id)
                       alert('Check browser console for detailed data')
                     }}
+                    className="mr-2"
                   >
                     📊 Log to Console
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      // Check localStorage directly
+                      const localStorageData = localStorage.getItem('hsh_gc_labor_entries')
+                      const materialData = localStorage.getItem('hsh_gc_material_entries')
+                      const subData = localStorage.getItem('hsh_gc_subcontractor_entries')
+                      
+                      console.log('🔍 localStorage data:')
+                      console.log('Labor entries:', localStorageData ? JSON.parse(localStorageData) : 'No data')
+                      console.log('Material entries:', materialData ? JSON.parse(materialData) : 'No data')
+                      console.log('Subcontractor entries:', subData ? JSON.parse(subData) : 'No data')
+                      
+                      alert('Check browser console for localStorage data')
+                    }}
+                  >
+                    💾 Check localStorage
                   </Button>
                 </div>
               </div>
