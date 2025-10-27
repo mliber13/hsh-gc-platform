@@ -559,6 +559,103 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             </CardContent>
           </Card>
 
+          {/* Debug Information */}
+          <Card className="bg-gray-50 border-gray-200">
+            <CardHeader>
+              <CardTitle className="text-gray-700">Debug Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm">
+                <p><strong>Total Entries:</strong> {actualEntries.length}</p>
+                <p><strong>Labor Entries:</strong> {actualEntries.filter(e => e.type === 'labor').length}</p>
+                <p><strong>Material Entries:</strong> {actualEntries.filter(e => e.type === 'material').length}</p>
+                <p><strong>Subcontractor Entries:</strong> {actualEntries.filter(e => e.type === 'subcontractor').length}</p>
+                <p><strong>Linked Entries:</strong> {actualEntries.filter(e => e.tradeId).length}</p>
+                <p><strong>Unlinked Entries:</strong> {actualEntries.filter(e => !e.tradeId).length}</p>
+                <details className="mt-2">
+                  <summary className="cursor-pointer font-semibold">Show Raw Entries Data</summary>
+                  <pre className="mt-2 p-2 bg-white border rounded text-xs overflow-auto max-h-40">
+                    {JSON.stringify(actualEntries, null, 2)}
+                  </pre>
+                </details>
+                <div className="mt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      // Force reload actuals
+                      const loadActuals = async () => {
+                        const actuals = await getProjectActuals_Hybrid(project.id)
+                        
+                        if (actuals) {
+                          const entries: ActualEntry[] = []
+                          
+                          actuals.laborEntries?.forEach((labor: LaborEntry) => {
+                            entries.push({
+                              id: labor.id,
+                              type: 'labor',
+                              date: labor.date,
+                              amount: labor.totalCost,
+                              description: labor.description,
+                              category: labor.trade,
+                              tradeId: labor.tradeId,
+                              payrollPeriod: labor.date.toLocaleDateString(),
+                            })
+                          })
+                          
+                          actuals.materialEntries?.forEach((material: MaterialEntry) => {
+                            entries.push({
+                              id: material.id,
+                              type: 'material',
+                              date: material.date,
+                              amount: material.totalCost,
+                              description: material.materialName,
+                              category: material.category,
+                              tradeId: material.tradeId,
+                              vendor: material.vendor,
+                              invoiceNumber: material.invoiceNumber,
+                            })
+                          })
+                          
+                          actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
+                            entries.push({
+                              id: sub.id,
+                              type: 'subcontractor',
+                              date: sub.createdAt,
+                              amount: sub.totalPaid,
+                              description: sub.scopeOfWork,
+                              category: sub.trade,
+                              tradeId: sub.tradeId,
+                              subcontractorName: sub.subcontractor.name,
+                            })
+                          })
+                          
+                          entries.sort((a, b) => b.date.getTime() - a.date.getTime())
+                          setActualEntries(entries)
+                        }
+                      }
+                      loadActuals()
+                    }}
+                    className="mr-2"
+                  >
+                    🔄 Force Reload Data
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      console.log('Current actuals data:', actualEntries)
+                      console.log('Project ID:', project.id)
+                      alert('Check browser console for detailed data')
+                    }}
+                  >
+                    📊 Log to Console
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Unlinked Entries Summary */}
           {(() => {
             const allUnlinkedEntries = actualEntries.filter(entry => !entry.tradeId)
