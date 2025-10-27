@@ -559,6 +559,68 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             </CardContent>
           </Card>
 
+          {/* Unlinked Entries Summary */}
+          {(() => {
+            const allUnlinkedEntries = actualEntries.filter(entry => !entry.tradeId)
+            return allUnlinkedEntries.length > 0 && (
+              <Card className="bg-yellow-50 border-yellow-200">
+                <CardHeader>
+                  <CardTitle className="text-yellow-800">General Entries (Not Linked to Specific Items)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {allUnlinkedEntries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className={`flex items-center justify-between p-3 rounded border ${getEntryColor(entry.type)}`}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          {getEntryIcon(entry.type)}
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">{entry.description}</p>
+                            <p className="text-xs text-gray-600">
+                              {entry.date.toLocaleDateString()}
+                              {entry.category && ` • ${TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category}`}
+                              {entry.vendor && ` • ${entry.vendor}`}
+                              {entry.invoiceNumber && ` • Invoice: ${entry.invoiceNumber}`}
+                              {entry.subcontractorName && ` • ${entry.subcontractorName}`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditEntry(entry)}
+                              className="h-7 px-2"
+                            >
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDeleteEntry(entry)}
+                              className="h-7 px-2"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="pt-2 border-t border-yellow-300">
+                      <p className="text-sm font-semibold text-yellow-800">
+                        Total Unlinked Entries: {formatCurrency(allUnlinkedEntries.reduce((sum, entry) => sum + entry.amount, 0))}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })()}
+
           {/* Variance Legend */}
           {changeOrders.length > 0 && (
             <Card className="bg-blue-50 border-blue-200">
@@ -891,9 +953,71 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                           </div>
                                         )}
 
-                                        {tradeActuals.length === 0 && (
-                                          <p className="text-sm text-gray-500 italic mt-2">No actual entries yet</p>
-                                        )}
+                                        {/* Show unlinked entries for this category */}
+                                        {(() => {
+                                          const categoryEntries = getActualsByCategory(category)
+                                          const unlinkedEntries = categoryEntries.filter(entry => !entry.tradeId)
+                                          return unlinkedEntries.length > 0 && (
+                                            <div className="space-y-2 mt-3 pt-3 border-t border-gray-200">
+                                              <p className="text-xs font-semibold text-gray-700 uppercase">General Category Entries:</p>
+                                              {unlinkedEntries.map((entry) => (
+                                                <div
+                                                  key={entry.id}
+                                                  className={`flex items-center justify-between p-2 rounded border ${getEntryColor(entry.type)}`}
+                                                >
+                                                  <div className="flex items-center gap-2 flex-1">
+                                                    {getEntryIcon(entry.type)}
+                                                    <div className="flex-1">
+                                                      <p className="text-sm font-medium text-gray-900">{entry.description}</p>
+                                                      <p className="text-xs text-gray-600">
+                                                        {entry.date.toLocaleDateString()}
+                                                        {entry.category && ` • ${TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category}`}
+                                                        {entry.vendor && ` • ${entry.vendor}`}
+                                                        {entry.invoiceNumber && ` • Invoice: ${entry.invoiceNumber}`}
+                                                        {entry.subcontractorName && ` • ${entry.subcontractorName}`}
+                                                      </p>
+                                                    </div>
+                                                  </div>
+                                                  <div className="flex items-center gap-2">
+                                                    <p className="font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
+                                                    <div className="flex gap-1">
+                                                      <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={(e) => {
+                                                          e.stopPropagation()
+                                                          handleEditEntry(entry)
+                                                        }}
+                                                        className="h-7 px-2"
+                                                      >
+                                                        <Edit className="w-3 h-3" />
+                                                      </Button>
+                                                      <Button
+                                                        size="sm"
+                                                        variant="destructive"
+                                                        onClick={(e) => {
+                                                          e.stopPropagation()
+                                                          handleDeleteEntry(entry)
+                                                        }}
+                                                        className="h-7 px-2"
+                                                      >
+                                                        <Trash2 className="w-3 h-3" />
+                                                      </Button>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )
+                                        })()}
+
+                                        {tradeActuals.length === 0 && (() => {
+                                          const categoryEntries = getActualsByCategory(category)
+                                          const unlinkedEntries = categoryEntries.filter(entry => !entry.tradeId)
+                                          return unlinkedEntries.length === 0 && (
+                                            <p className="text-sm text-gray-500 italic mt-2">No actual entries yet</p>
+                                          )
+                                        })()}
                                       </div>
                                     )
                                   })}
