@@ -11,18 +11,18 @@ import { v4 as uuidv4 } from 'uuid'
 import { Project, Trade, LaborEntry, MaterialEntry, SubcontractorEntry } from '@/types'
 import { PrintableReport, ReportDepth } from './PrintableReport'
 import { 
-  getTradesForEstimate,
-  getProjectActuals,
-  addLaborEntry,
-  addMaterialEntry,
-  addSubcontractorEntry,
-  updateLaborEntry,
-  updateMaterialEntry,
-  updateSubcontractorEntry,
-  deleteLaborEntry,
-  deleteMaterialEntry,
-  deleteSubcontractorEntry,
-} from '@/services'
+  getTradesForEstimate_Hybrid,
+  getProjectActuals_Hybrid,
+  addLaborEntry_Hybrid,
+  addMaterialEntry_Hybrid,
+  addSubcontractorEntry_Hybrid,
+  updateLaborEntry_Hybrid,
+  updateMaterialEntry_Hybrid,
+  updateSubcontractorEntry_Hybrid,
+  deleteLaborEntry_Hybrid,
+  deleteMaterialEntry_Hybrid,
+  deleteSubcontractorEntry_Hybrid,
+} from '@/services/actualsHybridService'
 import { fetchTradesForEstimate } from '@/services/supabaseService'
 import { isOnlineMode } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -109,13 +109,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         console.log('Project estimate ID:', project.estimate?.id)
         
         let loadedTrades: Trade[] = []
-        if (isOnlineMode()) {
-          console.log('Using Supabase to fetch trades')
-          loadedTrades = await fetchTradesForEstimate(project.estimate.id)
-        } else {
-          console.log('Using local storage to fetch trades')
-          loadedTrades = getTradesForEstimate(project.estimate.id)
-        }
+        console.log('Using hybrid service to fetch trades')
+        loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
         
         console.log('Loaded trades:', loadedTrades)
         setTrades(loadedTrades)
@@ -135,7 +130,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   // Load actual entries from project.actuals
   useEffect(() => {
     const loadActuals = async () => {
-      const actuals = getProjectActuals(project.id)
+      const actuals = await getProjectActuals_Hybrid(project.id)
       
       if (actuals) {
         const entries: ActualEntry[] = []
@@ -349,23 +344,23 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     setShowEntryForm(true)
   }
 
-  const handleDeleteEntry = (entry: ActualEntry) => {
+  const handleDeleteEntry = async (entry: ActualEntry) => {
     if (!confirm(`Delete this ${entry.type} entry for ${formatCurrency(entry.amount)}?`)) {
       return
     }
 
     let deleted = false
     if (entry.type === 'labor') {
-      deleted = deleteLaborEntry(entry.id)
+      deleted = await deleteLaborEntry_Hybrid(entry.id)
     } else if (entry.type === 'material') {
-      deleted = deleteMaterialEntry(entry.id)
+      deleted = await deleteMaterialEntry_Hybrid(entry.id)
     } else if (entry.type === 'subcontractor') {
-      deleted = deleteSubcontractorEntry(entry.id)
+      deleted = await deleteSubcontractorEntry_Hybrid(entry.id)
     }
 
     if (deleted) {
       // Reload actuals
-      const actuals = getProjectActuals(project.id)
+      const actuals = await getProjectActuals_Hybrid(project.id)
       if (actuals) {
         const entries: ActualEntry[] = []
         
@@ -941,18 +936,18 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           project={project}
           trades={trades}
           editingEntry={editingEntry}
-          onSave={(entry) => {
+          onSave={async (entry) => {
             // Save to storage based on entry type
             if (editingEntry) {
               // Update existing entry
               if (entry.type === 'labor') {
-                updateLaborEntry(entry.id, {
+                await updateLaborEntry_Hybrid(entry.id, {
                   date: entry.date,
                   description: entry.description,
                   totalCost: entry.amount,
                 })
               } else if (entry.type === 'material') {
-                updateMaterialEntry(entry.id, {
+                await updateMaterialEntry_Hybrid(entry.id, {
                   date: entry.date,
                   materialName: entry.description,
                   totalCost: entry.amount,
@@ -960,7 +955,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   invoiceNumber: entry.invoiceNumber,
                 })
               } else if (entry.type === 'subcontractor') {
-                updateSubcontractorEntry(entry.id, {
+                await updateSubcontractorEntry_Hybrid(entry.id, {
                   subcontractorName: entry.subcontractorName || 'Unknown',
                   scopeOfWork: entry.description,
                   totalPaid: entry.amount,
@@ -969,7 +964,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             } else {
               // Add new entry
               if (entry.type === 'labor') {
-                addLaborEntry(project.id, {
+                await addLaborEntry_Hybrid(project.id, {
                   date: entry.date,
                   description: entry.description,
                   totalCost: entry.amount,
@@ -977,7 +972,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   tradeId: entry.tradeId,
                 })
               } else if (entry.type === 'material') {
-                addMaterialEntry(project.id, {
+                await addMaterialEntry_Hybrid(project.id, {
                   date: entry.date,
                   materialName: entry.description,
                   totalCost: entry.amount,
@@ -987,7 +982,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   invoiceNumber: entry.invoiceNumber,
                 })
               } else if (entry.type === 'subcontractor') {
-                addSubcontractorEntry(project.id, {
+                await addSubcontractorEntry_Hybrid(project.id, {
                   subcontractorName: entry.subcontractorName || 'Unknown',
                   scopeOfWork: entry.description,
                   contractAmount: entry.amount,
@@ -999,7 +994,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             }
             
             // Reload actuals to reflect changes
-            const actuals = getProjectActuals(project.id)
+            const actuals = await getProjectActuals_Hybrid(project.id)
             if (actuals) {
               const entries: ActualEntry[] = []
               
