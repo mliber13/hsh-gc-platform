@@ -826,7 +826,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   }, 0)
                   
                   const groupActual = Object.values(groupCategories).flat().reduce((sum, trade) => {
-                    return sum + getCategoryActual(trade.category)
+                    // Only add actuals for trades that have actuals entries
+                    const tradeActuals = getActualsByTrade(trade.id)
+                    return sum + tradeActuals.reduce((tradeSum, entry) => tradeSum + entry.amount, 0)
                   }, 0)
                   
                   const groupVariance = groupActual - groupEstimate
