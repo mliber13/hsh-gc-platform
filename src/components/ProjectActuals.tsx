@@ -179,6 +179,13 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         
         // Convert subcontractor entries
         actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
+          console.log('🔍 Converting subcontractor entry:', {
+            id: sub.id,
+            trade: sub.trade,
+            tradeId: sub.tradeId,
+            amount: sub.totalPaid,
+            description: sub.scopeOfWork
+          })
           entries.push({
             id: sub.id,
             type: 'subcontractor',
@@ -298,7 +305,14 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   }
 
   const getCategoryActual = (category: string) => {
-    return getActualsByCategory(category).reduce((sum, entry) => sum + entry.amount, 0)
+    const entries = getActualsByCategory(category)
+    const total = entries.reduce((sum, entry) => sum + entry.amount, 0)
+    console.log(`🔍 getCategoryActual(${category}):`, {
+      entries: entries.length,
+      total,
+      entryDetails: entries.map(e => ({ id: e.id, amount: e.amount, description: e.description }))
+    })
+    return total
   }
 
   const formatCurrency = (amount: number) =>
