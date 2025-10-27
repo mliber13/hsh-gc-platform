@@ -1218,6 +1218,9 @@ interface ActualEntryFormProps {
 }
 
 function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel }: ActualEntryFormProps) {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+
   const [formData, setFormData] = useState({
     date: editingEntry?.date ? new Date(editingEntry.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     amount: editingEntry?.amount?.toString() || '',
