@@ -2147,9 +2147,39 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
           form={selectedForm}
           project={project}
           onClose={() => setSelectedForm(null)}
-          onSave={(formData) => {
-            // TODO: Implement save functionality
-            console.log('Saving form data:', formData);
+          onSave={async (formData) => {
+            try {
+              console.log('Saving form data:', formData);
+              
+              const { error } = await supabase
+                .from('project_forms')
+                .update({
+                  form_data: formData,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', selectedForm.id);
+
+              if (error) {
+                console.error('Error saving form:', error);
+                alert('Failed to save form. Please try again.');
+                return;
+              }
+
+              console.log('Form saved successfully');
+              
+              // Reload forms to get the latest data
+              await loadProjectForms();
+              
+              // Update the selected form with new data
+              const updatedForm = { ...selectedForm, form_data: formData };
+              setSelectedForm(updatedForm);
+              
+              // Show success message
+              alert('Form saved successfully!');
+            } catch (error) {
+              console.error('Error saving form:', error);
+              alert('Failed to save form. Please try again.');
+            }
           }}
           onDelete={deleteForm}
         />
@@ -2389,7 +2419,6 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
   const renderField = () => {
     switch (field.type) {
       case 'text':
-      case 'textarea':
         return (
           <Input
             value={value || ''}
@@ -2397,6 +2426,18 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
             placeholder={field.placeholder}
             required={field.required}
             className="w-full"
+          />
+        );
+
+      case 'textarea':
+        return (
+          <textarea
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={field.placeholder}
+            required={field.required}
+            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            rows={4}
           />
         );
 
