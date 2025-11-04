@@ -93,11 +93,11 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
     }
   }
 
-  return (
+              return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3 sm:space-x-4">
               <img src={hshLogo} alt="HSH Contractor" className="h-20 sm:h-24 lg:h-28 w-auto" />
@@ -116,10 +116,10 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
             </Button>
           </div>
         </div>
-      </header>
-
+                                          </header>
+  
       {/* Form */}
-      <main className="w-full">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card>
           <CardHeader>
             <CardTitle>Project Information</CardTitle>

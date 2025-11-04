@@ -49,11 +49,11 @@ export function PlanLibrary({ onBack, onCreatePlan, onEditPlan }: PlanLibraryPro
     plan.description?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  return (
+              return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3 sm:space-x-4">
               <img src={hshLogo} alt="HSH Contractor" className="h-20 sm:h-24 lg:h-28 w-auto" />
@@ -72,10 +72,10 @@ export function PlanLibrary({ onBack, onCreatePlan, onEditPlan }: PlanLibraryPro
             </Button>
           </div>
         </div>
-      </header>
-
+                                          </header>
+  
       {/* Main Content */}
-      <main className="w-full">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <Card className="bg-white shadow-lg">
