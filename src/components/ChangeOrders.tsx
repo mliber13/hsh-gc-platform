@@ -140,8 +140,8 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
 
   return (
     <div className="min-h-screen bg-background pb-20 sm:pb-0">
-      <div className="p-2 sm:p-4 lg:p-6">
-        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+      <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
+        <div className="w-full space-y-4 sm:space-y-6">
           {/* Header */}
           <ChangeOrdersHeader project={project} onBack={onBack} />
 

@@ -4,7 +4,7 @@ import { ProjectsDashboard } from './components/ProjectsDashboard'
 import { ProjectDetailView } from './components/ProjectDetailView'
 import { EstimateBuilder } from './components/EstimateBuilder'
 import { ProjectActuals } from './components/ProjectActuals'
-import { ScheduleBuilder } from './components/ScheduleBuilder'
+
 import { ChangeOrders } from './components/ChangeOrders'
 import { ProjectForms } from './components/ProjectForms'
 import { CreateProjectForm, ProjectFormData } from './components/CreateProjectForm'
@@ -29,7 +29,7 @@ import { Button } from './components/ui/button'
 import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2 } from 'lucide-react'
 import { backupAllData } from './services/backupService'
 
-type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'schedule' | 'change-orders' | 'forms' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration' | 'qb-settings' | 'qb-callback'
+type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'change-orders' | 'forms' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration' | 'qb-settings' | 'qb-callback'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -68,7 +68,7 @@ function App() {
 
   // Refresh project data when viewing project-related screens
   useEffect(() => {
-    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'schedule' || currentView === 'change-orders' || currentView === 'forms')) {
+    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms')) {
       getProject_Hybrid(selectedProject.id).then(refreshedProject => {
         if (refreshedProject) {
           setSelectedProject(refreshedProject)
@@ -145,9 +145,7 @@ function App() {
     setCurrentView('actuals')
   }
 
-  const handleViewSchedule = () => {
-    setCurrentView('schedule')
-  }
+
 
   const handleViewChangeOrders = () => {
     setCurrentView('change-orders')
@@ -327,7 +325,6 @@ function App() {
           onBack={handleBackToDashboard}
           onViewEstimate={handleViewEstimate}
           onViewActuals={handleViewActuals}
-          onViewSchedule={handleViewSchedule}
           onViewChangeOrders={handleViewChangeOrders}
           onViewForms={handleViewForms}
           onProjectDuplicated={(newProject) => {
@@ -351,12 +348,7 @@ function App() {
         />
       )}
 
-      {currentView === 'schedule' && selectedProject && (
-        <ScheduleBuilder
-          project={selectedProject}
-          onBack={handleBackToProjectDetail}
-        />
-      )}
+
 
       {currentView === 'change-orders' && selectedProject && (
         <ChangeOrders

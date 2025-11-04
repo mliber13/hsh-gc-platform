@@ -196,7 +196,7 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-6">
+        <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3 sm:space-x-4">
               <img src={hshLogo} alt="HSH Contractor" className="h-20 sm:h-24 lg:h-28 w-auto" />
@@ -255,7 +255,7 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 sm:pb-8">
+      <main className="w-full pb-24 sm:pb-8">
         {/* Stats Cards - Show first on mobile, with action buttons on desktop */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* Action Cards - Hidden on mobile, shown on desktop */}

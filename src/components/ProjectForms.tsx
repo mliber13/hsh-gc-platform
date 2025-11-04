@@ -1924,7 +1924,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center space-x-3 sm:space-x-4">
               {onBack && (
@@ -1984,7 +1984,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
       </header>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
         {/* Create Forms Section */}
         <div className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Create New Form</h2>
