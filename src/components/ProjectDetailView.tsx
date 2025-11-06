@@ -305,13 +305,17 @@ export function ProjectDetailView({
                 <div className="flex-1">
                   <p className="text-sm text-gray-600">Plan ID</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <p className="text-xl font-bold text-gray-900">
-                      {project.metadata?.planId || 'N/A'}
-                    </p>
-                    {project.metadata?.isCustomPlan && (
-                      <span className="text-xs bg-[#0E79C9] text-white px-2 py-0.5 rounded">
-                        Custom
-                      </span>
+                    {project.metadata?.isCustomPlan || !project.metadata?.planId ? (
+                      <>
+                        <p className="text-xl font-bold text-gray-900">Custom</p>
+                        <span className="text-xs bg-[#0E79C9] text-white px-2 py-0.5 rounded">
+                          Custom
+                        </span>
+                      </>
+                    ) : (
+                      <p className="text-xl font-bold text-gray-900">
+                        {project.metadata.planId}
+                      </p>
                     )}
                   </div>
                   {project.metadata?.planOptions && project.metadata.planOptions.length > 0 && (
@@ -551,10 +555,14 @@ export function ProjectDetailView({
                   <div>
                     <Label htmlFor="planId">Plan ID</Label>
                     <Select
-                      value={editedProject.metadata?.planId || '__none__'}
+                      value={editedProject.metadata?.isCustomPlan ? 'custom' : (editedProject.metadata?.planId || '__none__')}
                       onValueChange={(value) => setEditedProject(prev => ({ 
                         ...prev, 
-                        metadata: { ...prev.metadata, planId: value === '__none__' ? '' : value }
+                        metadata: { 
+                          ...prev.metadata, 
+                          planId: value === '__none__' ? undefined : (value === 'custom' ? undefined : value),
+                          isCustomPlan: value === 'custom'
+                        }
                       }))}
                     >
                       <SelectTrigger>

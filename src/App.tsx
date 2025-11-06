@@ -84,8 +84,8 @@ function App() {
   const handleProjectCreated = async (formData: ProjectFormData) => {
     // Create the project with the form data
     // For spec homes, we'll create a placeholder client
-    // Use customPlanId if it's a custom plan, otherwise use the selected planId
-    const finalPlanId = formData.planId === 'custom' ? formData.customPlanId : formData.planId
+    // If custom plan is selected, leave planId blank/null
+    const finalPlanId = formData.planId === 'custom' ? undefined : formData.planId
     
     const newProject = await createProject_Hybrid({
       name: formData.name,

@@ -419,15 +419,18 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                             {project.city && `, ${project.city}`}
                             {project.state && `, ${project.state}`}
                           </p>
-                          {project.metadata?.planId && (
+                          {project.metadata?.isCustomPlan || !project.metadata?.planId ? (
+                            <p className="flex items-center gap-2">
+                              <FileText className="w-4 h-4" />
+                              Plan: Custom
+                              <span className="text-xs bg-[#0E79C9] text-white px-1.5 py-0.5 rounded">
+                                Custom
+                              </span>
+                            </p>
+                          ) : (
                             <p className="flex items-center gap-2">
                               <FileText className="w-4 h-4" />
                               Plan: {project.metadata.planId}
-                              {project.metadata.isCustomPlan && (
-                                <span className="text-xs bg-[#0E79C9] text-white px-1.5 py-0.5 rounded">
-                                  Custom
-                                </span>
-                              )}
                             </p>
                           )}
                           <p className="flex items-center gap-2">

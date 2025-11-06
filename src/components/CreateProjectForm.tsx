@@ -26,7 +26,6 @@ export interface ProjectFormData {
   name: string
   type: ProjectType
   planId: string
-  customPlanId?: string
   planOptions?: string[]
   address: string
   city: string
@@ -56,7 +55,6 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
     name: '',
     type: 'residential-new-build',
     planId: '',
-    customPlanId: '',
     planOptions: [],
     address: '',
     city: '',
@@ -235,7 +233,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                   <Label htmlFor="planId">Plan ID *</Label>
                   <Select 
                     value={formData.planId} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, planId: value, planOptions: [], customPlanId: '' }))}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, planId: value, planOptions: [] }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a plan..." />
@@ -267,16 +265,9 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                     </p>
                   )}
                   {isCustomPlan && (
-                    <div className="mt-2 space-y-2">
-                      <Input
-                        value={formData.customPlanId}
-                        placeholder="Enter custom plan ID (e.g., 1416CN, Custom Apartment)"
-                        onChange={(e) => setFormData(prev => ({ ...prev, customPlanId: e.target.value }))}
-                        required
-                        className="border-[#0E79C9] focus:ring-[#0E79C9]"
-                      />
+                    <div className="mt-2">
                       <p className="text-xs text-gray-600 italic">
-                        💡 For one-off projects or plans not in your library
+                        💡 Custom plan - no plan ID required
                       </p>
                     </div>
                   )}

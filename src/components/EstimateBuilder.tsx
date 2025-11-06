@@ -748,9 +748,13 @@ function ProjectHeader({ project, onUpdate, onBack }: ProjectHeaderProps) {
                 </span>
               </div>
               <p className="text-xs text-gray-600">
-                Plan: {project.metadata?.planId || 'N/A'}
-                {project.metadata?.isCustomPlan && (
-                  <span className="ml-1 text-xs bg-[#0E79C9] text-white px-1.5 py-0.5 rounded">Custom</span>
+                Plan: {project.metadata?.isCustomPlan || !project.metadata?.planId ? (
+                  <>
+                    Custom
+                    <span className="ml-1 text-xs bg-[#0E79C9] text-white px-1.5 py-0.5 rounded">Custom</span>
+                  </>
+                ) : (
+                  project.metadata.planId
                 )}
               </p>
             </div>
@@ -806,13 +810,17 @@ function ProjectHeader({ project, onUpdate, onBack }: ProjectHeaderProps) {
             <div>
                 <Label className="text-[#E65133] text-xs sm:text-sm">Plan ID</Label>
                 <div className="flex items-center gap-1 sm:gap-2">
-                  <p className="text-gray-900 font-semibold text-xs sm:text-sm">{project.metadata?.planId || 'Not set'}</p>
-                  {project.metadata?.isCustomPlan && (
-                    <span className="text-xs bg-[#0E79C9] text-white px-1 sm:px-2 py-0.5 rounded">
-                      Custom
-                    </span>
+                  {project.metadata?.isCustomPlan || !project.metadata?.planId ? (
+                    <>
+                      <p className="text-gray-900 font-semibold text-xs sm:text-sm">Custom</p>
+                      <span className="text-xs bg-[#0E79C9] text-white px-1 sm:px-2 py-0.5 rounded">
+                        Custom
+                      </span>
+                    </>
+                  ) : (
+                    <p className="text-gray-900 font-semibold text-xs sm:text-sm">{project.metadata.planId}</p>
                   )}
-            </div>
+                </div>
               {project.metadata?.planOptions && project.metadata.planOptions.length > 0 && (
                 <div className="mt-1">
                   {project.metadata.planOptions.map((option: string) => (
