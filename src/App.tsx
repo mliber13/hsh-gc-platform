@@ -26,11 +26,12 @@ import { DataMigration } from './components/DataMigration'
 import { QuickBooksConnect } from './components/QuickBooksConnect'
 import { QuickBooksCallback } from './components/QuickBooksCallback'
 import { VendorQuotePortal } from './components/VendorQuotePortal'
+import { QuoteReviewDashboard } from './components/QuoteReviewDashboard'
 import { Button } from './components/ui/button'
 import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2 } from 'lucide-react'
 import { backupAllData } from './services/backupService'
 
-type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'change-orders' | 'forms' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration' | 'qb-settings' | 'qb-callback'
+type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'change-orders' | 'forms' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration' | 'qb-settings' | 'qb-callback' | 'quote-review'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -72,7 +73,7 @@ function App() {
 
   // Refresh project data when viewing project-related screens
   useEffect(() => {
-    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms')) {
+    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms' || currentView === 'quote-review')) {
       getProject_Hybrid(selectedProject.id).then(refreshedProject => {
         if (refreshedProject) {
           setSelectedProject(refreshedProject)
@@ -158,6 +159,10 @@ function App() {
 
   const handleViewForms = () => {
     setCurrentView('forms')
+  }
+
+  const handleViewQuotes = () => {
+    setCurrentView('quote-review')
   }
 
   const handleOpenPlanLibrary = () => {
@@ -338,6 +343,7 @@ function App() {
           onViewActuals={handleViewActuals}
           onViewChangeOrders={handleViewChangeOrders}
           onViewForms={handleViewForms}
+          onViewQuotes={handleViewQuotes}
           onProjectDuplicated={(newProject) => {
             setSelectedProject(newProject)
             // Stay on project detail view to see the new project
@@ -371,6 +377,13 @@ function App() {
       {currentView === 'forms' && selectedProject && (
         <ProjectForms
           projectId={selectedProject.id}
+          project={selectedProject}
+          onBack={handleBackToProjectDetail}
+        />
+      )}
+
+      {currentView === 'quote-review' && selectedProject && (
+        <QuoteReviewDashboard
           project={selectedProject}
           onBack={handleBackToProjectDetail}
         />

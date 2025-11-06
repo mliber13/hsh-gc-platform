@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react'
 import { Project, ProjectType, ProjectStatus, Plan } from '@/types'
 import { duplicateProject } from '@/services/projectService'
-import { getTradesForEstimate_Hybrid, updateProject_Hybrid, deleteProject_Hybrid } from '@/services/hybridService'
+import { getTradesForEstimate_Hybrid, updateProject_Hybrid, deleteProject_Hybrid, fetchQuoteRequestsForProject_Hybrid, fetchSubmittedQuotesForRequest_Hybrid } from '@/services/hybridService'
 import { getActivePlans_Hybrid } from '@/services/planHybridService'
 import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
 import { supabase } from '@/lib/supabase'
@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PROJECT_TYPES, PROJECT_STATUS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck } from 'lucide-react'
+import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface ProjectDetailViewProps {
@@ -28,6 +28,7 @@ interface ProjectDetailViewProps {
   onViewActuals: () => void
   onViewChangeOrders?: () => void
   onViewForms: () => void
+  onViewQuotes?: () => void
   onProjectDuplicated?: (project: Project) => void
 }
 
@@ -38,6 +39,7 @@ export function ProjectDetailView({
   onViewActuals,
   onViewChangeOrders,
   onViewForms,
+  onViewQuotes,
   onProjectDuplicated,
 }: ProjectDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -50,6 +52,7 @@ export function ProjectDetailView({
     itemCount: 0,
   })
   const [formsCount, setFormsCount] = useState(0)
+  const [quotesCount, setQuotesCount] = useState(0)
   const [actualTotals, setActualTotals] = useState({
     laborCost: 0,
     materialCost: 0,
@@ -158,6 +161,24 @@ export function ProjectDetailView({
       }
     }
     loadActuals()
+  }, [project.id])
+
+  // Load quotes count
+  useEffect(() => {
+    const loadQuotesCount = async () => {
+      try {
+        const quoteRequests = await fetchQuoteRequestsForProject_Hybrid(project.id)
+        let totalQuotes = 0
+        for (const request of quoteRequests) {
+          const quotes = await fetchSubmittedQuotesForRequest_Hybrid(request.id)
+          totalQuotes += quotes.length
+        }
+        setQuotesCount(totalQuotes)
+      } catch (error) {
+        console.error('Error loading quotes count:', error)
+      }
+    }
+    loadQuotesCount()
   }, [project.id])
   
   const formatCurrency = (amount: number) =>
@@ -516,6 +537,40 @@ export function ProjectDetailView({
               </CardContent>
             </button>
           </Card>
+
+          {/* Quotes Card */}
+          {onViewQuotes && (
+            <Card className="bg-gradient-to-br from-[#0E79C9] to-[#0A5A96] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
+              <button onClick={onViewQuotes} className="w-full text-left">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
+                      <Mail className="w-8 h-8" />
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm opacity-80">Quotes</p>
+                      <p className="text-2xl font-bold">{quotesCount}</p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <h3 className="text-2xl font-bold mb-3">Quote Review</h3>
+                  <p className="text-white/80 mb-4">
+                    Review and manage vendor quotes. Accept quotes, assign to trades, and track quote status.
+                  </p>
+                  <div className="bg-white/10 rounded-lg p-3 mb-4">
+                    <div className="flex justify-between text-sm mb-1">
+                      <span>Total Quotes</span>
+                      <span className="font-semibold">{quotesCount}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center text-sm text-white/60">
+                    <span>Click to review quotes →</span>
+                  </div>
+                </CardContent>
+              </button>
+            </Card>
+          )}
         </div>
 
         {/* Secondary Action - Change Orders */}
