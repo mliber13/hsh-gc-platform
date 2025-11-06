@@ -575,13 +575,9 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
               setShowQuoteRequestForm(false)
               setSelectedTradeForQuote(null)
             }}
-            onSuccess={(quoteRequests) => {
-              // Show success with links to copy
-              const linksText = quoteRequests.map((qr: any) => 
-                `${qr.vendorEmail}: ${qr.link}`
-              ).join('\n\n')
-              
-              alert(`Quote requests created successfully!\n\nEmail links (copy these to send to vendors):\n\n${linksText}\n\n(Email functionality coming soon)`)
+            onSuccess={() => {
+              // Emails are now sent automatically in QuoteRequestForm
+              // Just close the form
               setShowQuoteRequestForm(false)
               setSelectedTradeForQuote(null)
             }}
