@@ -60,6 +60,22 @@ export interface Project {
     [key: string]: any
   }
   
+  // Project specifications (NEW)
+  specs?: {
+    livingSquareFootage: number        // Required - total living space
+    existingSquareFootage?: number     // For renovations - existing sqft
+    newSquareFootage?: number          // For renovations - sqft being added
+    totalSquareFootage?: number        // Total including garage, etc.
+    bedrooms?: number
+    bathrooms?: number
+    stories?: number
+    garageSpaces?: number
+    foundationType?: 'slab' | 'crawl-space' | 'full-basement' | 'partial-basement' | 'other'
+    roofType?: 'gable' | 'hip' | 'mansard' | 'flat' | 'shed' | 'gambrel' | 'other'
+    basement?: 'none' | 'unfinished' | 'finished' | 'partial'
+    lotSize?: number                   // in square feet
+  }
+  
   // Convenience fields (duplicated from address for easier access)
   city?: string
   state?: string

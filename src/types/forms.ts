@@ -47,6 +47,20 @@ export interface CreateProjectInput {
     planOptions?: string[]
     [key: string]: any
   }
+  specs?: {
+    livingSquareFootage: number        // Required
+    existingSquareFootage?: number     // For renovations
+    newSquareFootage?: number          // For renovations
+    totalSquareFootage?: number
+    bedrooms?: number
+    bathrooms?: number
+    stories?: number
+    garageSpaces?: number
+    foundationType?: 'slab' | 'crawl-space' | 'full-basement' | 'partial-basement' | 'other'
+    roofType?: 'gable' | 'hip' | 'mansard' | 'flat' | 'shed' | 'gambrel' | 'other'
+    basement?: 'none' | 'unfinished' | 'finished' | 'partial'
+    lotSize?: number                   // in square feet
+  }
   notes?: string
 }
 

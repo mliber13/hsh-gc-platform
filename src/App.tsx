@@ -111,6 +111,7 @@ function App() {
         planOptions: formData.planOptions,
         isCustomPlan: formData.planId === 'custom',
       },
+      specs: formData.specs,
     })
 
     // Apply estimate template if one was selected via the plan

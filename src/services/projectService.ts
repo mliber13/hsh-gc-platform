@@ -72,6 +72,11 @@ export function createProject(input: CreateProjectInput): Project {
     startDate: input.startDate,
     estimatedCompletionDate: input.estimatedCompletionDate,
     notes: input.notes,
+    specs: input.specs,
+    metadata: input.metadata,
+    city: input.city,
+    state: input.state,
+    zipCode: input.zipCode,
     createdAt: now,
     updatedAt: now,
   }

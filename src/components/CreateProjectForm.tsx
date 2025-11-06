@@ -35,6 +35,20 @@ export interface ProjectFormData {
   startDate?: Date
   endDate?: Date
   estimateTemplateId?: string // Added to pass template ID to onCreate
+  specs?: {
+    livingSquareFootage: number
+    existingSquareFootage?: number
+    newSquareFootage?: number
+    totalSquareFootage?: number
+    bedrooms?: number
+    bathrooms?: number
+    stories?: number
+    garageSpaces?: number
+    foundationType?: 'slab' | 'crawl-space' | 'full-basement' | 'partial-basement' | 'other'
+    roofType?: 'gable' | 'hip' | 'mansard' | 'flat' | 'shed' | 'gambrel' | 'other'
+    basement?: 'none' | 'unfinished' | 'finished' | 'partial'
+    lotSize?: number
+  }
 }
 
 export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) {
@@ -65,6 +79,42 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
 
   const selectedPlan = availablePlans.find(p => p.id === formData.planId)
   const isCustomPlan = formData.planId === 'custom'
+  const isRenovation = formData.type === 'residential-renovation' || formData.type === 'commercial-renovation'
+  
+  // Auto-populate specs from plan when plan is selected
+  useEffect(() => {
+    if (selectedPlan && !isCustomPlan) {
+      setFormData(prev => {
+        const baseSqft = selectedPlan.squareFootage || 0
+        const additionalSqft = (prev.planOptions || [])
+          .map(optName => {
+            const option = selectedPlan.options.find(o => o.name === optName)
+            return option?.additionalSquareFootage || 0
+          })
+          .reduce((sum, sqft) => sum + sqft, 0)
+        const totalSqft = baseSqft + additionalSqft
+        
+        return {
+          ...prev,
+          specs: {
+            livingSquareFootage: prev.specs?.livingSquareFootage || totalSqft || 0,
+            totalSquareFootage: prev.specs?.totalSquareFootage || totalSqft || undefined,
+            bedrooms: prev.specs?.bedrooms ?? selectedPlan.bedrooms,
+            bathrooms: prev.specs?.bathrooms ?? selectedPlan.bathrooms,
+            stories: prev.specs?.stories ?? selectedPlan.stories,
+            garageSpaces: prev.specs?.garageSpaces ?? selectedPlan.garageSpaces,
+            // Keep existing foundation/roof/basement if set, otherwise leave undefined
+            foundationType: prev.specs?.foundationType,
+            roofType: prev.specs?.roofType,
+            basement: prev.specs?.basement,
+            lotSize: prev.specs?.lotSize,
+            existingSquareFootage: prev.specs?.existingSquareFootage,
+            newSquareFootage: prev.specs?.newSquareFootage,
+          }
+        }
+      })
+    }
+  }, [selectedPlan, isCustomPlan, formData.planOptions])
   
   const handlePlanOptionToggle = (option: string) => {
     setFormData(prev => {
@@ -81,6 +131,27 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validate required fields
+    if (!isRenovation && !formData.specs?.livingSquareFootage) {
+      alert('Please enter the living square footage. This is required for new builds.')
+      return
+    }
+    
+    // For renovations, calculate living sqft if not set
+    if (isRenovation && !formData.specs?.livingSquareFootage) {
+      const existing = formData.specs?.existingSquareFootage || 0
+      const newSqft = formData.specs?.newSquareFootage || 0
+      if (existing > 0 || newSqft > 0) {
+        setFormData(prev => ({
+          ...prev,
+          specs: {
+            ...prev.specs,
+            livingSquareFootage: existing + newSqft,
+          }
+        }))
+      }
+    }
     
     // Check if selected plan has an estimate template
     if (selectedPlan?.estimateTemplateId) {
@@ -264,6 +335,277 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                         endDate: e.target.value ? new Date(e.target.value) : undefined 
                       }))}
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* Project Specifications */}
+              <div className="space-y-4 pt-6 border-t">
+                <h3 className="text-lg font-semibold text-gray-900">Project Specifications</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  These specifications help inform budget estimates and will be visible while building your estimate.
+                </p>
+                
+                {/* Square Footage - Different fields for renovations vs new builds */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {isRenovation ? (
+                    <>
+                      <div>
+                        <Label htmlFor="existingSquareFootage">Existing Square Footage</Label>
+                        <Input
+                          id="existingSquareFootage"
+                          type="number"
+                          value={formData.specs?.existingSquareFootage || ''}
+                          onChange={(e) => {
+                            const existing = e.target.value ? parseFloat(e.target.value) : undefined
+                            const newSqft = formData.specs?.newSquareFootage || 0
+                            setFormData(prev => ({
+                              ...prev,
+                              specs: {
+                                ...prev.specs,
+                                existingSquareFootage: existing,
+                                livingSquareFootage: (existing || 0) + newSqft,
+                              }
+                            }))
+                          }}
+                          placeholder="e.g., 2000"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Current living space</p>
+                      </div>
+                      <div>
+                        <Label htmlFor="newSquareFootage">New Square Footage Being Added</Label>
+                        <Input
+                          id="newSquareFootage"
+                          type="number"
+                          value={formData.specs?.newSquareFootage || ''}
+                          onChange={(e) => {
+                            const newSqft = e.target.value ? parseFloat(e.target.value) : undefined
+                            const existingSqft = formData.specs?.existingSquareFootage || 0
+                            setFormData(prev => ({
+                              ...prev,
+                              specs: {
+                                ...prev.specs,
+                                newSquareFootage: newSqft,
+                                livingSquareFootage: existingSqft + (newSqft || 0),
+                              }
+                            }))
+                          }}
+                          placeholder="e.g., 500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Additional space being added</p>
+                      </div>
+                    </>
+                  ) : null}
+                  
+                  <div className={isRenovation ? 'md:col-span-2' : ''}>
+                    <Label htmlFor="livingSquareFootage">
+                      Living Square Footage {!isRenovation && '*'}
+                    </Label>
+                    <Input
+                      id="livingSquareFootage"
+                      type="number"
+                      value={formData.specs?.livingSquareFootage || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        specs: {
+                          ...prev.specs,
+                          livingSquareFootage: e.target.value ? parseFloat(e.target.value) : 0,
+                        }
+                      }))}
+                      placeholder="e.g., 2500"
+                      required={!isRenovation}
+                      className={!formData.specs?.livingSquareFootage && !isRenovation ? 'border-red-300' : ''}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      {isRenovation 
+                        ? 'Total living space after renovation (auto-calculated from existing + new)'
+                        : 'Total heated living space (required)'}
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="totalSquareFootage">Total Square Footage (Optional)</Label>
+                    <Input
+                      id="totalSquareFootage"
+                      type="number"
+                      value={formData.specs?.totalSquareFootage || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        specs: {
+                          ...prev.specs,
+                          totalSquareFootage: e.target.value ? parseFloat(e.target.value) : undefined,
+                        }
+                      }))}
+                      placeholder="e.g., 3000"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Includes garage, basement, etc.</p>
+                  </div>
+                </div>
+
+                {/* Basic Specs */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <Label htmlFor="bedrooms">Bedrooms</Label>
+                    <Input
+                      id="bedrooms"
+                      type="number"
+                      value={formData.specs?.bedrooms || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        specs: {
+                          ...prev.specs,
+                          bedrooms: e.target.value ? parseInt(e.target.value) : undefined,
+                        }
+                      }))}
+                      placeholder="e.g., 3"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="bathrooms">Bathrooms</Label>
+                    <Input
+                      id="bathrooms"
+                      type="number"
+                      step="0.5"
+                      value={formData.specs?.bathrooms || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        specs: {
+                          ...prev.specs,
+                          bathrooms: e.target.value ? parseFloat(e.target.value) : undefined,
+                        }
+                      }))}
+                      placeholder="e.g., 2.5"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="stories">Stories/Levels</Label>
+                    <Input
+                      id="stories"
+                      type="number"
+                      value={formData.specs?.stories || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        specs: {
+                          ...prev.specs,
+                          stories: e.target.value ? parseInt(e.target.value) : undefined,
+                        }
+                      }))}
+                      placeholder="e.g., 2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="garageSpaces">Garage Spaces</Label>
+                    <Input
+                      id="garageSpaces"
+                      type="number"
+                      value={formData.specs?.garageSpaces || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        specs: {
+                          ...prev.specs,
+                          garageSpaces: e.target.value ? parseInt(e.target.value) : undefined,
+                        }
+                      }))}
+                      placeholder="e.g., 2"
+                    />
+                  </div>
+                </div>
+
+                {/* Foundation, Roof, Basement, Lot */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="foundationType">Foundation Type</Label>
+                    <Select
+                      value={formData.specs?.foundationType || ''}
+                      onValueChange={(value) => setFormData(prev => ({
+                        ...prev,
+                        specs: {
+                          ...prev.specs,
+                          foundationType: value as any,
+                        }
+                      }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select foundation type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="slab">Slab</SelectItem>
+                        <SelectItem value="crawl-space">Crawl Space</SelectItem>
+                        <SelectItem value="full-basement">Full Basement</SelectItem>
+                        <SelectItem value="partial-basement">Partial Basement</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="roofType">Roof Type</Label>
+                    <Select
+                      value={formData.specs?.roofType || ''}
+                      onValueChange={(value) => setFormData(prev => ({
+                        ...prev,
+                        specs: {
+                          ...prev.specs,
+                          roofType: value as any,
+                        }
+                      }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select roof type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gable">Gable (Standard)</SelectItem>
+                        <SelectItem value="hip">Hip</SelectItem>
+                        <SelectItem value="mansard">Mansard</SelectItem>
+                        <SelectItem value="flat">Flat</SelectItem>
+                        <SelectItem value="shed">Shed</SelectItem>
+                        <SelectItem value="gambrel">Gambrel</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500 mt-1">Hip roofs typically cost more than standard gable</p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="basement">Basement</Label>
+                    <Select
+                      value={formData.specs?.basement || ''}
+                      onValueChange={(value) => setFormData(prev => ({
+                        ...prev,
+                        specs: {
+                          ...prev.specs,
+                          basement: value as any,
+                        }
+                      }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select basement type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="unfinished">Unfinished</SelectItem>
+                        <SelectItem value="finished">Finished</SelectItem>
+                        <SelectItem value="partial">Partial</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="lotSize">Lot Size (Square Feet)</Label>
+                    <Input
+                      id="lotSize"
+                      type="number"
+                      value={formData.specs?.lotSize || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        specs: {
+                          ...prev.specs,
+                          lotSize: e.target.value ? parseFloat(e.target.value) : undefined,
+                        }
+                      }))}
+                      placeholder="e.g., 10000"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Or enter in acres (1 acre = 43,560 sq ft)</p>
                   </div>
                 </div>
               </div>
