@@ -157,6 +157,18 @@ export async function createProjectInDB(input: CreateProjectInput): Promise<Proj
 export async function updateProjectInDB(projectId: string, updates: UpdateProjectInput): Promise<Project | null> {
   if (!isOnlineMode()) return null
 
+  // First check if project exists
+  const { data: existingProject } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('id', projectId)
+    .single()
+
+  if (!existingProject) {
+    console.warn(`Project ${projectId} not found in database. Skipping update.`)
+    return null
+  }
+
   const updateData: any = {
     name: updates.name,
     status: updates.status,
@@ -187,7 +199,12 @@ export async function updateProjectInDB(projectId: string, updates: UpdateProjec
     return null
   }
 
-  return data as Project
+  if (!data) {
+    console.warn(`Update succeeded but no data returned for project ${projectId}`)
+    return null
+  }
+
+  return transformProject(data)
 }
 
 export async function deleteProjectFromDB(projectId: string): Promise<boolean> {
