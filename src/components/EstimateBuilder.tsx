@@ -27,8 +27,6 @@ import {
   getEstimateStatusBadgeClass,
 } from '@/types'
 import {
-  createProject,
-  updateProject,
   addTrade,
   updateTrade,
   deleteTrade,
@@ -42,6 +40,8 @@ import {
   applyTemplateToEstimate,
 } from '@/services/estimateTemplateService'
 import {
+  createProject_Hybrid,
+  updateProject_Hybrid,
   addTrade_Hybrid,
   updateTrade_Hybrid,
   deleteTrade_Hybrid,
@@ -127,12 +127,15 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   // Initialize project if none provided
   useEffect(() => {
     if (!projectData) {
-      const newProject = createProject({
-        name: 'New Project',
-        client: { name: 'New Client' },
-        type: 'residential-new-build',
-      })
-      setProjectData(newProject)
+      const initializeProject = async () => {
+        const newProject = await createProject_Hybrid({
+          name: 'New Project',
+          client: { name: 'New Client' },
+          type: 'residential-new-build',
+        })
+        setProjectData(newProject)
+      }
+      initializeProject()
     }
   }, [projectData])
 
@@ -180,8 +183,13 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       }
       
       // Update project with new estimate
-      updateProject(projectData.id, {
+      updateProject_Hybrid(projectData.id, {
+        id: projectData.id,
         estimate: updatedEstimate,
+      }).then(updated => {
+        if (updated) {
+          setProjectData(updated)
+        }
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -191,10 +199,13 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   // Event Handlers
   // ----------------------------------------------------------------------------
 
-  const handleProjectUpdate = (updates: Partial<Project>) => {
+  const handleProjectUpdate = async (updates: Partial<Project>) => {
     if (!projectData) return
 
-    const updated = updateProject(projectData.id, updates)
+    const updated = await updateProject_Hybrid(projectData.id, {
+      id: projectData.id,
+      ...updates,
+    } as any)
     if (updated) {
       setProjectData(updated)
       onSave?.(updated)
