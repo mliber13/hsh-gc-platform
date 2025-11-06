@@ -30,7 +30,8 @@ import {
   User,
   ArrowLeft,
   Eye,
-  Link as LinkIcon
+  Link as LinkIcon,
+  RefreshCw
 } from 'lucide-react'
 
 interface QuoteReviewDashboardProps {
@@ -80,6 +81,29 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+
+  const applyQuoteToTrade = async (quote: SubmittedQuote, tradeId: string) => {
+    try {
+      const tradeToUpdate = trades.find(t => t.id === tradeId)
+      if (tradeToUpdate) {
+        await updateTrade_Hybrid(tradeId, {
+          subcontractorCost: quote.totalAmount,
+          isSubcontracted: true,
+        })
+        console.log(`✅ Applied quote amount ${formatCurrency(quote.totalAmount)} to trade ${tradeId}`)
+        alert(`Quote amount ${formatCurrency(quote.totalAmount)} applied to trade successfully!`)
+        return true
+      } else {
+        console.warn(`Trade ${tradeId} not found`)
+        alert('Trade not found')
+        return false
+      }
+    } catch (tradeError) {
+      console.error('Error applying quote to trade:', tradeError)
+      alert('Failed to apply quote to trade')
+      return false
+    }
+  }
 
   const handleUpdateStatus = async (quote: SubmittedQuote, status: SubmittedQuote['status']) => {
     // Use the selected quote's values if this is the selected quote, otherwise use quote's existing values
@@ -351,9 +375,22 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                   {/* Assignment Info */}
                   {quote.assignedTradeId && (
                     <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                      <p className="text-sm font-medium text-blue-900">
-                        Assigned to: {trades.find(t => t.id === quote.assignedTradeId)?.name || 'Unknown Trade'}
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-blue-900">
+                          Assigned to: {trades.find(t => t.id === quote.assignedTradeId)?.name || 'Unknown Trade'}
+                        </p>
+                        {quote.status === 'accepted' && (
+                          <Button
+                            onClick={() => applyQuoteToTrade(quote, quote.assignedTradeId!)}
+                            size="sm"
+                            variant="outline"
+                            className="border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
+                          >
+                            <RefreshCw className="w-3 h-3 mr-1" />
+                            Apply to Trade
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )}
 
