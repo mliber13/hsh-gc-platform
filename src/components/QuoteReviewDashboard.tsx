@@ -13,6 +13,7 @@ import {
   fetchSubmittedQuotesForRequest_Hybrid,
   updateQuoteStatus_Hybrid,
   getTradesForEstimate_Hybrid,
+  updateTrade_Hybrid,
 } from '@/services/hybridService'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -77,6 +78,9 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
     loadData()
   }, [project.id, project.estimate.id])
 
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+
   const handleUpdateStatus = async (quote: SubmittedQuote, status: SubmittedQuote['status']) => {
     // Use the selected quote's values if this is the selected quote, otherwise use quote's existing values
     const tradeId = selectedQuote?.id === quote.id ? selectedTradeId : (quote.assignedTradeId || '')
@@ -92,6 +96,25 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
     try {
       const updated = await updateQuoteStatus_Hybrid(input)
       if (updated) {
+        // If quote is accepted and assigned to a trade, update the trade's subcontractor cost
+        if (status === 'accepted' && input.assignedTradeId) {
+          try {
+            const tradeToUpdate = trades.find(t => t.id === input.assignedTradeId)
+            if (tradeToUpdate) {
+              await updateTrade_Hybrid(input.assignedTradeId, {
+                subcontractorCost: quote.totalAmount,
+                isSubcontracted: true,
+              })
+              console.log(`✅ Updated trade ${input.assignedTradeId} with quote amount: $${quote.totalAmount}`)
+            } else {
+              console.warn(`Trade ${input.assignedTradeId} not found`)
+            }
+          } catch (tradeError) {
+            console.error('Error updating trade with quote amount:', tradeError)
+            // Don't fail the whole operation if trade update fails
+          }
+        }
+
         // Refresh quotes
         const quotes = await fetchSubmittedQuotesForRequest_Hybrid(quote.quoteRequestId)
         setSubmittedQuotes(prev => {
@@ -102,16 +125,17 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
         setSelectedQuote(null)
         setSelectedTradeId('')
         setReviewNotes('')
-        alert(`Quote ${status === 'accepted' ? 'accepted' : status === 'rejected' ? 'rejected' : 'status updated'} successfully!`)
+        
+        const message = status === 'accepted' && input.assignedTradeId
+          ? `Quote accepted and applied to trade! Amount: ${formatCurrency(quote.totalAmount)}`
+          : `Quote ${status === 'accepted' ? 'accepted' : status === 'rejected' ? 'rejected' : 'status updated'} successfully!`
+        alert(message)
       }
     } catch (error) {
       console.error('Error updating quote status:', error)
       alert('Failed to update quote status')
     }
   }
-
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
   const getStatusBadge = (status: SubmittedQuote['status']) => {
     const badges = {
