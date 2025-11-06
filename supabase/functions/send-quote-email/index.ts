@@ -31,9 +31,14 @@ interface EmailRequest {
 }
 
 serve(async (req) => {
-  // Handle CORS
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { 
+      headers: {
+        ...corsHeaders,
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      }
+    })
   }
 
   try {
@@ -114,10 +119,18 @@ serve(async (req) => {
     })
 
     if (!resendResponse.ok) {
-      const errorData = await resendResponse.json().catch(() => ({ message: await resendResponse.text() }))
-      console.error('Resend API error:', errorData)
+      let errorMessage = 'Failed to send email'
+      try {
+        const errorData = await resendResponse.json()
+        errorMessage = errorData.message || errorData.error?.message || errorMessage
+        console.error('Resend API error:', errorData)
+      } catch (e) {
+        const errorText = await resendResponse.text()
+        console.error('Resend API error (text):', errorText)
+        errorMessage = errorText || errorMessage
+      }
       return new Response(
-        JSON.stringify({ success: false, error: errorData.message || 'Failed to send email' }),
+        JSON.stringify({ success: false, error: errorMessage }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -129,10 +142,10 @@ serve(async (req) => {
       JSON.stringify({ success: true, messageId: result.id }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending email:', error)
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error?.message || 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
