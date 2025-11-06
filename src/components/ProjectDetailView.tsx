@@ -53,6 +53,14 @@ export function ProjectDetailView({
   })
   const [formsCount, setFormsCount] = useState(0)
   const [quotesCount, setQuotesCount] = useState(0)
+  const [quotesStats, setQuotesStats] = useState({
+    total: 0,
+    pending: 0,
+    accepted: 0,
+    rejected: 0,
+    waitingForMore: 0,
+    revisionRequested: 0,
+  })
   const [actualTotals, setActualTotals] = useState({
     laborCost: 0,
     materialCost: 0,
@@ -163,22 +171,40 @@ export function ProjectDetailView({
     loadActuals()
   }, [project.id])
 
-  // Load quotes count
+  // Load quotes count and stats
   useEffect(() => {
-    const loadQuotesCount = async () => {
+    const loadQuotesStats = async () => {
       try {
         const quoteRequests = await fetchQuoteRequestsForProject_Hybrid(project.id)
         let totalQuotes = 0
+        const stats = {
+          total: 0,
+          pending: 0,
+          accepted: 0,
+          rejected: 0,
+          waitingForMore: 0,
+          revisionRequested: 0,
+        }
+        
         for (const request of quoteRequests) {
           const quotes = await fetchSubmittedQuotesForRequest_Hybrid(request.id)
           totalQuotes += quotes.length
+          quotes.forEach(quote => {
+            stats.total++
+            if (quote.status === 'pending') stats.pending++
+            else if (quote.status === 'accepted') stats.accepted++
+            else if (quote.status === 'rejected') stats.rejected++
+            else if (quote.status === 'waiting-for-more') stats.waitingForMore++
+            else if (quote.status === 'revision-requested') stats.revisionRequested++
+          })
         }
         setQuotesCount(totalQuotes)
+        setQuotesStats(stats)
       } catch (error) {
-        console.error('Error loading quotes count:', error)
+        console.error('Error loading quotes stats:', error)
       }
     }
-    loadQuotesCount()
+    loadQuotesStats()
   }, [project.id])
   
   const formatCurrency = (amount: number) =>
@@ -548,8 +574,8 @@ export function ProjectDetailView({
                       <Mail className="w-8 h-8" />
                     </div>
                     <div className="text-right">
-                      <p className="text-sm opacity-80">Quotes</p>
-                      <p className="text-2xl font-bold">{quotesCount}</p>
+                      <p className="text-sm opacity-80">Total Quotes</p>
+                      <p className="text-3xl font-bold">{quotesCount}</p>
                     </div>
                   </div>
                 </CardHeader>
@@ -558,11 +584,29 @@ export function ProjectDetailView({
                   <p className="text-white/80 mb-4">
                     Review and manage vendor quotes. Accept quotes, assign to trades, and track quote status.
                   </p>
-                  <div className="bg-white/10 rounded-lg p-3 mb-4">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>Total Quotes</span>
-                      <span className="font-semibold">{quotesCount}</span>
+                  <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>For Review</span>
+                      <span className="font-semibold">{quotesStats.pending}</span>
                     </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Accepted</span>
+                      <span className="font-semibold text-green-200">{quotesStats.accepted}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Waiting for More</span>
+                      <span className="font-semibold">{quotesStats.waitingForMore}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Revision Requested</span>
+                      <span className="font-semibold">{quotesStats.revisionRequested}</span>
+                    </div>
+                    {quotesStats.rejected > 0 && (
+                      <div className="flex justify-between text-sm pt-2 border-t border-white/20">
+                        <span>Rejected</span>
+                        <span className="font-semibold text-red-200">{quotesStats.rejected}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center text-sm text-white/60">
                     <span>Click to review quotes →</span>
