@@ -86,7 +86,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
       quoteId: quote.id,
       status,
       reviewNotes: notes || undefined,
-      assignedTradeId: tradeId || undefined,
+      assignedTradeId: tradeId && tradeId !== '__none__' ? tradeId : undefined,
     }
 
     try {
@@ -347,17 +347,17 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                       <>
                         <div className="flex-1 space-y-2">
                           <Select
-                            value={selectedQuote?.id === quote.id ? selectedTradeId : (quote.assignedTradeId || '')}
+                            value={selectedQuote?.id === quote.id ? (selectedTradeId || '__none__') : (quote.assignedTradeId || '__none__')}
                             onValueChange={(value) => {
                               setSelectedQuote(quote)
-                              setSelectedTradeId(value)
+                              setSelectedTradeId(value === '__none__' ? '' : value)
                             }}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Assign to trade (optional)" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">None</SelectItem>
+                              <SelectItem value="__none__">None</SelectItem>
                               {trades.map(trade => (
                                 <SelectItem key={trade.id} value={trade.id}>
                                   {trade.name}
@@ -428,16 +428,17 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                         {!quote.assignedTradeId && (
                           <>
                             <Select
-                              value={selectedQuote?.id === quote.id ? selectedTradeId : ''}
+                              value={selectedQuote?.id === quote.id ? (selectedTradeId || '__none__') : '__none__'}
                               onValueChange={(value) => {
                                 setSelectedQuote(quote)
-                                setSelectedTradeId(value)
+                                setSelectedTradeId(value === '__none__' ? '' : value)
                               }}
                             >
                               <SelectTrigger className="w-full sm:w-48">
                                 <SelectValue placeholder="Assign to trade" />
                               </SelectTrigger>
                               <SelectContent>
+                                <SelectItem value="__none__">None</SelectItem>
                                 {trades.map(trade => (
                                   <SelectItem key={trade.id} value={trade.id}>
                                     {trade.name}
@@ -445,7 +446,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                                 ))}
                               </SelectContent>
                             </Select>
-                            {selectedQuote?.id === quote.id && selectedTradeId && (
+                            {selectedQuote?.id === quote.id && selectedTradeId && selectedTradeId !== '__none__' && (
                               <Button
                                 onClick={() => {
                                   const input: UpdateQuoteStatusInput = {
