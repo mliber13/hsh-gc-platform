@@ -187,6 +187,7 @@ export function ProjectDetailView({
       endDate: editedProject.endDate,
       metadata: editedProject.metadata,
       client: editedProject.client,
+      specs: editedProject.specs,
     })
     
     console.log('✅ Project update result:', updated);
@@ -684,6 +685,388 @@ export function ProjectDetailView({
                       }))}
                     />
                   </div>
+                </div>
+
+                {/* Project Specifications Section */}
+                <div className="pt-6 border-t space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Project Specifications</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Add or update project specifications to help inform budget estimates.
+                  </p>
+                  
+                  {(() => {
+                    const isRenovation = editedProject.type === 'residential-renovation' || editedProject.type === 'commercial-renovation'
+                    return (
+                      <>
+                        {/* Square Footage */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {isRenovation ? (
+                            <>
+                              <div>
+                                <Label htmlFor="existingSquareFootage">Existing Square Footage</Label>
+                                <Input
+                                  id="existingSquareFootage"
+                                  type="number"
+                                  value={editedProject.specs?.existingSquareFootage || ''}
+                              onChange={(e) => {
+                                const existing = e.target.value ? parseFloat(e.target.value) : undefined
+                                const newSqft = editedProject.specs?.newSquareFootage || 0
+                                setEditedProject(prev => ({
+                                  ...prev,
+                                  specs: {
+                                    livingSquareFootage: (existing || 0) + newSqft,
+                                    existingSquareFootage: existing,
+                                    newSquareFootage: prev.specs?.newSquareFootage,
+                                    totalSquareFootage: prev.specs?.totalSquareFootage,
+                                    bedrooms: prev.specs?.bedrooms,
+                                    bathrooms: prev.specs?.bathrooms,
+                                    stories: prev.specs?.stories,
+                                    garageSpaces: prev.specs?.garageSpaces,
+                                    foundationType: prev.specs?.foundationType,
+                                    roofType: prev.specs?.roofType,
+                                    basement: prev.specs?.basement,
+                                    lotSize: prev.specs?.lotSize,
+                                  }
+                                }))
+                              }}
+                                  placeholder="e.g., 2000"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="newSquareFootage">New Square Footage Being Added</Label>
+                                <Input
+                                  id="newSquareFootage"
+                                  type="number"
+                                  value={editedProject.specs?.newSquareFootage || ''}
+                                  onChange={(e) => {
+                                    const newSqft = e.target.value ? parseFloat(e.target.value) : undefined
+                                    const existing = editedProject.specs?.existingSquareFootage || 0
+                                    setEditedProject(prev => ({
+                                      ...prev,
+                                      specs: {
+                                        livingSquareFootage: existing + (newSqft || 0),
+                                        existingSquareFootage: prev.specs?.existingSquareFootage,
+                                        newSquareFootage: newSqft,
+                                        totalSquareFootage: prev.specs?.totalSquareFootage,
+                                        bedrooms: prev.specs?.bedrooms,
+                                        bathrooms: prev.specs?.bathrooms,
+                                        stories: prev.specs?.stories,
+                                        garageSpaces: prev.specs?.garageSpaces,
+                                        foundationType: prev.specs?.foundationType,
+                                        roofType: prev.specs?.roofType,
+                                        basement: prev.specs?.basement,
+                                        lotSize: prev.specs?.lotSize,
+                                      }
+                                    }))
+                                  }}
+                                  placeholder="e.g., 500"
+                                />
+                              </div>
+                            </>
+                          ) : null}
+                          
+                          <div className={isRenovation ? 'md:col-span-2' : ''}>
+                            <Label htmlFor="livingSquareFootage">Living Square Footage</Label>
+                            <Input
+                              id="livingSquareFootage"
+                              type="number"
+                              value={editedProject.specs?.livingSquareFootage || ''}
+                              onChange={(e) => setEditedProject(prev => ({
+                                ...prev,
+                                specs: {
+                                  livingSquareFootage: e.target.value ? parseFloat(e.target.value) : 0,
+                                  existingSquareFootage: prev.specs?.existingSquareFootage,
+                                  newSquareFootage: prev.specs?.newSquareFootage,
+                                  totalSquareFootage: prev.specs?.totalSquareFootage,
+                                  bedrooms: prev.specs?.bedrooms,
+                                  bathrooms: prev.specs?.bathrooms,
+                                  stories: prev.specs?.stories,
+                                  garageSpaces: prev.specs?.garageSpaces,
+                                  foundationType: prev.specs?.foundationType,
+                                  roofType: prev.specs?.roofType,
+                                  basement: prev.specs?.basement,
+                                  lotSize: prev.specs?.lotSize,
+                                }
+                              }))}
+                              placeholder="e.g., 2500"
+                            />
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="totalSquareFootage">Total Square Footage (Optional)</Label>
+                            <Input
+                              id="totalSquareFootage"
+                              type="number"
+                              value={editedProject.specs?.totalSquareFootage || ''}
+                              onChange={(e) => setEditedProject(prev => ({
+                                ...prev,
+                                specs: {
+                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
+                                  existingSquareFootage: prev.specs?.existingSquareFootage,
+                                  newSquareFootage: prev.specs?.newSquareFootage,
+                                  totalSquareFootage: e.target.value ? parseFloat(e.target.value) : undefined,
+                                  bedrooms: prev.specs?.bedrooms,
+                                  bathrooms: prev.specs?.bathrooms,
+                                  stories: prev.specs?.stories,
+                                  garageSpaces: prev.specs?.garageSpaces,
+                                  foundationType: prev.specs?.foundationType,
+                                  roofType: prev.specs?.roofType,
+                                  basement: prev.specs?.basement,
+                                  lotSize: prev.specs?.lotSize,
+                                }
+                              }))}
+                              placeholder="e.g., 3000"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Basic Specs */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div>
+                            <Label htmlFor="bedrooms">Bedrooms</Label>
+                            <Input
+                              id="bedrooms"
+                              type="number"
+                              value={editedProject.specs?.bedrooms || ''}
+                              onChange={(e) => setEditedProject(prev => ({
+                                ...prev,
+                                specs: {
+                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
+                                  existingSquareFootage: prev.specs?.existingSquareFootage,
+                                  newSquareFootage: prev.specs?.newSquareFootage,
+                                  totalSquareFootage: prev.specs?.totalSquareFootage,
+                                  bedrooms: e.target.value ? parseInt(e.target.value) : undefined,
+                                  bathrooms: prev.specs?.bathrooms,
+                                  stories: prev.specs?.stories,
+                                  garageSpaces: prev.specs?.garageSpaces,
+                                  foundationType: prev.specs?.foundationType,
+                                  roofType: prev.specs?.roofType,
+                                  basement: prev.specs?.basement,
+                                  lotSize: prev.specs?.lotSize,
+                                }
+                              }))}
+                              placeholder="e.g., 3"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="bathrooms">Bathrooms</Label>
+                            <Input
+                              id="bathrooms"
+                              type="number"
+                              step="0.5"
+                              value={editedProject.specs?.bathrooms || ''}
+                              onChange={(e) => setEditedProject(prev => ({
+                                ...prev,
+                                specs: {
+                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
+                                  existingSquareFootage: prev.specs?.existingSquareFootage,
+                                  newSquareFootage: prev.specs?.newSquareFootage,
+                                  totalSquareFootage: prev.specs?.totalSquareFootage,
+                                  bedrooms: prev.specs?.bedrooms,
+                                  bathrooms: e.target.value ? parseFloat(e.target.value) : undefined,
+                                  stories: prev.specs?.stories,
+                                  garageSpaces: prev.specs?.garageSpaces,
+                                  foundationType: prev.specs?.foundationType,
+                                  roofType: prev.specs?.roofType,
+                                  basement: prev.specs?.basement,
+                                  lotSize: prev.specs?.lotSize,
+                                }
+                              }))}
+                              placeholder="e.g., 2.5"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="stories">Stories/Levels</Label>
+                            <Input
+                              id="stories"
+                              type="number"
+                              value={editedProject.specs?.stories || ''}
+                              onChange={(e) => setEditedProject(prev => ({
+                                ...prev,
+                                specs: {
+                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
+                                  existingSquareFootage: prev.specs?.existingSquareFootage,
+                                  newSquareFootage: prev.specs?.newSquareFootage,
+                                  totalSquareFootage: prev.specs?.totalSquareFootage,
+                                  bedrooms: prev.specs?.bedrooms,
+                                  bathrooms: prev.specs?.bathrooms,
+                                  stories: e.target.value ? parseInt(e.target.value) : undefined,
+                                  garageSpaces: prev.specs?.garageSpaces,
+                                  foundationType: prev.specs?.foundationType,
+                                  roofType: prev.specs?.roofType,
+                                  basement: prev.specs?.basement,
+                                  lotSize: prev.specs?.lotSize,
+                                }
+                              }))}
+                              placeholder="e.g., 2"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="garageSpaces">Garage Spaces</Label>
+                            <Input
+                              id="garageSpaces"
+                              type="number"
+                              value={editedProject.specs?.garageSpaces || ''}
+                              onChange={(e) => setEditedProject(prev => ({
+                                ...prev,
+                                specs: {
+                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
+                                  existingSquareFootage: prev.specs?.existingSquareFootage,
+                                  newSquareFootage: prev.specs?.newSquareFootage,
+                                  totalSquareFootage: prev.specs?.totalSquareFootage,
+                                  bedrooms: prev.specs?.bedrooms,
+                                  bathrooms: prev.specs?.bathrooms,
+                                  stories: prev.specs?.stories,
+                                  garageSpaces: e.target.value ? parseInt(e.target.value) : undefined,
+                                  foundationType: prev.specs?.foundationType,
+                                  roofType: prev.specs?.roofType,
+                                  basement: prev.specs?.basement,
+                                  lotSize: prev.specs?.lotSize,
+                                }
+                              }))}
+                              placeholder="e.g., 2"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Foundation, Roof, Basement, Lot */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="foundationType">Foundation Type</Label>
+                            <Select
+                              value={editedProject.specs?.foundationType || ''}
+                              onValueChange={(value) => setEditedProject(prev => ({
+                                ...prev,
+                                specs: {
+                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
+                                  existingSquareFootage: prev.specs?.existingSquareFootage,
+                                  newSquareFootage: prev.specs?.newSquareFootage,
+                                  totalSquareFootage: prev.specs?.totalSquareFootage,
+                                  bedrooms: prev.specs?.bedrooms,
+                                  bathrooms: prev.specs?.bathrooms,
+                                  stories: prev.specs?.stories,
+                                  garageSpaces: prev.specs?.garageSpaces,
+                                  foundationType: value as any,
+                                  roofType: prev.specs?.roofType,
+                                  basement: prev.specs?.basement,
+                                  lotSize: prev.specs?.lotSize,
+                                }
+                              }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select foundation type..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="slab">Slab</SelectItem>
+                                <SelectItem value="crawl-space">Crawl Space</SelectItem>
+                                <SelectItem value="full-basement">Full Basement</SelectItem>
+                                <SelectItem value="partial-basement">Partial Basement</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="roofType">Roof Type</Label>
+                            <Select
+                              value={editedProject.specs?.roofType || ''}
+                              onValueChange={(value) => setEditedProject(prev => ({
+                                ...prev,
+                                specs: {
+                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
+                                  existingSquareFootage: prev.specs?.existingSquareFootage,
+                                  newSquareFootage: prev.specs?.newSquareFootage,
+                                  totalSquareFootage: prev.specs?.totalSquareFootage,
+                                  bedrooms: prev.specs?.bedrooms,
+                                  bathrooms: prev.specs?.bathrooms,
+                                  stories: prev.specs?.stories,
+                                  garageSpaces: prev.specs?.garageSpaces,
+                                  foundationType: prev.specs?.foundationType,
+                                  roofType: value as any,
+                                  basement: prev.specs?.basement,
+                                  lotSize: prev.specs?.lotSize,
+                                }
+                              }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select roof type..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="gable">Gable (Standard)</SelectItem>
+                                <SelectItem value="hip">Hip</SelectItem>
+                                <SelectItem value="mansard">Mansard</SelectItem>
+                                <SelectItem value="flat">Flat</SelectItem>
+                                <SelectItem value="shed">Shed</SelectItem>
+                                <SelectItem value="gambrel">Gambrel</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="basement">Basement</Label>
+                            <Select
+                              value={editedProject.specs?.basement || ''}
+                              onValueChange={(value) => setEditedProject(prev => ({
+                                ...prev,
+                                specs: {
+                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
+                                  existingSquareFootage: prev.specs?.existingSquareFootage,
+                                  newSquareFootage: prev.specs?.newSquareFootage,
+                                  totalSquareFootage: prev.specs?.totalSquareFootage,
+                                  bedrooms: prev.specs?.bedrooms,
+                                  bathrooms: prev.specs?.bathrooms,
+                                  stories: prev.specs?.stories,
+                                  garageSpaces: prev.specs?.garageSpaces,
+                                  foundationType: prev.specs?.foundationType,
+                                  roofType: prev.specs?.roofType,
+                                  basement: value as any,
+                                  lotSize: prev.specs?.lotSize,
+                                }
+                              }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select basement type..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                <SelectItem value="unfinished">Unfinished</SelectItem>
+                                <SelectItem value="finished">Finished</SelectItem>
+                                <SelectItem value="partial">Partial</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="lotSize">Lot Size (Square Feet)</Label>
+                            <Input
+                              id="lotSize"
+                              type="number"
+                              value={editedProject.specs?.lotSize || ''}
+                              onChange={(e) => setEditedProject(prev => ({
+                                ...prev,
+                                specs: {
+                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
+                                  existingSquareFootage: prev.specs?.existingSquareFootage,
+                                  newSquareFootage: prev.specs?.newSquareFootage,
+                                  totalSquareFootage: prev.specs?.totalSquareFootage,
+                                  bedrooms: prev.specs?.bedrooms,
+                                  bathrooms: prev.specs?.bathrooms,
+                                  stories: prev.specs?.stories,
+                                  garageSpaces: prev.specs?.garageSpaces,
+                                  foundationType: prev.specs?.foundationType,
+                                  roofType: prev.specs?.roofType,
+                                  basement: prev.specs?.basement,
+                                  lotSize: e.target.value ? parseFloat(e.target.value) : undefined,
+                                }
+                              }))}
+                              placeholder="e.g., 10000"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )
+                  })()}
                 </div>
                 
                 <div className="flex gap-2 pt-4">
