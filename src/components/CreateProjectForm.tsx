@@ -432,6 +432,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
                         specs: {
+                          livingSquareFootage: prev.specs?.livingSquareFootage || 0,
                           ...prev.specs,
                           totalSquareFootage: e.target.value ? parseFloat(e.target.value) : undefined,
                         }
@@ -453,6 +454,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
                         specs: {
+                          livingSquareFootage: prev.specs?.livingSquareFootage || 0,
                           ...prev.specs,
                           bedrooms: e.target.value ? parseInt(e.target.value) : undefined,
                         }
@@ -470,6 +472,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
                         specs: {
+                          livingSquareFootage: prev.specs?.livingSquareFootage || 0,
                           ...prev.specs,
                           bathrooms: e.target.value ? parseFloat(e.target.value) : undefined,
                         }
@@ -486,6 +489,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
                         specs: {
+                          livingSquareFootage: prev.specs?.livingSquareFootage || 0,
                           ...prev.specs,
                           stories: e.target.value ? parseInt(e.target.value) : undefined,
                         }
@@ -502,6 +506,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
                         specs: {
+                          livingSquareFootage: prev.specs?.livingSquareFootage || 0,
                           ...prev.specs,
                           garageSpaces: e.target.value ? parseInt(e.target.value) : undefined,
                         }
@@ -520,6 +525,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       onValueChange={(value) => setFormData(prev => ({
                         ...prev,
                         specs: {
+                          livingSquareFootage: prev.specs?.livingSquareFootage || 0,
                           ...prev.specs,
                           foundationType: value as any,
                         }
@@ -545,6 +551,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       onValueChange={(value) => setFormData(prev => ({
                         ...prev,
                         specs: {
+                          livingSquareFootage: prev.specs?.livingSquareFootage || 0,
                           ...prev.specs,
                           roofType: value as any,
                         }
@@ -573,6 +580,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       onValueChange={(value) => setFormData(prev => ({
                         ...prev,
                         specs: {
+                          livingSquareFootage: prev.specs?.livingSquareFootage || 0,
                           ...prev.specs,
                           basement: value as any,
                         }
@@ -599,6 +607,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
                         specs: {
+                          livingSquareFootage: prev.specs?.livingSquareFootage || 0,
                           ...prev.specs,
                           lotSize: e.target.value ? parseFloat(e.target.value) : undefined,
                         }
