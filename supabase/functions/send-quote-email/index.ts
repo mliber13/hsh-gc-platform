@@ -31,9 +31,10 @@ interface EmailRequest {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
+  // Handle CORS preflight - must be first and return immediately
   if (req.method === 'OPTIONS') {
     return new Response('ok', { 
+      status: 200,
       headers: {
         ...corsHeaders,
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -42,7 +43,18 @@ serve(async (req) => {
   }
 
   try {
-    const { to, vendorName, projectName, tradeName, quoteLink, scopeOfWork, dueDate, expiresAt }: EmailRequest = await req.json()
+    // Only parse JSON for non-OPTIONS requests
+    let requestBody: EmailRequest
+    try {
+      requestBody = await req.json()
+    } catch (e) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON in request body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    
+    const { to, vendorName, projectName, tradeName, quoteLink, scopeOfWork, dueDate, expiresAt } = requestBody
 
     if (!to || !quoteLink) {
       return new Response(
