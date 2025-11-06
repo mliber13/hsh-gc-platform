@@ -14,7 +14,7 @@ export interface SendQuoteRequestEmailInput {
   tradeName?: string
   quoteLink: string
   scopeOfWork: string
-  dueDate?: Date
+  dueDate?: Date | null
   expiresAt: Date
 }
 
