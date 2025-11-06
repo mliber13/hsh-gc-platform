@@ -18,6 +18,7 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { 
   Mail, 
   FileText, 
@@ -31,8 +32,10 @@ import {
   ArrowLeft,
   Eye,
   Link as LinkIcon,
-  RefreshCw
+  RefreshCw,
+  X
 } from 'lucide-react'
+import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface QuoteReviewDashboardProps {
   project: Project
@@ -48,6 +51,8 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
   const [selectedTradeId, setSelectedTradeId] = useState<string>('')
   const [reviewNotes, setReviewNotes] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [showQuoteDetails, setShowQuoteDetails] = useState(false)
+  const [quoteDetails, setQuoteDetails] = useState<{ quote: SubmittedQuote; request: QuoteRequest } | null>(null)
 
   // Load quote requests and submitted quotes
   useEffect(() => {
@@ -102,6 +107,17 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
       console.error('Error applying quote to trade:', tradeError)
       alert('Failed to apply quote to trade')
       return false
+    }
+  }
+
+  const handleViewDetails = (quote: SubmittedQuote) => {
+    const request = quoteRequests.find(r => {
+      const quotes = submittedQuotes.get(r.id) || []
+      return quotes.some(q => q.id === quote.id)
+    })
+    if (request) {
+      setQuoteDetails({ quote, request })
+      setShowQuoteDetails(true)
     }
   }
 
@@ -208,11 +224,14 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
       <header className="bg-white shadow-md border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{project.name}</h1>
-              <p className="text-sm text-gray-600 mt-1">Quote Review Dashboard</p>
+            <div className="flex items-center gap-4">
+              <img src={hshLogo} alt="HSH Contractor" className="h-12 w-auto" />
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{project.name}</h1>
+                <p className="text-sm text-gray-600 mt-1">Quote Review Dashboard</p>
+              </div>
             </div>
-            <Button onClick={onBack} variant="outline">
+            <Button onClick={onBack} variant="outline" className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Project
             </Button>
@@ -224,37 +243,37 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Stats Summary */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-          <Card>
+          <Card className="bg-gradient-to-br from-[#0E79C9] to-[#0A5A96] text-white border-none">
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-sm text-gray-600">Total Requests</p>
-                <p className="text-2xl font-bold text-gray-900">{quoteRequests.length}</p>
+                <p className="text-sm opacity-90">Total Requests</p>
+                <p className="text-3xl font-bold">{quoteRequests.length}</p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-gradient-to-br from-[#213069] to-[#1a2550] text-white border-none">
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-sm text-gray-600">Submitted Quotes</p>
-                <p className="text-2xl font-bold text-gray-900">{allQuotes.length}</p>
+                <p className="text-sm opacity-90">Submitted Quotes</p>
+                <p className="text-3xl font-bold">{allQuotes.length}</p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-gradient-to-br from-[#D95C00] to-[#B34C00] text-white border-none">
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-sm text-gray-600">Pending Review</p>
-                <p className="text-2xl font-bold text-yellow-600">
+                <p className="text-sm opacity-90">Pending Review</p>
+                <p className="text-3xl font-bold">
                   {allQuotes.filter(({ quote }) => quote.status === 'pending').length}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white border-none">
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-sm text-gray-600">Accepted</p>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-sm opacity-90">Accepted</p>
+                <p className="text-3xl font-bold">
                   {allQuotes.filter(({ quote }) => quote.status === 'accepted').length}
                 </p>
               </div>
@@ -290,7 +309,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
         ) : (
           <div className="space-y-4">
             {filteredQuotes.map(({ quote, request }) => (
-              <Card key={quote.id} className="hover:shadow-lg transition-shadow">
+              <Card key={quote.id} className="hover:shadow-lg transition-shadow border border-gray-200">
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div className="flex-1">
@@ -475,13 +494,10 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                     {quote.status !== 'pending' && (
                       <div className="flex flex-col sm:flex-row gap-2">
                         <Button
-                          onClick={() => {
-                            setSelectedQuote(quote)
-                            setSelectedTradeId(quote.assignedTradeId || '')
-                            setReviewNotes(quote.reviewNotes || '')
-                          }}
+                          onClick={() => handleViewDetails(quote)}
                           variant="outline"
                           size="sm"
+                          className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
                         >
                           <Eye className="w-4 h-4 mr-2" />
                           View Details
@@ -548,7 +564,152 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
           </div>
         )}
       </main>
+
+      {/* Quote Details Dialog */}
+      <Dialog open={showQuoteDetails} onOpenChange={setShowQuoteDetails}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold">{quoteDetails?.quote.vendorName}</DialogTitle>
+            <DialogDescription>
+              Quote submitted on {quoteDetails?.quote.submittedAt ? new Date(quoteDetails.quote.submittedAt).toLocaleDateString() : 'N/A'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {quoteDetails && (
+            <div className="space-y-6 mt-4">
+              {/* Vendor Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-1">Vendor Email</p>
+                  <p className="text-sm text-gray-600">{quoteDetails.quote.vendorEmail}</p>
+                </div>
+                {quoteDetails.quote.vendorCompany && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-1">Company</p>
+                    <p className="text-sm text-gray-600">{quoteDetails.quote.vendorCompany}</p>
+                  </div>
+                )}
+                {quoteDetails.quote.vendorPhone && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-1">Phone</p>
+                    <p className="text-sm text-gray-600">{quoteDetails.quote.vendorPhone}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-1">Status</p>
+                  {getStatusBadge(quoteDetails.quote.status)}
+                </div>
+              </div>
+
+              {/* Scope of Work */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Scope of Work</p>
+                <p className="text-sm text-gray-600 bg-gray-50 rounded p-3 whitespace-pre-wrap">
+                  {quoteDetails.request.scopeOfWork}
+                </p>
+              </div>
+
+              {/* Line Items */}
+              {quoteDetails.quote.lineItems && quoteDetails.quote.lineItems.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Line Items</p>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700">Description</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-700">Quantity</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-700">Unit</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-700">Price</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-700">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {quoteDetails.quote.lineItems.map((item, index) => (
+                          <tr key={index}>
+                            <td className="px-4 py-2 text-sm text-gray-700">{item.description}</td>
+                            <td className="px-4 py-2 text-sm text-gray-600 text-right">{item.quantity}</td>
+                            <td className="px-4 py-2 text-sm text-gray-600 text-right">{item.unit}</td>
+                            <td className="px-4 py-2 text-sm text-gray-600 text-right">{formatCurrency(item.price)}</td>
+                            <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">{formatCurrency(item.price * item.quantity)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50">
+                        <tr>
+                          <td colSpan={4} className="px-4 py-2 text-sm font-medium text-gray-700 text-right">Total:</td>
+                          <td className="px-4 py-2 text-sm font-bold text-gray-900 text-right">{formatCurrency(quoteDetails.quote.totalAmount)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
+              {quoteDetails.quote.notes && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Vendor Notes</p>
+                  <p className="text-sm text-gray-600 bg-gray-50 rounded p-3 whitespace-pre-wrap">
+                    {quoteDetails.quote.notes}
+                  </p>
+                </div>
+              )}
+
+              {/* Review Notes */}
+              {quoteDetails.quote.reviewNotes && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Review Notes</p>
+                  <p className="text-sm text-gray-600 bg-gray-50 rounded p-3 whitespace-pre-wrap">
+                    {quoteDetails.quote.reviewNotes}
+                  </p>
+                </div>
+              )}
+
+              {/* Assignment */}
+              {quoteDetails.quote.assignedTradeId && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Assigned Trade</p>
+                  <p className="text-sm text-gray-600 bg-blue-50 rounded p-3">
+                    {trades.find(t => t.id === quoteDetails.quote.assignedTradeId)?.name || 'Unknown Trade'}
+                  </p>
+                </div>
+              )}
+
+              {/* Documents */}
+              {quoteDetails.quote.quoteDocumentUrl && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Quote Document</p>
+                  <a
+                    href={quoteDetails.quote.quoteDocumentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#0E79C9] hover:underline flex items-center gap-2 text-sm"
+                  >
+                    <FileText className="w-4 h-4" />
+                    View Quote Document
+                  </a>
+                </div>
+              )}
+
+              {quoteDetails.request.drawingsUrl && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Drawings</p>
+                  <a
+                    href={quoteDetails.request.drawingsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#0E79C9] hover:underline flex items-center gap-2 text-sm"
+                  >
+                    <FileText className="w-4 h-4" />
+                    View Drawings
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
-
