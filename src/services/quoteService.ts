@@ -103,6 +103,12 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
     return []
   }
 
+  // Validate organization_id - must be a valid UUID or null
+  const organizationId = profile.organization_id && 
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profile.organization_id)
+    ? profile.organization_id
+    : null
+
   const expiresAt = calculateExpirationDate(input.expiresInDays || 30)
   const requests: QuoteRequest[] = []
 
@@ -116,7 +122,9 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
     if (input.drawingsFile) {
       const fileExt = input.drawingsFile.name.split('.').pop()
       const fileName = `quote-drawings-${token}.${fileExt}`
-      const filePath = `${profile.organization_id}/${input.projectId}/${fileName}`
+      // Use organization_id if valid, otherwise use user_id for file path
+      const orgPath = organizationId || user.id
+      const filePath = `${orgPath}/${input.projectId}/${fileName}`
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('quote-documents')
@@ -137,7 +145,7 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
       .from('quote_requests')
       .insert({
         user_id: user.id,
-        organization_id: profile.organization_id,
+        organization_id: organizationId,
         project_id: input.projectId,
         trade_id: input.tradeId || null,
         vendor_email: email,
@@ -295,14 +303,19 @@ export async function submitQuote(input: SubmitQuoteInput): Promise<SubmittedQuo
   if (input.quoteDocument) {
     const quoteRequestData = await supabase
       .from('quote_requests')
-      .select('organization_id, project_id')
+      .select('organization_id, project_id, user_id')
       .eq('token', input.token)
       .single()
 
     if (quoteRequestData.data) {
       const fileExt = input.quoteDocument.name.split('.').pop()
       const fileName = `quote-${quoteRequest.id}-${Date.now()}.${fileExt}`
-      const filePath = `${quoteRequestData.data.organization_id}/${quoteRequestData.data.project_id}/${fileName}`
+      // Use organization_id if valid UUID, otherwise use user_id
+      const orgId = quoteRequestData.data.organization_id && 
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quoteRequestData.data.organization_id)
+        ? quoteRequestData.data.organization_id
+        : quoteRequestData.data.user_id
+      const filePath = `${orgId}/${quoteRequestData.data.project_id}/${fileName}`
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('quote-documents')
