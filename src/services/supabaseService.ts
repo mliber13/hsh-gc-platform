@@ -66,6 +66,7 @@ async function transformProject(row: any): Promise<Project> {
     startDate: row.start_date ? new Date(row.start_date) : undefined,
     endDate: row.end_date ? new Date(row.end_date) : undefined,
     metadata: row.metadata || {},
+    specs: row.specs || undefined,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     estimate: finalEstimate,
@@ -137,6 +138,7 @@ export async function createProjectInDB(input: CreateProjectInput): Promise<Proj
       start_date: input.startDate,
       end_date: input.endDate,
       metadata: input.metadata || {},
+      specs: input.specs || null,
       user_id: user.id,
       organization_id: profile.organization_id,
       created_by: user.id,
@@ -155,20 +157,27 @@ export async function createProjectInDB(input: CreateProjectInput): Promise<Proj
 export async function updateProjectInDB(projectId: string, updates: UpdateProjectInput): Promise<Project | null> {
   if (!isOnlineMode()) return null
 
+  const updateData: any = {
+    name: updates.name,
+    status: updates.status,
+    address: updates.address,
+    city: updates.city,
+    state: updates.state,
+    zip_code: updates.zipCode,
+    client: updates.client,
+    start_date: updates.startDate?.toISOString(),
+    end_date: updates.endDate?.toISOString(),
+    metadata: updates.metadata,
+  }
+  
+  // Only include specs if it's provided in the update
+  if (updates.specs !== undefined) {
+    updateData.specs = updates.specs || null
+  }
+
   const { data, error } = await supabase
     .from('projects')
-    .update({
-      name: updates.name,
-      status: updates.status,
-      address: updates.address,
-      city: updates.city,
-      state: updates.state,
-      zip_code: updates.zipCode,
-      client: updates.client,
-      start_date: updates.startDate?.toISOString(),
-      end_date: updates.endDate?.toISOString(),
-      metadata: updates.metadata,
-    })
+    .update(updateData)
     .eq('id', projectId)
     .select()
     .single()
