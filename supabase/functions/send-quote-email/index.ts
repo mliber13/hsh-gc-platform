@@ -2,23 +2,22 @@
 // Supabase Edge Function: Send Quote Request Email
 // ============================================================================
 //
-// This function sends quote request emails to vendors using Resend or similar service
+// This function sends quote request emails to vendors using Resend
 // 
 // Setup Instructions:
 // 1. Install Supabase CLI: npm install -g supabase
 // 2. Link your project: supabase link --project-ref YOUR_PROJECT_REF
 // 3. Set environment variables:
-//    - RESEND_API_KEY (or your email service API key)
+//    supabase secrets set RESEND_API_KEY=re_YOUR_API_KEY_HERE
+//    supabase secrets set FROM_EMAIL=onboarding@resend.dev (or your verified domain)
 // 4. Deploy: supabase functions deploy send-quote-email
-//
-// Alternative: Use a service like Resend, SendGrid, or AWS SES
 //
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { corsHeaders } from '../_shared/cors.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'noreply@hshcontractor.com'
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'onboarding@resend.dev'
 
 interface EmailRequest {
   to: string
@@ -115,10 +114,10 @@ serve(async (req) => {
     })
 
     if (!resendResponse.ok) {
-      const error = await resendResponse.text()
-      console.error('Resend API error:', error)
+      const errorData = await resendResponse.json().catch(() => ({ message: await resendResponse.text() }))
+      console.error('Resend API error:', errorData)
       return new Response(
-        JSON.stringify({ success: false, error: 'Failed to send email' }),
+        JSON.stringify({ success: false, error: errorData.message || 'Failed to send email' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

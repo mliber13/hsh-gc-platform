@@ -18,16 +18,18 @@ The quote request system now supports automatic email sending to vendors. When y
    # Install Supabase CLI if not already installed
    npm install -g supabase
    
-   # Link your project
+   # Link your project (get project ref from Supabase Dashboard → Settings → General)
    supabase link --project-ref YOUR_PROJECT_REF
    
-   # Set environment variables
-   supabase secrets set RESEND_API_KEY=your_resend_api_key
-   supabase secrets set FROM_EMAIL=noreply@yourdomain.com
+   # Set environment variables (secrets)
+   supabase secrets set RESEND_API_KEY=re_YOUR_API_KEY_HERE
+   supabase secrets set FROM_EMAIL=onboarding@resend.dev
    
    # Deploy the function
    supabase functions deploy send-quote-email
    ```
+   
+   **Quick Start:** See `DEPLOY_EMAIL_FUNCTION.md` for detailed step-by-step instructions.
 
 3. **Test the Function**
    - Create a quote request in the app
