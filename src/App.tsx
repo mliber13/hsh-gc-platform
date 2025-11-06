@@ -25,6 +25,7 @@ import { getCurrentUserProfile, UserProfile } from './services/userService'
 import { DataMigration } from './components/DataMigration'
 import { QuickBooksConnect } from './components/QuickBooksConnect'
 import { QuickBooksCallback } from './components/QuickBooksCallback'
+import { VendorQuotePortal } from './components/VendorQuotePortal'
 import { Button } from './components/ui/button'
 import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2 } from 'lucide-react'
 import { backupAllData } from './services/backupService'
@@ -49,18 +50,21 @@ function App() {
     }
   }, [isOnline, user])
 
-  // Check if we're on the QB callback route
+  // Check for special routes (vendor quote portal, QB callback)
   useEffect(() => {
+    const pathname = window.location.pathname
+    
+    // Check for vendor quote portal route
+    if (pathname.startsWith('/vendor-quote/')) {
+      // This will be handled by early return, no need to set view
+      return
+    }
+    
+    // Check for QB callback route
     const params = new URLSearchParams(window.location.search)
     const hasQBCode = params.get('code') && params.get('realmId')
     
-    console.log('Route check:', {
-      pathname: window.location.pathname,
-      search: window.location.search,
-      hasQBCode
-    })
-    
-    if (hasQBCode || window.location.pathname === '/qb-callback') {
+    if (hasQBCode || pathname === '/qb-callback') {
       console.log('Detected QB callback, switching to qb-callback view')
       setCurrentView('qb-callback')
     }
@@ -228,6 +232,12 @@ function App() {
     admin: 'Admin',
     editor: 'Editor',
     viewer: 'Viewer',
+  }
+
+  // Check for vendor quote portal route - bypass auth
+  const pathname = window.location.pathname
+  if (pathname.startsWith('/vendor-quote/')) {
+    return <VendorQuotePortal />
   }
 
   return (

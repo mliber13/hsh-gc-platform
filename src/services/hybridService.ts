@@ -22,6 +22,14 @@ import {
 import { getTradesForEstimate as getTradesLS } from './storage'
 import * as supabaseService from './supabaseService'
 import { Project, CreateProjectInput, UpdateProjectInput, Trade, TradeInput, getCategoryGroup } from '@/types'
+import * as quoteService from './quoteService'
+import { 
+  QuoteRequest, 
+  SubmittedQuote, 
+  CreateQuoteRequestInput, 
+  SubmitQuoteInput, 
+  UpdateQuoteStatusInput 
+} from '@/types/quote'
 
 // ============================================================================
 // PROJECT OPERATIONS
@@ -123,6 +131,53 @@ export async function deleteTrade_Hybrid(tradeId: string): Promise<boolean> {
   } else {
     return deleteTradeLS(tradeId)
   }
+}
+
+// ============================================================================
+// QUOTE OPERATIONS (Online-only - requires email links and vendor access)
+// ============================================================================
+
+export async function createQuoteRequest_Hybrid(input: CreateQuoteRequestInput): Promise<QuoteRequest[]> {
+  // Quotes are online-only feature
+  if (!isOnlineMode()) {
+    throw new Error('Quote requests require online mode')
+  }
+  return await quoteService.createQuoteRequestInDB(input)
+}
+
+export async function fetchQuoteRequestByToken_Hybrid(token: string): Promise<QuoteRequest | null> {
+  if (!isOnlineMode()) {
+    return null
+  }
+  return await quoteService.fetchQuoteRequestByToken(token)
+}
+
+export async function fetchQuoteRequestsForProject_Hybrid(projectId: string): Promise<QuoteRequest[]> {
+  if (!isOnlineMode()) {
+    return []
+  }
+  return await quoteService.fetchQuoteRequestsForProject(projectId)
+}
+
+export async function submitQuote_Hybrid(input: SubmitQuoteInput): Promise<SubmittedQuote | null> {
+  if (!isOnlineMode()) {
+    return null
+  }
+  return await quoteService.submitQuote(input)
+}
+
+export async function fetchSubmittedQuotesForRequest_Hybrid(quoteRequestId: string): Promise<SubmittedQuote[]> {
+  if (!isOnlineMode()) {
+    return []
+  }
+  return await quoteService.fetchSubmittedQuotesForRequest(quoteRequestId)
+}
+
+export async function updateQuoteStatus_Hybrid(input: UpdateQuoteStatusInput): Promise<SubmittedQuote | null> {
+  if (!isOnlineMode()) {
+    return null
+  }
+  return await quoteService.updateQuoteStatus(input)
 }
 
 // ============================================================================

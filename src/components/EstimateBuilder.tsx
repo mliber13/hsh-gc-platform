@@ -47,6 +47,7 @@ import {
   deleteTrade_Hybrid,
   getTradesForEstimate_Hybrid,
 } from '@/services/hybridService'
+import { QuoteRequestForm } from './QuoteRequestForm'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -80,7 +81,8 @@ import {
   ChevronUp,
   ArrowLeft,
   Printer,
-  Save
+  Save,
+  Mail
 } from 'lucide-react'
 
 // ----------------------------------------------------------------------------
@@ -123,6 +125,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   const [showApplyTemplateDialog, setShowApplyTemplateDialog] = useState(false)
   const [availableTemplates, setAvailableTemplates] = useState<any[]>([])
   const [selectedTemplateToApply, setSelectedTemplateToApply] = useState<string>('')
+  const [showQuoteRequestForm, setShowQuoteRequestForm] = useState(false)
+  const [selectedTradeForQuote, setSelectedTradeForQuote] = useState<Trade | null>(null)
 
   // Initialize project if none provided
   useEffect(() => {
@@ -544,6 +548,10 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           onDeleteTrade={handleDeleteTrade}
           onAddTrade={handleAddTrade}
           onAddDefaultCategories={handleAddDefaultCategories}
+          onRequestQuote={(trade) => {
+            setSelectedTradeForQuote(trade)
+            setShowQuoteRequestForm(true)
+          }}
           defaultMarkupPercent={markupPercent}
         />
 
@@ -555,6 +563,28 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
             onCancel={handleCancelEdit}
             isAdding={isAddingTrade}
             projectId={projectData.id}
+          />
+        )}
+
+        {/* Quote Request Form */}
+        {showQuoteRequestForm && projectData && (
+          <QuoteRequestForm
+            project={projectData}
+            trade={selectedTradeForQuote}
+            onClose={() => {
+              setShowQuoteRequestForm(false)
+              setSelectedTradeForQuote(null)
+            }}
+            onSuccess={(quoteRequests) => {
+              // Show success with links to copy
+              const linksText = quoteRequests.map((qr: any) => 
+                `${qr.vendorEmail}: ${qr.link}`
+              ).join('\n\n')
+              
+              alert(`Quote requests created successfully!\n\nEmail links (copy these to send to vendors):\n\n${linksText}\n\n(Email functionality coming soon)`)
+              setShowQuoteRequestForm(false)
+              setSelectedTradeForQuote(null)
+            }}
           />
         )}
 
@@ -1078,10 +1108,11 @@ interface TradeTableProps {
   onDeleteTrade: (tradeId: string) => void
   onAddTrade: () => void
   onAddDefaultCategories: () => void
+  onRequestQuote?: (trade: Trade) => void
   defaultMarkupPercent: number
 }
 
-function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefaultCategories, defaultMarkupPercent }: TradeTableProps) {
+function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefaultCategories, onRequestQuote, defaultMarkupPercent }: TradeTableProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   
   const formatCurrency = (amount: number) => 
@@ -1250,6 +1281,17 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                               <Edit className="w-3 h-3 mr-1" />
                               Edit
                             </Button>
+                            {onRequestQuote && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => onRequestQuote(trade)}
+                                className="flex-1 border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
+                              >
+                                <Mail className="w-3 h-3 mr-1" />
+                                Quote
+                              </Button>
+                            )}
                             <Button 
                               size="sm" 
                               variant="destructive" 
@@ -1404,6 +1446,17 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                               <td className="p-3 text-center border-b">
                                 <div className="flex gap-1">
                                   <Button size="sm" variant="outline" onClick={() => onEditTrade(trade)}>Edit</Button>
+                                  {onRequestQuote && (
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => onRequestQuote(trade)}
+                                      className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
+                                    >
+                                      <Mail className="w-3 h-3 mr-1" />
+                                      Quote
+                                    </Button>
+                                  )}
                                   <Button size="sm" variant="destructive" onClick={() => onDeleteTrade(trade.id)}>Delete</Button>
                                 </div>
                               </td>
