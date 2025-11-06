@@ -9,6 +9,7 @@ import React, { useState } from 'react'
 import { Project, Trade } from '@/types'
 import { CreateQuoteRequestInput } from '@/types/quote'
 import { createQuoteRequest_Hybrid } from '@/services/hybridService'
+import { sendQuoteRequestEmail, generateMailtoLink } from '@/services/emailService'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -117,24 +118,76 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
         return
       }
 
-      // Generate email links
+      // Generate email links and send emails
       const baseUrl = window.location.origin
       const emailLinks = quoteRequests.map(qr => ({
         ...qr,
         link: `${baseUrl}/vendor-quote/${qr.token}`,
       }))
 
-      // TODO: Send emails with links
-      // For now, we'll show the links to copy
+      // Send emails to vendors
+      const emailResults = await Promise.all(
+        quoteRequests.map(async (qr, index) => {
+          const link = `${baseUrl}/vendor-quote/${qr.token}`
+          const vendorName = vendorNames[index] || undefined
+          
+          const emailSent = await sendQuoteRequestEmail({
+            to: qr.vendorEmail,
+            vendorName,
+            projectName: project.name,
+            tradeName: trade?.name,
+            quoteLink: link,
+            scopeOfWork: scopeOfWork.trim(),
+            dueDate: dueDate ? new Date(dueDate) : undefined,
+            expiresAt: qr.expiresAt,
+          })
+
+          return {
+            email: qr.vendorEmail,
+            name: vendorName,
+            link,
+            emailSent,
+            mailtoLink: generateMailtoLink({
+              to: qr.vendorEmail,
+              vendorName,
+              projectName: project.name,
+              tradeName: trade?.name,
+              quoteLink: link,
+              scopeOfWork: scopeOfWork.trim(),
+              dueDate: dueDate ? new Date(dueDate) : undefined,
+              expiresAt: qr.expiresAt,
+            }),
+          }
+        })
+      )
+
+      // Check if any emails were sent successfully
+      const emailsSent = emailResults.filter(r => r.emailSent).length
+      const emailsFailed = emailResults.filter(r => !r.emailSent).length
+
       if (onSuccess) {
         onSuccess(emailLinks)
       } else {
-        // Show success message with links
-        const linksText = emailLinks.map(qr => 
-          `${qr.vendorEmail}: ${qr.link}`
-        ).join('\n')
+        // Show success message with email status
+        let message = `Quote requests created successfully!\n\n`
         
-        alert(`Quote requests created successfully!\n\nEmail links:\n${linksText}\n\n(Email functionality coming soon - copy these links for now)`)
+        if (emailsSent > 0) {
+          message += `✅ ${emailsSent} email(s) sent successfully.\n\n`
+        }
+        
+        if (emailsFailed > 0) {
+          message += `⚠️ ${emailsFailed} email(s) could not be sent automatically.\n\n`
+          message += `You can send them manually using these links:\n\n`
+          emailResults
+            .filter(r => !r.emailSent)
+            .forEach(r => {
+              message += `${r.name || r.email}: ${r.link}\n`
+            })
+        } else {
+          message += `All quote request emails have been sent to vendors.`
+        }
+        
+        alert(message)
         onClose()
       }
     } catch (err: any) {
