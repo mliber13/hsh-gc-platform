@@ -139,7 +139,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
             quoteLink: link,
             scopeOfWork: scopeOfWork.trim(),
             dueDate: dueDate ? new Date(dueDate) : null,
-            expiresAt: qr.expiresAt,
+            expiresAt: qr.expiresAt || null,
           })
 
           return {
@@ -155,7 +155,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
               quoteLink: link,
               scopeOfWork: scopeOfWork.trim(),
               dueDate: dueDate ? new Date(dueDate) : null,
-              expiresAt: qr.expiresAt,
+              expiresAt: qr.expiresAt || null,
             }),
           }
         })

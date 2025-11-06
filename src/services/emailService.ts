@@ -15,7 +15,7 @@ export interface SendQuoteRequestEmailInput {
   quoteLink: string
   scopeOfWork: string
   dueDate?: Date | null
-  expiresAt: Date
+  expiresAt: Date | null
 }
 
 /**
@@ -33,7 +33,7 @@ export async function sendQuoteRequestEmail(input: SendQuoteRequestEmailInput): 
         quoteLink: input.quoteLink,
         scopeOfWork: input.scopeOfWork,
         dueDate: input.dueDate?.toISOString(),
-        expiresAt: input.expiresAt.toISOString(),
+        expiresAt: input.expiresAt?.toISOString() || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // Default 30 days if not provided
       },
     })
 
@@ -73,7 +73,7 @@ ${input.scopeOfWork}
 Please submit your quote using the following link:
 ${input.quoteLink}
 
-This link will expire on ${input.expiresAt.toLocaleDateString()}.
+${input.expiresAt ? `This link will expire on ${input.expiresAt.toLocaleDateString()}.` : 'This link will expire in 30 days.'}
 
 Thank you,
 HSH Contractor`
