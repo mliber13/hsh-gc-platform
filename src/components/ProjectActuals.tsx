@@ -1613,10 +1613,10 @@ function ActualEntryForm({
     [availableSubcontractors]
   )
 
-  const supplierSelectValue = supplierOptions.includes(formData.vendor) ? formData.vendor : ''
+  const supplierSelectValue = supplierOptions.includes(formData.vendor) ? formData.vendor : 'manual'
   const subcontractorSelectValue = subcontractorOptions.includes(formData.subcontractorName)
     ? formData.subcontractorName
-    : ''
+    : 'manual'
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -1680,7 +1680,7 @@ function ActualEntryForm({
                       onValueChange={(value) =>
                         setFormData((prev) => ({
                           ...prev,
-                          vendor: value,
+                          vendor: value === 'manual' ? '' : value,
                         }))
                       }
                     >
@@ -1688,7 +1688,7 @@ function ActualEntryForm({
                         <SelectValue placeholder="Select supplier..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Select supplier...</SelectItem>
+                        <SelectItem value="manual">Type supplier name...</SelectItem>
                         {supplierOptions.map((name) => (
                           <SelectItem key={name} value={name}>
                             {name}
@@ -1729,7 +1729,7 @@ function ActualEntryForm({
                     onValueChange={(value) =>
                       setFormData((prev) => ({
                         ...prev,
-                        subcontractorName: value,
+                        subcontractorName: value === 'manual' ? '' : value,
                       }))
                     }
                   >
@@ -1737,7 +1737,7 @@ function ActualEntryForm({
                       <SelectValue placeholder="Select subcontractor..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Select subcontractor...</SelectItem>
+                      <SelectItem value="manual">Type subcontractor name...</SelectItem>
                       {subcontractorOptions.map((name) => (
                         <SelectItem key={name} value={name}>
                           {name}

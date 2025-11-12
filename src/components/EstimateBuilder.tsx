@@ -1535,11 +1535,11 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
   )
 
   const quoteVendorSelectValue = React.useMemo(() => {
-    if (!formData.quoteVendor) return ''
+    if (!formData.quoteVendor) return 'manual'
     const match = subcontractorOptions.find(
       (sub) => sub.name.toLowerCase() === formData.quoteVendor?.toLowerCase()
     )
-    return match?.id || ''
+    return match?.id || 'manual'
   }, [formData.quoteVendor, subcontractorOptions])
 
   // Load item templates when category changes
@@ -1753,7 +1753,7 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                     <Select
                       value={quoteVendorSelectValue}
                       onValueChange={(value) => {
-                        if (!value) {
+                        if (value === 'manual') {
                           setFormData((prev) => ({ ...prev, quoteVendor: '' }))
                           return
                         }
@@ -1765,7 +1765,7 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                         <SelectValue placeholder="Select subcontractor..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Manual entry...</SelectItem>
+                        <SelectItem value="manual">Manual entry...</SelectItem>
                         {subcontractorOptions.map((sub) => (
                           <SelectItem key={sub.id} value={sub.id}>
                             {sub.name}

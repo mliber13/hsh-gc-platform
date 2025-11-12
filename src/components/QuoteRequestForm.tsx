@@ -85,7 +85,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
   const handleSubcontractorSelect = (index: number, subcontractorId: string) => {
     const updatedSelected = [...selectedSubcontractors]
 
-    if (!subcontractorId) {
+    if (subcontractorId === 'manual') {
       updatedSelected[index] = null
       setSelectedSubcontractors(updatedSelected)
       return
@@ -300,14 +300,14 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
                       {availableSubcontractors.length > 0 && (
                         <div className="mb-1">
                           <Select
-                            value={selectedSubcontractors[index] ?? ''}
+                            value={selectedSubcontractors[index] ?? 'manual'}
                             onValueChange={(value) => handleSubcontractorSelect(index, value)}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select from directory..." />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">Manual entry...</SelectItem>
+                              <SelectItem value="manual">Manual entry...</SelectItem>
                               {availableSubcontractors.map((sub) => (
                                 <SelectItem key={sub.id} value={sub.id}>
                                   {sub.name}
