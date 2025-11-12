@@ -74,7 +74,7 @@ const toSupplier = (row: any): Supplier => ({
 })
 
 const buildSubcontractorPayload = (
-  input: SubcontractorInput,
+  input: Partial<SubcontractorInput>,
   organizationId?: string
 ) => {
   const payload: Record<string, any> = {}
@@ -92,7 +92,7 @@ const buildSubcontractorPayload = (
   return payload
 }
 
-const buildSupplierPayload = (input: SupplierInput, organizationId?: string) => {
+const buildSupplierPayload = (input: Partial<SupplierInput>, organizationId?: string) => {
   const payload: Record<string, any> = {}
 
   if (organizationId) payload.organization_id = organizationId
@@ -159,7 +159,7 @@ export async function createSubcontractor(
 
 export async function updateSubcontractor(
   id: string,
-  updates: SubcontractorInput
+  updates: Partial<SubcontractorInput>
 ): Promise<Subcontractor> {
   await requireOnlineMode()
 
@@ -250,7 +250,7 @@ export async function createSupplier(input: SupplierInput): Promise<Supplier> {
 
 export async function updateSupplier(
   id: string,
-  updates: SupplierInput
+  updates: Partial<SupplierInput>
 ): Promise<Supplier> {
   await requireOnlineMode()
 
