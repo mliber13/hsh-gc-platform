@@ -138,6 +138,15 @@ export type {
 } from './itemTemplate'
 
 export type {
+  PartnerBase,
+  Subcontractor,
+  Supplier,
+  SubcontractorInput,
+  SupplierInput,
+  PartnerDirectoryEntity,
+} from './partners'
+
+export type {
   PlanEstimateTemplate,
   CreatePlanEstimateTemplateInput,
   UpdatePlanEstimateTemplateInput,

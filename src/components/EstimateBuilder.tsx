@@ -15,6 +15,7 @@ import {
   Trade,
   TradeInput,
   UnitType,
+  Subcontractor as DirectorySubcontractor,
   TRADE_CATEGORIES,
   CATEGORY_GROUPS,
   CATEGORY_TO_GROUP,
@@ -54,6 +55,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { fetchSubcontractors } from '@/services/partnerDirectoryService'
 import { 
   Edit, 
   Trash2, 
@@ -127,6 +129,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   const [selectedTemplateToApply, setSelectedTemplateToApply] = useState<string>('')
   const [showQuoteRequestForm, setShowQuoteRequestForm] = useState(false)
   const [selectedTradeForQuote, setSelectedTradeForQuote] = useState<Trade | null>(null)
+const [availableSubcontractors, setAvailableSubcontractors] = useState<DirectorySubcontractor[]>([])
 
   // Initialize project if none provided
   useEffect(() => {
@@ -151,6 +154,19 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       })
     }
   }, [projectData])
+
+  useEffect(() => {
+    const loadSubcontractors = async () => {
+      try {
+        const subs = await fetchSubcontractors({ includeInactive: false })
+        setAvailableSubcontractors(subs)
+      } catch (error) {
+        console.warn('Unable to load subcontractor directory for estimate builder:', error)
+      }
+    }
+
+    loadSubcontractors()
+  }, [])
 
   // Update estimate totals whenever trades, markup, or contingency change
   useEffect(() => {
@@ -563,6 +579,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
             onCancel={handleCancelEdit}
             isAdding={isAddingTrade}
             projectId={projectData.id}
+            availableSubcontractors={availableSubcontractors}
           />
         )}
 
@@ -1490,9 +1507,10 @@ interface TradeFormProps {
   onCancel: () => void
   isAdding: boolean
   projectId: string
+  availableSubcontractors: DirectorySubcontractor[]
 }
 
-function TradeForm({ trade, onSave, onCancel, isAdding, projectId }: TradeFormProps) {
+function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubcontractors }: TradeFormProps) {
   const [formData, setFormData] = useState<TradeFormData>(trade)
   // Initialize subcontractor entry mode based on existing data
   // If the item has material or labor rates, it was saved as a breakdown
@@ -1503,6 +1521,26 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId }: TradeFormPr
     return 'lump-sum'
   })
   const [itemTemplates, setItemTemplates] = useState<any[]>([])
+
+  const subcontractorOptions = React.useMemo(
+    () =>
+      availableSubcontractors
+        .filter((sub) => sub.isActive)
+        .map((sub) => ({
+          id: sub.id,
+          name: sub.name,
+          trade: sub.trade,
+        })),
+    [availableSubcontractors]
+  )
+
+  const quoteVendorSelectValue = React.useMemo(() => {
+    if (!formData.quoteVendor) return ''
+    const match = subcontractorOptions.find(
+      (sub) => sub.name.toLowerCase() === formData.quoteVendor?.toLowerCase()
+    )
+    return match?.id || ''
+  }, [formData.quoteVendor, subcontractorOptions])
 
   // Load item templates when category changes
   React.useEffect(() => {
@@ -1709,14 +1747,45 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId }: TradeFormPr
               
               {/* Quote fields - only show when status is quoted or approved */}
               {(formData.estimateStatus === 'quoted' || formData.estimateStatus === 'approved') && (
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="quoteVendor">Quote Vendor/Subcontractor</Label>
+                  {subcontractorOptions.length > 0 && (
+                    <Select
+                      value={quoteVendorSelectValue}
+                      onValueChange={(value) => {
+                        if (!value) {
+                          setFormData((prev) => ({ ...prev, quoteVendor: '' }))
+                          return
+                        }
+                        const selected = subcontractorOptions.find((sub) => sub.id === value)
+                        setFormData((prev) => ({ ...prev, quoteVendor: selected?.name || '' }))
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select subcontractor..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Manual entry...</SelectItem>
+                        {subcontractorOptions.map((sub) => (
+                          <SelectItem key={sub.id} value={sub.id}>
+                            {sub.name}
+                            {sub.trade ? ` • ${sub.trade}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Input
                     id="quoteVendor"
                     value={formData.quoteVendor || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, quoteVendor: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, quoteVendor: e.target.value }))}
                     placeholder="Enter vendor name"
                   />
+                  {subcontractorOptions.length === 0 && (
+                    <p className="text-xs text-gray-500">
+                      Add subcontractors in the Partner Directory to make selection faster.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

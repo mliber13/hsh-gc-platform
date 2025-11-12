@@ -28,10 +28,26 @@ import { QuickBooksCallback } from './components/QuickBooksCallback'
 import { VendorQuotePortal } from './components/VendorQuotePortal'
 import { QuoteReviewDashboard } from './components/QuoteReviewDashboard'
 import { Button } from './components/ui/button'
-import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2 } from 'lucide-react'
+import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2 } from 'lucide-react'
 import { backupAllData } from './services/backupService'
+import { PartnerDirectory } from './components/PartnerDirectory'
 
-type View = 'dashboard' | 'create-project' | 'project-detail' | 'estimate' | 'actuals' | 'change-orders' | 'forms' | 'plan-library' | 'plan-editor' | 'item-library' | 'data-migration' | 'qb-settings' | 'qb-callback' | 'quote-review'
+type View =
+  | 'dashboard'
+  | 'create-project'
+  | 'project-detail'
+  | 'estimate'
+  | 'actuals'
+  | 'change-orders'
+  | 'forms'
+  | 'plan-library'
+  | 'plan-editor'
+  | 'item-library'
+  | 'data-migration'
+  | 'qb-settings'
+  | 'qb-callback'
+  | 'quote-review'
+  | 'partner-directory'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -285,6 +301,18 @@ function App() {
                       <Link2 className="w-4 h-4" />
                       QuickBooks
                     </button>
+                    {userProfile && ['admin', 'editor'].includes(userProfile.role) && (
+                      <button
+                        onClick={() => {
+                          setCurrentView('partner-directory');
+                          setShowUserMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                      >
+                        <Building2 className="w-4 h-4" />
+                        Partner Directory
+                      </button>
+                    )}
                     {userProfile?.role === 'admin' && (
                       <button
                         onClick={() => {
@@ -407,6 +435,12 @@ function App() {
 
       {currentView === 'item-library' && (
         <ItemLibrary
+          onBack={handleBackToDashboard}
+        />
+      )}
+
+      {currentView === 'partner-directory' && (
+        <PartnerDirectory
           onBack={handleBackToDashboard}
         />
       )}

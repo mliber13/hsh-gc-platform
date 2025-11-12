@@ -8,7 +8,15 @@
 
 import React, { useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { Project, Trade, LaborEntry, MaterialEntry, SubcontractorEntry } from '@/types'
+import {
+  Project,
+  Trade,
+  LaborEntry,
+  MaterialEntry,
+  SubcontractorEntry,
+  Subcontractor as DirectorySubcontractor,
+  Supplier,
+} from '@/types'
 import { PrintableReport, ReportDepth } from './PrintableReport'
 import { 
   getProjectActuals_Hybrid,
@@ -25,6 +33,7 @@ import {
 import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
 import { fetchTradesForEstimate } from '@/services/supabaseService'
 import { isOnlineMode } from '@/lib/supabase'
+import { fetchSubcontractors, fetchSuppliers } from '@/services/partnerDirectoryService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -98,6 +107,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const [showPrintReport, setShowPrintReport] = useState(false)
   const [reportDepth, setReportDepth] = useState<ReportDepth>('full')
   const [reportType, setReportType] = useState<'actuals' | 'comparison'>('actuals')
+  const [availableSubcontractors, setAvailableSubcontractors] = useState<DirectorySubcontractor[]>([])
+  const [availableSuppliers, setAvailableSuppliers] = useState<Supplier[]>([])
 
   // Load trades for the estimate
   useEffect(() => {
@@ -198,6 +209,24 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     
     loadActuals()
   }, [project.id])
+
+  // Load subcontractor and supplier directories
+  useEffect(() => {
+    const loadPartnerDirectories = async () => {
+      try {
+        const [subs, sups] = await Promise.all([
+          fetchSubcontractors({ includeInactive: false }),
+          fetchSuppliers({ includeInactive: false }),
+        ])
+        setAvailableSubcontractors(subs)
+        setAvailableSuppliers(sups)
+      } catch (error) {
+        console.warn('Unable to load partner directory data:', error)
+      }
+    }
+
+    loadPartnerDirectories()
+  }, [])
 
   // ----------------------------------------------------------------------------
   // Calculations
@@ -1201,6 +1230,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           type={entryType}
           project={project}
           trades={trades}
+          availableSuppliers={availableSuppliers}
+          availableSubcontractors={availableSubcontractors}
           editingEntry={editingEntry}
           onSave={async (entry) => {
             // Save to storage based on entry type
@@ -1476,12 +1507,23 @@ interface ActualEntryFormProps {
   type: EntryType
   project: Project
   trades: Trade[]
+  availableSuppliers: Supplier[]
+  availableSubcontractors: DirectorySubcontractor[]
   editingEntry: ActualEntry | null
   onSave: (entry: ActualEntry) => void
   onCancel: () => void
 }
 
-function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel }: ActualEntryFormProps) {
+function ActualEntryForm({
+  type,
+  project,
+  trades,
+  availableSuppliers,
+  availableSubcontractors,
+  editingEntry,
+  onSave,
+  onCancel,
+}: ActualEntryFormProps) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
@@ -1553,6 +1595,29 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
     ? trades.filter(t => t.category === formData.category)
     : []
 
+  const supplierOptions = React.useMemo(
+    () =>
+      availableSuppliers
+        .filter((supplier) => supplier.isActive)
+        .map((supplier) => supplier.name)
+        .sort((a, b) => a.localeCompare(b)),
+    [availableSuppliers]
+  )
+
+  const subcontractorOptions = React.useMemo(
+    () =>
+      availableSubcontractors
+        .filter((sub) => sub.isActive)
+        .map((sub) => sub.name)
+        .sort((a, b) => a.localeCompare(b)),
+    [availableSubcontractors]
+  )
+
+  const supplierSelectValue = supplierOptions.includes(formData.vendor) ? formData.vendor : ''
+  const subcontractorSelectValue = subcontractorOptions.includes(formData.subcontractorName)
+    ? formData.subcontractorName
+    : ''
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1607,13 +1672,40 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
 
             {type === 'material' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="vendor">Vendor</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="vendor">Supplier</Label>
+                  {supplierOptions.length > 0 ? (
+                    <Select
+                      value={supplierSelectValue}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          vendor: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select supplier..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Select supplier...</SelectItem>
+                        {supplierOptions.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      Add suppliers in the Partner Directory to reuse them here.
+                    </p>
+                  )}
                   <Input
                     id="vendor"
-                    placeholder="e.g., ABC Lumber"
+                    placeholder="Type supplier name"
                     value={formData.vendor}
-                    onChange={(e) => setFormData(prev => ({ ...prev, vendor: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, vendor: e.target.value }))}
                   />
                 </div>
                 <div>
@@ -1629,13 +1721,40 @@ function ActualEntryForm({ type, project, trades, editingEntry, onSave, onCancel
             )}
 
             {type === 'subcontractor' && (
-              <div>
-                <Label htmlFor="subcontractorName">Subcontractor Name</Label>
+              <div className="space-y-2">
+                <Label htmlFor="subcontractorName">Subcontractor</Label>
+                {subcontractorOptions.length > 0 ? (
+                  <Select
+                    value={subcontractorSelectValue}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        subcontractorName: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select subcontractor..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Select subcontractor...</SelectItem>
+                      {subcontractorOptions.map((name) => (
+                        <SelectItem key={name} value={name}>
+                          {name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    Add subcontractors in the Partner Directory to reuse them here.
+                  </p>
+                )}
                 <Input
                   id="subcontractorName"
-                  placeholder="e.g., Smith Electrical"
+                  placeholder="Type subcontractor name"
                   value={formData.subcontractorName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, subcontractorName: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, subcontractorName: e.target.value }))}
                 />
               </div>
             )}

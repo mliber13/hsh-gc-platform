@@ -5,8 +5,8 @@
 // Form to create quote requests for vendors
 //
 
-import React, { useState } from 'react'
-import { Project, Trade } from '@/types'
+import React, { useEffect, useState } from 'react'
+import { Project, Trade, Subcontractor as DirectorySubcontractor } from '@/types'
 import { CreateQuoteRequestInput } from '@/types/quote'
 import { createQuoteRequest_Hybrid } from '@/services/hybridService'
 import { sendQuoteRequestEmail, generateMailtoLink } from '@/services/emailService'
@@ -15,6 +15,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { X, Plus, Upload, FileText, Mail, Calendar } from 'lucide-react'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { fetchSubcontractors } from '@/services/partnerDirectoryService'
 
 interface QuoteRequestFormProps {
   project: Project
@@ -26,22 +28,39 @@ interface QuoteRequestFormProps {
 export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRequestFormProps) {
   const [vendorEmails, setVendorEmails] = useState<string[]>([''])
   const [vendorNames, setVendorNames] = useState<string[]>([''])
+  const [selectedSubcontractors, setSelectedSubcontractors] = useState<(string | null)[]>([null])
   const [scopeOfWork, setScopeOfWork] = useState(trade ? `${trade.name}${trade.description ? `\n\n${trade.description}` : ''}` : '')
   const [drawingsFile, setDrawingsFile] = useState<File | null>(null)
   const [dueDate, setDueDate] = useState<string>('')
   const [expiresInDays, setExpiresInDays] = useState<number>(30)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [availableSubcontractors, setAvailableSubcontractors] = useState<DirectorySubcontractor[]>([])
+
+  useEffect(() => {
+    const loadSubcontractors = async () => {
+      try {
+        const data = await fetchSubcontractors({ includeInactive: false })
+        setAvailableSubcontractors(data)
+      } catch (err) {
+        console.warn('Unable to load subcontractor directory for quote requests:', err)
+      }
+    }
+
+    loadSubcontractors()
+  }, [])
 
   const handleAddVendor = () => {
     setVendorEmails([...vendorEmails, ''])
     setVendorNames([...vendorNames, ''])
+    setSelectedSubcontractors([...selectedSubcontractors, null])
   }
 
   const handleRemoveVendor = (index: number) => {
     if (vendorEmails.length > 1) {
       setVendorEmails(vendorEmails.filter((_, i) => i !== index))
       setVendorNames(vendorNames.filter((_, i) => i !== index))
+      setSelectedSubcontractors(selectedSubcontractors.filter((_, i) => i !== index))
     }
   }
 
@@ -49,12 +68,42 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     const updated = [...vendorEmails]
     updated[index] = value
     setVendorEmails(updated)
+    const updatedSelected = [...selectedSubcontractors]
+    updatedSelected[index] = null
+    setSelectedSubcontractors(updatedSelected)
   }
 
   const handleVendorNameChange = (index: number, value: string) => {
     const updated = [...vendorNames]
     updated[index] = value
     setVendorNames(updated)
+    const updatedSelected = [...selectedSubcontractors]
+    updatedSelected[index] = null
+    setSelectedSubcontractors(updatedSelected)
+  }
+
+  const handleSubcontractorSelect = (index: number, subcontractorId: string) => {
+    const updatedSelected = [...selectedSubcontractors]
+
+    if (!subcontractorId) {
+      updatedSelected[index] = null
+      setSelectedSubcontractors(updatedSelected)
+      return
+    }
+
+    const selected = availableSubcontractors.find((sub) => sub.id === subcontractorId)
+    updatedSelected[index] = subcontractorId
+    setSelectedSubcontractors(updatedSelected)
+
+    if (selected) {
+      const updatedNames = [...vendorNames]
+      updatedNames[index] = selected.contactName?.trim() || selected.name
+      setVendorNames(updatedNames)
+
+      const updatedEmails = [...vendorEmails]
+      updatedEmails[index] = selected.email || ''
+      setVendorEmails(updatedEmails)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -248,11 +297,37 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
                     </div>
                     <div className="col-span-5">
                       <Label className="text-xs">Name (Optional)</Label>
+                      {availableSubcontractors.length > 0 && (
+                        <div className="mb-1">
+                          <Select
+                            value={selectedSubcontractors[index] ?? ''}
+                            onValueChange={(value) => handleSubcontractorSelect(index, value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select from directory..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">Manual entry...</SelectItem>
+                              {availableSubcontractors.map((sub) => (
+                                <SelectItem key={sub.id} value={sub.id}>
+                                  {sub.name}
+                                  {sub.trade ? ` • ${sub.trade}` : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                       <Input
                         value={vendorNames[index] || ''}
                         onChange={(e) => handleVendorNameChange(index, e.target.value)}
                         placeholder="Vendor name"
                       />
+                      {selectedSubcontractors[index] && !vendorEmails[index] && (
+                        <p className="text-[11px] text-orange-600 mt-1">
+                          This contact does not have an email saved yet—please add one above.
+                        </p>
+                      )}
                     </div>
                     <div className="col-span-2">
                       {vendorEmails.length > 1 && (
