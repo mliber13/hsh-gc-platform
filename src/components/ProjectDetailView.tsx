@@ -18,8 +18,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PROJECT_TYPES, PROJECT_STATUS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail } from 'lucide-react'
+import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail, TrendingUp } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
+import { ProFormaGenerator } from './ProFormaGenerator'
 
 interface ProjectDetailViewProps {
   project: Project
@@ -67,6 +68,7 @@ export function ProjectDetailView({
     subcontractorCost: 0,
     totalActual: 0,
   })
+  const [showProForma, setShowProForma] = useState(false)
 
   // Load plans when editing mode is enabled
   useEffect(() => {
@@ -615,6 +617,48 @@ export function ProjectDetailView({
               </button>
             </Card>
           )}
+
+          {/* Pro Forma Generator Card */}
+          <Card className="bg-gradient-to-br from-[#059669] to-[#047857] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
+            <button onClick={() => setShowProForma(true)} className="w-full text-left">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
+                    <TrendingUp className="w-8 h-8" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm opacity-80">Financial</p>
+                    <p className="text-3xl font-bold">Pro Forma</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <h3 className="text-2xl font-bold mb-3">Pro Forma Generator</h3>
+                <p className="text-white/80 mb-4">
+                  Generate construction loan pro forma financial projections. Create cash flow projections, payment schedules, and export-ready reports for banks.
+                </p>
+                <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Contract Value</span>
+                    <span className="font-semibold">{formatCurrency(estimateTotals.totalEstimated)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Projected Profit</span>
+                    <span className="font-semibold text-green-200">
+                      {formatCurrency(estimateTotals.totalEstimated * 0.11)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm pt-2 border-t border-white/20">
+                    <span>6 & 12 Month Views</span>
+                    <span className="font-semibold">Available</span>
+                  </div>
+                </div>
+                <div className="flex items-center text-sm text-white/60">
+                  <span>Click to generate pro forma →</span>
+                </div>
+              </CardContent>
+            </button>
+          </Card>
         </div>
 
         {/* Secondary Action - Change Orders */}
@@ -1241,6 +1285,14 @@ export function ProjectDetailView({
           </div>
         </div>
       </div>
+
+      {/* Pro Forma Generator Modal */}
+      {showProForma && (
+        <ProFormaGenerator
+          project={project}
+          onClose={() => setShowProForma(false)}
+        />
+      )}
     </div>
   )
 }

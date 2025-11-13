@@ -152,6 +152,14 @@ export type {
   UpdatePlanEstimateTemplateInput,
 } from './estimateTemplate'
 
+export type {
+  PaymentMilestone,
+  MonthlyCashFlow,
+  ProFormaInput,
+  ProFormaProjection,
+  ProFormaExportOptions,
+} from './proforma'
+
 // Export all API types
 export type {
   // Generic responses
