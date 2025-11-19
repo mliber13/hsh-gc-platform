@@ -1512,14 +1512,6 @@ interface TradeFormProps {
 
 function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubcontractors }: TradeFormProps) {
   const [formData, setFormData] = useState<TradeFormData>(trade)
-  // Initialize subcontractor entry mode based on existing data
-  // If the item has material or labor rates, it was saved as a breakdown
-  const [subcontractorEntryMode, setSubcontractorEntryMode] = useState<'lump-sum' | 'breakdown'>(() => {
-    if (trade.isSubcontracted && (trade.materialRate || trade.laborRate)) {
-      return 'breakdown'
-    }
-    return 'lump-sum'
-  })
   const [itemTemplates, setItemTemplates] = useState<any[]>([])
 
   const subcontractorOptions = React.useMemo(
@@ -1553,7 +1545,13 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await onSave(formData)
+    // Auto-set isSubcontracted based on whether there's a subcontractor cost
+    // This maintains backward compatibility with existing data structures
+    const dataToSave = {
+      ...formData,
+      isSubcontracted: (formData.subcontractorCost || 0) > 0,
+    }
+    await onSave(dataToSave)
   }
 
   return (
@@ -1675,46 +1673,6 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="isSubcontracted">Work Performed By</Label>
-                <Select 
-                  value={formData.isSubcontracted ? 'yes' : 'no'} 
-                  onValueChange={(value) => setFormData(prev => ({ 
-                    ...prev, 
-                    isSubcontracted: value === 'yes',
-                    // Clear subcontractor cost when switching to self-performed
-                    subcontractorCost: value === 'yes' ? prev.subcontractorCost : 0
-                  }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="no">Self-Performed</SelectItem>
-                    <SelectItem value="yes">Subcontracted</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {formData.isSubcontracted && (
-                <div>
-                  <Label htmlFor="subEntryMode">Subcontractor Entry Type</Label>
-                  <Select 
-                    value={subcontractorEntryMode} 
-                    onValueChange={(value: 'lump-sum' | 'breakdown') => setSubcontractorEntryMode(value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="lump-sum">Lump Sum Quote</SelectItem>
-                      <SelectItem value="breakdown">Material + Labor Breakdown</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
 
             {/* Estimate Status Section */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1866,9 +1824,8 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
               </div>
             )}
 
-            {/* Material fields - hide when subcontracted with lump sum */}
-            {(!formData.isSubcontracted || subcontractorEntryMode === 'breakdown') && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Material Costs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="materialRate">Material Unit Cost</Label>
                 <Input
@@ -1897,61 +1854,10 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                   }}
                 />
               </div>
-              </div>
-            )}
-
-            {formData.isSubcontracted ? (
-              subcontractorEntryMode === 'lump-sum' ? (
-              <div>
-                  <Label htmlFor="subcontractorCost">Subcontractor Lump Sum Cost</Label>
-                  <Input
-                    id="subcontractorCost"
-                    type="number"
-                    step="0.01"
-                    value={formData.subcontractorCost}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      subcontractorCost: parseFloat(e.target.value) || 0,
-                      materialCost: 0,
-                      laborCost: 0,
-                    }))}
-                    placeholder="Enter total quoted price"
-                  />
-              </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="laborRate">Labor Unit Cost</Label>
-                    <Input
-                      id="laborRate"
-                      type="number"
-                      step="0.01"
-                      value={formData.laborRate || ''}
-                      onChange={(e) => {
-                        const rate = parseFloat(e.target.value) || 0
-                        const cost = rate * formData.quantity
-                        setFormData(prev => ({ ...prev, laborRate: rate, laborCost: cost, subcontractorCost: 0 }))
-                      }}
-                    />
             </div>
-                  <div>
-                    <Label htmlFor="laborCost">Labor Cost</Label>
-                    <Input
-                      id="laborCost"
-                      type="number"
-                      step="0.01"
-                      value={formData.laborCost}
-                      onChange={(e) => {
-                        const cost = parseFloat(e.target.value) || 0
-                        const rate = formData.quantity > 0 ? cost / formData.quantity : 0
-                        setFormData(prev => ({ ...prev, laborCost: cost, laborRate: rate, subcontractorCost: 0 }))
-                      }}
-                    />
-                  </div>
-                </div>
-              )
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            {/* Labor Costs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="laborRate">Labor Unit Cost</Label>
                 <Input
@@ -1980,8 +1886,26 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                   }}
                 />
               </div>
-              </div>
-            )}
+            </div>
+
+            {/* Subcontractor Cost */}
+            <div>
+              <Label htmlFor="subcontractorCost">Subcontractor Cost</Label>
+              <Input
+                id="subcontractorCost"
+                type="number"
+                step="0.01"
+                value={formData.subcontractorCost}
+                onChange={(e) => setFormData(prev => ({ 
+                  ...prev, 
+                  subcontractorCost: parseFloat(e.target.value) || 0,
+                }))}
+                placeholder="Enter quoted price from subcontractor"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Use quote request feature to get quotes from subcontractors in your directory
+              </p>
+            </div>
 
               <div>
               <Label htmlFor="markupPercent">Markup % (for this item)</Label>
