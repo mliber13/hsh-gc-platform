@@ -18,6 +18,8 @@ import { X, Plus, Upload, FileText, Mail, Calendar } from 'lucide-react'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { fetchSubcontractors } from '@/services/partnerDirectoryService'
 import { TRADE_CATEGORIES } from '@/types/constants'
+import { fetchSOWTemplates, formatSOWForQuoteRequest, incrementSOWTemplateUseCount } from '@/services/sowService'
+import { SOWTemplate } from '@/types/sow'
 
 interface QuoteRequestFormProps {
   project: Project
@@ -37,6 +39,8 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [availableSubcontractors, setAvailableSubcontractors] = useState<DirectorySubcontractor[]>([])
+  const [availableSOWTemplates, setAvailableSOWTemplates] = useState<SOWTemplate[]>([])
+  const [selectedSOWTemplate, setSelectedSOWTemplate] = useState<string>('none')
 
   useEffect(() => {
     const loadSubcontractors = async () => {
@@ -48,8 +52,20 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
       }
     }
 
+    const loadSOWTemplates = async () => {
+      try {
+        // Filter by trade category if trade is selected
+        const tradeCategory = trade?.category
+        const data = await fetchSOWTemplates(tradeCategory)
+        setAvailableSOWTemplates(data)
+      } catch (err) {
+        console.warn('Unable to load SOW templates for quote requests:', err)
+      }
+    }
+
     loadSubcontractors()
-  }, [])
+    loadSOWTemplates()
+  }, [trade])
 
   const handleAddVendor = () => {
     setVendorEmails([...vendorEmails, ''])
@@ -81,6 +97,22 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     const updatedSelected = [...selectedSubcontractors]
     updatedSelected[index] = null
     setSelectedSubcontractors(updatedSelected)
+  }
+
+  const handleSOWTemplateSelect = async (templateId: string) => {
+    setSelectedSOWTemplate(templateId)
+    
+    if (templateId === 'none') {
+      // Clear SOW if none selected
+      return
+    }
+
+    const template = availableSOWTemplates.find(t => t.id === templateId)
+    if (template) {
+      // Format the SOW template as text and set it to scope of work
+      const formattedSOW = formatSOWForQuoteRequest(template)
+      setScopeOfWork(formattedSOW)
+    }
   }
 
   const handleSubcontractorSelect = (index: number, subcontractorId: string) => {
@@ -166,6 +198,16 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
       if (quoteRequests.length === 0) {
         setError('Failed to create quote requests. Please try again.')
         return
+      }
+
+      // Increment use count if a SOW template was used
+      if (selectedSOWTemplate !== 'none') {
+        try {
+          await incrementSOWTemplateUseCount(selectedSOWTemplate)
+        } catch (err) {
+          console.warn('Failed to increment SOW template use count:', err)
+          // Don't fail the whole operation if this fails
+        }
       }
 
       // Generate email links and send emails
@@ -347,6 +389,30 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
               </div>
             </div>
 
+            {/* SOW Template Selection */}
+            {availableSOWTemplates.length > 0 && (
+              <div>
+                <Label htmlFor="sowTemplate">Use SOW Template (Optional)</Label>
+                <Select value={selectedSOWTemplate} onValueChange={handleSOWTemplateSelect}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a SOW template or build from scratch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Build from scratch</SelectItem>
+                    {availableSOWTemplates.map(template => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                        {template.tradeCategory && ` (${TRADE_CATEGORIES[template.tradeCategory]?.label || template.tradeCategory})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Select a template to populate the scope of work, or build from scratch
+                </p>
+              </div>
+            )}
+
             {/* Scope of Work */}
             <div>
               <Label htmlFor="scopeOfWork">Scope of Work *</Label>
@@ -354,8 +420,14 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
                 id="scopeOfWork"
                 className="w-full min-h-[150px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0E79C9]"
                 value={scopeOfWork}
-                onChange={(e) => setScopeOfWork(e.target.value)}
-                placeholder="Describe the work you need quoted..."
+                onChange={(e) => {
+                  setScopeOfWork(e.target.value)
+                  // Clear selected template if user manually edits
+                  if (selectedSOWTemplate !== 'none') {
+                    setSelectedSOWTemplate('none')
+                  }
+                }}
+                placeholder="Describe the work you need quoted... You can use a SOW template above or type from scratch."
                 required
               />
             </div>

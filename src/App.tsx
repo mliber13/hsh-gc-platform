@@ -28,9 +28,10 @@ import { QuickBooksCallback } from './components/QuickBooksCallback'
 import { VendorQuotePortal } from './components/VendorQuotePortal'
 import { QuoteReviewDashboard } from './components/QuoteReviewDashboard'
 import { Button } from './components/ui/button'
-import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2 } from 'lucide-react'
+import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2, FileText } from 'lucide-react'
 import { backupAllData } from './services/backupService'
 import { PartnerDirectory } from './components/PartnerDirectory'
+import { SOWManagement } from './components/SOWManagement'
 
 type View =
   | 'dashboard'
@@ -48,6 +49,7 @@ type View =
   | 'qb-callback'
   | 'quote-review'
   | 'partner-directory'
+  | 'sow-management'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -302,16 +304,28 @@ function App() {
                       QuickBooks
                     </button>
                     {userProfile && ['admin', 'editor'].includes(userProfile.role) && (
-                      <button
-                        onClick={() => {
-                          setCurrentView('partner-directory');
-                          setShowUserMenu(false);
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
-                      >
-                        <Building2 className="w-4 h-4" />
-                        Partner Directory
-                      </button>
+                      <>
+                        <button
+                          onClick={() => {
+                            setCurrentView('partner-directory');
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                        >
+                          <Building2 className="w-4 h-4" />
+                          Partner Directory
+                        </button>
+                        <button
+                          onClick={() => {
+                            setCurrentView('sow-management');
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                        >
+                          <FileText className="w-4 h-4" />
+                          SOW Templates
+                        </button>
+                      </>
                     )}
                     {userProfile?.role === 'admin' && (
                       <button
@@ -441,6 +455,12 @@ function App() {
 
       {currentView === 'partner-directory' && (
         <PartnerDirectory
+          onBack={handleBackToDashboard}
+        />
+      )}
+
+      {currentView === 'sow-management' && (
+        <SOWManagement
           onBack={handleBackToDashboard}
         />
       )}

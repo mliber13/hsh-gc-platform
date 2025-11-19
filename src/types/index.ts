@@ -160,6 +160,16 @@ export type {
   ProFormaExportOptions,
 } from './proforma'
 
+export type {
+  SOWTemplate,
+  SOWTask,
+  SOWMaterial,
+  SOWSpecification,
+  CreateSOWTemplateInput,
+  UpdateSOWTemplateInput,
+  FormattedSOW,
+} from './sow'
+
 // Export all API types
 export type {
   // Generic responses
