@@ -396,7 +396,8 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
               <div className="space-y-4">
                 {quoteRequests.map((request) => {
                   const submittedQuotesForRequest = submittedQuotes.get(request.id) || []
-                  const tradeName = request.tradeId ? trades.find(t => t.id === request.tradeId)?.name : undefined
+                  const trade = request.tradeId ? trades.find(t => t.id === request.tradeId) : undefined
+                  const tradeCategoryLabel = trade?.category ? TRADE_CATEGORIES[trade.category]?.label : undefined
                   
                   return (
                     <Card key={request.id} className="hover:shadow-lg transition-shadow border border-gray-200">
@@ -412,10 +413,10 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                                 <Mail className="w-4 h-4" />
                                 {request.vendorEmail}
                               </div>
-                              {tradeName && (
+                              {tradeCategoryLabel && (
                                 <div className="flex items-center gap-1">
                                   <LinkIcon className="w-4 h-4" />
-                                  Trade: {tradeName}
+                                  Trade: {tradeCategoryLabel}
                                 </div>
                               )}
                               <div className="flex items-center gap-1">
@@ -548,7 +549,11 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
           </Card>
         ) : (
           <div className="space-y-4">
-            {filteredQuotes.map(({ quote, request }) => (
+            {filteredQuotes.map(({ quote, request }) => {
+              const requestTrade = request.tradeId ? trades.find(t => t.id === request.tradeId) : undefined
+              const requestTradeCategoryLabel = requestTrade?.category ? TRADE_CATEGORIES[requestTrade.category]?.label : undefined
+              
+              return (
               <Card key={quote.id} className="hover:shadow-lg transition-shadow border border-gray-200">
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -572,10 +577,10 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                           <Calendar className="w-4 h-4" />
                           Submitted: {new Date(quote.submittedAt).toLocaleDateString()}
                         </div>
-                        {request.tradeId && (
+                        {requestTradeCategoryLabel && (
                           <div className="flex items-center gap-1">
                             <LinkIcon className="w-4 h-4" />
-                            Trade: {trades.find(t => t.id === request.tradeId)?.name || 'Unknown'}
+                            Trade: {requestTradeCategoryLabel}
                           </div>
                         )}
                       </div>
@@ -800,7 +805,8 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              )
+            })}
           </div>
         )}
           </>
