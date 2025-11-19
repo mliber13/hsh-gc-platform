@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react'
 import { Project, Trade } from '@/types'
 import { QuoteRequest, SubmittedQuote, UpdateQuoteStatusInput } from '@/types/quote'
+import { TRADE_CATEGORIES } from '@/types/constants'
 import {
   fetchQuoteRequestsForProject_Hybrid,
   fetchSubmittedQuotesForRequest_Hybrid,
@@ -118,8 +119,9 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
 
   const handleResendQuoteRequest = async (request: QuoteRequest) => {
     try {
-      const tradeName = request.tradeId ? trades.find(t => t.id === request.tradeId)?.name : undefined
-      const resent = await resendQuoteRequestEmail_Hybrid(request, project.name, tradeName)
+      const trade = request.tradeId ? trades.find(t => t.id === request.tradeId) : undefined
+      const tradeCategoryLabel = trade?.category ? TRADE_CATEGORIES[trade.category]?.label : undefined
+      const resent = await resendQuoteRequestEmail_Hybrid(request, project.name, tradeCategoryLabel)
       
       if (resent) {
         // Reload quote requests to get updated sent_at timestamp

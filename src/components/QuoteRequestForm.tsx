@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { X, Plus, Upload, FileText, Mail, Calendar } from 'lucide-react'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { fetchSubcontractors } from '@/services/partnerDirectoryService'
+import { TRADE_CATEGORIES } from '@/types/constants'
 
 interface QuoteRequestFormProps {
   project: Project
@@ -169,6 +170,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
 
       // Generate email links and send emails
       const baseUrl = window.location.origin
+      const tradeCategoryLabel = trade?.category ? TRADE_CATEGORIES[trade.category]?.label : undefined
       const emailLinks = quoteRequests.map(qr => ({
         ...qr,
         link: `${baseUrl}/vendor-quote/${qr.token}`,
@@ -179,12 +181,11 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
         quoteRequests.map(async (qr, index) => {
           const link = `${baseUrl}/vendor-quote/${qr.token}`
           const vendorName = vendorNames[index] || undefined
-          
           const emailSent = await sendQuoteRequestEmail({
             to: qr.vendorEmail,
             vendorName,
             projectName: project.name,
-            tradeName: trade?.name,
+            tradeName: tradeCategoryLabel,
             quoteLink: link,
             scopeOfWork: scopeOfWork.trim(),
             dueDate: dueDate ? new Date(dueDate) : null,
@@ -200,7 +201,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
               to: qr.vendorEmail,
               vendorName,
               projectName: project.name,
-              tradeName: trade?.name,
+              tradeName: tradeCategoryLabel,
               quoteLink: link,
               scopeOfWork: scopeOfWork.trim(),
               dueDate: dueDate ? new Date(dueDate) : null,
@@ -264,7 +265,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-sm font-medium text-gray-700 mb-1">Project: {project.name}</p>
               {trade && (
-                <p className="text-sm text-gray-600">Trade: {trade.name}</p>
+                <p className="text-sm text-gray-600">Trade: {TRADE_CATEGORIES[trade.category]?.label || trade.category}</p>
               )}
             </div>
 
