@@ -337,8 +337,8 @@ export async function resendQuoteRequestEmail(quoteRequest: QuoteRequest, projec
     tradeName,
     quoteLink,
     scopeOfWork: quoteRequest.scopeOfWork,
-    dueDate: quoteRequest.dueDate,
-    expiresAt: quoteRequest.expiresAt,
+    dueDate: quoteRequest.dueDate || null,
+    expiresAt: quoteRequest.expiresAt || null,
   })
 
   if (emailSent) {
