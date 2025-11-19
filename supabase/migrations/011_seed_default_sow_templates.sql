@@ -107,7 +107,7 @@ INSERT INTO sow_templates (
   '[
     {"id": "1", "label": "Code Compliance", "value": "Local plumbing code and UPC", "order": 1},
     {"id": "2", "label": "Water Pressure", "value": "Minimum 40 PSI at all fixtures", "order": 2},
-    {"id": "3", "label": "Water Supply", "value": "3/4\\" main, 1/2\\" branch lines", "order": 3}
+    {"id": "3", "label": "Water Supply", "value": "3/4\" main, 1/2\" branch lines", "order": 3}
   ]'::jsonb,
   0
 ) ON CONFLICT DO NOTHING;
@@ -245,7 +245,7 @@ INSERT INTO sow_templates (
     {"id": "10", "description": "Prime all drywall surfaces", "order": 10}
   ]'::jsonb,
   '[
-    {"id": "1", "description": "Drywall panels (1/2\\" standard, 5/8\\" ceilings if specified)", "included": true, "order": 1},
+    {"id": "1", "description": "Drywall panels (1/2\" standard, 5/8\" ceilings if specified)", "included": true, "order": 1},
     {"id": "2", "description": "Drywall screws and fasteners", "included": true, "order": 2},
     {"id": "3", "description": "Joint compound (pre-mixed)", "included": true, "order": 3},
     {"id": "4", "description": "Drywall tape (paper or mesh)", "included": true, "order": 4},
@@ -259,7 +259,7 @@ INSERT INTO sow_templates (
   ]'::jsonb,
   '[
     {"id": "1", "label": "Code Compliance", "value": "Local building code", "order": 1},
-    {"id": "2", "label": "Drywall Thickness", "value": "1/2\\" walls, 5/8\\" ceilings (or as specified)", "order": 2},
+    {"id": "2", "label": "Drywall Thickness", "value": "1/2\" walls, 5/8\" ceilings (or as specified)", "order": 2},
     {"id": "3", "label": "Finish Level", "value": "Level 4 finish (ready for paint)", "order": 3}
   ]'::jsonb,
   0
