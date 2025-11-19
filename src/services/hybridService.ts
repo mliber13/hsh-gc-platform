@@ -180,6 +180,20 @@ export async function updateQuoteStatus_Hybrid(input: UpdateQuoteStatusInput): P
   return await quoteService.updateQuoteStatus(input)
 }
 
+export async function deleteQuoteRequest_Hybrid(quoteRequestId: string): Promise<boolean> {
+  if (!isOnlineMode()) {
+    return false
+  }
+  return await quoteService.deleteQuoteRequest(quoteRequestId)
+}
+
+export async function resendQuoteRequestEmail_Hybrid(quoteRequest: QuoteRequest, projectName: string, tradeName?: string): Promise<boolean> {
+  if (!isOnlineMode()) {
+    return false
+  }
+  return await quoteService.resendQuoteRequestEmail(quoteRequest, projectName, tradeName)
+}
+
 // ============================================================================
 // NOTE: This is a starter implementation
 // We'll expand this to cover all entities (actuals, schedules, change orders, etc.)

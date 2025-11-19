@@ -48,3 +48,4 @@ export interface SupplierInput {
 
 export type PartnerDirectoryEntity = Subcontractor | Supplier
 
+

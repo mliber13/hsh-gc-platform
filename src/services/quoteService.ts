@@ -281,6 +281,87 @@ export async function fetchQuoteRequestsForProject(projectId: string): Promise<Q
   }))
 }
 
+/**
+ * Delete a quote request
+ */
+export async function deleteQuoteRequest(quoteRequestId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+
+  // First check if user owns this quote request
+  const { data: request, error: fetchError } = await supabase
+    .from('quote_requests')
+    .select('id, user_id')
+    .eq('id', quoteRequestId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (fetchError || !request) {
+    console.error('Error fetching quote request for deletion:', fetchError)
+    return false
+  }
+
+  // Delete the quote request (cascade will handle submitted quotes if configured)
+  const { error } = await supabase
+    .from('quote_requests')
+    .delete()
+    .eq('id', quoteRequestId)
+
+  if (error) {
+    console.error('Error deleting quote request:', error)
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Resend a quote request email
+ */
+export async function resendQuoteRequestEmail(quoteRequest: QuoteRequest, projectName: string, tradeName?: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  // Import here to avoid circular dependency
+  const { sendQuoteRequestEmail } = await import('./emailService')
+
+  // Generate the quote link
+  const quoteLink = `${window.location.origin}/quote/${quoteRequest.token}`
+
+  // Send the email
+  const emailSent = await sendQuoteRequestEmail({
+    to: quoteRequest.vendorEmail,
+    vendorName: quoteRequest.vendorName,
+    projectName,
+    tradeName,
+    quoteLink,
+    scopeOfWork: quoteRequest.scopeOfWork,
+    dueDate: quoteRequest.dueDate,
+    expiresAt: quoteRequest.expiresAt,
+  })
+
+  if (emailSent) {
+    // Update sent_at timestamp
+    const { error } = await supabase
+      .from('quote_requests')
+      .update({ 
+        sent_at: new Date().toISOString(),
+        status: 'sent',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', quoteRequest.id)
+
+    if (error) {
+      console.error('Error updating quote request sent_at:', error)
+      // Email was sent but update failed - still return true
+      return true
+    }
+  }
+
+  return emailSent
+}
+
 // ============================================================================
 // SUBMITTED QUOTE OPERATIONS
 // ============================================================================

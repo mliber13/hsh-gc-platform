@@ -14,6 +14,8 @@ import {
   updateQuoteStatus_Hybrid,
   getTradesForEstimate_Hybrid,
   updateTrade_Hybrid,
+  deleteQuoteRequest_Hybrid,
+  resendQuoteRequestEmail_Hybrid,
 } from '@/services/hybridService'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -53,6 +55,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [showQuoteDetails, setShowQuoteDetails] = useState(false)
   const [quoteDetails, setQuoteDetails] = useState<{ quote: SubmittedQuote; request: QuoteRequest } | null>(null)
+  const [activeTab, setActiveTab] = useState<'requests' | 'quotes'>('quotes') // 'requests' for quote requests, 'quotes' for submitted quotes
 
   // Load quote requests and submitted quotes
   useEffect(() => {
@@ -86,6 +89,76 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+
+  const handleDeleteQuoteRequest = async (requestId: string) => {
+    if (!confirm('Are you sure you want to delete this quote request? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      const deleted = await deleteQuoteRequest_Hybrid(requestId)
+      if (deleted) {
+        // Remove from state
+        setQuoteRequests(prev => prev.filter(r => r.id !== requestId))
+        // Remove submitted quotes for this request
+        setSubmittedQuotes(prev => {
+          const newMap = new Map(prev)
+          newMap.delete(requestId)
+          return newMap
+        })
+        alert('Quote request deleted successfully')
+      } else {
+        alert('Failed to delete quote request')
+      }
+    } catch (error) {
+      console.error('Error deleting quote request:', error)
+      alert('Failed to delete quote request')
+    }
+  }
+
+  const handleResendQuoteRequest = async (request: QuoteRequest) => {
+    try {
+      const tradeName = request.tradeId ? trades.find(t => t.id === request.tradeId)?.name : undefined
+      const resent = await resendQuoteRequestEmail_Hybrid(request, project.name, tradeName)
+      
+      if (resent) {
+        // Reload quote requests to get updated sent_at timestamp
+        const requests = await fetchQuoteRequestsForProject_Hybrid(project.id)
+        setQuoteRequests(requests)
+        alert('Quote request email resent successfully!')
+      } else {
+        alert('Failed to resend quote request email. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error resending quote request:', error)
+      alert('Failed to resend quote request email')
+    }
+  }
+
+  const getRequestStatusBadge = (status: QuoteRequest['status'], expiresAt?: Date) => {
+    const isExpired = expiresAt && new Date(expiresAt) < new Date()
+    
+    if (isExpired) {
+      return (
+        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+          Expired
+        </span>
+      )
+    }
+
+    const badges = {
+      sent: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Sent' },
+      viewed: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Viewed' },
+      submitted: { bg: 'bg-green-100', text: 'text-green-800', label: 'Quote Submitted' },
+      expired: { bg: 'bg-red-100', text: 'text-red-800', label: 'Expired' },
+    }
+    const badge = badges[status] || badges.sent
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
+        {badge.label}
+      </span>
+    )
+  }
 
   const applyQuoteToTrade = async (quote: SubmittedQuote, tradeId: string) => {
     try {
@@ -281,22 +354,187 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
           </Card>
         </div>
 
-        {/* Filter */}
-        <div className="mb-6">
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full sm:w-64">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Quotes</SelectItem>
-              <SelectItem value="pending">Pending Review</SelectItem>
-              <SelectItem value="accepted">Accepted</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="waiting-for-more">Waiting for More</SelectItem>
-              <SelectItem value="revision-requested">Revision Requested</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* Tabs */}
+        <div className="mb-6 border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('requests')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'requests'
+                  ? 'border-[#0E79C9] text-[#0E79C9]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Quote Requests ({quoteRequests.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('quotes')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'quotes'
+                  ? 'border-[#0E79C9] text-[#0E79C9]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Submitted Quotes ({allQuotes.length})
+            </button>
+          </nav>
         </div>
+
+        {/* Quote Requests Tab */}
+        {activeTab === 'requests' && (
+          <>
+            {quoteRequests.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6 text-center py-12">
+                  <Mail className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No quote requests found</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {quoteRequests.map((request) => {
+                  const submittedQuotesForRequest = submittedQuotes.get(request.id) || []
+                  const tradeName = request.tradeId ? trades.find(t => t.id === request.tradeId)?.name : undefined
+                  
+                  return (
+                    <Card key={request.id} className="hover:shadow-lg transition-shadow border border-gray-200">
+                      <CardHeader>
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <CardTitle className="text-lg">{request.vendorName || request.vendorEmail}</CardTitle>
+                              {getRequestStatusBadge(request.status, request.expiresAt)}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                              <div className="flex items-center gap-1">
+                                <Mail className="w-4 h-4" />
+                                {request.vendorEmail}
+                              </div>
+                              {tradeName && (
+                                <div className="flex items-center gap-1">
+                                  <LinkIcon className="w-4 h-4" />
+                                  Trade: {tradeName}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1">
+                                <Calendar className="w-4 h-4" />
+                                Sent: {new Date(request.sentAt).toLocaleDateString()}
+                              </div>
+                              {request.viewedAt && (
+                                <div className="flex items-center gap-1">
+                                  <Eye className="w-4 h-4" />
+                                  Viewed: {new Date(request.viewedAt).toLocaleDateString()}
+                                </div>
+                              )}
+                              {request.expiresAt && (
+                                <div className="flex items-center gap-1">
+                                  <Clock className="w-4 h-4" />
+                                  Expires: {new Date(request.expiresAt).toLocaleDateString()}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-semibold text-gray-700">
+                              {submittedQuotesForRequest.length} {submittedQuotesForRequest.length === 1 ? 'Quote' : 'Quotes'}
+                            </p>
+                            {request.dueDate && (
+                              <p className="text-xs text-gray-500">
+                                Due: {new Date(request.dueDate).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {/* Scope of Work Preview */}
+                        <div className="mb-4">
+                          <p className="text-sm font-medium text-gray-700 mb-1">Scope of Work:</p>
+                          <p className="text-sm text-gray-600 bg-gray-50 rounded p-2 line-clamp-3">
+                            {request.scopeOfWork}
+                          </p>
+                        </div>
+
+                        {/* Submitted Quotes */}
+                        {submittedQuotesForRequest.length > 0 && (
+                          <div className="mb-4">
+                            <p className="text-sm font-medium text-gray-700 mb-2">Submitted Quotes:</p>
+                            <div className="space-y-2">
+                              {submittedQuotesForRequest.map((quote) => (
+                                <div key={quote.id} className="bg-blue-50 rounded p-2 flex items-center justify-between">
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">{quote.vendorName}</p>
+                                    <p className="text-xs text-gray-600">Submitted: {new Date(quote.submittedAt).toLocaleDateString()}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-sm font-bold text-[#0E79C9]">{formatCurrency(quote.totalAmount)}</p>
+                                    {getStatusBadge(quote.status)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t">
+                          <Button
+                            onClick={() => handleResendQuoteRequest(request)}
+                            variant="outline"
+                            size="sm"
+                            className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
+                          >
+                            <Mail className="w-4 h-4 mr-2" />
+                            Resend Email
+                          </Button>
+                          <Button
+                            onClick={() => handleDeleteQuoteRequest(request.id)}
+                            variant="destructive"
+                            size="sm"
+                          >
+                            <XCircle className="w-4 h-4 mr-2" />
+                            Delete
+                          </Button>
+                          {request.drawingsUrl && (
+                            <a
+                              href={request.drawingsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors border border-gray-300 bg-white hover:bg-gray-50 h-9 px-4 py-2"
+                            >
+                              <FileText className="w-4 h-4 mr-2" />
+                              View Drawings
+                            </a>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Submitted Quotes Tab */}
+        {activeTab === 'quotes' && (
+          <>
+            {/* Filter */}
+            <div className="mb-6">
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-full sm:w-64">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Quotes</SelectItem>
+                  <SelectItem value="pending">Pending Review</SelectItem>
+                  <SelectItem value="accepted">Accepted</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="waiting-for-more">Waiting for More</SelectItem>
+                  <SelectItem value="revision-requested">Revision Requested</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
         {/* Quotes List */}
         {filteredQuotes.length === 0 ? (
@@ -562,6 +800,8 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
               </Card>
             ))}
           </div>
+        )}
+          </>
         )}
       </main>
 
