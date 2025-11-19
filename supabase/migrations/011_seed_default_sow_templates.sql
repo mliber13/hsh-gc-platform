@@ -5,15 +5,8 @@
 -- Insert default Scope of Work templates for common trades
 -- These templates are system templates (user_id IS NULL) and available to all users
 --
-
--- First, update RLS policies to allow all authenticated users to view system templates
-DROP POLICY IF EXISTS "Users can view system SOW templates" ON sow_templates;
-CREATE POLICY "Users can view system SOW templates"
-  ON sow_templates FOR SELECT
-  USING (
-    user_id IS NULL
-    AND auth.uid() IS NOT NULL
-  );
+-- NOTE: Run migration 012_allow_null_user_id_sow_templates.sql first
+--
 
 -- Insert default templates (without user_id, they'll be available to all via RLS)
 -- We'll set user_id to NULL and they'll be accessible based on trade_category
