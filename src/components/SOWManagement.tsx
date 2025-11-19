@@ -139,18 +139,17 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
 
     setSaving(true)
     try {
-      const input: CreateSOWTemplateInput | UpdateSOWTemplateInput = {
-        name: formName.trim(),
-        description: formDescription.trim() || undefined,
-        tradeCategory: formTradeCategory,
-        tasks: formTasks,
-        materialsIncluded: formMaterialsIncluded,
-        materialsExcluded: formMaterialsExcluded,
-        specifications: formSpecifications,
-      }
-
       if (editingTemplate) {
-        const updated = await updateSOWTemplate(editingTemplate.id, input)
+        const updateInput: UpdateSOWTemplateInput = {
+          name: formName.trim(),
+          description: formDescription.trim() || undefined,
+          tradeCategory: formTradeCategory,
+          tasks: formTasks,
+          materialsIncluded: formMaterialsIncluded,
+          materialsExcluded: formMaterialsExcluded,
+          specifications: formSpecifications,
+        }
+        const updated = await updateSOWTemplate(editingTemplate.id, updateInput)
         if (updated) {
           await loadTemplates()
           setShowForm(false)
@@ -159,7 +158,16 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
           alert('Failed to update SOW template')
         }
       } else {
-        const created = await createSOWTemplate(input)
+        const createInput: CreateSOWTemplateInput = {
+          name: formName.trim(),
+          description: formDescription.trim() || undefined,
+          tradeCategory: formTradeCategory,
+          tasks: formTasks,
+          materialsIncluded: formMaterialsIncluded,
+          materialsExcluded: formMaterialsExcluded,
+          specifications: formSpecifications,
+        }
+        const created = await createSOWTemplate(createInput)
         if (created) {
           await loadTemplates()
           setShowForm(false)
