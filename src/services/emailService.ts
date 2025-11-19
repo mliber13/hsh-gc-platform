@@ -48,12 +48,30 @@ export async function sendQuoteRequestEmail(input: SendQuoteRequestEmailInput): 
       console.error('Error sending email via Edge Function:', error)
       console.error('Error details:', {
         message: error.message,
-        context: error.context,
         status: error.status,
       })
       
-      // If we have error context, try to extract more details
-      if (error.context?.body) {
+      // If we have error context (Response object), try to read the body
+      if (error.context instanceof Response) {
+        try {
+          // Clone the response so we can read it without consuming it
+          const clonedResponse = error.context.clone()
+          const errorBody = await clonedResponse.json()
+          console.error('Edge Function error response:', errorBody)
+          if (errorBody.error) {
+            console.error('Edge Function error message:', errorBody.error)
+          }
+        } catch (e) {
+          try {
+            const clonedResponse = error.context.clone()
+            const errorText = await clonedResponse.text()
+            console.error('Edge Function error response (text):', errorText)
+          } catch (e2) {
+            console.error('Could not read error response body. Status:', error.context.status)
+            console.error('Status text:', error.context.statusText)
+          }
+        }
+      } else if (error.context?.body) {
         try {
           const errorBody = typeof error.context.body === 'string' 
             ? JSON.parse(error.context.body) 
