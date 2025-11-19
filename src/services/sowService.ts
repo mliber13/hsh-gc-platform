@@ -35,12 +35,17 @@ export async function fetchSOWTemplates(tradeCategory?: string): Promise<SOWTemp
     .eq('id', user.id)
     .single()
 
-  const organizationId = profile?.organization_id || null
+  // Validate organization_id is a valid UUID
+  const organizationId = profile?.organization_id && 
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profile.organization_id)
+    ? profile.organization_id
+    : null
 
+  // Include user templates, organization templates, and system templates (user_id IS NULL)
   let query = supabase
     .from('sow_templates')
     .select('*')
-    .or(`user_id.eq.${user.id}${organizationId ? `,organization_id.eq.${organizationId}` : ''}`)
+    .or(`user_id.eq.${user.id}${organizationId ? `,organization_id.eq.${organizationId}` : ''},user_id.is.null`)
     .order('name', { ascending: true })
 
   if (tradeCategory) {
@@ -140,9 +145,10 @@ export async function createSOWTemplate(input: CreateSOWTemplateInput): Promise<
 
   const organizationId = profile?.organization_id || null
 
-  // Validate organization_id - must be a valid UUID or null
+  // Validate organization_id - must be a valid UUID or null (exclude 'default-org' and other invalid values)
   const validOrganizationId = organizationId && 
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(organizationId)
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(organizationId) &&
+    organizationId !== 'default-org'
     ? organizationId
     : null
 

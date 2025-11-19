@@ -2,13 +2,13 @@
 -- Create SOW Templates Table
 -- ============================================================================
 -- 
--- Statement of Work (SOW) templates for reuse in quote requests
+-- Scope of Work (SOW) templates for reuse in quote requests
 --
 
 -- SOW Templates Table
 CREATE TABLE IF NOT EXISTS sow_templates (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES auth.users ON DELETE CASCADE, -- NULL for system templates
   organization_id UUID,
   
   -- Template details
