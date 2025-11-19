@@ -127,11 +127,11 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
         setQuoteRequests(requests)
         alert('Quote request email resent successfully!')
       } else {
-        alert('Failed to resend quote request email. Please try again.')
+        alert('Failed to resend quote request email. Please check:\n1. Edge Function is deployed\n2. RESEND_API_KEY is configured\n3. FROM_EMAIL is verified\n\nCheck console for more details.')
       }
     } catch (error) {
       console.error('Error resending quote request:', error)
-      alert('Failed to resend quote request email')
+      alert(`Failed to resend quote request email: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 

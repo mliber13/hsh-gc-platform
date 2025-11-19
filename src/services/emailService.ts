@@ -23,6 +23,11 @@ export interface SendQuoteRequestEmailInput {
  */
 export async function sendQuoteRequestEmail(input: SendQuoteRequestEmailInput): Promise<boolean> {
   try {
+    // Ensure expiresAt is always a valid ISO string
+    const expiresAtDate = input.expiresAt instanceof Date && !isNaN(input.expiresAt.getTime())
+      ? input.expiresAt
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // Default 30 days if not provided
+    
     // Try using Supabase Edge Function first
     const { data, error } = await supabase.functions.invoke('send-quote-email', {
       body: {
@@ -32,20 +37,55 @@ export async function sendQuoteRequestEmail(input: SendQuoteRequestEmailInput): 
         tradeName: input.tradeName,
         quoteLink: input.quoteLink,
         scopeOfWork: input.scopeOfWork,
-        dueDate: input.dueDate?.toISOString(),
-        expiresAt: input.expiresAt?.toISOString() || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // Default 30 days if not provided
+        dueDate: input.dueDate instanceof Date && !isNaN(input.dueDate.getTime()) 
+          ? input.dueDate.toISOString() 
+          : undefined,
+        expiresAt: expiresAtDate.toISOString(),
       },
     })
 
     if (error) {
       console.error('Error sending email via Edge Function:', error)
-      // Fallback to mailto link
+      console.error('Error details:', {
+        message: error.message,
+        context: error.context,
+        status: error.status,
+      })
+      
+      // If we have error context, try to extract more details
+      if (error.context?.body) {
+        try {
+          const errorBody = typeof error.context.body === 'string' 
+            ? JSON.parse(error.context.body) 
+            : error.context.body
+          console.error('Edge Function error response:', errorBody)
+        } catch (e) {
+          console.error('Could not parse error body:', error.context.body)
+        }
+      }
+      
       return false
     }
 
-    return data?.success === true
+    if (data && typeof data === 'object' && 'success' in data) {
+      if (data.success === true) {
+        console.log('Email sent successfully via Edge Function')
+        return true
+      } else {
+        console.warn('Edge Function returned success: false', data)
+        return false
+      }
+    }
+
+    // If no success field, assume failure
+    console.warn('Edge Function response missing success field:', data)
+    return false
   } catch (error) {
     console.error('Error sending email:', error)
+    if (error instanceof Error) {
+      console.error('Error message:', error.message)
+      console.error('Error stack:', error.stack)
+    }
     return false
   }
 }
