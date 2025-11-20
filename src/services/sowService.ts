@@ -260,7 +260,8 @@ export async function deleteSOWTemplate(templateId: string): Promise<boolean> {
     .eq('id', user.id)
     .single()
 
-  const organizationId = profile?.organization_id || null
+  const organizationIdRaw = profile?.organization_id || null
+  const organizationId = organizationIdRaw === 'default-org' ? null : organizationIdRaw
 
   // Load template to determine ownership
   const { data: template, error: fetchError } = await supabase
