@@ -57,6 +57,8 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
   const [showQuoteDetails, setShowQuoteDetails] = useState(false)
   const [quoteDetails, setQuoteDetails] = useState<{ quote: SubmittedQuote; request: QuoteRequest } | null>(null)
   const [activeTab, setActiveTab] = useState<'requests' | 'quotes'>('quotes') // 'requests' for quote requests, 'quotes' for submitted quotes
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [quoteRequestToDelete, setQuoteRequestToDelete] = useState<string | null>(null)
 
   const requestMap = useMemo(() => {
     const map = new Map<string, QuoteRequest>()
@@ -100,31 +102,34 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
-  const handleDeleteQuoteRequest = async (requestId: string) => {
+  const handleDeleteQuoteRequest = (requestId: string) => {
     console.log('handleDeleteQuoteRequest called with requestId:', requestId)
-    
-    if (!confirm('Are you sure you want to delete this quote request? This action cannot be undone.')) {
-      console.log('User cancelled delete confirmation')
-      return
-    }
+    setQuoteRequestToDelete(requestId)
+    setDeleteDialogOpen(true)
+  }
 
-    console.log('User confirmed delete, proceeding...')
+  const confirmDeleteQuoteRequest = async () => {
+    if (!quoteRequestToDelete) return
+
+    console.log('User confirmed delete, proceeding with:', quoteRequestToDelete)
 
     try {
       console.log('Calling deleteQuoteRequest_Hybrid...')
-      const deleted = await deleteQuoteRequest_Hybrid(requestId)
+      const deleted = await deleteQuoteRequest_Hybrid(quoteRequestToDelete)
       console.log('deleteQuoteRequest_Hybrid returned:', deleted)
       
       if (deleted) {
         // Remove from state
-        setQuoteRequests(prev => prev.filter(r => r.id !== requestId))
+        setQuoteRequests(prev => prev.filter(r => r.id !== quoteRequestToDelete))
         // Remove submitted quotes for this request
         setSubmittedQuotes(prev => {
           const newMap = new Map(prev)
-          newMap.delete(requestId)
+          newMap.delete(quoteRequestToDelete)
           return newMap
         })
         alert('Quote request deleted successfully')
+        setDeleteDialogOpen(false)
+        setQuoteRequestToDelete(null)
       } else {
         console.error('deleteQuoteRequest_Hybrid returned false')
         alert('Failed to delete quote request')
@@ -1063,6 +1068,35 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Quote Request</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this quote request? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false)
+                setQuoteRequestToDelete(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteQuoteRequest}
+            >
+              Delete
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
