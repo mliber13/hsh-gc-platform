@@ -9,6 +9,7 @@
 -- Drop existing policies if they exist
 DROP POLICY IF EXISTS "Users can view own quote requests" ON quote_requests;
 DROP POLICY IF EXISTS "Public can view quote requests by token" ON quote_requests;
+DROP POLICY IF EXISTS "Users can create own quote requests" ON quote_requests;
 DROP POLICY IF EXISTS "Users can update own quote requests" ON quote_requests;
 DROP POLICY IF EXISTS "Users can delete own quote requests" ON quote_requests;
 
@@ -22,6 +23,11 @@ CREATE POLICY "Users can view own quote requests"
 CREATE POLICY "Public can view quote requests by token"
   ON quote_requests FOR SELECT
   USING (true); -- Allow anyone to read quote requests (token provides security)
+
+-- Allow users to create their own quote requests
+CREATE POLICY "Users can create own quote requests"
+  ON quote_requests FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
 
 -- Allow users to update their own quote requests
 CREATE POLICY "Users can update own quote requests"

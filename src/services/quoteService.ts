@@ -314,23 +314,45 @@ export async function fetchQuoteRequestsForProject(projectId: string): Promise<Q
  * Delete a quote request
  */
 export async function deleteQuoteRequest(quoteRequestId: string): Promise<boolean> {
-  if (!isOnlineMode()) return false
+  if (!isOnlineMode()) {
+    console.error('deleteQuoteRequest: Not in online mode')
+    return false
+  }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return false
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user) {
+    console.error('deleteQuoteRequest: No authenticated user', authError)
+    return false
+  }
+
+  console.log('deleteQuoteRequest: Attempting to delete quote request', quoteRequestId, 'for user', user.id)
 
   // First check if user owns this quote request
   const { data: request, error: fetchError } = await supabase
     .from('quote_requests')
     .select('id, user_id')
     .eq('id', quoteRequestId)
-    .eq('user_id', user.id)
     .single()
 
-  if (fetchError || !request) {
-    console.error('Error fetching quote request for deletion:', fetchError)
+  if (fetchError) {
+    console.error('deleteQuoteRequest: Error fetching quote request:', fetchError)
     return false
   }
+
+  if (!request) {
+    console.error('deleteQuoteRequest: Quote request not found')
+    return false
+  }
+
+  if (request.user_id !== user.id) {
+    console.error('deleteQuoteRequest: User does not own this quote request', {
+      requestUserId: request.user_id,
+      currentUserId: user.id
+    })
+    return false
+  }
+
+  console.log('deleteQuoteRequest: User owns quote request, proceeding with delete')
 
   // Delete the quote request (cascade will handle submitted quotes if configured)
   const { error } = await supabase
@@ -339,9 +361,12 @@ export async function deleteQuoteRequest(quoteRequestId: string): Promise<boolea
     .eq('id', quoteRequestId)
 
   if (error) {
-    console.error('Error deleting quote request:', error)
+    console.error('deleteQuoteRequest: Error deleting quote request:', error)
+    console.error('deleteQuoteRequest: Error details:', JSON.stringify(error, null, 2))
     return false
   }
+
+  console.log('deleteQuoteRequest: Successfully deleted quote request', quoteRequestId)
 
   return true
 }
