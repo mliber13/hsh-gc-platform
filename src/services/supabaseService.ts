@@ -1269,9 +1269,9 @@ export async function uploadQuotePDF(
     const fileName = `${tradeId}-${timestamp}.${fileExt}`
     const filePath = `${profile.organization_id}/${projectId}/${fileName}`
 
-    // Upload to storage
+    // Upload to storage (vendor quote documents go to quote-documents bucket)
     const { data, error } = await supabase.storage
-      .from('quote-attachments')
+      .from('quote-documents')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false
@@ -1284,7 +1284,7 @@ export async function uploadQuotePDF(
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
-      .from('quote-attachments')
+      .from('quote-documents')
       .getPublicUrl(filePath)
 
     return publicUrl
@@ -1302,7 +1302,7 @@ export async function deleteQuotePDF(fileUrl: string): Promise<boolean> {
 
   try {
     // Extract the file path from the URL
-    const urlParts = fileUrl.split('/quote-attachments/')
+    const urlParts = fileUrl.split('/quote-documents/')
     if (urlParts.length < 2) {
       console.error('Invalid file URL')
       return false
@@ -1311,7 +1311,7 @@ export async function deleteQuotePDF(fileUrl: string): Promise<boolean> {
     const filePath = urlParts[1]
 
     const { error } = await supabase.storage
-      .from('quote-attachments')
+      .from('quote-documents')
       .remove([filePath])
 
     if (error) {
@@ -1335,7 +1335,7 @@ export async function getQuotePDFSignedUrl(fileUrl: string, expiresIn: number = 
 
   try {
     // Extract the file path from the URL
-    const urlParts = fileUrl.split('/quote-attachments/')
+    const urlParts = fileUrl.split('/quote-documents/')
     if (urlParts.length < 2) {
       console.error('Invalid file URL')
       return null
@@ -1344,7 +1344,7 @@ export async function getQuotePDFSignedUrl(fileUrl: string, expiresIn: number = 
     const filePath = urlParts[1]
 
     const { data, error } = await supabase.storage
-      .from('quote-attachments')
+      .from('quote-documents')
       .createSignedUrl(filePath, expiresIn)
 
     if (error) {

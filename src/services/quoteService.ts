@@ -402,7 +402,7 @@ export async function submitQuote(input: SubmitQuoteInput): Promise<SubmittedQuo
     return null
   }
 
-  // Upload quote document if provided
+  // Upload quote document if provided (vendor's document - goes to quote-documents bucket)
   let quoteDocumentUrl: string | undefined
   if (input.quoteDocument) {
     const quoteRequestData = await supabase
@@ -422,7 +422,7 @@ export async function submitQuote(input: SubmitQuoteInput): Promise<SubmittedQuo
       const filePath = `${orgId}/${quoteRequestData.data.project_id}/${fileName}`
       
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('quote-attachments')
+        .from('quote-documents')
         .upload(filePath, input.quoteDocument, {
           cacheControl: '3600',
           upsert: false
@@ -430,7 +430,7 @@ export async function submitQuote(input: SubmitQuoteInput): Promise<SubmittedQuo
       
       if (!uploadError && uploadData) {
         const { data: { publicUrl } } = supabase.storage
-          .from('quote-attachments')
+          .from('quote-documents')
           .getPublicUrl(filePath)
         quoteDocumentUrl = publicUrl
       }
