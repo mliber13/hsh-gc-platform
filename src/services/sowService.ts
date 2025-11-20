@@ -281,6 +281,9 @@ export async function deleteSOWTemplate(templateId: string): Promise<boolean> {
     console.warn('User attempted to delete SOW template without permission', {
       templateId,
       userId: user.id,
+      templateUserId: template.user_id,
+      templateOrganizationId: template.organization_id,
+      userOrganizationId: organizationId,
     })
     return false
   }
