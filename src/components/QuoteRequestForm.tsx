@@ -6,7 +6,12 @@
 //
 
 import React, { useEffect, useState } from 'react'
-import { Project, Trade, Subcontractor as DirectorySubcontractor } from '@/types'
+import {
+  Project,
+  Trade,
+  Subcontractor as DirectorySubcontractor,
+  Supplier as DirectorySupplier,
+} from '@/types'
 import { CreateQuoteRequestInput } from '@/types/quote'
 import { createQuoteRequest_Hybrid } from '@/services/hybridService'
 import { sendQuoteRequestEmail, generateMailtoLink } from '@/services/emailService'
@@ -14,9 +19,17 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { X, Plus, Upload, FileText, Mail, Calendar } from 'lucide-react'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { fetchSubcontractors } from '@/services/partnerDirectoryService'
+import { X, Plus, FileText } from 'lucide-react'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+  SelectGroup,
+  SelectLabel,
+} from '@/components/ui/select'
+import { fetchSubcontractors, fetchSuppliers } from '@/services/partnerDirectoryService'
 import { TRADE_CATEGORIES } from '@/types/constants'
 import { fetchSOWTemplates, formatSOWForQuoteRequest, incrementSOWTemplateUseCount } from '@/services/sowService'
 import { SOWTemplate } from '@/types/sow'
@@ -31,7 +44,7 @@ interface QuoteRequestFormProps {
 export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRequestFormProps) {
   const [vendorEmails, setVendorEmails] = useState<string[]>([''])
   const [vendorNames, setVendorNames] = useState<string[]>([''])
-  const [selectedSubcontractors, setSelectedSubcontractors] = useState<(string | null)[]>([null])
+  const [selectedDirectoryContacts, setSelectedDirectoryContacts] = useState<(string | null)[]>([null])
   const [scopeOfWork, setScopeOfWork] = useState(trade ? `${trade.name}${trade.description ? `\n\n${trade.description}` : ''}` : '')
   const [drawingsFile, setDrawingsFile] = useState<File | null>(null)
   const [dueDate, setDueDate] = useState<string>('')
@@ -39,6 +52,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [availableSubcontractors, setAvailableSubcontractors] = useState<DirectorySubcontractor[]>([])
+  const [availableSuppliers, setAvailableSuppliers] = useState<DirectorySupplier[]>([])
   const [availableSOWTemplates, setAvailableSOWTemplates] = useState<SOWTemplate[]>([])
   const [selectedSOWTemplate, setSelectedSOWTemplate] = useState<string>('none')
 
@@ -49,6 +63,15 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
         setAvailableSubcontractors(data)
       } catch (err) {
         console.warn('Unable to load subcontractor directory for quote requests:', err)
+      }
+    }
+
+    const loadSuppliers = async () => {
+      try {
+        const data = await fetchSuppliers({ includeInactive: false })
+        setAvailableSuppliers(data)
+      } catch (err) {
+        console.warn('Unable to load supplier directory for quote requests:', err)
       }
     }
 
@@ -64,20 +87,21 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     }
 
     loadSubcontractors()
+    loadSuppliers()
     loadSOWTemplates()
   }, [trade])
 
   const handleAddVendor = () => {
     setVendorEmails([...vendorEmails, ''])
     setVendorNames([...vendorNames, ''])
-    setSelectedSubcontractors([...selectedSubcontractors, null])
+    setSelectedDirectoryContacts([...selectedDirectoryContacts, null])
   }
 
   const handleRemoveVendor = (index: number) => {
     if (vendorEmails.length > 1) {
       setVendorEmails(vendorEmails.filter((_, i) => i !== index))
       setVendorNames(vendorNames.filter((_, i) => i !== index))
-      setSelectedSubcontractors(selectedSubcontractors.filter((_, i) => i !== index))
+      setSelectedDirectoryContacts(selectedDirectoryContacts.filter((_, i) => i !== index))
     }
   }
 
@@ -85,18 +109,18 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     const updated = [...vendorEmails]
     updated[index] = value
     setVendorEmails(updated)
-    const updatedSelected = [...selectedSubcontractors]
+    const updatedSelected = [...selectedDirectoryContacts]
     updatedSelected[index] = null
-    setSelectedSubcontractors(updatedSelected)
+    setSelectedDirectoryContacts(updatedSelected)
   }
 
   const handleVendorNameChange = (index: number, value: string) => {
     const updated = [...vendorNames]
     updated[index] = value
     setVendorNames(updated)
-    const updatedSelected = [...selectedSubcontractors]
+    const updatedSelected = [...selectedDirectoryContacts]
     updatedSelected[index] = null
-    setSelectedSubcontractors(updatedSelected)
+    setSelectedDirectoryContacts(updatedSelected)
   }
 
   const handleSOWTemplateSelect = async (templateId: string) => {
@@ -115,18 +139,23 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     }
   }
 
-  const handleSubcontractorSelect = (index: number, subcontractorId: string) => {
-    const updatedSelected = [...selectedSubcontractors]
+  const handleDirectoryContactSelect = (index: number, contactKey: string) => {
+    const updatedSelected = [...selectedDirectoryContacts]
 
-    if (subcontractorId === 'manual') {
+    if (contactKey === 'manual') {
       updatedSelected[index] = null
-      setSelectedSubcontractors(updatedSelected)
+      setSelectedDirectoryContacts(updatedSelected)
       return
     }
 
-    const selected = availableSubcontractors.find((sub) => sub.id === subcontractorId)
-    updatedSelected[index] = subcontractorId
-    setSelectedSubcontractors(updatedSelected)
+    updatedSelected[index] = contactKey
+    setSelectedDirectoryContacts(updatedSelected)
+
+    const [type, id] = contactKey.split(':')
+    const selected =
+      type === 'supplier'
+        ? availableSuppliers.find((supplier) => supplier.id === id)
+        : availableSubcontractors.find((sub) => sub.id === id)
 
     if (selected) {
       const updatedNames = [...vendorNames]
@@ -340,23 +369,39 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
                     </div>
                     <div className="col-span-5">
                       <Label className="text-xs">Name (Optional)</Label>
-                      {availableSubcontractors.length > 0 && (
+                      {(availableSubcontractors.length > 0 || availableSuppliers.length > 0) && (
                         <div className="mb-1">
                           <Select
-                            value={selectedSubcontractors[index] ?? 'manual'}
-                            onValueChange={(value) => handleSubcontractorSelect(index, value)}
+                            value={selectedDirectoryContacts[index] ?? 'manual'}
+                            onValueChange={(value) => handleDirectoryContactSelect(index, value)}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select from directory..." />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="manual">Manual entry...</SelectItem>
-                              {availableSubcontractors.map((sub) => (
-                                <SelectItem key={sub.id} value={sub.id}>
-                                  {sub.name}
-                                  {sub.trade ? ` • ${sub.trade}` : ''}
-                                </SelectItem>
-                              ))}
+                              {availableSubcontractors.length > 0 && (
+                                <SelectGroup>
+                                  <SelectLabel>Subcontractors</SelectLabel>
+                                  {availableSubcontractors.map((sub) => (
+                                    <SelectItem key={`sub-${sub.id}`} value={`sub:${sub.id}`}>
+                                      {sub.name}
+                                      {sub.trade ? ` • ${sub.trade}` : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              )}
+                              {availableSuppliers.length > 0 && (
+                                <SelectGroup>
+                                  <SelectLabel>Suppliers</SelectLabel>
+                                  {availableSuppliers.map((supplier) => (
+                                    <SelectItem key={`supplier-${supplier.id}`} value={`supplier:${supplier.id}`}>
+                                      {supplier.name}
+                                      {supplier.category ? ` • ${supplier.category}` : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              )}
                             </SelectContent>
                           </Select>
                         </div>
@@ -366,7 +411,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
                         onChange={(e) => handleVendorNameChange(index, e.target.value)}
                         placeholder="Vendor name"
                       />
-                      {selectedSubcontractors[index] && !vendorEmails[index] && (
+                      {selectedDirectoryContacts[index] && !vendorEmails[index] && (
                         <p className="text-[11px] text-orange-600 mt-1">
                           This contact does not have an email saved yet—please add one above.
                         </p>
