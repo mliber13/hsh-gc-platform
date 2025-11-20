@@ -15,11 +15,20 @@ The `quote-documents` storage bucket doesn't exist, causing "Bucket not found" e
 
 ## Setup Steps
 
-### Step 1: Create the Bucket (SQL Migration)
+### ⚠️ IMPORTANT: Create Bucket via Dashboard (Not SQL)
 
-Run the migration `017_create_quote_documents_bucket_public.sql` in Supabase SQL Editor.
+**You cannot create storage buckets via SQL** - it requires service role permissions. You must use the Supabase Dashboard.
 
-This creates the bucket but **cannot set up storage policies** (requires service role permissions).
+### Step 1: Create the Bucket (Supabase Dashboard)
+
+1. Go to **Supabase Dashboard** → **Storage** → **Buckets**
+2. Click **New Bucket**
+3. Fill in the form:
+   - **Name:** `quote-documents`
+   - **Public bucket:** ✅ **Yes** (vendors need access without authentication)
+   - **File size limit:** `50 MB` (or leave default)
+   - **Allowed MIME types:** `application/pdf, image/jpeg, image/png, image/jpg, application/zip`
+4. Click **Create bucket**
 
 ### Step 2: Set Up Storage Policies (Supabase Dashboard)
 
@@ -72,17 +81,11 @@ After creating the bucket, set up policies through the dashboard:
 3. Click "View Drawings" - it should work
 4. Test as a vendor (unauthenticated) - should be able to view
 
-## Alternative: Create Bucket via Dashboard
+## Why SQL Migration Doesn't Work
 
-If the SQL migration doesn't work, create the bucket manually:
+Storage buckets require **service role** permissions to create via SQL. Regular database users don't have permission to insert into `storage.buckets`. The Supabase Dashboard uses the service role, so it can create buckets.
 
-1. Go to **Storage** → **Buckets** → **New Bucket**
-2. **Bucket name:** `quote-documents`
-3. **Public bucket:** ✅ **Yes** (vendors need access)
-4. **File size limit:** 50 MB
-5. **Allowed MIME types:** `application/pdf, image/jpeg, image/png, image/jpg, application/zip`
-6. Click **Create**
-7. Then set up the policies as described above
+**The SQL migration file is kept for documentation, but you must create the bucket through the Dashboard.**
 
 ## After Setup
 
