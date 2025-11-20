@@ -143,7 +143,8 @@ export async function createSOWTemplate(input: CreateSOWTemplateInput): Promise<
     .eq('id', user.id)
     .single()
 
-  const organizationId = profile?.organization_id || null
+  const organizationIdRaw = profile?.organization_id || null
+  const organizationId = organizationIdRaw === 'default-org' ? null : organizationIdRaw
 
   // Validate organization_id - must be a valid UUID or null (exclude 'default-org' and other invalid values)
   const validOrganizationId = organizationId && 
@@ -273,9 +274,13 @@ export async function deleteSOWTemplate(templateId: string): Promise<boolean> {
     return false
   }
 
+  const templateOrganizationId =
+    template.organization_id === 'default-org' ? null : template.organization_id
+
   const canDelete =
     template.user_id === user.id ||
-    template.organization_id === organizationId
+    (!!organizationId && templateOrganizationId === organizationId) ||
+    (!template.user_id && !templateOrganizationId)
 
   if (!canDelete) {
     console.warn('User attempted to delete SOW template without permission', {
