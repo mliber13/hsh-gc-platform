@@ -9,7 +9,7 @@ CREATE POLICY "Users can manage SOW templates they can access"
     auth.uid() = user_id
     OR (
       organization_id IS NOT NULL
-      AND organization_id = (
+      AND organization_id::text = (
         SELECT organization_id
         FROM profiles
         WHERE id = auth.uid()
