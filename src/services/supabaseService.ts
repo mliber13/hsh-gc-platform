@@ -1271,7 +1271,7 @@ export async function uploadQuotePDF(
 
     // Upload to storage
     const { data, error } = await supabase.storage
-      .from('quote-documents')
+      .from('quote-attachments')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false
@@ -1284,7 +1284,7 @@ export async function uploadQuotePDF(
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
-      .from('quote-documents')
+      .from('quote-attachments')
       .getPublicUrl(filePath)
 
     return publicUrl
@@ -1302,7 +1302,7 @@ export async function deleteQuotePDF(fileUrl: string): Promise<boolean> {
 
   try {
     // Extract the file path from the URL
-    const urlParts = fileUrl.split('/quote-documents/')
+    const urlParts = fileUrl.split('/quote-attachments/')
     if (urlParts.length < 2) {
       console.error('Invalid file URL')
       return false
@@ -1311,7 +1311,7 @@ export async function deleteQuotePDF(fileUrl: string): Promise<boolean> {
     const filePath = urlParts[1]
 
     const { error } = await supabase.storage
-      .from('quote-documents')
+      .from('quote-attachments')
       .remove([filePath])
 
     if (error) {
@@ -1335,7 +1335,7 @@ export async function getQuotePDFSignedUrl(fileUrl: string, expiresIn: number = 
 
   try {
     // Extract the file path from the URL
-    const urlParts = fileUrl.split('/quote-documents/')
+    const urlParts = fileUrl.split('/quote-attachments/')
     if (urlParts.length < 2) {
       console.error('Invalid file URL')
       return null
@@ -1344,7 +1344,7 @@ export async function getQuotePDFSignedUrl(fileUrl: string, expiresIn: number = 
     const filePath = urlParts[1]
 
     const { data, error } = await supabase.storage
-      .from('quote-documents')
+      .from('quote-attachments')
       .createSignedUrl(filePath, expiresIn)
 
     if (error) {

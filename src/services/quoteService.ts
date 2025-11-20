@@ -131,7 +131,7 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
       const filePath = `${orgPath}/${input.projectId}/${fileName}`
       
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('quote-documents')
+        .from('quote-attachments')
         .upload(filePath, input.drawingsFile, {
           cacheControl: '3600',
           upsert: false
@@ -139,7 +139,7 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
       
       if (!uploadError && uploadData) {
         const { data: { publicUrl } } = supabase.storage
-          .from('quote-documents')
+          .from('quote-attachments')
           .getPublicUrl(filePath)
         drawingsUrl = publicUrl
       }
@@ -422,7 +422,7 @@ export async function submitQuote(input: SubmitQuoteInput): Promise<SubmittedQuo
       const filePath = `${orgId}/${quoteRequestData.data.project_id}/${fileName}`
       
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('quote-documents')
+        .from('quote-attachments')
         .upload(filePath, input.quoteDocument, {
           cacheControl: '3600',
           upsert: false
@@ -430,7 +430,7 @@ export async function submitQuote(input: SubmitQuoteInput): Promise<SubmittedQuo
       
       if (!uploadError && uploadData) {
         const { data: { publicUrl } } = supabase.storage
-          .from('quote-documents')
+          .from('quote-attachments')
           .getPublicUrl(filePath)
         quoteDocumentUrl = publicUrl
       }
