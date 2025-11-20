@@ -47,6 +47,14 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          // Clean up old caches on update
+          cleanupOutdatedCaches: true,
+          // Skip waiting and claim clients immediately
+          skipWaiting: true,
+          clientsClaim: true,
+          // Handle missing precache entries gracefully
+          navigateFallback: 'index.html',
+          navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

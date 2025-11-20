@@ -32,6 +32,7 @@ import {
 import { fetchSubcontractors, fetchSuppliers } from '@/services/partnerDirectoryService'
 import { TRADE_CATEGORIES } from '@/types/constants'
 import { fetchSOWTemplates, formatSOWForQuoteRequest, incrementSOWTemplateUseCount } from '@/services/sowService'
+import { buildVendorPortalLink } from '@/config/appConfig'
 import { SOWTemplate } from '@/types/sow'
 
 interface QuoteRequestFormProps {
@@ -271,18 +272,18 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
       }
 
       // Generate email links and send emails
-      const baseUrl = window.location.origin
+      const safeLinkForRequest = (token: string) => buildVendorPortalLink(token)
       const tradeCategoryLabel = trade?.category ? TRADE_CATEGORIES[trade.category]?.label : undefined
       const emailLinks = quoteRequests.map(qr => ({
         ...qr,
-        link: `${baseUrl}/vendor-quote/${qr.token}`,
+        link: safeLinkForRequest(qr.token),
       }))
 
       // Send emails to vendors
       const emailResults = await Promise.all(
         quoteRequests.map(async (qr, index) => {
           const vendorEntry = sanitizedVendors[index]
-          const link = `${baseUrl}/vendor-quote/${qr.token}`
+          const link = safeLinkForRequest(qr.token)
           const vendorName = vendorEntry?.name || undefined
           const emailSent = await sendQuoteRequestEmail({
             to: qr.vendorEmail,

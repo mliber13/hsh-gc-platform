@@ -81,6 +81,15 @@ npm run preview
 
 The app will be available at `http://localhost:5173`
 
+### Vendor Quote Links
+
+Vendor emails now use a configurable public URL so the shared link always points to your deployed portal (and not your local dev server). Add these entries to your `.env` file or hosting provider:
+
+- `VITE_PUBLIC_APP_URL` – base URL for the main app (e.g. `https://hsh-gc-platform.vercel.app`)
+- `VITE_VENDOR_PORTAL_URL` (optional) – overrides the base specifically for vendor quote links if you host the portal elsewhere
+
+If neither value is set, the app falls back to `window.location.origin`.
+
 ## Project Structure
 
 ```

@@ -72,9 +72,10 @@ function App() {
   // Check for special routes (vendor quote portal, QB callback)
   useEffect(() => {
     const pathname = window.location.pathname
+    const isVendorPortalRoute = pathname.startsWith('/vendor-quote/') || pathname.startsWith('/quote/')
     
     // Check for vendor quote portal route
-    if (pathname.startsWith('/vendor-quote/')) {
+    if (isVendorPortalRoute) {
       // This will be handled by early return, no need to set view
       return
     }
@@ -259,7 +260,8 @@ function App() {
 
   // Check for vendor quote portal route - bypass auth
   const pathname = window.location.pathname
-  if (pathname.startsWith('/vendor-quote/')) {
+  const isVendorPortalRoute = pathname.startsWith('/vendor-quote/') || pathname.startsWith('/quote/')
+  if (isVendorPortalRoute) {
     return <VendorQuotePortal />
   }
 

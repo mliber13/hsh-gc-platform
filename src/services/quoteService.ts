@@ -15,6 +15,7 @@ import {
   QuoteRequestWithQuote,
 } from '@/types/quote'
 import { supabase, isOnlineMode } from '@/lib/supabase'
+import { buildVendorPortalLink } from '@/config/appConfig'
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -334,7 +335,7 @@ export async function resendQuoteRequestEmail(quoteRequest: QuoteRequest, projec
   const { sendQuoteRequestEmail } = await import('./emailService')
 
   // Generate the quote link
-  const quoteLink = `${window.location.origin}/quote/${quoteRequest.token}`
+  const quoteLink = buildVendorPortalLink(quoteRequest.token)
 
   // Send the email
   const emailSent = await sendQuoteRequestEmail({

@@ -26,8 +26,8 @@ export function VendorQuotePortal({ token: tokenProp }: VendorQuotePortalProps =
   const getTokenFromUrl = () => {
     if (tokenProp) return tokenProp
     const path = window.location.pathname
-    const match = path.match(/\/vendor-quote\/([^/]+)/)
-    return match ? match[1] : null
+    const match = path.match(/\/(vendor-quote|quote)\/([^/]+)/)
+    return match ? match[2] : null
   }
   
   const token = getTokenFromUrl()
