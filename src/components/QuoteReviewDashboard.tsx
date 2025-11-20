@@ -101,12 +101,20 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
   const handleDeleteQuoteRequest = async (requestId: string) => {
+    console.log('handleDeleteQuoteRequest called with requestId:', requestId)
+    
     if (!confirm('Are you sure you want to delete this quote request? This action cannot be undone.')) {
+      console.log('User cancelled delete confirmation')
       return
     }
 
+    console.log('User confirmed delete, proceeding...')
+
     try {
+      console.log('Calling deleteQuoteRequest_Hybrid...')
       const deleted = await deleteQuoteRequest_Hybrid(requestId)
+      console.log('deleteQuoteRequest_Hybrid returned:', deleted)
+      
       if (deleted) {
         // Remove from state
         setQuoteRequests(prev => prev.filter(r => r.id !== requestId))
@@ -118,11 +126,12 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
         })
         alert('Quote request deleted successfully')
       } else {
+        console.error('deleteQuoteRequest_Hybrid returned false')
         alert('Failed to delete quote request')
       }
     } catch (error) {
       console.error('Error deleting quote request:', error)
-      alert('Failed to delete quote request')
+      alert('Failed to delete quote request: ' + (error instanceof Error ? error.message : String(error)))
     }
   }
 
@@ -546,9 +555,15 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                             Resend Email
                           </Button>
                           <Button
-                            onClick={() => handleDeleteQuoteRequest(request.id)}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              console.log('Delete button clicked for request:', request.id)
+                              handleDeleteQuoteRequest(request.id)
+                            }}
                             variant="destructive"
                             size="sm"
+                            type="button"
                           >
                             <XCircle className="w-4 h-4 mr-2" />
                             Delete
