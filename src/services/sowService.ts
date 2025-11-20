@@ -252,11 +252,47 @@ export async function deleteSOWTemplate(templateId: string): Promise<boolean> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return false
 
+  // Fetch user's organization (validated to real UUID)
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  const organizationId = profile?.organization_id &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profile.organization_id) &&
+    profile.organization_id !== 'default-org'
+    ? profile.organization_id
+    : null
+
+  // Load template to determine ownership
+  const { data: template, error: fetchError } = await supabase
+    .from('sow_templates')
+    .select('id, user_id, organization_id')
+    .eq('id', templateId)
+    .single()
+
+  if (fetchError || !template) {
+    console.error('Error loading SOW template for delete:', fetchError)
+    return false
+  }
+
+  const canDelete =
+    template.user_id === user.id ||
+    (!!organizationId && template.organization_id === organizationId)
+
+  if (!canDelete) {
+    console.warn('User attempted to delete SOW template without permission', {
+      templateId,
+      userId: user.id,
+    })
+    return false
+  }
+
   const { error } = await supabase
     .from('sow_templates')
     .delete()
     .eq('id', templateId)
-    .eq('user_id', user.id) // Only allow deleting own templates
 
   if (error) {
     console.error('Error deleting SOW template:', error)
