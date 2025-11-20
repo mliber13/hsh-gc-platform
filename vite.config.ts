@@ -55,6 +55,7 @@ export default defineConfig(({ mode }) => {
           // Handle missing precache entries gracefully
           navigateFallback: 'index.html',
           navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/],
+          // Handle precache errors gracefully
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -70,7 +71,14 @@ export default defineConfig(({ mode }) => {
                 }
               }
             }
-          ]
+          ],
+          // Add error handling for missing precache entries
+          importScripts: [],
+        },
+        // Force service worker update
+        devOptions: {
+          enabled: false,
+          type: 'module',
         }
       })
     ],

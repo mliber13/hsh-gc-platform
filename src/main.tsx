@@ -8,13 +8,20 @@ import './index.css'
 import { registerSW } from 'virtual:pwa-register'
 
 const updateSW = registerSW({
+  immediate: true, // Check for updates immediately
   onNeedRefresh() {
-    if (confirm('New version available! Reload to update?')) {
-      updateSW(true)
-    }
+    // Auto-reload when update is available (don't wait for user confirmation)
+    console.log('New service worker available, reloading...')
+    updateSW(true)
   },
   onOfflineReady() {
     console.log('App ready to work offline')
+  },
+  onRegistered(registration) {
+    // Force update check every hour
+    setInterval(() => {
+      registration?.update()
+    }, 60 * 60 * 1000)
   },
 })
 
