@@ -29,13 +29,12 @@ CREATE POLICY "Public can view quote requests by token"
 DROP POLICY IF EXISTS "Vendors can submit quotes via token" ON submitted_quotes;
 
 -- Allow public inserts to submitted_quotes (for vendor submissions)
--- Note: We use both USING and WITH CHECK set to true to ensure it works
--- for unauthenticated users. The application validates quote_request_id exists.
+-- Note: For INSERT policies, we only use WITH CHECK (not USING)
+-- The application validates quote_request_id exists before allowing insert.
 CREATE POLICY "Vendors can submit quotes via token"
   ON submitted_quotes FOR INSERT
   TO public
-  WITH CHECK (true)
-  USING (true); -- Allow anyone to insert (application validates quote_request_id exists)
+  WITH CHECK (true); -- Allow anyone to insert (application validates quote_request_id exists)
 
 -- Also allow public to read their own submitted quotes (for confirmation)
 -- This allows vendors to see their submission after submitting
