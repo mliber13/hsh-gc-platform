@@ -275,7 +275,7 @@ export async function deleteSOWTemplate(templateId: string): Promise<boolean> {
 
   const canDelete =
     template.user_id === user.id ||
-    (!!organizationId && template.organization_id === organizationId)
+    template.organization_id === organizationId
 
   if (!canDelete) {
     console.warn('User attempted to delete SOW template without permission', {
