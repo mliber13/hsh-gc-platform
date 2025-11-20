@@ -176,15 +176,27 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
       const tradeToUpdate = trades.find(t => t.id === tradeId)
       if (tradeToUpdate) {
         const vendorType = getVendorTypeForQuote(quote)
+        // When applying a quote, clear conflicting costs:
+        // - Supplier quote: set materialCost, clear subcontractorCost (keep laborCost)
+        // - Subcontractor quote: set subcontractorCost, clear laborCost (keep materialCost)
         const updates =
           vendorType === 'supplier'
-            ? { materialCost: quote.totalAmount, isSubcontracted: false }
-            : { subcontractorCost: quote.totalAmount, isSubcontracted: true }
+            ? { 
+                materialCost: quote.totalAmount, 
+                subcontractorCost: 0, // Clear sub cost when using supplier
+                isSubcontracted: false 
+              }
+            : { 
+                subcontractorCost: quote.totalAmount, 
+                laborCost: 0, // Clear labor cost when using subcontractor
+                isSubcontracted: true 
+              }
 
         await updateTrade_Hybrid(tradeId, updates)
         const costLabel = vendorType === 'supplier' ? 'material' : 'subcontractor'
-        console.log(`✅ Applied ${costLabel} quote amount ${formatCurrency(quote.totalAmount)} to trade ${tradeId}`)
-        alert(`Quote amount ${formatCurrency(quote.totalAmount)} applied to ${costLabel} cost successfully!`)
+        const clearedLabel = vendorType === 'supplier' ? 'subcontractor' : 'labor'
+        console.log(`✅ Applied ${costLabel} quote amount ${formatCurrency(quote.totalAmount)} to trade ${tradeId} (cleared ${clearedLabel} cost)`)
+        alert(`Quote amount ${formatCurrency(quote.totalAmount)} applied to ${costLabel} cost. ${clearedLabel.charAt(0).toUpperCase() + clearedLabel.slice(1)} cost cleared.`)
         return true
       } else {
         console.warn(`Trade ${tradeId} not found`)
@@ -232,20 +244,33 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
     try {
       const updated = await updateQuoteStatus_Hybrid(input)
       if (updated) {
-        // If quote is accepted and assigned to a trade, update the trade's subcontractor cost
+        // If quote is accepted and assigned to a trade, update the trade's cost
+        // Clear conflicting costs: supplier quotes clear sub costs, sub quotes clear labor costs
         if (status === 'accepted' && input.assignedTradeId) {
           try {
             const tradeToUpdate = trades.find(t => t.id === input.assignedTradeId)
             if (tradeToUpdate) {
               const vendorType = getVendorTypeForQuote(quote)
+              // When accepting a quote, clear conflicting costs:
+              // - Supplier quote: set materialCost, clear subcontractorCost (keep laborCost)
+              // - Subcontractor quote: set subcontractorCost, clear laborCost (keep materialCost)
               const updates =
                 vendorType === 'supplier'
-                  ? { materialCost: quote.totalAmount, isSubcontracted: false }
-                  : { subcontractorCost: quote.totalAmount, isSubcontracted: true }
+                  ? { 
+                      materialCost: quote.totalAmount, 
+                      subcontractorCost: 0, // Clear sub cost when using supplier
+                      isSubcontracted: false 
+                    }
+                  : { 
+                      subcontractorCost: quote.totalAmount, 
+                      laborCost: 0, // Clear labor cost when using subcontractor
+                      isSubcontracted: true 
+                    }
 
               await updateTrade_Hybrid(input.assignedTradeId, updates)
+              const clearedLabel = vendorType === 'supplier' ? 'subcontractor' : 'labor'
               console.log(
-                `✅ Updated trade ${input.assignedTradeId} with ${vendorType} quote amount: $${quote.totalAmount}`
+                `✅ Updated trade ${input.assignedTradeId} with ${vendorType} quote amount: $${quote.totalAmount} (cleared ${clearedLabel} cost)`
               )
             } else {
               console.warn(`Trade ${input.assignedTradeId} not found`)
