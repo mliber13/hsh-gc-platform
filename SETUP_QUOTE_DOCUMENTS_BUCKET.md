@@ -1,8 +1,10 @@
-# Setup Quote Documents Storage Bucket
+# Setup Quote Attachments Storage Bucket
 
 ## The Problem
 
-The `quote-documents` storage bucket doesn't exist, causing "Bucket not found" errors when viewing drawings.
+The `quote-attachments` storage bucket doesn't exist, causing "Bucket not found" errors when viewing drawings.
+
+**Note:** We use `quote-attachments` (not `quote-documents`) because `quote-documents` is already used for something else.
 
 ## About Existing Quote Requests
 
@@ -31,7 +33,7 @@ The `quote-documents` storage bucket doesn't exist, causing "Bucket not found" e
 
 1. Click **New Bucket**
 2. Fill in the form:
-   - **Name:** `quote-documents`
+   - **Name:** `quote-attachments`
    - **Public bucket:** ✅ **Yes** (vendors need access without authentication)
    - **File size limit:** `50 MB` (or leave default)
    - **Allowed MIME types:** `application/pdf, image/jpeg, image/png, image/jpg, application/zip`
@@ -41,7 +43,7 @@ The `quote-documents` storage bucket doesn't exist, causing "Bucket not found" e
 
 If the bucket already exists, check these settings:
 
-1. Click on the `quote-documents` bucket
+1. Click on the `quote-attachments` bucket
 2. Verify:
    - ✅ **Public bucket:** Should be **ON/YES**
    - ✅ **File size limit:** At least 50 MB
@@ -67,29 +69,29 @@ After creating the bucket, set up policies through the dashboard:
 - **Target roles:** `anon`, `authenticated`
 
 #### Policy 2: Authenticated Upload
-- **Policy name:** `Authenticated users can upload quote documents`
+- **Policy name:** `Authenticated users can upload quote attachments`
 - **Allowed operation:** `INSERT`
 - **Policy definition:**
   ```sql
-  bucket_id = 'quote-documents' AND auth.uid() IS NOT NULL
+  bucket_id = 'quote-attachments' AND auth.uid() IS NOT NULL
   ```
 - **Target roles:** `authenticated`
 
 #### Policy 3: Authenticated Update
-- **Policy name:** `Authenticated users can update quote documents`
+- **Policy name:** `Authenticated users can update quote attachments`
 - **Allowed operation:** `UPDATE`
 - **Policy definition:**
   ```sql
-  bucket_id = 'quote-documents' AND auth.uid() IS NOT NULL
+  bucket_id = 'quote-attachments' AND auth.uid() IS NOT NULL
   ```
 - **Target roles:** `authenticated`
 
 #### Policy 4: Authenticated Delete
-- **Policy name:** `Authenticated users can delete quote documents`
+- **Policy name:** `Authenticated users can delete quote attachments`
 - **Allowed operation:** `DELETE`
 - **Policy definition:**
   ```sql
-  bucket_id = 'quote-documents' AND auth.uid() IS NOT NULL
+  bucket_id = 'quote-attachments' AND auth.uid() IS NOT NULL
   ```
 - **Target roles:** `authenticated`
 

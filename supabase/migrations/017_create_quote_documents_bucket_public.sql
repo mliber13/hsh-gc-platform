@@ -1,19 +1,20 @@
 -- ============================================================================
--- Migration: Create Quote Documents Storage Bucket (Public Read)
+-- Migration: Create Quote Attachments Storage Bucket (Public Read)
 -- ============================================================================
 -- 
--- Creates a Supabase Storage bucket for quote PDF documents
+-- Creates a Supabase Storage bucket for quote PDF documents and attachments
 -- Bucket is public so vendors can access drawings without authentication
 --
--- NOTE: Storage policies must be created through Supabase Dashboard or service role
--- This migration only creates the bucket. Policies should be set up manually.
+-- NOTE: Storage buckets must be created through Supabase Dashboard (not SQL)
+-- This migration is for documentation only. See SETUP_QUOTE_DOCUMENTS_BUCKET.md
 --
 
--- Create the storage bucket for quote documents (public for vendor access)
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES (
-  'quote-documents',
-  'quote-documents',
+-- NOTE: This SQL will fail - buckets must be created via Dashboard
+-- Create the storage bucket for quote attachments (public for vendor access)
+-- INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+-- VALUES (
+--   'quote-attachments',
+--   'quote-attachments',
   true, -- public so vendors can access without authentication
   52428800, -- 50MB max file size (increased for larger PDFs)
   ARRAY['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/zip']::text[]

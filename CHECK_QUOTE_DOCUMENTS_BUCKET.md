@@ -1,13 +1,15 @@
-# Check Quote Documents Bucket Configuration
+# Check Quote Attachments Bucket Configuration
 
 ## The Bucket Exists - Now Check Configuration
 
 Since the bucket already exists, we need to verify it's set up correctly.
 
+**Note:** We use `quote-attachments` (not `quote-documents`).
+
 ## Step 1: Verify Bucket Settings
 
 1. Go to **Supabase Dashboard** → **Storage** → **Buckets**
-2. Click on the `quote-documents` bucket
+2. Click on the `quote-attachments` bucket
 3. Check these settings:
    - ✅ **Public bucket:** Should be **ON/YES** (vendors need access)
    - ✅ **File size limit:** Should be at least 50 MB
@@ -18,7 +20,7 @@ If any of these are wrong, you can edit the bucket settings.
 ## Step 2: Check Storage Policies
 
 1. Go to **Storage** → **Policies**
-2. Select the `quote-documents` bucket
+2. Select the `quote-attachments` bucket
 3. You should see 4 policies:
 
 ### Required Policies:
@@ -66,8 +68,8 @@ If you don't see a public read policy, add it:
 ## Common Issues
 
 ### Issue: "Bucket not found" error
-- **Cause:** Bucket exists but policies aren't set up
-- **Fix:** Add the public read policy (Step 3)
+- **Cause:** Bucket doesn't exist or policies aren't set up
+- **Fix:** Create `quote-attachments` bucket via Dashboard, then add the public read policy (Step 3)
 
 ### Issue: "Permission denied" when uploading
 - **Cause:** Missing INSERT policy
