@@ -20,7 +20,7 @@ import {
 } from '@/services/hybridService'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { 
   Mail, 
@@ -210,8 +210,16 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
   }
 
   const handleUpdateStatus = async (quote: SubmittedQuote, status: SubmittedQuote['status']) => {
-    // Use the selected quote's values if this is the selected quote, otherwise use quote's existing values
-    const tradeId = selectedQuote?.id === quote.id ? selectedTradeId : (quote.assignedTradeId || '')
+    // Find the request for this quote to get the original tradeId
+    const request = quoteRequests.find(r => {
+      const quotes = submittedQuotes.get(r.id) || []
+      return quotes.some(q => q.id === quote.id)
+    })
+    
+    // Use the selected quote's values if this is the selected quote, otherwise use quote's existing values or request's tradeId
+    const tradeId = selectedQuote?.id === quote.id 
+      ? selectedTradeId 
+      : (quote.assignedTradeId || request?.tradeId || '')
     const notes = selectedQuote?.id === quote.id ? reviewNotes : ''
 
     const input: UpdateQuoteStatusInput = {
@@ -697,7 +705,9 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                       <>
                         <div className="flex-1 space-y-2">
                           <Select
-                            value={selectedQuote?.id === quote.id ? (selectedTradeId || '__none__') : (quote.assignedTradeId || '__none__')}
+                            value={selectedQuote?.id === quote.id 
+                              ? (selectedTradeId || request.tradeId || '__none__')
+                              : (quote.assignedTradeId || request.tradeId || '__none__')}
                             onValueChange={(value) => {
                               setSelectedQuote(quote)
                               setSelectedTradeId(value === '__none__' ? '' : value)
@@ -708,10 +718,25 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__none__">None</SelectItem>
-                              {trades.map(trade => (
-                                <SelectItem key={trade.id} value={trade.id}>
-                                  {trade.name}
-                                </SelectItem>
+                              {Object.entries(
+                                trades.reduce((acc, trade) => {
+                                  const category = trade.category || 'other'
+                                  const categoryLabel = TRADE_CATEGORIES[category]?.label || category
+                                  if (!acc[categoryLabel]) {
+                                    acc[categoryLabel] = []
+                                  }
+                                  acc[categoryLabel].push(trade)
+                                  return acc
+                                }, {} as Record<string, Trade[]>)
+                              ).map(([categoryLabel, categoryTrades]) => (
+                                <SelectGroup key={categoryLabel}>
+                                  <SelectLabel>{categoryLabel}</SelectLabel>
+                                  {categoryTrades.map(trade => (
+                                    <SelectItem key={trade.id} value={trade.id}>
+                                      {trade.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
                               ))}
                             </SelectContent>
                           </Select>
@@ -775,7 +800,9 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                         {!quote.assignedTradeId && (
                           <>
                             <Select
-                              value={selectedQuote?.id === quote.id ? (selectedTradeId || '__none__') : '__none__'}
+                              value={selectedQuote?.id === quote.id 
+                                ? (selectedTradeId || request.tradeId || '__none__')
+                                : (quote.assignedTradeId || request.tradeId || '__none__')}
                               onValueChange={(value) => {
                                 setSelectedQuote(quote)
                                 setSelectedTradeId(value === '__none__' ? '' : value)
@@ -786,10 +813,25 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="__none__">None</SelectItem>
-                                {trades.map(trade => (
-                                  <SelectItem key={trade.id} value={trade.id}>
-                                    {trade.name}
-                                  </SelectItem>
+                                {Object.entries(
+                                  trades.reduce((acc, trade) => {
+                                    const category = trade.category || 'other'
+                                    const categoryLabel = TRADE_CATEGORIES[category]?.label || category
+                                    if (!acc[categoryLabel]) {
+                                      acc[categoryLabel] = []
+                                    }
+                                    acc[categoryLabel].push(trade)
+                                    return acc
+                                  }, {} as Record<string, Trade[]>)
+                                ).map(([categoryLabel, categoryTrades]) => (
+                                  <SelectGroup key={categoryLabel}>
+                                    <SelectLabel>{categoryLabel}</SelectLabel>
+                                    {categoryTrades.map(trade => (
+                                      <SelectItem key={trade.id} value={trade.id}>
+                                        {trade.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
                                 ))}
                               </SelectContent>
                             </Select>
