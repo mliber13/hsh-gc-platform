@@ -199,9 +199,12 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
 
 /**
  * Fetch quote request by token (for vendor portal)
+ * This is a public endpoint - no authentication required
  */
 export async function fetchQuoteRequestByToken(token: string): Promise<QuoteRequest | null> {
   if (!isOnlineMode()) return null
+
+  console.log('Fetching quote request with token:', token.substring(0, 8) + '...')
 
   const { data, error } = await supabase
     .from('quote_requests')
@@ -209,8 +212,20 @@ export async function fetchQuoteRequestByToken(token: string): Promise<QuoteRequ
     .eq('token', token)
     .single()
 
-  if (error || !data) {
-    console.error('Error fetching quote request:', error)
+  if (error) {
+    console.error('Error fetching quote request:', {
+      error,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+      token: token.substring(0, 8) + '...'
+    })
+    return null
+  }
+
+  if (!data) {
+    console.warn('No quote request found for token:', token.substring(0, 8) + '...')
     return null
   }
 
