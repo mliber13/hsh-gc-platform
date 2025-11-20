@@ -12,7 +12,7 @@ import {
   Subcontractor as DirectorySubcontractor,
   Supplier as DirectorySupplier,
 } from '@/types'
-import { CreateQuoteRequestInput } from '@/types/quote'
+import { CreateQuoteRequestInput, QuoteVendorType } from '@/types/quote'
 import { createQuoteRequest_Hybrid } from '@/services/hybridService'
 import { sendQuoteRequestEmail, generateMailtoLink } from '@/services/emailService'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -45,6 +45,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
   const [vendorEmails, setVendorEmails] = useState<string[]>([''])
   const [vendorNames, setVendorNames] = useState<string[]>([''])
   const [selectedDirectoryContacts, setSelectedDirectoryContacts] = useState<(string | null)[]>([null])
+  const [vendorTypes, setVendorTypes] = useState<QuoteVendorType[]>(['subcontractor'])
   const [scopeOfWork, setScopeOfWork] = useState(trade ? `${trade.name}${trade.description ? `\n\n${trade.description}` : ''}` : '')
   const [drawingsFile, setDrawingsFile] = useState<File | null>(null)
   const [dueDate, setDueDate] = useState<string>('')
@@ -95,6 +96,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     setVendorEmails([...vendorEmails, ''])
     setVendorNames([...vendorNames, ''])
     setSelectedDirectoryContacts([...selectedDirectoryContacts, null])
+    setVendorTypes([...vendorTypes, 'subcontractor'])
   }
 
   const handleRemoveVendor = (index: number) => {
@@ -102,6 +104,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
       setVendorEmails(vendorEmails.filter((_, i) => i !== index))
       setVendorNames(vendorNames.filter((_, i) => i !== index))
       setSelectedDirectoryContacts(selectedDirectoryContacts.filter((_, i) => i !== index))
+      setVendorTypes(vendorTypes.filter((_, i) => i !== index))
     }
   }
 
@@ -112,6 +115,9 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     const updatedSelected = [...selectedDirectoryContacts]
     updatedSelected[index] = null
     setSelectedDirectoryContacts(updatedSelected)
+    const updatedTypes = [...vendorTypes]
+    updatedTypes[index] = 'subcontractor'
+    setVendorTypes(updatedTypes)
   }
 
   const handleVendorNameChange = (index: number, value: string) => {
@@ -121,6 +127,12 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     const updatedSelected = [...selectedDirectoryContacts]
     updatedSelected[index] = null
     setSelectedDirectoryContacts(updatedSelected)
+  }
+
+  const handleVendorTypeChange = (index: number, type: QuoteVendorType) => {
+    const updated = [...vendorTypes]
+    updated[index] = type
+    setVendorTypes(updated)
   }
 
   const handleSOWTemplateSelect = async (templateId: string) => {
@@ -145,6 +157,9 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     if (contactKey === 'manual') {
       updatedSelected[index] = null
       setSelectedDirectoryContacts(updatedSelected)
+      const updatedTypes = [...vendorTypes]
+      updatedTypes[index] = 'subcontractor'
+      setVendorTypes(updatedTypes)
       return
     }
 
@@ -152,6 +167,10 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     setSelectedDirectoryContacts(updatedSelected)
 
     const [type, id] = contactKey.split(':')
+    const derivedType: QuoteVendorType = type === 'supplier' ? 'supplier' : 'subcontractor'
+    const updatedTypes = [...vendorTypes]
+    updatedTypes[index] = derivedType
+    setVendorTypes(updatedTypes)
     const selected =
       type === 'supplier'
         ? availableSuppliers.find((supplier) => supplier.id === id)
@@ -173,8 +192,15 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     setError(null)
 
     // Validation
-    const validEmails = vendorEmails.filter(email => email.trim())
-    if (validEmails.length === 0) {
+    const sanitizedVendors = vendorEmails
+      .map((email, index) => ({
+        email: email.trim(),
+        name: vendorNames[index]?.trim(),
+        type: vendorTypes[index] || 'subcontractor',
+      }))
+      .filter(v => v.email)
+
+    if (sanitizedVendors.length === 0) {
       setError('Please enter at least one vendor email')
       return
     }
@@ -186,9 +212,9 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    for (const email of validEmails) {
-      if (!emailRegex.test(email)) {
-        setError(`Invalid email format: ${email}`)
+    for (const vendor of sanitizedVendors) {
+      if (!emailRegex.test(vendor.email)) {
+        setError(`Invalid email format: ${vendor.email}`)
         return
       }
     }
@@ -196,11 +222,16 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     setSubmitting(true)
 
     try {
+      const validEmails = sanitizedVendors.map(v => v.email)
+      const alignedVendorNames = sanitizedVendors.map(v => v.name || undefined)
+      const alignedVendorTypes = sanitizedVendors.map(v => v.type)
+
       const input: CreateQuoteRequestInput = {
         projectId: project.id,
         tradeId: trade?.id,
         vendorEmails: validEmails,
-        vendorNames: vendorNames.filter((_, i) => validEmails.includes(vendorEmails[i])),
+        vendorNames: alignedVendorNames,
+        vendorTypes: alignedVendorTypes,
         scopeOfWork: scopeOfWork.trim(),
         drawingsFile: drawingsFile || undefined,
         projectInfo: {
@@ -250,8 +281,9 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
       // Send emails to vendors
       const emailResults = await Promise.all(
         quoteRequests.map(async (qr, index) => {
+          const vendorEntry = sanitizedVendors[index]
           const link = `${baseUrl}/vendor-quote/${qr.token}`
-          const vendorName = vendorNames[index] || undefined
+          const vendorName = vendorEntry?.name || undefined
           const emailSent = await sendQuoteRequestEmail({
             to: qr.vendorEmail,
             vendorName,
@@ -357,7 +389,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
               <div className="space-y-3">
                 {vendorEmails.map((email, index) => (
                   <div key={index} className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-5">
+                    <div className="col-span-4">
                       <Label className="text-xs">Email *</Label>
                       <Input
                         type="email"
@@ -367,7 +399,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
                         required={index === 0}
                       />
                     </div>
-                    <div className="col-span-5">
+                    <div className="col-span-4">
                       <Label className="text-xs">Name (Optional)</Label>
                       {(availableSubcontractors.length > 0 || availableSuppliers.length > 0) && (
                         <div className="mb-1">
@@ -417,7 +449,22 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
                         </p>
                       )}
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-3">
+                      <Label className="text-xs">Vendor Type</Label>
+                      <Select
+                        value={vendorTypes[index]}
+                        onValueChange={(value) => handleVendorTypeChange(index, value as QuoteVendorType)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="subcontractor">Subcontractor</SelectItem>
+                          <SelectItem value="supplier">Supplier</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-1">
                       {vendorEmails.length > 1 && (
                         <Button
                           type="button"

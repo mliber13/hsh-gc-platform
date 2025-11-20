@@ -4,6 +4,7 @@
 
 export type QuoteRequestStatus = 'sent' | 'viewed' | 'submitted' | 'expired'
 export type SubmittedQuoteStatus = 'pending' | 'accepted' | 'rejected' | 'waiting-for-more' | 'revision-requested'
+export type QuoteVendorType = 'subcontractor' | 'supplier'
 
 // ----------------------------------------------------------------------------
 // Quote Request Line Item (for structured entry)
@@ -27,6 +28,7 @@ export interface QuoteRequest {
   organizationId?: string
   projectId: string
   tradeId?: string | null
+  vendorType: QuoteVendorType
   
   // Vendor information
   vendorEmail: string
@@ -71,6 +73,7 @@ export interface CreateQuoteRequestInput {
   tradeId?: string
   vendorEmails: string[] // Support multiple vendors
   vendorNames?: string[]
+  vendorTypes?: QuoteVendorType[]
   scopeOfWork: string
   drawingsFile?: File // Will be uploaded to storage
   projectInfo?: QuoteRequest['projectInfo']

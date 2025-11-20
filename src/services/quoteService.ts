@@ -53,11 +53,13 @@ export function createQuoteRequestLS(input: CreateQuoteRequestInput): QuoteReque
   // Create one request per vendor email
   const requests: QuoteRequest[] = input.vendorEmails.map((email, index) => {
     const token = generateSecureToken()
+    const vendorType = input.vendorTypes?.[index] || 'subcontractor'
     const request: QuoteRequest = {
       id: uuidv4(),
       userId: '', // Will be set by caller
       projectId: input.projectId,
       tradeId: input.tradeId,
+      vendorType,
       vendorEmail: email,
       vendorName: input.vendorNames?.[index],
       token,
@@ -113,8 +115,9 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
   const requests: QuoteRequest[] = []
 
   // Create one request per vendor email
-  for (let i = 0; i < input.vendorEmails.length; i++) {
+    for (let i = 0; i < input.vendorEmails.length; i++) {
     const email = input.vendorEmails[i]
+      const vendorType = input.vendorTypes?.[i] || 'subcontractor'
     const token = generateSecureToken()
     
     // Upload drawings if provided
@@ -141,7 +144,7 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
       }
     }
 
-    const { data, error } = await supabase
+      const { data, error } = await supabase
       .from('quote_requests')
       .insert({
         user_id: user.id,
@@ -150,6 +153,7 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
         trade_id: input.tradeId || null,
         vendor_email: email,
         vendor_name: input.vendorNames?.[i] || null,
+          vendor_type: vendorType,
         token,
         scope_of_work: input.scopeOfWork,
         drawings_url: drawingsUrl || null,
@@ -172,6 +176,7 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
       organizationId: data.organization_id,
       projectId: data.project_id,
       tradeId: data.trade_id,
+      vendorType: (data.vendor_type as 'subcontractor' | 'supplier') || 'subcontractor',
       vendorEmail: data.vendor_email,
       vendorName: data.vendor_name,
       token: data.token,
@@ -222,6 +227,7 @@ export async function fetchQuoteRequestByToken(token: string): Promise<QuoteRequ
     organizationId: data.organization_id,
     projectId: data.project_id,
     tradeId: data.trade_id,
+    vendorType: (data.vendor_type as 'subcontractor' | 'supplier') || 'subcontractor',
     vendorEmail: data.vendor_email,
     vendorName: data.vendor_name,
     token: data.token,
@@ -265,6 +271,7 @@ export async function fetchQuoteRequestsForProject(projectId: string): Promise<Q
     organizationId: row.organization_id,
     projectId: row.project_id,
     tradeId: row.trade_id,
+    vendorType: (row.vendor_type as 'subcontractor' | 'supplier') || 'subcontractor',
     vendorEmail: row.vendor_email,
     vendorName: row.vendor_name,
     token: row.token,

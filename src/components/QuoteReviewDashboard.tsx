@@ -5,7 +5,7 @@
 // Dashboard for reviewing and managing submitted quotes
 //
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Project, Trade } from '@/types'
 import { QuoteRequest, SubmittedQuote, UpdateQuoteStatusInput } from '@/types/quote'
 import { TRADE_CATEGORIES } from '@/types/constants'
@@ -57,6 +57,15 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
   const [showQuoteDetails, setShowQuoteDetails] = useState(false)
   const [quoteDetails, setQuoteDetails] = useState<{ quote: SubmittedQuote; request: QuoteRequest } | null>(null)
   const [activeTab, setActiveTab] = useState<'requests' | 'quotes'>('quotes') // 'requests' for quote requests, 'quotes' for submitted quotes
+
+  const requestMap = useMemo(() => {
+    const map = new Map<string, QuoteRequest>()
+    quoteRequests.forEach(request => map.set(request.id, request))
+    return map
+  }, [quoteRequests])
+
+  const getVendorTypeForQuote = (quote: SubmittedQuote) =>
+    requestMap.get(quote.quoteRequestId)?.vendorType || 'subcontractor'
 
   // Load quote requests and submitted quotes
   useEffect(() => {
@@ -166,12 +175,16 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
     try {
       const tradeToUpdate = trades.find(t => t.id === tradeId)
       if (tradeToUpdate) {
-        await updateTrade_Hybrid(tradeId, {
-          subcontractorCost: quote.totalAmount,
-          isSubcontracted: true,
-        })
-        console.log(`✅ Applied quote amount ${formatCurrency(quote.totalAmount)} to trade ${tradeId}`)
-        alert(`Quote amount ${formatCurrency(quote.totalAmount)} applied to trade successfully!`)
+        const vendorType = getVendorTypeForQuote(quote)
+        const updates =
+          vendorType === 'supplier'
+            ? { materialCost: quote.totalAmount, isSubcontracted: false }
+            : { subcontractorCost: quote.totalAmount, isSubcontracted: true }
+
+        await updateTrade_Hybrid(tradeId, updates)
+        const costLabel = vendorType === 'supplier' ? 'material' : 'subcontractor'
+        console.log(`✅ Applied ${costLabel} quote amount ${formatCurrency(quote.totalAmount)} to trade ${tradeId}`)
+        alert(`Quote amount ${formatCurrency(quote.totalAmount)} applied to ${costLabel} cost successfully!`)
         return true
       } else {
         console.warn(`Trade ${tradeId} not found`)
@@ -216,11 +229,16 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
           try {
             const tradeToUpdate = trades.find(t => t.id === input.assignedTradeId)
             if (tradeToUpdate) {
-              await updateTrade_Hybrid(input.assignedTradeId, {
-                subcontractorCost: quote.totalAmount,
-                isSubcontracted: true,
-              })
-              console.log(`✅ Updated trade ${input.assignedTradeId} with quote amount: $${quote.totalAmount}`)
+              const vendorType = getVendorTypeForQuote(quote)
+              const updates =
+                vendorType === 'supplier'
+                  ? { materialCost: quote.totalAmount, isSubcontracted: false }
+                  : { subcontractorCost: quote.totalAmount, isSubcontracted: true }
+
+              await updateTrade_Hybrid(input.assignedTradeId, updates)
+              console.log(
+                `✅ Updated trade ${input.assignedTradeId} with ${vendorType} quote amount: $${quote.totalAmount}`
+              )
             } else {
               console.warn(`Trade ${input.assignedTradeId} not found`)
             }
@@ -241,8 +259,9 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
         setSelectedTradeId('')
         setReviewNotes('')
         
+        const appliedCostLabel = getVendorTypeForQuote(quote) === 'supplier' ? 'material' : 'subcontractor'
         const message = status === 'accepted' && input.assignedTradeId
-          ? `Quote accepted and applied to trade! Amount: ${formatCurrency(quote.totalAmount)}`
+          ? `Quote accepted and applied to ${appliedCostLabel} cost! Amount: ${formatCurrency(quote.totalAmount)}`
           : `Quote ${status === 'accepted' ? 'accepted' : status === 'rejected' ? 'rejected' : 'status updated'} successfully!`
         alert(message)
       }
@@ -407,6 +426,9 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                             <div className="flex items-center gap-3 mb-2">
                               <CardTitle className="text-lg">{request.vendorName || request.vendorEmail}</CardTitle>
                               {getRequestStatusBadge(request.status, request.expiresAt)}
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                {request.vendorType === 'supplier' ? 'Supplier Request' : 'Subcontractor Request'}
+                              </span>
                             </div>
                             <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                               <div className="flex items-center gap-1">
@@ -561,6 +583,9 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                       <div className="flex items-center gap-3 mb-2">
                         <CardTitle className="text-lg">{quote.vendorName}</CardTitle>
                         {getStatusBadge(quote.status)}
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                          {request.vendorType === 'supplier' ? 'Supplier Quote' : 'Subcontractor Quote'}
+                        </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                         <div className="flex items-center gap-1">
