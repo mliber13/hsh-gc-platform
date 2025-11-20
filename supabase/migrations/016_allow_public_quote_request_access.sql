@@ -6,8 +6,9 @@
 -- to access quote requests and submit quotes using the secure token
 --
 
--- Drop the restrictive SELECT policy and replace with more permissive ones
+-- Drop existing policies if they exist
 DROP POLICY IF EXISTS "Users can view own quote requests" ON quote_requests;
+DROP POLICY IF EXISTS "Public can view quote requests by token" ON quote_requests;
 
 -- Allow users to view their own quote requests
 CREATE POLICY "Users can view own quote requests"
