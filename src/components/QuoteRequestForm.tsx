@@ -223,7 +223,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
 
     try {
       const validEmails = sanitizedVendors.map(v => v.email)
-      const alignedVendorNames = sanitizedVendors.map(v => v.name || undefined)
+      const alignedVendorNames = sanitizedVendors.map(v => v.name || '')
       const alignedVendorTypes = sanitizedVendors.map(v => v.type)
 
       const input: CreateQuoteRequestInput = {
