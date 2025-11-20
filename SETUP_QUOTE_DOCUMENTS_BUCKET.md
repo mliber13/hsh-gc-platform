@@ -24,7 +24,7 @@ The `quote-attachments` storage bucket doesn't exist, causing "Bucket not found"
 ### Step 1: Check if Bucket Exists
 
 1. Go to **Supabase Dashboard** → **Storage** → **Buckets**
-2. Look for `quote-documents` bucket
+2. Look for `quote-attachments` bucket
 
 **If it exists:** Skip to Step 2 (verify configuration)  
 **If it doesn't exist:** Create it (see below)
@@ -56,15 +56,15 @@ If any are wrong, you can edit the bucket settings.
 After creating the bucket, set up policies through the dashboard:
 
 1. **Go to Supabase Dashboard** → **Storage** → **Policies**
-2. **Select the `quote-documents` bucket**
+2. **Select the `quote-attachments` bucket**
 3. **Add these 4 policies:**
 
 #### Policy 1: Public Read (for vendors)
-- **Policy name:** `Public can view quote documents`
+- **Policy name:** `Public can view quote attachments`
 - **Allowed operation:** `SELECT`
 - **Policy definition:**
   ```sql
-  bucket_id = 'quote-documents'
+  bucket_id = 'quote-attachments'
   ```
 - **Target roles:** `anon`, `authenticated`
 

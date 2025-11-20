@@ -49,11 +49,11 @@ If you don't see a public read policy, add it:
 
 1. Click **New Policy** in the Policies tab
 2. Choose **For full customization**
-3. Policy name: `Public can view quote documents`
+3. Policy name: `Public can view quote attachments`
 4. Allowed operation: `SELECT`
 5. Policy definition:
    ```sql
-   bucket_id = 'quote-documents'
+   bucket_id = 'quote-attachments'
    ```
 6. Target roles: Check both `anon` and `authenticated`
 7. Click **Save**
