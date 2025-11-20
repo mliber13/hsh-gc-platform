@@ -68,7 +68,7 @@ After creating the bucket, set up policies through the dashboard:
   ```
 - **Target roles:** `anon`, `authenticated`
 
-#### Policy 2: Authenticated Upload
+#### Policy 2: Authenticated Upload (REQUIRED for uploads to work)
 - **Policy name:** `Authenticated users can upload quote attachments`
 - **Allowed operation:** `INSERT`
 - **Policy definition:**
@@ -76,6 +76,7 @@ After creating the bucket, set up policies through the dashboard:
   bucket_id = 'quote-attachments' AND auth.uid() IS NOT NULL
   ```
 - **Target roles:** `authenticated`
+- **⚠️ IMPORTANT:** Without this policy, file uploads will fail silently!
 
 #### Policy 3: Authenticated Update
 - **Policy name:** `Authenticated users can update quote attachments`

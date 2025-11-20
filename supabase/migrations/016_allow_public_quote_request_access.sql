@@ -9,6 +9,8 @@
 -- Drop existing policies if they exist
 DROP POLICY IF EXISTS "Users can view own quote requests" ON quote_requests;
 DROP POLICY IF EXISTS "Public can view quote requests by token" ON quote_requests;
+DROP POLICY IF EXISTS "Users can update own quote requests" ON quote_requests;
+DROP POLICY IF EXISTS "Users can delete own quote requests" ON quote_requests;
 
 -- Allow users to view their own quote requests
 CREATE POLICY "Users can view own quote requests"
@@ -21,12 +23,24 @@ CREATE POLICY "Public can view quote requests by token"
   ON quote_requests FOR SELECT
   USING (true); -- Allow anyone to read quote requests (token provides security)
 
+-- Allow users to update their own quote requests
+CREATE POLICY "Users can update own quote requests"
+  ON quote_requests FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Allow users to delete their own quote requests
+CREATE POLICY "Users can delete own quote requests"
+  ON quote_requests FOR DELETE
+  USING (auth.uid() = user_id);
+
 -- ============================================================================
 -- Allow Public Quote Submissions
 -- ============================================================================
 
--- Drop existing insert policy
+-- Drop existing policies if they exist
 DROP POLICY IF EXISTS "Vendors can submit quotes via token" ON submitted_quotes;
+DROP POLICY IF EXISTS "Public can view own submitted quotes" ON submitted_quotes;
 
 -- Allow public inserts to submitted_quotes (for vendor submissions)
 -- Note: For INSERT policies, we only use WITH CHECK (not USING)

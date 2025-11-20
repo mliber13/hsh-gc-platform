@@ -137,11 +137,17 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
           upsert: false
         })
       
-      if (!uploadError && uploadData) {
+      if (uploadError) {
+        console.error('Failed to upload drawings file:', uploadError)
+        console.error('File path attempted:', filePath)
+        console.error('Bucket: quote-attachments')
+        // Continue without drawingsUrl - the quote request will still be created
+      } else if (uploadData) {
         const { data: { publicUrl } } = supabase.storage
           .from('quote-attachments')
           .getPublicUrl(filePath)
         drawingsUrl = publicUrl
+        console.log('Drawings uploaded successfully:', publicUrl)
       }
     }
 
