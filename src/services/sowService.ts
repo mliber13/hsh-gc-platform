@@ -252,18 +252,14 @@ export async function deleteSOWTemplate(templateId: string): Promise<boolean> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return false
 
-  // Fetch user's organization (validated to real UUID)
+  // Fetch user's organization
   const { data: profile } = await supabase
     .from('profiles')
     .select('organization_id')
     .eq('id', user.id)
     .single()
 
-  const organizationId = profile?.organization_id &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profile.organization_id) &&
-    profile.organization_id !== 'default-org'
-    ? profile.organization_id
-    : null
+  const organizationId = profile?.organization_id || null
 
   // Load template to determine ownership
   const { data: template, error: fetchError } = await supabase
