@@ -18,6 +18,7 @@ import {
 } from '@/types/proforma'
 import { calculateProForma, generateDefaultMilestones } from '@/services/proformaService'
 import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
+import { exportProFormaToPDF, exportProFormaToExcel } from '@/services/proformaExportService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1107,11 +1108,27 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                   <Button variant="outline" onClick={() => setProjection(null)} className="flex-1">
                     Edit Inputs
                   </Button>
-                  <Button variant="outline" onClick={() => alert('PDF export coming soon')} className="flex-1">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      if (projection) {
+                        exportProFormaToPDF(projection)
+                      }
+                    }} 
+                    className="flex-1"
+                  >
                     <FileText className="w-4 h-4 mr-2" />
                     Export PDF
                   </Button>
-                  <Button variant="outline" onClick={() => alert('Excel export coming soon')} className="flex-1">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      if (projection) {
+                        exportProFormaToExcel(projection)
+                      }
+                    }} 
+                    className="flex-1"
+                  >
                     <Download className="w-4 h-4 mr-2" />
                     Export Excel
                   </Button>
