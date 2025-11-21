@@ -79,7 +79,24 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   // Storage key for this project's pro forma inputs
   const storageKey = `hsh_gc_proforma_${project.id}`
 
-  // Interface for saved pro forma inputs
+  // Interface for saved pro forma inputs (serialized to JSON)
+  interface SavedProFormaInputsSerialized {
+    contractValue: number
+    paymentMilestones: Array<Omit<PaymentMilestone, 'date'> & { date: string }>
+    monthlyOverhead: number
+    overheadMethod: 'proportional' | 'flat' | 'none'
+    projectionMonths: 6 | 12 | 24 | 36 | 60
+    startDate: string
+    includeRentalIncome: boolean
+    rentalUnits: Array<Omit<RentalUnit, 'occupancyStartDate'> & { occupancyStartDate?: string }>
+    includeOperatingExpenses: boolean
+    operatingExpenses: OperatingExpenses
+    includeDebtService: boolean
+    debtService: Omit<DebtService, 'startDate'> & { startDate: string }
+    constructionCompletionDate: string
+  }
+
+  // Interface for loaded pro forma inputs (deserialized with Date objects)
   interface SavedProFormaInputs {
     contractValue: number
     paymentMilestones: PaymentMilestone[]
@@ -92,18 +109,18 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     includeOperatingExpenses: boolean
     operatingExpenses: OperatingExpenses
     includeDebtService: boolean
-    debtService: DebtService & { startDate: string }
+    debtService: DebtService
     constructionCompletionDate: string
   }
 
   // Save pro forma inputs to localStorage
   const saveProFormaInputs = () => {
     try {
-      const savedInputs: SavedProFormaInputs = {
+      const savedInputs: SavedProFormaInputsSerialized = {
         contractValue,
         paymentMilestones: paymentMilestones.map(m => ({
           ...m,
-          date: m.date instanceof Date ? m.date.toISOString() : m.date as any,
+          date: m.date instanceof Date ? m.date.toISOString() : (m.date as any).toISOString(),
         })),
         monthlyOverhead,
         overheadMethod,
@@ -114,7 +131,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           ...u,
           occupancyStartDate: u.occupancyStartDate instanceof Date 
             ? u.occupancyStartDate.toISOString() 
-            : u.occupancyStartDate as any,
+            : u.occupancyStartDate,
         })),
         includeOperatingExpenses,
         operatingExpenses,
@@ -123,7 +140,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           ...debtService,
           startDate: debtService.startDate instanceof Date
             ? debtService.startDate.toISOString()
-            : debtService.startDate as any,
+            : (debtService.startDate as any).toISOString(),
         },
         constructionCompletionDate,
       }
@@ -138,27 +155,26 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     try {
       const saved = localStorage.getItem(storageKey)
       if (saved) {
-        const parsed = JSON.parse(saved) as SavedProFormaInputs
+        const parsed = JSON.parse(saved) as SavedProFormaInputsSerialized
         // Convert date strings back to Date objects
-        return {
+        const loaded: SavedProFormaInputs = {
           ...parsed,
           paymentMilestones: parsed.paymentMilestones.map(m => ({
             ...m,
-            date: new Date(m.date as any),
+            date: new Date(m.date),
           })),
           rentalUnits: parsed.rentalUnits.map(u => ({
             ...u,
             occupancyStartDate: u.occupancyStartDate 
-              ? new Date(u.occupancyStartDate as any)
+              ? new Date(u.occupancyStartDate)
               : undefined,
           })),
           debtService: {
             ...parsed.debtService,
-            startDate: parsed.debtService.startDate 
-              ? new Date(parsed.debtService.startDate)
-              : new Date(),
+            startDate: new Date(parsed.debtService.startDate),
           },
         }
+        return loaded
       }
     } catch (error) {
       console.error('Error loading pro forma inputs:', error)
