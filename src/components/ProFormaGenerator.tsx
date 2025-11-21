@@ -72,19 +72,138 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   
   // Construction completion
   const [constructionCompletionDate, setConstructionCompletionDate] = useState<string>('')
+  
+  // Track if we've loaded saved data (to prevent overwriting with defaults)
+  const [hasLoadedSavedData, setHasLoadedSavedData] = useState<boolean>(false)
 
-  // Load trades
+  // Storage key for this project's pro forma inputs
+  const storageKey = `hsh_gc_proforma_${project.id}`
+
+  // Interface for saved pro forma inputs
+  interface SavedProFormaInputs {
+    contractValue: number
+    paymentMilestones: PaymentMilestone[]
+    monthlyOverhead: number
+    overheadMethod: 'proportional' | 'flat' | 'none'
+    projectionMonths: 6 | 12 | 24 | 36 | 60
+    startDate: string
+    includeRentalIncome: boolean
+    rentalUnits: RentalUnit[]
+    includeOperatingExpenses: boolean
+    operatingExpenses: OperatingExpenses
+    includeDebtService: boolean
+    debtService: DebtService & { startDate: string }
+    constructionCompletionDate: string
+  }
+
+  // Save pro forma inputs to localStorage
+  const saveProFormaInputs = () => {
+    try {
+      const savedInputs: SavedProFormaInputs = {
+        contractValue,
+        paymentMilestones: paymentMilestones.map(m => ({
+          ...m,
+          date: m.date instanceof Date ? m.date.toISOString() : m.date as any,
+        })),
+        monthlyOverhead,
+        overheadMethod,
+        projectionMonths,
+        startDate,
+        includeRentalIncome,
+        rentalUnits: rentalUnits.map(u => ({
+          ...u,
+          occupancyStartDate: u.occupancyStartDate instanceof Date 
+            ? u.occupancyStartDate.toISOString() 
+            : u.occupancyStartDate as any,
+        })),
+        includeOperatingExpenses,
+        operatingExpenses,
+        includeDebtService,
+        debtService: {
+          ...debtService,
+          startDate: debtService.startDate instanceof Date
+            ? debtService.startDate.toISOString()
+            : debtService.startDate as any,
+        },
+        constructionCompletionDate,
+      }
+      localStorage.setItem(storageKey, JSON.stringify(savedInputs))
+    } catch (error) {
+      console.error('Error saving pro forma inputs:', error)
+    }
+  }
+
+  // Load saved pro forma inputs from localStorage
+  const loadProFormaInputs = (): SavedProFormaInputs | null => {
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const parsed = JSON.parse(saved) as SavedProFormaInputs
+        // Convert date strings back to Date objects
+        return {
+          ...parsed,
+          paymentMilestones: parsed.paymentMilestones.map(m => ({
+            ...m,
+            date: new Date(m.date as any),
+          })),
+          rentalUnits: parsed.rentalUnits.map(u => ({
+            ...u,
+            occupancyStartDate: u.occupancyStartDate 
+              ? new Date(u.occupancyStartDate as any)
+              : undefined,
+          })),
+          debtService: {
+            ...parsed.debtService,
+            startDate: parsed.debtService.startDate 
+              ? new Date(parsed.debtService.startDate)
+              : new Date(),
+          },
+        }
+      }
+    } catch (error) {
+      console.error('Error loading pro forma inputs:', error)
+    }
+    return null
+  }
+
+  // Load trades and saved inputs
   useEffect(() => {
     const loadTrades = async () => {
       try {
         const loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
         setTrades(loadedTrades)
         
-        // Calculate initial contract value from estimate
-        const totalEstimate = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
-        setContractValue(totalEstimate)
+        // Try to load saved pro forma inputs first
+        const savedInputs = loadProFormaInputs()
+        
+        if (savedInputs) {
+          // Restore saved inputs
+          setContractValue(savedInputs.contractValue)
+          setPaymentMilestones(savedInputs.paymentMilestones)
+          setMonthlyOverhead(savedInputs.monthlyOverhead)
+          setOverheadMethod(savedInputs.overheadMethod)
+          setProjectionMonths(savedInputs.projectionMonths)
+          setStartDate(savedInputs.startDate)
+          setIncludeRentalIncome(savedInputs.includeRentalIncome)
+          setRentalUnits(savedInputs.rentalUnits)
+          setIncludeOperatingExpenses(savedInputs.includeOperatingExpenses)
+          setOperatingExpenses(savedInputs.operatingExpenses)
+          setIncludeDebtService(savedInputs.includeDebtService)
+          setDebtService(savedInputs.debtService)
+          setConstructionCompletionDate(savedInputs.constructionCompletionDate)
+          setHasLoadedSavedData(true) // Mark that we've loaded saved data
+        } else {
+          // No saved inputs, use defaults
+          // Calculate initial contract value from estimate
+          const totalEstimate = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+          setContractValue(totalEstimate)
+        }
       } catch (error) {
         console.error('Error loading trades:', error)
+        // Fallback to default contract value
+        const loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
+        const totalEstimate = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+        setContractValue(totalEstimate)
       } finally {
         setLoading(false)
       }
@@ -93,8 +212,9 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   }, [project])
 
   // Generate default milestones when contract value or months change
+  // Only if milestones are empty AND we haven't loaded saved data
   useEffect(() => {
-    if (contractValue > 0 && startDate) {
+    if (contractValue > 0 && startDate && paymentMilestones.length === 0 && !hasLoadedSavedData) {
       const defaults = generateDefaultMilestones(
         contractValue,
         new Date(startDate),
@@ -102,7 +222,30 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       )
       setPaymentMilestones(defaults)
     }
-  }, [contractValue, projectionMonths, startDate])
+  }, [contractValue, projectionMonths, startDate, hasLoadedSavedData, paymentMilestones.length])
+
+  // Save inputs to localStorage whenever they change (debounced)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      saveProFormaInputs()
+    }, 500) // Debounce by 500ms to avoid excessive writes
+
+    return () => clearTimeout(timeoutId)
+  }, [
+    contractValue,
+    paymentMilestones,
+    monthlyOverhead,
+    overheadMethod,
+    projectionMonths,
+    startDate,
+    includeRentalIncome,
+    rentalUnits,
+    includeOperatingExpenses,
+    operatingExpenses,
+    includeDebtService,
+    debtService,
+    constructionCompletionDate,
+  ])
 
   const handleAddMilestone = () => {
     const newMilestone: PaymentMilestone = {
