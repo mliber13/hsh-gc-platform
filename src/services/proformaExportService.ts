@@ -97,7 +97,8 @@ export function exportProFormaToPDF(projection: ProFormaProjection): void {
 
     const rentalData = [
       ['Total Units', projection.rentalSummary.totalUnits.toString()],
-      ['Total Square Footage', projection.rentalSummary.totalSquareFootage.toLocaleString()],
+      ['Total Square Footage', projection.rentalSummary.totalProjectSquareFootage.toLocaleString() + ' sqft'],
+      ['Rental Units Square Footage', projection.rentalSummary.totalSquareFootage.toLocaleString() + ' sqft'],
       ['Average Rent Per Unit', formatCurrency(projection.rentalSummary.averageRentPerUnit)],
       ['Average Rent Per Sqft', formatCurrency(projection.rentalSummary.averageRentPerSqft)],
       ['Occupancy Rate', formatPercent(projection.rentalSummary.stabilizedOccupancy)],
@@ -232,7 +233,8 @@ export function exportProFormaToExcel(projection: ProFormaProjection): void {
       ['', ''],
       ['Rental Details', ''],
       ['Total Units', projection.rentalSummary.totalUnits],
-      ['Total Square Footage', projection.rentalSummary.totalSquareFootage],
+      ['Total Project Square Footage', projection.rentalSummary.totalProjectSquareFootage],
+      ['Rental Units Square Footage', projection.rentalSummary.totalSquareFootage],
       ['Average Rent Per Unit', projection.rentalSummary.averageRentPerUnit],
       ['Average Rent Per Sqft', projection.rentalSummary.averageRentPerSqft],
       ['Occupancy Rate', projection.rentalSummary.stabilizedOccupancy],

@@ -68,7 +68,11 @@ export function calculateProForma(
   }
 
   // Calculate rental summary
-  const rentalSummary = calculateRentalSummary(input.rentalUnits, input.includeRentalIncome)
+  const rentalSummary = calculateRentalSummary(
+    input.rentalUnits, 
+    input.includeRentalIncome,
+    input.totalProjectSquareFootage
+  )
   
   // Calculate financial summaries including rental income
   const rentalIncomeTotal = monthlyCashFlows.reduce((sum, m) => sum + m.rentalIncome, 0)
@@ -122,11 +126,16 @@ export function calculateProForma(
 /**
  * Calculate rental summary statistics
  */
-function calculateRentalSummary(rentalUnits: RentalUnit[], includeRentalIncome: boolean): ProFormaProjection['rentalSummary'] {
+function calculateRentalSummary(
+  rentalUnits: RentalUnit[], 
+  includeRentalIncome: boolean,
+  totalProjectSquareFootage?: number
+): ProFormaProjection['rentalSummary'] {
   if (!includeRentalIncome || rentalUnits.length === 0) {
     return {
       totalUnits: 0,
       totalSquareFootage: 0,
+      totalProjectSquareFootage: totalProjectSquareFootage || 0,
       averageRentPerUnit: 0,
       averageRentPerSqft: 0,
       stabilizedOccupancy: 0,
@@ -161,6 +170,7 @@ function calculateRentalSummary(rentalUnits: RentalUnit[], includeRentalIncome: 
   return {
     totalUnits,
     totalSquareFootage,
+    totalProjectSquareFootage: totalProjectSquareFootage || totalSquareFootage, // Use project sqft if provided, otherwise use rental units sqft
     averageRentPerUnit,
     averageRentPerSqft,
     stabilizedOccupancy: averageOccupancy,

@@ -96,6 +96,9 @@ export interface ProFormaInput {
   projectionMonths: 6 | 12 | 24 | 36 | 60 // Extended to support longer projections
   startDate: Date
   
+  // Project details
+  totalProjectSquareFootage?: number // Total square footage of the project
+  
   // Rental income
   rentalUnits: RentalUnit[]
   includeRentalIncome: boolean
@@ -154,7 +157,8 @@ export interface ProFormaProjection {
   }
   rentalSummary: {
     totalUnits: number
-    totalSquareFootage: number
+    totalSquareFootage: number // Total from rental units
+    totalProjectSquareFootage: number // Total project square footage
     averageRentPerUnit: number
     averageRentPerSqft: number
     stabilizedOccupancy: number // Average occupancy rate

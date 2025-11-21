@@ -74,6 +74,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   // Construction completion
   const [constructionCompletionDate, setConstructionCompletionDate] = useState<string>('')
   
+  // Total project square footage
+  const [totalProjectSquareFootage, setTotalProjectSquareFootage] = useState<number>(
+    project.specs?.totalSquareFootage || project.specs?.livingSquareFootage || 0
+  )
+  
   // Track if we've loaded saved data (to prevent overwriting with defaults)
   const [hasLoadedSavedData, setHasLoadedSavedData] = useState<boolean>(false)
 
@@ -88,6 +93,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     overheadMethod: 'proportional' | 'flat' | 'none'
     projectionMonths: 6 | 12 | 24 | 36 | 60
     startDate: string
+    totalProjectSquareFootage?: number
     includeRentalIncome: boolean
     rentalUnits: Array<Omit<RentalUnit, 'occupancyStartDate'> & { occupancyStartDate?: string }>
     includeOperatingExpenses: boolean
@@ -105,6 +111,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     overheadMethod: 'proportional' | 'flat' | 'none'
     projectionMonths: 6 | 12 | 24 | 36 | 60
     startDate: string
+    totalProjectSquareFootage?: number
     includeRentalIncome: boolean
     rentalUnits: RentalUnit[]
     includeOperatingExpenses: boolean
@@ -127,6 +134,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         overheadMethod,
         projectionMonths,
         startDate,
+        totalProjectSquareFootage,
         includeRentalIncome,
         rentalUnits: rentalUnits.map(u => ({
           ...u,
@@ -208,6 +216,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           setIncludeDebtService(savedInputs.includeDebtService)
           setDebtService(savedInputs.debtService)
           setConstructionCompletionDate(savedInputs.constructionCompletionDate)
+          setTotalProjectSquareFootage(savedInputs.totalProjectSquareFootage || 0)
           setHasLoadedSavedData(true) // Mark that we've loaded saved data
         } else {
           // No saved inputs, use defaults
@@ -262,6 +271,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     includeDebtService,
     debtService,
     constructionCompletionDate,
+    totalProjectSquareFootage,
   ])
 
   const handleAddMilestone = () => {
@@ -330,6 +340,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       overheadAllocationMethod: overheadMethod,
       projectionMonths,
       startDate: new Date(startDate),
+      totalProjectSquareFootage: totalProjectSquareFootage > 0 ? totalProjectSquareFootage : undefined,
       rentalUnits,
       includeRentalIncome,
       operatingExpenses,
@@ -438,6 +449,21 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     When construction ends and rental income begins (if applicable)
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="totalProjectSquareFootage">Total Project Square Footage</Label>
+                  <Input
+                    id="totalProjectSquareFootage"
+                    type="number"
+                    step="0.01"
+                    value={totalProjectSquareFootage}
+                    onChange={(e) => setTotalProjectSquareFootage(parseFloat(e.target.value) || 0)}
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Total square footage of the project (auto-filled from project specs if available)
                   </p>
                 </div>
 
@@ -609,6 +635,16 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                                 />
                               </div>
                               <div className="col-span-6 md:col-span-2">
+                                <Label className="text-xs">Square Feet (Optional)</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="1000"
+                                  value={unit.squareFootage || ''}
+                                  onChange={(e) => handleRentalUnitChange(unit.id, 'squareFootage', parseFloat(e.target.value) || 0)}
+                                />
+                              </div>
+                              <div className="col-span-6 md:col-span-2">
                                 <Label className="text-xs">Occupancy Rate (%)</Label>
                                 <Input
                                   type="number"
@@ -654,9 +690,9 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                             </>
                           )}
                           
-                          <div className="col-span-12 md:col-span-3 flex items-end">
+                          <div className="col-span-6 md:col-span-2 flex items-end">
                             <div className="w-full">
-                              <Label className="text-xs">Occupancy Start Date (Optional)</Label>
+                              <Label className="text-xs">Start Date (Optional)</Label>
                               <Input
                                 type="date"
                                 value={unit.occupancyStartDate ? new Date(unit.occupancyStartDate).toISOString().split('T')[0] : ''}
@@ -665,7 +701,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                             </div>
                           </div>
                           
-                          <div className="col-span-12 md:col-span-1 flex items-end">
+                          <div className="col-span-6 md:col-span-1 flex items-end">
                             <Button
                               type="button"
                               variant="ghost"
@@ -961,10 +997,16 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                       {projection.summary.monthlyRentalIncome > 0 && (
                         <div className="border-t pt-4">
                           <h4 className="text-sm font-semibold text-gray-700 mb-2">Rental Income Summary</h4>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                             <div>
                               <p className="text-sm text-gray-600">Total Units</p>
                               <p className="text-lg font-semibold">{projection.rentalSummary.totalUnits}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Total Square Footage</p>
+                              <p className="text-lg font-semibold">
+                                {projection.rentalSummary.totalProjectSquareFootage.toLocaleString()} sqft
+                              </p>
                             </div>
                             <div>
                               <p className="text-sm text-gray-600">Monthly Rental Income</p>
