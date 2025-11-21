@@ -158,6 +158,9 @@ export type {
   ProFormaInput,
   ProFormaProjection,
   ProFormaExportOptions,
+  RentalUnit,
+  OperatingExpenses,
+  DebtService,
 } from './proforma'
 
 export type {

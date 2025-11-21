@@ -12,6 +12,9 @@ import {
   ProFormaInput,
   ProFormaProjection,
   PaymentMilestone,
+  RentalUnit,
+  OperatingExpenses,
+  DebtService,
 } from '@/types/proforma'
 import { calculateProForma, generateDefaultMilestones } from '@/services/proformaService'
 import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
@@ -34,13 +37,41 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   const [paymentMilestones, setPaymentMilestones] = useState<PaymentMilestone[]>([])
   const [monthlyOverhead, setMonthlyOverhead] = useState<number>(0)
   const [overheadMethod, setOverheadMethod] = useState<'proportional' | 'flat' | 'none'>('proportional')
-  const [projectionMonths, setProjectionMonths] = useState<6 | 12>(12)
+  const [projectionMonths, setProjectionMonths] = useState<6 | 12 | 24 | 36 | 60>(12)
   const [startDate, setStartDate] = useState<string>(
     project.startDate 
       ? new Date(project.startDate).toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0]
   )
   const [projection, setProjection] = useState<ProFormaProjection | null>(null)
+  
+  // Rental income
+  const [includeRentalIncome, setIncludeRentalIncome] = useState<boolean>(false)
+  const [rentalUnits, setRentalUnits] = useState<RentalUnit[]>([])
+  
+  // Operating expenses
+  const [includeOperatingExpenses, setIncludeOperatingExpenses] = useState<boolean>(false)
+  const [operatingExpenses, setOperatingExpenses] = useState<OperatingExpenses>({
+    propertyManagementPercent: 0,
+    monthlyMaintenanceReserve: 0,
+    monthlyPropertyInsurance: 0,
+    monthlyPropertyTax: 0,
+    monthlyUtilities: 0,
+    monthlyOther: 0,
+  })
+  
+  // Debt service
+  const [includeDebtService, setIncludeDebtService] = useState<boolean>(false)
+  const [debtService, setDebtService] = useState<DebtService>({
+    loanAmount: 0,
+    interestRate: 0,
+    loanTermMonths: 360, // 30 years default
+    startDate: new Date(),
+    paymentType: 'principal-interest',
+  })
+  
+  // Construction completion
+  const [constructionCompletionDate, setConstructionCompletionDate] = useState<string>('')
 
   // Load trades
   useEffect(() => {
@@ -96,9 +127,38 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     )
   }
 
+  const handleAddRentalUnit = () => {
+    const newUnit: RentalUnit = {
+      id: uuidv4(),
+      name: '',
+      unitType: 'residential',
+      rentType: 'fixed',
+      monthlyRent: 0,
+      occupancyRate: 100,
+    }
+    setRentalUnits([...rentalUnits, newUnit])
+  }
+
+  const handleRemoveRentalUnit = (id: string) => {
+    setRentalUnits(rentalUnits.filter(u => u.id !== id))
+  }
+
+  const handleRentalUnitChange = (id: string, field: keyof RentalUnit, value: any) => {
+    setRentalUnits(
+      rentalUnits.map(u =>
+        u.id === id ? { ...u, [field]: value } : u
+      )
+    )
+  }
+
   const handleGenerate = () => {
     if (!contractValue || paymentMilestones.length === 0) {
       alert('Please enter contract value and at least one payment milestone')
+      return
+    }
+
+    if (includeRentalIncome && rentalUnits.length === 0) {
+      alert('Please add at least one rental unit if rental income is enabled')
       return
     }
 
@@ -110,6 +170,18 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       overheadAllocationMethod: overheadMethod,
       projectionMonths,
       startDate: new Date(startDate),
+      rentalUnits,
+      includeRentalIncome,
+      operatingExpenses,
+      includeOperatingExpenses,
+      debtService: {
+        ...debtService,
+        startDate: debtService.startDate || new Date(startDate),
+      },
+      includeDebtService,
+      constructionCompletionDate: constructionCompletionDate 
+        ? new Date(constructionCompletionDate)
+        : undefined,
     }
 
     const result = calculateProForma(project, trades, input)
@@ -180,7 +252,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                   <Label htmlFor="projectionMonths">Projection Period *</Label>
                   <Select
                     value={projectionMonths.toString()}
-                    onValueChange={(v) => setProjectionMonths(v === '6' ? 6 : 12)}
+                    onValueChange={(v) => setProjectionMonths(parseInt(v) as 6 | 12 | 24 | 36 | 60)}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -188,8 +260,25 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     <SelectContent>
                       <SelectItem value="6">6 Months</SelectItem>
                       <SelectItem value="12">12 Months</SelectItem>
+                      <SelectItem value="24">24 Months (2 Years)</SelectItem>
+                      <SelectItem value="36">36 Months (3 Years)</SelectItem>
+                      <SelectItem value="60">60 Months (5 Years)</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="constructionCompletionDate">Construction Completion Date</Label>
+                  <Input
+                    id="constructionCompletionDate"
+                    type="date"
+                    value={constructionCompletionDate}
+                    onChange={(e) => setConstructionCompletionDate(e.target.value)}
+                    placeholder="Optional - defaults to 80% of projection period"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    When construction ends and rental income begins (if applicable)
+                  </p>
                 </div>
 
                 <div>
@@ -286,6 +375,381 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                 </div>
               </div>
 
+              {/* Rental Income Section */}
+              <div className="border-t pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="includeRentalIncome"
+                      checked={includeRentalIncome}
+                      onChange={(e) => setIncludeRentalIncome(e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    <Label htmlFor="includeRentalIncome" className="text-lg font-semibold cursor-pointer">
+                      Rental Income
+                    </Label>
+                  </div>
+                  {includeRentalIncome && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddRentalUnit}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Unit
+                    </Button>
+                  )}
+                </div>
+                
+                {includeRentalIncome && (
+                  <div className="space-y-3">
+                    {rentalUnits.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        No rental units added. Click "Add Unit" to start.
+                      </p>
+                    ) : (
+                      rentalUnits.map((unit) => (
+                        <div key={unit.id} className="grid grid-cols-12 gap-2 p-4 border rounded-lg bg-gray-50">
+                          <div className="col-span-12 md:col-span-3">
+                            <Label className="text-xs">Unit Name *</Label>
+                            <Input
+                              placeholder="e.g., First Floor Store, Unit 2A"
+                              value={unit.name}
+                              onChange={(e) => handleRentalUnitChange(unit.id, 'name', e.target.value)}
+                            />
+                          </div>
+                          <div className="col-span-6 md:col-span-2">
+                            <Label className="text-xs">Rent Type *</Label>
+                            <Select
+                              value={unit.rentType}
+                              onValueChange={(v: 'fixed' | 'perSqft') => handleRentalUnitChange(unit.id, 'rentType', v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="fixed">Fixed Monthly</SelectItem>
+                                <SelectItem value="perSqft">Per Sqft</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          {unit.rentType === 'fixed' ? (
+                            <>
+                              <div className="col-span-6 md:col-span-2">
+                                <Label className="text-xs">Monthly Rent *</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="750.00"
+                                  value={unit.monthlyRent || ''}
+                                  onChange={(e) => handleRentalUnitChange(unit.id, 'monthlyRent', parseFloat(e.target.value) || 0)}
+                                />
+                              </div>
+                              <div className="col-span-6 md:col-span-2">
+                                <Label className="text-xs">Occupancy Rate (%)</Label>
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  placeholder="100"
+                                  value={unit.occupancyRate}
+                                  onChange={(e) => handleRentalUnitChange(unit.id, 'occupancyRate', parseFloat(e.target.value) || 0)}
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="col-span-6 md:col-span-2">
+                                <Label className="text-xs">Square Feet *</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="1000"
+                                  value={unit.squareFootage || ''}
+                                  onChange={(e) => handleRentalUnitChange(unit.id, 'squareFootage', parseFloat(e.target.value) || 0)}
+                                />
+                              </div>
+                              <div className="col-span-6 md:col-span-2">
+                                <Label className="text-xs">Rent Per Sqft/Month *</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="10.00"
+                                  value={unit.rentPerSqft || ''}
+                                  onChange={(e) => handleRentalUnitChange(unit.id, 'rentPerSqft', parseFloat(e.target.value) || 0)}
+                                />
+                              </div>
+                              <div className="col-span-6 md:col-span-2">
+                                <Label className="text-xs">Occupancy Rate (%)</Label>
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  placeholder="100"
+                                  value={unit.occupancyRate}
+                                  onChange={(e) => handleRentalUnitChange(unit.id, 'occupancyRate', parseFloat(e.target.value) || 0)}
+                                />
+                              </div>
+                            </>
+                          )}
+                          
+                          <div className="col-span-12 md:col-span-3 flex items-end">
+                            <div className="w-full">
+                              <Label className="text-xs">Occupancy Start Date (Optional)</Label>
+                              <Input
+                                type="date"
+                                value={unit.occupancyStartDate ? new Date(unit.occupancyStartDate).toISOString().split('T')[0] : ''}
+                                onChange={(e) => handleRentalUnitChange(unit.id, 'occupancyStartDate', e.target.value ? new Date(e.target.value) : undefined)}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="col-span-12 md:col-span-1 flex items-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveRentalUnit(unit.id)}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </div>
+                          
+                          {unit.rentType === 'fixed' && unit.monthlyRent ? (
+                            <div className="col-span-12 text-sm text-gray-600">
+                              Monthly income: {formatCurrency((unit.monthlyRent || 0) * (unit.occupancyRate / 100))}
+                            </div>
+                          ) : unit.rentType === 'perSqft' && unit.squareFootage && unit.rentPerSqft ? (
+                            <div className="col-span-12 text-sm text-gray-600">
+                              Monthly income: {formatCurrency((unit.squareFootage || 0) * (unit.rentPerSqft || 0) * (unit.occupancyRate / 100))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Operating Expenses Section */}
+              <div className="border-t pt-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <input
+                    type="checkbox"
+                    id="includeOperatingExpenses"
+                    checked={includeOperatingExpenses}
+                    onChange={(e) => setIncludeOperatingExpenses(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <Label htmlFor="includeOperatingExpenses" className="text-lg font-semibold cursor-pointer">
+                    Operating Expenses
+                  </Label>
+                </div>
+                
+                {includeOperatingExpenses && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="propertyManagementPercent">Property Management (%)</Label>
+                      <Input
+                        id="propertyManagementPercent"
+                        type="number"
+                        step="0.1"
+                        value={operatingExpenses.propertyManagementPercent}
+                        onChange={(e) => setOperatingExpenses({
+                          ...operatingExpenses,
+                          propertyManagementPercent: parseFloat(e.target.value) || 0,
+                        })}
+                        placeholder="0.0"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">% of rental income</p>
+                    </div>
+                    <div>
+                      <Label htmlFor="propertyManagementFixed">Property Management (Fixed $)</Label>
+                      <Input
+                        id="propertyManagementFixed"
+                        type="number"
+                        step="0.01"
+                        value={operatingExpenses.propertyManagementFixed || ''}
+                        onChange={(e) => setOperatingExpenses({
+                          ...operatingExpenses,
+                          propertyManagementFixed: parseFloat(e.target.value) || undefined,
+                        })}
+                        placeholder="0.00"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Fixed monthly amount (if not %)</p>
+                    </div>
+                    <div>
+                      <Label htmlFor="monthlyMaintenanceReserve">Monthly Maintenance Reserve</Label>
+                      <Input
+                        id="monthlyMaintenanceReserve"
+                        type="number"
+                        step="0.01"
+                        value={operatingExpenses.monthlyMaintenanceReserve}
+                        onChange={(e) => setOperatingExpenses({
+                          ...operatingExpenses,
+                          monthlyMaintenanceReserve: parseFloat(e.target.value) || 0,
+                        })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="monthlyPropertyInsurance">Monthly Property Insurance</Label>
+                      <Input
+                        id="monthlyPropertyInsurance"
+                        type="number"
+                        step="0.01"
+                        value={operatingExpenses.monthlyPropertyInsurance}
+                        onChange={(e) => setOperatingExpenses({
+                          ...operatingExpenses,
+                          monthlyPropertyInsurance: parseFloat(e.target.value) || 0,
+                        })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="monthlyPropertyTax">Monthly Property Tax</Label>
+                      <Input
+                        id="monthlyPropertyTax"
+                        type="number"
+                        step="0.01"
+                        value={operatingExpenses.monthlyPropertyTax}
+                        onChange={(e) => setOperatingExpenses({
+                          ...operatingExpenses,
+                          monthlyPropertyTax: parseFloat(e.target.value) || 0,
+                        })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="monthlyUtilities">Monthly Utilities (Common Areas)</Label>
+                      <Input
+                        id="monthlyUtilities"
+                        type="number"
+                        step="0.01"
+                        value={operatingExpenses.monthlyUtilities || ''}
+                        onChange={(e) => setOperatingExpenses({
+                          ...operatingExpenses,
+                          monthlyUtilities: parseFloat(e.target.value) || undefined,
+                        })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label htmlFor="monthlyOther">Other Monthly Expenses</Label>
+                      <Input
+                        id="monthlyOther"
+                        type="number"
+                        step="0.01"
+                        value={operatingExpenses.monthlyOther || ''}
+                        onChange={(e) => setOperatingExpenses({
+                          ...operatingExpenses,
+                          monthlyOther: parseFloat(e.target.value) || undefined,
+                        })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Debt Service Section */}
+              <div className="border-t pt-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <input
+                    type="checkbox"
+                    id="includeDebtService"
+                    checked={includeDebtService}
+                    onChange={(e) => setIncludeDebtService(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <Label htmlFor="includeDebtService" className="text-lg font-semibold cursor-pointer">
+                    Debt Service
+                  </Label>
+                </div>
+                
+                {includeDebtService && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="loanAmount">Loan Amount</Label>
+                      <Input
+                        id="loanAmount"
+                        type="number"
+                        step="0.01"
+                        value={debtService.loanAmount}
+                        onChange={(e) => setDebtService({
+                          ...debtService,
+                          loanAmount: parseFloat(e.target.value) || 0,
+                        })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="interestRate">Interest Rate (%)</Label>
+                      <Input
+                        id="interestRate"
+                        type="number"
+                        step="0.01"
+                        value={debtService.interestRate}
+                        onChange={(e) => setDebtService({
+                          ...debtService,
+                          interestRate: parseFloat(e.target.value) || 0,
+                        })}
+                        placeholder="5.5"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Annual percentage rate</p>
+                    </div>
+                    <div>
+                      <Label htmlFor="loanTermMonths">Loan Term (Months)</Label>
+                      <Input
+                        id="loanTermMonths"
+                        type="number"
+                        value={debtService.loanTermMonths}
+                        onChange={(e) => setDebtService({
+                          ...debtService,
+                          loanTermMonths: parseInt(e.target.value) || 360,
+                        })}
+                        placeholder="360"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Amortization period (e.g., 360 = 30 years)</p>
+                    </div>
+                    <div>
+                      <Label htmlFor="paymentType">Payment Type</Label>
+                      <Select
+                        value={debtService.paymentType}
+                        onValueChange={(v: 'interest-only' | 'principal-interest') => setDebtService({
+                          ...debtService,
+                          paymentType: v,
+                        })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="interest-only">Interest Only (Construction)</SelectItem>
+                          <SelectItem value="principal-interest">Principal + Interest (Permanent)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {debtService.loanAmount > 0 && debtService.interestRate > 0 && (
+                      <div className="md:col-span-2">
+                        <p className="text-sm text-gray-600">
+                          Estimated monthly payment: <span className="font-semibold">
+                            {formatCurrency(
+                              debtService.paymentType === 'interest-only'
+                                ? (debtService.loanAmount * debtService.interestRate / 100 / 12)
+                                : (debtService.loanAmount * 
+                                    (debtService.interestRate / 100 / 12 * Math.pow(1 + debtService.interestRate / 100 / 12, debtService.loanTermMonths)) /
+                                    (Math.pow(1 + debtService.interestRate / 100 / 12, debtService.loanTermMonths) - 1))
+                            )}
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-4 pt-4">
                 <Button variant="outline" onClick={onClose} className="flex-1">
                   Cancel
@@ -305,27 +769,101 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     <CardTitle>Financial Summary</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="space-y-4">
+                      {/* Construction Summary */}
                       <div>
-                        <p className="text-sm text-gray-600">Contract Value</p>
-                        <p className="text-lg font-semibold">{formatCurrency(projection.contractValue)}</p>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Construction Phase</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">Contract Value</p>
+                            <p className="text-lg font-semibold">{formatCurrency(projection.contractValue)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Total Estimated Cost</p>
+                            <p className="text-lg font-semibold">{formatCurrency(projection.totalEstimatedCost)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Projected Profit</p>
+                            <p className={`text-lg font-semibold ${projection.projectedProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {formatCurrency(projection.projectedProfit)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Projected Margin</p>
+                            <p className={`text-lg font-semibold ${projection.projectedMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {formatPercent(projection.projectedMargin)}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Total Estimated Cost</p>
-                        <p className="text-lg font-semibold">{formatCurrency(projection.totalEstimatedCost)}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Projected Profit</p>
-                        <p className={`text-lg font-semibold ${projection.projectedProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formatCurrency(projection.projectedProfit)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Projected Margin</p>
-                        <p className={`text-lg font-semibold ${projection.projectedMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formatPercent(projection.projectedMargin)}
-                        </p>
-                      </div>
+
+                      {/* Rental Income Summary */}
+                      {projection.summary.monthlyRentalIncome > 0 && (
+                        <div className="border-t pt-4">
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Rental Income Summary</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                              <p className="text-sm text-gray-600">Total Units</p>
+                              <p className="text-lg font-semibold">{projection.rentalSummary.totalUnits}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Monthly Rental Income</p>
+                              <p className="text-lg font-semibold text-green-600">
+                                {formatCurrency(projection.summary.monthlyRentalIncome)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Annual Rental Income</p>
+                              <p className="text-lg font-semibold text-green-600">
+                                {formatCurrency(projection.summary.annualRentalIncome)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Occupancy Rate</p>
+                              <p className="text-lg font-semibold">
+                                {formatPercent(projection.rentalSummary.stabilizedOccupancy)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Financial Metrics */}
+                      {projection.summary.monthlyRentalIncome > 0 && (
+                        <div className="border-t pt-4">
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Financial Metrics</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                              <p className="text-sm text-gray-600">Net Operating Income (NOI)</p>
+                              <p className="text-lg font-semibold text-green-600">
+                                {formatCurrency(projection.summary.netOperatingIncome)}
+                              </p>
+                              <p className="text-xs text-gray-500">Annual</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Operating Expenses</p>
+                              <p className="text-lg font-semibold text-red-600">
+                                {formatCurrency(projection.summary.annualOperatingExpenses)}
+                              </p>
+                              <p className="text-xs text-gray-500">Annual</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Debt Service</p>
+                              <p className="text-lg font-semibold text-red-600">
+                                {formatCurrency(projection.summary.monthlyDebtService * 12)}
+                              </p>
+                              <p className="text-xs text-gray-500">Annual</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Cash Flow After Debt</p>
+                              <p className={`text-lg font-semibold ${projection.summary.cashFlowAfterDebt >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {formatCurrency(projection.summary.cashFlowAfterDebt)}
+                              </p>
+                              <p className="text-xs text-gray-500">Annual</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -341,25 +879,55 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         <thead>
                           <tr className="border-b">
                             <th className="text-left p-2">Month</th>
-                            <th className="text-right p-2">Inflow</th>
+                            <th className="text-right p-2">Phase</th>
+                            <th className="text-right p-2">Milestone</th>
+                            <th className="text-right p-2">Rental</th>
+                            <th className="text-right p-2">Total Inflow</th>
                             <th className="text-right p-2">Labor</th>
                             <th className="text-right p-2">Materials</th>
                             <th className="text-right p-2">Subs</th>
                             <th className="text-right p-2">Overhead</th>
+                            <th className="text-right p-2">OpEx</th>
+                            <th className="text-right p-2">Debt</th>
                             <th className="text-right p-2">Total Outflow</th>
-                            <th className="text-right p-2">Net Cash Flow</th>
+                            <th className="text-right p-2">Net</th>
                             <th className="text-right p-2">Cumulative</th>
                           </tr>
                         </thead>
                         <tbody>
                           {projection.monthlyCashFlows.map((month, idx) => (
-                            <tr key={idx} className={`border-b ${month.cumulativeBalance < 0 ? 'bg-red-50' : ''}`}>
+                            <tr 
+                              key={idx} 
+                              className={`border-b ${
+                                month.cumulativeBalance < 0 ? 'bg-red-50' : 
+                                month.phase === 'post-construction' ? 'bg-green-50' : ''
+                              }`}
+                            >
                               <td className="p-2">{month.monthLabel}</td>
-                              <td className="text-right p-2">{formatCurrency(month.totalInflow)}</td>
+                              <td className="text-right p-2">
+                                <span className={`text-xs px-2 py-1 rounded ${
+                                  month.phase === 'construction' 
+                                    ? 'bg-blue-100 text-blue-700' 
+                                    : 'bg-green-100 text-green-700'
+                                }`}>
+                                  {month.phase === 'construction' ? 'Build' : 'Rent'}
+                                </span>
+                              </td>
+                              <td className="text-right p-2">{formatCurrency(month.milestonePayments)}</td>
+                              <td className="text-right p-2 text-green-600">
+                                {month.rentalIncome > 0 ? formatCurrency(month.rentalIncome) : '-'}
+                              </td>
+                              <td className="text-right p-2 font-medium">{formatCurrency(month.totalInflow)}</td>
                               <td className="text-right p-2">{formatCurrency(month.laborCost)}</td>
                               <td className="text-right p-2">{formatCurrency(month.materialCost)}</td>
                               <td className="text-right p-2">{formatCurrency(month.subcontractorCost)}</td>
                               <td className="text-right p-2">{formatCurrency(month.overheadAllocation)}</td>
+                              <td className="text-right p-2 text-orange-600">
+                                {month.operatingExpenses > 0 ? formatCurrency(month.operatingExpenses) : '-'}
+                              </td>
+                              <td className="text-right p-2 text-red-600">
+                                {month.debtService > 0 ? formatCurrency(month.debtService) : '-'}
+                              </td>
                               <td className="text-right p-2">{formatCurrency(month.totalOutflow)}</td>
                               <td className={`text-right p-2 font-medium ${month.netCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {formatCurrency(month.netCashFlow)}
