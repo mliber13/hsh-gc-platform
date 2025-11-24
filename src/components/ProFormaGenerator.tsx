@@ -5,7 +5,7 @@
 // Component for generating construction loan pro forma financial projections
 //
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { Project, Trade } from '@/types'
 import {
@@ -35,6 +35,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
   const [contractValue, setContractValue] = useState<number>(0)
+  const lastSyncedTotalRef = useRef<number>(0) // Track the total we last synced with
   const [paymentMilestones, setPaymentMilestones] = useState<PaymentMilestone[]>([])
   const [monthlyOverhead, setMonthlyOverhead] = useState<number>(0)
   const [overheadMethod, setOverheadMethod] = useState<'proportional' | 'flat' | 'none'>('proportional')
@@ -204,6 +205,8 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         if (savedInputs) {
           // Restore saved inputs
           setContractValue(savedInputs.contractValue)
+          // Set last synced total to the saved value so we can detect if estimate changed
+          lastSyncedTotalRef.current = savedInputs.contractValue
           setPaymentMilestones(savedInputs.paymentMilestones)
           setMonthlyOverhead(savedInputs.monthlyOverhead)
           setOverheadMethod(savedInputs.overheadMethod)
@@ -223,6 +226,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           // Calculate initial contract value from estimate
           const totalEstimate = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
           setContractValue(totalEstimate)
+          lastSyncedTotalRef.current = totalEstimate
         }
       } catch (error) {
         console.error('Error loading trades:', error)
@@ -230,12 +234,30 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         const loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
         const totalEstimate = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
         setContractValue(totalEstimate)
+        lastSyncedTotalRef.current = totalEstimate
       } finally {
         setLoading(false)
       }
     }
     loadTrades()
   }, [project])
+
+  // Auto-update contract value when trades change
+  // Only updates if contract value is 0, or if it matches the last synced total (meaning estimate changed)
+  useEffect(() => {
+    if (trades.length > 0) {
+      const currentTotal = trades.reduce((sum, t) => sum + t.totalCost, 0)
+      
+      // Only auto-update if:
+      // 1. Contract value is 0, OR
+      // 2. Contract value matches the last synced total (within $1 for rounding)
+      // This allows auto-sync when estimate changes, but preserves manual edits
+      if (contractValue === 0 || Math.abs(contractValue - lastSyncedTotalRef.current) < 1) {
+        setContractValue(currentTotal)
+        lastSyncedTotalRef.current = currentTotal
+      }
+    }
+  }, [trades, contractValue])
 
   // Generate default milestones when contract value or months change
   // Only if milestones are empty AND we haven't loaded saved data
@@ -304,7 +326,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       unitType: 'residential',
       rentType: 'fixed',
       monthlyRent: 0,
-      occupancyRate: 100,
+      occupancyRate: 95,
     }
     setRentalUnits([...rentalUnits, newUnit])
   }
