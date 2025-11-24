@@ -82,6 +82,8 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   
   // Track if we've loaded saved data (to prevent overwriting with defaults)
   const [hasLoadedSavedData, setHasLoadedSavedData] = useState<boolean>(false)
+  // Track if initial load is complete to prevent auto-update from interfering
+  const initialLoadCompleteRef = useRef<boolean>(false)
 
   // Storage key for this project's pro forma inputs
   const storageKey = `hsh_gc_proforma_${project.id}`
@@ -204,9 +206,12 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         
         if (savedInputs) {
           // Restore saved inputs
-          setContractValue(savedInputs.contractValue)
-          // Set last synced total to the saved value so we can detect if estimate changed
-          lastSyncedTotalRef.current = savedInputs.contractValue
+          // If saved contract value is 0, use current estimate total instead
+          const currentTotal = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+          const contractValueToUse = savedInputs.contractValue > 0 ? savedInputs.contractValue : currentTotal
+          setContractValue(contractValueToUse)
+          // Set last synced total to the value we're using
+          lastSyncedTotalRef.current = contractValueToUse
           setPaymentMilestones(savedInputs.paymentMilestones)
           setMonthlyOverhead(savedInputs.monthlyOverhead)
           setOverheadMethod(savedInputs.overheadMethod)
@@ -237,32 +242,41 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         lastSyncedTotalRef.current = totalEstimate
       } finally {
         setLoading(false)
+        initialLoadCompleteRef.current = true // Mark initial load as complete
       }
     }
     loadTrades()
   }, [project])
 
-  // Auto-update contract value when trades change
+  // Auto-update contract value when trades change (after initial load)
   // Only updates if contract value is 0, or if it matches the last synced total (meaning estimate changed)
   useEffect(() => {
-    if (trades.length > 0) {
+    // Only run after initial load is complete to avoid interfering with initialization
+    if (initialLoadCompleteRef.current && !loading && trades.length > 0) {
       const currentTotal = trades.reduce((sum, t) => sum + t.totalCost, 0)
       
       // Only auto-update if:
       // 1. Contract value is 0, OR
       // 2. Contract value matches the last synced total (within $1 for rounding)
       // This allows auto-sync when estimate changes, but preserves manual edits
-      if (contractValue === 0 || Math.abs(contractValue - lastSyncedTotalRef.current) < 1) {
-        setContractValue(currentTotal)
-        lastSyncedTotalRef.current = currentTotal
+      if (currentTotal > 0) {
+        // Use a function to get the current contract value to avoid stale closure
+        setContractValue(prevValue => {
+          if (prevValue === 0 || Math.abs(prevValue - lastSyncedTotalRef.current) < 1) {
+            lastSyncedTotalRef.current = currentTotal
+            return currentTotal
+          }
+          return prevValue
+        })
       }
     }
-  }, [trades, contractValue])
+  }, [trades, loading]) // Only watch trades and loading, use functional setState to avoid stale values
 
   // Generate default milestones when contract value or months change
-  // Only if milestones are empty AND we haven't loaded saved data
+  // Only if milestones are empty AND loading is complete
+  // Generate even if saved data exists but has no milestones
   useEffect(() => {
-    if (contractValue > 0 && startDate && paymentMilestones.length === 0 && !hasLoadedSavedData) {
+    if (initialLoadCompleteRef.current && !loading && contractValue > 0 && startDate && paymentMilestones.length === 0) {
       const defaults = generateDefaultMilestones(
         contractValue,
         new Date(startDate),
@@ -270,7 +284,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       )
       setPaymentMilestones(defaults)
     }
-  }, [contractValue, projectionMonths, startDate, hasLoadedSavedData, paymentMilestones.length])
+  }, [contractValue, projectionMonths, startDate, paymentMilestones.length, loading])
 
   // Save inputs to localStorage whenever they change (debounced)
   useEffect(() => {
