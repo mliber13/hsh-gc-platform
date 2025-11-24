@@ -275,16 +275,33 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   // Generate default milestones when contract value or months change
   // Only if milestones are empty AND loading is complete
   // Generate even if saved data exists but has no milestones
+  // Use construction completion date to determine project duration, or estimate from projection months
   useEffect(() => {
     if (initialLoadCompleteRef.current && !loading && contractValue > 0 && startDate && paymentMilestones.length === 0) {
+      // Calculate construction duration in months
+      let constructionMonths = projectionMonths
+      
+      if (constructionCompletionDate) {
+        // Use explicit construction completion date
+        const start = new Date(startDate)
+        const end = new Date(constructionCompletionDate)
+        const monthsDiff = Math.max(1, Math.ceil(
+          (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30)
+        ))
+        constructionMonths = monthsDiff
+      } else {
+        // Default to 80% of projection period for construction (same logic as in service)
+        constructionMonths = Math.ceil(projectionMonths * 0.8)
+      }
+      
       const defaults = generateDefaultMilestones(
         contractValue,
         new Date(startDate),
-        projectionMonths
+        constructionMonths
       )
       setPaymentMilestones(defaults)
     }
-  }, [contractValue, projectionMonths, startDate, paymentMilestones.length, loading])
+  }, [contractValue, projectionMonths, startDate, constructionCompletionDate, paymentMilestones.length, loading])
 
   // Save inputs to localStorage whenever they change (debounced)
   useEffect(() => {
