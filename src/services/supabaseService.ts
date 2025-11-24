@@ -1360,6 +1360,223 @@ export async function getQuotePDFSignedUrl(fileUrl: string, expiresIn: number = 
 }
 
 // ============================================================================
+// PROFORMA INPUTS OPERATIONS
+// ============================================================================
+
+interface ProFormaInputsRow {
+  id: string
+  project_id: string
+  user_id: string
+  contract_value: number
+  start_date: string
+  projection_months: number
+  construction_completion_date: string | null
+  total_project_square_footage: number | null
+  monthly_overhead: number
+  overhead_method: 'proportional' | 'flat' | 'none'
+  payment_milestones: any
+  include_rental_income: boolean
+  rental_units: any
+  include_operating_expenses: boolean
+  operating_expenses: any
+  include_debt_service: boolean
+  debt_service: any
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Save proforma inputs to database
+ */
+export async function saveProFormaInputs(
+  projectId: string,
+  inputs: {
+    contractValue: number
+    paymentMilestones: any[]
+    monthlyOverhead: number
+    overheadMethod: 'proportional' | 'flat' | 'none'
+    projectionMonths: 6 | 12 | 24 | 36 | 60
+    startDate: string
+    totalProjectSquareFootage?: number
+    includeRentalIncome: boolean
+    rentalUnits: any[]
+    includeOperatingExpenses: boolean
+    operatingExpenses: any
+    includeDebtService: boolean
+    debtService: any
+    constructionCompletionDate?: string
+  }
+): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      console.error('User not authenticated')
+      return false
+    }
+
+    // Serialize dates in payment milestones
+    const serializedMilestones = inputs.paymentMilestones.map(m => ({
+      ...m,
+      date: m.date instanceof Date ? m.date.toISOString() : m.date,
+    }))
+
+    // Serialize dates in rental units
+    const serializedRentalUnits = inputs.rentalUnits.map(u => ({
+      ...u,
+      occupancyStartDate: u.occupancyStartDate instanceof Date 
+        ? u.occupancyStartDate.toISOString() 
+        : u.occupancyStartDate,
+    }))
+
+    // Serialize debt service start date
+    const serializedDebtService = {
+      ...inputs.debtService,
+      startDate: inputs.debtService.startDate instanceof Date
+        ? inputs.debtService.startDate.toISOString()
+        : inputs.debtService.startDate,
+    }
+
+    // Get project to get organization_id
+    const { data: projectData } = await supabase
+      .from('projects')
+      .select('organization_id')
+      .eq('id', projectId)
+      .single()
+
+    const organizationId = projectData?.organization_id || 'default-org'
+
+    const rowData = {
+      project_id: projectId,
+      user_id: user.id,
+      organization_id: organizationId,
+      contract_value: inputs.contractValue,
+      start_date: inputs.startDate,
+      projection_months: inputs.projectionMonths,
+      construction_completion_date: inputs.constructionCompletionDate || null,
+      total_project_square_footage: inputs.totalProjectSquareFootage || null,
+      monthly_overhead: inputs.monthlyOverhead,
+      overhead_method: inputs.overheadMethod,
+      payment_milestones: serializedMilestones,
+      include_rental_income: inputs.includeRentalIncome,
+      rental_units: serializedRentalUnits,
+      include_operating_expenses: inputs.includeOperatingExpenses,
+      operating_expenses: inputs.operatingExpenses,
+      include_debt_service: inputs.includeDebtService,
+      debt_service: serializedDebtService,
+    }
+
+    // Try to update first, then insert if not found
+    const { data: existing } = await supabase
+      .from('proforma_inputs')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (existing) {
+      const { error } = await supabase
+        .from('proforma_inputs')
+        .update(rowData)
+        .eq('id', existing.id)
+
+      if (error) {
+        console.error('Error updating proforma inputs:', error)
+        return false
+      }
+    } else {
+      const { error } = await supabase
+        .from('proforma_inputs')
+        .insert(rowData)
+
+      if (error) {
+        console.error('Error creating proforma inputs:', error)
+        return false
+      }
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in saveProFormaInputs:', error)
+    return false
+  }
+}
+
+/**
+ * Load proforma inputs from database
+ * Gets the most recent proforma input for the project from any user in the organization
+ */
+export async function loadProFormaInputs(projectId: string): Promise<any | null> {
+  if (!isOnlineMode()) return null
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      console.error('User not authenticated')
+      return null
+    }
+
+    // Get the most recent proforma input for this project from any user in the organization
+    // This allows users to see each other's proforma inputs
+    const { data, error } = await supabase
+      .from('proforma_inputs')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No row found - this is okay
+        return null
+      }
+      console.error('Error loading proforma inputs:', error)
+      return null
+    }
+
+    if (!data) return null
+
+    // Deserialize dates
+    const paymentMilestones = (data.payment_milestones || []).map((m: any) => ({
+      ...m,
+      date: new Date(m.date),
+    }))
+
+    const rentalUnits = (data.rental_units || []).map((u: any) => ({
+      ...u,
+      occupancyStartDate: u.occupancyStartDate ? new Date(u.occupancyStartDate) : undefined,
+    }))
+
+    const debtService = {
+      ...data.debt_service,
+      startDate: new Date(data.debt_service.startDate),
+    }
+
+    return {
+      contractValue: data.contract_value,
+      paymentMilestones,
+      monthlyOverhead: data.monthly_overhead,
+      overheadMethod: data.overhead_method,
+      projectionMonths: data.projection_months,
+      startDate: data.start_date,
+      totalProjectSquareFootage: data.total_project_square_footage || undefined,
+      includeRentalIncome: data.include_rental_income,
+      rentalUnits,
+      includeOperatingExpenses: data.include_operating_expenses,
+      operatingExpenses: data.operating_expenses,
+      includeDebtService: data.include_debt_service,
+      debtService,
+      constructionCompletionDate: data.construction_completion_date || undefined,
+    }
+  } catch (error) {
+    console.error('Error in loadProFormaInputs:', error)
+    return null
+  }
+}
+
+// ============================================================================
 // HELPER: Check if online mode is active
 // ============================================================================
 

@@ -19,6 +19,8 @@ import {
 import { calculateProForma, generateDefaultMilestones } from '@/services/proformaService'
 import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
 import { exportProFormaToPDF, exportProFormaToExcel } from '@/services/proformaExportService'
+import { saveProFormaInputs as saveProFormaInputsDB, loadProFormaInputs as loadProFormaInputsDB } from '@/services/supabaseService'
+import { isOnlineMode } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -124,8 +126,8 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     constructionCompletionDate: string
   }
 
-  // Save pro forma inputs to localStorage
-  const saveProFormaInputs = () => {
+  // Save pro forma inputs to database or localStorage
+  const saveProFormaInputs = async () => {
     try {
       const savedInputs: SavedProFormaInputsSerialized = {
         contractValue,
@@ -156,15 +158,97 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         },
         constructionCompletionDate,
       }
-      localStorage.setItem(storageKey, JSON.stringify(savedInputs))
+
+      // Try database first if online, fallback to localStorage
+      if (isOnlineMode()) {
+        const success = await saveProFormaInputsDB(project.id, savedInputs)
+        if (!success) {
+          // Fallback to localStorage if database save fails
+          localStorage.setItem(storageKey, JSON.stringify(savedInputs))
+        }
+      } else {
+        localStorage.setItem(storageKey, JSON.stringify(savedInputs))
+      }
     } catch (error) {
       console.error('Error saving pro forma inputs:', error)
+      // Fallback to localStorage on error
+      try {
+        const savedInputs: SavedProFormaInputsSerialized = {
+          contractValue,
+          paymentMilestones: paymentMilestones.map(m => ({
+            ...m,
+            date: m.date instanceof Date ? m.date.toISOString() : (m.date as any).toISOString(),
+          })),
+          monthlyOverhead,
+          overheadMethod,
+          projectionMonths,
+          startDate,
+          totalProjectSquareFootage,
+          includeRentalIncome,
+          rentalUnits: rentalUnits.map(u => ({
+            ...u,
+            occupancyStartDate: u.occupancyStartDate instanceof Date 
+              ? u.occupancyStartDate.toISOString() 
+              : u.occupancyStartDate,
+          })),
+          includeOperatingExpenses,
+          operatingExpenses,
+          includeDebtService,
+          debtService: {
+            ...debtService,
+            startDate: debtService.startDate instanceof Date
+              ? debtService.startDate.toISOString()
+              : (debtService.startDate as any).toISOString(),
+          },
+          constructionCompletionDate,
+        }
+        localStorage.setItem(storageKey, JSON.stringify(savedInputs))
+      } catch (localError) {
+        console.error('Error saving to localStorage fallback:', localError)
+      }
     }
   }
 
-  // Load saved pro forma inputs from localStorage
-  const loadProFormaInputs = (): SavedProFormaInputs | null => {
+  // Load saved pro forma inputs from database or localStorage
+  const loadProFormaInputs = async (): Promise<SavedProFormaInputs | null> => {
     try {
+      // Try database first if online
+      if (isOnlineMode()) {
+        const dbData = await loadProFormaInputsDB(project.id)
+        if (dbData) {
+          // Convert date strings back to Date objects
+          const loaded: SavedProFormaInputs = {
+            contractValue: dbData.contractValue,
+            paymentMilestones: dbData.paymentMilestones.map((m: any) => ({
+              ...m,
+              date: new Date(m.date),
+            })),
+            monthlyOverhead: dbData.monthlyOverhead,
+            overheadMethod: dbData.overheadMethod,
+            projectionMonths: dbData.projectionMonths,
+            startDate: dbData.startDate,
+            totalProjectSquareFootage: dbData.totalProjectSquareFootage,
+            includeRentalIncome: dbData.includeRentalIncome,
+            rentalUnits: dbData.rentalUnits.map((u: any) => ({
+              ...u,
+              occupancyStartDate: u.occupancyStartDate 
+                ? new Date(u.occupancyStartDate)
+                : undefined,
+            })),
+            includeOperatingExpenses: dbData.includeOperatingExpenses,
+            operatingExpenses: dbData.operatingExpenses,
+            includeDebtService: dbData.includeDebtService,
+            debtService: {
+              ...dbData.debtService,
+              startDate: new Date(dbData.debtService.startDate),
+            },
+            constructionCompletionDate: dbData.constructionCompletionDate,
+          }
+          return loaded
+        }
+      }
+
+      // Fallback to localStorage
       const saved = localStorage.getItem(storageKey)
       if (saved) {
         const parsed = JSON.parse(saved) as SavedProFormaInputsSerialized
@@ -202,7 +286,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         setTrades(loadedTrades)
         
         // Try to load saved pro forma inputs first
-        const savedInputs = loadProFormaInputs()
+        const savedInputs = await loadProFormaInputs()
         
         if (savedInputs) {
           // Restore saved inputs
@@ -403,11 +487,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     }
   }, [contractValue, projectionMonths, startDate, constructionCompletionDate, paymentMilestones.length, loading])
 
-  // Save inputs to localStorage whenever they change (debounced)
+  // Save inputs to database/localStorage whenever they change (debounced)
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       saveProFormaInputs()
-    }, 500) // Debounce by 500ms to avoid excessive writes
+    }, 1000) // Debounce by 1000ms to avoid excessive database writes
 
     return () => clearTimeout(timeoutId)
   }, [
