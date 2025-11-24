@@ -209,13 +209,27 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           // If saved contract value is 0, use current estimate total (includes profit/markup) instead
           let estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
           
-          // If estimate total is 0 or not set, calculate it from estimate fields
+          // If estimate total is 0 or not set, try using stored profit/contingency amounts
           if (estimateTotal === 0) {
-            const baseCost = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
-            const overhead = project.estimate.overhead || 0
-            const profit = project.estimate.profit || 0
-            const contingency = project.estimate.contingency || 0
-            estimateTotal = baseCost + overhead + profit + contingency
+            const basePriceTotal = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+            const storedContingency = project.estimate.contingency || 0
+            const storedProfit = project.estimate.profit || 0
+            
+            // If we have stored amounts, use them
+            if (storedContingency > 0 || storedProfit > 0) {
+              estimateTotal = basePriceTotal + storedContingency + storedProfit
+            } else {
+              // Otherwise calculate it the same way EstimateBuilder does
+              const contingencyPercent = 10 // Default contingency
+              const contingency = basePriceTotal * (contingencyPercent / 100)
+              // Calculate gross profit from markup on each trade (same as EstimateBuilder)
+              const grossProfitTotal = loadedTrades.reduce((sum, trade) => {
+                const itemMarkup = trade.markupPercent || 11.1 // Default markup
+                const markup = trade.totalCost * (itemMarkup / 100)
+                return sum + markup
+              }, 0)
+              estimateTotal = basePriceTotal + contingency + grossProfitTotal
+            }
           }
           
           const contractValueToUse = savedInputs.contractValue > 0 ? savedInputs.contractValue : estimateTotal
@@ -241,13 +255,27 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           // Use estimate total (includes profit, overhead, contingency) as contract value
           let estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
           
-          // If estimate total is 0 or not set, calculate it from estimate fields
+          // If estimate total is 0 or not set, try using stored profit/contingency amounts
           if (estimateTotal === 0) {
-            const baseCost = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
-            const overhead = project.estimate.overhead || 0
-            const profit = project.estimate.profit || 0
-            const contingency = project.estimate.contingency || 0
-            estimateTotal = baseCost + overhead + profit + contingency
+            const basePriceTotal = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+            const storedContingency = project.estimate.contingency || 0
+            const storedProfit = project.estimate.profit || 0
+            
+            // If we have stored amounts, use them
+            if (storedContingency > 0 || storedProfit > 0) {
+              estimateTotal = basePriceTotal + storedContingency + storedProfit
+            } else {
+              // Otherwise calculate it the same way EstimateBuilder does
+              const contingencyPercent = 10 // Default contingency
+              const contingency = basePriceTotal * (contingencyPercent / 100)
+              // Calculate gross profit from markup on each trade (same as EstimateBuilder)
+              const grossProfitTotal = loadedTrades.reduce((sum, trade) => {
+                const itemMarkup = trade.markupPercent || 11.1 // Default markup
+                const markup = trade.totalCost * (itemMarkup / 100)
+                return sum + markup
+              }, 0)
+              estimateTotal = basePriceTotal + contingency + grossProfitTotal
+            }
           }
           
           // Fallback to sum of trades if estimate total is still 0
@@ -263,13 +291,19 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         const loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
         let estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
         
-        // If estimate total is 0 or not set, calculate it from estimate fields
+        // If estimate total is 0 or not set, calculate it the same way EstimateBuilder does
         if (estimateTotal === 0) {
-          const baseCost = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
-          const overhead = project.estimate.overhead || 0
-          const profit = project.estimate.profit || 0
-          const contingency = project.estimate.contingency || 0
-          estimateTotal = baseCost + overhead + profit + contingency
+          const basePriceTotal = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+          // Calculate contingency (typically 10% default)
+          const contingencyPercent = 10 // Default contingency, could be from estimate
+          const contingency = basePriceTotal * (contingencyPercent / 100)
+          // Calculate gross profit from markup on each trade (same as EstimateBuilder)
+          const grossProfitTotal = loadedTrades.reduce((sum, trade) => {
+            const itemMarkup = trade.markupPercent || 11.1 // Default markup
+            const markup = trade.totalCost * (itemMarkup / 100)
+            return sum + markup
+          }, 0)
+          estimateTotal = basePriceTotal + contingency + grossProfitTotal
         }
         
         const contractValue = estimateTotal > 0 
@@ -293,13 +327,27 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       // Use estimate total (includes profit, overhead, contingency) as the contract value
       let estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
       
-      // If estimate total is 0 or not set, calculate it from estimate fields
+      // If estimate total is 0 or not set, try using stored profit/contingency amounts
       if (estimateTotal === 0 && trades.length > 0) {
-        const baseCost = trades.reduce((sum, t) => sum + t.totalCost, 0)
-        const overhead = project.estimate.overhead || 0
-        const profit = project.estimate.profit || 0
-        const contingency = project.estimate.contingency || 0
-        estimateTotal = baseCost + overhead + profit + contingency
+        const basePriceTotal = trades.reduce((sum, t) => sum + t.totalCost, 0)
+        const storedContingency = project.estimate.contingency || 0
+        const storedProfit = project.estimate.profit || 0
+        
+        // If we have stored amounts, use them
+        if (storedContingency > 0 || storedProfit > 0) {
+          estimateTotal = basePriceTotal + storedContingency + storedProfit
+        } else {
+          // Otherwise calculate it the same way EstimateBuilder does
+          const contingencyPercent = 10 // Default contingency
+          const contingency = basePriceTotal * (contingencyPercent / 100)
+          // Calculate gross profit from markup on each trade (same as EstimateBuilder)
+          const grossProfitTotal = trades.reduce((sum, trade) => {
+            const itemMarkup = trade.markupPercent || 11.1 // Default markup
+            const markup = trade.totalCost * (itemMarkup / 100)
+            return sum + markup
+          }, 0)
+          estimateTotal = basePriceTotal + contingency + grossProfitTotal
+        }
       }
       
       // Fallback to sum of trades if estimate total is still not available
@@ -322,7 +370,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         })
       }
     }
-  }, [project.estimate.totalEstimate, project.estimate.totals?.totalEstimated, project.estimate.overhead, project.estimate.profit, project.estimate.contingency, trades, loading]) // Watch estimate fields and trades
+  }, [project.estimate.totalEstimate, project.estimate.totals?.totalEstimated, trades, loading]) // Watch estimate total and trades
 
   // Generate default milestones when contract value or months change
   // Only if milestones are empty AND loading is complete
