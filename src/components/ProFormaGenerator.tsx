@@ -206,9 +206,9 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         
         if (savedInputs) {
           // Restore saved inputs
-          // If saved contract value is 0, use current estimate total instead
-          const currentTotal = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
-          const contractValueToUse = savedInputs.contractValue > 0 ? savedInputs.contractValue : currentTotal
+          // If saved contract value is 0, use current estimate total (includes profit/markup) instead
+          const estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
+          const contractValueToUse = savedInputs.contractValue > 0 ? savedInputs.contractValue : estimateTotal
           setContractValue(contractValueToUse)
           // Set last synced total to the value we're using
           lastSyncedTotalRef.current = contractValueToUse
@@ -228,18 +228,25 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           setHasLoadedSavedData(true) // Mark that we've loaded saved data
         } else {
           // No saved inputs, use defaults
-          // Calculate initial contract value from estimate
-          const totalEstimate = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
-          setContractValue(totalEstimate)
-          lastSyncedTotalRef.current = totalEstimate
+          // Use estimate total (includes profit, overhead, contingency) as contract value
+          const estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
+          // Fallback to sum of trades if estimate total is not available
+          const contractValue = estimateTotal > 0 
+            ? estimateTotal 
+            : loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+          setContractValue(contractValue)
+          lastSyncedTotalRef.current = contractValue
         }
       } catch (error) {
         console.error('Error loading trades:', error)
         // Fallback to default contract value
         const loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
-        const totalEstimate = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
-        setContractValue(totalEstimate)
-        lastSyncedTotalRef.current = totalEstimate
+        const estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
+        const contractValue = estimateTotal > 0 
+          ? estimateTotal 
+          : loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+        setContractValue(contractValue)
+        lastSyncedTotalRef.current = contractValue
       } finally {
         setLoading(false)
         initialLoadCompleteRef.current = true // Mark initial load as complete
@@ -248,12 +255,17 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     loadTrades()
   }, [project])
 
-  // Auto-update contract value when trades change (after initial load)
+  // Auto-update contract value when estimate changes (after initial load)
   // Only updates if contract value is 0, or if it matches the last synced total (meaning estimate changed)
   useEffect(() => {
     // Only run after initial load is complete to avoid interfering with initialization
-    if (initialLoadCompleteRef.current && !loading && trades.length > 0) {
-      const currentTotal = trades.reduce((sum, t) => sum + t.totalCost, 0)
+    if (initialLoadCompleteRef.current && !loading) {
+      // Use estimate total (includes profit, overhead, contingency) as the contract value
+      const estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
+      // Fallback to sum of trades if estimate total is not available
+      const currentTotal = estimateTotal > 0 
+        ? estimateTotal 
+        : trades.reduce((sum, t) => sum + t.totalCost, 0)
       
       // Only auto-update if:
       // 1. Contract value is 0, OR
@@ -270,7 +282,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         })
       }
     }
-  }, [trades, loading]) // Only watch trades and loading, use functional setState to avoid stale values
+  }, [project.estimate.totalEstimate, project.estimate.totals?.totalEstimated, trades, loading]) // Watch estimate total and trades
 
   // Generate default milestones when contract value or months change
   // Only if milestones are empty AND loading is complete
@@ -456,7 +468,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     placeholder="0.00"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Total estimated cost: {formatCurrency(
+                    Estimate total: {formatCurrency(
+                      project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 
+                      trades.reduce((sum, t) => sum + t.totalCost, 0)
+                    )} | 
+                    Estimated cost: {formatCurrency(
                       trades.reduce((sum, t) => sum + t.totalCost, 0)
                     )}
                   </p>
