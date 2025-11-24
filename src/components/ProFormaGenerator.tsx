@@ -279,7 +279,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   useEffect(() => {
     if (initialLoadCompleteRef.current && !loading && contractValue > 0 && startDate && paymentMilestones.length === 0) {
       // Calculate construction duration in months
-      let constructionMonths = projectionMonths
+      let constructionMonths: number = projectionMonths
       
       if (constructionCompletionDate) {
         // Use explicit construction completion date
