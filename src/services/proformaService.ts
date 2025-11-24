@@ -230,16 +230,18 @@ function generateMonthlyCashFlows(
     const isConstructionPhase = currentDate < actualConstructionEndDate
     const phase = isConstructionPhase ? 'construction' : 'post-construction'
 
-    // Calculate milestone payments (construction phase only)
-    const milestonePayments = isConstructionPhase
-      ? input.paymentMilestones
-          .filter(m => {
-            const milestoneDate = new Date(m.date)
-            return milestoneDate.getFullYear() === currentDate.getFullYear() &&
-                   milestoneDate.getMonth() === currentDate.getMonth()
-          })
-          .reduce((sum, m) => sum + m.amount, 0)
-      : 0
+    // Calculate milestone payments
+    // Milestones should be counted if they fall within the projection period
+    // This ensures all milestones are included, even if the last one is at completion
+    const milestonePayments = input.paymentMilestones
+      .filter(m => {
+        const milestoneDate = new Date(m.date)
+        // Normalize dates to first of month for comparison
+        const milestoneMonth = new Date(milestoneDate.getFullYear(), milestoneDate.getMonth(), 1)
+        const currentMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+        return milestoneMonth.getTime() === currentMonth.getTime()
+      })
+      .reduce((sum, m) => sum + m.amount, 0)
 
     // Calculate rental income (post-construction phase only)
     const rentalIncome = !isConstructionPhase && input.includeRentalIncome

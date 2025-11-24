@@ -207,7 +207,17 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         if (savedInputs) {
           // Restore saved inputs
           // If saved contract value is 0, use current estimate total (includes profit/markup) instead
-          const estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
+          let estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
+          
+          // If estimate total is 0 or not set, calculate it from estimate fields
+          if (estimateTotal === 0) {
+            const baseCost = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+            const overhead = project.estimate.overhead || 0
+            const profit = project.estimate.profit || 0
+            const contingency = project.estimate.contingency || 0
+            estimateTotal = baseCost + overhead + profit + contingency
+          }
+          
           const contractValueToUse = savedInputs.contractValue > 0 ? savedInputs.contractValue : estimateTotal
           setContractValue(contractValueToUse)
           // Set last synced total to the value we're using
@@ -229,8 +239,18 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         } else {
           // No saved inputs, use defaults
           // Use estimate total (includes profit, overhead, contingency) as contract value
-          const estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
-          // Fallback to sum of trades if estimate total is not available
+          let estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
+          
+          // If estimate total is 0 or not set, calculate it from estimate fields
+          if (estimateTotal === 0) {
+            const baseCost = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+            const overhead = project.estimate.overhead || 0
+            const profit = project.estimate.profit || 0
+            const contingency = project.estimate.contingency || 0
+            estimateTotal = baseCost + overhead + profit + contingency
+          }
+          
+          // Fallback to sum of trades if estimate total is still 0
           const contractValue = estimateTotal > 0 
             ? estimateTotal 
             : loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
@@ -241,7 +261,17 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         console.error('Error loading trades:', error)
         // Fallback to default contract value
         const loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
-        const estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
+        let estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
+        
+        // If estimate total is 0 or not set, calculate it from estimate fields
+        if (estimateTotal === 0) {
+          const baseCost = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+          const overhead = project.estimate.overhead || 0
+          const profit = project.estimate.profit || 0
+          const contingency = project.estimate.contingency || 0
+          estimateTotal = baseCost + overhead + profit + contingency
+        }
+        
         const contractValue = estimateTotal > 0 
           ? estimateTotal 
           : loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
@@ -261,8 +291,18 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     // Only run after initial load is complete to avoid interfering with initialization
     if (initialLoadCompleteRef.current && !loading) {
       // Use estimate total (includes profit, overhead, contingency) as the contract value
-      const estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
-      // Fallback to sum of trades if estimate total is not available
+      let estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
+      
+      // If estimate total is 0 or not set, calculate it from estimate fields
+      if (estimateTotal === 0 && trades.length > 0) {
+        const baseCost = trades.reduce((sum, t) => sum + t.totalCost, 0)
+        const overhead = project.estimate.overhead || 0
+        const profit = project.estimate.profit || 0
+        const contingency = project.estimate.contingency || 0
+        estimateTotal = baseCost + overhead + profit + contingency
+      }
+      
+      // Fallback to sum of trades if estimate total is still not available
       const currentTotal = estimateTotal > 0 
         ? estimateTotal 
         : trades.reduce((sum, t) => sum + t.totalCost, 0)
@@ -282,7 +322,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         })
       }
     }
-  }, [project.estimate.totalEstimate, project.estimate.totals?.totalEstimated, trades, loading]) // Watch estimate total and trades
+  }, [project.estimate.totalEstimate, project.estimate.totals?.totalEstimated, project.estimate.overhead, project.estimate.profit, project.estimate.contingency, trades, loading]) // Watch estimate fields and trades
 
   // Generate default milestones when contract value or months change
   // Only if milestones are empty AND loading is complete
