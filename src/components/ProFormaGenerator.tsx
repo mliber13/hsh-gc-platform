@@ -54,9 +54,9 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   const [includeOperatingExpenses, setIncludeOperatingExpenses] = useState<boolean>(false)
   const [operatingExpenses, setOperatingExpenses] = useState<OperatingExpenses>({
     propertyManagementPercent: 0,
-    monthlyMaintenanceReserve: 0,
+    maintenanceReservePercent: 0,
     monthlyPropertyInsurance: 0,
-    monthlyPropertyTax: 0,
+    annualPropertyTax: 0,
     monthlyUtilities: 0,
     monthlyOther: 0,
   })
@@ -761,33 +761,34 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                       <p className="text-xs text-gray-500 mt-1">% of rental income</p>
                     </div>
                     <div>
-                      <Label htmlFor="propertyManagementFixed">Property Management (Fixed $)</Label>
+                      <Label htmlFor="capExPercent">Cap EX %</Label>
                       <Input
-                        id="propertyManagementFixed"
+                        id="capExPercent"
                         type="number"
-                        step="0.01"
-                        value={operatingExpenses.propertyManagementFixed || ''}
+                        step="0.1"
+                        value={operatingExpenses.capExPercent || ''}
                         onChange={(e) => setOperatingExpenses({
                           ...operatingExpenses,
-                          propertyManagementFixed: parseFloat(e.target.value) || undefined,
+                          capExPercent: parseFloat(e.target.value) || undefined,
                         })}
-                        placeholder="0.00"
+                        placeholder="0.0"
                       />
-                      <p className="text-xs text-gray-500 mt-1">Fixed monthly amount (if not %)</p>
+                      <p className="text-xs text-gray-500 mt-1">% of rental income</p>
                     </div>
                     <div>
-                      <Label htmlFor="monthlyMaintenanceReserve">Monthly Maintenance Reserve</Label>
+                      <Label htmlFor="maintenanceReservePercent">Monthly Maintenance Reserve (%)</Label>
                       <Input
-                        id="monthlyMaintenanceReserve"
+                        id="maintenanceReservePercent"
                         type="number"
-                        step="0.01"
-                        value={operatingExpenses.monthlyMaintenanceReserve}
+                        step="0.1"
+                        value={operatingExpenses.maintenanceReservePercent}
                         onChange={(e) => setOperatingExpenses({
                           ...operatingExpenses,
-                          monthlyMaintenanceReserve: parseFloat(e.target.value) || 0,
+                          maintenanceReservePercent: parseFloat(e.target.value) || 0,
                         })}
-                        placeholder="0.00"
+                        placeholder="0.0"
                       />
+                      <p className="text-xs text-gray-500 mt-1">% of rental income</p>
                     </div>
                     <div>
                       <Label htmlFor="monthlyPropertyInsurance">Monthly Property Insurance</Label>
@@ -804,18 +805,19 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                       />
                     </div>
                     <div>
-                      <Label htmlFor="monthlyPropertyTax">Monthly Property Tax</Label>
+                      <Label htmlFor="annualPropertyTax">Annual Property Tax</Label>
                       <Input
-                        id="monthlyPropertyTax"
+                        id="annualPropertyTax"
                         type="number"
                         step="0.01"
-                        value={operatingExpenses.monthlyPropertyTax}
+                        value={operatingExpenses.annualPropertyTax}
                         onChange={(e) => setOperatingExpenses({
                           ...operatingExpenses,
-                          monthlyPropertyTax: parseFloat(e.target.value) || 0,
+                          annualPropertyTax: parseFloat(e.target.value) || 0,
                         })}
                         placeholder="0.00"
                       />
+                      <p className="text-xs text-gray-500 mt-1">Annual amount (will be prorated monthly)</p>
                     </div>
                     <div>
                       <Label htmlFor="monthlyUtilities">Monthly Utilities (Common Areas)</Label>

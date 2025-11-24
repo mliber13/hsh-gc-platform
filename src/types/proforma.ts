@@ -39,10 +39,10 @@ export interface RentalUnit {
 
 export interface OperatingExpenses {
   propertyManagementPercent: number // % of rental income
-  propertyManagementFixed?: number // Fixed monthly amount (if not %)
-  monthlyMaintenanceReserve: number
+  capExPercent?: number // Capital Expenditures % of rental income
+  maintenanceReservePercent: number // % of rental income for maintenance reserve
   monthlyPropertyInsurance: number
-  monthlyPropertyTax: number
+  annualPropertyTax: number // Annual property tax (will be prorated monthly)
   monthlyUtilities?: number // Common area utilities
   monthlyOther?: number // Miscellaneous expenses
   annualExpenses?: { // Annual expenses that can be prorated monthly

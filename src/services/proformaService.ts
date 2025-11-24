@@ -354,15 +354,22 @@ function calculateMonthlyRentalIncome(rentalUnits: RentalUnit[], currentDate: Da
 function calculateMonthlyOperatingExpenses(expenses: OperatingExpenses, rentalIncome: number): number {
   let total = 0
 
-  // Property management (percentage or fixed)
+  // Property management (percentage)
   if (expenses.propertyManagementPercent > 0) {
     total += (rentalIncome * expenses.propertyManagementPercent) / 100
-  } else if (expenses.propertyManagementFixed) {
-    total += expenses.propertyManagementFixed
+  }
+
+  // Cap EX (percentage of rental income)
+  if (expenses.capExPercent && expenses.capExPercent > 0) {
+    total += (rentalIncome * expenses.capExPercent) / 100
+  }
+
+  // Maintenance reserve (percentage of rental income)
+  if (expenses.maintenanceReservePercent > 0) {
+    total += (rentalIncome * expenses.maintenanceReservePercent) / 100
   }
 
   // Fixed monthly expenses
-  total += expenses.monthlyMaintenanceReserve || 0
   total += expenses.monthlyUtilities || 0
   total += expenses.monthlyOther || 0
 
@@ -372,9 +379,9 @@ function calculateMonthlyOperatingExpenses(expenses: OperatingExpenses, rentalIn
     total += (expenses.annualExpenses.propertyTax || 0) / 12
     total += (expenses.annualExpenses.other || 0) / 12
   } else {
-    // Fallback to monthly fields
+    // Fallback to monthly/annual fields
     total += expenses.monthlyPropertyInsurance || 0
-    total += expenses.monthlyPropertyTax || 0
+    total += (expenses.annualPropertyTax || 0) / 12 // Annual property tax prorated monthly
   }
 
   return total
