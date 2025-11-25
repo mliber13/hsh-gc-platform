@@ -304,6 +304,16 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     return total
   }
 
+  const getCategoryActualsByType = (category: string) => {
+    const entries = getActualsByCategory(category)
+    return {
+      labor: entries.filter(e => e.type === 'labor').reduce((sum, entry) => sum + entry.amount, 0),
+      material: entries.filter(e => e.type === 'material').reduce((sum, entry) => sum + entry.amount, 0),
+      subcontractor: entries.filter(e => e.type === 'subcontractor').reduce((sum, entry) => sum + entry.amount, 0),
+      generalCount: entries.filter(e => !e.tradeId).length,
+    }
+  }
+
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
@@ -781,6 +791,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                             const categoryActual = getCategoryActual(category)
                             const categoryVariance = categoryActual - categoryEstimate
                             const isOver = categoryVariance > 0
+                            const categoryActualBreakdown = getCategoryActualsByType(category)
+                            const categoryEntries = getActualsByCategory(category)
+                            const unlinkedEntries = categoryEntries.filter(entry => !entry.tradeId)
                             
                             return (
                               <div key={category} className="bg-white rounded-lg border border-gray-200 p-3">
@@ -816,6 +829,28 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                       </span>
                                     </div>
                                   </div>
+                                    <div className="flex flex-wrap gap-2 text-[11px] text-gray-600">
+                                      {categoryActualBreakdown.labor > 0 && (
+                                        <span className="px-2 py-1 bg-blue-50 border border-blue-200 rounded-full">
+                                          Labor {formatCurrency(categoryActualBreakdown.labor)}
+                                        </span>
+                                      )}
+                                      {categoryActualBreakdown.material > 0 && (
+                                        <span className="px-2 py-1 bg-green-50 border border-green-200 rounded-full">
+                                          Material {formatCurrency(categoryActualBreakdown.material)}
+                                        </span>
+                                      )}
+                                      {categoryActualBreakdown.subcontractor > 0 && (
+                                        <span className="px-2 py-1 bg-orange-50 border border-orange-200 rounded-full">
+                                          Sub {formatCurrency(categoryActualBreakdown.subcontractor)}
+                                        </span>
+                                      )}
+                                      {unlinkedEntries.length > 0 && (
+                                        <span className="px-2 py-1 bg-gray-100 border border-gray-200 rounded-full">
+                                          General entries: {unlinkedEntries.length}
+                                        </span>
+                                      )}
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                   {categoryTrades.map((trade) => {
@@ -931,9 +966,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                   {getEntryIcon(entry.type)}
                                                   <div className="flex-1">
                                                     <p className="text-sm font-medium text-gray-900">{entry.description}</p>
-                                                    <p className="text-xs text-gray-600">
-                                                      {entry.date.toLocaleDateString()}
-                                                      {entry.category && ` • ${TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category}`}
+                                            <p className="text-xs text-gray-600">
+                                              {formatDate(entry.date)}
+                                              {entry.category && ` • ${TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category}`}
                                                       {entry.tradeId && trades.find(t => t.id === entry.tradeId) && ` • ${trades.find(t => t.id === entry.tradeId)?.name}`}
                                                       {entry.vendor && ` • ${entry.vendor}`}
                                                       {entry.invoiceNumber && ` • Invoice: ${entry.invoiceNumber}`}
@@ -975,8 +1010,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
                                         {/* Show unlinked entries for this category */}
                                         {(() => {
-                                          const categoryEntries = getActualsByCategory(category)
-                                          const unlinkedEntries = categoryEntries.filter(entry => !entry.tradeId)
                                           return unlinkedEntries.length > 0 && (
                                             <div className="space-y-2 mt-3 pt-3 border-t border-gray-200">
                                               <p className="text-xs font-semibold text-gray-700 uppercase">General Category Entries:</p>
@@ -990,7 +1023,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                     <div className="flex-1">
                                                       <p className="text-sm font-medium text-gray-900">{entry.description}</p>
                                                       <p className="text-xs text-gray-600">
-                                                        {entry.date.toLocaleDateString()}
+                                                        {formatDate(entry.date)}
                                                         {entry.category && ` • ${TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category}`}
                                                         {entry.vendor && ` • ${entry.vendor}`}
                                                         {entry.invoiceNumber && ` • Invoice: ${entry.invoiceNumber}`}
@@ -1101,6 +1134,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   totalCost: entry.amount,
                   vendor: entry.vendor,
                   invoiceNumber: entry.invoiceNumber,
+                  category: entry.category,
+                  tradeId: entry.tradeId,
+                  group: entry.category ? getCategoryGroup(entry.category) : undefined,
                 })
               } else if (entry.type === 'subcontractor') {
                 await updateSubcontractorEntry_Hybrid(entry.id, {
