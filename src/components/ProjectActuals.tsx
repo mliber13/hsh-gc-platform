@@ -114,14 +114,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   useEffect(() => {
     const loadTrades = async () => {
       if (project) {
-        console.log('ProjectActuals loading trades for project:', project)
-        console.log('Project estimate ID:', project.estimate?.id)
-        
-        let loadedTrades: Trade[] = []
-        console.log('Using hybrid service to fetch trades')
-        loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
-        
-        console.log('Loaded trades:', loadedTrades)
+        const loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
         setTrades(loadedTrades)
         
         // Load change orders
@@ -139,9 +132,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   // Load actual entries from project.actuals
   useEffect(() => {
     const loadActuals = async () => {
-      console.log('🔄 ProjectActuals useEffect: Loading actuals for project:', project.id)
       const actuals = await getProjectActuals_Hybrid(project.id)
-      console.log('📊 ProjectActuals useEffect: Received actuals:', actuals)
       
       if (actuals) {
         const entries: ActualEntry[] = []
@@ -177,13 +168,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         
         // Convert subcontractor entries
         actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
-          console.log('🔍 Converting subcontractor entry:', {
-            id: sub.id,
-            trade: sub.trade,
-            tradeId: sub.tradeId,
-            amount: sub.totalPaid,
-            description: sub.scopeOfWork
-          })
           entries.push({
             id: sub.id,
             type: 'subcontractor',
@@ -198,10 +182,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         
         // Sort by date, newest first
         entries.sort((a, b) => b.date.getTime() - a.date.getTime())
-        
-        console.log('🔄 ProjectActuals useEffect: Converted entries:', entries)
-        console.log('💰 ProjectActuals useEffect: Entry amounts:', entries.map(e => ({ id: e.id, amount: e.amount })))
-        console.log('🧮 ProjectActuals useEffect: Calculated total:', entries.reduce((sum, e) => sum + e.amount, 0))
         
         setActualEntries(entries)
       }
@@ -244,8 +224,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
   const calculateActualTotal = () => {
     const total = actualEntries.reduce((sum, entry) => sum + entry.amount, 0)
-    console.log('🧮 calculateActualTotal: actualEntries:', actualEntries.length, 'total:', total)
-    console.log('🧮 calculateActualTotal: entry amounts:', actualEntries.map(e => ({ id: e.id, amount: e.amount })))
     return total
   }
 
@@ -323,11 +301,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const getCategoryActual = (category: string) => {
     const entries = getActualsByCategory(category)
     const total = entries.reduce((sum, entry) => sum + entry.amount, 0)
-    console.log(`🔍 getCategoryActual(${category}):`, {
-      entries: entries.length,
-      total,
-      entryDetails: entries.map(e => ({ id: e.id, amount: e.amount, description: e.description }))
-    })
     return total
   }
 
@@ -356,14 +329,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     acc[group][trade.category].push(trade)
     return acc
   }, {} as Record<string, Record<string, Trade[]>>)
-
-  // Debug logging
-  console.log('ProjectActuals Debug:', {
-    tradesCount: trades.length,
-    trades: trades,
-    groupedTradesKeys: Object.keys(groupedTrades),
-    groupedTrades: groupedTrades
-  })
 
   // Handle print report
   const handlePrintReport = (type: 'actuals' | 'comparison', depth: ReportDepth) => {
@@ -609,122 +574,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             </CardContent>
           </Card>
 
-          {/* Debug Information */}
-          <Card className="bg-gray-50 border-gray-200">
-            <CardHeader>
-              <CardTitle className="text-gray-700">Debug Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 text-sm">
-                <p><strong>Total Entries:</strong> {actualEntries.length}</p>
-                <p><strong>Labor Entries:</strong> {actualEntries.filter(e => e.type === 'labor').length}</p>
-                <p><strong>Material Entries:</strong> {actualEntries.filter(e => e.type === 'material').length}</p>
-                <p><strong>Subcontractor Entries:</strong> {actualEntries.filter(e => e.type === 'subcontractor').length}</p>
-                <p><strong>Linked Entries:</strong> {actualEntries.filter(e => e.tradeId).length}</p>
-                <p><strong>Unlinked Entries:</strong> {actualEntries.filter(e => !e.tradeId).length}</p>
-                <details className="mt-2">
-                  <summary className="cursor-pointer font-semibold">Show Raw Entries Data</summary>
-                  <pre className="mt-2 p-2 bg-white border rounded text-xs overflow-auto max-h-40">
-                    {JSON.stringify(actualEntries, null, 2)}
-                  </pre>
-                </details>
-                <div className="mt-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      // Force reload actuals
-                      const loadActuals = async () => {
-                        const actuals = await getProjectActuals_Hybrid(project.id)
-                        
-                        if (actuals) {
-                          const entries: ActualEntry[] = []
-                          
-                          actuals.laborEntries?.forEach((labor: LaborEntry) => {
-                            entries.push({
-                              id: labor.id,
-                              type: 'labor',
-                              date: labor.date,
-                              amount: labor.totalCost,
-                              description: labor.description,
-                              category: labor.trade,
-                              tradeId: labor.tradeId,
-                              payrollPeriod: labor.date.toLocaleDateString(),
-                            })
-                          })
-                          
-                          actuals.materialEntries?.forEach((material: MaterialEntry) => {
-                            entries.push({
-                              id: material.id,
-                              type: 'material',
-                              date: material.date,
-                              amount: material.totalCost,
-                              description: material.materialName,
-                              category: material.category,
-                              tradeId: material.tradeId,
-                              vendor: material.vendor,
-                              invoiceNumber: material.invoiceNumber,
-                            })
-                          })
-                          
-                          actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
-                            entries.push({
-                              id: sub.id,
-                              type: 'subcontractor',
-                              date: sub.createdAt,
-                              amount: sub.totalPaid,
-                              description: sub.scopeOfWork,
-                              category: sub.trade,
-                              tradeId: sub.tradeId,
-                              subcontractorName: sub.subcontractor.name,
-                            })
-                          })
-                          
-                          entries.sort((a, b) => b.date.getTime() - a.date.getTime())
-                          setActualEntries(entries)
-                        }
-                      }
-                      loadActuals()
-                    }}
-                    className="mr-2"
-                  >
-                    🔄 Force Reload Data
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      console.log('Current actuals data:', actualEntries)
-                      console.log('Project ID:', project.id)
-                      alert('Check browser console for detailed data')
-                    }}
-                    className="mr-2"
-                  >
-                    📊 Log to Console
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      // Check localStorage directly
-                      const localStorageData = localStorage.getItem('hsh_gc_labor_entries')
-                      const materialData = localStorage.getItem('hsh_gc_material_entries')
-                      const subData = localStorage.getItem('hsh_gc_subcontractor_entries')
-                      
-                      console.log('🔍 localStorage data:')
-                      console.log('Labor entries:', localStorageData ? JSON.parse(localStorageData) : 'No data')
-                      console.log('Material entries:', materialData ? JSON.parse(materialData) : 'No data')
-                      console.log('Subcontractor entries:', subData ? JSON.parse(subData) : 'No data')
-                      
-                      alert('Check browser console for localStorage data')
-                    }}
-                  >
-                    💾 Check localStorage
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Debug Information removed */}
 
           {/* Unlinked Entries Summary */}
           {(() => {
@@ -835,10 +685,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     return sum + (trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100))
                   }, 0)
                   
-                  const groupActual = Object.values(groupCategories).flat().reduce((sum, trade) => {
-                    // Only add actuals for trades that have actuals entries
-                    const tradeActuals = getActualsByTrade(trade.id)
-                    return sum + tradeActuals.reduce((tradeSum, entry) => tradeSum + entry.amount, 0)
+                  const groupActual = Object.keys(groupCategories).reduce((sum, category) => {
+                    return sum + getCategoryActual(category)
                   }, 0)
                   
                   const groupVariance = groupActual - groupEstimate
