@@ -307,6 +307,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
+  const formatDate = (date: Date) =>
+    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
   const toggleCategory = (category: string) => {
     const newExpanded = new Set(expandedCategories)
     if (newExpanded.has(category)) {
