@@ -1128,15 +1128,16 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   totalCost: entry.amount,
                 })
               } else if (entry.type === 'material') {
+                const materialCategory = entry.category as Trade['category'] | undefined
                 await updateMaterialEntry_Hybrid(entry.id, {
                   date: entry.date,
                   materialName: entry.description,
                   totalCost: entry.amount,
                   vendor: entry.vendor,
                   invoiceNumber: entry.invoiceNumber,
-                  category: entry.category,
+                  category: materialCategory,
                   tradeId: entry.tradeId,
-                  group: entry.category ? getCategoryGroup(entry.category) : undefined,
+                  group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
                 })
               } else if (entry.type === 'subcontractor') {
                 await updateSubcontractorEntry_Hybrid(entry.id, {
@@ -1156,14 +1157,16 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   tradeId: entry.tradeId,
                 })
               } else if (entry.type === 'material') {
+                const materialCategory = entry.category as Trade['category'] | undefined
                 await addMaterialEntry_Hybrid(project.id, {
                   date: entry.date,
                   materialName: entry.description,
                   totalCost: entry.amount,
-                  category: entry.category as any,
+                  category: materialCategory,
                   tradeId: entry.tradeId,
                   vendor: entry.vendor,
                   invoiceNumber: entry.invoiceNumber,
+                  group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
                 })
               } else if (entry.type === 'subcontractor') {
                 await addSubcontractorEntry_Hybrid(project.id, {
