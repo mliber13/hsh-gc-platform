@@ -1477,12 +1477,19 @@ function ActualEntryForm({
     }
   }
 
-  // Get unique categories from trades
-  const categories = Array.from(new Set(trades.map(t => t.category)))
+  // Get unique categories from trades (ensure editing entry category is included)
+  const categories = React.useMemo(() => {
+    const set = new Set(trades.map(t => t.category))
+    if (editingEntry?.category) {
+      set.add(editingEntry.category as Trade['category'])
+    }
+    return Array.from(set)
+  }, [trades, editingEntry?.category])
 
   // Filter trades by selected category
-  const filteredTrades = formData.category 
-    ? trades.filter(t => t.category === formData.category)
+  const selectedCategory = formData.category as Trade['category'] | ''
+  const filteredTrades = selectedCategory
+    ? trades.filter(t => t.category === selectedCategory)
     : []
 
   const supplierOptions = React.useMemo(
@@ -1654,7 +1661,6 @@ function ActualEntryForm({
               <Select 
                 value={formData.category} 
                 onValueChange={(value) => setFormData(prev => ({ ...prev, category: value, tradeId: '' }))}
-                disabled={!!editingEntry}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select category..." />
@@ -1668,9 +1674,6 @@ function ActualEntryForm({
                   ))}
                 </SelectContent>
               </Select>
-              {editingEntry && (
-                <p className="text-xs text-gray-500 mt-1">Category cannot be changed when editing</p>
-              )}
             </div>
 
             {formData.category && filteredTrades.length > 0 && (
