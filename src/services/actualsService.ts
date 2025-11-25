@@ -236,12 +236,22 @@ export function updateMaterialEntry(
     invoiceNumber: string
     quantity: number
     unitCost: number
+    category: TradeCategory
+    tradeId: string
   }>
 ): MaterialEntry | null {
   const entry = materialStorage.getById(entryId)
   if (!entry) return null
 
-  const updated = materialStorage.update(entryId, updates)
+  const normalizedUpdates: any = { ...updates }
+  if (updates.materialName !== undefined) normalizedUpdates.materialName = updates.materialName
+  if (updates.totalCost !== undefined) normalizedUpdates.totalCost = updates.totalCost
+  if (updates.vendor !== undefined) normalizedUpdates.vendor = updates.vendor
+  if (updates.invoiceNumber !== undefined) normalizedUpdates.invoiceNumber = updates.invoiceNumber
+  if (updates.category !== undefined) normalizedUpdates.category = updates.category
+  if (updates.tradeId !== undefined) normalizedUpdates.tradeId = updates.tradeId
+
+  const updated = materialStorage.update(entryId, normalizedUpdates)
   
   if (updated) {
     recalculateActuals(entry.projectId)

@@ -787,6 +787,8 @@ export async function updateMaterialEntryInDB(entryId: string, updates: any): Pr
   if (updates.unitCost !== undefined) updateData.unit_cost = updates.unitCost
   if (updates.vendor !== undefined) updateData.vendor = updates.vendor
   if (updates.invoiceNumber !== undefined) updateData.invoice_number = updates.invoiceNumber
+  if (updates.category !== undefined) updateData.category = updates.category
+  if (updates.tradeId !== undefined) updateData.trade_id = updates.tradeId
 
   const { data, error } = await supabase
     .from('material_entries')
