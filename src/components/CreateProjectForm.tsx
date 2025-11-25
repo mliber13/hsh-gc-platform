@@ -26,6 +26,7 @@ export interface ProjectFormData {
   name: string
   type: ProjectType
   planId: string
+  planDisplayId?: string
   planOptions?: string[]
   address: string
   city: string
@@ -55,6 +56,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
     name: '',
     type: 'residential-new-build',
     planId: '',
+    planDisplayId: '',
     planOptions: [],
     address: '',
     city: '',
@@ -233,7 +235,28 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                   <Label htmlFor="planId">Plan ID *</Label>
                   <Select 
                     value={formData.planId} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, planId: value, planOptions: [] }))}
+                    onValueChange={(value) => {
+                      if (value === 'custom') {
+                        setFormData(prev => ({
+                          ...prev,
+                          planId: 'custom',
+                          planDisplayId: '',
+                          planOptions: [],
+                          estimateTemplateId: undefined,
+                        }))
+                        return
+                      }
+                      
+                      const chosenPlan = availablePlans.find(plan => plan.id === value)
+                      
+                      setFormData(prev => ({
+                        ...prev,
+                        planId: value,
+                        planDisplayId: chosenPlan?.planId,
+                        planOptions: [],
+                        estimateTemplateId: chosenPlan?.estimateTemplateId,
+                      }))
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a plan..." />

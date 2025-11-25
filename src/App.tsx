@@ -19,6 +19,7 @@ import {
   getProject_Hybrid,
   updateProject_Hybrid,
   deleteProject_Hybrid,
+  addTrade_Hybrid,
 } from './services/hybridService'
 import { applyTemplateToEstimate } from './services/estimateTemplateService'
 import { getCurrentUserProfile, UserProfile } from './services/userService'
@@ -109,7 +110,10 @@ function App() {
     // Create the project with the form data
     // For spec homes, we'll create a placeholder client
     // If custom plan is selected, leave planId blank/null
-    const finalPlanId = formData.planId === 'custom' ? undefined : formData.planId
+    const finalPlanId =
+      formData.planId === 'custom'
+        ? (formData.planDisplayId || undefined)
+        : (formData.planDisplayId || formData.planId)
     
     const newProject = await createProject_Hybrid({
       name: formData.name,
@@ -139,12 +143,39 @@ function App() {
     })
 
     // Apply estimate template if one was selected via the plan
+    let projectToSet: Project | null = newProject
+
     if (formData.estimateTemplateId && newProject.estimate) {
-      const trades = applyTemplateToEstimate(formData.estimateTemplateId, newProject.estimate.id)
-      console.log(`Applied estimate template: ${trades.length} trades added to project`)
+      const templateTrades = applyTemplateToEstimate(formData.estimateTemplateId, newProject.estimate.id)
+      if (templateTrades.length > 0) {
+        for (const templateTrade of templateTrades) {
+          await addTrade_Hybrid(newProject.estimate.id, {
+            category: templateTrade.category,
+            name: templateTrade.name,
+            description: templateTrade.description,
+            quantity: templateTrade.quantity,
+            unit: templateTrade.unit,
+            laborCost: templateTrade.laborCost,
+            laborRate: templateTrade.laborRate,
+            laborHours: templateTrade.laborHours,
+            materialCost: templateTrade.materialCost,
+            materialRate: templateTrade.materialRate,
+            subcontractorCost: templateTrade.subcontractorCost,
+            isSubcontracted: templateTrade.isSubcontracted,
+            wasteFactor: templateTrade.wasteFactor,
+            markupPercent: templateTrade.markupPercent,
+            notes: templateTrade.notes,
+          })
+        }
+
+        const refreshed = await getProject_Hybrid(newProject.id)
+        if (refreshed) {
+          projectToSet = refreshed
+        }
+      }
     }
 
-    setSelectedProject(newProject)
+    setSelectedProject(projectToSet)
     setCurrentView('estimate')
   }
 
