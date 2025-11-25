@@ -1012,7 +1012,19 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                         {(() => {
                                           return unlinkedEntries.length > 0 && (
                                             <div className="space-y-2 mt-3 pt-3 border-t border-gray-200">
-                                              <p className="text-xs font-semibold text-gray-700 uppercase">General Category Entries:</p>
+                                              <div className="flex items-center justify-between">
+                                                <p className="text-xs font-semibold text-gray-700 uppercase">General Category Entries:</p>
+                                                <button
+                                                  className="text-xs h-6 px-2 border border-gray-300 rounded hover:bg-gray-100"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    const firstEntry = unlinkedEntries[0]
+                                                    handleEditEntry(firstEntry)
+                                                  }}
+                                                >
+                                                  Assign to Item
+                                                </button>
+                                              </div>
                                               {unlinkedEntries.map((entry) => (
                                                 <div
                                                   key={entry.id}
@@ -1094,6 +1106,77 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           </Card>
         </div>
       </div>
+
+      {/* All Actual Entries List */}
+      <Card>
+        <CardHeader>
+          <CardTitle>All Actual Entries</CardTitle>
+          <p className="text-sm text-gray-500">
+            Use this list to quickly edit or assign any entry—even if it isn’t linked to a specific estimate item yet.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {actualEntries.length === 0 ? (
+            <p className="text-gray-500 text-sm">No actual entries recorded yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {actualEntries.map((entry) => {
+                const tradeName = entry.tradeId ? trades.find(t => t.id === entry.tradeId)?.name : null
+                return (
+                  <div
+                    key={entry.id}
+                    className={`flex flex-col sm:flex-row sm:items-center sm:justify-between border rounded-lg p-3 ${getEntryColor(entry.type)}`}
+                  >
+                    <div className="flex items-start gap-3 flex-1">
+                      {getEntryIcon(entry.type)}
+                      <div className="flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                          <span>{formatDate(entry.date)}</span>
+                          <span>•</span>
+                          <span className="font-semibold text-gray-800">
+                            {entry.category ? TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category : 'No category'}
+                          </span>
+                          <span>•</span>
+                          <span className="uppercase tracking-wide">{entry.type}</span>
+                        </div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {entry.description || entry.vendor || entry.subcontractorName || 'No description'}
+                        </p>
+                        <div className="text-xs text-gray-500">
+                          {tradeName ? (
+                            <span className="text-green-700 font-semibold">Linked to {tradeName}</span>
+                          ) : (
+                            <span className="text-red-600 font-semibold">Not linked to a specific item</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between sm:flex-col sm:items-end gap-3 mt-3 sm:mt-0">
+                      <p className="text-base font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditEntry(entry)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDeleteEntry(entry)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Print Report */}
       {showPrintReport && (
