@@ -742,6 +742,7 @@ export async function createMaterialEntryInDB(projectId: string, entry: any): Pr
       actuals_id: actualsId,
       category: entry.category,
       trade_id: entry.tradeId,
+    group: entry.group,
       description: entry.materialName,
       date: entry.date.toISOString(),
       quantity: entry.quantity || 0,
@@ -789,6 +790,7 @@ export async function updateMaterialEntryInDB(entryId: string, updates: any): Pr
   if (updates.invoiceNumber !== undefined) updateData.invoice_number = updates.invoiceNumber
   if (updates.category !== undefined) updateData.category = updates.category
   if (updates.tradeId !== undefined) updateData.trade_id = updates.tradeId
+  if (updates.group !== undefined) updateData.group = updates.group
 
   const { data, error } = await supabase
     .from('material_entries')

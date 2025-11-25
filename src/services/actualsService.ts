@@ -205,6 +205,7 @@ export function addMaterialEntry(
     vendor: data.vendor,
     invoiceNumber: data.invoiceNumber,
     createdAt: new Date(),
+    group: getCategoryGroup(data.category),
   }
 
   // Save material entry
@@ -238,6 +239,7 @@ export function updateMaterialEntry(
     unitCost: number
     category: TradeCategory
     tradeId: string
+    group: string
   }>
 ): MaterialEntry | null {
   const entry = materialStorage.getById(entryId)
@@ -250,6 +252,7 @@ export function updateMaterialEntry(
   if (updates.invoiceNumber !== undefined) normalizedUpdates.invoiceNumber = updates.invoiceNumber
   if (updates.category !== undefined) normalizedUpdates.category = updates.category
   if (updates.tradeId !== undefined) normalizedUpdates.tradeId = updates.tradeId
+  if (updates.group !== undefined) normalizedUpdates.group = updates.group
 
   const updated = materialStorage.update(entryId, normalizedUpdates)
   
