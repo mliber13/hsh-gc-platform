@@ -13,6 +13,7 @@ import {
   MaterialEntry,
   SubcontractorEntry,
   TradeCategory,
+  getCategoryGroup,
 } from '@/types'
 import {
   projectStorage,
