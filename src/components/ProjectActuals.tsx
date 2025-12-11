@@ -797,21 +797,23 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
                       {isGroupExpanded && (
                         <div className="border-t border-gray-200 bg-gray-50 p-4 space-y-4">
-                          {/* Group Breakdown */}
-                          {groupActual > 0 && (() => {
-                            const groupBreakdown = getGroupActualsByType(group, groupCategories)
+                          {/* Group Breakdown - Always show if group has any entries */}
+                          {(() => {
                             const groupEntries = Object.keys(groupCategories).flatMap(category => getActualsByCategory(category))
+                            if (groupEntries.length === 0) return null
+                            
+                            const groupBreakdown = getGroupActualsByType(group, groupCategories)
                             const unlinkedGroupEntries = groupEntries.filter(entry => !entry.tradeId)
                             return (
-                              <div className="mb-4 pb-4 border-b border-gray-300 bg-white rounded-lg p-4">
-                                <p className="text-sm font-semibold text-gray-800 uppercase mb-3">Group Breakdown by Type:</p>
+                              <div className="mb-4 pb-4 border-b-2 border-gray-400 bg-white rounded-lg p-4 shadow-sm">
+                                <p className="text-base font-bold text-gray-900 mb-3">💰 Group Breakdown by Type:</p>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                   <div className={`px-3 py-2 rounded-md border text-sm ${
                                     groupBreakdown.labor > 0 
                                       ? 'bg-blue-50 border-blue-300 text-blue-800' 
                                       : 'bg-gray-50 border-gray-200 text-gray-400'
                                   }`}>
-                                    <div className="font-semibold mb-1">Labor</div>
+                                    <div className="font-semibold mb-1">👷 Labor</div>
                                     <div className="text-lg font-bold">{formatCurrency(groupBreakdown.labor)}</div>
                                   </div>
                                   <div className={`px-3 py-2 rounded-md border text-sm ${
@@ -819,7 +821,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                       ? 'bg-green-50 border-green-300 text-green-800' 
                                       : 'bg-gray-50 border-gray-200 text-gray-400'
                                   }`}>
-                                    <div className="font-semibold mb-1">Material</div>
+                                    <div className="font-semibold mb-1">📦 Material</div>
                                     <div className="text-lg font-bold">{formatCurrency(groupBreakdown.material)}</div>
                                   </div>
                                   <div className={`px-3 py-2 rounded-md border text-sm ${
@@ -827,12 +829,12 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                       ? 'bg-orange-50 border-orange-300 text-orange-800' 
                                       : 'bg-gray-50 border-gray-200 text-gray-400'
                                   }`}>
-                                    <div className="font-semibold mb-1">Subcontractor</div>
+                                    <div className="font-semibold mb-1">👷‍♂️ Subcontractor</div>
                                     <div className="text-lg font-bold">{formatCurrency(groupBreakdown.subcontractor)}</div>
                                   </div>
                                   {unlinkedGroupEntries.length > 0 && (
                                     <div className="px-3 py-2 rounded-md border bg-yellow-50 border-yellow-300 text-yellow-800 text-sm">
-                                      <div className="font-semibold mb-1">General ({unlinkedGroupEntries.length})</div>
+                                      <div className="font-semibold mb-1">📋 General ({unlinkedGroupEntries.length})</div>
                                       <div className="text-lg font-bold">{formatCurrency(unlinkedGroupEntries.reduce((sum, e) => sum + e.amount, 0))}</div>
                                     </div>
                                   )}
@@ -886,35 +888,35 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                   </div>
                                 </div>
                                 
-                                {/* Breakdown by Type */}
-                                {categoryActual > 0 && (
-                                  <div className="mb-3 pb-3 border-b border-gray-200">
-                                    <p className="text-xs font-semibold text-gray-700 uppercase mb-2">Breakdown by Type:</p>
+                                {/* Breakdown by Type - Always show if category has any entries */}
+                                {getActualsByCategory(category).length > 0 && (
+                                  <div className="mb-3 pb-3 border-b border-gray-200 bg-gray-50 p-3 rounded">
+                                    <p className="text-sm font-semibold text-gray-800 mb-2">💰 Breakdown by Type:</p>
                                     <div className="flex flex-wrap gap-2">
                                       <div className={`px-3 py-1.5 rounded-md border text-xs font-medium ${
                                         categoryActualBreakdown.labor > 0 
                                           ? 'bg-blue-50 border-blue-300 text-blue-800' 
                                           : 'bg-gray-50 border-gray-200 text-gray-400'
                                       }`}>
-                                        <span className="font-semibold">Labor:</span> {formatCurrency(categoryActualBreakdown.labor)}
+                                        <span className="font-semibold">👷 Labor:</span> {formatCurrency(categoryActualBreakdown.labor)}
                                       </div>
                                       <div className={`px-3 py-1.5 rounded-md border text-xs font-medium ${
                                         categoryActualBreakdown.material > 0 
                                           ? 'bg-green-50 border-green-300 text-green-800' 
                                           : 'bg-gray-50 border-gray-200 text-gray-400'
                                       }`}>
-                                        <span className="font-semibold">Material:</span> {formatCurrency(categoryActualBreakdown.material)}
+                                        <span className="font-semibold">📦 Material:</span> {formatCurrency(categoryActualBreakdown.material)}
                                       </div>
                                       <div className={`px-3 py-1.5 rounded-md border text-xs font-medium ${
                                         categoryActualBreakdown.subcontractor > 0 
                                           ? 'bg-orange-50 border-orange-300 text-orange-800' 
                                           : 'bg-gray-50 border-gray-200 text-gray-400'
                                       }`}>
-                                        <span className="font-semibold">Subcontractor:</span> {formatCurrency(categoryActualBreakdown.subcontractor)}
+                                        <span className="font-semibold">👷‍♂️ Subcontractor:</span> {formatCurrency(categoryActualBreakdown.subcontractor)}
                                       </div>
                                       {unlinkedEntries.length > 0 && (
                                         <div className="px-3 py-1.5 rounded-md border bg-yellow-50 border-yellow-300 text-yellow-800 text-xs font-medium">
-                                          <span className="font-semibold">General ({unlinkedEntries.length}):</span> {formatCurrency(unlinkedEntries.reduce((sum, e) => sum + e.amount, 0))}
+                                          <span className="font-semibold">📋 General ({unlinkedEntries.length}):</span> {formatCurrency(unlinkedEntries.reduce((sum, e) => sum + e.amount, 0))}
                                         </div>
                                       )}
                                     </div>
@@ -1021,37 +1023,37 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                           </div>
                                         </div>
 
-                                        {/* Trade Item Breakdown by Type */}
-                                        {tradeActualTotal > 0 && (() => {
+                                        {/* Trade Item Breakdown by Type - Always show if item has entries */}
+                                        {tradeActuals.length > 0 && (() => {
                                           const tradeBreakdown = {
                                             labor: tradeActuals.filter(e => e.type === 'labor').reduce((sum, entry) => sum + entry.amount, 0),
                                             material: tradeActuals.filter(e => e.type === 'material').reduce((sum, entry) => sum + entry.amount, 0),
                                             subcontractor: tradeActuals.filter(e => e.type === 'subcontractor').reduce((sum, entry) => sum + entry.amount, 0),
                                           }
                                           return (
-                                            <div className="mb-3 pb-3 border-b border-gray-200">
-                                              <p className="text-xs font-semibold text-gray-700 uppercase mb-2">Item Breakdown:</p>
+                                            <div className="mb-3 pb-3 border-b border-gray-200 bg-gray-50 p-2 rounded">
+                                              <p className="text-xs font-semibold text-gray-800 mb-2">💰 Item Breakdown:</p>
                                               <div className="flex flex-wrap gap-2">
                                                 <div className={`px-2 py-1 rounded border text-xs ${
                                                   tradeBreakdown.labor > 0 
                                                     ? 'bg-blue-50 border-blue-200 text-blue-800' 
                                                     : 'bg-gray-50 border-gray-200 text-gray-400'
                                                 }`}>
-                                                  <span className="font-semibold">Labor:</span> {formatCurrency(tradeBreakdown.labor)}
+                                                  <span className="font-semibold">👷 Labor:</span> {formatCurrency(tradeBreakdown.labor)}
                                                 </div>
                                                 <div className={`px-2 py-1 rounded border text-xs ${
                                                   tradeBreakdown.material > 0 
                                                     ? 'bg-green-50 border-green-200 text-green-800' 
                                                     : 'bg-gray-50 border-gray-200 text-gray-400'
                                                 }`}>
-                                                  <span className="font-semibold">Material:</span> {formatCurrency(tradeBreakdown.material)}
+                                                  <span className="font-semibold">📦 Material:</span> {formatCurrency(tradeBreakdown.material)}
                                                 </div>
                                                 <div className={`px-2 py-1 rounded border text-xs ${
                                                   tradeBreakdown.subcontractor > 0 
                                                     ? 'bg-orange-50 border-orange-200 text-orange-800' 
                                                     : 'bg-gray-50 border-gray-200 text-gray-400'
                                                 }`}>
-                                                  <span className="font-semibold">Sub:</span> {formatCurrency(tradeBreakdown.subcontractor)}
+                                                  <span className="font-semibold">👷‍♂️ Sub:</span> {formatCurrency(tradeBreakdown.subcontractor)}
                                                 </div>
                                               </div>
                                             </div>
