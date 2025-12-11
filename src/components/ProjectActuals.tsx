@@ -954,6 +954,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                           })()}
                           
                           {Object.entries(groupCategories).map(([category, categoryTrades]) => {
+                            const categoryKey = `${group}-${category}`
+                            const isCategoryExpanded = expandedCategories.has(categoryKey)
                             const categoryEstimate = getCategoryEstimate(category)
                             const categoryActual = getCategoryActual(category)
                             const categoryVariance = categoryActual - categoryEstimate
@@ -967,42 +969,52 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                             const categorySubVariance = categoryActualBreakdown.subcontractor - categoryEstimateBreakdown.subcontractor
                             
                             return (
-                              <div key={category} className="bg-white rounded-lg border border-gray-200 p-3">
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-lg">
-                                      {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
-                                    </span>
-                                    <div>
-                                      <h4 className="font-semibold text-gray-900 text-sm">
-                                        {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
-                                      </h4>
-                                      <p className="text-xs text-gray-500">
-                                        {categoryTrades.length} items • {getActualsByCategory(category).length} entries
-                                      </p>
+                              <div key={category} className="bg-white rounded-lg border border-gray-200">
+                                <button
+                                  onClick={() => toggleCategory(categoryKey)}
+                                  className="w-full p-3 hover:bg-gray-50 transition-colors"
+                                >
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-lg">
+                                        {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
+                                      </span>
+                                      <div>
+                                        <h4 className="font-semibold text-gray-900 text-sm">
+                                          {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                                        </h4>
+                                        <p className="text-xs text-gray-500">
+                                          {categoryTrades.length} items • {getActualsByCategory(category).length} entries
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                      <div className="flex items-center gap-4 text-sm">
+                                        <div className="text-right">
+                                          <span className="text-gray-500">Est:</span>
+                                          <span className="font-semibold ml-1">{formatCurrency(categoryEstimate)}</span>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="text-gray-500">Act:</span>
+                                          <span className={`font-semibold ml-1 ${isOver ? 'text-red-600' : 'text-green-600'}`}>
+                                            {formatCurrency(categoryActual)}
+                                          </span>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="text-gray-500">Var:</span>
+                                          <span className={`font-semibold ml-1 ${isOver ? 'text-red-600' : 'text-green-600'}`}>
+                                            {formatCurrency(Math.abs(categoryVariance))}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {isCategoryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-4 text-sm">
-                                    <div className="text-right">
-                                      <span className="text-gray-500">Est:</span>
-                                      <span className="font-semibold ml-1">{formatCurrency(categoryEstimate)}</span>
-                                    </div>
-                                    <div className="text-right">
-                                      <span className="text-gray-500">Act:</span>
-                                      <span className={`font-semibold ml-1 ${isOver ? 'text-red-600' : 'text-green-600'}`}>
-                                        {formatCurrency(categoryActual)}
-                                      </span>
-                                    </div>
-                                    <div className="text-right">
-                                      <span className="text-gray-500">Var:</span>
-                                      <span className={`font-semibold ml-1 ${isOver ? 'text-red-600' : 'text-green-600'}`}>
-                                        {formatCurrency(Math.abs(categoryVariance))}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
+                                </button>
                                 
-                                {/* Inline Breakdown in Category Header */}
+                                {isCategoryExpanded && (
+                                  <div className="px-3 pb-3">
+                                    {/* Inline Breakdown in Category Header */}
                                 {(categoryEntries.length > 0 || categoryEstimateBreakdown.labor > 0 || categoryEstimateBreakdown.material > 0 || categoryEstimateBreakdown.subcontractor > 0) && (
                                   <div className="mb-3 pb-2 border-b border-gray-300">
                                     <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -1424,6 +1436,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     )
                                   })}
                                 </div>
+                                  </div>
+                                )}
                               </div>
                             )
                           })}
