@@ -314,6 +314,17 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     }
   }
 
+  const getGroupActualsByType = (group: string, groupCategories: Record<string, Trade[]>) => {
+    const categories = Object.keys(groupCategories)
+    const groupEntries = categories.flatMap(category => getActualsByCategory(category))
+    return {
+      labor: groupEntries.filter(e => e.type === 'labor').reduce((sum, entry) => sum + entry.amount, 0),
+      material: groupEntries.filter(e => e.type === 'material').reduce((sum, entry) => sum + entry.amount, 0),
+      subcontractor: groupEntries.filter(e => e.type === 'subcontractor').reduce((sum, entry) => sum + entry.amount, 0),
+      generalCount: groupEntries.filter(e => !e.tradeId).length,
+    }
+  }
+
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
@@ -786,6 +797,50 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
                       {isGroupExpanded && (
                         <div className="border-t border-gray-200 bg-gray-50 p-4 space-y-4">
+                          {/* Group Breakdown */}
+                          {groupActual > 0 && (() => {
+                            const groupBreakdown = getGroupActualsByType(group, groupCategories)
+                            const groupEntries = Object.keys(groupCategories).flatMap(category => getActualsByCategory(category))
+                            const unlinkedGroupEntries = groupEntries.filter(entry => !entry.tradeId)
+                            return (
+                              <div className="mb-4 pb-4 border-b border-gray-300 bg-white rounded-lg p-4">
+                                <p className="text-sm font-semibold text-gray-800 uppercase mb-3">Group Breakdown by Type:</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                  <div className={`px-3 py-2 rounded-md border text-sm ${
+                                    groupBreakdown.labor > 0 
+                                      ? 'bg-blue-50 border-blue-300 text-blue-800' 
+                                      : 'bg-gray-50 border-gray-200 text-gray-400'
+                                  }`}>
+                                    <div className="font-semibold mb-1">Labor</div>
+                                    <div className="text-lg font-bold">{formatCurrency(groupBreakdown.labor)}</div>
+                                  </div>
+                                  <div className={`px-3 py-2 rounded-md border text-sm ${
+                                    groupBreakdown.material > 0 
+                                      ? 'bg-green-50 border-green-300 text-green-800' 
+                                      : 'bg-gray-50 border-gray-200 text-gray-400'
+                                  }`}>
+                                    <div className="font-semibold mb-1">Material</div>
+                                    <div className="text-lg font-bold">{formatCurrency(groupBreakdown.material)}</div>
+                                  </div>
+                                  <div className={`px-3 py-2 rounded-md border text-sm ${
+                                    groupBreakdown.subcontractor > 0 
+                                      ? 'bg-orange-50 border-orange-300 text-orange-800' 
+                                      : 'bg-gray-50 border-gray-200 text-gray-400'
+                                  }`}>
+                                    <div className="font-semibold mb-1">Subcontractor</div>
+                                    <div className="text-lg font-bold">{formatCurrency(groupBreakdown.subcontractor)}</div>
+                                  </div>
+                                  {unlinkedGroupEntries.length > 0 && (
+                                    <div className="px-3 py-2 rounded-md border bg-yellow-50 border-yellow-300 text-yellow-800 text-sm">
+                                      <div className="font-semibold mb-1">General ({unlinkedGroupEntries.length})</div>
+                                      <div className="text-lg font-bold">{formatCurrency(unlinkedGroupEntries.reduce((sum, e) => sum + e.amount, 0))}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })()}
+                          
                           {Object.entries(groupCategories).map(([category, categoryTrades]) => {
                             const categoryEstimate = getCategoryEstimate(category)
                             const categoryActual = getCategoryActual(category)
@@ -797,7 +852,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                             
                             return (
                               <div key={category} className="bg-white rounded-lg border border-gray-200 p-3">
-                                <div className="flex items-center justify-between mb-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                                   <div className="flex items-center gap-2">
                                     <span className="text-lg">
                                       {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
@@ -829,29 +884,42 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                       </span>
                                     </div>
                                   </div>
-                                    <div className="flex flex-wrap gap-2 text-[11px] text-gray-600">
-                                      {categoryActualBreakdown.labor > 0 && (
-                                        <span className="px-2 py-1 bg-blue-50 border border-blue-200 rounded-full">
-                                          Labor {formatCurrency(categoryActualBreakdown.labor)}
-                                        </span>
-                                      )}
-                                      {categoryActualBreakdown.material > 0 && (
-                                        <span className="px-2 py-1 bg-green-50 border border-green-200 rounded-full">
-                                          Material {formatCurrency(categoryActualBreakdown.material)}
-                                        </span>
-                                      )}
-                                      {categoryActualBreakdown.subcontractor > 0 && (
-                                        <span className="px-2 py-1 bg-orange-50 border border-orange-200 rounded-full">
-                                          Sub {formatCurrency(categoryActualBreakdown.subcontractor)}
-                                        </span>
-                                      )}
+                                </div>
+                                
+                                {/* Breakdown by Type */}
+                                {categoryActual > 0 && (
+                                  <div className="mb-3 pb-3 border-b border-gray-200">
+                                    <p className="text-xs font-semibold text-gray-700 uppercase mb-2">Breakdown by Type:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      <div className={`px-3 py-1.5 rounded-md border text-xs font-medium ${
+                                        categoryActualBreakdown.labor > 0 
+                                          ? 'bg-blue-50 border-blue-300 text-blue-800' 
+                                          : 'bg-gray-50 border-gray-200 text-gray-400'
+                                      }`}>
+                                        <span className="font-semibold">Labor:</span> {formatCurrency(categoryActualBreakdown.labor)}
+                                      </div>
+                                      <div className={`px-3 py-1.5 rounded-md border text-xs font-medium ${
+                                        categoryActualBreakdown.material > 0 
+                                          ? 'bg-green-50 border-green-300 text-green-800' 
+                                          : 'bg-gray-50 border-gray-200 text-gray-400'
+                                      }`}>
+                                        <span className="font-semibold">Material:</span> {formatCurrency(categoryActualBreakdown.material)}
+                                      </div>
+                                      <div className={`px-3 py-1.5 rounded-md border text-xs font-medium ${
+                                        categoryActualBreakdown.subcontractor > 0 
+                                          ? 'bg-orange-50 border-orange-300 text-orange-800' 
+                                          : 'bg-gray-50 border-gray-200 text-gray-400'
+                                      }`}>
+                                        <span className="font-semibold">Subcontractor:</span> {formatCurrency(categoryActualBreakdown.subcontractor)}
+                                      </div>
                                       {unlinkedEntries.length > 0 && (
-                                        <span className="px-2 py-1 bg-gray-100 border border-gray-200 rounded-full">
-                                          General entries: {unlinkedEntries.length}
-                                        </span>
+                                        <div className="px-3 py-1.5 rounded-md border bg-yellow-50 border-yellow-300 text-yellow-800 text-xs font-medium">
+                                          <span className="font-semibold">General ({unlinkedEntries.length}):</span> {formatCurrency(unlinkedEntries.reduce((sum, e) => sum + e.amount, 0))}
+                                        </div>
                                       )}
                                     </div>
-                                </div>
+                                  </div>
+                                )}
                                 <div className="space-y-2">
                                   {categoryTrades.map((trade) => {
                                     const tradeActuals = getActualsByTrade(trade.id)
@@ -952,6 +1020,43 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                             )}
                                           </div>
                                         </div>
+
+                                        {/* Trade Item Breakdown by Type */}
+                                        {tradeActualTotal > 0 && (() => {
+                                          const tradeBreakdown = {
+                                            labor: tradeActuals.filter(e => e.type === 'labor').reduce((sum, entry) => sum + entry.amount, 0),
+                                            material: tradeActuals.filter(e => e.type === 'material').reduce((sum, entry) => sum + entry.amount, 0),
+                                            subcontractor: tradeActuals.filter(e => e.type === 'subcontractor').reduce((sum, entry) => sum + entry.amount, 0),
+                                          }
+                                          return (
+                                            <div className="mb-3 pb-3 border-b border-gray-200">
+                                              <p className="text-xs font-semibold text-gray-700 uppercase mb-2">Item Breakdown:</p>
+                                              <div className="flex flex-wrap gap-2">
+                                                <div className={`px-2 py-1 rounded border text-xs ${
+                                                  tradeBreakdown.labor > 0 
+                                                    ? 'bg-blue-50 border-blue-200 text-blue-800' 
+                                                    : 'bg-gray-50 border-gray-200 text-gray-400'
+                                                }`}>
+                                                  <span className="font-semibold">Labor:</span> {formatCurrency(tradeBreakdown.labor)}
+                                                </div>
+                                                <div className={`px-2 py-1 rounded border text-xs ${
+                                                  tradeBreakdown.material > 0 
+                                                    ? 'bg-green-50 border-green-200 text-green-800' 
+                                                    : 'bg-gray-50 border-gray-200 text-gray-400'
+                                                }`}>
+                                                  <span className="font-semibold">Material:</span> {formatCurrency(tradeBreakdown.material)}
+                                                </div>
+                                                <div className={`px-2 py-1 rounded border text-xs ${
+                                                  tradeBreakdown.subcontractor > 0 
+                                                    ? 'bg-orange-50 border-orange-200 text-orange-800' 
+                                                    : 'bg-gray-50 border-gray-200 text-gray-400'
+                                                }`}>
+                                                  <span className="font-semibold">Sub:</span> {formatCurrency(tradeBreakdown.subcontractor)}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          )
+                                        })()}
 
                                         {/* Actual Entries for this trade */}
                                         {tradeActuals.length > 0 && (
