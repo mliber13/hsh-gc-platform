@@ -715,6 +715,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   
                   const groupVariance = groupActual - groupEstimate
                   const isGroupOver = groupVariance > 0
+                  
+                  // Calculate breakdown for header display
+                  const groupBreakdown = getGroupActualsByType(group, groupCategories)
+                  const groupEntries = Object.keys(groupCategories).flatMap(category => getActualsByCategory(category))
+                  const hasGroupActuals = groupEntries.length > 0
 
                   return (
                     <Card key={group} className="border-2">
@@ -740,7 +745,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                             </div>
                             {isGroupExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="grid grid-cols-3 gap-2 text-xs mb-2">
                             <div className="text-center bg-blue-50 rounded p-2">
                               <p className="text-gray-600 mb-1">Est.</p>
                               <p className="font-bold text-gray-900">{formatCurrency(groupEstimate)}</p>
@@ -757,41 +762,72 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                               </p>
                             </div>
                           </div>
+                          {/* Breakdown in collapsed header - Mobile */}
+                          {hasGroupActuals && (
+                            <div className="flex flex-wrap gap-1.5 text-[10px] mt-2 pt-2 border-t border-gray-200">
+                              <span className={`px-2 py-0.5 rounded ${groupBreakdown.labor > 0 ? 'bg-blue-100 text-blue-800' : 'text-gray-400'}`}>
+                                👷 {formatCurrency(groupBreakdown.labor)}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded ${groupBreakdown.material > 0 ? 'bg-green-100 text-green-800' : 'text-gray-400'}`}>
+                                📦 {formatCurrency(groupBreakdown.material)}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded ${groupBreakdown.subcontractor > 0 ? 'bg-orange-100 text-orange-800' : 'text-gray-400'}`}>
+                                👷‍♂️ {formatCurrency(groupBreakdown.subcontractor)}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Desktop Layout - Row */}
-                        <div className="hidden sm:flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="text-2xl">
-                              {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.icon || '📦'}
-                            </span>
-                            <div className="text-left">
-                              <p className="font-bold text-gray-900">
-                                {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {Object.values(groupCategories).flat().length} items
-                              </p>
+                        <div className="hidden sm:block">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-3">
+                              <span className="text-2xl">
+                                {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.icon || '📦'}
+                              </span>
+                              <div className="text-left">
+                                <p className="font-bold text-gray-900">
+                                  {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {Object.values(groupCategories).flat().length} items
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="text-right">
+                                <p className="text-sm text-gray-600">Estimated</p>
+                                <p className="font-bold text-gray-900">{formatCurrency(groupEstimate)}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm text-gray-600">Actual</p>
+                                <p className="font-bold text-gray-900">{formatCurrency(groupActual)}</p>
+                              </div>
+                              <div className="text-right min-w-[100px]">
+                                <p className="text-sm text-gray-600">Variance</p>
+                                <p className={`font-bold ${isGroupOver ? 'text-red-600' : 'text-green-600'}`}>
+                                  {formatCurrency(Math.abs(groupVariance))}
+                                  {isGroupOver ? ' ⚠️' : ' ✓'}
+                                </p>
+                              </div>
+                              {isGroupExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <p className="text-sm text-gray-600">Estimated</p>
-                              <p className="font-bold text-gray-900">{formatCurrency(groupEstimate)}</p>
+                          {/* Breakdown in collapsed header - Desktop */}
+                          {hasGroupActuals && (
+                            <div className="flex items-center gap-3 text-xs pt-2 border-t border-gray-200">
+                              <span className="text-gray-600 font-semibold">Breakdown:</span>
+                              <span className={`px-2 py-1 rounded ${groupBreakdown.labor > 0 ? 'bg-blue-100 text-blue-800' : 'text-gray-400'}`}>
+                                👷 Labor {formatCurrency(groupBreakdown.labor)}
+                              </span>
+                              <span className={`px-2 py-1 rounded ${groupBreakdown.material > 0 ? 'bg-green-100 text-green-800' : 'text-gray-400'}`}>
+                                📦 Material {formatCurrency(groupBreakdown.material)}
+                              </span>
+                              <span className={`px-2 py-1 rounded ${groupBreakdown.subcontractor > 0 ? 'bg-orange-100 text-orange-800' : 'text-gray-400'}`}>
+                                👷‍♂️ Sub {formatCurrency(groupBreakdown.subcontractor)}
+                              </span>
                             </div>
-                            <div className="text-right">
-                              <p className="text-sm text-gray-600">Actual</p>
-                              <p className="font-bold text-gray-900">{formatCurrency(groupActual)}</p>
-                            </div>
-                            <div className="text-right min-w-[100px]">
-                              <p className="text-sm text-gray-600">Variance</p>
-                              <p className={`font-bold ${isGroupOver ? 'text-red-600' : 'text-green-600'}`}>
-                                {formatCurrency(Math.abs(groupVariance))}
-                                {isGroupOver ? ' ⚠️' : ' ✓'}
-                              </p>
-                            </div>
-                            {isGroupExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                          </div>
+                          )}
                         </div>
                       </button>
 
@@ -887,6 +923,29 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     </div>
                                   </div>
                                 </div>
+                                
+                                {/* Inline Breakdown in Category Header */}
+                                {categoryEntries.length > 0 && (
+                                  <div className="mb-3 pb-2 border-b border-gray-300">
+                                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                                      <span className="text-gray-600 font-semibold">Breakdown:</span>
+                                      <span className={`px-2 py-1 rounded ${categoryActualBreakdown.labor > 0 ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'text-gray-400'}`}>
+                                        👷 Labor {formatCurrency(categoryActualBreakdown.labor)}
+                                      </span>
+                                      <span className={`px-2 py-1 rounded ${categoryActualBreakdown.material > 0 ? 'bg-green-100 text-green-800 border border-green-300' : 'text-gray-400'}`}>
+                                        📦 Material {formatCurrency(categoryActualBreakdown.material)}
+                                      </span>
+                                      <span className={`px-2 py-1 rounded ${categoryActualBreakdown.subcontractor > 0 ? 'bg-orange-100 text-orange-800 border border-orange-300' : 'text-gray-400'}`}>
+                                        👷‍♂️ Sub {formatCurrency(categoryActualBreakdown.subcontractor)}
+                                      </span>
+                                      {unlinkedEntries.length > 0 && (
+                                        <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 border border-yellow-300">
+                                          📋 General ({unlinkedEntries.length}) {formatCurrency(unlinkedEntries.reduce((sum, e) => sum + e.amount, 0))}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                                 
                                 {/* Breakdown by Type - Always show if category has any entries */}
                                 {getActualsByCategory(category).length > 0 && (
