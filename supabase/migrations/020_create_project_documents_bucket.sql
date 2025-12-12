@@ -1,0 +1,95 @@
+-- ============================================================================
+-- Migration: Create Project Documents Storage Bucket
+-- ============================================================================
+-- 
+-- Creates a Supabase Storage bucket for project documents
+-- (contracts, SOWs, agreements, etc.)
+--
+-- NOTE: Storage buckets must be created through Supabase Dashboard (not SQL)
+-- This migration is for documentation only.
+--
+
+-- NOTE: This SQL will fail - buckets must be created via Dashboard
+-- Create the storage bucket for project documents
+-- INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+-- VALUES (
+--   'project-documents',
+--   'project-documents',
+--   false, -- private bucket - requires authentication
+--   104857600, -- 100MB max file size
+--   ARRAY[
+--     -- PDFs (contracts, agreements, plans, permits)
+--     'application/pdf',
+--     -- Microsoft Word documents
+--     'application/msword',
+--     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+--     -- Microsoft Excel spreadsheets (budgets, cost breakdowns)
+--     'application/vnd.ms-excel',
+--     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+--     -- Images (photos, scans, drawings)
+--     'image/jpeg',
+--     'image/jpg',
+--     'image/png',
+--     'image/gif',
+--     'image/webp',
+--     -- Archives (compressed documents)
+--     'application/zip',
+--     'application/x-zip-compressed',
+--     -- Text files (notes, specifications)
+--     'text/plain',
+--     'text/csv'
+--   ]::text[]
+-- )
+-- ON CONFLICT (id) DO UPDATE
+-- SET 
+--   public = false,
+--   file_size_limit = 104857600,
+--   allowed_mime_types = ARRAY[
+--     'application/pdf',
+--     'application/msword',
+--     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+--     'image/jpeg',
+--     'image/png',
+--     'image/jpg',
+--     'application/zip'
+--   ]::text[];
+
+-- ============================================================================
+-- IMPORTANT: Storage Policies Setup
+-- ============================================================================
+-- 
+-- After creating the bucket through the Supabase Dashboard, you need to set up
+-- storage policies through the Supabase Dashboard:
+--
+-- 1. Go to Storage → Policies → project-documents bucket
+-- 2. Add these policies:
+--
+--    SELECT Policy (Organization Access):
+--    - Policy name: "Users can view documents in their organization"
+--    - Allowed operation: SELECT
+--    - Policy definition (paste this EXACT text):
+--        bucket_id = 'project-documents' AND (storage.foldername(name))[1] IN (SELECT organization_id FROM profiles WHERE id = auth.uid())
+--    - Target roles: authenticated
+--
+--    INSERT Policy (Organization Upload):
+--    - Policy name: "Users can upload documents in their organization"
+--    - Allowed operation: INSERT
+--    - Policy definition (paste this EXACT text):
+--        bucket_id = 'project-documents' AND (storage.foldername(name))[1] IN (SELECT organization_id FROM profiles WHERE id = auth.uid())
+--    - Target roles: authenticated
+--
+--    UPDATE Policy (Organization Update):
+--    - Policy name: "Users can update documents in their organization"
+--    - Allowed operation: UPDATE
+--    - Policy definition (paste this EXACT text):
+--        bucket_id = 'project-documents' AND (storage.foldername(name))[1] IN (SELECT organization_id FROM profiles WHERE id = auth.uid())
+--    - Target roles: authenticated
+--
+--    DELETE Policy (Organization Delete):
+--    - Policy name: "Users can delete documents in their organization"
+--    - Allowed operation: DELETE
+--    - Policy definition (paste this EXACT text):
+--        bucket_id = 'project-documents' AND (storage.foldername(name))[1] IN (SELECT organization_id FROM profiles WHERE id = auth.uid())
+--    - Target roles: authenticated
+--
+

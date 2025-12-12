@@ -18,6 +18,8 @@ import {
   SubcontractorEntry,
   PlanEstimateTemplate,
   CreatePlanEstimateTemplateInput,
+  ProjectDocument,
+  DocumentType,
 } from '@/types'
 
 // ============================================================================
@@ -1257,7 +1259,7 @@ export async function uploadQuotePDF(
 
     // Fetch user profile to get organization_id
     const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
+      .from('profiles')
       .select('organization_id')
       .eq('id', user.id)
       .single()
@@ -1576,6 +1578,275 @@ export async function loadProFormaInputs(projectId: string): Promise<any | null>
     }
   } catch (error) {
     console.error('Error in loadProFormaInputs:', error)
+    return null
+  }
+}
+
+// ============================================================================
+// PROJECT DOCUMENTS OPERATIONS
+// ============================================================================
+
+/**
+ * Upload a project document to Supabase Storage
+ * Files are organized by organization/project/filename
+ */
+export async function uploadProjectDocument(
+  file: File,
+  projectId: string,
+  documentType: DocumentType,
+  description?: string,
+  category?: string,
+  tags?: string[]
+): Promise<ProjectDocument | null> {
+  if (!isOnlineMode()) {
+    console.warn('Cannot upload files in offline mode')
+    return null
+  }
+
+  try {
+    // Get current user and their organization
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      console.error('User not authenticated')
+      return null
+    }
+
+    // Fetch user profile to get organization_id
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError || !profile) {
+      console.error('Error fetching user profile:', profileError)
+      return null
+    }
+
+    // Create a unique filename with timestamp
+    const timestamp = Date.now()
+    const fileExt = file.name.split('.').pop()
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+    const fileName = `${timestamp}-${sanitizedName}`
+    const filePath = `${profile.organization_id}/${projectId}/${fileName}`
+
+    // Upload to storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('project-documents')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      })
+
+    if (uploadError) {
+      console.error('Error uploading document:', uploadError)
+      return null
+    }
+
+    // Get public URL (or signed URL for private buckets)
+    const { data: { publicUrl } } = supabase.storage
+      .from('project-documents')
+      .getPublicUrl(filePath)
+
+    // Create document record in database
+    const { data: docData, error: docError } = await supabase
+      .from('project_documents')
+      .insert({
+        project_id: projectId,
+        organization_id: profile.organization_id,
+        name: file.name,
+        type: documentType,
+        file_url: publicUrl,
+        file_size: file.size,
+        mime_type: file.type,
+        uploaded_by: user.id,
+        description: description || null,
+        category: category || null,
+        tags: tags || null,
+      })
+      .select()
+      .single()
+
+    if (docError || !docData) {
+      console.error('Error creating document record:', docError)
+      // Try to delete the uploaded file if database insert failed
+      await supabase.storage.from('project-documents').remove([filePath])
+      return null
+    }
+
+    // Transform to ProjectDocument
+    return {
+      id: docData.id,
+      projectId: docData.project_id,
+      name: docData.name,
+      type: docData.type as DocumentType,
+      fileUrl: docData.file_url,
+      fileSize: docData.file_size,
+      mimeType: docData.mime_type,
+      category: docData.category || undefined,
+      tags: docData.tags || undefined,
+      uploadedBy: docData.uploaded_by,
+      uploadedAt: new Date(docData.uploaded_at),
+      description: docData.description || undefined,
+      version: docData.version || undefined,
+      replacesDocumentId: docData.replaces_document_id || undefined,
+    }
+  } catch (error) {
+    console.error('Error in uploadProjectDocument:', error)
+    return null
+  }
+}
+
+/**
+ * Fetch all documents for a project
+ */
+export async function fetchProjectDocuments(projectId: string): Promise<ProjectDocument[]> {
+  if (!isOnlineMode()) return []
+
+  try {
+    const { data, error } = await supabase
+      .from('project_documents')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('uploaded_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching project documents:', error)
+      return []
+    }
+
+    return data.map((row) => ({
+      id: row.id,
+      projectId: row.project_id,
+      name: row.name,
+      type: row.type as DocumentType,
+      fileUrl: row.file_url,
+      fileSize: row.file_size,
+      mimeType: row.mime_type,
+      category: row.category || undefined,
+      tags: row.tags || undefined,
+      uploadedBy: row.uploaded_by,
+      uploadedAt: new Date(row.uploaded_at),
+      description: row.description || undefined,
+      version: row.version || undefined,
+      replacesDocumentId: row.replaces_document_id || undefined,
+    }))
+  } catch (error) {
+    console.error('Error in fetchProjectDocuments:', error)
+    return []
+  }
+}
+
+/**
+ * Delete a project document
+ */
+export async function deleteProjectDocument(documentId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  try {
+    // First, get the document to find the file path
+    const { data: doc, error: fetchError } = await supabase
+      .from('project_documents')
+      .select('file_url')
+      .eq('id', documentId)
+      .single()
+
+    if (fetchError || !doc) {
+      console.error('Error fetching document:', fetchError)
+      return false
+    }
+
+    // Extract the file path from the URL
+    const urlParts = doc.file_url.split('/project-documents/')
+    if (urlParts.length < 2) {
+      console.error('Invalid file URL')
+      return false
+    }
+
+    const filePath = urlParts[1]
+
+    // Delete from storage
+    const { error: storageError } = await supabase.storage
+      .from('project-documents')
+      .remove([filePath])
+
+    if (storageError) {
+      console.error('Error deleting file from storage:', storageError)
+      // Continue to delete the database record even if storage delete fails
+    }
+
+    // Delete from database
+    const { error: dbError } = await supabase
+      .from('project_documents')
+      .delete()
+      .eq('id', documentId)
+
+    if (dbError) {
+      console.error('Error deleting document record:', dbError)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in deleteProjectDocument:', error)
+    return false
+  }
+}
+
+/**
+ * Update document metadata
+ */
+export async function updateProjectDocument(
+  documentId: string,
+  updates: {
+    name?: string
+    type?: DocumentType
+    description?: string
+    category?: string
+    tags?: string[]
+  }
+): Promise<ProjectDocument | null> {
+  if (!isOnlineMode()) return null
+
+  try {
+    const updateData: any = {}
+    if (updates.name !== undefined) updateData.name = updates.name
+    if (updates.type !== undefined) updateData.type = updates.type
+    if (updates.description !== undefined) updateData.description = updates.description
+    if (updates.category !== undefined) updateData.category = updates.category
+    if (updates.tags !== undefined) updateData.tags = updates.tags
+    updateData.updated_at = new Date().toISOString()
+
+    const { data, error } = await supabase
+      .from('project_documents')
+      .update(updateData)
+      .eq('id', documentId)
+      .select()
+      .single()
+
+    if (error || !data) {
+      console.error('Error updating document:', error)
+      return null
+    }
+
+    return {
+      id: data.id,
+      projectId: data.project_id,
+      name: data.name,
+      type: data.type as DocumentType,
+      fileUrl: data.file_url,
+      fileSize: data.file_size,
+      mimeType: data.mime_type,
+      category: data.category || undefined,
+      tags: data.tags || undefined,
+      uploadedBy: data.uploaded_by,
+      uploadedAt: new Date(data.uploaded_at),
+      description: data.description || undefined,
+      version: data.version || undefined,
+      replacesDocumentId: data.replaces_document_id || undefined,
+    }
+  } catch (error) {
+    console.error('Error in updateProjectDocument:', error)
     return null
   }
 }

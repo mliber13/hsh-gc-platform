@@ -590,6 +590,8 @@ export type DocumentType =
   | 'inspection'
   | 'warranty'
   | 'photo'
+  | 'subcontractor-agreement'
+  | 'scope-of-work-signoff'
   | 'other'
 
 export interface ProjectDocument {

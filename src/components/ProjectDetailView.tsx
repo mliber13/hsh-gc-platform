@@ -18,9 +18,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PROJECT_TYPES, PROJECT_STATUS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail, TrendingUp } from 'lucide-react'
+import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail, TrendingUp, FolderOpen } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import { ProFormaGenerator } from './ProFormaGenerator'
+import { ProjectDocuments } from './ProjectDocuments'
 
 interface ProjectDetailViewProps {
   project: Project
@@ -69,6 +70,7 @@ export function ProjectDetailView({
     totalActual: 0,
   })
   const [showProForma, setShowProForma] = useState(false)
+  const [showDocuments, setShowDocuments] = useState(false)
 
   // Load plans when editing mode is enabled
   useEffect(() => {
@@ -661,9 +663,9 @@ export function ProjectDetailView({
           </Card>
         </div>
 
-        {/* Secondary Action - Change Orders */}
-        {onViewChangeOrders && (
-          <div className="mb-6 sm:mb-8">
+        {/* Secondary Actions */}
+        <div className="mb-6 sm:mb-8 space-y-3">
+          {onViewChangeOrders && (
             <Button
               onClick={onViewChangeOrders}
               variant="outline"
@@ -672,6 +674,21 @@ export function ProjectDetailView({
               <FileText className="w-4 h-4 mr-2" />
               Manage Change Orders ({project.actuals?.changeOrders?.length || 0})
             </Button>
+          )}
+          <Button
+            onClick={() => setShowDocuments(!showDocuments)}
+            variant="outline"
+            className="w-full border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white"
+          >
+            <FolderOpen className="w-4 h-4 mr-2" />
+            {showDocuments ? 'Hide' : 'View'} Project Documents
+          </Button>
+        </div>
+
+        {/* Documents Section */}
+        {showDocuments && (
+          <div className="mb-6 sm:mb-8">
+            <ProjectDocuments projectId={project.id} />
           </div>
         )}
       </main>
