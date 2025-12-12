@@ -209,6 +209,12 @@ function App() {
     setCurrentView('change-orders')
   }
 
+  const handleViewDocuments = () => {
+    if (selectedProject) {
+      setCurrentView('documents')
+    }
+  }
+
   const handleViewForms = () => {
     setCurrentView('forms')
   }
