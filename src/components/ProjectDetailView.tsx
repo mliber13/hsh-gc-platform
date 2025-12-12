@@ -661,28 +661,84 @@ export function ProjectDetailView({
               </CardContent>
             </button>
           </Card>
-        </div>
 
-        {/* Secondary Actions */}
-        <div className="mb-6 sm:mb-8 space-y-3">
+          {/* Change Orders Card */}
           {onViewChangeOrders && (
-            <Button
-              onClick={onViewChangeOrders}
-              variant="outline"
-              className="w-full border-purple-600 text-purple-600 hover:bg-purple-600 hover:text-white"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Manage Change Orders ({project.actuals?.changeOrders?.length || 0})
-            </Button>
+            <Card className="bg-gradient-to-br from-[#9333EA] to-[#7C3AED] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
+              <button onClick={onViewChangeOrders} className="w-full text-left">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
+                      <FileText className="w-8 h-8" />
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm opacity-80">Change Orders</p>
+                      <p className="text-3xl font-bold">{project.actuals?.changeOrders?.length || 0}</p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <h3 className="text-2xl font-bold mb-3">Change Orders</h3>
+                  <p className="text-white/80 mb-4">
+                    Track and manage scope changes, cost adjustments, and schedule modifications throughout the project lifecycle.
+                  </p>
+                  <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Total Change Orders</span>
+                      <span className="font-semibold">{project.actuals?.changeOrders?.length || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-2 border-t border-white/20">
+                      <span>Status Tracking</span>
+                      <span className="font-semibold">Active</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center text-sm text-white/60">
+                    <span>Click to manage change orders →</span>
+                  </div>
+                </CardContent>
+              </button>
+            </Card>
           )}
-          <Button
-            onClick={() => setShowDocuments(!showDocuments)}
-            variant="outline"
-            className="w-full border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white"
-          >
-            <FolderOpen className="w-4 h-4 mr-2" />
-            {showDocuments ? 'Hide' : 'View'} Project Documents
-          </Button>
+
+          {/* Project Documents Card */}
+          <Card className="bg-gradient-to-br from-[#4F46E5] to-[#4338CA] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
+            <button onClick={() => setShowDocuments(!showDocuments)} className="w-full text-left">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
+                    <FolderOpen className="w-8 h-8" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm opacity-80">Documents</p>
+                    <p className="text-3xl font-bold">Files</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <h3 className="text-2xl font-bold mb-3">Project Documents</h3>
+                <p className="text-white/80 mb-4">
+                  Store and manage all project documents including contracts, agreements, SOW sign-offs, permits, and more.
+                </p>
+                <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Document Types</span>
+                    <span className="font-semibold">Multiple</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Storage</span>
+                    <span className="font-semibold">Secure</span>
+                  </div>
+                  <div className="flex justify-between text-sm pt-2 border-t border-white/20">
+                    <span>Organization</span>
+                    <span className="font-semibold">By Type</span>
+                  </div>
+                </div>
+                <div className="flex items-center text-sm text-white/60">
+                  <span>Click to {showDocuments ? 'hide' : 'view'} documents →</span>
+                </div>
+              </CardContent>
+            </button>
+          </Card>
         </div>
 
         {/* Documents Section */}
