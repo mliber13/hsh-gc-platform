@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail, TrendingUp, FolderOpen } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import { ProFormaGenerator } from './ProFormaGenerator'
-import { ProjectDocuments } from './ProjectDocuments'
 
 interface ProjectDetailViewProps {
   project: Project
@@ -30,6 +29,7 @@ interface ProjectDetailViewProps {
   onViewActuals: () => void
   onViewChangeOrders?: () => void
   onViewForms: () => void
+  onViewDocuments?: () => void
   onViewQuotes?: () => void
   onProjectDuplicated?: (project: Project) => void
 }
@@ -41,6 +41,7 @@ export function ProjectDetailView({
   onViewActuals,
   onViewChangeOrders,
   onViewForms,
+  onViewDocuments,
   onViewQuotes,
   onProjectDuplicated,
 }: ProjectDetailViewProps) {
@@ -70,7 +71,6 @@ export function ProjectDetailView({
     totalActual: 0,
   })
   const [showProForma, setShowProForma] = useState(false)
-  const [showDocuments, setShowDocuments] = useState(false)
 
   // Load plans when editing mode is enabled
   useEffect(() => {
@@ -701,52 +701,47 @@ export function ProjectDetailView({
           )}
 
           {/* Project Documents Card */}
-          <Card className="bg-gradient-to-br from-[#4F46E5] to-[#4338CA] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
-            <button onClick={() => setShowDocuments(!showDocuments)} className="w-full text-left">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
-                    <FolderOpen className="w-8 h-8" />
+          {onViewDocuments && (
+            <Card className="bg-gradient-to-br from-[#4F46E5] to-[#4338CA] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
+              <button onClick={onViewDocuments} className="w-full text-left">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
+                      <FolderOpen className="w-8 h-8" />
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm opacity-80">Documents</p>
+                      <p className="text-3xl font-bold">Files</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm opacity-80">Documents</p>
-                    <p className="text-3xl font-bold">Files</p>
+                </CardHeader>
+                <CardContent>
+                  <h3 className="text-2xl font-bold mb-3">Project Documents</h3>
+                  <p className="text-white/80 mb-4">
+                    Store and manage all project documents including contracts, agreements, SOW sign-offs, permits, and more.
+                  </p>
+                  <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Document Types</span>
+                      <span className="font-semibold">Multiple</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Storage</span>
+                      <span className="font-semibold">Secure</span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-2 border-t border-white/20">
+                      <span>Organization</span>
+                      <span className="font-semibold">By Type</span>
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <h3 className="text-2xl font-bold mb-3">Project Documents</h3>
-                <p className="text-white/80 mb-4">
-                  Store and manage all project documents including contracts, agreements, SOW sign-offs, permits, and more.
-                </p>
-                <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Document Types</span>
-                    <span className="font-semibold">Multiple</span>
+                  <div className="flex items-center text-sm text-white/60">
+                    <span>Click to manage documents →</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Storage</span>
-                    <span className="font-semibold">Secure</span>
-                  </div>
-                  <div className="flex justify-between text-sm pt-2 border-t border-white/20">
-                    <span>Organization</span>
-                    <span className="font-semibold">By Type</span>
-                  </div>
-                </div>
-                <div className="flex items-center text-sm text-white/60">
-                  <span>Click to {showDocuments ? 'hide' : 'view'} documents →</span>
-                </div>
-              </CardContent>
-            </button>
-          </Card>
+                </CardContent>
+              </button>
+            </Card>
+          )}
         </div>
-
-        {/* Documents Section */}
-        {showDocuments && (
-          <div className="mb-6 sm:mb-8">
-            <ProjectDocuments projectId={project.id} />
-          </div>
-        )}
       </main>
       
       {/* Edit Project Modal */}

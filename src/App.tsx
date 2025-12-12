@@ -7,6 +7,7 @@ import { ProjectActuals } from './components/ProjectActuals'
 
 import { ChangeOrders } from './components/ChangeOrders'
 import { ProjectForms } from './components/ProjectForms'
+import { ProjectDocuments } from './components/ProjectDocuments'
 import { CreateProjectForm, ProjectFormData } from './components/CreateProjectForm'
 import { PlanLibrary } from './components/PlanLibrary'
 import { PlanEditor } from './components/PlanEditor'
@@ -42,6 +43,7 @@ type View =
   | 'actuals'
   | 'change-orders'
   | 'forms'
+  | 'documents'
   | 'plan-library'
   | 'plan-editor'
   | 'item-library'
@@ -93,7 +95,7 @@ function App() {
 
   // Refresh project data when viewing project-related screens
   useEffect(() => {
-    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms' || currentView === 'quote-review')) {
+    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms' || currentView === 'documents' || currentView === 'quote-review')) {
       getProject_Hybrid(selectedProject.id).then(refreshedProject => {
         if (refreshedProject) {
           setSelectedProject(refreshedProject)
@@ -418,6 +420,7 @@ function App() {
           onViewActuals={handleViewActuals}
           onViewChangeOrders={handleViewChangeOrders}
           onViewForms={handleViewForms}
+          onViewDocuments={handleViewDocuments}
           onViewQuotes={handleViewQuotes}
           onProjectDuplicated={(newProject) => {
             setSelectedProject(newProject)
@@ -455,6 +458,21 @@ function App() {
           project={selectedProject}
           onBack={handleBackToProjectDetail}
         />
+      )}
+
+      {currentView === 'documents' && selectedProject && (
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20 sm:pb-0">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+            <Button
+              onClick={handleBackToProjectDetail}
+              variant="outline"
+              className="mb-6"
+            >
+              ← Back to Project
+            </Button>
+            <ProjectDocuments projectId={selectedProject.id} />
+          </div>
+        </div>
       )}
 
       {currentView === 'quote-review' && selectedProject && (
