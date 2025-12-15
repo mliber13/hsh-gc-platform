@@ -11,6 +11,7 @@ export type {
   // Estimate types
   Estimate,
   Trade,
+  SubItem,
   TakeoffItem,
 } from './project'
 

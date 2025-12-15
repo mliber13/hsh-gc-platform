@@ -1667,7 +1667,7 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                                       </div>
                                     </td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{subItem.quantity}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{UNIT_TYPES[subItem.unit]?.abbreviation || subItem.unit}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{(UNIT_TYPES[subItem.unit as UnitType]?.abbreviation) || subItem.unit}</td>
                                     <td className="p-3 text-center border-b text-sm">{subItem.materialRate ? formatCurrency(subItem.materialRate) : '-'}</td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.materialCost)}</td>
                                     <td className="p-3 text-center border-b text-sm">{subItem.laborRate ? formatCurrency(subItem.laborRate) : '-'}</td>
@@ -2230,7 +2230,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
               <Input
                 id="subItemName"
                 value={formData.name || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => setFormData((prev: Partial<SubItem>) => ({ ...prev, name: e.target.value }))}
                 required
                 placeholder="e.g., Towel bars, Recessed lights"
               />
@@ -2246,7 +2246,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
                   value={formData.quantity || 0}
                   onChange={(e) => {
                     const qty = parseFloat(e.target.value) || 0
-                    setFormData(prev => ({
+                    setFormData((prev: Partial<SubItem>) => ({
                       ...prev,
                       quantity: qty,
                       materialCost: (prev.materialRate || 0) * qty,
@@ -2259,7 +2259,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
                 <Label htmlFor="subItemUnit">Unit</Label>
                 <Select
                   value={formData.unit || 'each'}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, unit: value as UnitType }))}
+                  onValueChange={(value) => setFormData((prev: Partial<SubItem>) => ({ ...prev, unit: value as UnitType }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -2267,7 +2267,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
                   <SelectContent>
                     {Object.entries(UNIT_TYPES).map(([key, value]) => (
                       <SelectItem key={key} value={key}>
-                        {value.icon} {value.label} ({value.abbreviation})
+                        {value.label} ({value.abbreviation})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2286,7 +2286,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
                   onChange={(e) => {
                     const rate = parseFloat(e.target.value) || 0
                     const cost = rate * (formData.quantity || 0)
-                    setFormData(prev => ({ ...prev, materialRate: rate, materialCost: cost }))
+                    setFormData((prev: Partial<SubItem>) => ({ ...prev, materialRate: rate, materialCost: cost }))
                   }}
                 />
               </div>
@@ -2300,7 +2300,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
                   onChange={(e) => {
                     const cost = parseFloat(e.target.value) || 0
                     const rate = (formData.quantity || 0) > 0 ? cost / (formData.quantity || 0) : 0
-                    setFormData(prev => ({ ...prev, materialCost: cost, materialRate: rate }))
+                    setFormData((prev: Partial<SubItem>) => ({ ...prev, materialCost: cost, materialRate: rate }))
                   }}
                 />
               </div>
@@ -2317,7 +2317,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
                   onChange={(e) => {
                     const rate = parseFloat(e.target.value) || 0
                     const cost = rate * (formData.quantity || 0)
-                    setFormData(prev => ({ ...prev, laborRate: rate, laborCost: cost }))
+                    setFormData((prev: Partial<SubItem>) => ({ ...prev, laborRate: rate, laborCost: cost }))
                   }}
                 />
               </div>
@@ -2331,7 +2331,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
                   onChange={(e) => {
                     const cost = parseFloat(e.target.value) || 0
                     const rate = (formData.quantity || 0) > 0 ? cost / (formData.quantity || 0) : 0
-                    setFormData(prev => ({ ...prev, laborCost: cost, laborRate: rate }))
+                    setFormData((prev: Partial<SubItem>) => ({ ...prev, laborCost: cost, laborRate: rate }))
                   }}
                 />
               </div>
@@ -2344,7 +2344,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
                 type="number"
                 step="0.01"
                 value={formData.subcontractorCost || 0}
-                onChange={(e) => setFormData(prev => ({
+                onChange={(e) => setFormData((prev: Partial<SubItem>) => ({
                   ...prev,
                   subcontractorCost: parseFloat(e.target.value) || 0,
                 }))}
@@ -2358,16 +2358,16 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
                 type="number"
                 step="0.1"
                 value={formData.markupPercent || defaultMarkupPercent}
-                onChange={(e) => setFormData(prev => ({ ...prev, markupPercent: parseFloat(e.target.value) || 0 }))}
+                onChange={(e) => setFormData((prev: Partial<SubItem>) => ({ ...prev, markupPercent: parseFloat(e.target.value) || 0 }))}
               />
             </div>
 
             <div>
-              <Label htmlFor="subItemDescription">Description</Label>
+                <Label htmlFor="subItemDescription">Description</Label>
               <Input
                 id="subItemDescription"
                 value={formData.description || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                onChange={(e) => setFormData((prev: Partial<SubItem>) => ({ ...prev, description: e.target.value }))}
               />
             </div>
 
@@ -2376,7 +2376,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
               <Input
                 id="subItemNotes"
                 value={formData.notes || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                onChange={(e) => setFormData((prev: Partial<SubItem>) => ({ ...prev, notes: e.target.value }))}
               />
             </div>
 
