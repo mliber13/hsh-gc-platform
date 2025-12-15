@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid'
 import {
   Project,
   Trade,
+  SubItem,
   LaborEntry,
   MaterialEntry,
   SubcontractorEntry,
@@ -31,7 +32,7 @@ import {
   deleteSubcontractorEntry_Hybrid,
 } from '@/services/actualsHybridService'
 import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
-import { fetchTradesForEstimate } from '@/services/supabaseService'
+import { fetchTradesForEstimate, fetchSubItemsForTrade } from '@/services/supabaseService'
 import { isOnlineMode } from '@/lib/supabase'
 import { fetchSubcontractors, fetchSuppliers } from '@/services/partnerDirectoryService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -79,6 +80,7 @@ interface ActualEntry {
   description: string
   category?: string
   tradeId?: string
+  subItemId?: string
   
   // Labor specific
   payrollPeriod?: string
@@ -109,6 +111,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const [reportType, setReportType] = useState<'actuals' | 'comparison'>('actuals')
   const [availableSubcontractors, setAvailableSubcontractors] = useState<DirectorySubcontractor[]>([])
   const [availableSuppliers, setAvailableSuppliers] = useState<Supplier[]>([])
+  const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set())
+  const [subItemsByTrade, setSubItemsByTrade] = useState<Record<string, SubItem[]>>({})
 
   // Load trades for the estimate
   useEffect(() => {
@@ -116,6 +120,20 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
       if (project) {
         const loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
         setTrades(loadedTrades)
+        
+        // Load sub-items for each trade
+        if (isOnlineMode() && loadedTrades.length > 0) {
+          const subItemsMap: Record<string, SubItem[]> = {}
+          for (const trade of loadedTrades) {
+            if (trade.subItems && trade.subItems.length > 0) {
+              subItemsMap[trade.id] = trade.subItems
+            } else {
+              const subItems = await fetchSubItemsForTrade(trade.id)
+              subItemsMap[trade.id] = subItems
+            }
+          }
+          setSubItemsByTrade(subItemsMap)
+        }
         
         // Load change orders
         if (project.actuals?.changeOrders) {
@@ -147,6 +165,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             description: labor.description,
             category: labor.trade,
             tradeId: labor.tradeId,
+            subItemId: labor.subItemId,
             payrollPeriod: labor.date.toLocaleDateString(),
           })
         })
@@ -161,6 +180,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             description: material.materialName,
             category: material.category,
             tradeId: material.tradeId,
+            subItemId: material.subItemId,
             vendor: material.vendor,
             invoiceNumber: material.invoiceNumber,
           })
@@ -176,6 +196,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             description: sub.scopeOfWork,
             category: sub.trade,
             tradeId: sub.tradeId,
+            subItemId: sub.subItemId,
             subcontractorName: sub.subcontractor.name,
           })
         })
@@ -286,7 +307,23 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   }
 
   const getActualsByTrade = (tradeId: string) => {
-    return actualEntries.filter(entry => entry.tradeId === tradeId)
+    return actualEntries.filter(entry => entry.tradeId === tradeId && !entry.subItemId)
+  }
+
+  const getActualsBySubItem = (subItemId: string) => {
+    return actualEntries.filter(entry => entry.subItemId === subItemId)
+  }
+
+  const toggleTradeExpansion = (tradeId: string) => {
+    setExpandedTrades(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(tradeId)) {
+        newSet.delete(tradeId)
+      } else {
+        newSet.add(tradeId)
+      }
+      return newSet
+    })
   }
 
   const getCategoryEstimate = (category: string) => {
@@ -345,6 +382,15 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   }
 
   const getTradeEstimateByType = (trade: Trade) => {
+    const tradeSubItems = subItemsByTrade[trade.id] || []
+    // If trade has sub-items, use sub-item totals; otherwise use trade totals
+    if (tradeSubItems.length > 0) {
+      return {
+        labor: tradeSubItems.reduce((sum, si) => sum + (si.laborCost || 0), 0),
+        material: tradeSubItems.reduce((sum, si) => sum + (si.materialCost || 0), 0),
+        subcontractor: tradeSubItems.reduce((sum, si) => sum + (si.subcontractorCost || 0), 0),
+      }
+    }
     return {
       labor: trade.laborCost || 0,
       material: trade.materialCost || 0,
@@ -1116,7 +1162,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                 <div className="space-y-2">
                                   {categoryTrades.map((trade) => {
                                     const tradeActuals = getActualsByTrade(trade.id)
-                                    const tradeActualTotal = tradeActuals.reduce((sum, entry) => sum + entry.amount, 0)
+                                    const tradeSubItems = subItemsByTrade[trade.id] || []
+                                    // Include sub-item actuals in trade total
+                                    const subItemActuals = tradeSubItems.flatMap(si => getActualsBySubItem(si.id))
+                                    const tradeActualTotal = tradeActuals.reduce((sum, entry) => sum + entry.amount, 0) + 
+                                                             subItemActuals.reduce((sum, entry) => sum + entry.amount, 0)
                                     const tradeEstimate = trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100)
                                     const tradeVariance = tradeActualTotal - tradeEstimate
                                     const isTradeOver = tradeVariance > 0
@@ -1124,13 +1174,32 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     const itemCOs = getChangeOrdersForTrade(trade.id)
                                     const varianceType = getVarianceType(trade.id, tradeVariance)
                                     const hasExpanded = expandedCOItems.has(trade.id)
+                                    const isTradeExpanded = expandedTrades.has(trade.id)
+                                    const tradeSubItems = subItemsByTrade[trade.id] || []
+                                    const hasSubItems = tradeSubItems.length > 0
 
                                     return (
                                       <div key={trade.id} className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
                                         {/* Item Header */}
                                         <div className="mb-3">
                                           <div className="flex items-center gap-2 flex-wrap">
+                                            {hasSubItems && (
+                                              <button
+                                                onClick={() => toggleTradeExpansion(trade.id)}
+                                                className="p-1 hover:bg-gray-200 rounded"
+                                                title={isTradeExpanded ? 'Collapse sub-items' : 'Expand sub-items'}
+                                              >
+                                                {isTradeExpanded ? (
+                                                  <ChevronDown className="w-4 h-4" />
+                                                ) : (
+                                                  <ChevronUp className="w-4 h-4 rotate-180" />
+                                                )}
+                                              </button>
+                                            )}
                                             <h4 className="font-semibold text-gray-900 text-sm sm:text-base">{trade.name}</h4>
+                                            {hasSubItems && (
+                                              <span className="text-xs text-gray-500">({tradeSubItems.length} sub-items)</span>
+                                            )}
                                             {itemCOs.length > 0 && (
                                               <button
                                                 onClick={() => {
@@ -1216,10 +1285,13 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
                                         {/* Trade Item Breakdown by Type - Always show if item has entries or estimates */}
                                         {(() => {
+                                          // Include sub-item actuals in breakdown
+                                          const subItemActuals = tradeSubItems.flatMap(si => getActualsBySubItem(si.id))
+                                          const allTradeActuals = [...tradeActuals, ...subItemActuals]
                                           const tradeBreakdown = {
-                                            labor: tradeActuals.filter(e => e.type === 'labor').reduce((sum, entry) => sum + entry.amount, 0),
-                                            material: tradeActuals.filter(e => e.type === 'material').reduce((sum, entry) => sum + entry.amount, 0),
-                                            subcontractor: tradeActuals.filter(e => e.type === 'subcontractor').reduce((sum, entry) => sum + entry.amount, 0),
+                                            labor: allTradeActuals.filter(e => e.type === 'labor').reduce((sum, entry) => sum + entry.amount, 0),
+                                            material: allTradeActuals.filter(e => e.type === 'material').reduce((sum, entry) => sum + entry.amount, 0),
+                                            subcontractor: allTradeActuals.filter(e => e.type === 'subcontractor').reduce((sum, entry) => sum + entry.amount, 0),
                                           }
                                           const tradeEstimateBreakdown = getTradeEstimateByType(trade)
                                           const itemLaborVariance = tradeBreakdown.labor - tradeEstimateBreakdown.labor
@@ -1301,6 +1373,78 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                             </div>
                                           )
                                         })()}
+
+                                        {/* Sub-Items */}
+                                        {isTradeExpanded && hasSubItems && (
+                                          <div className="mb-3 pb-3 border-b border-gray-200 space-y-2">
+                                            <p className="text-xs font-semibold text-gray-700 uppercase mb-2">Sub-Items:</p>
+                                            {tradeSubItems.map((subItem) => {
+                                              const subItemActuals = getActualsBySubItem(subItem.id)
+                                              const subItemActualTotal = subItemActuals.reduce((sum, entry) => sum + entry.amount, 0)
+                                              const subItemEstimate = subItem.totalCost * (1 + (subItem.markupPercent || 11.1) / 100)
+                                              const subItemVariance = subItemActualTotal - subItemEstimate
+                                              
+                                              return (
+                                                <div key={subItem.id} className="bg-blue-50 rounded-lg p-2 border border-blue-200">
+                                                  <div className="flex items-center justify-between mb-2">
+                                                    <div>
+                                                      <p className="text-sm font-medium text-gray-900">{subItem.name}</p>
+                                                      <p className="text-xs text-gray-600">{subItem.quantity} {subItem.unit}</p>
+                                                    </div>
+                                                    <div className="text-right text-xs">
+                                                      <p className="text-gray-600">Est: {formatCurrency(subItemEstimate)}</p>
+                                                      <p className="text-gray-600">Act: {formatCurrency(subItemActualTotal)}</p>
+                                                      <p className={`font-semibold ${subItemVariance > 0 ? 'text-red-600' : subItemVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                                                        Var: {formatCurrency(Math.abs(subItemVariance))} {subItemVariance > 0 ? '⚠️' : subItemVariance < 0 ? '✓' : ''}
+                                                      </p>
+                                                    </div>
+                                                  </div>
+                                                  {subItemActuals.length > 0 && (
+                                                    <div className="mt-2 pt-2 border-t border-blue-200 space-y-1">
+                                                      {subItemActuals.map((entry) => (
+                                                        <div
+                                                          key={entry.id}
+                                                          className={`flex items-center justify-between p-1.5 rounded border text-xs ${getEntryColor(entry.type)}`}
+                                                        >
+                                                          <div className="flex items-center gap-1.5 flex-1">
+                                                            {getEntryIcon(entry.type)}
+                                                            <div className="flex-1">
+                                                              <p className="font-medium text-gray-900">{entry.description}</p>
+                                                              <p className="text-gray-600">
+                                                                {formatDate(entry.date)}
+                                                                {entry.vendor && ` • ${entry.vendor}`}
+                                                                {entry.invoiceNumber && ` • ${entry.invoiceNumber}`}
+                                                              </p>
+                                                            </div>
+                                                          </div>
+                                                          <div className="flex items-center gap-1">
+                                                            <p className="font-semibold text-gray-900">{formatCurrency(entry.amount)}</p>
+                                                            <Button
+                                                              size="sm"
+                                                              variant="outline"
+                                                              onClick={() => handleEditEntry(entry)}
+                                                              className="h-6 px-1.5"
+                                                            >
+                                                              <Edit className="w-3 h-3" />
+                                                            </Button>
+                                                            <Button
+                                                              size="sm"
+                                                              variant="destructive"
+                                                              onClick={() => handleDeleteEntry(entry)}
+                                                              className="h-6 px-1.5"
+                                                            >
+                                                              <Trash2 className="w-3 h-3" />
+                                                            </Button>
+                                                          </div>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )
+                                            })}
+                                          </div>
+                                        )}
 
                                         {/* Actual Entries for this trade */}
                                         {tradeActuals.length > 0 && (
@@ -1548,6 +1692,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           type={entryType}
           project={project}
           trades={trades}
+          subItemsByTrade={subItemsByTrade}
           availableSuppliers={availableSuppliers}
           availableSubcontractors={availableSubcontractors}
           editingEntry={editingEntry}
@@ -1560,6 +1705,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   date: entry.date,
                   description: entry.description,
                   totalCost: entry.amount,
+                  tradeId: entry.tradeId,
+                  subItemId: entry.subItemId,
                 })
               } else if (entry.type === 'material') {
                 const materialCategory = entry.category as Trade['category'] | undefined
@@ -1571,6 +1718,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   invoiceNumber: entry.invoiceNumber,
                   category: materialCategory,
                   tradeId: entry.tradeId,
+                  subItemId: entry.subItemId,
                   group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
                 })
               } else if (entry.type === 'subcontractor') {
@@ -1578,6 +1726,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   subcontractorName: entry.subcontractorName || 'Unknown',
                   scopeOfWork: entry.description,
                   totalPaid: entry.amount,
+                  tradeId: entry.tradeId,
+                  subItemId: entry.subItemId,
                 })
               }
             } else {
@@ -1589,6 +1739,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   totalCost: entry.amount,
                   trade: entry.category as any,
                   tradeId: entry.tradeId,
+                  subItemId: entry.subItemId,
                 })
               } else if (entry.type === 'material') {
                 const materialCategory = entry.category as Trade['category'] | undefined
@@ -1598,6 +1749,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   totalCost: entry.amount,
                   category: materialCategory,
                   tradeId: entry.tradeId,
+                  subItemId: entry.subItemId,
                   vendor: entry.vendor,
                   invoiceNumber: entry.invoiceNumber,
                   group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
@@ -1610,6 +1762,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   totalPaid: entry.amount,
                   trade: entry.category as any,
                   tradeId: entry.tradeId,
+                  subItemId: entry.subItemId,
                 })
               }
             }
@@ -1628,6 +1781,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   description: labor.description,
                   category: labor.trade,
                   tradeId: labor.tradeId,
+                  subItemId: labor.subItemId,
                   payrollPeriod: labor.date.toLocaleDateString(),
                 })
               })
@@ -1641,6 +1795,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   description: material.materialName,
                   category: material.category,
                   tradeId: material.tradeId,
+                  subItemId: material.subItemId,
                   vendor: material.vendor,
                   invoiceNumber: material.invoiceNumber,
                 })
@@ -1655,6 +1810,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   description: sub.scopeOfWork,
                   category: sub.trade,
                   tradeId: sub.tradeId,
+                  subItemId: sub.subItemId,
                   subcontractorName: sub.subcontractor.name,
                 })
               })
@@ -1831,6 +1987,7 @@ interface ActualEntryFormProps {
   type: EntryType
   project: Project
   trades: Trade[]
+  subItemsByTrade: Record<string, SubItem[]>
   availableSuppliers: Supplier[]
   availableSubcontractors: DirectorySubcontractor[]
   editingEntry: ActualEntry | null
@@ -1842,6 +1999,7 @@ function ActualEntryForm({
   type,
   project,
   trades,
+  subItemsByTrade,
   availableSuppliers,
   availableSubcontractors,
   editingEntry,
@@ -1857,6 +2015,7 @@ function ActualEntryForm({
     description: editingEntry?.description || '',
     category: editingEntry?.category || '',
     tradeId: editingEntry?.tradeId || '',
+    subItemId: editingEntry?.subItemId || '',
     
     // Labor
     payrollPeriod: editingEntry?.payrollPeriod || '',
@@ -1880,6 +2039,7 @@ function ActualEntryForm({
       description: formData.description,
       category: formData.category,
       tradeId: formData.tradeId || undefined,
+      subItemId: formData.subItemId || undefined,
       
       ...(type === 'labor' && { payrollPeriod: formData.payrollPeriod }),
       ...(type === 'material' && { 
@@ -1925,6 +2085,9 @@ function ActualEntryForm({
   const filteredTrades = selectedCategory
     ? trades.filter(t => t.category === selectedCategory)
     : []
+
+  // Get sub-items for selected trade
+  const selectedTradeSubItems = formData.tradeId ? (subItemsByTrade[formData.tradeId] || []) : []
 
   const supplierOptions = React.useMemo(
     () =>
@@ -2115,7 +2278,7 @@ function ActualEntryForm({
                 <Label htmlFor="tradeId">Link to Specific Item</Label>
                 <Select 
                   value={formData.tradeId || 'none'} 
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, tradeId: value === 'none' ? '' : value }))}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, tradeId: value === 'none' ? '' : value, subItemId: '' }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select item or leave blank..." />
@@ -2131,6 +2294,31 @@ function ActualEntryForm({
                 </Select>
                 <p className="text-xs text-gray-500 mt-1">
                   💡 <strong>Tip:</strong> Link to specific items for detailed tracking, or apply to category for general costs like permits, cleanup, etc.
+                </p>
+              </div>
+            )}
+
+            {formData.tradeId && selectedTradeSubItems.length > 0 && (
+              <div>
+                <Label htmlFor="subItemId">Link to Sub-Item (Optional)</Label>
+                <Select 
+                  value={formData.subItemId || 'none'} 
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, subItemId: value === 'none' ? '' : value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select sub-item or leave blank..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Apply to entire item</SelectItem>
+                    {selectedTradeSubItems.map((subItem) => (
+                      <SelectItem key={subItem.id} value={subItem.id}>
+                        {subItem.name} ({subItem.quantity} {subItem.unit}) - {formatCurrency(subItem.totalCost)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 <strong>Tip:</strong> Link to a specific sub-item for even more granular tracking (e.g., "Towel bars" within "Bath Hardware").
                 </p>
               </div>
             )}
