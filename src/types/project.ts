@@ -151,6 +151,50 @@ export type EstimateStatus =
   | 'quoted'        // Real vendor quote received
   | 'approved'      // Quote accepted/approved
 
+export interface SubItem {
+  id: string
+  tradeId: string
+  name: string              // e.g., "Towel bars", "Recessed lights"
+  description?: string
+  
+  // Quantities
+  quantity: number
+  unit: UnitType
+  
+  // Costs (rolls up to parent trade)
+  laborCost: number         // Labor cost for this sub-item
+  laborRate?: number        // $/unit for reference
+  laborHours?: number       // Estimated hours
+  
+  materialCost: number      // Material cost for this sub-item
+  materialRate?: number     // $/unit for reference
+  
+  subcontractorCost: number // Subcontractor cost for this sub-item
+  isSubcontracted: boolean
+  
+  // Waste factors
+  wasteFactor: number       // Percentage (e.g., 10 = 10%)
+  
+  // Markup
+  markupPercent?: number    // Percentage markup for this sub-item
+  
+  // Total for this sub-item
+  totalCost: number         // labor + material + sub
+  
+  // Order/grouping
+  sortOrder: number
+  
+  // Estimate status tracking (inherits from parent trade by default)
+  estimateStatus?: EstimateStatus
+  quoteVendor?: string
+  quoteDate?: Date
+  quoteReference?: string
+  quoteFileUrl?: string
+  
+  // Notes
+  notes?: string
+}
+
 export interface Trade {
   id: string
   estimateId: string
@@ -164,14 +208,14 @@ export interface Trade {
   unit: UnitType
   
   // Costs
-  laborCost: number         // Total labor cost
+  laborCost: number         // Total labor cost (includes sub-items)
   laborRate?: number        // $/unit for reference
   laborHours?: number       // Estimated hours
   
-  materialCost: number      // Total material cost
+  materialCost: number      // Total material cost (includes sub-items)
   materialRate?: number     // $/unit for reference
   
-  subcontractorCost: number // If using sub
+  subcontractorCost: number // If using sub (includes sub-items)
   isSubcontracted: boolean
   
   // Waste factors
@@ -180,8 +224,11 @@ export interface Trade {
   // Markup
   markupPercent?: number    // Percentage markup for this line item
   
-  // Total for this trade
+  // Total for this trade (includes sub-items)
   totalCost: number         // labor + material + sub
+  
+  // Sub-items (optional - for detailed breakdown)
+  subItems?: SubItem[]
   
   // Historical reference
   historicalRate?: number   // From past projects
@@ -263,6 +310,7 @@ export interface LaborEntry {
   id: string
   projectId: string
   tradeId?: string          // Link to estimated trade
+  subItemId?: string        // Link to specific sub-item (optional)
   
   // When
   date: Date
@@ -303,6 +351,7 @@ export interface MaterialEntry {
   id: string
   projectId: string
   tradeId?: string          // Link to estimated trade
+  subItemId?: string        // Link to specific sub-item (optional)
   
   // When
   date: Date
@@ -330,6 +379,11 @@ export interface MaterialEntry {
   invoiceNumber?: string
   poNumber?: string
   
+  // Invoice splitting (for multi-category invoices)
+  isSplitEntry?: boolean    // True if this is part of a split invoice
+  splitParentId?: string    // ID of the original invoice entry
+  splitAllocation?: number  // Percentage or amount allocated to this entry
+  
   // Notes
   notes?: string
   createdAt: Date
@@ -339,6 +393,7 @@ export interface SubcontractorEntry {
   id: string
   projectId: string
   tradeId?: string          // Link to estimated trade
+  subItemId?: string        // Link to specific sub-item (optional)
   
   // Who
   subcontractor: {

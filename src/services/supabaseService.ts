@@ -13,6 +13,7 @@ import {
   UpdateProjectInput,
   Trade,
   TradeInput,
+  SubItem,
   LaborEntry,
   MaterialEntry,
   SubcontractorEntry,
@@ -378,7 +379,16 @@ export async function fetchTradesForEstimate(estimateId: string): Promise<Trade[
     return []
   }
 
-  return data.map(transformTrade)
+  // Fetch sub-items for each trade
+  const trades = await Promise.all(
+    data.map(async (row) => {
+      const trade = transformTrade(row)
+      const subItems = await fetchSubItemsForTrade(trade.id)
+      return { ...trade, subItems }
+    })
+  )
+
+  return trades
 }
 
 export async function createTradeInDB(estimateId: string, input: TradeInput): Promise<Trade | null> {
@@ -497,6 +507,301 @@ export async function deleteTradeFromDB(tradeId: string): Promise<boolean> {
   }
 
   return true
+}
+
+// ============================================================================
+// SUB-ITEMS OPERATIONS
+// ============================================================================
+
+function transformSubItem(row: any): SubItem {
+  return {
+    id: row.id,
+    tradeId: row.trade_id,
+    name: row.name,
+    description: row.description || '',
+    quantity: row.quantity || 0,
+    unit: row.unit,
+    laborCost: row.labor_cost || 0,
+    laborRate: row.labor_rate || 0,
+    laborHours: row.labor_hours || 0,
+    materialCost: row.material_cost || 0,
+    materialRate: row.material_rate || 0,
+    subcontractorCost: row.subcontractor_cost || 0,
+    totalCost: row.total_cost || 0,
+    isSubcontracted: row.is_subcontracted || false,
+    wasteFactor: row.waste_factor || 10,
+    markupPercent: row.markup_percent || 0,
+    estimateStatus: row.estimate_status || 'budget',
+    quoteVendor: row.quote_vendor,
+    quoteDate: row.quote_date ? new Date(row.quote_date) : undefined,
+    quoteReference: row.quote_reference,
+    quoteFileUrl: row.quote_file_url,
+    notes: row.notes || '',
+    sortOrder: row.sort_order || 0,
+  }
+}
+
+export async function fetchSubItemsForTrade(tradeId: string): Promise<SubItem[]> {
+  if (!isOnlineMode()) return []
+
+  const { data, error } = await supabase
+    .from('sub_items')
+    .select('*')
+    .eq('trade_id', tradeId)
+    .order('sort_order', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching sub-items:', error)
+    return []
+  }
+
+  return data.map(transformSubItem)
+}
+
+export async function createSubItemInDB(
+  tradeId: string,
+  estimateId: string,
+  input: {
+    name: string
+    description?: string
+    quantity: number
+    unit: string
+    laborCost: number
+    laborRate?: number
+    laborHours?: number
+    materialCost: number
+    materialRate?: number
+    subcontractorCost: number
+    isSubcontracted: boolean
+    wasteFactor?: number
+    markupPercent?: number
+    estimateStatus?: string
+    quoteVendor?: string
+    quoteDate?: Date
+    quoteReference?: string
+    quoteFileUrl?: string
+    notes?: string
+    sortOrder?: number
+  }
+): Promise<SubItem | null> {
+  if (!isOnlineMode()) return null
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  // Get user's organization
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) {
+    console.error('User profile not found')
+    return null
+  }
+
+  // Get existing sub-items to set sort order
+  const existingSubItems = await fetchSubItemsForTrade(tradeId)
+  const sortOrder = input.sortOrder !== undefined ? input.sortOrder : existingSubItems.length
+
+  const totalCost = (input.laborCost || 0) + (input.materialCost || 0) + (input.subcontractorCost || 0)
+
+  const { data, error } = await supabase
+    .from('sub_items')
+    .insert({
+      trade_id: tradeId,
+      estimate_id: estimateId,
+      organization_id: profile.organization_id,
+      name: input.name,
+      description: input.description || '',
+      quantity: input.quantity || 0,
+      unit: input.unit,
+      labor_cost: input.laborCost || 0,
+      labor_rate: input.laborRate || 0,
+      labor_hours: input.laborHours || 0,
+      material_cost: input.materialCost || 0,
+      material_rate: input.materialRate || 0,
+      subcontractor_cost: input.subcontractorCost || 0,
+      total_cost: totalCost,
+      is_subcontracted: input.isSubcontracted || false,
+      waste_factor: input.wasteFactor || 10,
+      markup_percent: input.markupPercent || 0,
+      estimate_status: input.estimateStatus || 'budget',
+      quote_vendor: input.quoteVendor || null,
+      quote_date: input.quoteDate || null,
+      quote_reference: input.quoteReference || null,
+      quote_file_url: input.quoteFileUrl || null,
+      notes: input.notes || '',
+      sort_order: sortOrder,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating sub-item:', error)
+    return null
+  }
+
+  // Recalculate parent trade totals
+  await recalculateTradeTotals(tradeId)
+
+  return transformSubItem(data)
+}
+
+export async function updateSubItemInDB(
+  subItemId: string,
+  updates: Partial<{
+    name: string
+    description: string
+    quantity: number
+    unit: string
+    laborCost: number
+    laborRate: number
+    laborHours: number
+    materialCost: number
+    materialRate: number
+    subcontractorCost: number
+    isSubcontracted: boolean
+    wasteFactor: number
+    markupPercent: number
+    estimateStatus: string
+    quoteVendor: string
+    quoteDate: Date
+    quoteReference: string
+    quoteFileUrl: string
+    notes: string
+    sortOrder: number
+  }>
+): Promise<SubItem | null> {
+  if (!isOnlineMode()) return null
+
+  // Calculate total cost if cost fields are being updated
+  let totalCost: number | undefined
+  if (
+    updates.laborCost !== undefined ||
+    updates.materialCost !== undefined ||
+    updates.subcontractorCost !== undefined
+  ) {
+    // Need to fetch current values for fields not being updated
+    const { data: current } = await supabase
+      .from('sub_items')
+      .select('labor_cost, material_cost, subcontractor_cost')
+      .eq('id', subItemId)
+      .single()
+
+    if (current) {
+      totalCost =
+        (updates.laborCost ?? current.labor_cost) +
+        (updates.materialCost ?? current.material_cost) +
+        (updates.subcontractorCost ?? current.subcontractor_cost)
+    }
+  }
+
+  const updateData: any = {}
+  if (updates.name !== undefined) updateData.name = updates.name
+  if (updates.description !== undefined) updateData.description = updates.description
+  if (updates.quantity !== undefined) updateData.quantity = updates.quantity
+  if (updates.unit !== undefined) updateData.unit = updates.unit
+  if (updates.laborCost !== undefined) updateData.labor_cost = updates.laborCost
+  if (updates.laborRate !== undefined) updateData.labor_rate = updates.laborRate
+  if (updates.laborHours !== undefined) updateData.labor_hours = updates.laborHours
+  if (updates.materialCost !== undefined) updateData.material_cost = updates.materialCost
+  if (updates.materialRate !== undefined) updateData.material_rate = updates.materialRate
+  if (updates.subcontractorCost !== undefined) updateData.subcontractor_cost = updates.subcontractorCost
+  if (updates.isSubcontracted !== undefined) updateData.is_subcontracted = updates.isSubcontracted
+  if (updates.wasteFactor !== undefined) updateData.waste_factor = updates.wasteFactor
+  if (updates.markupPercent !== undefined) updateData.markup_percent = updates.markupPercent
+  if (updates.estimateStatus !== undefined) updateData.estimate_status = updates.estimateStatus
+  if (updates.quoteVendor !== undefined) updateData.quote_vendor = updates.quoteVendor
+  if (updates.quoteDate !== undefined) updateData.quote_date = updates.quoteDate
+  if (updates.quoteReference !== undefined) updateData.quote_reference = updates.quoteReference
+  if (updates.quoteFileUrl !== undefined) updateData.quote_file_url = updates.quoteFileUrl
+  if (updates.notes !== undefined) updateData.notes = updates.notes
+  if (updates.sortOrder !== undefined) updateData.sort_order = updates.sortOrder
+  if (totalCost !== undefined) updateData.total_cost = totalCost
+
+  const { data, error } = await supabase
+    .from('sub_items')
+    .update(updateData)
+    .eq('id', subItemId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating sub-item:', error)
+    return null
+  }
+
+  // Recalculate parent trade totals
+  if (data) {
+    await recalculateTradeTotals(data.trade_id)
+  }
+
+  return transformSubItem(data)
+}
+
+export async function deleteSubItemFromDB(subItemId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  // Get trade ID before deleting
+  const { data: subItem } = await supabase
+    .from('sub_items')
+    .select('trade_id')
+    .eq('id', subItemId)
+    .single()
+
+  const { error } = await supabase
+    .from('sub_items')
+    .delete()
+    .eq('id', subItemId)
+
+  if (error) {
+    console.error('Error deleting sub-item:', error)
+    return false
+  }
+
+  // Recalculate parent trade totals
+  if (subItem) {
+    await recalculateTradeTotals(subItem.trade_id)
+  }
+
+  return true
+}
+
+// Helper function to recalculate trade totals from sub-items
+async function recalculateTradeTotals(tradeId: string): Promise<void> {
+  const subItems = await fetchSubItemsForTrade(tradeId)
+  
+  // Sum up sub-item costs
+  const totalLaborCost = subItems.reduce((sum, item) => sum + (item.laborCost || 0), 0)
+  const totalMaterialCost = subItems.reduce((sum, item) => sum + (item.materialCost || 0), 0)
+  const totalSubcontractorCost = subItems.reduce((sum, item) => sum + (item.subcontractorCost || 0), 0)
+  
+  // Get current trade to preserve non-sub-item costs
+  const { data: trade } = await supabase
+    .from('trades')
+    .select('labor_cost, material_cost, subcontractor_cost')
+    .eq('id', tradeId)
+    .single()
+
+  if (trade) {
+    // If trade has sub-items, use sub-item totals; otherwise keep existing values
+    const newLaborCost = subItems.length > 0 ? totalLaborCost : trade.labor_cost
+    const newMaterialCost = subItems.length > 0 ? totalMaterialCost : trade.material_cost
+    const newSubcontractorCost = subItems.length > 0 ? totalSubcontractorCost : trade.subcontractor_cost
+    const newTotalCost = newLaborCost + newMaterialCost + newSubcontractorCost
+
+    await supabase
+      .from('trades')
+      .update({
+        labor_cost: newLaborCost,
+        material_cost: newMaterialCost,
+        subcontractor_cost: newSubcontractorCost,
+        total_cost: newTotalCost,
+      })
+      .eq('id', tradeId)
+  }
 }
 
 // ============================================================================
@@ -628,7 +933,8 @@ export async function createLaborEntryInDB(projectId: string, entry: any): Promi
       project_id: projectId,
       actuals_id: actualsId,
       category: entry.trade || entry.category,
-      trade_id: entry.tradeId,
+      trade_id: entry.tradeId || null,
+      sub_item_id: entry.subItemId || null,
       description: entry.description,
       date: entry.date.toISOString(),
       hours: entry.totalHours || 0,
@@ -669,6 +975,8 @@ export async function updateLaborEntryInDB(entryId: string, updates: any): Promi
   if (updates.totalCost !== undefined) updateData.amount = updates.totalCost
   if (updates.totalHours !== undefined) updateData.hours = updates.totalHours
   if (updates.laborRate !== undefined) updateData.hourly_rate = updates.laborRate
+  if (updates.tradeId !== undefined) updateData.trade_id = updates.tradeId
+  if (updates.subItemId !== undefined) updateData.sub_item_id = updates.subItemId
 
   const { data, error } = await supabase
     .from('labor_entries')
@@ -744,7 +1052,8 @@ export async function createMaterialEntryInDB(projectId: string, entry: any): Pr
       actuals_id: actualsId,
       category: entry.category,
       trade_id: entry.tradeId,
-    group: entry.group,
+      sub_item_id: entry.subItemId || null,
+      group: entry.group,
       description: entry.materialName,
       date: entry.date.toISOString(),
       quantity: entry.quantity || 0,
@@ -752,6 +1061,9 @@ export async function createMaterialEntryInDB(projectId: string, entry: any): Pr
       amount: entry.totalCost,
       vendor: entry.vendor || '',
       invoice_number: entry.invoiceNumber || '',
+      is_split_entry: entry.isSplitEntry || false,
+      split_parent_id: entry.splitParentId || null,
+      split_allocation: entry.splitAllocation || null,
       notes: entry.notes || '',
     })
     .select()
@@ -792,7 +1104,11 @@ export async function updateMaterialEntryInDB(entryId: string, updates: any): Pr
   if (updates.invoiceNumber !== undefined) updateData.invoice_number = updates.invoiceNumber
   if (updates.category !== undefined) updateData.category = updates.category
   if (updates.tradeId !== undefined) updateData.trade_id = updates.tradeId
+  if (updates.subItemId !== undefined) updateData.sub_item_id = updates.subItemId
   if (updates.group !== undefined) updateData.group = updates.group
+  if (updates.isSplitEntry !== undefined) updateData.is_split_entry = updates.isSplitEntry
+  if (updates.splitParentId !== undefined) updateData.split_parent_id = updates.splitParentId
+  if (updates.splitAllocation !== undefined) updateData.split_allocation = updates.splitAllocation
 
   const { data, error } = await supabase
     .from('material_entries')
@@ -869,7 +1185,8 @@ export async function createSubcontractorEntryInDB(projectId: string, entry: any
       project_id: projectId,
       actuals_id: actualsId,
       category: entry.trade,
-      trade_id: entry.tradeId,
+      trade_id: entry.tradeId || null,
+      sub_item_id: entry.subItemId || null,
       description: entry.scopeOfWork,
       date: new Date().toISOString(),
       amount: entry.totalPaid,
@@ -912,6 +1229,8 @@ export async function updateSubcontractorEntryInDB(entryId: string, updates: any
   if (updates.scopeOfWork !== undefined) updateData.description = updates.scopeOfWork
   if (updates.totalPaid !== undefined) updateData.amount = updates.totalPaid
   if (updates.subcontractorName !== undefined) updateData.subcontractor_name = updates.subcontractorName
+  if (updates.tradeId !== undefined) updateData.trade_id = updates.tradeId
+  if (updates.subItemId !== undefined) updateData.sub_item_id = updates.subItemId
 
   const { data, error } = await supabase
     .from('subcontractor_entries')

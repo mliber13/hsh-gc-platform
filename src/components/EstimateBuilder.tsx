@@ -13,6 +13,7 @@ import {
   Project,
   Estimate,
   Trade,
+  SubItem,
   TradeInput,
   UnitType,
   Subcontractor as DirectorySubcontractor,
@@ -48,6 +49,13 @@ import {
   deleteTrade_Hybrid,
   getTradesForEstimate_Hybrid,
 } from '@/services/hybridService'
+import {
+  fetchSubItemsForTrade,
+  createSubItemInDB,
+  updateSubItemInDB,
+  deleteSubItemFromDB,
+} from '@/services/supabaseService'
+import { isOnlineMode } from '@/lib/supabase'
 import { QuoteRequestForm } from './QuoteRequestForm'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -129,7 +137,10 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   const [selectedTemplateToApply, setSelectedTemplateToApply] = useState<string>('')
   const [showQuoteRequestForm, setShowQuoteRequestForm] = useState(false)
   const [selectedTradeForQuote, setSelectedTradeForQuote] = useState<Trade | null>(null)
-const [availableSubcontractors, setAvailableSubcontractors] = useState<DirectorySubcontractor[]>([])
+  const [availableSubcontractors, setAvailableSubcontractors] = useState<DirectorySubcontractor[]>([])
+  const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set())
+  const [editingSubItem, setEditingSubItem] = useState<{ tradeId: string; subItem?: SubItem } | null>(null)
+  const [subItemsByTrade, setSubItemsByTrade] = useState<Record<string, SubItem[]>>({})
 
   // Initialize project if none provided
   useEffect(() => {
@@ -145,6 +156,29 @@ const [availableSubcontractors, setAvailableSubcontractors] = useState<Directory
       initializeProject()
     }
   }, [projectData])
+
+  // Load sub-items when trades change (if not already included)
+  useEffect(() => {
+    if (trades.length > 0) {
+      const subItemsMap: Record<string, SubItem[]> = {}
+      for (const trade of trades) {
+        // Use subItems from trade if available, otherwise fetch them
+        if (trade.subItems && trade.subItems.length > 0) {
+          subItemsMap[trade.id] = trade.subItems
+        } else if (isOnlineMode()) {
+          // Fetch sub-items if not already included
+          fetchSubItemsForTrade(trade.id).then(subItems => {
+            subItemsMap[trade.id] = subItems
+            setSubItemsByTrade(prev => ({ ...prev, ...subItemsMap }))
+          })
+        }
+      }
+      // Update state with sub-items from trades
+      if (Object.keys(subItemsMap).length > 0) {
+        setSubItemsByTrade(prev => ({ ...prev, ...subItemsMap }))
+      }
+    }
+  }, [trades])
 
   // Load trades when project changes
   useEffect(() => {
@@ -320,6 +354,111 @@ const [availableSubcontractors, setAvailableSubcontractors] = useState<Directory
       setIsAddingTrade(false)
     } catch (error) {
       console.error('Error saving trade:', error)
+    }
+  }
+
+  const toggleTradeExpansion = (tradeId: string) => {
+    setExpandedTrades(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(tradeId)) {
+        newSet.delete(tradeId)
+      } else {
+        newSet.add(tradeId)
+      }
+      return newSet
+    })
+  }
+
+  const handleAddSubItem = (tradeId: string) => {
+    setEditingSubItem({ tradeId })
+  }
+
+  const handleEditSubItem = (tradeId: string, subItem: SubItem) => {
+    setEditingSubItem({ tradeId, subItem })
+  }
+
+  const handleSaveSubItem = async (tradeId: string, subItemData: Partial<SubItem>) => {
+    if (!projectData) return
+
+    try {
+      let updatedSubItem: SubItem | null
+      
+      if (editingSubItem?.subItem) {
+        // Update existing sub-item
+        updatedSubItem = await updateSubItemInDB(editingSubItem.subItem.id, {
+          name: subItemData.name!,
+          description: subItemData.description,
+          quantity: subItemData.quantity!,
+          unit: subItemData.unit!,
+          laborCost: subItemData.laborCost!,
+          laborRate: subItemData.laborRate,
+          laborHours: subItemData.laborHours,
+          materialCost: subItemData.materialCost!,
+          materialRate: subItemData.materialRate,
+          subcontractorCost: subItemData.subcontractorCost!,
+          isSubcontracted: subItemData.isSubcontracted || false,
+          wasteFactor: subItemData.wasteFactor || 10,
+          markupPercent: subItemData.markupPercent,
+        })
+      } else {
+        // Create new sub-item
+        updatedSubItem = await createSubItemInDB(
+          tradeId,
+          projectData.estimate.id,
+          {
+            name: subItemData.name!,
+            description: subItemData.description,
+            quantity: subItemData.quantity || 0,
+            unit: subItemData.unit || 'each',
+            laborCost: subItemData.laborCost || 0,
+            laborRate: subItemData.laborRate,
+            laborHours: subItemData.laborHours,
+            materialCost: subItemData.materialCost || 0,
+            materialRate: subItemData.materialRate,
+            subcontractorCost: subItemData.subcontractorCost || 0,
+            isSubcontracted: subItemData.isSubcontracted || false,
+            wasteFactor: subItemData.wasteFactor || 10,
+            markupPercent: subItemData.markupPercent,
+          }
+        )
+      }
+
+      if (updatedSubItem) {
+        // Reload sub-items for this trade
+        const subItems = await fetchSubItemsForTrade(tradeId)
+        setSubItemsByTrade(prev => ({ ...prev, [tradeId]: subItems }))
+        
+        // Reload trades to get updated totals
+        const refreshedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
+        setTrades(refreshedTrades)
+        
+        setEditingSubItem(null)
+      }
+    } catch (error) {
+      console.error('Error saving sub-item:', error)
+      alert('Failed to save sub-item. Please try again.')
+    }
+  }
+
+  const handleDeleteSubItem = async (subItemId: string, tradeId: string) => {
+    if (!confirm('Are you sure you want to delete this sub-item?')) return
+
+    try {
+      const success = await deleteSubItemFromDB(subItemId)
+      if (success) {
+        // Reload sub-items for this trade
+        const subItems = await fetchSubItemsForTrade(tradeId)
+        setSubItemsByTrade(prev => ({ ...prev, [tradeId]: subItems }))
+        
+        // Reload trades to get updated totals
+        if (projectData) {
+          const refreshedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
+          setTrades(refreshedTrades)
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting sub-item:', error)
+      alert('Failed to delete sub-item. Please try again.')
     }
   }
 
@@ -598,6 +737,19 @@ const [availableSubcontractors, setAvailableSubcontractors] = useState<Directory
               setShowQuoteRequestForm(false)
               setSelectedTradeForQuote(null)
             }}
+          />
+        )}
+
+        {/* Sub-Item Form */}
+        {editingSubItem && projectData && (
+          <SubItemForm
+            tradeId={editingSubItem.tradeId}
+            subItem={editingSubItem.subItem}
+            estimateId={projectData.estimate.id}
+            onSave={handleSaveSubItem}
+            onCancel={() => setEditingSubItem(null)}
+            isAdding={!editingSubItem.subItem}
+            defaultMarkupPercent={markupPercent}
           />
         )}
 
@@ -1430,51 +1582,112 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                             <td className="p-3 text-center border-b font-bold border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.totalCost * (1 + (t.markupPercent || defaultMarkupPercent) / 100), 0))}</td>
                             <td className="p-3 text-center border-b"></td>
                           </tr>
-                          {isCategoryExpanded && categoryTrades.map((trade) => (
-                            <tr key={trade.id} className="hover:bg-gray-50">
-                              <td className="p-3 border-b pl-12 border-r-2 border-gray-300">
-                                <div className="flex items-center gap-2">
-                                  <span>{trade.name}</span>
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getEstimateStatusBadgeClass(trade.estimateStatus || 'budget')}`}>
-                                    {ESTIMATE_STATUS[trade.estimateStatus || 'budget']?.icon} {getEstimateStatusLabel(trade.estimateStatus || 'budget')}
-                                  </span>
-                                  {trade.quoteFileUrl && (
-                                    <span className="text-blue-600" title="Quote PDF attached">
-                                      <FileText className="w-4 h-4" />
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300">{trade.quantity}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300">{UNIT_TYPES[trade.unit]?.abbreviation || trade.unit}</td>
-                              <td className="p-3 text-center border-b">{trade.materialRate ? formatCurrency(trade.materialRate) : '-'}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.materialCost)}</td>
-                              <td className="p-3 text-center border-b">{trade.laborRate ? formatCurrency(trade.laborRate) : '-'}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.laborCost)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300">{(trade.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * ((trade.markupPercent || defaultMarkupPercent) / 100))}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300">{(((trade.markupPercent || defaultMarkupPercent) / (100 + (trade.markupPercent || defaultMarkupPercent))) * 100).toFixed(1)}%</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * (1 + (trade.markupPercent || defaultMarkupPercent) / 100))}</td>
-                              <td className="p-3 text-center border-b">
-                                <div className="flex gap-1">
-                                  <Button size="sm" variant="outline" onClick={() => onEditTrade(trade)}>Edit</Button>
-                                  {onRequestQuote && (
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline"
-                                      onClick={() => onRequestQuote(trade)}
-                                      className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
-                                    >
-                                      <Mail className="w-3 h-3 mr-1" />
-                                      Quote
-                                    </Button>
-                                  )}
-                                  <Button size="sm" variant="destructive" onClick={() => onDeleteTrade(trade.id)}>Delete</Button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                          {isCategoryExpanded && categoryTrades.map((trade) => {
+                            const isTradeExpanded = expandedTrades.has(trade.id)
+                            const tradeSubItems = subItemsByTrade[trade.id] || []
+                            const hasSubItems = tradeSubItems.length > 0
+                            
+                            return (
+                              <React.Fragment key={trade.id}>
+                                <tr className="hover:bg-gray-50">
+                                  <td className="p-3 border-b pl-12 border-r-2 border-gray-300">
+                                    <div className="flex items-center gap-2">
+                                      {hasSubItems && (
+                                        <button
+                                          onClick={() => toggleTradeExpansion(trade.id)}
+                                          className="p-1 hover:bg-gray-200 rounded"
+                                          title={isTradeExpanded ? 'Collapse sub-items' : 'Expand sub-items'}
+                                        >
+                                          {isTradeExpanded ? (
+                                            <ChevronDown className="w-4 h-4" />
+                                          ) : (
+                                            <ChevronUp className="w-4 h-4 rotate-180" />
+                                          )}
+                                        </button>
+                                      )}
+                                      <span>{trade.name}</span>
+                                      {hasSubItems && (
+                                        <span className="text-xs text-gray-500">({tradeSubItems.length} sub-items)</span>
+                                      )}
+                                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getEstimateStatusBadgeClass(trade.estimateStatus || 'budget')}`}>
+                                        {ESTIMATE_STATUS[trade.estimateStatus || 'budget']?.icon} {getEstimateStatusLabel(trade.estimateStatus || 'budget')}
+                                      </span>
+                                      {trade.quoteFileUrl && (
+                                        <span className="text-blue-600" title="Quote PDF attached">
+                                          <FileText className="w-4 h-4" />
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{trade.quantity}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{UNIT_TYPES[trade.unit]?.abbreviation || trade.unit}</td>
+                                  <td className="p-3 text-center border-b">{trade.materialRate ? formatCurrency(trade.materialRate) : '-'}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.materialCost)}</td>
+                                  <td className="p-3 text-center border-b">{trade.laborRate ? formatCurrency(trade.laborRate) : '-'}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.laborCost)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{(trade.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * ((trade.markupPercent || defaultMarkupPercent) / 100))}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{(((trade.markupPercent || defaultMarkupPercent) / (100 + (trade.markupPercent || defaultMarkupPercent))) * 100).toFixed(1)}%</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * (1 + (trade.markupPercent || defaultMarkupPercent) / 100))}</td>
+                                  <td className="p-3 text-center border-b">
+                                    <div className="flex gap-1 flex-wrap">
+                                      <Button size="sm" variant="outline" onClick={() => onEditTrade(trade)}>Edit</Button>
+                                      {isOnlineMode() && (
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline"
+                                          onClick={() => handleAddSubItem(trade.id)}
+                                          title="Add sub-item"
+                                        >
+                                          <PlusCircle className="w-3 h-3 mr-1" />
+                                          Sub-item
+                                        </Button>
+                                      )}
+                                      {onRequestQuote && (
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline"
+                                          onClick={() => onRequestQuote(trade)}
+                                          className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
+                                        >
+                                          <Mail className="w-3 h-3 mr-1" />
+                                          Quote
+                                        </Button>
+                                      )}
+                                      <Button size="sm" variant="destructive" onClick={() => onDeleteTrade(trade.id)}>Delete</Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {isTradeExpanded && tradeSubItems.map((subItem) => (
+                                  <tr key={subItem.id} className="bg-blue-50 hover:bg-blue-100">
+                                    <td className="p-3 border-b pl-20 border-r-2 border-gray-300">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm">{subItem.name}</span>
+                                      </div>
+                                    </td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{subItem.quantity}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{UNIT_TYPES[subItem.unit]?.abbreviation || subItem.unit}</td>
+                                    <td className="p-3 text-center border-b text-sm">{subItem.materialRate ? formatCurrency(subItem.materialRate) : '-'}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.materialCost)}</td>
+                                    <td className="p-3 text-center border-b text-sm">{subItem.laborRate ? formatCurrency(subItem.laborRate) : '-'}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.laborCost)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold">{formatCurrency(subItem.totalCost)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{(subItem.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.totalCost * ((subItem.markupPercent || defaultMarkupPercent) / 100))}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{(((subItem.markupPercent || defaultMarkupPercent) / (100 + (subItem.markupPercent || defaultMarkupPercent))) * 100).toFixed(1)}%</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold">{formatCurrency(subItem.totalCost * (1 + (subItem.markupPercent || defaultMarkupPercent) / 100))}</td>
+                                    <td className="p-3 text-center border-b">
+                                      <div className="flex gap-1">
+                                        <Button size="sm" variant="outline" onClick={() => handleEditSubItem(trade.id, subItem)}>Edit</Button>
+                                        <Button size="sm" variant="destructive" onClick={() => handleDeleteSubItem(subItem.id, trade.id)}>Delete</Button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </React.Fragment>
+                            )
+                          })}
                         </React.Fragment>
                       )
                     })}
@@ -1954,6 +2167,225 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                 className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226] text-white border-none shadow-lg"
               >
                 {isAdding ? 'Add Cost Item' : 'Save Changes'}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ----------------------------------------------------------------------------
+// Sub-Item Form Component
+// ----------------------------------------------------------------------------
+
+interface SubItemFormProps {
+  tradeId: string
+  estimateId: string
+  subItem?: SubItem
+  onSave: (tradeId: string, data: Partial<SubItem>) => Promise<void>
+  onCancel: () => void
+  isAdding: boolean
+  defaultMarkupPercent: number
+}
+
+function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding, defaultMarkupPercent }: SubItemFormProps) {
+  const [formData, setFormData] = useState<Partial<SubItem>>({
+    name: subItem?.name || '',
+    description: subItem?.description || '',
+    quantity: subItem?.quantity || 0,
+    unit: subItem?.unit || 'each',
+    laborCost: subItem?.laborCost || 0,
+    laborRate: subItem?.laborRate || 0,
+    laborHours: subItem?.laborHours || 0,
+    materialCost: subItem?.materialCost || 0,
+    materialRate: subItem?.materialRate || 0,
+    subcontractorCost: subItem?.subcontractorCost || 0,
+    isSubcontracted: subItem?.isSubcontracted || false,
+    wasteFactor: subItem?.wasteFactor || 10,
+    markupPercent: subItem?.markupPercent || defaultMarkupPercent,
+    notes: subItem?.notes || '',
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.name) {
+      alert('Please enter a name for the sub-item')
+      return
+    }
+    await onSave(tradeId, formData)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+      <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <CardHeader>
+          <CardTitle className="text-lg sm:text-xl">{isAdding ? 'Add Sub-Item' : 'Edit Sub-Item'}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="subItemName">Sub-Item Name *</Label>
+              <Input
+                id="subItemName"
+                value={formData.name || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                required
+                placeholder="e.g., Towel bars, Recessed lights"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="subItemQuantity">Quantity</Label>
+                <Input
+                  id="subItemQuantity"
+                  type="number"
+                  step="0.01"
+                  value={formData.quantity || 0}
+                  onChange={(e) => {
+                    const qty = parseFloat(e.target.value) || 0
+                    setFormData(prev => ({
+                      ...prev,
+                      quantity: qty,
+                      materialCost: (prev.materialRate || 0) * qty,
+                      laborCost: (prev.laborRate || 0) * qty,
+                    }))
+                  }}
+                />
+              </div>
+              <div>
+                <Label htmlFor="subItemUnit">Unit</Label>
+                <Select
+                  value={formData.unit || 'each'}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, unit: value as UnitType }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(UNIT_TYPES).map(([key, value]) => (
+                      <SelectItem key={key} value={key}>
+                        {value.icon} {value.label} ({value.abbreviation})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="subItemMaterialRate">Material Unit Cost</Label>
+                <Input
+                  id="subItemMaterialRate"
+                  type="number"
+                  step="0.01"
+                  value={formData.materialRate || ''}
+                  onChange={(e) => {
+                    const rate = parseFloat(e.target.value) || 0
+                    const cost = rate * (formData.quantity || 0)
+                    setFormData(prev => ({ ...prev, materialRate: rate, materialCost: cost }))
+                  }}
+                />
+              </div>
+              <div>
+                <Label htmlFor="subItemMaterialCost">Material Cost</Label>
+                <Input
+                  id="subItemMaterialCost"
+                  type="number"
+                  step="0.01"
+                  value={formData.materialCost || 0}
+                  onChange={(e) => {
+                    const cost = parseFloat(e.target.value) || 0
+                    const rate = (formData.quantity || 0) > 0 ? cost / (formData.quantity || 0) : 0
+                    setFormData(prev => ({ ...prev, materialCost: cost, materialRate: rate }))
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="subItemLaborRate">Labor Unit Cost</Label>
+                <Input
+                  id="subItemLaborRate"
+                  type="number"
+                  step="0.01"
+                  value={formData.laborRate || ''}
+                  onChange={(e) => {
+                    const rate = parseFloat(e.target.value) || 0
+                    const cost = rate * (formData.quantity || 0)
+                    setFormData(prev => ({ ...prev, laborRate: rate, laborCost: cost }))
+                  }}
+                />
+              </div>
+              <div>
+                <Label htmlFor="subItemLaborCost">Labor Cost</Label>
+                <Input
+                  id="subItemLaborCost"
+                  type="number"
+                  step="0.01"
+                  value={formData.laborCost || 0}
+                  onChange={(e) => {
+                    const cost = parseFloat(e.target.value) || 0
+                    const rate = (formData.quantity || 0) > 0 ? cost / (formData.quantity || 0) : 0
+                    setFormData(prev => ({ ...prev, laborCost: cost, laborRate: rate }))
+                  }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="subItemSubcontractorCost">Subcontractor Cost</Label>
+              <Input
+                id="subItemSubcontractorCost"
+                type="number"
+                step="0.01"
+                value={formData.subcontractorCost || 0}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  subcontractorCost: parseFloat(e.target.value) || 0,
+                }))}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="subItemMarkupPercent">Markup %</Label>
+              <Input
+                id="subItemMarkupPercent"
+                type="number"
+                step="0.1"
+                value={formData.markupPercent || defaultMarkupPercent}
+                onChange={(e) => setFormData(prev => ({ ...prev, markupPercent: parseFloat(e.target.value) || 0 }))}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="subItemDescription">Description</Label>
+              <Input
+                id="subItemDescription"
+                value={formData.description || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="subItemNotes">Notes</Label>
+              <Input
+                id="subItemNotes"
+                value={formData.notes || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226] text-white">
+                {isAdding ? 'Add Sub-Item' : 'Save Changes'}
               </Button>
             </div>
           </form>
