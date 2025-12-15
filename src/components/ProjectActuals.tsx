@@ -468,8 +468,24 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   }
 
   const handleDeleteEntry = async (entry: ActualEntry) => {
-    if (!confirm(`Delete this ${entry.type} entry for ${formatCurrency(entry.amount)}?`)) {
+    // Check if this is a parent entry with split children
+    const splitChildren = entry.type === 'material' && entry.invoiceNumber
+      ? actualEntries.filter(e => e.isSplitEntry && e.splitParentId === entry.id)
+      : []
+    
+    const confirmMessage = splitChildren.length > 0
+      ? `Delete this invoice and all ${splitChildren.length} split allocations (${formatCurrency(entry.amount)} total)?`
+      : `Delete this ${entry.type} entry for ${formatCurrency(entry.amount)}?`
+    
+    if (!confirm(confirmMessage)) {
       return
+    }
+
+    // Delete split children first
+    if (splitChildren.length > 0) {
+      for (const child of splitChildren) {
+        await deleteMaterialEntry_Hybrid(child.id)
+      }
     }
 
     let deleted = false
@@ -511,6 +527,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             tradeId: material.tradeId,
             vendor: material.vendor,
             invoiceNumber: material.invoiceNumber,
+            isSplitEntry: material.isSplitEntry,
+            splitParentId: material.splitParentId,
+            splitAllocation: material.splitAllocation,
           })
         })
         
