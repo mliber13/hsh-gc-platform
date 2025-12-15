@@ -1175,7 +1175,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     const varianceType = getVarianceType(trade.id, tradeVariance)
                                     const hasExpanded = expandedCOItems.has(trade.id)
                                     const isTradeExpanded = expandedTrades.has(trade.id)
-                                    const tradeSubItems = subItemsByTrade[trade.id] || []
                                     const hasSubItems = tradeSubItems.length > 0
 
                                     return (
