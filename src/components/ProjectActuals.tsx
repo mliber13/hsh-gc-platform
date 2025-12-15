@@ -2574,33 +2574,54 @@ function ActualEntryForm({
               </div>
             )}
 
-            {type === 'material' && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="isSplitInvoice"
-                      checked={formData.isSplitInvoice}
-                      onChange={(e) => {
-                        setFormData((prev: typeof formData) => ({ ...prev, isSplitInvoice: e.target.checked }))
-                        if (!e.target.checked) {
-                          setSplitAllocations([])
-                        } else if (splitAllocations.length === 0) {
-                          // Add one allocation by default
+            {type === 'material' && !editingEntry?.isSplitEntry && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="isSplitInvoice"
+                    checked={formData.isSplitInvoice}
+                    onChange={(e) => {
+                      setFormData((prev: typeof formData) => ({ ...prev, isSplitInvoice: e.target.checked }))
+                      if (!e.target.checked) {
+                        setSplitAllocations([])
+                      } else if (splitAllocations.length === 0) {
+                        // If editing and converting to split, initialize with current entry as one allocation
+                        if (editingEntry) {
+                          setSplitAllocations([{
+                            id: uuidv4(),
+                            category: editingEntry.category || '',
+                            tradeId: editingEntry.tradeId,
+                            subItemId: editingEntry.subItemId,
+                            amount: editingEntry.amount,
+                          }])
+                        } else {
+                          // Add one allocation by default for new entries
                           addSplitAllocation()
                         }
-                      }}
-                      className="w-4 h-4"
-                    />
-                    <Label htmlFor="isSplitInvoice" className="cursor-pointer">
-                      Split invoice across multiple items/categories
-                    </Label>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    Use this when a single invoice contains materials for multiple trades or categories
-                  </p>
+                      }
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <Label htmlFor="isSplitInvoice" className="cursor-pointer">
+                    Split invoice across multiple items/categories
+                  </Label>
                 </div>
-              )}
+                <p className="text-xs text-gray-500">
+                  {editingEntry 
+                    ? 'Convert this invoice to a split invoice. The current entry will be replaced with a parent entry and split allocations.'
+                    : 'Use this when a single invoice contains materials for multiple trades or categories'}
+                </p>
+              </div>
+            )}
+
+            {type === 'material' && editingEntry?.isSplitEntry && (
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ This is a split allocation entry. To edit the split invoice, edit the parent entry instead.
+                </p>
+              </div>
+            )}
 
               {type === 'material' && formData.isSplitInvoice && (
                 <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
