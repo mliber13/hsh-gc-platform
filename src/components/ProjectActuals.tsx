@@ -2473,16 +2473,14 @@ function ActualEntryForm({
                       Add Allocation
                     </Button>
                   </div>
-                  <div className="space-y-2">
-                    {splitAllocations.map((allocation: SplitAllocation, index: number) => {
-                      const allocationTrades = allocation.category 
-                        ? trades.filter(t => t.category === allocation.category)
-                        : []
-                      const allocationSubItems = allocation.tradeId 
-                        ? (subItemsByTrade[allocation.tradeId] || [])
-                        : []
-                      const allocatedTotal = splitAllocations.reduce((sum: number, a: SplitAllocation) => sum + a.amount, 0)
-                      const remaining = parseFloat(formData.amount) - allocatedTotal
+                <div className="space-y-2">
+                  {splitAllocations.map((allocation: SplitAllocation, index: number) => {
+                    const allocationTrades = allocation.category 
+                      ? trades.filter(t => t.category === allocation.category)
+                      : []
+                    const allocationSubItems = allocation.tradeId 
+                      ? (subItemsByTrade[allocation.tradeId] || [])
+                      : []
                     
                     return (
                       <div key={allocation.id} className="p-3 bg-white border border-gray-300 rounded space-y-2">
@@ -2587,25 +2585,31 @@ function ActualEntryForm({
                     )
                   })}
                 </div>
-                <div className="pt-2 border-t border-blue-300">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-semibold">Total Allocated:</span>
-                    <span className={Math.abs(remaining) < 0.01 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                      {formatCurrency(splitAllocations.reduce((sum, a) => sum + a.amount, 0))}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-xs mt-1">
-                    <span>Remaining:</span>
-                    <span className={Math.abs(remaining) < 0.01 ? 'text-green-600' : 'text-red-600'}>
-                      {formatCurrency(remaining)}
-                    </span>
-                  </div>
-                  {Math.abs(remaining) > 0.01 && (
-                    <p className="text-xs text-red-600 mt-1">
-                      ⚠️ Allocations must sum to the total invoice amount
-                    </p>
-                  )}
-                </div>
+                {(() => {
+                  const allocatedTotal = splitAllocations.reduce((sum: number, a: SplitAllocation) => sum + a.amount, 0)
+                  const remaining = parseFloat(formData.amount) - allocatedTotal
+                  return (
+                    <div className="pt-2 border-t border-blue-300">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-semibold">Total Allocated:</span>
+                        <span className={Math.abs(remaining) < 0.01 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                          {formatCurrency(allocatedTotal)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs mt-1">
+                        <span>Remaining:</span>
+                        <span className={Math.abs(remaining) < 0.01 ? 'text-green-600' : 'text-red-600'}>
+                          {formatCurrency(remaining)}
+                        </span>
+                      </div>
+                      {Math.abs(remaining) > 0.01 && (
+                        <p className="text-xs text-red-600 mt-1">
+                          ⚠️ Allocations must sum to the total invoice amount
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )}
 
