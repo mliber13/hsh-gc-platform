@@ -2187,10 +2187,13 @@ function ActualEntryForm({
     // Material
     vendor: editingEntry?.vendor || '',
     invoiceNumber: editingEntry?.invoiceNumber || '',
+    isSplitInvoice: false,
     
     // Subcontractor
     subcontractorName: editingEntry?.subcontractorName || '',
   })
+
+  const [splitAllocations, setSplitAllocations] = useState<SplitAllocation[]>([])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -2428,58 +2431,58 @@ function ActualEntryForm({
             )}
 
             {type === 'material' && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="isSplitInvoice"
-                    checked={formData.isSplitInvoice}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, isSplitInvoice: e.target.checked }))
-                      if (!e.target.checked) {
-                        setSplitAllocations([])
-                      } else if (splitAllocations.length === 0) {
-                        // Add one allocation by default
-                        addSplitAllocation()
-                      }
-                    }}
-                    className="w-4 h-4"
-                  />
-                  <Label htmlFor="isSplitInvoice" className="cursor-pointer">
-                    Split invoice across multiple items/categories
-                  </Label>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Use this when a single invoice contains materials for multiple trades or categories
-                </p>
-              </div>
-            )}
-
-            {type === 'material' && formData.isSplitInvoice && (
-              <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold">Split Allocations</Label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={addSplitAllocation}
-                    className="text-xs"
-                  >
-                    <PlusCircle className="w-3 h-3 mr-1" />
-                    Add Allocation
-                  </Button>
-                </div>
                 <div className="space-y-2">
-                  {splitAllocations.map((allocation, index) => {
-                    const allocationTrades = allocation.category 
-                      ? trades.filter(t => t.category === allocation.category)
-                      : []
-                    const allocationSubItems = allocation.tradeId 
-                      ? (subItemsByTrade[allocation.tradeId] || [])
-                      : []
-                    const allocatedTotal = splitAllocations.reduce((sum, a) => sum + a.amount, 0)
-                    const remaining = parseFloat(formData.amount) - allocatedTotal
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="isSplitInvoice"
+                      checked={formData.isSplitInvoice}
+                      onChange={(e) => {
+                        setFormData((prev: typeof formData) => ({ ...prev, isSplitInvoice: e.target.checked }))
+                        if (!e.target.checked) {
+                          setSplitAllocations([])
+                        } else if (splitAllocations.length === 0) {
+                          // Add one allocation by default
+                          addSplitAllocation()
+                        }
+                      }}
+                      className="w-4 h-4"
+                    />
+                    <Label htmlFor="isSplitInvoice" className="cursor-pointer">
+                      Split invoice across multiple items/categories
+                    </Label>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Use this when a single invoice contains materials for multiple trades or categories
+                  </p>
+                </div>
+              )}
+
+              {type === 'material' && formData.isSplitInvoice && (
+                <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">Split Allocations</Label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={addSplitAllocation}
+                      className="text-xs"
+                    >
+                      <PlusCircle className="w-3 h-3 mr-1" />
+                      Add Allocation
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {splitAllocations.map((allocation: SplitAllocation, index: number) => {
+                      const allocationTrades = allocation.category 
+                        ? trades.filter(t => t.category === allocation.category)
+                        : []
+                      const allocationSubItems = allocation.tradeId 
+                        ? (subItemsByTrade[allocation.tradeId] || [])
+                        : []
+                      const allocatedTotal = splitAllocations.reduce((sum: number, a: SplitAllocation) => sum + a.amount, 0)
+                      const remaining = parseFloat(formData.amount) - allocatedTotal
                     
                     return (
                       <div key={allocation.id} className="p-3 bg-white border border-gray-300 rounded space-y-2">
