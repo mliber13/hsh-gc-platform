@@ -88,9 +88,20 @@ interface ActualEntry {
   // Material specific
   vendor?: string
   invoiceNumber?: string
+  isSplitEntry?: boolean
+  splitParentId?: string
+  splitAllocation?: number
   
   // Subcontractor specific
   subcontractorName?: string
+}
+
+interface SplitAllocation {
+  id: string
+  category: string
+  tradeId?: string
+  subItemId?: string
+  amount: number
 }
 
 // ----------------------------------------------------------------------------
@@ -1614,59 +1625,93 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             <p className="text-gray-500 text-sm">No actual entries recorded yet.</p>
           ) : (
             <div className="space-y-3">
-              {actualEntries.map((entry) => {
-                const tradeName = entry.tradeId ? trades.find(t => t.id === entry.tradeId)?.name : null
-                return (
-                  <div
-                    key={entry.id}
-                    className={`flex flex-col sm:flex-row sm:items-center sm:justify-between border rounded-lg p-3 ${getEntryColor(entry.type)}`}
-                  >
-                    <div className="flex items-start gap-3 flex-1">
-                      {getEntryIcon(entry.type)}
-                      <div className="flex-1 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                          <span>{formatDate(entry.date)}</span>
-                          <span>•</span>
-                          <span className="font-semibold text-gray-800">
-                            {entry.category ? TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category : 'No category'}
-                          </span>
-                          <span>•</span>
-                          <span className="uppercase tracking-wide">{entry.type}</span>
+              {actualEntries
+                .filter(entry => !entry.isSplitEntry) // Only show parent entries and non-split entries
+                .map((entry) => {
+                  const tradeName = entry.tradeId ? trades.find(t => t.id === entry.tradeId)?.name : null
+                  const splitChildren = entry.type === 'material' && entry.invoiceNumber
+                    ? actualEntries.filter(e => e.isSplitEntry && e.splitParentId === entry.id)
+                    : []
+                  
+                  return (
+                    <div key={entry.id}>
+                      <div
+                        className={`flex flex-col sm:flex-row sm:items-center sm:justify-between border rounded-lg p-3 ${getEntryColor(entry.type)}`}
+                      >
+                        <div className="flex items-start gap-3 flex-1">
+                          {getEntryIcon(entry.type)}
+                          <div className="flex-1 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                              <span>{formatDate(entry.date)}</span>
+                              <span>•</span>
+                              <span className="font-semibold text-gray-800">
+                                {entry.category ? TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category : 'No category'}
+                              </span>
+                              <span>•</span>
+                              <span className="uppercase tracking-wide">{entry.type}</span>
+                              {splitChildren.length > 0 && (
+                                <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-semibold">
+                                  Split Invoice ({splitChildren.length} allocations)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {entry.description || entry.vendor || entry.subcontractorName || 'No description'}
+                            </p>
+                            <div className="text-xs text-gray-500">
+                              {tradeName ? (
+                                <span className="text-green-700 font-semibold">Linked to {tradeName}</span>
+                              ) : (
+                                <span className="text-red-600 font-semibold">Not linked to a specific item</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {entry.description || entry.vendor || entry.subcontractorName || 'No description'}
-                        </p>
-                        <div className="text-xs text-gray-500">
-                          {tradeName ? (
-                            <span className="text-green-700 font-semibold">Linked to {tradeName}</span>
-                          ) : (
-                            <span className="text-red-600 font-semibold">Not linked to a specific item</span>
-                          )}
+                        <div className="flex items-center justify-between sm:flex-col sm:items-end gap-3 mt-3 sm:mt-0">
+                          <p className="text-base font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditEntry(entry)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDeleteEntry(entry)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         </div>
                       </div>
+                      {splitChildren.length > 0 && (
+                        <div className="ml-8 mt-2 space-y-1 border-l-2 border-blue-300 pl-3">
+                          {splitChildren.map((child) => {
+                            const childTradeName = child.tradeId ? trades.find(t => t.id === child.tradeId)?.name : null
+                            return (
+                              <div
+                                key={child.id}
+                                className="flex items-center justify-between p-2 bg-blue-50 border border-blue-200 rounded text-sm"
+                              >
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-900">{child.description}</p>
+                                  <p className="text-xs text-gray-600">
+                                    {child.category && `${TRADE_CATEGORIES[child.category as keyof typeof TRADE_CATEGORIES]?.label || child.category}`}
+                                    {childTradeName && ` • ${childTradeName}`}
+                                  </p>
+                                </div>
+                                <p className="font-semibold text-gray-900 ml-2">{formatCurrency(child.amount)}</p>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center justify-between sm:flex-col sm:items-end gap-3 mt-3 sm:mt-0">
-                      <p className="text-base font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEditEntry(entry)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDeleteEntry(entry)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
             </div>
           )}
         </CardContent>
@@ -1695,7 +1740,108 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           availableSuppliers={availableSuppliers}
           availableSubcontractors={availableSubcontractors}
           editingEntry={editingEntry}
-          onSave={async (entry) => {
+          onSave={async (entry, splitAllocations) => {
+            // Handle split invoices
+            if (entry.type === 'material' && splitAllocations && splitAllocations.length > 0) {
+              // Create parent entry first
+              const materialCategory = entry.category as Trade['category'] | undefined
+              const parentEntry = await addMaterialEntry_Hybrid(project.id, {
+                date: entry.date,
+                materialName: entry.description,
+                totalCost: entry.amount,
+                category: materialCategory,
+                tradeId: entry.tradeId,
+                subItemId: entry.subItemId,
+                vendor: entry.vendor,
+                invoiceNumber: entry.invoiceNumber,
+                group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
+                isSplitEntry: false,
+              })
+
+              if (!parentEntry) {
+                alert('Failed to create parent invoice entry')
+                return
+              }
+
+              // Create split entries for each allocation
+              for (const allocation of splitAllocations) {
+                const allocCategory = allocation.category as Trade['category'] | undefined
+                await addMaterialEntry_Hybrid(project.id, {
+                  date: entry.date,
+                  materialName: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
+                  totalCost: allocation.amount,
+                  category: allocCategory,
+                  tradeId: allocation.tradeId,
+                  subItemId: allocation.subItemId,
+                  vendor: entry.vendor,
+                  invoiceNumber: entry.invoiceNumber,
+                  group: allocCategory ? getCategoryGroup(allocCategory) : undefined,
+                  isSplitEntry: true,
+                  splitParentId: parentEntry.id,
+                  splitAllocation: allocation.amount,
+                })
+              }
+
+              // Reload actuals
+              const actuals = await getProjectActuals_Hybrid(project.id)
+              if (actuals) {
+                const entries: ActualEntry[] = []
+                
+                actuals.laborEntries?.forEach((labor: LaborEntry) => {
+                  entries.push({
+                    id: labor.id,
+                    type: 'labor',
+                    date: labor.date,
+                    amount: labor.totalCost,
+                    description: labor.description,
+                    category: labor.trade,
+                    tradeId: labor.tradeId,
+                    subItemId: labor.subItemId,
+                    payrollPeriod: labor.date.toLocaleDateString(),
+                  })
+                })
+                
+                actuals.materialEntries?.forEach((material: MaterialEntry) => {
+                  entries.push({
+                    id: material.id,
+                    type: 'material',
+                    date: material.date,
+                    amount: material.totalCost,
+                    description: material.materialName,
+                    category: material.category,
+                    tradeId: material.tradeId,
+                    subItemId: material.subItemId,
+                    vendor: material.vendor,
+                    invoiceNumber: material.invoiceNumber,
+                    isSplitEntry: material.isSplitEntry,
+                    splitParentId: material.splitParentId,
+                    splitAllocation: material.splitAllocation,
+                  })
+                })
+                
+                actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
+                  entries.push({
+                    id: sub.id,
+                    type: 'subcontractor',
+                    date: sub.createdAt,
+                    amount: sub.totalPaid,
+                    description: sub.scopeOfWork,
+                    category: sub.trade,
+                    tradeId: sub.tradeId,
+                    subItemId: sub.subItemId,
+                    subcontractorName: sub.subcontractor.name,
+                  })
+                })
+                
+                entries.sort((a, b) => b.date.getTime() - a.date.getTime())
+                setActualEntries(entries)
+              }
+
+              setShowEntryForm(false)
+              setEditingEntry(null)
+              return
+            }
+
             // Save to storage based on entry type
             if (editingEntry) {
               // Update existing entry
@@ -1990,7 +2136,7 @@ interface ActualEntryFormProps {
   availableSuppliers: Supplier[]
   availableSubcontractors: DirectorySubcontractor[]
   editingEntry: ActualEntry | null
-  onSave: (entry: ActualEntry) => void
+  onSave: (entry: ActualEntry, splitAllocations?: SplitAllocation[]) => void
   onCancel: () => void
 }
 
@@ -2030,6 +2176,37 @@ function ActualEntryForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
+    // For split invoices, we'll handle it in the parent component
+    if (type === 'material' && formData.isSplitInvoice && splitAllocations.length > 0) {
+      // Validate allocations sum to total
+      const totalAllocated = splitAllocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+      const totalAmount = parseFloat(formData.amount)
+      
+      if (Math.abs(totalAllocated - totalAmount) > 0.01) {
+        alert(`Split allocations must sum to the total amount (${formatCurrency(totalAmount)}). Current total: ${formatCurrency(totalAllocated)}`)
+        return
+      }
+      
+      // Create a special entry that indicates this is a split invoice
+      const entry: ActualEntry = {
+        id: editingEntry?.id || uuidv4(),
+        type,
+        date: new Date(formData.date),
+        amount: totalAmount,
+        description: formData.description,
+        category: formData.category,
+        tradeId: formData.tradeId || undefined,
+        subItemId: formData.subItemId || undefined,
+        vendor: formData.vendor,
+        invoiceNumber: formData.invoiceNumber,
+        isSplitEntry: false, // This is the parent
+      }
+      
+      // Pass split allocations to parent handler
+      onSave(entry, splitAllocations)
+      return
+    }
+    
     const entry: ActualEntry = {
       id: editingEntry?.id || uuidv4(),
       type,
@@ -2051,6 +2228,24 @@ function ActualEntryForm({
     }
     
     onSave(entry)
+  }
+
+  const addSplitAllocation = () => {
+    setSplitAllocations(prev => [...prev, {
+      id: uuidv4(),
+      category: '',
+      tradeId: undefined,
+      subItemId: undefined,
+      amount: 0,
+    }])
+  }
+
+  const removeSplitAllocation = (id: string) => {
+    setSplitAllocations(prev => prev.filter(a => a.id !== id))
+  }
+
+  const updateSplitAllocation = (id: string, updates: Partial<SplitAllocation>) => {
+    setSplitAllocations(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a))
   }
 
   const getTitle = () => {
@@ -2209,6 +2404,185 @@ function ActualEntryForm({
                     value={formData.invoiceNumber}
                     onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
                   />
+                </div>
+              </div>
+            )}
+
+            {type === 'material' && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="isSplitInvoice"
+                    checked={formData.isSplitInvoice}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, isSplitInvoice: e.target.checked }))
+                      if (!e.target.checked) {
+                        setSplitAllocations([])
+                      } else if (splitAllocations.length === 0) {
+                        // Add one allocation by default
+                        addSplitAllocation()
+                      }
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <Label htmlFor="isSplitInvoice" className="cursor-pointer">
+                    Split invoice across multiple items/categories
+                  </Label>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Use this when a single invoice contains materials for multiple trades or categories
+                </p>
+              </div>
+            )}
+
+            {type === 'material' && formData.isSplitInvoice && (
+              <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">Split Allocations</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={addSplitAllocation}
+                    className="text-xs"
+                  >
+                    <PlusCircle className="w-3 h-3 mr-1" />
+                    Add Allocation
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {splitAllocations.map((allocation, index) => {
+                    const allocationTrades = allocation.category 
+                      ? trades.filter(t => t.category === allocation.category)
+                      : []
+                    const allocationSubItems = allocation.tradeId 
+                      ? (subItemsByTrade[allocation.tradeId] || [])
+                      : []
+                    const allocatedTotal = splitAllocations.reduce((sum, a) => sum + a.amount, 0)
+                    const remaining = parseFloat(formData.amount) - allocatedTotal
+                    
+                    return (
+                      <div key={allocation.id} className="p-3 bg-white border border-gray-300 rounded space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Allocation {index + 1}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeSplitAllocation(allocation.id)}
+                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Category *</Label>
+                            <Select
+                              value={allocation.category}
+                              onValueChange={(value) => updateSplitAllocation(allocation.id, { 
+                                category: value, 
+                                tradeId: undefined,
+                                subItemId: undefined 
+                              })}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select category..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {categories.map((category) => (
+                                  <SelectItem key={category} value={category}>
+                                    {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
+                                    {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Amount *</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={allocation.amount || ''}
+                              onChange={(e) => updateSplitAllocation(allocation.id, { 
+                                amount: parseFloat(e.target.value) || 0 
+                              })}
+                              className="h-8 text-xs"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                        {allocation.category && allocationTrades.length > 0 && (
+                          <div>
+                            <Label className="text-xs">Item (Optional)</Label>
+                            <Select
+                              value={allocation.tradeId || 'none'}
+                              onValueChange={(value) => updateSplitAllocation(allocation.id, { 
+                                tradeId: value === 'none' ? undefined : value,
+                                subItemId: undefined
+                              })}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select item..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Apply to entire category</SelectItem>
+                                {allocationTrades.map((trade) => (
+                                  <SelectItem key={trade.id} value={trade.id}>
+                                    {trade.name} ({trade.quantity} {trade.unit})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        {allocation.tradeId && allocationSubItems.length > 0 && (
+                          <div>
+                            <Label className="text-xs">Sub-Item (Optional)</Label>
+                            <Select
+                              value={allocation.subItemId || 'none'}
+                              onValueChange={(value) => updateSplitAllocation(allocation.id, { 
+                                subItemId: value === 'none' ? undefined : value
+                              })}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select sub-item..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Apply to entire item</SelectItem>
+                                {allocationSubItems.map((subItem) => (
+                                  <SelectItem key={subItem.id} value={subItem.id}>
+                                    {subItem.name} ({subItem.quantity} {subItem.unit})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="pt-2 border-t border-blue-300">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-semibold">Total Allocated:</span>
+                    <span className={Math.abs(remaining) < 0.01 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                      {formatCurrency(splitAllocations.reduce((sum, a) => sum + a.amount, 0))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs mt-1">
+                    <span>Remaining:</span>
+                    <span className={Math.abs(remaining) < 0.01 ? 'text-green-600' : 'text-red-600'}>
+                      {formatCurrency(remaining)}
+                    </span>
+                  </div>
+                  {Math.abs(remaining) > 0.01 && (
+                    <p className="text-xs text-red-600 mt-1">
+                      ⚠️ Allocations must sum to the total invoice amount
+                    </p>
+                  )}
                 </div>
               </div>
             )}
