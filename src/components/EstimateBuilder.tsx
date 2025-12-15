@@ -708,6 +708,12 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
             setShowQuoteRequestForm(true)
           }}
           defaultMarkupPercent={markupPercent}
+          expandedTrades={expandedTrades}
+          subItemsByTrade={subItemsByTrade}
+          onToggleTradeExpansion={toggleTradeExpansion}
+          onAddSubItem={handleAddSubItem}
+          onEditSubItem={handleEditSubItem}
+          onDeleteSubItem={handleDeleteSubItem}
         />
 
         {/* Trade Form Modal */}
@@ -1275,9 +1281,29 @@ interface TradeTableProps {
   onAddDefaultCategories: () => void
   onRequestQuote?: (trade: Trade) => void
   defaultMarkupPercent: number
+  expandedTrades: Set<string>
+  subItemsByTrade: Record<string, SubItem[]>
+  onToggleTradeExpansion: (tradeId: string) => void
+  onAddSubItem: (tradeId: string) => void
+  onEditSubItem: (tradeId: string, subItem: SubItem) => void
+  onDeleteSubItem: (subItemId: string, tradeId: string) => void
 }
 
-function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefaultCategories, onRequestQuote, defaultMarkupPercent }: TradeTableProps) {
+function TradeTable({ 
+  trades, 
+  onEditTrade, 
+  onDeleteTrade, 
+  onAddTrade, 
+  onAddDefaultCategories, 
+  onRequestQuote, 
+  defaultMarkupPercent,
+  expandedTrades,
+  subItemsByTrade,
+  onToggleTradeExpansion,
+  onAddSubItem,
+  onEditSubItem,
+  onDeleteSubItem,
+}: TradeTableProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   
   const formatCurrency = (amount: number) => 
@@ -1594,7 +1620,7 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                                     <div className="flex items-center gap-2">
                                       {hasSubItems && (
                                         <button
-                                          onClick={() => toggleTradeExpansion(trade.id)}
+                                          onClick={() => onToggleTradeExpansion(trade.id)}
                                           className="p-1 hover:bg-gray-200 rounded"
                                           title={isTradeExpanded ? 'Collapse sub-items' : 'Expand sub-items'}
                                         >
@@ -1637,7 +1663,7 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                                         <Button 
                                           size="sm" 
                                           variant="outline"
-                                          onClick={() => handleAddSubItem(trade.id)}
+                                          onClick={() => onAddSubItem(trade.id)}
                                           title="Add sub-item"
                                         >
                                           <PlusCircle className="w-3 h-3 mr-1" />
@@ -1659,7 +1685,7 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                                     </div>
                                   </td>
                                 </tr>
-                                {isTradeExpanded && tradeSubItems.map((subItem) => (
+                                {isTradeExpanded && tradeSubItems.map((subItem: SubItem) => (
                                   <tr key={subItem.id} className="bg-blue-50 hover:bg-blue-100">
                                     <td className="p-3 border-b pl-20 border-r-2 border-gray-300">
                                       <div className="flex items-center gap-2">
@@ -1679,8 +1705,8 @@ function TradeTable({ trades, onEditTrade, onDeleteTrade, onAddTrade, onAddDefau
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold">{formatCurrency(subItem.totalCost * (1 + (subItem.markupPercent || defaultMarkupPercent) / 100))}</td>
                                     <td className="p-3 text-center border-b">
                                       <div className="flex gap-1">
-                                        <Button size="sm" variant="outline" onClick={() => handleEditSubItem(trade.id, subItem)}>Edit</Button>
-                                        <Button size="sm" variant="destructive" onClick={() => handleDeleteSubItem(subItem.id, trade.id)}>Delete</Button>
+                                        <Button size="sm" variant="outline" onClick={() => onEditSubItem(trade.id, subItem)}>Edit</Button>
+                                        <Button size="sm" variant="destructive" onClick={() => onDeleteSubItem(subItem.id, trade.id)}>Delete</Button>
                                       </div>
                                     </td>
                                   </tr>
