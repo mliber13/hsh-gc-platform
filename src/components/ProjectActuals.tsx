@@ -1759,6 +1759,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           availableSuppliers={availableSuppliers}
           availableSubcontractors={availableSubcontractors}
           editingEntry={editingEntry}
+          actualEntries={actualEntries}
           onSave={async (entry, splitAllocations) => {
             // Handle split invoices
             if (entry.type === 'material' && splitAllocations && splitAllocations.length > 0) {
