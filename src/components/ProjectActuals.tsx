@@ -1863,7 +1863,119 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
             // Save to storage based on entry type
             if (editingEntry) {
-              // Update existing entry
+              // If converting to split invoice, delete original and create parent + splits
+              if (entry.type === 'material' && splitAllocations && splitAllocations.length > 0) {
+                // Delete the original entry
+                await deleteMaterialEntry_Hybrid(editingEntry.id)
+                
+                // Delete any existing split children
+                const existingSplitChildren = actualEntries.filter(
+                  e => e.isSplitEntry && e.splitParentId === editingEntry.id
+                )
+                for (const child of existingSplitChildren) {
+                  await deleteMaterialEntry_Hybrid(child.id)
+                }
+                
+                // Create parent entry
+                const materialCategory = entry.category as Trade['category'] | undefined
+                const parentEntry = await addMaterialEntry_Hybrid(project.id, {
+                  date: entry.date,
+                  materialName: entry.description,
+                  totalCost: entry.amount,
+                  category: materialCategory,
+                  tradeId: entry.tradeId,
+                  subItemId: entry.subItemId,
+                  vendor: entry.vendor,
+                  invoiceNumber: entry.invoiceNumber,
+                  group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
+                  isSplitEntry: false,
+                })
+
+                if (!parentEntry) {
+                  alert('Failed to create parent invoice entry')
+                  return
+                }
+
+                // Create split entries for each allocation
+                for (const allocation of splitAllocations) {
+                  const allocCategory = allocation.category as Trade['category'] | undefined
+                  await addMaterialEntry_Hybrid(project.id, {
+                    date: entry.date,
+                    materialName: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
+                    totalCost: allocation.amount,
+                    category: allocCategory,
+                    tradeId: allocation.tradeId,
+                    subItemId: allocation.subItemId,
+                    vendor: entry.vendor,
+                    invoiceNumber: entry.invoiceNumber,
+                    group: allocCategory ? getCategoryGroup(allocCategory) : undefined,
+                    isSplitEntry: true,
+                    splitParentId: parentEntry.id,
+                    splitAllocation: allocation.amount,
+                  })
+                }
+
+                // Reload actuals
+                const actuals = await getProjectActuals_Hybrid(project.id)
+                if (actuals) {
+                  const entries: ActualEntry[] = []
+                  
+                  actuals.laborEntries?.forEach((labor: LaborEntry) => {
+                    entries.push({
+                      id: labor.id,
+                      type: 'labor',
+                      date: labor.date,
+                      amount: labor.totalCost,
+                      description: labor.description,
+                      category: labor.trade,
+                      tradeId: labor.tradeId,
+                      subItemId: labor.subItemId,
+                      payrollPeriod: labor.date.toLocaleDateString(),
+                    })
+                  })
+                  
+                  actuals.materialEntries?.forEach((material: MaterialEntry) => {
+                    entries.push({
+                      id: material.id,
+                      type: 'material',
+                      date: material.date,
+                      amount: material.totalCost,
+                      description: material.materialName,
+                      category: material.category,
+                      tradeId: material.tradeId,
+                      subItemId: material.subItemId,
+                      vendor: material.vendor,
+                      invoiceNumber: material.invoiceNumber,
+                      isSplitEntry: material.isSplitEntry,
+                      splitParentId: material.splitParentId,
+                      splitAllocation: material.splitAllocation,
+                    })
+                  })
+                  
+                  actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
+                    entries.push({
+                      id: sub.id,
+                      type: 'subcontractor',
+                      date: sub.createdAt,
+                      amount: sub.totalPaid,
+                      description: sub.scopeOfWork,
+                      category: sub.trade,
+                      tradeId: sub.tradeId,
+                      subItemId: sub.subItemId,
+                      subcontractorName: sub.subcontractor.name,
+                    })
+                  })
+                  
+                  entries.sort((a, b) => b.date.getTime() - a.date.getTime())
+                  setActualEntries(entries)
+                }
+
+                setShowEntryForm(false)
+                setEditingEntry(null)
+                return
+              }
+              
+              // Regular update (not converting to split)
               if (entry.type === 'labor') {
                 await updateLaborEntry_Hybrid(entry.id, {
                   date: entry.date,
@@ -2155,6 +2267,7 @@ interface ActualEntryFormProps {
   availableSuppliers: Supplier[]
   availableSubcontractors: DirectorySubcontractor[]
   editingEntry: ActualEntry | null
+  actualEntries: ActualEntry[] // Pass all entries to check for split children
   onSave: (entry: ActualEntry, splitAllocations?: SplitAllocation[]) => void
   onCancel: () => void
 }
@@ -2167,6 +2280,7 @@ function ActualEntryForm({
   availableSuppliers,
   availableSubcontractors,
   editingEntry,
+  actualEntries,
   onSave,
   onCancel,
 }: ActualEntryFormProps) {
@@ -2194,6 +2308,36 @@ function ActualEntryForm({
   })
 
   const [splitAllocations, setSplitAllocations] = useState<SplitAllocation[]>([])
+
+  // Initialize split allocations when editing an entry that has split children
+  React.useEffect(() => {
+    if (editingEntry && type === 'material' && editingEntry.invoiceNumber) {
+      // Check if this entry has split children
+      const splitChildren = actualEntries.filter(
+        e => e.isSplitEntry && e.splitParentId === editingEntry.id
+      )
+      
+      if (splitChildren.length > 0) {
+        // Load existing split allocations
+        const allocations: SplitAllocation[] = splitChildren.map(child => ({
+          id: child.id,
+          category: child.category || '',
+          tradeId: child.tradeId,
+          subItemId: child.subItemId,
+          amount: child.amount,
+        }))
+        setSplitAllocations(allocations)
+        setFormData(prev => ({ ...prev, isSplitInvoice: true }))
+      } else if (!editingEntry.isSplitEntry) {
+        // Regular entry - allow converting to split
+        setSplitAllocations([])
+        setFormData(prev => ({ ...prev, isSplitInvoice: false }))
+      }
+    } else {
+      setSplitAllocations([])
+      setFormData(prev => ({ ...prev, isSplitInvoice: false }))
+    }
+  }, [editingEntry, type, actualEntries])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
