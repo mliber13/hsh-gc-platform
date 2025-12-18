@@ -491,6 +491,21 @@ export async function uploadSelectionImage(
       ? (existingImages[0].display_order || 0) + 1
       : 0
 
+    // Verify organization_id before insert (for debugging)
+    console.log('About to insert image record with:')
+    console.log('- organization_id:', orgId)
+    console.log('- selection_room_id:', roomId)
+    console.log('- User ID:', user.id)
+    
+    // Double-check user's organization_id
+    const { data: verifyProfile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+    console.log('- User profile organization_id:', verifyProfile?.organization_id)
+    console.log('- Match:', orgId === verifyProfile?.organization_id)
+
     // Save image record
     const { data: imageRecord, error: recordError } = await supabase
       .from('selection_room_images')

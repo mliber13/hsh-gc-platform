@@ -1,0 +1,75 @@
+-- ============================================================================
+-- Migration: Create Selection Images Storage Bucket
+-- ============================================================================
+-- 
+-- Creates a Supabase Storage bucket for selection room images
+-- (paint swatches, flooring samples, lighting fixtures, etc.)
+--
+-- NOTE: Storage buckets must be created through Supabase Dashboard (not SQL)
+-- This migration is for documentation only.
+--
+
+-- ============================================================================
+-- IMPORTANT: Storage Bucket Setup
+-- ============================================================================
+-- 
+-- After creating the bucket through the Supabase Dashboard, you need to set up
+-- storage policies through the Supabase Dashboard:
+--
+-- 1. Go to Storage → Create Bucket
+--    - Bucket name: selection-images
+--    - Public bucket: No (private)
+--    - File size limit: 10485760 (10MB)
+--    - Allowed MIME types: image/jpeg, image/png, image/webp, image/gif
+--
+-- 2. Go to Storage → Policies → selection-images bucket
+--    Add these policies:
+--
+--    SELECT Policy (Organization Access):
+--    - Policy name: "Users can view images in their organization"
+--    - Allowed operation: SELECT
+--    - Policy definition:
+--        bucket_id = 'selection-images' 
+--        AND EXISTS (
+--          SELECT 1 FROM profiles 
+--          WHERE id = auth.uid() 
+--          AND organization_id = (storage.foldername(name))[1]
+--        )
+--    - Target roles: authenticated
+--
+--    INSERT Policy (Organization Upload):
+--    - Policy name: "Users can upload images in their organization"
+--    - Allowed operation: INSERT
+--    - Policy definition:
+--        bucket_id = 'selection-images' 
+--        AND EXISTS (
+--          SELECT 1 FROM profiles 
+--          WHERE id = auth.uid() 
+--          AND organization_id = (storage.foldername(name))[1]
+--        )
+--    - Target roles: authenticated
+--
+--    UPDATE Policy (Organization Update):
+--    - Policy name: "Users can update images in their organization"
+--    - Allowed operation: UPDATE
+--    - Policy definition:
+--        bucket_id = 'selection-images' 
+--        AND EXISTS (
+--          SELECT 1 FROM profiles 
+--          WHERE id = auth.uid() 
+--          AND organization_id = (storage.foldername(name))[1]
+--        )
+--    - Target roles: authenticated
+--
+--    DELETE Policy (Organization Delete):
+--    - Policy name: "Users can delete images in their organization"
+--    - Allowed operation: DELETE
+--    - Policy definition:
+--        bucket_id = 'selection-images' 
+--        AND EXISTS (
+--          SELECT 1 FROM profiles 
+--          WHERE id = auth.uid() 
+--          AND organization_id = (storage.foldername(name))[1]
+--        )
+--    - Target roles: authenticated
+
