@@ -587,6 +587,30 @@ export async function uploadSelectionImage(
 }
 
 /**
+ * Get signed URL for a selection image
+ */
+export async function getSelectionImageSignedUrl(
+  imagePath: string,
+  expiresIn: number = 31536000 // 1 year default
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.storage
+      .from('selection-images')
+      .createSignedUrl(imagePath, expiresIn)
+
+    if (error) {
+      console.error('Error creating signed URL:', error)
+      return null
+    }
+
+    return data?.signedUrl || null
+  } catch (error) {
+    console.error('Error in getSelectionImageSignedUrl:', error)
+    return null
+  }
+}
+
+/**
  * Delete selection image
  */
 export async function deleteSelectionImage(

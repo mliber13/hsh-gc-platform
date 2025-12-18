@@ -37,6 +37,7 @@ import {
   deleteSelectionRoom,
   uploadSelectionImage,
   deleteSelectionImage,
+  getSelectionImageSignedUrl,
 } from '@/services/selectionBookService'
 import type {
   SelectionBook as SelectionBookType,
@@ -781,6 +782,31 @@ const RoomView: React.FC<RoomViewProps> = ({
   const [uploading, setUploading] = useState(false)
   const [uploadCategory, setUploadCategory] = useState<ImageCategory>('general')
   const [uploadDescription, setUploadDescription] = useState('')
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({})
+
+  // Generate signed URLs for images when component mounts or room changes
+  useEffect(() => {
+    const loadImageUrls = async () => {
+      if (!room.images || room.images.length === 0) return
+
+      const urls: Record<string, string> = {}
+      for (const img of room.images) {
+        // If image_url is already a valid URL, use it
+        if (img.image_url && (img.image_url.startsWith('http://') || img.image_url.startsWith('https://'))) {
+          urls[img.id] = img.image_url
+        } else if (img.image_path) {
+          // Generate signed URL from image_path
+          const signedUrl = await getSelectionImageSignedUrl(img.image_path)
+          if (signedUrl) {
+            urls[img.id] = signedUrl
+          }
+        }
+      }
+      setImageUrls(urls)
+    }
+
+    loadImageUrls()
+  }, [room.images])
 
   const handleSave = async () => {
     setSaving(true)
@@ -907,14 +933,33 @@ const RoomView: React.FC<RoomViewProps> = ({
             {/* Image Gallery */}
             {room.images && room.images.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mt-6">
-                {room.images.map((img) => (
+                {room.images.map((img) => {
+                  const imageUrl = imageUrls[img.id] || img.image_url
+                  return (
                   <div key={img.id} className="relative group">
                     <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                      <img
-                        src={img.image_url}
-                        alt={img.description || 'Room image'}
-                        className="w-full h-full object-cover"
-                      />
+                      {imageUrl ? (
+                        <img
+                          src={imageUrl}
+                          alt={img.description || 'Room image'}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            console.error('Error loading image:', img.id, imageUrl)
+                            // Try to regenerate signed URL if it failed
+                            if (img.image_path) {
+                              getSelectionImageSignedUrl(img.image_path).then(url => {
+                                if (url) {
+                                  setImageUrls(prev => ({ ...prev, [img.id]: url }))
+                                }
+                              })
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <ImageIcon className="w-8 h-8" />
+                        </div>
+                      )}
                     </div>
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity rounded-lg flex items-center justify-center">
                       <Button
@@ -941,7 +986,8 @@ const RoomView: React.FC<RoomViewProps> = ({
                       </p>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
