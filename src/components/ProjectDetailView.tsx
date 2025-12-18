@@ -586,7 +586,7 @@ export function ProjectDetailView({
               <CardContent>
                 <h3 className="text-2xl font-bold mb-3">Project Forms</h3>
                 <p className="text-white/80 mb-4">
-                  Complete project documentation including architect verification, site checklists, due diligence, and selections.
+                  Complete project documentation including architect verification, site checklists, and due diligence.
                 </p>
                 <div className="bg-white/10 rounded-lg p-3 mb-4">
                   <div className="flex justify-between text-sm mb-1">
@@ -597,12 +597,8 @@ export function ProjectDetailView({
                     <span>Site Checklist</span>
                     <span className="font-semibold">Pending</span>
                   </div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Due Diligence</span>
-                    <span className="font-semibold">Pending</span>
-                  </div>
                   <div className="flex justify-between text-sm font-bold pt-2 border-t border-white/20">
-                    <span>Selections</span>
+                    <span>Due Diligence</span>
                     <span>Pending</span>
                   </div>
                 </div>
