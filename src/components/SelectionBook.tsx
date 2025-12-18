@@ -914,6 +914,7 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
   imageUrls,
 }) => {
   const [uploadingCategory, setUploadingCategory] = useState<ImageCategory | null>(null)
+  const [expandedCategory, setExpandedCategory] = useState<ImageCategory | null>(null)
 
   const updateSelection = (path: string[], value: any) => {
     const newSelections = { ...selections }
@@ -963,693 +964,129 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
     return room.images?.filter(img => img.category === category) || []
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Paint Selections */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Paint</CardTitle>
-            <Label htmlFor="paint-upload" className="cursor-pointer">
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                disabled={uploadingCategory === 'paint'}
-              >
-                <span>
-                  <Upload className="w-4 h-4 mr-2" />
-                  {uploadingCategory === 'paint' ? 'Uploading...' : 'Upload Paint Image'}
-                </span>
-              </Button>
+  const getPrimaryImage = (category: ImageCategory) => {
+    const images = getImagesForCategory(category)
+    return images.length > 0 ? images[0] : null
+  }
+
+  const getCategorySummary = (category: ImageCategory) => {
+    switch (category) {
+      case 'paint':
+        const wallColor = selections.paint?.walls?.color
+        return wallColor || 'No color selected'
+      case 'flooring':
+        return selections.flooring?.type || selections.flooring?.material || 'No selection'
+      case 'lighting':
+        return selections.lighting?.switches || selections.lighting?.dimmers || 'No selection'
+      case 'cabinetry':
+        return selections.cabinetry?.style || selections.cabinetry?.color || 'No selection'
+      case 'countertop':
+        return selections.countertops?.material || selections.countertops?.color || 'No selection'
+      case 'fixture':
+        return selections.fixtures?.faucets || selections.fixtures?.sinks || 'No selection'
+      case 'hardware':
+        return selections.hardware?.door_handles || selections.hardware?.cabinet_pulls || 'No selection'
+      default:
+        return 'No details'
+    }
+  }
+
+  // Render a compact category card
+  const renderCategoryCard = (
+    category: ImageCategory,
+    title: string
+  ) => {
+    const primaryImage = getPrimaryImage(category)
+    const imageUrl = primaryImage ? (imageUrls[primaryImage.id] || primaryImage.image_url) : null
+    const summary = getCategorySummary(category)
+    const isExpanded = expandedCategory === category
+    const allImages = getImagesForCategory(category)
+
+    return (
+      <Card key={category} className="overflow-hidden">
+        <div className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors">
+          {/* Image Thumbnail */}
+          <div className="flex-shrink-0">
+            <Label htmlFor={`${category}-upload`} className="cursor-pointer">
+              <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors flex items-center justify-center relative group">
+                {imageUrl ? (
+                  <>
+                    <img
+                      src={imageUrl}
+                      alt={title}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-opacity flex items-center justify-center">
+                      <Upload className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center">
+                    <ImageIcon className="w-6 h-6 text-gray-400 mx-auto mb-1" />
+                    <span className="text-xs text-gray-400">Add Image</span>
+                  </div>
+                )}
+              </div>
             </Label>
             <input
-              id="paint-upload"
+              id={`${category}-upload`}
               type="file"
               accept="image/*"
-              onChange={(e) => handleImageUpload('paint', e)}
+              onChange={(e) => handleImageUpload(category, e)}
               className="hidden"
-              disabled={uploadingCategory === 'paint'}
+              disabled={uploadingCategory === category}
             />
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Paint Images */}
-          {getImagesForCategory('paint').length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-              {getImagesForCategory('paint').map((img) => {
-                const imageUrl = imageUrls[img.id] || img.image_url
-                return (
-                  <div key={img.id} className="relative group">
-                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                      {imageUrl ? (
-                        <img
-                          src={imageUrl}
-                          alt={img.description || 'Paint image'}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          <ImageIcon className="w-6 h-6" />
-                        </div>
-                      )}
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm('Delete this image?')) {
-                          onImageDelete(img.id)
-                        }
-                      }}
-                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                    {img.description && (
-                      <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Walls</Label>
-              <div className="space-y-2 mt-2">
-                <Input
-                  placeholder="Color"
-                  value={selections.paint?.walls?.color || ''}
-                  onChange={(e) =>
-                    updateSelection(['paint', 'walls', 'color'], e.target.value)
-                  }
-                />
-                <Input
-                  placeholder="Brand"
-                  value={selections.paint?.walls?.brand || ''}
-                  onChange={(e) =>
-                    updateSelection(['paint', 'walls', 'brand'], e.target.value)
-                  }
-                />
-                <Input
-                  placeholder="Finish (e.g., Eggshell)"
-                  value={selections.paint?.walls?.finish || ''}
-                  onChange={(e) =>
-                    updateSelection(['paint', 'walls', 'finish'], e.target.value)
-                  }
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Ceiling</Label>
-              <div className="space-y-2 mt-2">
-                <Input
-                  placeholder="Color"
-                  value={selections.paint?.ceiling?.color || ''}
-                  onChange={(e) =>
-                    updateSelection(['paint', 'ceiling', 'color'], e.target.value)
-                  }
-                />
-                <Input
-                  placeholder="Brand"
-                  value={selections.paint?.ceiling?.brand || ''}
-                  onChange={(e) =>
-                    updateSelection(['paint', 'ceiling', 'brand'], e.target.value)
-                  }
-                />
-                <Input
-                  placeholder="Finish (e.g., Flat)"
-                  value={selections.paint?.ceiling?.finish || ''}
-                  onChange={(e) =>
-                    updateSelection(['paint', 'ceiling', 'finish'], e.target.value)
-                  }
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Trim</Label>
-              <div className="space-y-2 mt-2">
-                <Input
-                  placeholder="Color"
-                  value={selections.paint?.trim?.color || ''}
-                  onChange={(e) =>
-                    updateSelection(['paint', 'trim', 'color'], e.target.value)
-                  }
-                />
-                <Input
-                  placeholder="Brand"
-                  value={selections.paint?.trim?.brand || ''}
-                  onChange={(e) =>
-                    updateSelection(['paint', 'trim', 'brand'], e.target.value)
-                  }
-                />
-                <Input
-                  placeholder="Finish (e.g., Satin)"
-                  value={selections.paint?.trim?.finish || ''}
-                  onChange={(e) =>
-                    updateSelection(['paint', 'trim', 'finish'], e.target.value)
-                  }
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Flooring Selection */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Flooring</CardTitle>
-            <Label htmlFor="flooring-upload" className="cursor-pointer">
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                disabled={uploadingCategory === 'flooring'}
-              >
-                <span>
-                  <Upload className="w-4 h-4 mr-2" />
-                  {uploadingCategory === 'flooring' ? 'Uploading...' : 'Upload Flooring Image'}
-                </span>
-              </Button>
-            </Label>
-            <input
-              id="flooring-upload"
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleImageUpload('flooring', e)}
-              className="hidden"
-              disabled={uploadingCategory === 'flooring'}
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Flooring Images */}
-          {getImagesForCategory('flooring').length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-              {getImagesForCategory('flooring').map((img) => {
-                const imageUrl = imageUrls[img.id] || img.image_url
-                return (
-                  <div key={img.id} className="relative group">
-                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                      {imageUrl ? (
-                        <img
-                          src={imageUrl}
-                          alt={img.description || 'Flooring image'}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          <ImageIcon className="w-6 h-6" />
-                        </div>
-                      )}
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm('Delete this image?')) {
-                          onImageDelete(img.id)
-                        }
-                      }}
-                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                    {img.description && (
-                      <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Type</Label>
-              <Input
-                placeholder="e.g., Hardwood, Tile, Carpet"
-                value={selections.flooring?.type || ''}
-                onChange={(e) =>
-                  updateSelection(['flooring', 'type'], e.target.value)
-                }
-              />
-            </div>
-            <div>
-              <Label>Material</Label>
-              <Input
-                placeholder="e.g., Oak, Porcelain, Wool"
-                value={selections.flooring?.material || ''}
-                onChange={(e) =>
-                  updateSelection(['flooring', 'material'], e.target.value)
-                }
-              />
-            </div>
-            <div>
-              <Label>Color</Label>
-              <Input
-                placeholder="Color name or code"
-                value={selections.flooring?.color || ''}
-                onChange={(e) =>
-                  updateSelection(['flooring', 'color'], e.target.value)
-                }
-              />
-            </div>
-            <div>
-              <Label>Brand</Label>
-              <Input
-                placeholder="Brand name"
-                value={selections.flooring?.brand || ''}
-                onChange={(e) =>
-                  updateSelection(['flooring', 'brand'], e.target.value)
-                }
-              />
-            </div>
-          </div>
-          <div>
-            <Label>Notes</Label>
-            <Textarea
-              placeholder="Additional flooring notes..."
-              value={selections.flooring?.notes || ''}
-              onChange={(e) =>
-                updateSelection(['flooring', 'notes'], e.target.value)
-              }
-              rows={3}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Lighting Selection */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Lighting</CardTitle>
-            <Label htmlFor="lighting-upload" className="cursor-pointer">
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                disabled={uploadingCategory === 'lighting'}
-              >
-                <span>
-                  <Upload className="w-4 h-4 mr-2" />
-                  {uploadingCategory === 'lighting' ? 'Uploading...' : 'Upload Lighting Image'}
-                </span>
-              </Button>
-            </Label>
-            <input
-              id="lighting-upload"
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleImageUpload('lighting', e)}
-              className="hidden"
-              disabled={uploadingCategory === 'lighting'}
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Lighting Images */}
-          {getImagesForCategory('lighting').length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-              {getImagesForCategory('lighting').map((img) => {
-                const imageUrl = imageUrls[img.id] || img.image_url
-                return (
-                  <div key={img.id} className="relative group">
-                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                      {imageUrl ? (
-                        <img
-                          src={imageUrl}
-                          alt={img.description || 'Lighting image'}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          <ImageIcon className="w-6 h-6" />
-                        </div>
-                      )}
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm('Delete this image?')) {
-                          onImageDelete(img.id)
-                        }
-                      }}
-                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                    {img.description && (
-                      <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Switches</Label>
-              <Input
-                placeholder="Switch type/brand"
-                value={selections.lighting?.switches || ''}
-                onChange={(e) =>
-                  updateSelection(['lighting', 'switches'], e.target.value)
-                }
-              />
-            </div>
-            <div>
-              <Label>Dimmers</Label>
-              <Input
-                placeholder="Dimmer type/brand"
-                value={selections.lighting?.dimmers || ''}
-                onChange={(e) =>
-                  updateSelection(['lighting', 'dimmers'], e.target.value)
-                }
-              />
-            </div>
-          </div>
-          <div>
-            <Label>Notes</Label>
-            <Textarea
-              placeholder="Lighting fixture details, locations, etc."
-              value={selections.lighting?.notes || ''}
-              onChange={(e) =>
-                updateSelection(['lighting', 'notes'], e.target.value)
-              }
-              rows={3}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Cabinetry & Countertops (for kitchens and bathrooms) */}
-      {(roomType === 'kitchen' ||
-        roomType === 'bathroom' ||
-        roomType === 'custom') && (
-        <>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Cabinetry</CardTitle>
-                <Label htmlFor="cabinetry-upload" className="cursor-pointer">
-                  <Button
-                    asChild
-                    variant="outline"
-                    size="sm"
-                    disabled={uploadingCategory === 'cabinetry'}
-                  >
-                    <span>
-                      <Upload className="w-4 h-4 mr-2" />
-                      {uploadingCategory === 'cabinetry' ? 'Uploading...' : 'Upload Image'}
-                    </span>
-                  </Button>
-                </Label>
-                <input
-                  id="cabinetry-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleImageUpload('cabinetry', e)}
-                  className="hidden"
-                  disabled={uploadingCategory === 'cabinetry'}
-                />
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-sm text-gray-900 mb-1">{title}</h3>
+                <p className="text-xs text-gray-500 mb-1 truncate">{summary}</p>
+                {primaryImage?.description && (
+                  <p className="text-xs text-gray-400 truncate">{primaryImage.description}</p>
+                )}
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Cabinetry Images */}
-              {getImagesForCategory('cabinetry').length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-                  {getImagesForCategory('cabinetry').map((img) => {
-                    const imageUrl = imageUrls[img.id] || img.image_url
-                    return (
-                      <div key={img.id} className="relative group">
-                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                          {imageUrl ? (
-                            <img
-                              src={imageUrl}
-                              alt={img.description || 'Cabinetry image'}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              <ImageIcon className="w-6 h-6" />
-                            </div>
-                          )}
-                        </div>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm('Delete this image?')) {
-                              onImageDelete(img.id)
-                            }
-                          }}
-                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                        {img.description && (
-                          <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Style</Label>
-                  <Input
-                    placeholder="Cabinet style"
-                    value={selections.cabinetry?.style || ''}
-                    onChange={(e) =>
-                      updateSelection(['cabinetry', 'style'], e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Color</Label>
-                  <Input
-                    placeholder="Cabinet color"
-                    value={selections.cabinetry?.color || ''}
-                    onChange={(e) =>
-                      updateSelection(['cabinetry', 'color'], e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Brand</Label>
-                  <Input
-                    placeholder="e.g., Sam Mueller"
-                    value={selections.cabinetry?.brand || ''}
-                    onChange={(e) =>
-                      updateSelection(['cabinetry', 'brand'], e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Hardware</Label>
-                  <Input
-                    placeholder="Pulls/knobs finish"
-                    value={selections.cabinetry?.hardware || ''}
-                    onChange={(e) =>
-                      updateSelection(['cabinetry', 'hardware'], e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <Label>Notes</Label>
-                <Textarea
-                  placeholder="Additional cabinetry notes..."
-                  value={selections.cabinetry?.notes || ''}
-                  onChange={(e) =>
-                    updateSelection(['cabinetry', 'notes'], e.target.value)
-                  }
-                  rows={3}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Countertops</CardTitle>
-                <Label htmlFor="countertop-upload" className="cursor-pointer">
-                  <Button
-                    asChild
-                    variant="outline"
-                    size="sm"
-                    disabled={uploadingCategory === 'countertop'}
-                  >
-                    <span>
-                      <Upload className="w-4 h-4 mr-2" />
-                      {uploadingCategory === 'countertop' ? 'Uploading...' : 'Upload Image'}
-                    </span>
-                  </Button>
-                </Label>
-                <input
-                  id="countertop-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleImageUpload('countertop', e)}
-                  className="hidden"
-                  disabled={uploadingCategory === 'countertop'}
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Countertop Images */}
-              {getImagesForCategory('countertop').length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-                  {getImagesForCategory('countertop').map((img) => {
-                    const imageUrl = imageUrls[img.id] || img.image_url
-                    return (
-                      <div key={img.id} className="relative group">
-                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                          {imageUrl ? (
-                            <img
-                              src={imageUrl}
-                              alt={img.description || 'Countertop image'}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              <ImageIcon className="w-6 h-6" />
-                            </div>
-                          )}
-                        </div>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm('Delete this image?')) {
-                              onImageDelete(img.id)
-                            }
-                          }}
-                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                        {img.description && (
-                          <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Material</Label>
-                  <Input
-                    placeholder="e.g., Quartz, Granite, Marble"
-                    value={selections.countertops?.material || ''}
-                    onChange={(e) =>
-                      updateSelection(['countertops', 'material'], e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Color</Label>
-                  <Input
-                    placeholder="Countertop color"
-                    value={selections.countertops?.color || ''}
-                    onChange={(e) =>
-                      updateSelection(['countertops', 'color'], e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Brand</Label>
-                  <Input
-                    placeholder="Brand name"
-                    value={selections.countertops?.brand || ''}
-                    onChange={(e) =>
-                      updateSelection(['countertops', 'brand'], e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Edge</Label>
-                  <Input
-                    placeholder="Edge profile"
-                    value={selections.countertops?.edge || ''}
-                    onChange={(e) =>
-                      updateSelection(['countertops', 'edge'], e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <Label>Notes</Label>
-                <Textarea
-                  placeholder="Additional countertop notes..."
-                  value={selections.countertops?.notes || ''}
-                  onChange={(e) =>
-                    updateSelection(['countertops', 'notes'], e.target.value)
-                  }
-                  rows={3}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
-
-      {/* Fixtures (for bathrooms) */}
-      {(roomType === 'bathroom' ||
-        roomType === 'custom') && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Fixtures</CardTitle>
-              <Label htmlFor="fixture-upload" className="cursor-pointer">
-                <Button
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  disabled={uploadingCategory === 'fixture'}
-                >
-                  <span>
-                    <Upload className="w-4 h-4 mr-2" />
-                    {uploadingCategory === 'fixture' ? 'Uploading...' : 'Upload Image'}
+              <div className="flex items-center gap-2">
+                {allImages.length > 1 && (
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                    +{allImages.length - 1} more
                   </span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExpandedCategory(isExpanded ? null : category)}
+                  className="text-xs h-7"
+                >
+                  {isExpanded ? 'Hide' : 'Details'}
                 </Button>
-              </Label>
-              <input
-                id="fixture-upload"
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageUpload('fixture', e)}
-                className="hidden"
-                disabled={uploadingCategory === 'fixture'}
-              />
+              </div>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Fixture Images */}
-            {getImagesForCategory('fixture').length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-                {getImagesForCategory('fixture').map((img) => {
-                  const imageUrl = imageUrls[img.id] || img.image_url
+          </div>
+        </div>
+
+        {/* Expanded Details */}
+        {isExpanded && (
+          <div className="border-t bg-gray-50 p-4 space-y-4">
+            {/* All Images Grid */}
+            {allImages.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {allImages.map((img) => {
+                  const imgUrl = imageUrls[img.id] || img.image_url
                   return (
                     <div key={img.id} className="relative group">
                       <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                        {imageUrl ? (
+                        {imgUrl ? (
                           <img
-                            src={imageUrl}
-                            alt={img.description || 'Fixture image'}
+                            src={imgUrl}
+                            alt={img.description || title}
                             className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-400">
-                            <ImageIcon className="w-6 h-6" />
+                            <ImageIcon className="w-4 h-4" />
                           </div>
                         )}
                       </div>
@@ -1661,164 +1098,335 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                             onImageDelete(img.id)
                           }
                         }}
-                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
                       >
                         <X className="w-3 h-3" />
                       </Button>
-                      {img.description && (
-                        <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
-                      )}
                     </div>
                   )
                 })}
               </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>Faucets</Label>
+
+            {/* Category-specific form fields */}
+            {category === 'paint' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-xs font-medium">Walls</Label>
+                  <div className="space-y-2 mt-1">
+                    <Input
+                      placeholder="Color"
+                      value={selections.paint?.walls?.color || ''}
+                      onChange={(e) => updateSelection(['paint', 'walls', 'color'], e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      placeholder="Brand"
+                      value={selections.paint?.walls?.brand || ''}
+                      onChange={(e) => updateSelection(['paint', 'walls', 'brand'], e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      placeholder="Finish"
+                      value={selections.paint?.walls?.finish || ''}
+                      onChange={(e) => updateSelection(['paint', 'walls', 'finish'], e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium">Ceiling</Label>
+                  <div className="space-y-2 mt-1">
+                    <Input
+                      placeholder="Color"
+                      value={selections.paint?.ceiling?.color || ''}
+                      onChange={(e) => updateSelection(['paint', 'ceiling', 'color'], e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      placeholder="Brand"
+                      value={selections.paint?.ceiling?.brand || ''}
+                      onChange={(e) => updateSelection(['paint', 'ceiling', 'brand'], e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      placeholder="Finish"
+                      value={selections.paint?.ceiling?.finish || ''}
+                      onChange={(e) => updateSelection(['paint', 'ceiling', 'finish'], e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium">Trim</Label>
+                  <div className="space-y-2 mt-1">
+                    <Input
+                      placeholder="Color"
+                      value={selections.paint?.trim?.color || ''}
+                      onChange={(e) => updateSelection(['paint', 'trim', 'color'], e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      placeholder="Brand"
+                      value={selections.paint?.trim?.brand || ''}
+                      onChange={(e) => updateSelection(['paint', 'trim', 'brand'], e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      placeholder="Finish"
+                      value={selections.paint?.trim?.finish || ''}
+                      onChange={(e) => updateSelection(['paint', 'trim', 'finish'], e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {category === 'flooring' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
-                  placeholder="Faucet model/finish"
+                  placeholder="Type (e.g., Hardwood, Tile)"
+                  value={selections.flooring?.type || ''}
+                  onChange={(e) => updateSelection(['flooring', 'type'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Material (e.g., Oak, Porcelain)"
+                  value={selections.flooring?.material || ''}
+                  onChange={(e) => updateSelection(['flooring', 'material'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Color"
+                  value={selections.flooring?.color || ''}
+                  onChange={(e) => updateSelection(['flooring', 'color'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Brand"
+                  value={selections.flooring?.brand || ''}
+                  onChange={(e) => updateSelection(['flooring', 'brand'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Textarea
+                  placeholder="Notes"
+                  value={selections.flooring?.notes || ''}
+                  onChange={(e) => updateSelection(['flooring', 'notes'], e.target.value)}
+                  className="text-sm md:col-span-2"
+                  rows={2}
+                />
+              </div>
+            )}
+
+            {category === 'lighting' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    placeholder="Switches"
+                    value={selections.lighting?.switches || ''}
+                    onChange={(e) => updateSelection(['lighting', 'switches'], e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    placeholder="Dimmers"
+                    value={selections.lighting?.dimmers || ''}
+                    onChange={(e) => updateSelection(['lighting', 'dimmers'], e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <Textarea
+                  placeholder="Notes"
+                  value={selections.lighting?.notes || ''}
+                  onChange={(e) => updateSelection(['lighting', 'notes'], e.target.value)}
+                  className="text-sm"
+                  rows={2}
+                />
+              </div>
+            )}
+
+            {category === 'cabinetry' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  placeholder="Style"
+                  value={selections.cabinetry?.style || ''}
+                  onChange={(e) => updateSelection(['cabinetry', 'style'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Color"
+                  value={selections.cabinetry?.color || ''}
+                  onChange={(e) => updateSelection(['cabinetry', 'color'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Brand"
+                  value={selections.cabinetry?.brand || ''}
+                  onChange={(e) => updateSelection(['cabinetry', 'brand'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Hardware"
+                  value={selections.cabinetry?.hardware || ''}
+                  onChange={(e) => updateSelection(['cabinetry', 'hardware'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Textarea
+                  placeholder="Notes"
+                  value={selections.cabinetry?.notes || ''}
+                  onChange={(e) => updateSelection(['cabinetry', 'notes'], e.target.value)}
+                  className="text-sm md:col-span-2"
+                  rows={2}
+                />
+              </div>
+            )}
+
+            {category === 'countertop' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  placeholder="Material"
+                  value={selections.countertops?.material || ''}
+                  onChange={(e) => updateSelection(['countertops', 'material'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Color"
+                  value={selections.countertops?.color || ''}
+                  onChange={(e) => updateSelection(['countertops', 'color'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Brand"
+                  value={selections.countertops?.brand || ''}
+                  onChange={(e) => updateSelection(['countertops', 'brand'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Edge"
+                  value={selections.countertops?.edge || ''}
+                  onChange={(e) => updateSelection(['countertops', 'edge'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Textarea
+                  placeholder="Notes"
+                  value={selections.countertops?.notes || ''}
+                  onChange={(e) => updateSelection(['countertops', 'notes'], e.target.value)}
+                  className="text-sm md:col-span-2"
+                  rows={2}
+                />
+              </div>
+            )}
+
+            {category === 'fixture' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  placeholder="Faucets"
                   value={selections.fixtures?.faucets || ''}
-                  onChange={(e) =>
-                    updateSelection(['fixtures', 'faucets'], e.target.value)
-                  }
+                  onChange={(e) => updateSelection(['fixtures', 'faucets'], e.target.value)}
+                  className="h-8 text-sm"
                 />
-              </div>
-              <div>
-                <Label>Sinks</Label>
                 <Input
-                  placeholder="Sink type/brand"
+                  placeholder="Sinks"
                   value={selections.fixtures?.sinks || ''}
-                  onChange={(e) =>
-                    updateSelection(['fixtures', 'sinks'], e.target.value)
-                  }
+                  onChange={(e) => updateSelection(['fixtures', 'sinks'], e.target.value)}
+                  className="h-8 text-sm"
                 />
-              </div>
-              <div>
-                <Label>Toilets</Label>
                 <Input
-                  placeholder="Toilet brand/model"
+                  placeholder="Toilets"
                   value={selections.fixtures?.toilets || ''}
-                  onChange={(e) =>
-                    updateSelection(['fixtures', 'toilets'], e.target.value)
-                  }
+                  onChange={(e) => updateSelection(['fixtures', 'toilets'], e.target.value)}
+                  className="h-8 text-sm"
                 />
-              </div>
-              <div>
-                <Label>Showers/Tubs</Label>
                 <Input
-                  placeholder="Shower/tub details"
+                  placeholder="Showers/Tubs"
                   value={selections.fixtures?.showers || ''}
-                  onChange={(e) =>
-                    updateSelection(['fixtures', 'showers'], e.target.value)
-                  }
+                  onChange={(e) => updateSelection(['fixtures', 'showers'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Textarea
+                  placeholder="Notes"
+                  value={selections.fixtures?.notes || ''}
+                  onChange={(e) => updateSelection(['fixtures', 'notes'], e.target.value)}
+                  className="text-sm md:col-span-2"
+                  rows={2}
                 />
               </div>
-            </div>
-            <div>
-              <Label>Notes</Label>
-              <Textarea
-                placeholder="Additional fixture notes..."
-                value={selections.fixtures?.notes || ''}
-                onChange={(e) =>
-                  updateSelection(['fixtures', 'notes'], e.target.value)
-                }
-                rows={3}
-              />
-            </div>
-          </CardContent>
-        </Card>
+            )}
+
+            {category === 'hardware' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  placeholder="Door Handles"
+                  value={selections.hardware?.door_handles || ''}
+                  onChange={(e) => updateSelection(['hardware', 'door_handles'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Cabinet Pulls"
+                  value={selections.hardware?.cabinet_pulls || ''}
+                  onChange={(e) => updateSelection(['hardware', 'cabinet_pulls'], e.target.value)}
+                  className="h-8 text-sm"
+                />
+                {(roomType === 'bathroom' || roomType === 'custom') && (
+                  <>
+                    <Input
+                      placeholder="Towel Bars"
+                      value={selections.hardware?.towel_bars || ''}
+                      onChange={(e) => updateSelection(['hardware', 'towel_bars'], e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      placeholder="Hooks & TP Holders"
+                      value={selections.hardware?.hooks || ''}
+                      onChange={(e) => updateSelection(['hardware', 'hooks'], e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </>
+                )}
+                <Textarea
+                  placeholder="Notes"
+                  value={selections.hardware?.notes || ''}
+                  onChange={(e) => updateSelection(['hardware', 'notes'], e.target.value)}
+                  className="text-sm md:col-span-2"
+                  rows={2}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Paint */}
+      {renderCategoryCard('paint', 'Paint')}
+
+      {/* Flooring */}
+      {renderCategoryCard('flooring', 'Flooring')}
+
+      {/* Lighting */}
+      {renderCategoryCard('lighting', 'Lighting')}
+
+      {/* Cabinetry & Countertops (for kitchens and bathrooms) */}
+      {(roomType === 'kitchen' ||
+        roomType === 'bathroom' ||
+        roomType === 'custom') && (
+        <>
+          {renderCategoryCard('cabinetry', 'Cabinetry')}
+          {renderCategoryCard('countertop', 'Countertops')}
+        </>
+      )}
+
+      {/* Fixtures (for bathrooms) */}
+      {(roomType === 'bathroom' ||
+        roomType === 'custom') && (
+        renderCategoryCard('fixture', 'Fixtures')
       )}
 
       {/* Hardware */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Hardware</CardTitle>
-            <Label htmlFor="hardware-upload" className="cursor-pointer">
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                disabled={uploadingCategory === 'hardware'}
-              >
-                <span>
-                  <Upload className="w-4 h-4 mr-2" />
-                  {uploadingCategory === 'hardware' ? 'Uploading...' : 'Upload Image'}
-                </span>
-              </Button>
-            </Label>
-            <input
-              id="hardware-upload"
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleImageUpload('hardware', e)}
-              className="hidden"
-              disabled={uploadingCategory === 'hardware'}
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Door Handles</Label>
-              <Input
-                placeholder="Door handle style/finish"
-                value={selections.hardware?.door_handles || ''}
-                onChange={(e) =>
-                  updateSelection(['hardware', 'door_handles'], e.target.value)
-                }
-              />
-            </div>
-            <div>
-              <Label>Cabinet Pulls</Label>
-              <Input
-                placeholder="Cabinet pull style/finish"
-                value={selections.hardware?.cabinet_pulls || ''}
-                onChange={(e) =>
-                  updateSelection(['hardware', 'cabinet_pulls'], e.target.value)
-                }
-              />
-            </div>
-            {(roomType === 'bathroom' ||
-              roomType === 'custom') && (
-              <>
-                <div>
-                  <Label>Towel Bars</Label>
-                  <Input
-                    placeholder="Towel bar style/finish"
-                    value={selections.hardware?.towel_bars || ''}
-                    onChange={(e) =>
-                      updateSelection(['hardware', 'towel_bars'], e.target.value)
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Hooks & TP Holders</Label>
-                  <Input
-                    placeholder="Accessories style/finish"
-                    value={selections.hardware?.hooks || ''}
-                    onChange={(e) =>
-                      updateSelection(['hardware', 'hooks'], e.target.value)
-                    }
-                  />
-                </div>
-              </>
-            )}
-          </div>
-          <div>
-            <Label>Notes</Label>
-            <Textarea
-              placeholder="Additional hardware notes..."
-              value={selections.hardware?.notes || ''}
-              onChange={(e) =>
-                updateSelection(['hardware', 'notes'], e.target.value)
-              }
-              rows={3}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {renderCategoryCard('hardware', 'Hardware')}
 
       {/* General Notes */}
       <Card>
