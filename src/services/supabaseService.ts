@@ -1962,10 +1962,33 @@ export async function uploadProjectDocument(
       return null
     }
 
-    // Get public URL (or signed URL for private buckets)
-    const { data: { publicUrl } } = supabase.storage
+    // Generate signed URL for private bucket (valid for 1 year)
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from('project-documents')
-      .getPublicUrl(filePath)
+      .createSignedUrl(filePath, 31536000) // 1 year
+
+    if (signedUrlError) {
+      console.error('Error creating signed URL:', signedUrlError)
+      // Try to delete uploaded file
+      try {
+        await supabase.storage.from('project-documents').remove([filePath])
+      } catch (storageError) {
+        console.error('Error deleting uploaded file:', storageError)
+      }
+      return null
+    }
+
+    const signedUrl = signedUrlData?.signedUrl || null
+    if (!signedUrl) {
+      console.error('Failed to generate signed URL')
+      // Try to delete uploaded file
+      try {
+        await supabase.storage.from('project-documents').remove([filePath])
+      } catch (storageError) {
+        console.error('Error deleting uploaded file:', storageError)
+      }
+      return null
+    }
 
     // Create document record in database
     const { data: docData, error: docError } = await supabase
@@ -1975,7 +1998,8 @@ export async function uploadProjectDocument(
         organization_id: profile.organization_id,
         name: file.name,
         type: documentType,
-        file_url: publicUrl,
+        file_url: signedUrl, // Store signed URL instead of public URL
+        file_path: filePath, // Store file path for regenerating signed URLs
         file_size: file.size,
         mime_type: file.type,
         uploaded_by: user.id,
@@ -2034,22 +2058,42 @@ export async function fetchProjectDocuments(projectId: string): Promise<ProjectD
       return []
     }
 
-    return data.map((row) => ({
-      id: row.id,
-      projectId: row.project_id,
-      name: row.name,
-      type: row.type as DocumentType,
-      fileUrl: row.file_url,
-      fileSize: row.file_size,
-      mimeType: row.mime_type,
-      category: row.category || undefined,
-      tags: row.tags || undefined,
-      uploadedBy: row.uploaded_by,
-      uploadedAt: new Date(row.uploaded_at),
-      description: row.description || undefined,
-      version: row.version || undefined,
-      replacesDocumentId: row.replaces_document_id || undefined,
-    }))
+    // Generate signed URLs for documents if needed
+    const documentsWithUrls = await Promise.all(
+      data.map(async (row) => {
+        let fileUrl = row.file_url
+        
+        // If file_url is not a valid URL or if we have file_path, generate signed URL
+        if (row.file_path && (!fileUrl || !fileUrl.startsWith('http'))) {
+          const { data: signedUrlData } = await supabase.storage
+            .from('project-documents')
+            .createSignedUrl(row.file_path, 31536000) // 1 year
+          
+          if (signedUrlData?.signedUrl) {
+            fileUrl = signedUrlData.signedUrl
+          }
+        }
+        
+        return {
+          id: row.id,
+          projectId: row.project_id,
+          name: row.name,
+          type: row.type as DocumentType,
+          fileUrl: fileUrl,
+          fileSize: row.file_size,
+          mimeType: row.mime_type,
+          category: row.category || undefined,
+          tags: row.tags || undefined,
+          uploadedBy: row.uploaded_by,
+          uploadedAt: new Date(row.uploaded_at),
+          description: row.description || undefined,
+          version: row.version || undefined,
+          replacesDocumentId: row.replaces_document_id || undefined,
+        }
+      })
+    )
+    
+    return documentsWithUrls
   } catch (error) {
     console.error('Error in fetchProjectDocuments:', error)
     return []
