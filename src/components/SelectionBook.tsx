@@ -57,22 +57,27 @@ interface SelectionBookProps {
 
 type ViewMode = 'overview' | 'room'
 
-const ROOM_TYPES = [
-  { value: 'kitchen', label: 'Kitchen' },
-  { value: 'bathroom', label: 'Bathroom' },
-  { value: 'master-bath', label: 'Master Bath' },
-  { value: 'bedroom', label: 'Bedroom' },
-  { value: 'master-bedroom', label: 'Master Bedroom' },
-  { value: 'living-room', label: 'Living Room' },
-  { value: 'dining-room', label: 'Dining Room' },
-  { value: 'hallway', label: 'Hallway' },
-  { value: 'basement', label: 'Basement' },
-  { value: 'laundry', label: 'Laundry' },
-  { value: 'mudroom', label: 'Mudroom' },
-  { value: 'entry', label: 'Entry' },
-  { value: 'exterior', label: 'Exterior' },
-  { value: 'custom', label: 'Custom' },
+// Room categories (types) - general categories
+const ROOM_CATEGORIES = [
+  { value: 'kitchen', label: 'Kitchen', defaultName: 'Kitchen' },
+  { value: 'bathroom', label: 'Bathroom', defaultName: 'Bathroom' },
+  { value: 'bedroom', label: 'Bedroom', defaultName: 'Bedroom' },
+  { value: 'living-room', label: 'Living Room', defaultName: 'Living Room' },
+  { value: 'dining-room', label: 'Dining Room', defaultName: 'Dining Room' },
+  { value: 'hallway', label: 'Hallway', defaultName: 'Hallway' },
+  { value: 'basement', label: 'Basement', defaultName: 'Basement' },
+  { value: 'laundry', label: 'Laundry Room', defaultName: 'Laundry Room' },
+  { value: 'mudroom', label: 'Mudroom', defaultName: 'Mudroom' },
+  { value: 'entry', label: 'Entry/Foyer', defaultName: 'Entry' },
+  { value: 'exterior', label: 'Exterior', defaultName: 'Exterior' },
+  { value: 'custom', label: 'Custom', defaultName: 'Custom Room' },
 ]
+
+// Helper to get default name for a category
+const getDefaultRoomName = (category: string): string => {
+  const cat = ROOM_CATEGORIES.find(c => c.value === category)
+  return cat?.defaultName || 'Room'
+}
 
 const IMAGE_CATEGORIES: { value: ImageCategory; label: string }[] = [
   { value: 'paint', label: 'Paint' },
@@ -96,9 +101,12 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>('overview')
   const [selectedRoom, setSelectedRoom] = useState<SelectionRoom | null>(null)
   const [showAddRoom, setShowAddRoom] = useState(false)
+  const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [newRoomName, setNewRoomName] = useState('')
   const [newRoomType, setNewRoomType] = useState<string>('')
+  const [selectedQuickAddTypes, setSelectedQuickAddTypes] = useState<string[]>([])
   const [addingRoom, setAddingRoom] = useState(false)
+  const [addingMultipleRooms, setAddingMultipleRooms] = useState(false)
 
   useEffect(() => {
     loadSelectionBook()
@@ -148,6 +156,57 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
       setError('An error occurred while adding the room. Please try again.')
     } finally {
       setAddingRoom(false)
+    }
+  }
+
+  const handleQuickAddRooms = async () => {
+    if (!book || selectedQuickAddTypes.length === 0) return
+
+    setAddingMultipleRooms(true)
+    setError(null)
+    try {
+      let successCount = 0
+      let failCount = 0
+
+      for (const category of selectedQuickAddTypes) {
+        const defaultName = getDefaultRoomName(category)
+        const room = await createSelectionRoom(
+          book.id,
+          defaultName,
+          category
+        )
+
+        if (room) {
+          successCount++
+        } else {
+          failCount++
+        }
+      }
+
+      if (successCount > 0) {
+        await loadSelectionBook()
+        setSelectedQuickAddTypes([])
+        setShowQuickAdd(false)
+        
+        if (failCount > 0) {
+          setError(`Added ${successCount} room(s), but ${failCount} failed.`)
+        }
+      } else {
+        setError('Failed to create rooms. Please check your permissions and try again.')
+      }
+    } catch (error) {
+      console.error('Error adding rooms:', error)
+      setError('An error occurred while adding rooms. Please try again.')
+    } finally {
+      setAddingMultipleRooms(false)
+    }
+  }
+
+  const handleRoomTypeChange = (category: string) => {
+    setNewRoomType(category)
+    // Auto-populate name if empty, but allow user to customize
+    if (!newRoomName.trim()) {
+      setNewRoomName(getDefaultRoomName(category))
     }
   }
 
@@ -345,12 +404,18 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
             onDeleteRoom={handleDeleteRoom}
             showAddRoom={showAddRoom}
             setShowAddRoom={setShowAddRoom}
+            showQuickAdd={showQuickAdd}
+            setShowQuickAdd={setShowQuickAdd}
             newRoomName={newRoomName}
             setNewRoomName={setNewRoomName}
             newRoomType={newRoomType}
-            setNewRoomType={setNewRoomType}
+            setNewRoomType={handleRoomTypeChange}
             onAddRoom={handleAddRoom}
             addingRoom={addingRoom}
+            selectedQuickAddTypes={selectedQuickAddTypes}
+            setSelectedQuickAddTypes={setSelectedQuickAddTypes}
+            onQuickAddRooms={handleQuickAddRooms}
+            addingMultipleRooms={addingMultipleRooms}
           />
         ) : selectedRoom ? (
           <RoomView
@@ -415,12 +480,18 @@ interface OverviewViewProps {
   onDeleteRoom: (roomId: string) => void
   showAddRoom: boolean
   setShowAddRoom: (show: boolean) => void
+  showQuickAdd: boolean
+  setShowQuickAdd: (show: boolean) => void
   newRoomName: string
   setNewRoomName: (name: string) => void
   newRoomType: string
   setNewRoomType: (type: string) => void
   onAddRoom: () => void
   addingRoom: boolean
+  selectedQuickAddTypes: string[]
+  setSelectedQuickAddTypes: (types: string[]) => void
+  onQuickAddRooms: () => void
+  addingMultipleRooms: boolean
 }
 
 const OverviewView: React.FC<OverviewViewProps> = ({
@@ -429,46 +500,137 @@ const OverviewView: React.FC<OverviewViewProps> = ({
   onDeleteRoom,
   showAddRoom,
   setShowAddRoom,
+  showQuickAdd,
+  setShowQuickAdd,
   newRoomName,
   setNewRoomName,
   newRoomType,
   setNewRoomType,
   onAddRoom,
   addingRoom,
+  selectedQuickAddTypes,
+  setSelectedQuickAddTypes,
+  onQuickAddRooms,
+  addingMultipleRooms,
 }) => {
+  const toggleQuickAddType = (type: string) => {
+    if (selectedQuickAddTypes.includes(type)) {
+      setSelectedQuickAddTypes(selectedQuickAddTypes.filter(t => t !== type))
+    } else {
+      setSelectedQuickAddTypes([...selectedQuickAddTypes, type])
+    }
+  }
+
   return (
     <div className="space-y-6">
-      {/* Add Room Section */}
-      {showAddRoom ? (
+      {/* Quick Add Section */}
+      {showQuickAdd ? (
         <Card>
           <CardHeader>
-            <CardTitle>Add New Room</CardTitle>
+            <CardTitle>Quick Add Multiple Rooms</CardTitle>
+            <p className="text-sm text-gray-500 mt-1">
+              Select multiple room categories to add them all at once with default names
+            </p>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="roomName">Room Name</Label>
+                <Label>Select Room Categories</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-2">
+                  {ROOM_CATEGORIES.map((category) => (
+                    <button
+                      key={category.value}
+                      type="button"
+                      onClick={() => toggleQuickAddType(category.value)}
+                      className={`p-3 rounded-lg border-2 text-left transition-colors ${
+                        selectedQuickAddTypes.includes(category.value)
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                          selectedQuickAddTypes.includes(category.value)
+                            ? 'border-blue-500 bg-blue-500'
+                            : 'border-gray-300'
+                        }`}>
+                          {selectedQuickAddTypes.includes(category.value) && (
+                            <span className="text-white text-xs">✓</span>
+                          )}
+                        </div>
+                        <span className="text-sm font-medium">{category.label}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1 ml-6">
+                        Will create: "{category.defaultName}"
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={onQuickAddRooms} 
+                  disabled={selectedQuickAddTypes.length === 0 || addingMultipleRooms}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  {addingMultipleRooms 
+                    ? `Adding ${selectedQuickAddTypes.length} room(s)...` 
+                    : `Add ${selectedQuickAddTypes.length} Room(s)`}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowQuickAdd(false)
+                    setSelectedQuickAddTypes([])
+                  }} 
+                  disabled={addingMultipleRooms}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : showAddRoom ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add New Room</CardTitle>
+            <p className="text-sm text-gray-500 mt-1">
+              Room Name is the specific identifier (e.g., "Master Bedroom"). 
+              Room Category helps organize and show relevant selection fields.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="roomName">Room Name *</Label>
                 <Input
                   id="roomName"
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
-                  placeholder="e.g., Master Bedroom"
+                  placeholder="e.g., Master Bedroom, Guest Bathroom"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  The specific name for this room
+                </p>
               </div>
               <div>
-                <Label htmlFor="roomType">Room Type (Optional)</Label>
-                <Select value={newRoomType || undefined} onValueChange={(value) => setNewRoomType(value || '')}>
+                <Label htmlFor="roomType">Room Category (Optional)</Label>
+                <Select value={newRoomType || undefined} onValueChange={setNewRoomType}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select room type (optional)" />
+                    <SelectValue placeholder="Select category (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ROOM_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
+                    {ROOM_CATEGORIES.map((category) => (
+                      <SelectItem key={category.value} value={category.value}>
+                        {category.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Category helps show relevant selection fields (e.g., cabinetry for kitchens)
+                </p>
               </div>
               <div className="flex gap-2">
                 <Button onClick={onAddRoom} disabled={!newRoomName.trim() || addingRoom}>
@@ -483,10 +645,14 @@ const OverviewView: React.FC<OverviewViewProps> = ({
           </CardContent>
         </Card>
       ) : (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setShowQuickAdd(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Quick Add Rooms
+          </Button>
           <Button onClick={() => setShowAddRoom(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Add Room
+            Add Single Room
           </Button>
         </div>
       )}
@@ -565,10 +731,16 @@ const OverviewView: React.FC<OverviewViewProps> = ({
             <p className="text-gray-500 mb-6">
               Add your first room to start building your selection book.
             </p>
-            <Button onClick={() => setShowAddRoom(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add First Room
-            </Button>
+            <div className="flex gap-2 justify-center">
+              <Button variant="outline" onClick={() => setShowQuickAdd(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Quick Add Rooms
+              </Button>
+              <Button onClick={() => setShowAddRoom(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Single Room
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -1018,7 +1190,6 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
       {/* Cabinetry & Countertops (for kitchens and bathrooms) */}
       {(roomType === 'kitchen' ||
         roomType === 'bathroom' ||
-        roomType === 'master-bath' ||
         roomType === 'custom') && (
         <>
           <Card>
@@ -1147,7 +1318,6 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
 
       {/* Fixtures (for bathrooms) */}
       {(roomType === 'bathroom' ||
-        roomType === 'master-bath' ||
         roomType === 'custom') && (
         <Card>
           <CardHeader>
@@ -1239,7 +1409,6 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
               />
             </div>
             {(roomType === 'bathroom' ||
-              roomType === 'master-bath' ||
               roomType === 'custom') && (
               <>
                 <div>
