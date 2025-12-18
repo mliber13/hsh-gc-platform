@@ -869,141 +869,15 @@ const RoomView: React.FC<RoomViewProps> = ({
         </CardHeader>
       </Card>
 
-      {/* Image Upload Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Images</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Upload Controls */}
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="flex-1 min-w-[200px]">
-                <Label htmlFor="imageCategory">Category</Label>
-                <Select
-                  value={uploadCategory}
-                  onValueChange={(value) => setUploadCategory(value as ImageCategory)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {IMAGE_CATEGORIES.map((cat) => (
-                      <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <Label htmlFor="imageDescription">Description (Optional)</Label>
-                <Input
-                  id="imageDescription"
-                  value={uploadDescription}
-                  onChange={(e) => setUploadDescription(e.target.value)}
-                  placeholder="e.g., Paint swatch - SW 7004"
-                />
-              </div>
-              <div>
-                <Label htmlFor="imageUpload" className="cursor-pointer">
-                  <Button
-                    asChild
-                    variant="outline"
-                    disabled={uploading}
-                    className="w-full"
-                  >
-                    <span>
-                      <Upload className="w-4 h-4 mr-2" />
-                      {uploading ? 'Uploading...' : 'Upload Image'}
-                    </span>
-                  </Button>
-                </Label>
-                <input
-                  id="imageUpload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  disabled={uploading}
-                />
-              </div>
-            </div>
-
-            {/* Image Gallery */}
-            {room.images && room.images.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mt-6">
-                {room.images.map((img) => {
-                  const imageUrl = imageUrls[img.id] || img.image_url
-                  return (
-                  <div key={img.id} className="relative group">
-                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                      {imageUrl ? (
-                        <img
-                          src={imageUrl}
-                          alt={img.description || 'Room image'}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            console.error('Error loading image:', img.id, imageUrl)
-                            // Try to regenerate signed URL if it failed
-                            if (img.image_path) {
-                              getSelectionImageSignedUrl(img.image_path).then(url => {
-                                if (url) {
-                                  setImageUrls(prev => ({ ...prev, [img.id]: url }))
-                                }
-                              })
-                            }
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          <ImageIcon className="w-8 h-8" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity rounded-lg flex items-center justify-center">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm('Delete this image?')) {
-                            onImageDelete(img.id)
-                          }
-                        }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    {img.category && (
-                      <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
-                        {IMAGE_CATEGORIES.find(c => c.value === img.category)?.label}
-                      </div>
-                    )}
-                    {img.description && (
-                      <p className="text-xs text-gray-600 mt-1 truncate">
-                        {img.description}
-                      </p>
-                    )}
-                  </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No images uploaded yet</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Selections Forms */}
       <SelectionsForm
         selections={selections}
         onChange={setSelections}
         roomType={room.room_type}
+        room={room}
+        onImageUpload={onImageUpload}
+        onImageDelete={onImageDelete}
+        imageUrls={imageUrls}
       />
     </div>
   )
@@ -1017,13 +891,27 @@ interface SelectionsFormProps {
   selections: RoomSelections
   onChange: (selections: RoomSelections) => void
   roomType?: string
+  room: SelectionRoom
+  onImageUpload: (
+    file: File,
+    category?: ImageCategory,
+    description?: string
+  ) => Promise<void>
+  onImageDelete: (imageId: string) => Promise<void>
+  imageUrls: Record<string, string>
 }
 
 const SelectionsForm: React.FC<SelectionsFormProps> = ({
   selections,
   onChange,
   roomType,
+  room,
+  onImageUpload,
+  onImageDelete,
+  imageUrls,
 }) => {
+  const [uploadingCategory, setUploadingCategory] = useState<ImageCategory | null>(null)
+
   const updateSelection = (path: string[], value: any) => {
     const newSelections = { ...selections }
     let current: any = newSelections
@@ -1039,14 +927,110 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
     onChange(newSelections)
   }
 
+  const handleImageUpload = async (category: ImageCategory, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image size must be less than 10MB')
+      return
+    }
+
+    setUploadingCategory(category)
+    try {
+      await onImageUpload(file, category)
+      // Reset file input
+      e.target.value = ''
+    } catch (error) {
+      console.error('Error uploading image:', error)
+      alert('Failed to upload image. Please try again.')
+    } finally {
+      setUploadingCategory(null)
+    }
+  }
+
+  const getImagesForCategory = (category: ImageCategory) => {
+    return room.images?.filter(img => img.category === category) || []
+  }
+
   return (
     <div className="space-y-6">
       {/* Paint Selections */}
       <Card>
         <CardHeader>
-          <CardTitle>Paint</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Paint</CardTitle>
+            <Label htmlFor="paint-upload" className="cursor-pointer">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                disabled={uploadingCategory === 'paint'}
+              >
+                <span>
+                  <Upload className="w-4 h-4 mr-2" />
+                  {uploadingCategory === 'paint' ? 'Uploading...' : 'Upload Paint Image'}
+                </span>
+              </Button>
+            </Label>
+            <input
+              id="paint-upload"
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleImageUpload('paint', e)}
+              className="hidden"
+              disabled={uploadingCategory === 'paint'}
+            />
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Paint Images */}
+          {getImagesForCategory('paint').length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+              {getImagesForCategory('paint').map((img) => {
+                const imageUrl = imageUrls[img.id] || img.image_url
+                return (
+                  <div key={img.id} className="relative group">
+                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                      {imageUrl ? (
+                        <img
+                          src={imageUrl}
+                          alt={img.description || 'Paint image'}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm('Delete this image?')) {
+                          onImageDelete(img.id)
+                        }
+                      }}
+                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                    {img.description && (
+                      <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>Walls</Label>
@@ -1133,9 +1117,72 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
       {/* Flooring Selection */}
       <Card>
         <CardHeader>
-          <CardTitle>Flooring</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Flooring</CardTitle>
+            <Label htmlFor="flooring-upload" className="cursor-pointer">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                disabled={uploadingCategory === 'flooring'}
+              >
+                <span>
+                  <Upload className="w-4 h-4 mr-2" />
+                  {uploadingCategory === 'flooring' ? 'Uploading...' : 'Upload Flooring Image'}
+                </span>
+              </Button>
+            </Label>
+            <input
+              id="flooring-upload"
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleImageUpload('flooring', e)}
+              className="hidden"
+              disabled={uploadingCategory === 'flooring'}
+            />
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Flooring Images */}
+          {getImagesForCategory('flooring').length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+              {getImagesForCategory('flooring').map((img) => {
+                const imageUrl = imageUrls[img.id] || img.image_url
+                return (
+                  <div key={img.id} className="relative group">
+                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                      {imageUrl ? (
+                        <img
+                          src={imageUrl}
+                          alt={img.description || 'Flooring image'}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm('Delete this image?')) {
+                          onImageDelete(img.id)
+                        }
+                      }}
+                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                    {img.description && (
+                      <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>Type</Label>
@@ -1195,9 +1242,72 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
       {/* Lighting Selection */}
       <Card>
         <CardHeader>
-          <CardTitle>Lighting</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Lighting</CardTitle>
+            <Label htmlFor="lighting-upload" className="cursor-pointer">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                disabled={uploadingCategory === 'lighting'}
+              >
+                <span>
+                  <Upload className="w-4 h-4 mr-2" />
+                  {uploadingCategory === 'lighting' ? 'Uploading...' : 'Upload Lighting Image'}
+                </span>
+              </Button>
+            </Label>
+            <input
+              id="lighting-upload"
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleImageUpload('lighting', e)}
+              className="hidden"
+              disabled={uploadingCategory === 'lighting'}
+            />
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Lighting Images */}
+          {getImagesForCategory('lighting').length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+              {getImagesForCategory('lighting').map((img) => {
+                const imageUrl = imageUrls[img.id] || img.image_url
+                return (
+                  <div key={img.id} className="relative group">
+                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                      {imageUrl ? (
+                        <img
+                          src={imageUrl}
+                          alt={img.description || 'Lighting image'}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm('Delete this image?')) {
+                          onImageDelete(img.id)
+                        }
+                      }}
+                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                    {img.description && (
+                      <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>Switches</Label>
@@ -1241,9 +1351,72 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Cabinetry</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Cabinetry</CardTitle>
+                <Label htmlFor="cabinetry-upload" className="cursor-pointer">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadingCategory === 'cabinetry'}
+                  >
+                    <span>
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploadingCategory === 'cabinetry' ? 'Uploading...' : 'Upload Image'}
+                    </span>
+                  </Button>
+                </Label>
+                <input
+                  id="cabinetry-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload('cabinetry', e)}
+                  className="hidden"
+                  disabled={uploadingCategory === 'cabinetry'}
+                />
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Cabinetry Images */}
+              {getImagesForCategory('cabinetry').length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+                  {getImagesForCategory('cabinetry').map((img) => {
+                    const imageUrl = imageUrls[img.id] || img.image_url
+                    return (
+                      <div key={img.id} className="relative group">
+                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                          {imageUrl ? (
+                            <img
+                              src={imageUrl}
+                              alt={img.description || 'Cabinetry image'}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400">
+                              <ImageIcon className="w-6 h-6" />
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Delete this image?')) {
+                              onImageDelete(img.id)
+                            }
+                          }}
+                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                        {img.description && (
+                          <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label>Style</Label>
@@ -1302,9 +1475,72 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
 
           <Card>
             <CardHeader>
-              <CardTitle>Countertops</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Countertops</CardTitle>
+                <Label htmlFor="countertop-upload" className="cursor-pointer">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadingCategory === 'countertop'}
+                  >
+                    <span>
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploadingCategory === 'countertop' ? 'Uploading...' : 'Upload Image'}
+                    </span>
+                  </Button>
+                </Label>
+                <input
+                  id="countertop-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload('countertop', e)}
+                  className="hidden"
+                  disabled={uploadingCategory === 'countertop'}
+                />
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Countertop Images */}
+              {getImagesForCategory('countertop').length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+                  {getImagesForCategory('countertop').map((img) => {
+                    const imageUrl = imageUrls[img.id] || img.image_url
+                    return (
+                      <div key={img.id} className="relative group">
+                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                          {imageUrl ? (
+                            <img
+                              src={imageUrl}
+                              alt={img.description || 'Countertop image'}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400">
+                              <ImageIcon className="w-6 h-6" />
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Delete this image?')) {
+                              onImageDelete(img.id)
+                            }
+                          }}
+                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                        {img.description && (
+                          <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label>Material</Label>
@@ -1368,9 +1604,72 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
         roomType === 'custom') && (
         <Card>
           <CardHeader>
-            <CardTitle>Fixtures</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Fixtures</CardTitle>
+              <Label htmlFor="fixture-upload" className="cursor-pointer">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  disabled={uploadingCategory === 'fixture'}
+                >
+                  <span>
+                    <Upload className="w-4 h-4 mr-2" />
+                    {uploadingCategory === 'fixture' ? 'Uploading...' : 'Upload Image'}
+                  </span>
+                </Button>
+              </Label>
+              <input
+                id="fixture-upload"
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleImageUpload('fixture', e)}
+                className="hidden"
+                disabled={uploadingCategory === 'fixture'}
+              />
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Fixture Images */}
+            {getImagesForCategory('fixture').length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+                {getImagesForCategory('fixture').map((img) => {
+                  const imageUrl = imageUrls[img.id] || img.image_url
+                  return (
+                    <div key={img.id} className="relative group">
+                      <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt={img.description || 'Fixture image'}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400">
+                            <ImageIcon className="w-6 h-6" />
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm('Delete this image?')) {
+                            onImageDelete(img.id)
+                          }
+                        }}
+                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                      {img.description && (
+                        <p className="text-xs text-gray-600 mt-1 truncate">{img.description}</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>Faucets</Label>
@@ -1431,7 +1730,30 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
       {/* Hardware */}
       <Card>
         <CardHeader>
-          <CardTitle>Hardware</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Hardware</CardTitle>
+            <Label htmlFor="hardware-upload" className="cursor-pointer">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                disabled={uploadingCategory === 'hardware'}
+              >
+                <span>
+                  <Upload className="w-4 h-4 mr-2" />
+                  {uploadingCategory === 'hardware' ? 'Uploading...' : 'Upload Image'}
+                </span>
+              </Button>
+            </Label>
+            <input
+              id="hardware-upload"
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleImageUpload('hardware', e)}
+              className="hidden"
+              disabled={uploadingCategory === 'hardware'}
+            />
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
