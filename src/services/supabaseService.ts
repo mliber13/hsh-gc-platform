@@ -2110,21 +2110,22 @@ export async function fetchProjectDocuments(projectId: string): Promise<ProjectD
     const documentsWithUrls = await Promise.all(
       data.map(async (row) => {
         let fileUrl = row.file_url
+        let filePath = row.file_path
         
-        // If file_url is not a valid URL or if we have file_path, generate signed URL
-        if (row.file_path && (!fileUrl || !fileUrl.startsWith('http'))) {
+        // If we have file_path, always regenerate signed URL (URLs expire after 1 year)
+        if (filePath) {
           // Try primary bucket name first
           let bucketName = 'project-documents'
           let { data: signedUrlData, error: signedUrlError } = await supabase.storage
             .from(bucketName)
-            .createSignedUrl(row.file_path, 31536000) // 1 year
+            .createSignedUrl(filePath, 31536000) // 1 year
           
           // If that fails, try alternative bucket name
           if (signedUrlError && signedUrlError.message?.includes('Bucket not found')) {
             bucketName = 'project_documents'
             const retryResult = await supabase.storage
               .from(bucketName)
-              .createSignedUrl(row.file_path, 31536000)
+              .createSignedUrl(filePath, 31536000)
             signedUrlData = retryResult.data
             signedUrlError = retryResult.error
           }
@@ -2133,6 +2134,42 @@ export async function fetchProjectDocuments(projectId: string): Promise<ProjectD
             fileUrl = signedUrlData.signedUrl
           } else if (signedUrlError) {
             console.warn('Could not generate signed URL for document:', row.id, signedUrlError)
+            // If signed URL generation fails, try to use existing URL as fallback
+            if (!fileUrl || !fileUrl.startsWith('http')) {
+              console.error('No valid URL available for document:', row.id)
+            }
+          }
+        } else if (fileUrl) {
+          // For legacy documents without file_path, try to extract path from URL and regenerate
+          // Check if URL is a signed URL (contains query params) or public URL
+          const urlParts = fileUrl.split('/project-documents/')
+          if (urlParts.length >= 2) {
+            const extractedPath = urlParts[1].split('?')[0] // Remove query params if present
+            // Try to regenerate signed URL
+            let bucketName = 'project-documents'
+            const { data: signedUrlData } = await supabase.storage
+              .from(bucketName)
+              .createSignedUrl(extractedPath, 31536000)
+            
+            if (signedUrlData?.signedUrl) {
+              fileUrl = signedUrlData.signedUrl
+              // Optionally update the database with file_path for future use
+              // (commented out to avoid unnecessary writes)
+              // await supabase.from('project_documents').update({ file_path: extractedPath }).eq('id', row.id)
+            }
+          } else {
+            // Try alternative bucket name
+            const altUrlParts = fileUrl.split('/project_documents/')
+            if (altUrlParts.length >= 2) {
+              const extractedPath = altUrlParts[1].split('?')[0]
+              const { data: signedUrlData } = await supabase.storage
+                .from('project_documents')
+                .createSignedUrl(extractedPath, 31536000)
+              
+              if (signedUrlData?.signedUrl) {
+                fileUrl = signedUrlData.signedUrl
+              }
+            }
           }
         }
         
