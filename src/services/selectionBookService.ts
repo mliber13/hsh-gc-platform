@@ -398,7 +398,7 @@ export async function uploadSelectionImage(
   file: File,
   category?: ImageCategory,
   description?: string,
-  organizationId: string = 'default-org'
+  organizationId?: string
 ): Promise<SelectionRoomImage | null> {
   try {
     // Get user profile for organization_id
@@ -408,23 +408,39 @@ export async function uploadSelectionImage(
       return null
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('organization_id')
       .eq('id', user.id)
       .single()
 
-    const orgId = profile?.organization_id || organizationId
+    if (profileError) {
+      console.error('Error fetching user profile:', profileError)
+      return null
+    }
 
-    // Get room to find book and project
-    const { data: room } = await supabase
+    if (!profile?.organization_id) {
+      console.error('User profile missing organization_id')
+      return null
+    }
+
+    const orgId = organizationId || profile.organization_id
+
+    // Get room to find book and project, and verify organization_id matches
+    const { data: room, error: roomError } = await supabase
       .from('selection_rooms')
-      .select('selection_book_id')
+      .select('selection_book_id, organization_id')
       .eq('id', roomId)
       .single()
 
-    if (!room) {
-      console.error('Room not found')
+    if (roomError || !room) {
+      console.error('Room not found:', roomError)
+      return null
+    }
+
+    // Verify room belongs to user's organization
+    if (room.organization_id !== orgId) {
+      console.error('Room organization_id does not match user organization_id')
       return null
     }
 
@@ -486,8 +502,8 @@ export async function uploadSelectionImage(
         file_name: file.name,
         file_size: file.size,
         mime_type: file.type,
-        category: category,
-        description: description,
+        category: category || 'general',
+        description: description || null,
         display_order: nextOrder,
       })
       .select()
@@ -495,10 +511,16 @@ export async function uploadSelectionImage(
 
     if (recordError) {
       console.error('Error saving image record:', recordError)
+      console.error('Organization ID:', orgId)
+      console.error('Room ID:', roomId)
       // Try to delete uploaded file
-      await supabase.storage
-        .from('selection-images')
-        .remove([filePath])
+      try {
+        await supabase.storage
+          .from('selection-images')
+          .remove([filePath])
+      } catch (storageError) {
+        console.error('Error deleting uploaded file:', storageError)
+      }
       return null
     }
 
