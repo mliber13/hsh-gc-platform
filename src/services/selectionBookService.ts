@@ -511,8 +511,19 @@ export async function uploadSelectionImage(
 
     if (recordError) {
       console.error('Error saving image record:', recordError)
-      console.error('Organization ID:', orgId)
+      console.error('Organization ID being inserted:', orgId)
+      console.error('User ID:', user.id)
       console.error('Room ID:', roomId)
+      console.error('Room organization_id:', room.organization_id)
+      
+      // Check what the user's organization_id is
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single()
+      console.error('User profile organization_id:', userProfile?.organization_id)
+      
       // Try to delete uploaded file
       try {
         await supabase.storage
