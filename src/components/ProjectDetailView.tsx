@@ -527,6 +527,48 @@ export function ProjectDetailView({
             </button>
           </Card>
 
+          {/* Selection Book Card */}
+          {onViewSelectionBook && (
+            <Card className="bg-gradient-to-br from-[#EC4899] to-[#BE185D] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
+              <button onClick={onViewSelectionBook} className="w-full text-left">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
+                      <Palette className="w-8 h-8" />
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm opacity-80">Rooms</p>
+                      <p className="text-3xl font-bold">{selectionBookRoomsCount}</p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <h3 className="text-2xl font-bold mb-3">Selection Book</h3>
+                  <p className="text-white/80 mb-4">
+                    Organize paint colors, flooring, lighting, and other selections room-by-room with image uploads for visual reference.
+                  </p>
+                  <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Rooms Created</span>
+                      <span className="font-semibold">{selectionBookRoomsCount}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Image Uploads</span>
+                      <span className="font-semibold">Available</span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-2 border-t border-white/20">
+                      <span>Printable/Exportable</span>
+                      <span className="font-semibold">Yes</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center text-sm text-white/60">
+                    <span>Click to manage selections →</span>
+                  </div>
+                </CardContent>
+              </button>
+            </Card>
+          )}
+
           {/* Project Forms Card */}
           <Card className="bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
             <button onClick={onViewForms} className="w-full text-left">
