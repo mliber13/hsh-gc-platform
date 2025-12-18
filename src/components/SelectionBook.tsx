@@ -39,7 +39,7 @@ import {
   deleteSelectionImage,
 } from '@/services/selectionBookService'
 import type {
-  SelectionBook,
+  SelectionBook as SelectionBookType,
   SelectionRoom,
   RoomSelections,
   ImageCategory,
@@ -90,7 +90,7 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
   project,
   onBack,
 }) => {
-  const [book, setBook] = useState<SelectionBook | null>(null)
+  const [book, setBook] = useState<SelectionBookType | null>(null)
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('overview')
   const [selectedRoom, setSelectedRoom] = useState<SelectionRoom | null>(null)
@@ -372,7 +372,7 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
 // ============================================================================
 
 interface OverviewViewProps {
-  book: SelectionBook
+  book: SelectionBookType
   onViewRoom: (room: SelectionRoom) => void
   onDeleteRoom: (roomId: string) => void
   showAddRoom: boolean
