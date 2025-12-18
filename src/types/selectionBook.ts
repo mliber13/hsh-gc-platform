@@ -29,6 +29,7 @@ export type ImageCategory =
   | 'fixture'
   | 'hardware'
   | 'general'
+  | string // Allow custom category names
 
 export interface PaintSelection {
   color?: string
@@ -94,6 +95,12 @@ export interface HardwareSelection {
   notes?: string
 }
 
+export interface CustomCategorySelection {
+  name: string // The custom category name (e.g., "trim", "appliances", "2 lights")
+  details?: Record<string, string> // Flexible key-value pairs for custom fields
+  notes?: string
+}
+
 export interface RoomSelections {
   paint?: {
     walls?: PaintSelection
@@ -107,6 +114,7 @@ export interface RoomSelections {
   countertops?: CountertopSelection
   fixtures?: FixtureSelection
   hardware?: HardwareSelection
+  customCategories?: Record<string, CustomCategorySelection> // Key is the category name
   notes?: string
 }
 

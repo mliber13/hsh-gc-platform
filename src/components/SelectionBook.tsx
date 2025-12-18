@@ -915,6 +915,8 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
 }) => {
   const [uploadingCategory, setUploadingCategory] = useState<ImageCategory | null>(null)
   const [expandedCategory, setExpandedCategory] = useState<ImageCategory | null>(null)
+  const [showAddCategory, setShowAddCategory] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
 
   const updateSelection = (path: string[], value: any) => {
     const newSelections = { ...selections }
@@ -970,6 +972,17 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
   }
 
   const getCategorySummary = (category: ImageCategory) => {
+    // Check if it's a custom category
+    if (selections.customCategories && selections.customCategories[category]) {
+      const customCat = selections.customCategories[category]
+      // Try to get first detail value or notes
+      if (customCat.details && Object.keys(customCat.details).length > 0) {
+        return Object.values(customCat.details)[0] || customCat.notes || 'No details'
+      }
+      return customCat.notes || 'No details'
+    }
+    
+    // Standard categories
     switch (category) {
       case 'paint':
         const wallColor = selections.paint?.walls?.color
@@ -989,6 +1002,103 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
       default:
         return 'No details'
     }
+  }
+
+  const handleAddCustomCategory = () => {
+    if (!newCategoryName.trim()) return
+    
+    const categoryName = newCategoryName.trim()
+    const newSelections = { ...selections }
+    
+    if (!newSelections.customCategories) {
+      newSelections.customCategories = {}
+    }
+    
+    // Check if category already exists
+    if (newSelections.customCategories[categoryName]) {
+      alert('This category already exists')
+      return
+    }
+    
+    newSelections.customCategories[categoryName] = {
+      name: categoryName,
+      details: {},
+      notes: '',
+    }
+    
+    onChange(newSelections)
+    setNewCategoryName('')
+    setShowAddCategory(false)
+  }
+
+  const handleDeleteCustomCategory = (categoryName: string) => {
+    if (!confirm(`Delete category "${categoryName}"? This will also remove all associated images.`)) {
+      return
+    }
+    
+    const newSelections = { ...selections }
+    if (newSelections.customCategories) {
+      delete newSelections.customCategories[categoryName]
+      if (Object.keys(newSelections.customCategories).length === 0) {
+        delete newSelections.customCategories
+      }
+    }
+    
+    onChange(newSelections)
+    
+    // Also delete images associated with this category
+    const imagesToDelete = room.images?.filter(img => img.category === categoryName) || []
+    imagesToDelete.forEach(img => onImageDelete(img.id))
+  }
+
+  const updateCustomCategory = (categoryName: string, field: 'notes' | 'details', value: any) => {
+    const newSelections = { ...selections }
+    if (!newSelections.customCategories) {
+      newSelections.customCategories = {}
+    }
+    if (!newSelections.customCategories[categoryName]) {
+      newSelections.customCategories[categoryName] = {
+        name: categoryName,
+        details: {},
+        notes: '',
+      }
+    }
+    
+    if (field === 'notes') {
+      newSelections.customCategories[categoryName].notes = value
+    } else {
+      newSelections.customCategories[categoryName].details = value
+    }
+    
+    onChange(newSelections)
+  }
+
+  const updateCustomCategoryDetail = (categoryName: string, key: string, value: string) => {
+    const newSelections = { ...selections }
+    if (!newSelections.customCategories) {
+      newSelections.customCategories = {}
+    }
+    if (!newSelections.customCategories[categoryName]) {
+      newSelections.customCategories[categoryName] = {
+        name: categoryName,
+        details: {},
+        notes: '',
+      }
+    }
+    
+    if (!newSelections.customCategories[categoryName].details) {
+      newSelections.customCategories[categoryName].details = {}
+    }
+    
+    if (value.trim() === '') {
+      // Remove empty detail
+      const { [key]: _, ...rest } = newSelections.customCategories[categoryName].details!
+      newSelections.customCategories[categoryName].details = rest
+    } else {
+      newSelections.customCategories[categoryName].details![key] = value
+    }
+    
+    onChange(newSelections)
   }
 
   // Render a compact category card
@@ -1392,6 +1502,49 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                 />
               </div>
             )}
+
+            {/* Custom Category Form */}
+            {selections.customCategories && selections.customCategories[category] && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Object.entries(selections.customCategories[category].details || {}).map(([key, value]) => (
+                    <div key={key} className="space-y-1">
+                      <Label className="text-xs font-medium capitalize">{key.replace(/_/g, ' ')}</Label>
+                      <Input
+                        value={value || ''}
+                        onChange={(e) => updateCustomCategoryDetail(category, key, e.target.value)}
+                        className="h-8 text-sm"
+                        placeholder={`Enter ${key.replace(/_/g, ' ')}...`}
+                      />
+                    </div>
+                  ))}
+                  {/* Add new detail field */}
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-500">Add Detail Field</Label>
+                    <Input
+                      placeholder="Field name (e.g., Brand, Model)"
+                      className="h-8 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const fieldName = e.currentTarget.value.trim().toLowerCase().replace(/\s+/g, '_')
+                          if (fieldName && !selections.customCategories?.[category]?.details?.[fieldName]) {
+                            updateCustomCategoryDetail(category, fieldName, '')
+                            e.currentTarget.value = ''
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+                <Textarea
+                  placeholder="Notes"
+                  value={selections.customCategories[category].notes || ''}
+                  onChange={(e) => updateCustomCategory(category, 'notes', e.target.value)}
+                  className="text-sm"
+                  rows={2}
+                />
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -1427,6 +1580,231 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
 
       {/* Hardware */}
       {renderCategoryCard('hardware', 'Hardware')}
+
+      {/* Custom Categories */}
+      {selections.customCategories && Object.keys(selections.customCategories).length > 0 && (
+        <>
+          {Object.entries(selections.customCategories).map(([categoryName, customCat]) => (
+            <Card key={categoryName} className="overflow-hidden">
+              <div className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors">
+                {/* Image Thumbnail */}
+                <div className="flex-shrink-0">
+                  <Label htmlFor={`custom-${categoryName}-upload`} className="cursor-pointer">
+                    <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors flex items-center justify-center relative group">
+                      {(() => {
+                        const customImages = getImagesForCategory(categoryName)
+                        const primaryImage = customImages.length > 0 ? customImages[0] : null
+                        const imageUrl = primaryImage ? (imageUrls[primaryImage.id] || primaryImage.image_url) : null
+                        return imageUrl ? (
+                          <>
+                            <img
+                              src={imageUrl}
+                              alt={categoryName}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-opacity flex items-center justify-center">
+                              <Upload className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-center">
+                            <ImageIcon className="w-6 h-6 text-gray-400 mx-auto mb-1" />
+                            <span className="text-xs text-gray-400">Add Image</span>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  </Label>
+                  <input
+                    id={`custom-${categoryName}-upload`}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(categoryName, e)}
+                    className="hidden"
+                    disabled={uploadingCategory === categoryName}
+                  />
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm text-gray-900 mb-1 capitalize">{categoryName}</h3>
+                      <p className="text-xs text-gray-500 mb-1 truncate">{getCategorySummary(categoryName)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const customImages = getImagesForCategory(categoryName)
+                        return customImages.length > 1 && (
+                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                            +{customImages.length - 1} more
+                          </span>
+                        )
+                      })()}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setExpandedCategory(expandedCategory === categoryName ? null : categoryName)}
+                        className="text-xs h-7"
+                      >
+                        {expandedCategory === categoryName ? 'Hide' : 'Details'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteCustomCategory(categoryName)}
+                        className="text-xs h-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        title="Delete category"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Expanded Details */}
+              {expandedCategory === categoryName && (
+                <div className="border-t bg-gray-50 p-4 space-y-4">
+                  {/* All Images Grid */}
+                  {(() => {
+                    const customImages = getImagesForCategory(categoryName)
+                    return customImages.length > 0 && (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {customImages.map((img) => {
+                          const imgUrl = imageUrls[img.id] || img.image_url
+                          return (
+                            <div key={img.id} className="relative group">
+                              <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                {imgUrl ? (
+                                  <img
+                                    src={imgUrl}
+                                    alt={img.description || categoryName}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                    <ImageIcon className="w-4 h-4" />
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm('Delete this image?')) {
+                                    onImageDelete(img.id)
+                                  }
+                                }}
+                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
+
+                  {/* Custom Category Form Fields */}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {Object.entries(customCat.details || {}).map(([key, value]) => (
+                        <div key={key} className="space-y-1">
+                          <Label className="text-xs font-medium capitalize">{key.replace(/_/g, ' ')}</Label>
+                          <Input
+                            value={value || ''}
+                            onChange={(e) => updateCustomCategoryDetail(categoryName, key, e.target.value)}
+                            className="h-8 text-sm"
+                            placeholder={`Enter ${key.replace(/_/g, ' ')}...`}
+                          />
+                        </div>
+                      ))}
+                      {/* Add new detail field */}
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium text-gray-500">Add Detail Field</Label>
+                        <Input
+                          placeholder="Field name (e.g., Brand, Model)"
+                          className="h-8 text-sm"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const fieldName = e.currentTarget.value.trim().toLowerCase().replace(/\s+/g, '_')
+                              if (fieldName && !customCat.details?.[fieldName]) {
+                                updateCustomCategoryDetail(categoryName, fieldName, '')
+                                e.currentTarget.value = ''
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <Textarea
+                      placeholder="Notes"
+                      value={customCat.notes || ''}
+                      onChange={(e) => updateCustomCategory(categoryName, 'notes', e.target.value)}
+                      className="text-sm"
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              )}
+            </Card>
+          ))}
+        </>
+      )}
+
+      {/* Add Custom Category */}
+      {showAddCategory ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Add Custom Category</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="categoryName">Category Name</Label>
+              <Input
+                id="categoryName"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="e.g., Trim, Appliances, 2 Lights, Garage Doors"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newCategoryName.trim()) {
+                    handleAddCustomCategory()
+                  }
+                }}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Enter a name for your custom category (e.g., "Trim", "Appliances", "2 Lights")
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleAddCustomCategory} disabled={!newCategoryName.trim()}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Category
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowAddCategory(false)
+                  setNewCategoryName('')
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Button
+          variant="outline"
+          onClick={() => setShowAddCategory(true)}
+          className="w-full"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add Custom Category
+        </Button>
+      )}
 
       {/* General Notes */}
       <Card>
