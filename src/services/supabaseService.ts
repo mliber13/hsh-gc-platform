@@ -1954,44 +1954,72 @@ export async function uploadProjectDocument(
     const fileName = `${timestamp}-${sanitizedName}`
     const filePath = `${profile.organization_id}/${projectId}/${fileName}`
 
-    // Check if bucket exists and is accessible
+    // Try to list buckets for debugging (but don't fail if this doesn't work due to RLS)
     const { data: buckets, error: bucketError } = await supabase.storage.listBuckets()
     if (bucketError) {
-      console.error('Error listing buckets:', bucketError)
+      console.warn('Could not list buckets (may be RLS restriction):', bucketError)
     } else {
+      console.log('Available buckets:', buckets?.map(b => b.id))
       const bucketExists = buckets?.some(b => b.id === 'project-documents')
       if (!bucketExists) {
-        console.error('Bucket "project-documents" not found. Available buckets:', buckets?.map(b => b.id))
-        return null
+        console.warn('Bucket "project-documents" not found in list. Available buckets:', buckets?.map(b => b.id))
+        console.warn('Attempting upload anyway - bucket may exist but not be visible due to RLS')
       }
     }
 
-    // Upload to storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('project-documents')
+    // Try upload with primary bucket name
+    let bucketName = 'project-documents'
+    let { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucketName)
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false
       })
 
+    // If that fails with "Bucket not found", try alternative bucket name (with underscore)
+    if (uploadError && uploadError.message?.includes('Bucket not found')) {
+      console.warn(`Bucket "${bucketName}" not found, trying "project_documents" (with underscore)`)
+      bucketName = 'project_documents'
+      const retryResult = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+      uploadData = retryResult.data
+      uploadError = retryResult.error
+    }
+
     if (uploadError) {
       console.error('Error uploading document:', uploadError)
+      console.error('Bucket name tried:', bucketName)
       console.error('File path:', filePath)
       console.error('Organization ID:', profile.organization_id)
       console.error('Project ID:', projectId)
+      console.error('File name:', file.name)
+      console.error('File size:', file.size)
+      console.error('File type:', file.type)
+      
+      // Provide user-friendly error message
+      if (uploadError.message?.includes('Bucket not found')) {
+        console.error('SOLUTION: Please verify the bucket name in Supabase Dashboard. It should be "project-documents" (with hyphen) or "project_documents" (with underscore).')
+      } else if (uploadError.message?.includes('row-level security')) {
+        console.error('SOLUTION: Check the storage bucket RLS policies. The INSERT policy should allow users to upload files in their organization folder.')
+      }
+      
       return null
     }
 
     // Generate signed URL for private bucket (valid for 1 year)
     const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-      .from('project-documents')
+      .from(bucketName)
       .createSignedUrl(filePath, 31536000) // 1 year
 
     if (signedUrlError) {
       console.error('Error creating signed URL:', signedUrlError)
       // Try to delete uploaded file
       try {
-        await supabase.storage.from('project-documents').remove([filePath])
+        await supabase.storage.from(bucketName).remove([filePath])
       } catch (storageError) {
         console.error('Error deleting uploaded file:', storageError)
       }
@@ -2003,7 +2031,7 @@ export async function uploadProjectDocument(
       console.error('Failed to generate signed URL')
       // Try to delete uploaded file
       try {
-        await supabase.storage.from('project-documents').remove([filePath])
+        await supabase.storage.from(bucketName).remove([filePath])
       } catch (storageError) {
         console.error('Error deleting uploaded file:', storageError)
       }
@@ -2033,7 +2061,7 @@ export async function uploadProjectDocument(
     if (docError || !docData) {
       console.error('Error creating document record:', docError)
       // Try to delete the uploaded file if database insert failed
-      await supabase.storage.from('project-documents').remove([filePath])
+      await supabase.storage.from(bucketName).remove([filePath])
       return null
     }
 
@@ -2085,12 +2113,26 @@ export async function fetchProjectDocuments(projectId: string): Promise<ProjectD
         
         // If file_url is not a valid URL or if we have file_path, generate signed URL
         if (row.file_path && (!fileUrl || !fileUrl.startsWith('http'))) {
-          const { data: signedUrlData } = await supabase.storage
-            .from('project-documents')
+          // Try primary bucket name first
+          let bucketName = 'project-documents'
+          let { data: signedUrlData, error: signedUrlError } = await supabase.storage
+            .from(bucketName)
             .createSignedUrl(row.file_path, 31536000) // 1 year
+          
+          // If that fails, try alternative bucket name
+          if (signedUrlError && signedUrlError.message?.includes('Bucket not found')) {
+            bucketName = 'project_documents'
+            const retryResult = await supabase.storage
+              .from(bucketName)
+              .createSignedUrl(row.file_path, 31536000)
+            signedUrlData = retryResult.data
+            signedUrlError = retryResult.error
+          }
           
           if (signedUrlData?.signedUrl) {
             fileUrl = signedUrlData.signedUrl
+          } else if (signedUrlError) {
+            console.warn('Could not generate signed URL for document:', row.id, signedUrlError)
           }
         }
         
@@ -2130,7 +2172,7 @@ export async function deleteProjectDocument(documentId: string): Promise<boolean
     // First, get the document to find the file path
     const { data: doc, error: fetchError } = await supabase
       .from('project_documents')
-      .select('file_url')
+      .select('file_url, file_path')
       .eq('id', documentId)
       .single()
 
@@ -2139,23 +2181,47 @@ export async function deleteProjectDocument(documentId: string): Promise<boolean
       return false
     }
 
-    // Extract the file path from the URL
-    const urlParts = doc.file_url.split('/project-documents/')
-    if (urlParts.length < 2) {
-      console.error('Invalid file URL')
-      return false
+    // Prefer file_path from database, otherwise extract from URL
+    let filePath = doc.file_path
+    let bucketName = 'project-documents'
+
+    if (!filePath) {
+      // Try to extract from URL (legacy support)
+      const urlParts = doc.file_url?.split('/project-documents/')
+      if (urlParts && urlParts.length >= 2) {
+        filePath = urlParts[1]
+      } else {
+        // Try alternative bucket name
+        const altUrlParts = doc.file_url?.split('/project_documents/')
+        if (altUrlParts && altUrlParts.length >= 2) {
+          filePath = altUrlParts[1]
+          bucketName = 'project_documents'
+        }
+      }
     }
 
-    const filePath = urlParts[1]
+    if (!filePath) {
+      console.error('Could not determine file path for document:', documentId)
+      // Continue to delete database record even if we can't delete from storage
+    } else {
+      // Delete from storage
+      let { error: storageError } = await supabase.storage
+        .from(bucketName)
+        .remove([filePath])
 
-    // Delete from storage
-    const { error: storageError } = await supabase.storage
-      .from('project-documents')
-      .remove([filePath])
+      // If that fails, try alternative bucket name
+      if (storageError && storageError.message?.includes('Bucket not found')) {
+        bucketName = bucketName === 'project-documents' ? 'project_documents' : 'project-documents'
+        const retryResult = await supabase.storage
+          .from(bucketName)
+          .remove([filePath])
+        storageError = retryResult.error
+      }
 
-    if (storageError) {
-      console.error('Error deleting file from storage:', storageError)
-      // Continue to delete the database record even if storage delete fails
+      if (storageError) {
+        console.error('Error deleting file from storage:', storageError)
+        // Continue to delete the database record even if storage delete fails
+      }
     }
 
     // Delete from database
