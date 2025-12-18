@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PROJECT_TYPES, PROJECT_STATUS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail, TrendingUp, FolderOpen } from 'lucide-react'
+import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail, TrendingUp, FolderOpen, Palette } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import { ProFormaGenerator } from './ProFormaGenerator'
 
@@ -31,6 +31,7 @@ interface ProjectDetailViewProps {
   onViewForms: () => void
   onViewDocuments?: () => void
   onViewQuotes?: () => void
+  onViewSelectionBook?: () => void
   onProjectDuplicated?: (project: Project) => void
 }
 
@@ -43,6 +44,7 @@ export function ProjectDetailView({
   onViewForms,
   onViewDocuments,
   onViewQuotes,
+  onViewSelectionBook,
   onProjectDuplicated,
 }: ProjectDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -55,6 +57,7 @@ export function ProjectDetailView({
     itemCount: 0,
   })
   const [formsCount, setFormsCount] = useState(0)
+  const [selectionBookRoomsCount, setSelectionBookRoomsCount] = useState(0)
   const [quotesCount, setQuotesCount] = useState(0)
   const [quotesStats, setQuotesStats] = useState({
     total: 0,

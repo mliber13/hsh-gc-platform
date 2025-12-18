@@ -8,6 +8,7 @@ import { ProjectActuals } from './components/ProjectActuals'
 import { ChangeOrders } from './components/ChangeOrders'
 import { ProjectForms } from './components/ProjectForms'
 import { ProjectDocuments } from './components/ProjectDocuments'
+import { SelectionBook } from './components/SelectionBook'
 import { CreateProjectForm, ProjectFormData } from './components/CreateProjectForm'
 import { PlanLibrary } from './components/PlanLibrary'
 import { PlanEditor } from './components/PlanEditor'
@@ -44,6 +45,7 @@ type View =
   | 'change-orders'
   | 'forms'
   | 'documents'
+  | 'selection-book'
   | 'plan-library'
   | 'plan-editor'
   | 'item-library'
@@ -95,7 +97,7 @@ function App() {
 
   // Refresh project data when viewing project-related screens
   useEffect(() => {
-    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms' || currentView === 'documents' || currentView === 'quote-review')) {
+    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms' || currentView === 'documents' || currentView === 'quote-review' || currentView === 'selection-book')) {
       getProject_Hybrid(selectedProject.id).then(refreshedProject => {
         if (refreshedProject) {
           setSelectedProject(refreshedProject)
@@ -217,6 +219,12 @@ function App() {
 
   const handleViewForms = () => {
     setCurrentView('forms')
+  }
+
+  const handleViewSelectionBook = () => {
+    if (selectedProject) {
+      setCurrentView('selection-book')
+    }
   }
 
   const handleViewQuotes = () => {
@@ -428,6 +436,7 @@ function App() {
           onViewForms={handleViewForms}
           onViewDocuments={handleViewDocuments}
           onViewQuotes={handleViewQuotes}
+          onViewSelectionBook={handleViewSelectionBook}
           onProjectDuplicated={(newProject) => {
             setSelectedProject(newProject)
             // Stay on project detail view to see the new project
@@ -460,6 +469,14 @@ function App() {
 
       {currentView === 'forms' && selectedProject && (
         <ProjectForms
+          projectId={selectedProject.id}
+          project={selectedProject}
+          onBack={handleBackToProjectDetail}
+        />
+      )}
+
+      {currentView === 'selection-book' && selectedProject && (
+        <SelectionBook
           projectId={selectedProject.id}
           project={selectedProject}
           onBack={handleBackToProjectDetail}

@@ -164,8 +164,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
     const names: Record<string, string> = {
       'architect_verification': 'Architect Engineer Verification',
       'closing_checklist': 'Closing Site Start Checklist',
-      'due_diligence': 'Due Diligence Checklist',
-      'selections': 'Selection Sheet & Checklist'
+      'due_diligence': 'Due Diligence Checklist'
     };
     return names[formType] || formType;
   };
@@ -1287,9 +1286,10 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
           ]
         };
 
-      case 'selections':
-        return {
-          title: 'Selection Sheet & Checklist',
+      // Selection Book is now a separate feature - removed selections form
+      // case 'selections':
+      //   return {
+      //     title: 'Selection Sheet & Checklist',
           sections: [
             {
               id: 'project_info',
@@ -1880,6 +1880,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
             }
           ]
         };
+      // End of removed selections case
 
       default:
         return {
@@ -2052,26 +2053,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
               </div>
             </Card>
 
-            <Card 
-              className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-200"
-              onClick={() => createNewForm('selections')}
-            >
-              <div className="w-full text-left p-4 sm:p-6">
-                <div className="flex items-center mb-3">
-                  <div className="bg-purple-100 rounded-lg p-2 sm:p-3 mr-3 sm:mr-4 flex-shrink-0">
-                    <Edit className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Selections Sheet</h3>
-                    <p className="text-xs sm:text-sm text-gray-500">Material and finish selections</p>
-                  </div>
-                </div>
-                <div className="flex items-center text-purple-600 text-xs sm:text-sm">
-                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                  Create Form
-                </div>
-              </div>
-            </Card>
           </div>
         </div>
 

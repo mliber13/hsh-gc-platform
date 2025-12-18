@@ -81,6 +81,24 @@ export type {
   ProgressSummary,
 } from './project'
 
+// Export selection book types
+export type {
+  SelectionBook,
+  SelectionRoom,
+  SelectionRoomImage,
+  RoomSelections,
+  SelectionBookStatus,
+  RoomType,
+  ImageCategory,
+  PaintSelection,
+  FlooringSelection,
+  LightingSelection,
+  CabinetrySelection,
+  CountertopSelection,
+  FixtureSelection,
+  HardwareSelection,
+} from './selectionBook'
+
 // Export all form types
 export type {
   // Project forms
