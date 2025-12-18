@@ -161,11 +161,40 @@ export async function getSelectionBookWithRooms(
         console.error('Error fetching images:', imagesError)
       }
 
-      // Attach images to rooms
+      // Attach images to rooms and generate signed URLs for each
       if (images) {
-        rooms.forEach(room => {
-          room.images = images.filter(img => img.selection_room_id === room.id)
-        })
+        for (const room of rooms) {
+          const roomImages = images.filter(img => img.selection_room_id === room.id)
+          
+          // Generate signed URLs for each image
+          const imagesWithUrls = await Promise.all(
+            roomImages.map(async (img) => {
+              // If image_url is already a signed URL or public URL, use it
+              // Otherwise, generate a new signed URL from image_path
+              if (img.image_url && (img.image_url.startsWith('http') || img.image_url.startsWith('https'))) {
+                return img
+              }
+              
+              // Generate signed URL from image_path
+              if (img.image_path) {
+                const { data: signedUrlData } = await supabase.storage
+                  .from('selection-images')
+                  .createSignedUrl(img.image_path, 31536000) // 1 year
+                
+                if (signedUrlData?.signedUrl) {
+                  return {
+                    ...img,
+                    image_url: signedUrlData.signedUrl
+                  }
+                }
+              }
+              
+              return img
+            })
+          )
+          
+          room.images = imagesWithUrls
+        }
       }
     }
 
