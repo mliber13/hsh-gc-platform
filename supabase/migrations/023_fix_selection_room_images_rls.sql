@@ -13,35 +13,44 @@ DROP POLICY IF EXISTS "Users can update selection room images in their organizat
 DROP POLICY IF EXISTS "Users can delete selection room images in their organization" ON selection_room_images;
 
 -- Recreate policies with better organization_id handling
+-- Using EXISTS to handle NULL cases properly
 CREATE POLICY "Users can view selection room images in their organization"
   ON selection_room_images FOR SELECT
   USING (
-    organization_id = (
-      SELECT organization_id FROM profiles WHERE id = auth.uid() LIMIT 1
+    EXISTS (
+      SELECT 1 FROM profiles 
+      WHERE id = auth.uid() 
+      AND organization_id = selection_room_images.organization_id
     )
   );
 
 CREATE POLICY "Users can create selection room images in their organization"
   ON selection_room_images FOR INSERT
   WITH CHECK (
-    organization_id = (
-      SELECT organization_id FROM profiles WHERE id = auth.uid() LIMIT 1
+    EXISTS (
+      SELECT 1 FROM profiles 
+      WHERE id = auth.uid() 
+      AND organization_id = selection_room_images.organization_id
     )
   );
 
 CREATE POLICY "Users can update selection room images in their organization"
   ON selection_room_images FOR UPDATE
   USING (
-    organization_id = (
-      SELECT organization_id FROM profiles WHERE id = auth.uid() LIMIT 1
+    EXISTS (
+      SELECT 1 FROM profiles 
+      WHERE id = auth.uid() 
+      AND organization_id = selection_room_images.organization_id
     )
   );
 
 CREATE POLICY "Users can delete selection room images in their organization"
   ON selection_room_images FOR DELETE
   USING (
-    organization_id = (
-      SELECT organization_id FROM profiles WHERE id = auth.uid() LIMIT 1
+    EXISTS (
+      SELECT 1 FROM profiles 
+      WHERE id = auth.uid() 
+      AND organization_id = selection_room_images.organization_id
     )
   );
 
