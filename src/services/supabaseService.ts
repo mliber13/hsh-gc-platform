@@ -1924,9 +1924,9 @@ export async function uploadProjectDocument(
 
   try {
     // Get current user and their organization
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      console.error('User not authenticated')
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.error('User not authenticated:', authError)
       return null
     }
 
@@ -1942,12 +1942,29 @@ export async function uploadProjectDocument(
       return null
     }
 
+    if (!profile.organization_id) {
+      console.error('User profile missing organization_id')
+      return null
+    }
+
     // Create a unique filename with timestamp
     const timestamp = Date.now()
     const fileExt = file.name.split('.').pop()
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
     const fileName = `${timestamp}-${sanitizedName}`
     const filePath = `${profile.organization_id}/${projectId}/${fileName}`
+
+    // Check if bucket exists and is accessible
+    const { data: buckets, error: bucketError } = await supabase.storage.listBuckets()
+    if (bucketError) {
+      console.error('Error listing buckets:', bucketError)
+    } else {
+      const bucketExists = buckets?.some(b => b.id === 'project-documents')
+      if (!bucketExists) {
+        console.error('Bucket "project-documents" not found. Available buckets:', buckets?.map(b => b.id))
+        return null
+      }
+    }
 
     // Upload to storage
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -1959,6 +1976,9 @@ export async function uploadProjectDocument(
 
     if (uploadError) {
       console.error('Error uploading document:', uploadError)
+      console.error('File path:', filePath)
+      console.error('Organization ID:', profile.organization_id)
+      console.error('Project ID:', projectId)
       return null
     }
 
