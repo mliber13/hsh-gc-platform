@@ -203,10 +203,11 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
   }
 
   const handleRoomTypeChange = (category: string) => {
-    setNewRoomType(category)
+    const value = category || ''
+    setNewRoomType(value)
     // Auto-populate name if empty, but allow user to customize
-    if (!newRoomName.trim()) {
-      setNewRoomName(getDefaultRoomName(category))
+    if (value && !newRoomName.trim()) {
+      setNewRoomName(getDefaultRoomName(value))
     }
   }
 
