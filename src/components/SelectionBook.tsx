@@ -457,12 +457,11 @@ const OverviewView: React.FC<OverviewViewProps> = ({
               </div>
               <div>
                 <Label htmlFor="roomType">Room Type (Optional)</Label>
-                <Select value={newRoomType} onValueChange={setNewRoomType}>
+                <Select value={newRoomType || undefined} onValueChange={(value) => setNewRoomType(value || '')}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select room type" />
+                    <SelectValue placeholder="Select room type (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
                     {ROOM_TYPES.map((type) => (
                       <SelectItem key={type.value} value={type.value}>
                         {type.label}
