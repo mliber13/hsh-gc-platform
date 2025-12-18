@@ -23,9 +23,32 @@ import type {
  */
 export async function getOrCreateSelectionBook(
   projectId: string,
-  organizationId: string = 'default-org'
+  organizationId?: string
 ): Promise<SelectionBook | null> {
   try {
+    // Get user profile for organization_id if not provided
+    let orgId = organizationId
+    if (!orgId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.error('User not authenticated')
+        return null
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.organization_id) {
+        console.error('User profile not found or missing organization_id')
+        return null
+      }
+
+      orgId = profile.organization_id
+    }
+
     // Try to get existing book
     const { data: existing, error: fetchError } = await supabase
       .from('selection_books')
@@ -41,7 +64,7 @@ export async function getOrCreateSelectionBook(
     const { data: newBook, error: createError } = await supabase
       .from('selection_books')
       .insert({
-        organization_id: organizationId,
+        organization_id: orgId,
         project_id: projectId,
         title: 'Selection Book',
         status: 'draft',
@@ -58,6 +81,42 @@ export async function getOrCreateSelectionBook(
   } catch (error) {
     console.error('Error in getOrCreateSelectionBook:', error)
     return null
+  }
+}
+
+/**
+ * Get the count of rooms in a selection book
+ */
+export async function getSelectionBookRoomsCount(
+  projectId: string
+): Promise<number> {
+  try {
+    // First get the selection book
+    const { data: book, error: bookError } = await supabase
+      .from('selection_books')
+      .select('id')
+      .eq('project_id', projectId)
+      .single()
+
+    if (bookError || !book) {
+      return 0
+    }
+
+    // Count rooms
+    const { count, error: countError } = await supabase
+      .from('selection_rooms')
+      .select('*', { count: 'exact', head: true })
+      .eq('selection_book_id', book.id)
+
+    if (countError) {
+      console.error('Error counting rooms:', countError)
+      return 0
+    }
+
+    return count || 0
+  } catch (error) {
+    console.error('Error in getSelectionBookRoomsCount:', error)
+    return 0
   }
 }
 
@@ -158,9 +217,32 @@ export async function createSelectionRoom(
   bookId: string,
   roomName: string,
   roomType?: string,
-  organizationId: string = 'default-org'
+  organizationId?: string
 ): Promise<SelectionRoom | null> {
   try {
+    // Get user profile for organization_id if not provided
+    let orgId = organizationId
+    if (!orgId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.error('User not authenticated')
+        return null
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.organization_id) {
+        console.error('User profile not found or missing organization_id')
+        return null
+      }
+
+      orgId = profile.organization_id
+    }
+
     // Get current max display_order
     const { data: existingRooms } = await supabase
       .from('selection_rooms')
@@ -176,7 +258,7 @@ export async function createSelectionRoom(
     const { data, error } = await supabase
       .from('selection_rooms')
       .insert({
-        organization_id: organizationId,
+        organization_id: orgId,
         selection_book_id: bookId,
         room_name: roomName,
         room_type: roomType,

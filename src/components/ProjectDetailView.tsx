@@ -11,6 +11,7 @@ import { duplicateProject } from '@/services/projectService'
 import { getTradesForEstimate_Hybrid, updateProject_Hybrid, deleteProject_Hybrid, fetchQuoteRequestsForProject_Hybrid, fetchSubmittedQuotesForRequest_Hybrid } from '@/services/hybridService'
 import { getActivePlans_Hybrid } from '@/services/planHybridService'
 import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
+import { getSelectionBookRoomsCount } from '@/services/selectionBookService'
 import { supabase } from '@/lib/supabase'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -212,6 +213,19 @@ export function ProjectDetailView({
       }
     }
     loadQuotesStats()
+  }, [project.id])
+
+  // Load selection book rooms count
+  useEffect(() => {
+    const loadSelectionBookCount = async () => {
+      try {
+        const count = await getSelectionBookRoomsCount(project.id)
+        setSelectionBookRoomsCount(count)
+      } catch (error) {
+        console.error('Error loading selection book rooms count:', error)
+      }
+    }
+    loadSelectionBookCount()
   }, [project.id])
   
   const formatCurrency = (amount: number) =>

@@ -92,11 +92,13 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
 }) => {
   const [book, setBook] = useState<SelectionBookType | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('overview')
   const [selectedRoom, setSelectedRoom] = useState<SelectionRoom | null>(null)
   const [showAddRoom, setShowAddRoom] = useState(false)
   const [newRoomName, setNewRoomName] = useState('')
   const [newRoomType, setNewRoomType] = useState<string>('')
+  const [addingRoom, setAddingRoom] = useState(false)
 
   useEffect(() => {
     loadSelectionBook()
@@ -105,13 +107,17 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
   const loadSelectionBook = async () => {
     try {
       setLoading(true)
+      setError(null)
       const selectionBook = await getOrCreateSelectionBook(projectId)
       if (selectionBook) {
         const fullBook = await getSelectionBookWithRooms(projectId)
         setBook(fullBook)
+      } else {
+        setError('Failed to load or create selection book. Please try again.')
       }
     } catch (error) {
       console.error('Error loading selection book:', error)
+      setError('An error occurred while loading the selection book. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -120,17 +126,28 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
   const handleAddRoom = async () => {
     if (!book || !newRoomName.trim()) return
 
-    const room = await createSelectionRoom(
-      book.id,
-      newRoomName.trim(),
-      newRoomType || undefined
-    )
+    setAddingRoom(true)
+    setError(null)
+    try {
+      const room = await createSelectionRoom(
+        book.id,
+        newRoomName.trim(),
+        newRoomType || undefined
+      )
 
-    if (room) {
-      await loadSelectionBook()
-      setNewRoomName('')
-      setNewRoomType('')
-      setShowAddRoom(false)
+      if (room) {
+        await loadSelectionBook()
+        setNewRoomName('')
+        setNewRoomType('')
+        setShowAddRoom(false)
+      } else {
+        setError('Failed to create room. Please check your permissions and try again.')
+      }
+    } catch (error) {
+      console.error('Error adding room:', error)
+      setError('An error occurred while adding the room. Please try again.')
+    } finally {
+      setAddingRoom(false)
     }
   }
 
@@ -210,15 +227,22 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
     )
   }
 
-  if (!book) {
+  if (!book && !loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600">Error loading selection book</p>
-          <Button onClick={onBack} className="mt-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
+        <div className="text-center max-w-md mx-auto px-4">
+          <p className="text-red-600 mb-4">{error || 'Error loading selection book'}</p>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={loadSelectionBook} variant="outline">
+              Retry
+            </Button>
+            {onBack && (
+              <Button onClick={onBack}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -268,7 +292,7 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
                 </div>
                 <p className="text-xs sm:text-sm text-gray-600">
                   {viewMode === 'overview'
-                    ? `${book.rooms?.length || 0} rooms`
+                    ? `${book?.rooms?.length || 0} rooms`
                     : 'Room selections'}
                 </p>
               </div>
@@ -301,7 +325,20 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {viewMode === 'overview' ? (
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-800">{error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setError(null)}
+              className="mt-2"
+            >
+              Dismiss
+            </Button>
+          </div>
+        )}
+        {viewMode === 'overview' && book ? (
           <OverviewView
             book={book}
             onViewRoom={handleViewRoom}
@@ -313,6 +350,7 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
             newRoomType={newRoomType}
             setNewRoomType={setNewRoomType}
             onAddRoom={handleAddRoom}
+            addingRoom={addingRoom}
           />
         ) : selectedRoom ? (
           <RoomView
@@ -382,6 +420,7 @@ interface OverviewViewProps {
   newRoomType: string
   setNewRoomType: (type: string) => void
   onAddRoom: () => void
+  addingRoom: boolean
 }
 
 const OverviewView: React.FC<OverviewViewProps> = ({
@@ -395,6 +434,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
   newRoomType,
   setNewRoomType,
   onAddRoom,
+  addingRoom,
 }) => {
   return (
     <div className="space-y-6">
@@ -432,11 +472,11 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                 </Select>
               </div>
               <div className="flex gap-2">
-                <Button onClick={onAddRoom} disabled={!newRoomName.trim()}>
+                <Button onClick={onAddRoom} disabled={!newRoomName.trim() || addingRoom}>
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Room
+                  {addingRoom ? 'Adding...' : 'Add Room'}
                 </Button>
-                <Button variant="outline" onClick={() => setShowAddRoom(false)}>
+                <Button variant="outline" onClick={() => setShowAddRoom(false)} disabled={addingRoom}>
                   Cancel
                 </Button>
               </div>
