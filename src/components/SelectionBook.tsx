@@ -787,7 +787,10 @@ const RoomView: React.FC<RoomViewProps> = ({
   // Generate signed URLs for images when component mounts or room changes
   useEffect(() => {
     const loadImageUrls = async () => {
-      if (!room.images || room.images.length === 0) return
+      if (!room.images || room.images.length === 0) {
+        setImageUrls({})
+        return
+      }
 
       const urls: Record<string, string> = {}
       for (const img of room.images) {
@@ -806,7 +809,7 @@ const RoomView: React.FC<RoomViewProps> = ({
     }
 
     loadImageUrls()
-  }, [room.images])
+  }, [room.images, room.id]) // Also depend on room.id to force refresh when room changes
 
   const handleSave = async () => {
     setSaving(true)

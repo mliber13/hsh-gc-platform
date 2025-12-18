@@ -503,10 +503,37 @@ export async function uploadSelectionImage(
       return null
     }
 
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
+    // Generate signed URL for private bucket (valid for 1 year)
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from('selection-images')
-      .getPublicUrl(filePath)
+      .createSignedUrl(filePath, 31536000) // 1 year
+
+    if (signedUrlError) {
+      console.error('Error creating signed URL:', signedUrlError)
+      // Try to delete uploaded file
+      try {
+        await supabase.storage
+          .from('selection-images')
+          .remove([filePath])
+      } catch (storageError) {
+        console.error('Error deleting uploaded file:', storageError)
+      }
+      return null
+    }
+
+    const signedUrl = signedUrlData?.signedUrl || null
+    if (!signedUrl) {
+      console.error('Failed to generate signed URL')
+      // Try to delete uploaded file
+      try {
+        await supabase.storage
+          .from('selection-images')
+          .remove([filePath])
+      } catch (storageError) {
+        console.error('Error deleting uploaded file:', storageError)
+      }
+      return null
+    }
 
     // Get current max display_order
     const { data: existingImages } = await supabase
@@ -541,7 +568,7 @@ export async function uploadSelectionImage(
       .insert({
         organization_id: orgId,
         selection_room_id: roomId,
-        image_url: publicUrl,
+        image_url: signedUrl, // Store signed URL
         image_path: filePath,
         file_name: file.name,
         file_size: file.size,
