@@ -1272,7 +1272,7 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                   >
                     <span>
                       <FileText className="w-3 h-3 mr-1" />
-                      Spec
+                      Add Spec
                     </span>
                   </Button>
                 </Label>
