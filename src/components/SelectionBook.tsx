@@ -26,6 +26,8 @@ import {
   Printer,
   Download,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   FileText,
 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
@@ -1291,7 +1293,9 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                   className="text-xs h-7 px-1.5 sm:px-2"
                 >
                   <span className="hidden sm:inline">{isExpanded ? 'Hide' : 'Details'}</span>
-                  <span className="sm:hidden">{isExpanded ? '−' : '+'}</span>
+                  <span className="sm:hidden">
+                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </span>
                 </Button>
               </div>
             </div>
@@ -1856,7 +1860,9 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                         className="text-xs h-7 px-1.5 sm:px-2"
                       >
                         <span className="hidden sm:inline">{expandedCategory === categoryName ? 'Hide' : 'Details'}</span>
-                        <span className="sm:hidden">{expandedCategory === categoryName ? '−' : '+'}</span>
+                        <span className="sm:hidden">
+                          {expandedCategory === categoryName ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </span>
                       </Button>
                       <Button
                         variant="ghost"
