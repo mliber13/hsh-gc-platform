@@ -133,6 +133,21 @@ export interface SelectionRoomImage {
   created_by?: string
 }
 
+export interface SelectionRoomSpecSheet {
+  id: string
+  selection_room_id: string
+  file_url: string
+  file_path: string
+  file_name: string
+  file_size?: number
+  mime_type?: string
+  category: string // Category name (paint, flooring, lighting, or custom category)
+  description?: string
+  display_order: number
+  created_at: string
+  created_by?: string
+}
+
 export interface SelectionRoom {
   id: string
   organization_id: string
@@ -144,6 +159,7 @@ export interface SelectionRoom {
   created_at: string
   updated_at: string
   images?: SelectionRoomImage[]
+  specSheets?: SelectionRoomSpecSheet[]
 }
 
 export interface SelectionBook {

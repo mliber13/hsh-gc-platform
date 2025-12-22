@@ -26,6 +26,7 @@ import {
   Printer,
   Download,
   ChevronRight,
+  FileText,
 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import {
@@ -38,6 +39,8 @@ import {
   uploadSelectionImage,
   deleteSelectionImage,
   getSelectionImageSignedUrl,
+  uploadSelectionSpecSheet,
+  deleteSelectionSpecSheet,
 } from '@/services/selectionBookService'
 import type {
   SelectionBook as SelectionBookType,
@@ -465,6 +468,37 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
                 }
               }
             }}
+            onSpecSheetUpload={async (file, category, description) => {
+              const specSheet = await uploadSelectionSpecSheet(
+                selectedRoom.id,
+                file,
+                category,
+                description
+              )
+              if (specSheet) {
+                await loadSelectionBook()
+                const updatedBook = await getSelectionBookWithRooms(projectId)
+                if (updatedBook) {
+                  const updatedRoom = updatedBook.rooms?.find(r => r.id === selectedRoom.id)
+                  if (updatedRoom) {
+                    setSelectedRoom(updatedRoom)
+                  }
+                }
+              }
+            }}
+            onSpecSheetDelete={async (specSheetId) => {
+              const success = await deleteSelectionSpecSheet(specSheetId)
+              if (success) {
+                await loadSelectionBook()
+                const updatedBook = await getSelectionBookWithRooms(projectId)
+                if (updatedBook) {
+                  const updatedRoom = updatedBook.rooms?.find(r => r.id === selectedRoom.id)
+                  if (updatedRoom) {
+                    setSelectedRoom(updatedRoom)
+                  }
+                }
+              }
+            }}
           />
         ) : null}
       </main>
@@ -768,6 +802,12 @@ interface RoomViewProps {
     description?: string
   ) => Promise<void>
   onImageDelete: (imageId: string) => Promise<void>
+  onSpecSheetUpload: (
+    file: File,
+    category: string,
+    description?: string
+  ) => Promise<void>
+  onSpecSheetDelete: (specSheetId: string) => Promise<void>
 }
 
 const RoomView: React.FC<RoomViewProps> = ({
@@ -776,6 +816,8 @@ const RoomView: React.FC<RoomViewProps> = ({
   onSave,
   onImageUpload,
   onImageDelete,
+  onSpecSheetUpload,
+  onSpecSheetDelete,
 }) => {
   const [selections, setSelections] = useState<RoomSelections>(room.selections || {})
   const [saving, setSaving] = useState(false)
@@ -880,6 +922,8 @@ const RoomView: React.FC<RoomViewProps> = ({
         room={room}
         onImageUpload={onImageUpload}
         onImageDelete={onImageDelete}
+        onSpecSheetUpload={onSpecSheetUpload}
+        onSpecSheetDelete={onSpecSheetDelete}
         imageUrls={imageUrls}
       />
     </div>
@@ -901,6 +945,12 @@ interface SelectionsFormProps {
     description?: string
   ) => Promise<void>
   onImageDelete: (imageId: string) => Promise<void>
+  onSpecSheetUpload: (
+    file: File,
+    category: string,
+    description?: string
+  ) => Promise<void>
+  onSpecSheetDelete: (specSheetId: string) => Promise<void>
   imageUrls: Record<string, string>
 }
 
@@ -911,6 +961,8 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
   room,
   onImageUpload,
   onImageDelete,
+  onSpecSheetUpload,
+  onSpecSheetDelete,
   imageUrls,
 }) => {
   const [uploadingCategory, setUploadingCategory] = useState<ImageCategory | null>(null)
@@ -969,6 +1021,40 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
   const getPrimaryImage = (category: ImageCategory) => {
     const images = getImagesForCategory(category)
     return images.length > 0 ? images[0] : null
+  }
+
+  const getSpecSheetsForCategory = (category: string) => {
+    return room.specSheets?.filter(sheet => sheet.category === category) || []
+  }
+
+  const handleSpecSheetUpload = async (category: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type (PDF or image)
+    const isValidType = file.type === 'application/pdf' || file.type.startsWith('image/')
+    if (!isValidType) {
+      alert('Please select a PDF or image file')
+      return
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size must be less than 10MB')
+      return
+    }
+
+    setUploadingCategory(category as ImageCategory)
+    try {
+      await onSpecSheetUpload(file, category)
+      // Reset file input
+      e.target.value = ''
+    } catch (error) {
+      console.error('Error uploading spec sheet:', error)
+      alert('Failed to upload spec sheet. Please try again.')
+    } finally {
+      setUploadingCategory(null)
+    }
   }
 
   const getCategorySummary = (category: ImageCategory) => {
@@ -1032,7 +1118,7 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
   }
 
   const handleDeleteCustomCategory = (categoryName: string) => {
-    if (!confirm(`Delete category "${categoryName}"? This will also remove all associated images.`)) {
+    if (!confirm(`Delete category "${categoryName}"? This will also remove all associated images and spec sheets.`)) {
       return
     }
     
@@ -1049,6 +1135,10 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
     // Also delete images associated with this category
     const imagesToDelete = room.images?.filter(img => img.category === categoryName) || []
     imagesToDelete.forEach(img => onImageDelete(img.id))
+    
+    // Also delete spec sheets associated with this category
+    const specSheetsToDelete = room.specSheets?.filter(sheet => sheet.category === categoryName) || []
+    specSheetsToDelete.forEach(sheet => onSpecSheetDelete(sheet.id))
   }
 
   const updateCustomCategory = (categoryName: string, field: 'notes' | 'details', value: any) => {
@@ -1111,6 +1201,7 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
     const summary = getCategorySummary(category)
     const isExpanded = expandedCategory === category
     const allImages = getImagesForCategory(category)
+    const specSheets = getSpecSheetsForCategory(category as string)
 
     return (
       <Card key={category} className="overflow-hidden">
@@ -1164,6 +1255,35 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                     +{allImages.length - 1} more
                   </span>
                 )}
+                {/* Spec Sheet Icon */}
+                {specSheets.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs text-blue-600">{specSheets.length}</span>
+                  </div>
+                )}
+                {/* Spec Sheet Upload Button */}
+                <Label htmlFor={`${category}-spec-upload`} className="cursor-pointer">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-7"
+                    asChild
+                  >
+                    <span>
+                      <FileText className="w-3 h-3 mr-1" />
+                      Spec
+                    </span>
+                  </Button>
+                </Label>
+                <input
+                  id={`${category}-spec-upload`}
+                  type="file"
+                  accept=".pdf,image/*"
+                  onChange={(e) => handleSpecSheetUpload(category as string, e)}
+                  className="hidden"
+                  disabled={uploadingCategory === category}
+                />
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1217,6 +1337,64 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                 })}
               </div>
             )}
+
+            {/* Spec Sheets Section */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-xs font-medium">Spec Sheets</Label>
+                <Label htmlFor={`${category}-spec-upload-expanded`} className="cursor-pointer">
+                  <Button variant="outline" size="sm" className="text-xs h-7" asChild>
+                    <span>
+                      <Plus className="w-3 h-3 mr-1" />
+                      Add Spec Sheet
+                    </span>
+                  </Button>
+                </Label>
+                <input
+                  id={`${category}-spec-upload-expanded`}
+                  type="file"
+                  accept=".pdf,image/*"
+                  onChange={(e) => handleSpecSheetUpload(category as string, e)}
+                  className="hidden"
+                  disabled={uploadingCategory === category}
+                />
+              </div>
+              {specSheets.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {specSheets.map((sheet) => (
+                    <div
+                      key={sheet.id}
+                      className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg hover:border-blue-400 transition-colors group"
+                    >
+                      <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                      <a
+                        href={sheet.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline truncate max-w-[200px]"
+                        title={sheet.file_name}
+                      >
+                        {sheet.file_name}
+                      </a>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm('Delete this spec sheet?')) {
+                            onSpecSheetDelete(sheet.id)
+                          }
+                        }}
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">No spec sheets uploaded</p>
+              )}
+            </div>
 
             {/* Category-specific form fields */}
             {category === 'paint' && (
@@ -1635,10 +1813,39 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                     <div className="flex items-center gap-2">
                       {(() => {
                         const customImages = getImagesForCategory(categoryName)
-                        return customImages.length > 1 && (
-                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                            +{customImages.length - 1} more
-                          </span>
+                        const customSpecSheets = getSpecSheetsForCategory(categoryName)
+                        return (
+                          <>
+                            {customImages.length > 1 && (
+                              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                                +{customImages.length - 1} more
+                              </span>
+                            )}
+                            {/* Spec Sheet Icon */}
+                            {customSpecSheets.length > 0 && (
+                              <div className="flex items-center gap-1">
+                                <FileText className="w-4 h-4 text-blue-600" />
+                                <span className="text-xs text-blue-600">{customSpecSheets.length}</span>
+                              </div>
+                            )}
+                            {/* Spec Sheet Upload Button */}
+                            <Label htmlFor={`custom-${categoryName}-spec-upload`} className="cursor-pointer">
+                              <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
+                                <span>
+                                  <FileText className="w-3 h-3 mr-1" />
+                                  Spec
+                                </span>
+                              </Button>
+                            </Label>
+                            <input
+                              id={`custom-${categoryName}-spec-upload`}
+                              type="file"
+                              accept=".pdf,image/*"
+                              onChange={(e) => handleSpecSheetUpload(categoryName, e)}
+                              className="hidden"
+                              disabled={uploadingCategory === categoryName}
+                            />
+                          </>
                         )
                       })()}
                       <Button
@@ -1706,6 +1913,67 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                       </div>
                     )
                   })()}
+
+                  {/* Spec Sheets Section for Custom Category */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-xs font-medium">Spec Sheets</Label>
+                      <Label htmlFor={`custom-${categoryName}-spec-upload-expanded`} className="cursor-pointer">
+                        <Button variant="outline" size="sm" className="text-xs h-7" asChild>
+                          <span>
+                            <Plus className="w-3 h-3 mr-1" />
+                            Add Spec Sheet
+                          </span>
+                        </Button>
+                      </Label>
+                      <input
+                        id={`custom-${categoryName}-spec-upload-expanded`}
+                        type="file"
+                        accept=".pdf,image/*"
+                        onChange={(e) => handleSpecSheetUpload(categoryName, e)}
+                        className="hidden"
+                        disabled={uploadingCategory === categoryName}
+                      />
+                    </div>
+                    {(() => {
+                      const customSpecSheets = getSpecSheetsForCategory(categoryName)
+                      return customSpecSheets.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {customSpecSheets.map((sheet) => (
+                            <div
+                              key={sheet.id}
+                              className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg hover:border-blue-400 transition-colors group"
+                            >
+                              <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                              <a
+                                href={sheet.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:underline truncate max-w-[200px]"
+                                title={sheet.file_name}
+                              >
+                                {sheet.file_name}
+                              </a>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm('Delete this spec sheet?')) {
+                                    onSpecSheetDelete(sheet.id)
+                                  }
+                                }}
+                                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400">No spec sheets uploaded</p>
+                      )
+                    })()}
+                  </div>
 
                   {/* Custom Category Form Fields */}
                   <div className="space-y-4">

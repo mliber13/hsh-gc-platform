@@ -10,6 +10,7 @@ import type {
   SelectionBook,
   SelectionRoom,
   SelectionRoomImage,
+  SelectionRoomSpecSheet,
   RoomSelections,
   ImageCategory,
 } from '@/types/selectionBook'
@@ -161,10 +162,21 @@ export async function getSelectionBookWithRooms(
         console.error('Error fetching images:', imagesError)
       }
 
-      // Attach images to rooms and generate signed URLs for each
-      if (images) {
+      // Get spec sheets for each room
+      const { data: specSheets, error: specSheetsError } = await supabase
+        .from('selection_room_spec_sheets')
+        .select('*')
+        .in('selection_room_id', roomIds)
+        .order('display_order', { ascending: true })
+
+      if (specSheetsError) {
+        console.error('Error fetching spec sheets:', specSheetsError)
+      }
+
+      // Attach images and spec sheets to rooms and generate signed URLs for each
+      if (images || specSheets) {
         for (const room of rooms) {
-          const roomImages = images.filter(img => img.selection_room_id === room.id)
+          const roomImages = images?.filter(img => img.selection_room_id === room.id) || []
           
           // Generate signed URLs for each image
           const imagesWithUrls = await Promise.all(
@@ -194,6 +206,36 @@ export async function getSelectionBookWithRooms(
           )
           
           room.images = imagesWithUrls
+
+          // Generate signed URLs for spec sheets
+          const roomSpecSheets = specSheets?.filter(sheet => sheet.selection_room_id === room.id) || []
+          const specSheetsWithUrls = await Promise.all(
+            roomSpecSheets.map(async (sheet) => {
+              // If file_url is already a signed URL or public URL, use it
+              // Otherwise, generate a new signed URL from file_path
+              if (sheet.file_url && (sheet.file_url.startsWith('http') || sheet.file_url.startsWith('https'))) {
+                return sheet
+              }
+              
+              // Generate signed URL from file_path
+              if (sheet.file_path) {
+                const { data: signedUrlData } = await supabase.storage
+                  .from('selection-images')
+                  .createSignedUrl(sheet.file_path, 31536000) // 1 year
+                
+                if (signedUrlData?.signedUrl) {
+                  return {
+                    ...sheet,
+                    file_url: signedUrlData.signedUrl
+                  }
+                }
+              }
+              
+              return sheet
+            })
+          )
+          
+          room.specSheets = specSheetsWithUrls
         }
       }
     }
@@ -707,6 +749,247 @@ export async function updateSelectionImage(
   } catch (error) {
     console.error('Error in updateSelectionImage:', error)
     return null
+  }
+}
+
+// ============================================================================
+// SPEC SHEET OPERATIONS
+// ============================================================================
+
+/**
+ * Upload spec sheet for a selection room category
+ */
+export async function uploadSelectionSpecSheet(
+  roomId: string,
+  file: File,
+  category: string, // Category name (paint, flooring, lighting, or custom category)
+  description?: string,
+  organizationId?: string
+): Promise<SelectionRoomSpecSheet | null> {
+  try {
+    // Get user profile for organization_id
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      console.error('User not authenticated')
+      return null
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError) {
+      console.error('Error fetching user profile:', profileError)
+      return null
+    }
+
+    if (!profile?.organization_id) {
+      console.error('User profile missing organization_id')
+      return null
+    }
+
+    const orgId = organizationId || profile.organization_id
+
+    // Get room to find book and project, and verify organization_id matches
+    const { data: room, error: roomError } = await supabase
+      .from('selection_rooms')
+      .select('selection_book_id, organization_id')
+      .eq('id', roomId)
+      .single()
+
+    if (roomError || !room) {
+      console.error('Room not found:', roomError)
+      return null
+    }
+
+    // Verify room belongs to user's organization
+    if (room.organization_id !== orgId) {
+      console.error('Room organization_id does not match user organization_id')
+      return null
+    }
+
+    const { data: book } = await supabase
+      .from('selection_books')
+      .select('project_id')
+      .eq('id', room.selection_book_id)
+      .single()
+
+    if (!book) {
+      console.error('Book not found')
+      return null
+    }
+
+    // Create unique filename
+    const timestamp = Date.now()
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${roomId}-spec-${timestamp}.${fileExt}`
+    const filePath = `${orgId}/${book.project_id}/${roomId}/specs/${fileName}`
+
+    // Upload to storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('selection-images')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      })
+
+    if (uploadError) {
+      console.error('Error uploading spec sheet:', uploadError)
+      return null
+    }
+
+    // Generate signed URL for private bucket (valid for 1 year)
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      .from('selection-images')
+      .createSignedUrl(filePath, 31536000) // 1 year
+
+    if (signedUrlError) {
+      console.error('Error creating signed URL:', signedUrlError)
+      // Try to delete uploaded file
+      try {
+        await supabase.storage
+          .from('selection-images')
+          .remove([filePath])
+      } catch (storageError) {
+        console.error('Error deleting uploaded file:', storageError)
+      }
+      return null
+    }
+
+    const signedUrl = signedUrlData?.signedUrl || null
+    if (!signedUrl) {
+      console.error('Failed to generate signed URL')
+      // Try to delete uploaded file
+      try {
+        await supabase.storage
+          .from('selection-images')
+          .remove([filePath])
+      } catch (storageError) {
+        console.error('Error deleting uploaded file:', storageError)
+      }
+      return null
+    }
+
+    // Get current max display_order
+    const { data: existingSpecSheets } = await supabase
+      .from('selection_room_spec_sheets')
+      .select('display_order')
+      .eq('selection_room_id', roomId)
+      .eq('category', category)
+      .order('display_order', { ascending: false })
+      .limit(1)
+
+    const nextOrder = existingSpecSheets && existingSpecSheets.length > 0
+      ? (existingSpecSheets[0].display_order || 0) + 1
+      : 0
+
+    // Save spec sheet record
+    const { data: specSheetRecord, error: recordError } = await supabase
+      .from('selection_room_spec_sheets')
+      .insert({
+        organization_id: orgId,
+        selection_room_id: roomId,
+        file_url: signedUrl, // Store signed URL
+        file_path: filePath,
+        file_name: file.name,
+        file_size: file.size,
+        mime_type: file.type,
+        category: category,
+        description: description || null,
+        display_order: nextOrder,
+      })
+      .select()
+      .single()
+
+    if (recordError) {
+      console.error('Error saving spec sheet record:', recordError)
+      // Try to delete uploaded file
+      try {
+        await supabase.storage
+          .from('selection-images')
+          .remove([filePath])
+      } catch (storageError) {
+        console.error('Error deleting uploaded file:', storageError)
+      }
+      return null
+    }
+
+    return specSheetRecord as SelectionRoomSpecSheet
+  } catch (error) {
+    console.error('Error in uploadSelectionSpecSheet:', error)
+    return null
+  }
+}
+
+/**
+ * Get signed URL for a spec sheet
+ */
+export async function getSelectionSpecSheetSignedUrl(
+  filePath: string,
+  expiresIn: number = 31536000 // 1 year default
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.storage
+      .from('selection-images')
+      .createSignedUrl(filePath, expiresIn)
+
+    if (error) {
+      console.error('Error creating signed URL:', error)
+      return null
+    }
+
+    return data?.signedUrl || null
+  } catch (error) {
+    console.error('Error in getSelectionSpecSheetSignedUrl:', error)
+    return null
+  }
+}
+
+/**
+ * Delete selection spec sheet
+ */
+export async function deleteSelectionSpecSheet(
+  specSheetId: string
+): Promise<boolean> {
+  try {
+    // Get spec sheet record to find file path
+    const { data: specSheet, error: fetchError } = await supabase
+      .from('selection_room_spec_sheets')
+      .select('file_path')
+      .eq('id', specSheetId)
+      .single()
+
+    if (fetchError || !specSheet) {
+      console.error('Error fetching spec sheet:', fetchError)
+      return false
+    }
+
+    // Delete from storage
+    const { error: storageError } = await supabase.storage
+      .from('selection-images')
+      .remove([specSheet.file_path])
+
+    if (storageError) {
+      console.error('Error deleting spec sheet from storage:', storageError)
+    }
+
+    // Delete record
+    const { error: deleteError } = await supabase
+      .from('selection_room_spec_sheets')
+      .delete()
+      .eq('id', specSheetId)
+
+    if (deleteError) {
+      console.error('Error deleting spec sheet record:', deleteError)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in deleteSelectionSpecSheet:', error)
+    return false
   }
 }
 
