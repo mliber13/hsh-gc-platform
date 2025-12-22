@@ -1242,24 +1242,24 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
           {/* Content */}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 pr-2">
                 <h3 className="font-semibold text-sm text-gray-900 mb-1">{title}</h3>
                 <p className="text-xs text-gray-500 mb-1 truncate">{summary}</p>
                 {primaryImage?.description && (
                   <p className="text-xs text-gray-400 truncate">{primaryImage.description}</p>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 flex-shrink-0">
                 {allImages.length > 1 && (
-                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                    +{allImages.length - 1} more
+                  <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded hidden sm:inline">
+                    +{allImages.length - 1}
                   </span>
                 )}
                 {/* Spec Sheet Icon */}
                 {specSheets.length > 0 && (
-                  <div className="flex items-center gap-1">
-                    <FileText className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs text-blue-600">{specSheets.length}</span>
+                  <div className="flex items-center gap-0.5" title={`${specSheets.length} spec sheet${specSheets.length > 1 ? 's' : ''}`}>
+                    <FileText className="w-3.5 h-3.5 text-blue-600" />
+                    <span className="text-xs text-blue-600 hidden sm:inline">{specSheets.length}</span>
                   </div>
                 )}
                 {/* Spec Sheet Upload Button */}
@@ -1267,12 +1267,12 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-xs h-7"
+                    className="text-xs h-7 px-1.5 sm:px-2"
                     asChild
                   >
                     <span>
-                      <FileText className="w-3 h-3 mr-1" />
-                      Add Spec
+                      <FileText className="w-3 h-3 sm:mr-1" />
+                      <span className="hidden sm:inline">Add Spec</span>
                     </span>
                   </Button>
                 </Label>
@@ -1288,9 +1288,10 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={() => setExpandedCategory(isExpanded ? null : category)}
-                  className="text-xs h-7"
+                  className="text-xs h-7 px-1.5 sm:px-2"
                 >
-                  {isExpanded ? 'Hide' : 'Details'}
+                  <span className="hidden sm:inline">{isExpanded ? 'Hide' : 'Details'}</span>
+                  <span className="sm:hidden">{isExpanded ? '−' : '+'}</span>
                 </Button>
               </div>
             </div>
@@ -1806,34 +1807,34 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 pr-2">
                       <h3 className="font-semibold text-sm text-gray-900 mb-1 capitalize">{categoryName}</h3>
                       <p className="text-xs text-gray-500 mb-1 truncate">{getCategorySummary(categoryName)}</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       {(() => {
                         const customImages = getImagesForCategory(categoryName)
                         const customSpecSheets = getSpecSheetsForCategory(categoryName)
                         return (
                           <>
                             {customImages.length > 1 && (
-                              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                                +{customImages.length - 1} more
+                              <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded hidden sm:inline">
+                                +{customImages.length - 1}
                               </span>
                             )}
                             {/* Spec Sheet Icon */}
                             {customSpecSheets.length > 0 && (
-                              <div className="flex items-center gap-1">
-                                <FileText className="w-4 h-4 text-blue-600" />
-                                <span className="text-xs text-blue-600">{customSpecSheets.length}</span>
+                              <div className="flex items-center gap-0.5" title={`${customSpecSheets.length} spec sheet${customSpecSheets.length > 1 ? 's' : ''}`}>
+                                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                <span className="text-xs text-blue-600 hidden sm:inline">{customSpecSheets.length}</span>
                               </div>
                             )}
                             {/* Spec Sheet Upload Button */}
                             <Label htmlFor={`custom-${categoryName}-spec-upload`} className="cursor-pointer">
-                              <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
+                              <Button variant="ghost" size="sm" className="text-xs h-7 px-1.5 sm:px-2" asChild>
                                 <span>
-                                  <FileText className="w-3 h-3 mr-1" />
-                                  Spec
+                                  <FileText className="w-3 h-3 sm:mr-1" />
+                                  <span className="hidden sm:inline">Add Spec</span>
                                 </span>
                               </Button>
                             </Label>
@@ -1852,15 +1853,16 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                         variant="ghost"
                         size="sm"
                         onClick={() => setExpandedCategory(expandedCategory === categoryName ? null : categoryName)}
-                        className="text-xs h-7"
+                        className="text-xs h-7 px-1.5 sm:px-2"
                       >
-                        {expandedCategory === categoryName ? 'Hide' : 'Details'}
+                        <span className="hidden sm:inline">{expandedCategory === categoryName ? 'Hide' : 'Details'}</span>
+                        <span className="sm:hidden">{expandedCategory === categoryName ? '−' : '+'}</span>
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteCustomCategory(categoryName)}
-                        className="text-xs h-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="text-xs h-7 px-1.5 sm:px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                         title="Delete category"
                       >
                         <Trash2 className="w-4 h-4" />
