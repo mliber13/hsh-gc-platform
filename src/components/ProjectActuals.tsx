@@ -3046,46 +3046,54 @@ function ActualEntryForm({
                     onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
                   />
                 </div>
+                
+                {!editingEntry?.isSplitEntry && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="isSplitInvoiceSub"
+                        checked={formData.isSplitInvoice}
+                        onChange={(e) => {
+                          setFormData((prev: typeof formData) => ({ ...prev, isSplitInvoice: e.target.checked }))
+                          if (!e.target.checked) {
+                            setSplitAllocations([])
+                          } else if (splitAllocations.length === 0) {
+                            // If editing and converting to split, initialize with current entry as one allocation
+                            if (editingEntry) {
+                              setSplitAllocations([{
+                                id: uuidv4(),
+                                category: editingEntry.category || '',
+                                tradeId: editingEntry.tradeId,
+                                subItemId: editingEntry.subItemId,
+                                amount: editingEntry.amount,
+                              }])
+                            } else {
+                              // Add one allocation by default for new entries
+                              addSplitAllocation()
+                            }
+                          }
+                        }}
+                        className="w-4 h-4"
+                      />
+                      <Label htmlFor="isSplitInvoiceSub" className="cursor-pointer">
+                        Split invoice across multiple items/categories
+                      </Label>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {editingEntry 
+                        ? 'Convert this invoice to a split invoice. The current entry will be replaced with a parent entry and split allocations.'
+                        : 'Use this when a single invoice contains work for multiple trades or categories'}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
-            {currentType === 'subcontractor' && !editingEntry?.isSplitEntry && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="isSplitInvoiceSub"
-                    checked={formData.isSplitInvoice}
-                    onChange={(e) => {
-                      setFormData((prev: typeof formData) => ({ ...prev, isSplitInvoice: e.target.checked }))
-                      if (!e.target.checked) {
-                        setSplitAllocations([])
-                      } else if (splitAllocations.length === 0) {
-                        // If editing and converting to split, initialize with current entry as one allocation
-                        if (editingEntry) {
-                          setSplitAllocations([{
-                            id: uuidv4(),
-                            category: editingEntry.category || '',
-                            tradeId: editingEntry.tradeId,
-                            subItemId: editingEntry.subItemId,
-                            amount: editingEntry.amount,
-                          }])
-                        } else {
-                          // Add one allocation by default for new entries
-                          addSplitAllocation()
-                        }
-                      }
-                    }}
-                    className="w-4 h-4"
-                  />
-                  <Label htmlFor="isSplitInvoiceSub" className="cursor-pointer">
-                    Split invoice across multiple items/categories
-                  </Label>
-                </div>
-                <p className="text-xs text-gray-500">
-                  {editingEntry 
-                    ? 'Convert this invoice to a split invoice. The current entry will be replaced with a parent entry and split allocations.'
-                    : 'Use this when a single invoice contains work for multiple trades or categories'}
+            {currentType === 'subcontractor' && editingEntry?.isSplitEntry && (
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ This is a split allocation entry. To edit the split invoice, edit the parent entry instead.
                 </p>
               </div>
             )}
