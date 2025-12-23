@@ -424,6 +424,11 @@ export interface SubcontractorEntry {
   contractDocumentUrl?: string
   insuranceCertUrl?: string
   
+  // Invoice splitting (for multi-category invoices)
+  isSplitEntry?: boolean    // True if this is part of a split invoice
+  splitParentId?: string    // ID of the original invoice entry
+  splitAllocation?: number  // Amount allocated to this entry
+  
   // Notes
   notes?: string
   createdAt: Date

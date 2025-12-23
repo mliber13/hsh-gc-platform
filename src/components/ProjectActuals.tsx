@@ -209,6 +209,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             tradeId: sub.tradeId,
             subItemId: sub.subItemId,
             subcontractorName: sub.subcontractor.name,
+            invoiceNumber: (sub as any).invoiceNumber,
+            isSplitEntry: (sub as any).isSplitEntry,
+            splitParentId: (sub as any).splitParentId,
+            splitAllocation: (sub as any).splitAllocation,
           })
         })
         
@@ -469,7 +473,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
   const handleDeleteEntry = async (entry: ActualEntry) => {
     // Check if this is a parent entry with split children
-    const splitChildren = entry.type === 'material' && entry.invoiceNumber
+    const splitChildren = ((entry.type === 'material' || entry.type === 'subcontractor') && entry.invoiceNumber)
       ? actualEntries.filter(e => e.isSplitEntry && e.splitParentId === entry.id)
       : []
     
@@ -484,7 +488,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     // Delete split children first
     if (splitChildren.length > 0) {
       for (const child of splitChildren) {
-        await deleteMaterialEntry_Hybrid(child.id)
+        if (child.type === 'material') {
+          await deleteMaterialEntry_Hybrid(child.id)
+        } else if (child.type === 'subcontractor') {
+          await deleteSubcontractorEntry_Hybrid(child.id)
+        }
       }
     }
 
@@ -1648,7 +1656,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 .filter(entry => !entry.isSplitEntry) // Only show parent entries and non-split entries
                 .map((entry) => {
                   const tradeName = entry.tradeId ? trades.find(t => t.id === entry.tradeId)?.name : null
-                  const splitChildren = entry.type === 'material' && entry.invoiceNumber
+                  const splitChildren = ((entry.type === 'material' || entry.type === 'subcontractor') && entry.invoiceNumber)
                     ? actualEntries.filter(e => e.isSplitEntry && e.splitParentId === entry.id)
                     : []
                   
@@ -1762,44 +1770,83 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           actualEntries={actualEntries}
           onSave={async (entry, splitAllocations) => {
             // Handle split invoices
-            if (entry.type === 'material' && splitAllocations && splitAllocations.length > 0) {
-              // Create parent entry first
-              const materialCategory = entry.category as Trade['category'] | undefined
-              const parentEntry = await addMaterialEntry_Hybrid(project.id, {
-                date: entry.date,
-                materialName: entry.description,
-                totalCost: entry.amount,
-                category: materialCategory,
-                tradeId: entry.tradeId,
-                subItemId: entry.subItemId,
-                vendor: entry.vendor,
-                invoiceNumber: entry.invoiceNumber,
-                group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
-                isSplitEntry: false,
-              })
-
-              if (!parentEntry) {
-                alert('Failed to create parent invoice entry')
-                return
-              }
-
-              // Create split entries for each allocation
-              for (const allocation of splitAllocations) {
-                const allocCategory = allocation.category as Trade['category'] | undefined
-                await addMaterialEntry_Hybrid(project.id, {
+            if ((entry.type === 'material' || entry.type === 'subcontractor') && splitAllocations && splitAllocations.length > 0) {
+              if (entry.type === 'material') {
+                // Create parent entry first
+                const materialCategory = entry.category as Trade['category'] | undefined
+                const parentEntry = await addMaterialEntry_Hybrid(project.id, {
                   date: entry.date,
-                  materialName: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
-                  totalCost: allocation.amount,
-                  category: allocCategory,
-                  tradeId: allocation.tradeId,
-                  subItemId: allocation.subItemId,
+                  materialName: entry.description,
+                  totalCost: entry.amount,
+                  category: materialCategory,
+                  tradeId: entry.tradeId,
+                  subItemId: entry.subItemId,
                   vendor: entry.vendor,
                   invoiceNumber: entry.invoiceNumber,
-                  group: allocCategory ? getCategoryGroup(allocCategory) : undefined,
-                  isSplitEntry: true,
-                  splitParentId: parentEntry.id,
-                  splitAllocation: allocation.amount,
+                  group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
+                  isSplitEntry: false,
                 })
+
+                if (!parentEntry) {
+                  alert('Failed to create parent invoice entry')
+                  return
+                }
+
+                // Create split entries for each allocation
+                for (const allocation of splitAllocations) {
+                  const allocCategory = allocation.category as Trade['category'] | undefined
+                  await addMaterialEntry_Hybrid(project.id, {
+                    date: entry.date,
+                    materialName: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
+                    totalCost: allocation.amount,
+                    category: allocCategory,
+                    tradeId: allocation.tradeId,
+                    subItemId: allocation.subItemId,
+                    vendor: entry.vendor,
+                    invoiceNumber: entry.invoiceNumber,
+                    group: allocCategory ? getCategoryGroup(allocCategory) : undefined,
+                    isSplitEntry: true,
+                    splitParentId: parentEntry.id,
+                    splitAllocation: allocation.amount,
+                  })
+                }
+              } else if (entry.type === 'subcontractor') {
+                // Create parent entry first
+                const subCategory = entry.category as Trade['category'] | undefined
+                const parentEntry = await addSubcontractorEntry_Hybrid(project.id, {
+                  subcontractorName: entry.subcontractorName || 'Unknown',
+                  scopeOfWork: entry.description,
+                  contractAmount: entry.amount,
+                  totalPaid: entry.amount,
+                  trade: subCategory as any,
+                  tradeId: entry.tradeId,
+                  subItemId: entry.subItemId,
+                  invoiceNumber: entry.invoiceNumber,
+                  isSplitEntry: false,
+                })
+
+                if (!parentEntry) {
+                  alert('Failed to create parent invoice entry')
+                  return
+                }
+
+                // Create split entries for each allocation
+                for (const allocation of splitAllocations) {
+                  const allocCategory = allocation.category as Trade['category'] | undefined
+                  await addSubcontractorEntry_Hybrid(project.id, {
+                    subcontractorName: entry.subcontractorName || 'Unknown',
+                    scopeOfWork: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
+                    contractAmount: allocation.amount,
+                    totalPaid: allocation.amount,
+                    trade: allocCategory as any,
+                    tradeId: allocation.tradeId,
+                    subItemId: allocation.subItemId,
+                    invoiceNumber: entry.invoiceNumber,
+                    isSplitEntry: true,
+                    splitParentId: parentEntry.id,
+                    splitAllocation: allocation.amount,
+                  })
+                }
               }
 
               // Reload actuals
@@ -1850,6 +1897,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     tradeId: sub.tradeId,
                     subItemId: sub.subItemId,
                     subcontractorName: sub.subcontractor.name,
+                    invoiceNumber: (sub as any).invoiceNumber,
+                    isSplitEntry: (sub as any).isSplitEntry,
+                    splitParentId: (sub as any).splitParentId,
+                    splitAllocation: (sub as any).splitAllocation,
                   })
                 })
                 
@@ -1865,55 +1916,105 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             // Save to storage based on entry type
             if (editingEntry) {
               // If converting to split invoice, delete original and create parent + splits
-              if (entry.type === 'material' && splitAllocations && splitAllocations.length > 0) {
-                // Delete the original entry
-                await deleteMaterialEntry_Hybrid(editingEntry.id)
-                
-                // Delete any existing split children
-                const existingSplitChildren = actualEntries.filter(
-                  e => e.isSplitEntry && e.splitParentId === editingEntry.id
-                )
-                for (const child of existingSplitChildren) {
-                  await deleteMaterialEntry_Hybrid(child.id)
-                }
-                
-                // Create parent entry
-                const materialCategory = entry.category as Trade['category'] | undefined
-                const parentEntry = await addMaterialEntry_Hybrid(project.id, {
-                  date: entry.date,
-                  materialName: entry.description,
-                  totalCost: entry.amount,
-                  category: materialCategory,
-                  tradeId: entry.tradeId,
-                  subItemId: entry.subItemId,
-                  vendor: entry.vendor,
-                  invoiceNumber: entry.invoiceNumber,
-                  group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
-                  isSplitEntry: false,
-                })
-
-                if (!parentEntry) {
-                  alert('Failed to create parent invoice entry')
-                  return
-                }
-
-                // Create split entries for each allocation
-                for (const allocation of splitAllocations) {
-                  const allocCategory = allocation.category as Trade['category'] | undefined
-                  await addMaterialEntry_Hybrid(project.id, {
+              if ((entry.type === 'material' || entry.type === 'subcontractor') && splitAllocations && splitAllocations.length > 0) {
+                if (entry.type === 'material') {
+                  // Delete the original entry
+                  await deleteMaterialEntry_Hybrid(editingEntry.id)
+                  
+                  // Delete any existing split children
+                  const existingSplitChildren = actualEntries.filter(
+                    e => e.isSplitEntry && e.splitParentId === editingEntry.id
+                  )
+                  for (const child of existingSplitChildren) {
+                    await deleteMaterialEntry_Hybrid(child.id)
+                  }
+                  
+                  // Create parent entry
+                  const materialCategory = entry.category as Trade['category'] | undefined
+                  const parentEntry = await addMaterialEntry_Hybrid(project.id, {
                     date: entry.date,
-                    materialName: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
-                    totalCost: allocation.amount,
-                    category: allocCategory,
-                    tradeId: allocation.tradeId,
-                    subItemId: allocation.subItemId,
+                    materialName: entry.description,
+                    totalCost: entry.amount,
+                    category: materialCategory,
+                    tradeId: entry.tradeId,
+                    subItemId: entry.subItemId,
                     vendor: entry.vendor,
                     invoiceNumber: entry.invoiceNumber,
-                    group: allocCategory ? getCategoryGroup(allocCategory) : undefined,
-                    isSplitEntry: true,
-                    splitParentId: parentEntry.id,
-                    splitAllocation: allocation.amount,
+                    group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
+                    isSplitEntry: false,
                   })
+
+                  if (!parentEntry) {
+                    alert('Failed to create parent invoice entry')
+                    return
+                  }
+
+                  // Create split entries for each allocation
+                  for (const allocation of splitAllocations) {
+                    const allocCategory = allocation.category as Trade['category'] | undefined
+                    await addMaterialEntry_Hybrid(project.id, {
+                      date: entry.date,
+                      materialName: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
+                      totalCost: allocation.amount,
+                      category: allocCategory,
+                      tradeId: allocation.tradeId,
+                      subItemId: allocation.subItemId,
+                      vendor: entry.vendor,
+                      invoiceNumber: entry.invoiceNumber,
+                      group: allocCategory ? getCategoryGroup(allocCategory) : undefined,
+                      isSplitEntry: true,
+                      splitParentId: parentEntry.id,
+                      splitAllocation: allocation.amount,
+                    })
+                  }
+                } else if (entry.type === 'subcontractor') {
+                  // Delete the original entry
+                  await deleteSubcontractorEntry_Hybrid(editingEntry.id)
+                  
+                  // Delete any existing split children
+                  const existingSplitChildren = actualEntries.filter(
+                    e => e.isSplitEntry && e.splitParentId === editingEntry.id
+                  )
+                  for (const child of existingSplitChildren) {
+                    await deleteSubcontractorEntry_Hybrid(child.id)
+                  }
+                  
+                  // Create parent entry
+                  const subCategory = entry.category as Trade['category'] | undefined
+                  const parentEntry = await addSubcontractorEntry_Hybrid(project.id, {
+                    subcontractorName: entry.subcontractorName || 'Unknown',
+                    scopeOfWork: entry.description,
+                    contractAmount: entry.amount,
+                    totalPaid: entry.amount,
+                    trade: subCategory as any,
+                    tradeId: entry.tradeId,
+                    subItemId: entry.subItemId,
+                    invoiceNumber: entry.invoiceNumber,
+                    isSplitEntry: false,
+                  })
+
+                  if (!parentEntry) {
+                    alert('Failed to create parent invoice entry')
+                    return
+                  }
+
+                  // Create split entries for each allocation
+                  for (const allocation of splitAllocations) {
+                    const allocCategory = allocation.category as Trade['category'] | undefined
+                    await addSubcontractorEntry_Hybrid(project.id, {
+                      subcontractorName: entry.subcontractorName || 'Unknown',
+                      scopeOfWork: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
+                      contractAmount: allocation.amount,
+                      totalPaid: allocation.amount,
+                      trade: allocCategory as any,
+                      tradeId: allocation.tradeId,
+                      subItemId: allocation.subItemId,
+                      invoiceNumber: entry.invoiceNumber,
+                      isSplitEntry: true,
+                      splitParentId: parentEntry.id,
+                      splitAllocation: allocation.amount,
+                    })
+                  }
                 }
 
                 // Reload actuals
@@ -1964,6 +2065,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       tradeId: sub.tradeId,
                       subItemId: sub.subItemId,
                       subcontractorName: sub.subcontractor.name,
+                      invoiceNumber: (sub as any).invoiceNumber,
+                      isSplitEntry: (sub as any).isSplitEntry,
+                      splitParentId: (sub as any).splitParentId,
+                      splitAllocation: (sub as any).splitAllocation,
                     })
                   })
                   
@@ -2358,6 +2463,8 @@ function ActualEntryForm({
     
     // Subcontractor
     subcontractorName: editingEntry?.subcontractorName || '',
+    invoiceNumber: editingEntry?.invoiceNumber || '',
+    isSplitInvoice: false,
   })
 
   const [splitAllocations, setSplitAllocations] = useState<SplitAllocation[]>([])
@@ -2373,7 +2480,7 @@ function ActualEntryForm({
 
   // Initialize split allocations when editing an entry that has split children
   React.useEffect(() => {
-    if (editingEntry && currentType === 'material' && editingEntry.invoiceNumber) {
+    if (editingEntry && (currentType === 'material' || currentType === 'subcontractor') && editingEntry.invoiceNumber) {
       // Check if this entry has split children
       const splitChildren = actualEntries.filter(
         e => e.isSplitEntry && e.splitParentId === editingEntry.id
@@ -2405,7 +2512,7 @@ function ActualEntryForm({
     e.preventDefault()
     
     // For split invoices, we'll handle it in the parent component
-    if (currentType === 'material' && formData.isSplitInvoice && splitAllocations.length > 0) {
+    if ((currentType === 'material' || currentType === 'subcontractor') && formData.isSplitInvoice && splitAllocations.length > 0) {
       // Validate allocations sum to total
       const totalAllocated = splitAllocations.reduce((sum, alloc) => sum + alloc.amount, 0)
       const totalAmount = parseFloat(formData.amount)
@@ -2451,7 +2558,8 @@ function ActualEntryForm({
         invoiceNumber: formData.invoiceNumber 
       }),
       ...(currentType === 'subcontractor' && { 
-        subcontractorName: formData.subcontractorName 
+        subcontractorName: formData.subcontractorName,
+        invoiceNumber: formData.invoiceNumber
       }),
     }
     
@@ -2892,41 +3000,256 @@ function ActualEntryForm({
             )}
 
             {currentType === 'subcontractor' && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="subcontractorName">Subcontractor</Label>
+                  {subcontractorOptions.length > 0 ? (
+                    <Select
+                      value={subcontractorSelectValue}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          subcontractorName: value === 'manual' ? '' : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select subcontractor..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">Type subcontractor name...</SelectItem>
+                        {subcontractorOptions.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      Add subcontractors in the Partner Directory to reuse them here.
+                    </p>
+                  )}
+                  <Input
+                    id="subcontractorName"
+                    placeholder="Type subcontractor name"
+                    value={formData.subcontractorName}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, subcontractorName: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="invoiceNumber">Invoice Number</Label>
+                  <Input
+                    id="invoiceNumber"
+                    placeholder="e.g., INV-12345"
+                    value={formData.invoiceNumber}
+                    onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
+                  />
+                </div>
+              </div>
+            )}
+
+            {currentType === 'subcontractor' && !editingEntry?.isSplitEntry && (
               <div className="space-y-2">
-                <Label htmlFor="subcontractorName">Subcontractor</Label>
-                {subcontractorOptions.length > 0 ? (
-                  <Select
-                    value={subcontractorSelectValue}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        subcontractorName: value === 'manual' ? '' : value,
-                      }))
-                    }
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="isSplitInvoiceSub"
+                    checked={formData.isSplitInvoice}
+                    onChange={(e) => {
+                      setFormData((prev: typeof formData) => ({ ...prev, isSplitInvoice: e.target.checked }))
+                      if (!e.target.checked) {
+                        setSplitAllocations([])
+                      } else if (splitAllocations.length === 0) {
+                        // If editing and converting to split, initialize with current entry as one allocation
+                        if (editingEntry) {
+                          setSplitAllocations([{
+                            id: uuidv4(),
+                            category: editingEntry.category || '',
+                            tradeId: editingEntry.tradeId,
+                            subItemId: editingEntry.subItemId,
+                            amount: editingEntry.amount,
+                          }])
+                        } else {
+                          // Add one allocation by default for new entries
+                          addSplitAllocation()
+                        }
+                      }
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <Label htmlFor="isSplitInvoiceSub" className="cursor-pointer">
+                    Split invoice across multiple items/categories
+                  </Label>
+                </div>
+                <p className="text-xs text-gray-500">
+                  {editingEntry 
+                    ? 'Convert this invoice to a split invoice. The current entry will be replaced with a parent entry and split allocations.'
+                    : 'Use this when a single invoice contains work for multiple trades or categories'}
+                </p>
+              </div>
+            )}
+
+            {currentType === 'subcontractor' && editingEntry?.isSplitEntry && (
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ This is a split allocation entry. To edit the split invoice, edit the parent entry instead.
+                </p>
+              </div>
+            )}
+
+            {currentType === 'subcontractor' && formData.isSplitInvoice && (
+              <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">Split Allocations</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={addSplitAllocation}
+                    className="text-xs"
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select subcontractor..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="manual">Type subcontractor name...</SelectItem>
-                      {subcontractorOptions.map((name) => (
-                        <SelectItem key={name} value={name}>
-                          {name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <p className="text-xs text-gray-500">
-                    Add subcontractors in the Partner Directory to reuse them here.
-                  </p>
-                )}
-                <Input
-                  id="subcontractorName"
-                  placeholder="Type subcontractor name"
-                  value={formData.subcontractorName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, subcontractorName: e.target.value }))}
-                />
+                    <PlusCircle className="w-3 h-3 mr-1" />
+                    Add Allocation
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {splitAllocations.map((allocation: SplitAllocation, index: number) => {
+                    const allocationTrades = allocation.category 
+                      ? trades.filter(t => t.category === allocation.category)
+                      : []
+                    const allocationSubItems = allocation.tradeId 
+                      ? (subItemsByTrade[allocation.tradeId] || [])
+                      : []
+                    
+                    return (
+                      <div key={allocation.id} className="p-3 bg-white border border-gray-300 rounded space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Allocation {index + 1}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeSplitAllocation(allocation.id)}
+                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Category *</Label>
+                            <Select
+                              value={allocation.category}
+                              onValueChange={(value) => updateSplitAllocation(allocation.id, { 
+                                category: value, 
+                                tradeId: undefined,
+                                subItemId: undefined 
+                              })}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select category..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {categories.map((category) => (
+                                  <SelectItem key={category} value={category}>
+                                    {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
+                                    {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Amount *</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={allocation.amount || ''}
+                              onChange={(e) => updateSplitAllocation(allocation.id, { 
+                                amount: parseFloat(e.target.value) || 0 
+                              })}
+                              className="h-8 text-xs"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                        {allocation.category && allocationTrades.length > 0 && (
+                          <div>
+                            <Label className="text-xs">Item (Optional)</Label>
+                            <Select
+                              value={allocation.tradeId || 'none'}
+                              onValueChange={(value) => updateSplitAllocation(allocation.id, { 
+                                tradeId: value === 'none' ? undefined : value,
+                                subItemId: undefined
+                              })}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select item..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Apply to entire category</SelectItem>
+                                {allocationTrades.map((trade) => (
+                                  <SelectItem key={trade.id} value={trade.id}>
+                                    {trade.name} ({trade.quantity} {trade.unit})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        {allocation.tradeId && allocationSubItems.length > 0 && (
+                          <div>
+                            <Label className="text-xs">Sub-Item (Optional)</Label>
+                            <Select
+                              value={allocation.subItemId || 'none'}
+                              onValueChange={(value) => updateSplitAllocation(allocation.id, { 
+                                subItemId: value === 'none' ? undefined : value
+                              })}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select sub-item..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Apply to entire item</SelectItem>
+                                {allocationSubItems.map((subItem) => (
+                                  <SelectItem key={subItem.id} value={subItem.id}>
+                                    {subItem.name} ({subItem.quantity} {subItem.unit})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                {(() => {
+                  const allocatedTotal = splitAllocations.reduce((sum: number, a: SplitAllocation) => sum + a.amount, 0)
+                  const remaining = parseFloat(formData.amount) - allocatedTotal
+                  return (
+                    <div className="pt-2 border-t border-blue-300">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-semibold">Total Allocated:</span>
+                        <span className={Math.abs(remaining) < 0.01 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                          {formatCurrency(allocatedTotal)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs mt-1">
+                        <span>Remaining:</span>
+                        <span className={Math.abs(remaining) < 0.01 ? 'text-green-600' : 'text-red-600'}>
+                          {formatCurrency(remaining)}
+                        </span>
+                      </div>
+                      {Math.abs(remaining) > 0.01 && (
+                        <p className="text-xs text-red-600 mt-1">
+                          ⚠️ Allocations must sum to the total invoice amount
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )}
 
