@@ -2458,11 +2458,11 @@ function ActualEntryForm({
     
     // Material
     vendor: editingEntry?.vendor || '',
-    invoiceNumber: editingEntry?.invoiceNumber || '',
-    isSplitInvoice: false,
     
     // Subcontractor
     subcontractorName: editingEntry?.subcontractorName || '',
+    
+    // Shared fields
     invoiceNumber: editingEntry?.invoiceNumber || '',
     isSplitInvoice: false,
   })
