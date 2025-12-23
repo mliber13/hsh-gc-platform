@@ -1976,36 +1976,85 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 return
               }
               
-              // Regular update (not converting to split)
-              if (entry.type === 'labor') {
-                await updateLaborEntry_Hybrid(entry.id, {
-                  date: entry.date,
-                  description: entry.description,
-                  totalCost: entry.amount,
-                  tradeId: entry.tradeId,
-                  subItemId: entry.subItemId,
-                })
-              } else if (entry.type === 'material') {
-                const materialCategory = entry.category as Trade['category'] | undefined
-                await updateMaterialEntry_Hybrid(entry.id, {
-                  date: entry.date,
-                  materialName: entry.description,
-                  totalCost: entry.amount,
-                  vendor: entry.vendor,
-                  invoiceNumber: entry.invoiceNumber,
-                  category: materialCategory,
-                  tradeId: entry.tradeId,
-                  subItemId: entry.subItemId,
-                  group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
-                })
-              } else if (entry.type === 'subcontractor') {
-                await updateSubcontractorEntry_Hybrid(entry.id, {
-                  subcontractorName: entry.subcontractorName || 'Unknown',
-                  scopeOfWork: entry.description,
-                  totalPaid: entry.amount,
-                  tradeId: entry.tradeId,
-                  subItemId: entry.subItemId,
-                })
+              // Check if type changed - if so, delete old and create new
+              const typeChanged = editingEntry && editingEntry.type !== entry.type
+              
+              if (typeChanged) {
+                // Delete the old entry
+                if (editingEntry.type === 'labor') {
+                  await deleteLaborEntry_Hybrid(editingEntry.id)
+                } else if (editingEntry.type === 'material') {
+                  await deleteMaterialEntry_Hybrid(editingEntry.id)
+                } else if (editingEntry.type === 'subcontractor') {
+                  await deleteSubcontractorEntry_Hybrid(editingEntry.id)
+                }
+                
+                // Create new entry with new type
+                if (entry.type === 'labor') {
+                  await addLaborEntry_Hybrid(project.id, {
+                    date: entry.date,
+                    description: entry.description,
+                    totalCost: entry.amount,
+                    trade: entry.category as any,
+                    tradeId: entry.tradeId,
+                    subItemId: entry.subItemId,
+                  })
+                } else if (entry.type === 'material') {
+                  const materialCategory = entry.category as Trade['category'] | undefined
+                  await addMaterialEntry_Hybrid(project.id, {
+                    date: entry.date,
+                    materialName: entry.description,
+                    totalCost: entry.amount,
+                    category: materialCategory,
+                    tradeId: entry.tradeId,
+                    subItemId: entry.subItemId,
+                    vendor: entry.vendor,
+                    invoiceNumber: entry.invoiceNumber,
+                    group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
+                  })
+                } else if (entry.type === 'subcontractor') {
+                  await addSubcontractorEntry_Hybrid(project.id, {
+                    subcontractorName: entry.subcontractorName || 'Unknown',
+                    scopeOfWork: entry.description,
+                    contractAmount: entry.amount,
+                    totalPaid: entry.amount,
+                    trade: entry.category as any,
+                    tradeId: entry.tradeId,
+                    subItemId: entry.subItemId,
+                  })
+                }
+              } else {
+                // Regular update (not converting to split, type unchanged)
+                if (entry.type === 'labor') {
+                  await updateLaborEntry_Hybrid(entry.id, {
+                    date: entry.date,
+                    description: entry.description,
+                    totalCost: entry.amount,
+                    tradeId: entry.tradeId,
+                    subItemId: entry.subItemId,
+                  })
+                } else if (entry.type === 'material') {
+                  const materialCategory = entry.category as Trade['category'] | undefined
+                  await updateMaterialEntry_Hybrid(entry.id, {
+                    date: entry.date,
+                    materialName: entry.description,
+                    totalCost: entry.amount,
+                    vendor: entry.vendor,
+                    invoiceNumber: entry.invoiceNumber,
+                    category: materialCategory,
+                    tradeId: entry.tradeId,
+                    subItemId: entry.subItemId,
+                    group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
+                  })
+                } else if (entry.type === 'subcontractor') {
+                  await updateSubcontractorEntry_Hybrid(entry.id, {
+                    subcontractorName: entry.subcontractorName || 'Unknown',
+                    scopeOfWork: entry.description,
+                    totalPaid: entry.amount,
+                    tradeId: entry.tradeId,
+                    subItemId: entry.subItemId,
+                  })
+                }
               }
             } else {
               // Add new entry
@@ -2288,6 +2337,9 @@ function ActualEntryForm({
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
+  // Allow changing type when editing
+  const [currentType, setCurrentType] = useState<EntryType>(type)
+
   const [formData, setFormData] = useState({
     date: editingEntry?.date ? new Date(editingEntry.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     amount: editingEntry?.amount?.toString() || '',
@@ -2310,9 +2362,18 @@ function ActualEntryForm({
 
   const [splitAllocations, setSplitAllocations] = useState<SplitAllocation[]>([])
 
+  // Update currentType when editingEntry changes
+  React.useEffect(() => {
+    if (editingEntry) {
+      setCurrentType(editingEntry.type)
+    } else {
+      setCurrentType(type)
+    }
+  }, [editingEntry, type])
+
   // Initialize split allocations when editing an entry that has split children
   React.useEffect(() => {
-    if (editingEntry && type === 'material' && editingEntry.invoiceNumber) {
+    if (editingEntry && currentType === 'material' && editingEntry.invoiceNumber) {
       // Check if this entry has split children
       const splitChildren = actualEntries.filter(
         e => e.isSplitEntry && e.splitParentId === editingEntry.id
@@ -2338,13 +2399,13 @@ function ActualEntryForm({
       setSplitAllocations([])
       setFormData(prev => ({ ...prev, isSplitInvoice: false }))
     }
-  }, [editingEntry, type, actualEntries])
+  }, [editingEntry, currentType, actualEntries])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
     // For split invoices, we'll handle it in the parent component
-    if (type === 'material' && formData.isSplitInvoice && splitAllocations.length > 0) {
+    if (currentType === 'material' && formData.isSplitInvoice && splitAllocations.length > 0) {
       // Validate allocations sum to total
       const totalAllocated = splitAllocations.reduce((sum, alloc) => sum + alloc.amount, 0)
       const totalAmount = parseFloat(formData.amount)
@@ -2357,7 +2418,7 @@ function ActualEntryForm({
       // Create a special entry that indicates this is a split invoice
       const entry: ActualEntry = {
         id: editingEntry?.id || uuidv4(),
-        type,
+        type: currentType,
         date: new Date(formData.date),
         amount: totalAmount,
         description: formData.description,
@@ -2376,7 +2437,7 @@ function ActualEntryForm({
     
     const entry: ActualEntry = {
       id: editingEntry?.id || uuidv4(),
-      type,
+      type: currentType,
       date: new Date(formData.date),
       amount: parseFloat(formData.amount),
       description: formData.description,
@@ -2384,12 +2445,12 @@ function ActualEntryForm({
       tradeId: formData.tradeId || undefined,
       subItemId: formData.subItemId || undefined,
       
-      ...(type === 'labor' && { payrollPeriod: formData.payrollPeriod }),
-      ...(type === 'material' && { 
+      ...(currentType === 'labor' && { payrollPeriod: formData.payrollPeriod }),
+      ...(currentType === 'material' && { 
         vendor: formData.vendor,
         invoiceNumber: formData.invoiceNumber 
       }),
-      ...(type === 'subcontractor' && { 
+      ...(currentType === 'subcontractor' && { 
         subcontractorName: formData.subcontractorName 
       }),
     }
@@ -2417,7 +2478,7 @@ function ActualEntryForm({
 
   const getTitle = () => {
     const action = editingEntry ? 'Edit' : 'Add'
-    switch (type) {
+    switch (currentType) {
       case 'labor': return `${action} Labor Entry`
       case 'material': return `${action} Material Entry`
       case 'subcontractor': return `${action} Subcontractor Entry`
@@ -2425,7 +2486,7 @@ function ActualEntryForm({
   }
 
   const getIcon = () => {
-    switch (type) {
+    switch (currentType) {
       case 'labor': return <Users className="w-5 h-5" />
       case 'material': return <Package className="w-5 h-5" />
       case 'subcontractor': return <HardHat className="w-5 h-5" />
@@ -2484,6 +2545,57 @@ function ActualEntryForm({
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Entry Type Selector - only show when editing */}
+            {editingEntry && (
+              <div>
+                <Label htmlFor="entryType">Entry Type *</Label>
+                <Select
+                  value={currentType}
+                  onValueChange={(value: EntryType) => {
+                    setCurrentType(value)
+                    // Clear type-specific fields when changing type
+                    if (value !== 'material') {
+                      setFormData(prev => ({ ...prev, vendor: '', invoiceNumber: '', isSplitInvoice: false }))
+                      setSplitAllocations([])
+                    }
+                    if (value !== 'subcontractor') {
+                      setFormData(prev => ({ ...prev, subcontractorName: '' }))
+                    }
+                    if (value !== 'labor') {
+                      setFormData(prev => ({ ...prev, payrollPeriod: '' }))
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="labor">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        Labor
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="material">
+                      <div className="flex items-center gap-2">
+                        <Package className="w-4 h-4" />
+                        Material
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="subcontractor">
+                      <div className="flex items-center gap-2">
+                        <HardHat className="w-4 h-4" />
+                        Subcontractor
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Changing the type will convert this entry. The original entry will be deleted and a new one created.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="date">Date *</Label>
@@ -2515,8 +2627,8 @@ function ActualEntryForm({
               <Input
                 id="description"
                 placeholder={
-                  type === 'labor' ? 'e.g., Payroll Week 11' :
-                  type === 'material' ? 'e.g., Lumber delivery' :
+                  currentType === 'labor' ? 'e.g., Payroll Week 11' :
+                  currentType === 'material' ? 'e.g., Lumber delivery' :
                   'e.g., Framing scope'
                 }
                 value={formData.description}
@@ -2525,7 +2637,7 @@ function ActualEntryForm({
               />
             </div>
 
-            {type === 'material' && (
+            {currentType === 'material' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="vendor">Supplier</Label>
@@ -2575,7 +2687,7 @@ function ActualEntryForm({
               </div>
             )}
 
-            {type === 'material' && !editingEntry?.isSplitEntry && (
+            {currentType === 'material' && !editingEntry?.isSplitEntry && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <input
@@ -2616,7 +2728,7 @@ function ActualEntryForm({
               </div>
             )}
 
-            {type === 'material' && editingEntry?.isSplitEntry && (
+            {currentType === 'material' && editingEntry?.isSplitEntry && (
               <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-sm text-yellow-800">
                   ⚠️ This is a split allocation entry. To edit the split invoice, edit the parent entry instead.
@@ -2624,7 +2736,7 @@ function ActualEntryForm({
               </div>
             )}
 
-              {type === 'material' && formData.isSplitInvoice && (
+              {currentType === 'material' && formData.isSplitInvoice && (
                 <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-semibold">Split Allocations</Label>
@@ -2779,7 +2891,7 @@ function ActualEntryForm({
               </div>
             )}
 
-            {type === 'subcontractor' && (
+            {currentType === 'subcontractor' && (
               <div className="space-y-2">
                 <Label htmlFor="subcontractorName">Subcontractor</Label>
                 {subcontractorOptions.length > 0 ? (
