@@ -2112,20 +2112,43 @@ export async function fetchProjectDocuments(projectId: string): Promise<ProjectD
   if (!isOnlineMode()) return []
 
   try {
-    const { data, error } = await supabase
+    // Try to select with file_path first (if migration has been applied)
+    let data: Array<{ id: any; project_id: any; name: any; type: any; file_url: any; file_path?: any; file_size: any; mime_type: any; category: any; tags: any; uploaded_by: any; uploaded_at: any; description: any; version: any; replaces_document_id: any }> | null = null
+    let error: any = null
+    
+    const firstResult = await supabase
       .from('project_documents')
-      .select('*')
+      .select('id, project_id, name, type, file_url, file_path, file_size, mime_type, category, tags, uploaded_by, uploaded_at, description, version, replaces_document_id')
       .eq('project_id', projectId)
       .order('uploaded_at', { ascending: false })
+    
+    data = firstResult.data as any
+    error = firstResult.error
+
+    // If file_path column doesn't exist yet, retry without it
+    if (error && (error.message?.includes("file_path") || error.code === "42703")) {
+      console.warn('file_path column not found, fetching without it')
+      const retryResult = await supabase
+        .from('project_documents')
+        .select('id, project_id, name, type, file_url, file_size, mime_type, category, tags, uploaded_by, uploaded_at, description, version, replaces_document_id')
+        .eq('project_id', projectId)
+        .order('uploaded_at', { ascending: false })
+      data = retryResult.data as any
+      error = retryResult.error
+    }
 
     if (error) {
       console.error('Error fetching project documents:', error)
       return []
     }
 
+    if (!data) {
+      return []
+    }
+
     // Generate signed URLs for documents if needed
     const documentsWithUrls = await Promise.all(
-      data.map(async (row) => {
+      data.map(async (row: any) => {
         let fileUrl = row.file_url
         let filePath = row.file_path
         
