@@ -2225,11 +2225,17 @@ export async function deleteProjectDocument(documentId: string): Promise<boolean
   try {
     // First, get the document to find the file path
     // Try selecting with file_path first (if migration has been applied)
-    let { data: doc, error: fetchError } = await supabase
+    let doc: { file_url: string; file_path?: string } | null = null
+    let fetchError: any = null
+    
+    const firstResult = await supabase
       .from('project_documents')
       .select('file_url, file_path')
       .eq('id', documentId)
       .single()
+    
+    doc = firstResult.data
+    fetchError = firstResult.error
 
     // If file_path column doesn't exist yet, retry with just file_url
     if (fetchError && fetchError.message?.includes("file_path") && fetchError.message?.includes("schema cache")) {
@@ -2239,7 +2245,7 @@ export async function deleteProjectDocument(documentId: string): Promise<boolean
         .select('file_url')
         .eq('id', documentId)
         .single()
-      doc = retryResult.data
+      doc = retryResult.data as { file_url: string; file_path?: string } | null
       fetchError = retryResult.error
     }
 
@@ -2249,7 +2255,7 @@ export async function deleteProjectDocument(documentId: string): Promise<boolean
     }
 
     // Prefer file_path from database, otherwise extract from URL
-    let filePath = (doc as any).file_path
+    let filePath = doc.file_path
     let bucketName = 'project-documents'
 
     if (!filePath) {
