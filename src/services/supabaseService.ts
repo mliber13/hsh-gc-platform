@@ -2230,57 +2230,41 @@ export async function deleteProjectDocument(documentId: string): Promise<boolean
 
   try {
     // First, get the document to find the file path
-    // Try selecting with file_path first (if migration has been applied)
-    let doc: { file_url: string; file_path?: string } | null = null
-    let fetchError: any = null
-    
-    const firstResult = await supabase
+    // Select without file_path for now (migration 025_add_file_path_to_project_documents.sql not applied yet)
+    const { data: doc, error: fetchError } = await supabase
       .from('project_documents')
-      .select('file_url, file_path')
+      .select('file_url')
       .eq('id', documentId)
       .single()
-    
-    doc = firstResult.data
-    fetchError = firstResult.error
-
-    // If file_path column doesn't exist yet, retry with just file_url
-    if (fetchError && fetchError.message?.includes("file_path") && fetchError.message?.includes("schema cache")) {
-      console.warn('file_path column not found, fetching without it')
-      const retryResult = await supabase
-        .from('project_documents')
-        .select('file_url')
-        .eq('id', documentId)
-        .single()
-      doc = retryResult.data as { file_url: string; file_path?: string } | null
-      fetchError = retryResult.error
-    }
 
     if (fetchError || !doc) {
       console.error('Error fetching document:', fetchError)
       return false
     }
 
-    // Prefer file_path from database, otherwise extract from URL
-    let filePath = doc.file_path
+    // Extract file path from URL (file_path column not available yet)
+    let filePath: string | null = null
     let bucketName = 'project-documents'
 
-    if (!filePath) {
-      // Try to extract from URL (legacy support)
-      const urlParts = doc.file_url?.split('/project-documents/')
+    // Try to extract from URL
+    if (doc.file_url) {
+      // Try primary bucket name first
+      const urlParts = doc.file_url.split('/project-documents/')
       if (urlParts && urlParts.length >= 2) {
-        filePath = urlParts[1]
+        // Remove query parameters if present (signed URLs have query params)
+        filePath = urlParts[1].split('?')[0]
       } else {
         // Try alternative bucket name
-        const altUrlParts = doc.file_url?.split('/project_documents/')
+        const altUrlParts = doc.file_url.split('/project_documents/')
         if (altUrlParts && altUrlParts.length >= 2) {
-          filePath = altUrlParts[1]
+          filePath = altUrlParts[1].split('?')[0]
           bucketName = 'project_documents'
         }
       }
     }
 
     if (!filePath) {
-      console.error('Could not determine file path for document:', documentId)
+      console.warn('Could not determine file path for document:', documentId, 'URL:', doc.file_url)
       // Continue to delete database record even if we can't delete from storage
     } else {
       // Delete from storage
