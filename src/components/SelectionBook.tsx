@@ -1226,18 +1226,41 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
   const handleMoveCategory = (category: string, direction: 'up' | 'down') => {
     const newSelections = { ...selections }
     if (!newSelections.categoryOrder) {
-      // Initialize with default order if not set
+      // Initialize with categories that have data or images
       const defaultCategories: string[] = []
-      if (selections.paint) defaultCategories.push('paint')
-      if (selections.flooring) defaultCategories.push('flooring')
-      if (selections.lighting) defaultCategories.push('lighting')
-      if (selections.cabinetry) defaultCategories.push('cabinetry')
-      if (selections.countertops) defaultCategories.push('countertop')
-      if (selections.fixtures) defaultCategories.push('fixture')
-      if (selections.hardware) defaultCategories.push('hardware')
+      const hasImagesForCategory = (cat: string): boolean => {
+        return (room.images?.some(img => img.category === cat) || 
+                room.specSheets?.some(sheet => sheet.category === cat)) || false
+      }
+      
+      if (selections.paint || hasImagesForCategory('paint')) defaultCategories.push('paint')
+      if (selections.flooring || hasImagesForCategory('flooring')) defaultCategories.push('flooring')
+      if (selections.lighting || hasImagesForCategory('lighting')) defaultCategories.push('lighting')
+      if (selections.cabinetry || hasImagesForCategory('cabinetry')) defaultCategories.push('cabinetry')
+      if (selections.countertops || hasImagesForCategory('countertop')) defaultCategories.push('countertop')
+      if (selections.fixtures || hasImagesForCategory('fixture')) defaultCategories.push('fixture')
+      if (selections.hardware || hasImagesForCategory('hardware')) defaultCategories.push('hardware')
+      
+      // Add custom categories from selections
       if (selections.customCategories) {
         defaultCategories.push(...Object.keys(selections.customCategories))
       }
+      
+      // Add custom categories from images/spec sheets
+      const defaultCategoryValues = ['paint', 'flooring', 'lighting', 'cabinetry', 'countertop', 'fixture', 'hardware', 'general']
+      const customFromImages = new Set<string>()
+      room.images?.forEach(img => {
+        if (img.category && !defaultCategoryValues.includes(img.category) && !selections.customCategories?.[img.category]) {
+          customFromImages.add(img.category)
+        }
+      })
+      room.specSheets?.forEach(sheet => {
+        if (sheet.category && !defaultCategoryValues.includes(sheet.category) && !selections.customCategories?.[sheet.category]) {
+          customFromImages.add(sheet.category)
+        }
+      })
+      defaultCategories.push(...Array.from(customFromImages))
+      
       newSelections.categoryOrder = defaultCategories
     }
     
@@ -1261,21 +1284,62 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
   const getOrderedCategories = (): Array<{ type: 'default' | 'custom'; value: string; label: string }> => {
     const defaultCategories: Array<{ type: 'default' | 'custom'; value: string; label: string }> = []
     
-    // Add default categories that have data
-    if (selections.paint) defaultCategories.push({ type: 'default', value: 'paint', label: 'Paint' })
-    if (selections.flooring) defaultCategories.push({ type: 'default', value: 'flooring', label: 'Flooring' })
-    if (selections.lighting) defaultCategories.push({ type: 'default', value: 'lighting', label: 'Lighting' })
-    if (selections.cabinetry) defaultCategories.push({ type: 'default', value: 'cabinetry', label: 'Cabinetry' })
-    if (selections.countertops) defaultCategories.push({ type: 'default', value: 'countertop', label: 'Countertops' })
-    if (selections.fixtures) defaultCategories.push({ type: 'default', value: 'fixture', label: 'Fixtures' })
-    if (selections.hardware) defaultCategories.push({ type: 'default', value: 'hardware', label: 'Hardware' })
+    // Helper to check if a category has images
+    const hasImagesForCategory = (category: string): boolean => {
+      return (room.images?.some(img => img.category === category) || 
+              room.specSheets?.some(sheet => sheet.category === category)) || false
+    }
     
-    // Add custom categories
+    // Add default categories that have data OR images
+    if (selections.paint || hasImagesForCategory('paint')) {
+      defaultCategories.push({ type: 'default', value: 'paint', label: 'Paint' })
+    }
+    if (selections.flooring || hasImagesForCategory('flooring')) {
+      defaultCategories.push({ type: 'default', value: 'flooring', label: 'Flooring' })
+    }
+    if (selections.lighting || hasImagesForCategory('lighting')) {
+      defaultCategories.push({ type: 'default', value: 'lighting', label: 'Lighting' })
+    }
+    if (selections.cabinetry || hasImagesForCategory('cabinetry')) {
+      defaultCategories.push({ type: 'default', value: 'cabinetry', label: 'Cabinetry' })
+    }
+    if (selections.countertops || hasImagesForCategory('countertop')) {
+      defaultCategories.push({ type: 'default', value: 'countertop', label: 'Countertops' })
+    }
+    if (selections.fixtures || hasImagesForCategory('fixture')) {
+      defaultCategories.push({ type: 'default', value: 'fixture', label: 'Fixtures' })
+    }
+    if (selections.hardware || hasImagesForCategory('hardware')) {
+      defaultCategories.push({ type: 'default', value: 'hardware', label: 'Hardware' })
+    }
+    
+    // Add custom categories (from selections or from images)
+    const customCategoryNames = new Set<string>()
+    
+    // Add custom categories from selections
     if (selections.customCategories) {
       Object.keys(selections.customCategories).forEach(catName => {
-        defaultCategories.push({ type: 'custom', value: catName, label: catName })
+        customCategoryNames.add(catName)
       })
     }
+    
+    // Add custom categories from images/spec sheets (categories that aren't default categories)
+    const defaultCategoryValues = ['paint', 'flooring', 'lighting', 'cabinetry', 'countertop', 'fixture', 'hardware', 'general']
+    room.images?.forEach(img => {
+      if (img.category && !defaultCategoryValues.includes(img.category)) {
+        customCategoryNames.add(img.category)
+      }
+    })
+    room.specSheets?.forEach(sheet => {
+      if (sheet.category && !defaultCategoryValues.includes(sheet.category)) {
+        customCategoryNames.add(sheet.category)
+      }
+    })
+    
+    // Add all custom categories
+    customCategoryNames.forEach(catName => {
+      defaultCategories.push({ type: 'custom', value: catName, label: catName })
+    })
     
     // If there's a custom order, use it; otherwise use default order
     if (selections.categoryOrder && selections.categoryOrder.length > 0) {
