@@ -234,8 +234,21 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
     }
   }
 
-  const handleViewRoom = (room: SelectionRoom) => {
-    setSelectedRoom(room)
+  const handleViewRoom = async (room: SelectionRoom) => {
+    // Reload the room data to ensure we have all images and latest data
+    const updatedBook = await getSelectionBookWithRooms(projectId)
+    if (updatedBook) {
+      const updatedRoom = updatedBook.rooms?.find(r => r.id === room.id)
+      if (updatedRoom) {
+        setSelectedRoom(updatedRoom)
+      } else {
+        // Fallback to the room passed in if not found
+        setSelectedRoom(room)
+      }
+    } else {
+      // Fallback to the room passed in if book reload fails
+      setSelectedRoom(room)
+    }
     setViewMode('room')
   }
 
@@ -855,7 +868,7 @@ const RoomView: React.FC<RoomViewProps> = ({
     }
 
     loadImageUrls()
-  }, [room.images, room.id]) // Also depend on room.id to force refresh when room changes
+  }, [room]) // Depend on entire room object to catch all changes
 
   const handleSave = async () => {
     setSaving(true)
