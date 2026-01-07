@@ -29,6 +29,8 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import {
@@ -1114,6 +1116,12 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
       notes: '',
     }
     
+    // Add to category order
+    if (!newSelections.categoryOrder) {
+      newSelections.categoryOrder = []
+    }
+    newSelections.categoryOrder.push(categoryName)
+    
     onChange(newSelections)
     setNewCategoryName('')
     setShowAddCategory(false)
@@ -1132,6 +1140,14 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
       }
     }
     
+    // Remove from category order
+    if (newSelections.categoryOrder) {
+      newSelections.categoryOrder = newSelections.categoryOrder.filter(cat => cat !== categoryName)
+      if (newSelections.categoryOrder.length === 0) {
+        delete newSelections.categoryOrder
+      }
+    }
+    
     onChange(newSelections)
     
     // Also delete images associated with this category
@@ -1141,6 +1157,134 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
     // Also delete spec sheets associated with this category
     const specSheetsToDelete = room.specSheets?.filter(sheet => sheet.category === categoryName) || []
     specSheetsToDelete.forEach(sheet => onSpecSheetDelete(sheet.id))
+  }
+
+  const handleDeleteDefaultCategory = (category: ImageCategory) => {
+    if (!confirm(`Delete category "${category}"? This will clear all selections and remove all associated images and spec sheets.`)) {
+      return
+    }
+    
+    const newSelections = { ...selections }
+    
+    // Clear the category data
+    switch (category) {
+      case 'paint':
+        delete newSelections.paint
+        break
+      case 'flooring':
+        delete newSelections.flooring
+        break
+      case 'lighting':
+        delete newSelections.lighting
+        break
+      case 'cabinetry':
+        delete newSelections.cabinetry
+        break
+      case 'countertop':
+        delete newSelections.countertops
+        break
+      case 'fixture':
+        delete newSelections.fixtures
+        break
+      case 'hardware':
+        delete newSelections.hardware
+        break
+    }
+    
+    // Remove from category order
+    if (newSelections.categoryOrder) {
+      newSelections.categoryOrder = newSelections.categoryOrder.filter(cat => cat !== category)
+      if (newSelections.categoryOrder.length === 0) {
+        delete newSelections.categoryOrder
+      }
+    }
+    
+    onChange(newSelections)
+    
+    // Also delete images associated with this category
+    const imagesToDelete = room.images?.filter(img => img.category === category) || []
+    imagesToDelete.forEach(img => onImageDelete(img.id))
+    
+    // Also delete spec sheets associated with this category
+    const specSheetsToDelete = room.specSheets?.filter(sheet => sheet.category === category) || []
+    specSheetsToDelete.forEach(sheet => onSpecSheetDelete(sheet.id))
+  }
+
+  const handleMoveCategory = (category: string, direction: 'up' | 'down') => {
+    const newSelections = { ...selections }
+    if (!newSelections.categoryOrder) {
+      // Initialize with default order if not set
+      const defaultCategories: string[] = []
+      if (selections.paint) defaultCategories.push('paint')
+      if (selections.flooring) defaultCategories.push('flooring')
+      if (selections.lighting) defaultCategories.push('lighting')
+      if (selections.cabinetry) defaultCategories.push('cabinetry')
+      if (selections.countertops) defaultCategories.push('countertop')
+      if (selections.fixtures) defaultCategories.push('fixture')
+      if (selections.hardware) defaultCategories.push('hardware')
+      if (selections.customCategories) {
+        defaultCategories.push(...Object.keys(selections.customCategories))
+      }
+      newSelections.categoryOrder = defaultCategories
+    }
+    
+    const order = [...newSelections.categoryOrder]
+    const index = order.indexOf(category)
+    if (index === -1) return
+    
+    if (direction === 'up' && index > 0) {
+      [order[index], order[index - 1]] = [order[index - 1], order[index]]
+    } else if (direction === 'down' && index < order.length - 1) {
+      [order[index], order[index + 1]] = [order[index + 1], order[index]]
+    } else {
+      return // Can't move further
+    }
+    
+    newSelections.categoryOrder = order
+    onChange(newSelections)
+  }
+
+  // Get ordered list of categories to display
+  const getOrderedCategories = (): Array<{ type: 'default' | 'custom'; value: string; label: string }> => {
+    const defaultCategories: Array<{ type: 'default' | 'custom'; value: string; label: string }> = []
+    
+    // Add default categories that have data
+    if (selections.paint) defaultCategories.push({ type: 'default', value: 'paint', label: 'Paint' })
+    if (selections.flooring) defaultCategories.push({ type: 'default', value: 'flooring', label: 'Flooring' })
+    if (selections.lighting) defaultCategories.push({ type: 'default', value: 'lighting', label: 'Lighting' })
+    if (selections.cabinetry) defaultCategories.push({ type: 'default', value: 'cabinetry', label: 'Cabinetry' })
+    if (selections.countertops) defaultCategories.push({ type: 'default', value: 'countertop', label: 'Countertops' })
+    if (selections.fixtures) defaultCategories.push({ type: 'default', value: 'fixture', label: 'Fixtures' })
+    if (selections.hardware) defaultCategories.push({ type: 'default', value: 'hardware', label: 'Hardware' })
+    
+    // Add custom categories
+    if (selections.customCategories) {
+      Object.keys(selections.customCategories).forEach(catName => {
+        defaultCategories.push({ type: 'custom', value: catName, label: catName })
+      })
+    }
+    
+    // If there's a custom order, use it; otherwise use default order
+    if (selections.categoryOrder && selections.categoryOrder.length > 0) {
+      const ordered: Array<{ type: 'default' | 'custom'; value: string; label: string }> = []
+      const categoryMap = new Map(defaultCategories.map(cat => [cat.value, cat]))
+      
+      // Add categories in the specified order
+      selections.categoryOrder.forEach(catValue => {
+        const cat = categoryMap.get(catValue)
+        if (cat) {
+          ordered.push(cat)
+          categoryMap.delete(catValue)
+        }
+      })
+      
+      // Add any remaining categories that weren't in the order
+      categoryMap.forEach(cat => ordered.push(cat))
+      
+      return ordered
+    }
+    
+    return defaultCategories
   }
 
   const updateCustomCategory = (categoryName: string, field: 'notes' | 'details', value: any) => {
@@ -1286,6 +1430,37 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                   className="hidden"
                   disabled={uploadingCategory === category}
                 />
+                {/* Reorder Buttons */}
+                <div className="flex flex-col gap-0.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleMoveCategory(category, 'up')}
+                    className="h-3 w-6 p-0"
+                    title="Move up"
+                    disabled={(() => {
+                      const ordered = getOrderedCategories()
+                      const index = ordered.findIndex(cat => cat.value === category)
+                      return index <= 0
+                    })()}
+                  >
+                    <ArrowUp className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleMoveCategory(category, 'down')}
+                    className="h-3 w-6 p-0"
+                    title="Move down"
+                    disabled={(() => {
+                      const ordered = getOrderedCategories()
+                      const index = ordered.findIndex(cat => cat.value === category)
+                      return index >= ordered.length - 1
+                    })()}
+                  >
+                    <ArrowDown className="w-3 h-3" />
+                  </Button>
+                </div>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1296,6 +1471,16 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                   <span className="sm:hidden">
                     {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </span>
+                </Button>
+                {/* Delete Button for Default Categories */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDeleteDefaultCategory(category)}
+                  className="text-xs h-7 px-1.5 sm:px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  title="Delete category"
+                >
+                  <Trash2 className="w-4 h-4" />
                 </Button>
               </div>
             </div>
@@ -1734,40 +1919,35 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
     )
   }
 
+  // Get ordered categories
+  const orderedCategories = getOrderedCategories()
+  
+  // Filter categories based on room type
+  const visibleCategories = orderedCategories.filter(cat => {
+    if (cat.type === 'custom') return true
+    // Show cabinetry and countertops only for kitchens, bathrooms, and custom rooms
+    if ((cat.value === 'cabinetry' || cat.value === 'countertop') && 
+        roomType !== 'kitchen' && roomType !== 'bathroom' && roomType !== 'custom') {
+      return false
+    }
+    // Show fixtures only for bathrooms and custom rooms
+    if (cat.value === 'fixture' && roomType !== 'bathroom' && roomType !== 'custom') {
+      return false
+    }
+    return true
+  })
+
   return (
     <div className="space-y-3">
-      {/* Paint */}
-      {renderCategoryCard('paint', 'Paint')}
-
-      {/* Flooring */}
-      {renderCategoryCard('flooring', 'Flooring')}
-
-      {/* Lighting */}
-      {renderCategoryCard('lighting', 'Lighting')}
-
-      {/* Cabinetry & Countertops (for kitchens and bathrooms) */}
-      {(roomType === 'kitchen' ||
-        roomType === 'bathroom' ||
-        roomType === 'custom') && (
-        <>
-          {renderCategoryCard('cabinetry', 'Cabinetry')}
-          {renderCategoryCard('countertop', 'Countertops')}
-        </>
-      )}
-
-      {/* Fixtures (for bathrooms) */}
-      {(roomType === 'bathroom' ||
-        roomType === 'custom') && (
-        renderCategoryCard('fixture', 'Fixtures')
-      )}
-
-      {/* Hardware */}
-      {renderCategoryCard('hardware', 'Hardware')}
-
-      {/* Custom Categories */}
-      {selections.customCategories && Object.keys(selections.customCategories).length > 0 && (
-        <>
-          {Object.entries(selections.customCategories).map(([categoryName, customCat]) => (
+      {/* Render categories in order */}
+      {visibleCategories.map(cat => {
+        if (cat.type === 'custom') {
+          // Custom category rendering (keep existing custom category rendering)
+          const categoryName = cat.value
+          const customCat = selections.customCategories?.[categoryName]
+          if (!customCat) return null
+          
+          return (
             <Card key={categoryName} className="overflow-hidden">
               <div className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors">
                 {/* Image Thumbnail */}
@@ -1853,6 +2033,37 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                           </>
                         )
                       })()}
+                      {/* Reorder Buttons */}
+                      <div className="flex flex-col gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMoveCategory(categoryName, 'up')}
+                          className="h-3 w-6 p-0"
+                          title="Move up"
+                          disabled={(() => {
+                            const ordered = getOrderedCategories()
+                            const index = ordered.findIndex(cat => cat.value === categoryName)
+                            return index <= 0
+                          })()}
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMoveCategory(categoryName, 'down')}
+                          className="h-3 w-6 p-0"
+                          title="Move down"
+                          disabled={(() => {
+                            const ordered = getOrderedCategories()
+                            const index = ordered.findIndex(cat => cat.value === categoryName)
+                            return index >= ordered.length - 1
+                          })()}
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </Button>
+                      </div>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -2026,9 +2237,12 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
                 </div>
               )}
             </Card>
-          ))}
-        </>
-      )}
+          )
+        } else {
+          // Default category rendering
+          return renderCategoryCard(cat.value as ImageCategory, cat.label)
+        }
+      })}
 
       {/* Add Custom Category */}
       {showAddCategory ? (

@@ -115,6 +115,7 @@ export interface RoomSelections {
   fixtures?: FixtureSelection
   hardware?: HardwareSelection
   customCategories?: Record<string, CustomCategorySelection> // Key is the category name
+  categoryOrder?: string[] // Order of categories (default + custom)
   notes?: string
 }
 
