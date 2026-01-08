@@ -26,9 +26,14 @@ import {
   Clock,
   XCircle,
   User as UserIcon,
+  Edit,
+  Trash2,
 } from 'lucide-react'
-import { getFeedback } from '@/services/feedbackService'
-import type { Feedback, FeedbackType } from '@/types/feedback'
+import { getFeedback, updateFeedback, deleteFeedback } from '@/services/feedbackService'
+import { getCurrentUserProfile } from '@/services/userService'
+import { Label } from './ui/label'
+import { Textarea } from './ui/textarea'
+import type { Feedback, FeedbackType, FeedbackStatus } from '@/types/feedback'
 import {
   FEEDBACK_TYPE_LABELS,
   FEEDBACK_STATUS_LABELS,
@@ -48,10 +53,58 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [editingFeedback, setEditingFeedback] = useState<Feedback | null>(null)
+  const [adminNotes, setAdminNotes] = useState('')
+  const [selectedStatus, setSelectedStatus] = useState<FeedbackStatus>('new')
 
   useEffect(() => {
     loadFeedback()
+    loadUserProfile()
   }, [])
+
+  const loadUserProfile = async () => {
+    if (user) {
+      const profile = await getCurrentUserProfile()
+      if (profile) {
+        setIsAdmin(profile.role === 'admin')
+      }
+    }
+  }
+
+  const handleUpdateStatus = async (feedbackId: string, status: FeedbackStatus) => {
+    const success = await updateFeedback(feedbackId, { status })
+    if (success) {
+      await loadFeedback()
+      setEditingFeedback(null)
+    } else {
+      alert('Failed to update feedback status')
+    }
+  }
+
+  const handleUpdateNotes = async (feedbackId: string) => {
+    const success = await updateFeedback(feedbackId, { admin_notes: adminNotes })
+    if (success) {
+      await loadFeedback()
+      setEditingFeedback(null)
+      setAdminNotes('')
+    } else {
+      alert('Failed to update admin response')
+    }
+  }
+
+  const handleDelete = async (feedbackId: string) => {
+    if (!confirm('Are you sure you want to delete this feedback?')) {
+      return
+    }
+
+    const success = await deleteFeedback(feedbackId)
+    if (success) {
+      await loadFeedback()
+    } else {
+      alert('Failed to delete feedback')
+    }
+  }
 
   // Expose refresh function to parent
   useEffect(() => {
@@ -70,9 +123,8 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
     setLoading(true)
     try {
       const allFeedback = await getFeedback()
-      // Filter to only show current user's feedback
-      const myFeedback = allFeedback.filter((item) => item.submitted_by === user?.id)
-      setFeedback(myFeedback)
+      // Show all feedback for transparency
+      setFeedback(allFeedback)
     } catch (error) {
       console.error('Error loading feedback:', error)
     } finally {
@@ -258,6 +310,29 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
                       )}
                     </div>
                   </div>
+                  {isAdmin && (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingFeedback(item)
+                          setAdminNotes(item.admin_notes || '')
+                          setSelectedStatus(item.status)
+                        }}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(item.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -278,6 +353,69 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
                       <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded mt-1 whitespace-pre-wrap">
                         {item.admin_notes}
                       </p>
+                    </div>
+                  )}
+
+                  {isAdmin && editingFeedback?.id === item.id && (
+                    <div className="border-t pt-4 space-y-4">
+                      <div>
+                        <Label htmlFor="status">Update Status</Label>
+                        <Select
+                          value={selectedStatus}
+                          onValueChange={(value) => setSelectedStatus(value as FeedbackStatus)}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(FEEDBACK_STATUS_LABELS).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          className="mt-2"
+                          onClick={() => handleUpdateStatus(item.id, selectedStatus)}
+                        >
+                          Update Status
+                        </Button>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="admin_notes">Admin Response</Label>
+                        <p className="text-xs text-gray-500 mb-1">
+                          This response will be visible to all team members (transparent system)
+                        </p>
+                        <Textarea
+                          id="admin_notes"
+                          value={adminNotes}
+                          onChange={(e) => setAdminNotes(e.target.value)}
+                          placeholder="Add your response or update on this feedback..."
+                          className="mt-1"
+                          rows={4}
+                        />
+                        <Button
+                          size="sm"
+                          className="mt-2"
+                          onClick={() => handleUpdateNotes(item.id)}
+                        >
+                          Save Response
+                        </Button>
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingFeedback(null)
+                          setAdminNotes('')
+                        }}
+                      >
+                        Cancel
+                      </Button>
                     </div>
                   )}
                 </div>

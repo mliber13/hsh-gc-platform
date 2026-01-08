@@ -37,7 +37,6 @@ import { PartnerDirectory } from './components/PartnerDirectory'
 import { SOWManagement } from './components/SOWManagement'
 import { DealPipeline } from './components/DealPipeline'
 import { FeedbackForm } from './components/FeedbackForm'
-import { FeedbackManagement } from './components/FeedbackManagement'
 import { MyFeedback } from './components/MyFeedback'
 
 type View =
@@ -60,7 +59,6 @@ type View =
   | 'partner-directory'
   | 'sow-management'
   | 'deal-pipeline'
-  | 'feedback-management'
   | 'my-feedback'
 
 function App() {
@@ -243,9 +241,6 @@ function App() {
     setCurrentView('deal-pipeline')
   }
 
-  const handleViewFeedbackManagement = () => {
-    setCurrentView('feedback-management')
-  }
 
   const handleOpenFeedbackForm = () => {
     setShowFeedbackForm(true)
@@ -419,28 +414,6 @@ function App() {
                       Feedback & Requests
                     </button>
                     <button
-                      onClick={() => {
-                        handleOpenFeedbackForm()
-                        setShowUserMenu(false)
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      Submit Feedback
-                    </button>
-                    {userProfile?.role === 'admin' && (
-                      <button
-                        onClick={() => {
-                          handleViewFeedbackManagement()
-                          setShowUserMenu(false)
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                        Manage Feedback
-                      </button>
-                    )}
-                    <button
                       onClick={handleBackupData}
                       disabled={isBackingUp}
                       className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -597,14 +570,6 @@ function App() {
           <DealPipeline 
             onBack={handleBackToDashboard}
             onViewProjects={handleBackToDashboard}
-          />
-        </div>
-      )}
-
-      {currentView === 'feedback-management' && (
-        <div className="container mx-auto py-6 px-4">
-          <FeedbackManagement
-            onBack={handleBackToDashboard}
           />
         </div>
       )}
