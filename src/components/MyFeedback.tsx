@@ -1,0 +1,271 @@
+// ============================================================================
+// My Feedback Component
+// ============================================================================
+//
+// User-facing view to see their own submitted feedback and status
+//
+
+import React, { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select'
+import {
+  ArrowLeft,
+  Search,
+  Bug,
+  Lightbulb,
+  MessageSquare,
+  CheckCircle2,
+  Clock,
+  XCircle,
+} from 'lucide-react'
+import { getFeedback } from '@/services/feedbackService'
+import type { Feedback, FeedbackType } from '@/types/feedback'
+import {
+  FEEDBACK_TYPE_LABELS,
+  FEEDBACK_STATUS_LABELS,
+  FEEDBACK_STATUS_COLORS,
+} from '@/types/feedback'
+import { useAuth } from '@/contexts/AuthContext'
+
+interface MyFeedbackProps {
+  onBack: () => void
+  onNewFeedback: () => void
+}
+
+export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
+  const { user } = useAuth()
+  const [feedback, setFeedback] = useState<Feedback[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
+
+  useEffect(() => {
+    loadFeedback()
+  }, [])
+
+  // Expose refresh function to parent
+  useEffect(() => {
+    // This will be called when component mounts or when parent triggers refresh
+    const handleRefresh = () => {
+      loadFeedback()
+    }
+    // Store refresh function on window for parent to call if needed
+    ;(window as any).refreshMyFeedback = handleRefresh
+    return () => {
+      delete (window as any).refreshMyFeedback
+    }
+  }, [])
+
+  const loadFeedback = async () => {
+    setLoading(true)
+    try {
+      const allFeedback = await getFeedback()
+      // Filter to only show current user's feedback
+      const myFeedback = allFeedback.filter((item) => item.submitted_by === user?.id)
+      setFeedback(myFeedback)
+    } catch (error) {
+      console.error('Error loading feedback:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filteredFeedback = feedback.filter((item) => {
+    const matchesSearch =
+      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.description.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesStatus = statusFilter === 'all' || item.status === statusFilter
+    const matchesType = typeFilter === 'all' || item.type === typeFilter
+    return matchesSearch && matchesStatus && matchesType
+  })
+
+  const getTypeIcon = (type: FeedbackType) => {
+    switch (type) {
+      case 'bug':
+        return <Bug className="w-4 h-4" />
+      case 'feature-request':
+        return <Lightbulb className="w-4 h-4" />
+      default:
+        return <MessageSquare className="w-4 h-4" />
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle2 className="w-4 h-4 text-green-600" />
+      case 'rejected':
+        return <XCircle className="w-4 h-4 text-red-600" />
+      default:
+        return <Clock className="w-4 h-4 text-yellow-600" />
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={onBack}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">My Feedback</h1>
+            <p className="text-gray-500 mt-1">View your submitted feedback and feature requests</p>
+          </div>
+        </div>
+        <Button onClick={onNewFeedback}>
+          <MessageSquare className="w-4 h-4 mr-2" />
+          New Feedback
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="search" className="text-sm font-medium text-gray-700">Search</label>
+              <div className="relative mt-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  id="search"
+                  placeholder="Search your feedback..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="status" className="text-sm font-medium text-gray-700">Status</label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {Object.entries(FEEDBACK_STATUS_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label htmlFor="type" className="text-sm font-medium text-gray-700">Type</label>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {Object.entries(FEEDBACK_TYPE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Feedback List */}
+      {loading ? (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0E79C9]"></div>
+              <p className="mt-4 text-gray-500">Loading your feedback...</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : filteredFeedback.length === 0 ? (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-600 text-lg mb-2">
+                {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
+                  ? 'No feedback found matching your filters'
+                  : 'You haven\'t submitted any feedback yet'}
+              </p>
+              <p className="text-gray-500 mb-6">
+                {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
+                  ? 'Try adjusting your search or filters'
+                  : 'Share your ideas, report bugs, or request features'}
+              </p>
+              <Button onClick={onNewFeedback}>
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Submit Your First Feedback
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {filteredFeedback.map((item) => (
+            <Card key={item.id}>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      {getTypeIcon(item.type)}
+                      <CardTitle className="text-lg">{item.title}</CardTitle>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${FEEDBACK_STATUS_COLORS[item.status]}`}>
+                        {getStatusIcon(item.status)}
+                        <span className="ml-1">{FEEDBACK_STATUS_LABELS[item.status]}</span>
+                      </span>
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        {FEEDBACK_TYPE_LABELS[item.type]}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      Submitted {formatDate(item.submitted_at)}
+                      {item.resolved_at && (
+                        <span className="ml-2">
+                          • Resolved {formatDate(item.resolved_at)}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Description</label>
+                  <p className="text-sm text-gray-900 whitespace-pre-wrap mt-1">
+                    {item.description}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+

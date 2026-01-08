@@ -38,6 +38,7 @@ import { SOWManagement } from './components/SOWManagement'
 import { DealPipeline } from './components/DealPipeline'
 import { FeedbackForm } from './components/FeedbackForm'
 import { FeedbackManagement } from './components/FeedbackManagement'
+import { MyFeedback } from './components/MyFeedback'
 
 type View =
   | 'dashboard'
@@ -60,6 +61,7 @@ type View =
   | 'sow-management'
   | 'deal-pipeline'
   | 'feedback-management'
+  | 'my-feedback'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -408,6 +410,16 @@ function App() {
                     )}
                     <button
                       onClick={() => {
+                        setCurrentView('my-feedback')
+                        setShowUserMenu(false)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      My Feedback
+                    </button>
+                    <button
+                      onClick={() => {
                         handleOpenFeedbackForm()
                         setShowUserMenu(false)
                       }}
@@ -597,12 +609,30 @@ function App() {
         </div>
       )}
 
+      {currentView === 'my-feedback' && (
+        <div className="container mx-auto py-6 px-4">
+          <MyFeedback
+            onBack={handleBackToDashboard}
+            onNewFeedback={handleOpenFeedbackForm}
+          />
+        </div>
+      )}
+
       {showFeedbackForm && (
         <FeedbackForm
           onClose={() => setShowFeedbackForm(false)}
           onSuccess={() => {
             setShowFeedbackForm(false)
-            alert('✅ Thank you for your feedback! We\'ll review it soon.')
+            // If on my-feedback view, refresh the list
+            if (currentView === 'my-feedback') {
+              // Trigger refresh if function exists
+              if ((window as any).refreshMyFeedback) {
+                (window as any).refreshMyFeedback()
+              }
+              alert('✅ Thank you for your feedback! We\'ll review it soon.')
+            } else {
+              alert('✅ Thank you for your feedback! We\'ll review it soon.')
+            }
           }}
         />
       )}
