@@ -35,7 +35,7 @@ export interface BackupData {
     formTemplates: any[]
     formResponses: any[]
     quoteRequests: any[]
-    quoteResponses: any[]
+    submittedQuotes: any[]
     profile: any
   }
 }
@@ -114,7 +114,7 @@ export async function exportAllData(): Promise<BackupData> {
     formTemplatesRes,
     formResponsesRes,
     quoteRequestsRes,
-    quoteResponsesRes,
+    submittedQuotesRes,
   ] = await Promise.all([
     supabase.from('projects').select('*').order('created_at', { ascending: false }),
     supabase.from('estimates').select('*').order('created_at', { ascending: false }),
@@ -138,7 +138,7 @@ export async function exportAllData(): Promise<BackupData> {
     orgFilter('form_templates'),
     orgFilter('form_responses', 'responded_at'), // form_responses uses responded_at instead of created_at
     orgFilterUUID('quote_requests'), // quote_requests uses UUID for organization_id
-    orgFilterUUID('quote_responses'), // quote_responses uses UUID for organization_id (if it exists)
+    supabase.from('submitted_quotes').select('*').order('created_at', { ascending: false }), // submitted_quotes doesn't have organization_id, linked via quote_request_id
   ])
 
   // Check for errors
@@ -165,7 +165,7 @@ export async function exportAllData(): Promise<BackupData> {
     formTemplatesRes.error,
     formResponsesRes.error,
     quoteRequestsRes.error,
-    quoteResponsesRes.error,
+    submittedQuotesRes.error,
   ].filter(Boolean)
 
   if (errors.length > 0) {
@@ -201,7 +201,7 @@ export async function exportAllData(): Promise<BackupData> {
       formTemplates: formTemplatesRes.data || [],
       formResponses: formResponsesRes.data || [],
       quoteRequests: quoteRequestsRes.data || [],
-      quoteResponses: quoteResponsesRes.data || [],
+      submittedQuotes: submittedQuotesRes.data || [],
       profile: profile,
     },
   }
@@ -229,7 +229,7 @@ export async function exportAllData(): Promise<BackupData> {
   console.log(`   Form Templates: ${backup.data.formTemplates.length}`)
   console.log(`   Form Responses: ${backup.data.formResponses.length}`)
   console.log(`   Quote Requests: ${backup.data.quoteRequests.length}`)
-  console.log(`   Quote Responses: ${backup.data.quoteResponses.length}`)
+  console.log(`   Submitted Quotes: ${backup.data.submittedQuotes.length}`)
 
   return backup
 }
