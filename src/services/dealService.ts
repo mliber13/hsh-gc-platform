@@ -160,7 +160,7 @@ export async function createDeal(input: CreateDealInput): Promise<Deal | null> {
         custom_type: input.custom_type || null,
         projected_cost: input.projected_cost || null,
         estimated_duration_months: input.estimated_duration_months || null,
-        expected_start_date: input.expected_start_date || null,
+        expected_start_date: input.expected_start_date === '' || input.expected_start_date === null || input.expected_start_date === undefined ? null : input.expected_start_date,
         status: input.status || 'early-stage',
         custom_status: input.custom_status || null,
         contact: input.contact || null,
@@ -217,7 +217,10 @@ export async function updateDeal(dealId: string, updates: UpdateDealInput): Prom
     if (updates.custom_type !== undefined) updateData.custom_type = updates.custom_type
     if (updates.projected_cost !== undefined) updateData.projected_cost = updates.projected_cost
     if (updates.estimated_duration_months !== undefined) updateData.estimated_duration_months = updates.estimated_duration_months
-    if (updates.expected_start_date !== undefined) updateData.expected_start_date = updates.expected_start_date
+    if (updates.expected_start_date !== undefined) {
+      // Convert empty string to null for timestamp field
+      updateData.expected_start_date = updates.expected_start_date === '' || updates.expected_start_date === null ? null : updates.expected_start_date
+    }
     if (updates.status !== undefined) updateData.status = updates.status
     if (updates.custom_status !== undefined) updateData.custom_status = updates.custom_status
     if (updates.contact !== undefined) updateData.contact = updates.contact
