@@ -538,6 +538,23 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                     <p className="text-xs text-gray-500">Manage default rates</p>
                   </div>
                 </button>
+                {onOpenDealPipeline && (
+                  <button
+                    onClick={() => {
+                      onOpenDealPipeline()
+                      setShowMobileActions(false)
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
+                  >
+                    <div className="bg-[#0E79C9] text-white rounded-full p-2">
+                      <Building2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Deal Pipeline</p>
+                      <p className="text-xs text-gray-500">Manage deals before projects</p>
+                    </div>
+                  </button>
+                )}
                 {canCreate && (
                   <button
                     onClick={() => {
