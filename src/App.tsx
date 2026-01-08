@@ -69,6 +69,7 @@ function App() {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [isBackingUp, setIsBackingUp] = useState(false)
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false)
 
   // Load user profile when authenticated
   useEffect(() => {
