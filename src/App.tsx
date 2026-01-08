@@ -35,6 +35,7 @@ import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2,
 import { backupAllData } from './services/backupService'
 import { PartnerDirectory } from './components/PartnerDirectory'
 import { SOWManagement } from './components/SOWManagement'
+import { DealPipeline } from './components/DealPipeline'
 
 type View =
   | 'dashboard'
@@ -55,6 +56,7 @@ type View =
   | 'quote-review'
   | 'partner-directory'
   | 'sow-management'
+  | 'deal-pipeline'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -229,6 +231,10 @@ function App() {
 
   const handleViewQuotes = () => {
     setCurrentView('quote-review')
+  }
+
+  const handleViewDealPipeline = () => {
+    setCurrentView('deal-pipeline')
   }
 
   const handleOpenPlanLibrary = () => {
@@ -416,6 +422,7 @@ function App() {
             onSelectProject={handleSelectProject}
             onOpenPlanLibrary={handleOpenPlanLibrary}
             onOpenItemLibrary={handleOpenItemLibrary}
+            onOpenDealPipeline={handleViewDealPipeline}
           />
         )}
 
@@ -537,6 +544,15 @@ function App() {
         <SOWManagement
           onBack={handleBackToDashboard}
         />
+      )}
+
+      {currentView === 'deal-pipeline' && (
+        <div className="container mx-auto py-6 px-4">
+          <DealPipeline 
+            onBack={handleBackToDashboard}
+            onViewProjects={handleBackToDashboard}
+          />
+        </div>
       )}
 
       {currentView === 'data-migration' && (

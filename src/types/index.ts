@@ -192,6 +192,18 @@ export type {
   FormattedSOW,
 } from './sow'
 
+// Export deal pipeline types
+export type {
+  Deal,
+  DealNote,
+  DealContact,
+  DealType,
+  DealStatus,
+  CreateDealInput,
+  UpdateDealInput,
+  ConvertDealToProjectsInput,
+} from './deal'
+
 // Export all API types
 export type {
   // Generic responses

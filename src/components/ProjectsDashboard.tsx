@@ -15,7 +15,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Download, Upload, Eye, FileSpreadsheet, ChevronDown } from 'lucide-react'
+import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Download, Upload, Eye, FileSpreadsheet, ChevronDown, TrendingUp } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import ImportEstimate from './ImportEstimate'
 
@@ -24,6 +24,7 @@ interface ProjectsDashboardProps {
   onSelectProject: (project: Project) => void
   onOpenPlanLibrary: () => void
   onOpenItemLibrary: () => void
+  onOpenDealPipeline?: () => void
 }
 
 interface ProjectWithStats extends Project {
@@ -32,7 +33,7 @@ interface ProjectWithStats extends Project {
   tradeCount?: number
 }
 
-export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlanLibrary, onOpenItemLibrary }: ProjectsDashboardProps) {
+export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlanLibrary, onOpenItemLibrary, onOpenDealPipeline }: ProjectsDashboardProps) {
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [showImportEstimate, setShowImportEstimate] = useState(false)
@@ -311,6 +312,25 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
               </button>
             </CardContent>
           </Card>
+
+          {onOpenDealPipeline && (
+            <Card className="bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] text-white hover:shadow-xl transition-shadow cursor-pointer border-none hidden sm:block">
+              <CardContent className="pt-6">
+                <button
+                  onClick={onOpenDealPipeline}
+                  className="w-full text-left"
+                >
+                  <div className="flex flex-col items-center justify-center py-3 sm:py-8">
+                    <div className="bg-white/20 rounded-full p-2 sm:p-4 mb-2 sm:mb-4">
+                      <TrendingUp className="w-8 sm:w-12 h-8 sm:h-12" />
+                    </div>
+                    <h3 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">Deal Pipeline</h3>
+                    <p className="text-white/80 text-center text-sm sm:text-base hidden sm:block">Manage deals before they become projects</p>
+                  </div>
+                </button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Stats Cards */}
           <Card className="bg-white shadow-lg">
