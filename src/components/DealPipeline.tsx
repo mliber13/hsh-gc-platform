@@ -34,6 +34,7 @@ import {
   XCircle,
   PlusCircle,
 } from 'lucide-react'
+import hshLogo from '/HSH Contractor Logo - Color.png'
 import {
   fetchDeals,
   fetchDealById,
@@ -213,29 +214,38 @@ export function DealPipeline({ onBack, onViewProjects }: DealPipelineProps) {
 
   // List view
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Deal Pipeline</h1>
-          <p className="text-gray-500 mt-1">Manage deals before they become projects</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {onBack && (
-            <Button variant="outline" onClick={onBack}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-          )}
-          <Button onClick={handleCreateDeal}>
-            <Plus className="w-4 h-4 mr-2" />
-            New Deal
-          </Button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20 sm:pb-0">
+      <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
+        <div className="w-full space-y-4 sm:space-y-6">
+          {/* Header */}
+          <header className="bg-white shadow-md border-b border-gray-200">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center space-x-3 sm:space-x-4">
+                  <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto" />
+                  <div>
+                    <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Deal Pipeline</h1>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-1">Manage deals before they become projects</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  {onBack && (
+                    <Button variant="outline" onClick={onBack} size="sm" className="hidden sm:flex">
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Back
+                    </Button>
+                  )}
+                  <Button onClick={handleCreateDeal} size="sm">
+                    <Plus className="w-4 h-4 mr-2" />
+                    New Deal
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </header>
 
-      {/* Filters */}
-      <Card>
+          {/* Filters */}
+          <Card>
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -357,6 +367,8 @@ export function DealPipeline({ onBack, onViewProjects }: DealPipelineProps) {
           ))}
         </div>
       )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -667,39 +679,85 @@ function DealDetailView({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={onBack}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">{deal.deal_name}</h1>
-            <p className="text-gray-500 mt-1">{deal.location}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {!deal.converted_to_projects && (
-            <Button onClick={onConvert} variant="default">
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              Convert to Projects
-            </Button>
-          )}
-          <Button variant="outline" onClick={onEdit}>
-            <Edit className="w-4 h-4 mr-2" />
-            Edit
-          </Button>
-          <Button variant="outline" onClick={onDelete}>
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </Button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20 sm:pb-0">
+      <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
+        <div className="w-full space-y-4 sm:space-y-6">
+          {/* Header */}
+          <header className="bg-white shadow-md border-b border-gray-200">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center space-x-3 sm:space-x-4">
+                  <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto" />
+                  <div>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-1">
+                      <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{deal.deal_name}</h1>
+                      <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
+                        deal.status === 'active-pipeline' ? 'bg-green-100 text-green-800' :
+                        deal.status === 'pending-docs' ? 'bg-yellow-100 text-yellow-800' :
+                        deal.status === 'early-stage' || deal.status === 'very-early' ? 'bg-blue-100 text-blue-800' :
+                        'bg-gray-100 text-gray-800'
+                      } w-fit`}>
+                        {DEAL_STATUS_LABELS[deal.status]}
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-gray-600">
+                      <MapPin className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
+                      {deal.location}
+                    </p>
+                  </div>
+                </div>
+                {/* Desktop Buttons */}
+                <div className="hidden sm:flex gap-3">
+                  {onBack && (
+                    <Button variant="outline" onClick={onBack} size="sm">
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Back
+                    </Button>
+                  )}
+                  {!deal.converted_to_projects && (
+                    <Button onClick={onConvert} variant="default" size="sm">
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      Convert to Projects
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={onEdit} size="sm">
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit
+                  </Button>
+                  <Button variant="outline" onClick={onDelete} size="sm">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+              {/* Mobile Buttons */}
+              <div className="sm:hidden mt-4 flex flex-wrap gap-2">
+                {onBack && (
+                  <Button variant="outline" onClick={onBack} size="sm" className="flex-1">
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back
+                  </Button>
+                )}
+                {!deal.converted_to_projects && (
+                  <Button onClick={onConvert} variant="default" size="sm" className="flex-1">
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Convert
+                  </Button>
+                )}
+                <Button variant="outline" onClick={onEdit} size="sm" className="flex-1">
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit
+                </Button>
+                <Button variant="outline" onClick={onDelete} size="sm" className="flex-1">
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </Button>
+              </div>
+            </div>
+          </header>
 
-      {/* Deal Information */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Deal Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Deal Details</CardTitle>
@@ -836,6 +894,8 @@ function DealDetailView({
           )}
         </CardContent>
       </Card>
+        </div>
+      </div>
     </div>
   )
 }

@@ -24,6 +24,18 @@ export interface BackupData {
     subcontractorEntries: any[]
     schedules: any[]
     changeOrders: any[]
+    deals: any[]
+    dealNotes: any[]
+    projectDocuments: any[]
+    selectionBooks: any[]
+    selectionRooms: any[]
+    selectionRoomImages: any[]
+    selectionRoomSpecSheets: any[]
+    projectForms: any[]
+    formTemplates: any[]
+    formResponses: any[]
+    quoteRequests: any[]
+    quoteResponses: any[]
     profile: any
   }
 }
@@ -57,6 +69,11 @@ export async function exportAllData(): Promise<BackupData> {
   console.log(`📦 Backing up data for user: ${user.id}`)
   console.log(`🏢 Organization: ${organizationId || 'Personal'}`)
 
+  // Build organization filter for tables that use organization_id
+  const orgFilter = organizationId 
+    ? (table: string) => supabase.from(table).select('*').eq('organization_id', organizationId).order('created_at', { ascending: false })
+    : (table: string) => supabase.from(table).select('*').order('created_at', { ascending: false })
+
   // Fetch all data in parallel
   const [
     projectsRes,
@@ -70,6 +87,18 @@ export async function exportAllData(): Promise<BackupData> {
     subcontractorEntriesRes,
     schedulesRes,
     changeOrdersRes,
+    dealsRes,
+    dealNotesRes,
+    projectDocumentsRes,
+    selectionBooksRes,
+    selectionRoomsRes,
+    selectionRoomImagesRes,
+    selectionRoomSpecSheetsRes,
+    projectFormsRes,
+    formTemplatesRes,
+    formResponsesRes,
+    quoteRequestsRes,
+    quoteResponsesRes,
   ] = await Promise.all([
     supabase.from('projects').select('*').order('created_at', { ascending: false }),
     supabase.from('estimates').select('*').order('created_at', { ascending: false }),
@@ -82,6 +111,18 @@ export async function exportAllData(): Promise<BackupData> {
     supabase.from('subcontractor_entries').select('*').order('created_at', { ascending: false }),
     supabase.from('schedules').select('*').order('created_at', { ascending: false }),
     supabase.from('change_orders').select('*').order('created_at', { ascending: false }),
+    orgFilter('deals'),
+    orgFilter('deal_notes'),
+    supabase.from('project_documents').select('*').order('created_at', { ascending: false }),
+    orgFilter('selection_books'),
+    supabase.from('selection_rooms').select('*').order('created_at', { ascending: false }),
+    supabase.from('selection_room_images').select('*').order('created_at', { ascending: false }),
+    supabase.from('selection_room_spec_sheets').select('*').order('created_at', { ascending: false }),
+    orgFilter('project_forms'),
+    orgFilter('form_templates'),
+    orgFilter('form_responses'),
+    orgFilter('quote_requests'),
+    orgFilter('quote_responses'),
   ])
 
   // Check for errors
@@ -97,6 +138,18 @@ export async function exportAllData(): Promise<BackupData> {
     subcontractorEntriesRes.error,
     schedulesRes.error,
     changeOrdersRes.error,
+    dealsRes.error,
+    dealNotesRes.error,
+    projectDocumentsRes.error,
+    selectionBooksRes.error,
+    selectionRoomsRes.error,
+    selectionRoomImagesRes.error,
+    selectionRoomSpecSheetsRes.error,
+    projectFormsRes.error,
+    formTemplatesRes.error,
+    formResponsesRes.error,
+    quoteRequestsRes.error,
+    quoteResponsesRes.error,
   ].filter(Boolean)
 
   if (errors.length > 0) {
@@ -121,6 +174,18 @@ export async function exportAllData(): Promise<BackupData> {
       subcontractorEntries: subcontractorEntriesRes.data || [],
       schedules: schedulesRes.data || [],
       changeOrders: changeOrdersRes.data || [],
+      deals: dealsRes.data || [],
+      dealNotes: dealNotesRes.data || [],
+      projectDocuments: projectDocumentsRes.data || [],
+      selectionBooks: selectionBooksRes.data || [],
+      selectionRooms: selectionRoomsRes.data || [],
+      selectionRoomImages: selectionRoomImagesRes.data || [],
+      selectionRoomSpecSheets: selectionRoomSpecSheetsRes.data || [],
+      projectForms: projectFormsRes.data || [],
+      formTemplates: formTemplatesRes.data || [],
+      formResponses: formResponsesRes.data || [],
+      quoteRequests: quoteRequestsRes.data || [],
+      quoteResponses: quoteResponsesRes.data || [],
       profile: profile,
     },
   }
@@ -137,6 +202,18 @@ export async function exportAllData(): Promise<BackupData> {
   console.log(`   Subcontractor Entries: ${backup.data.subcontractorEntries.length}`)
   console.log(`   Schedules: ${backup.data.schedules.length}`)
   console.log(`   Change Orders: ${backup.data.changeOrders.length}`)
+  console.log(`   Deals: ${backup.data.deals.length}`)
+  console.log(`   Deal Notes: ${backup.data.dealNotes.length}`)
+  console.log(`   Project Documents: ${backup.data.projectDocuments.length}`)
+  console.log(`   Selection Books: ${backup.data.selectionBooks.length}`)
+  console.log(`   Selection Rooms: ${backup.data.selectionRooms.length}`)
+  console.log(`   Selection Room Images: ${backup.data.selectionRoomImages.length}`)
+  console.log(`   Selection Room Spec Sheets: ${backup.data.selectionRoomSpecSheets.length}`)
+  console.log(`   Project Forms: ${backup.data.projectForms.length}`)
+  console.log(`   Form Templates: ${backup.data.formTemplates.length}`)
+  console.log(`   Form Responses: ${backup.data.formResponses.length}`)
+  console.log(`   Quote Requests: ${backup.data.quoteRequests.length}`)
+  console.log(`   Quote Responses: ${backup.data.quoteResponses.length}`)
 
   return backup
 }
@@ -222,6 +299,12 @@ export async function restoreFromBackup(backup: BackupData): Promise<void> {
     projects: backup.data.projects.length,
     estimates: backup.data.estimates.length,
     trades: backup.data.trades.length,
+    deals: backup.data.deals.length,
+    dealNotes: backup.data.dealNotes.length,
+    projectDocuments: backup.data.projectDocuments.length,
+    selectionBooks: backup.data.selectionBooks.length,
+    projectForms: backup.data.projectForms.length,
+    quoteRequests: backup.data.quoteRequests.length,
   })
   
   // TODO: Implement restore logic
