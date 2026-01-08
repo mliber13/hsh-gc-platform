@@ -35,6 +35,7 @@ interface ProjectWithStats extends Project {
 
 export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlanLibrary, onOpenItemLibrary, onOpenDealPipeline }: ProjectsDashboardProps) {
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [showImportEstimate, setShowImportEstimate] = useState(false)
   const [showMobileActions, setShowMobileActions] = useState(false)
@@ -42,24 +43,52 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
 
   useEffect(() => {
     const loadProjects = async () => {
+      setLoading(true)
+      
+      // First, load projects immediately (fast)
       const allProjects = await getProjects_Hybrid()
       
-      // Calculate stats for each project
+      // Show projects immediately without stats
+      setProjects(allProjects.map(p => ({ ...p, estimatedValue: 0, actualCosts: 0, tradeCount: 0 })))
+      setLoading(false)
+      
+      // Then load stats in the background (progressive enhancement)
+      // Combine trade fetching to avoid duplicate calls
       const projectsWithStats = await Promise.all(
         allProjects.map(async (project) => {
-          const estimatedValue = await calculateEstimatedValue(project)
-          const actualCosts = await calculateActualCosts(project)
-          const tradeCount = await calculateTradeCount(project)
-          return { ...project, estimatedValue, actualCosts, tradeCount }
+          // Fetch trades once and use for both estimated value and trade count
+          const [trades, actuals] = await Promise.all([
+            getTradesForEstimate_Hybrid(project.estimate.id),
+            getProjectActuals_Hybrid(project.id)
+          ])
+          
+          // Calculate all stats from the single trades fetch
+          const tradeCount = trades.length
+          const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
+          const grossProfitTotal = trades.reduce((sum, trade) => {
+            const markup = trade.markupPercent || 11.1
+            return sum + (trade.totalCost * (markup / 100))
+          }, 0)
+          const contingency = basePriceTotal * 0.10 // 10% default
+          const estimatedValue = basePriceTotal + grossProfitTotal + contingency
+          const actualCosts = actuals?.totalActualCost || 0
+          
+          return { 
+            ...project, 
+            estimatedValue, 
+            actualCosts, 
+            tradeCount 
+          }
         })
       )
       
+      // Update with stats once loaded
       setProjects(projectsWithStats)
     }
     loadProjects()
   }, [])
 
-  // Calculate estimated value for a project from its trades
+  // Calculate estimated value for a project from its trades (kept for compatibility)
   const calculateEstimatedValue = async (project: Project): Promise<number> => {
     const trades = await getTradesForEstimate_Hybrid(project.estimate.id)
     const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
@@ -391,7 +420,12 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {filteredProjects.length === 0 ? (
+            {loading && projects.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0E79C9]"></div>
+                <p className="mt-4 text-gray-500">Loading projects...</p>
+              </div>
+            ) : filteredProjects.length === 0 ? (
               <div className="text-center py-12">
                 <Building2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-600 text-lg mb-2">
