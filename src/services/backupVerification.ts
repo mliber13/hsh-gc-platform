@@ -63,7 +63,7 @@ export function verifyBackup(backup: BackupData): VerificationResult {
     'subcontractors',
     'suppliers',
     'userInvitations',
-    'profile',
+    'profiles',
   ]
 
   // Verify backup structure
@@ -99,14 +99,6 @@ export function verifyBackup(backup: BackupData): VerificationResult {
       missingTables.push(table)
       errors.push(`Missing table: ${table}`)
       stats[table] = { count: 0, hasData: false }
-    } else if (table === 'profile') {
-      // Profile is a single object, not an array
-      if (!tableData || typeof tableData !== 'object') {
-        errors.push(`Invalid profile data (expected object, got ${typeof tableData})`)
-        stats[table] = { count: 0, hasData: false }
-      } else {
-        stats[table] = { count: 1, hasData: true }
-      }
     } else {
       // All other tables should be arrays
       if (!Array.isArray(tableData)) {

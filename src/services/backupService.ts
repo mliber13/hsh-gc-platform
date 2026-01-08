@@ -44,7 +44,7 @@ export interface BackupData {
     subcontractors: any[]
     suppliers: any[]
     userInvitations: any[]
-    profile: any
+    profiles: any[]
   }
 }
 
@@ -60,8 +60,8 @@ export async function exportAllData(): Promise<BackupData> {
     throw new Error('Not authenticated')
   }
 
-  // Get user profile
-  const { data: profile, error: profileError } = await supabase
+  // Get current user profile first to get organization_id
+  const { data: currentProfile, error: profileError } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
@@ -72,7 +72,7 @@ export async function exportAllData(): Promise<BackupData> {
     throw new Error('Failed to fetch user profile')
   }
 
-  const organizationId = profile.organization_id
+  const organizationId = currentProfile.organization_id
 
   console.log(`📦 Backing up data for user: ${user.id}`)
   console.log(`🏢 Organization: ${organizationId || 'Personal'}`)
@@ -130,6 +130,7 @@ export async function exportAllData(): Promise<BackupData> {
     subcontractorsRes,
     suppliersRes,
     userInvitationsRes,
+    profilesRes,
   ] = await Promise.all([
     supabase.from('projects').select('*').order('created_at', { ascending: false }),
     supabase.from('estimates').select('*').order('created_at', { ascending: false }),
@@ -161,6 +162,7 @@ export async function exportAllData(): Promise<BackupData> {
     orgFilter('subcontractors'),
     orgFilter('suppliers'),
     orgFilter('user_invitations'),
+    orgFilter('profiles'), // Get all profiles in the organization
   ])
 
   // Check for errors
@@ -195,6 +197,7 @@ export async function exportAllData(): Promise<BackupData> {
     subcontractorsRes.error,
     suppliersRes.error,
     userInvitationsRes.error,
+    profilesRes.error,
   ].filter(Boolean)
 
   if (errors.length > 0) {
@@ -238,7 +241,7 @@ export async function exportAllData(): Promise<BackupData> {
       subcontractors: subcontractorsRes.data || [],
       suppliers: suppliersRes.data || [],
       userInvitations: userInvitationsRes.data || [],
-      profile: profile,
+      profiles: profilesRes.data || [],
     },
   }
 
@@ -273,6 +276,7 @@ export async function exportAllData(): Promise<BackupData> {
   console.log(`   Subcontractors: ${backup.data.subcontractors.length}`)
   console.log(`   Suppliers: ${backup.data.suppliers.length}`)
   console.log(`   User Invitations: ${backup.data.userInvitations.length}`)
+  console.log(`   Profiles: ${backup.data.profiles.length}`)
 
   // Verify the backup
   console.log('\n🔍 Verifying backup integrity...')
@@ -398,6 +402,7 @@ export async function restoreFromBackup(backup: BackupData): Promise<void> {
     subcontractors: backup.data.subcontractors.length,
     suppliers: backup.data.suppliers.length,
     userInvitations: backup.data.userInvitations.length,
+    profiles: backup.data.profiles.length,
   })
   
   // TODO: Implement restore logic
