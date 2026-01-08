@@ -6,6 +6,7 @@
 //
 
 import { supabase } from '@/lib/supabase'
+import { verifyBackup, printVerificationResults } from './backupVerification'
 
 export interface BackupData {
   version: string
@@ -231,6 +232,15 @@ export async function exportAllData(): Promise<BackupData> {
   console.log(`   Quote Requests: ${backup.data.quoteRequests.length}`)
   console.log(`   Submitted Quotes: ${backup.data.submittedQuotes.length}`)
 
+  // Verify the backup
+  console.log('\n🔍 Verifying backup integrity...')
+  const verification = verifyBackup(backup)
+  printVerificationResults(verification)
+
+  if (!verification.isValid) {
+    console.warn('⚠️ Backup completed but has validation errors. Review the errors above.')
+  }
+
   return backup
 }
 
@@ -289,7 +299,17 @@ export async function parseBackupFile(file: File): Promise<BackupData> {
           throw new Error('Invalid backup file format')
         }
 
-        console.log('✅ Backup file validated')
+        console.log('✅ Backup file parsed successfully')
+        
+        // Run full verification
+        console.log('\n🔍 Verifying backup integrity...')
+        const verification = verifyBackup(backup)
+        printVerificationResults(verification)
+
+        if (!verification.isValid) {
+          console.warn('⚠️ Backup file has validation errors. Review the errors above.')
+        }
+
         resolve(backup)
       } catch (error) {
         console.error('❌ Failed to parse backup file:', error)
@@ -303,6 +323,14 @@ export async function parseBackupFile(file: File): Promise<BackupData> {
 
     reader.readAsText(file)
   })
+}
+
+/**
+ * Verify an existing backup file
+ */
+export async function verifyBackupFile(file: File): Promise<void> {
+  const { verifyBackupFromFile } = await import('./backupVerification')
+  await verifyBackupFromFile(file)
 }
 
 /**

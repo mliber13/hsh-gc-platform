@@ -283,7 +283,7 @@ function App() {
     setIsBackingUp(true)
     try {
       await backupAllData()
-      alert('✅ Backup successful! Your data has been downloaded.')
+      alert('✅ Backup successful! Your data has been downloaded.\n\nCheck the browser console (F12) for verification results.')
       setShowUserMenu(false)
     } catch (error) {
       console.error('Backup failed:', error)
