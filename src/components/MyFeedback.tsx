@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  User as UserIcon,
 } from 'lucide-react'
 import { getFeedback } from '@/services/feedbackService'
 import type { Feedback, FeedbackType } from '@/types/feedback'
