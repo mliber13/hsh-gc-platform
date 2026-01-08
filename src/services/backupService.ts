@@ -69,10 +69,26 @@ export async function exportAllData(): Promise<BackupData> {
   console.log(`📦 Backing up data for user: ${user.id}`)
   console.log(`🏢 Organization: ${organizationId || 'Personal'}`)
 
-  // Build organization filter for tables that use organization_id
+  // Helper to check if a string is a valid UUID
+  const isValidUUID = (str: string | null): boolean => {
+    if (!str) return false
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    return uuidRegex.test(str)
+  }
+
+  // Build organization filter for tables that use TEXT organization_id
   const orgFilter = organizationId 
     ? (table: string, orderBy: string = 'created_at') => supabase.from(table).select('*').eq('organization_id', organizationId).order(orderBy, { ascending: false })
     : (table: string, orderBy: string = 'created_at') => supabase.from(table).select('*').order(orderBy, { ascending: false })
+
+  // For tables that use UUID organization_id, only filter if organizationId is a valid UUID
+  const orgFilterUUID = (table: string, orderBy: string = 'created_at') => {
+    if (organizationId && isValidUUID(organizationId)) {
+      return supabase.from(table).select('*').eq('organization_id', organizationId).order(orderBy, { ascending: false })
+    }
+    // If not a valid UUID (e.g., "default-org"), fetch all without filtering
+    return supabase.from(table).select('*').order(orderBy, { ascending: false })
+  }
 
   // Fetch all data in parallel
   const [
@@ -121,8 +137,8 @@ export async function exportAllData(): Promise<BackupData> {
     orgFilter('project_forms'),
     orgFilter('form_templates'),
     orgFilter('form_responses', 'responded_at'), // form_responses uses responded_at instead of created_at
-    orgFilter('quote_requests'),
-    orgFilter('quote_responses'),
+    orgFilterUUID('quote_requests'), // quote_requests uses UUID for organization_id
+    orgFilterUUID('quote_responses'), // quote_responses uses UUID for organization_id (if it exists)
   ])
 
   // Check for errors
