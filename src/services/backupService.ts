@@ -37,6 +37,13 @@ export interface BackupData {
     formResponses: any[]
     quoteRequests: any[]
     submittedQuotes: any[]
+    projectActuals: any[]
+    subItems: any[]
+    proformaInputs: any[]
+    sowTemplates: any[]
+    subcontractors: any[]
+    suppliers: any[]
+    userInvitations: any[]
     profile: any
   }
 }
@@ -116,6 +123,13 @@ export async function exportAllData(): Promise<BackupData> {
     formResponsesRes,
     quoteRequestsRes,
     submittedQuotesRes,
+    projectActualsRes,
+    subItemsRes,
+    proformaInputsRes,
+    sowTemplatesRes,
+    subcontractorsRes,
+    suppliersRes,
+    userInvitationsRes,
   ] = await Promise.all([
     supabase.from('projects').select('*').order('created_at', { ascending: false }),
     supabase.from('estimates').select('*').order('created_at', { ascending: false }),
@@ -140,6 +154,13 @@ export async function exportAllData(): Promise<BackupData> {
     orgFilter('form_responses', 'responded_at'), // form_responses uses responded_at instead of created_at
     orgFilterUUID('quote_requests'), // quote_requests uses UUID for organization_id
     supabase.from('submitted_quotes').select('*').order('created_at', { ascending: false }), // submitted_quotes doesn't have organization_id, linked via quote_request_id
+    orgFilter('project_actuals'),
+    orgFilter('sub_items'),
+    orgFilter('proforma_inputs'),
+    orgFilterUUID('sow_templates'), // sow_templates uses UUID for organization_id
+    orgFilter('subcontractors'),
+    orgFilter('suppliers'),
+    orgFilter('user_invitations'),
   ])
 
   // Check for errors
@@ -167,6 +188,13 @@ export async function exportAllData(): Promise<BackupData> {
     formResponsesRes.error,
     quoteRequestsRes.error,
     submittedQuotesRes.error,
+    projectActualsRes.error,
+    subItemsRes.error,
+    proformaInputsRes.error,
+    sowTemplatesRes.error,
+    subcontractorsRes.error,
+    suppliersRes.error,
+    userInvitationsRes.error,
   ].filter(Boolean)
 
   if (errors.length > 0) {
@@ -203,6 +231,13 @@ export async function exportAllData(): Promise<BackupData> {
       formResponses: formResponsesRes.data || [],
       quoteRequests: quoteRequestsRes.data || [],
       submittedQuotes: submittedQuotesRes.data || [],
+      projectActuals: projectActualsRes.data || [],
+      subItems: subItemsRes.data || [],
+      proformaInputs: proformaInputsRes.data || [],
+      sowTemplates: sowTemplatesRes.data || [],
+      subcontractors: subcontractorsRes.data || [],
+      suppliers: suppliersRes.data || [],
+      userInvitations: userInvitationsRes.data || [],
       profile: profile,
     },
   }
@@ -231,6 +266,13 @@ export async function exportAllData(): Promise<BackupData> {
   console.log(`   Form Responses: ${backup.data.formResponses.length}`)
   console.log(`   Quote Requests: ${backup.data.quoteRequests.length}`)
   console.log(`   Submitted Quotes: ${backup.data.submittedQuotes.length}`)
+  console.log(`   Project Actuals: ${backup.data.projectActuals.length}`)
+  console.log(`   Sub Items: ${backup.data.subItems.length}`)
+  console.log(`   Proforma Inputs: ${backup.data.proformaInputs.length}`)
+  console.log(`   SOW Templates: ${backup.data.sowTemplates.length}`)
+  console.log(`   Subcontractors: ${backup.data.subcontractors.length}`)
+  console.log(`   Suppliers: ${backup.data.suppliers.length}`)
+  console.log(`   User Invitations: ${backup.data.userInvitations.length}`)
 
   // Verify the backup
   console.log('\n🔍 Verifying backup integrity...')
@@ -349,6 +391,13 @@ export async function restoreFromBackup(backup: BackupData): Promise<void> {
     selectionBooks: backup.data.selectionBooks.length,
     projectForms: backup.data.projectForms.length,
     quoteRequests: backup.data.quoteRequests.length,
+    projectActuals: backup.data.projectActuals.length,
+    subItems: backup.data.subItems.length,
+    proformaInputs: backup.data.proformaInputs.length,
+    sowTemplates: backup.data.sowTemplates.length,
+    subcontractors: backup.data.subcontractors.length,
+    suppliers: backup.data.suppliers.length,
+    userInvitations: backup.data.userInvitations.length,
   })
   
   // TODO: Implement restore logic

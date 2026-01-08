@@ -56,6 +56,13 @@ export function verifyBackup(backup: BackupData): VerificationResult {
     'formResponses',
     'quoteRequests',
     'submittedQuotes',
+    'projectActuals',
+    'subItems',
+    'proformaInputs',
+    'sowTemplates',
+    'subcontractors',
+    'suppliers',
+    'userInvitations',
     'profile',
   ]
 
