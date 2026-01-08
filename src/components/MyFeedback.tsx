@@ -244,7 +244,7 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
                     </div>
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <div className="flex items-center gap-1">
-                        <User className="w-3 h-3" />
+                        <UserIcon className="w-3 h-3" />
                         <span>Submitted by {item.submitted_by === user?.id ? 'you' : 'team member'}</span>
                       </div>
                       <span>•</span>
