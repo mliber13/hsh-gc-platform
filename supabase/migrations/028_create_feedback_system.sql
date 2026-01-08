@@ -44,6 +44,7 @@ ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 
 -- Users can view ALL feedback in their organization (transparent system)
 -- Everyone can see all feedback, admin notes, and status updates
+DROP POLICY IF EXISTS "Users can view feedback in their organization" ON feedback;
 CREATE POLICY "Users can view feedback in their organization"
   ON feedback FOR SELECT
   USING (
@@ -53,6 +54,7 @@ CREATE POLICY "Users can view feedback in their organization"
   );
 
 -- Users can create feedback in their organization
+DROP POLICY IF EXISTS "Users can create feedback in their organization" ON feedback;
 CREATE POLICY "Users can create feedback in their organization"
   ON feedback FOR INSERT
   WITH CHECK (
@@ -62,6 +64,7 @@ CREATE POLICY "Users can create feedback in their organization"
   );
 
 -- Only admins can update feedback (change status, add notes)
+DROP POLICY IF EXISTS "Admins can update feedback in their organization" ON feedback;
 CREATE POLICY "Admins can update feedback in their organization"
   ON feedback FOR UPDATE
   USING (
@@ -76,6 +79,7 @@ CREATE POLICY "Admins can update feedback in their organization"
   );
 
 -- Only admins can delete feedback
+DROP POLICY IF EXISTS "Admins can delete feedback in their organization" ON feedback;
 CREATE POLICY "Admins can delete feedback in their organization"
   ON feedback FOR DELETE
   USING (
