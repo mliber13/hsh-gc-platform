@@ -204,6 +204,15 @@ export type {
   ConvertDealToProjectsInput,
 } from './deal'
 
+// Export feedback types
+export type {
+  Feedback,
+  FeedbackType,
+  FeedbackStatus,
+  CreateFeedbackInput,
+  UpdateFeedbackInput,
+} from './feedback'
+
 // Export all API types
 export type {
   // Generic responses

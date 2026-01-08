@@ -44,6 +44,7 @@ export interface BackupData {
     subcontractors: any[]
     suppliers: any[]
     userInvitations: any[]
+    feedback: any[]
     profiles: any[]
   }
 }
@@ -130,6 +131,7 @@ export async function exportAllData(): Promise<BackupData> {
     subcontractorsRes,
     suppliersRes,
     userInvitationsRes,
+    feedbackRes,
     profilesRes,
   ] = await Promise.all([
     supabase.from('projects').select('*').order('created_at', { ascending: false }),
@@ -162,6 +164,7 @@ export async function exportAllData(): Promise<BackupData> {
     orgFilter('subcontractors'),
     orgFilter('suppliers'),
     orgFilter('user_invitations'),
+    orgFilter('feedback'),
     orgFilter('profiles'), // Get all profiles in the organization
   ])
 
@@ -197,6 +200,7 @@ export async function exportAllData(): Promise<BackupData> {
     subcontractorsRes.error,
     suppliersRes.error,
     userInvitationsRes.error,
+    feedbackRes.error,
     profilesRes.error,
   ].filter(Boolean)
 
@@ -241,6 +245,7 @@ export async function exportAllData(): Promise<BackupData> {
       subcontractors: subcontractorsRes.data || [],
       suppliers: suppliersRes.data || [],
       userInvitations: userInvitationsRes.data || [],
+      feedback: feedbackRes.data || [],
       profiles: profilesRes.data || [],
     },
   }
@@ -276,6 +281,7 @@ export async function exportAllData(): Promise<BackupData> {
   console.log(`   Subcontractors: ${backup.data.subcontractors.length}`)
   console.log(`   Suppliers: ${backup.data.suppliers.length}`)
   console.log(`   User Invitations: ${backup.data.userInvitations.length}`)
+  console.log(`   Feedback: ${backup.data.feedback.length}`)
   console.log(`   Profiles: ${backup.data.profiles.length}`)
 
   // Verify the backup
@@ -402,6 +408,7 @@ export async function restoreFromBackup(backup: BackupData): Promise<void> {
     subcontractors: backup.data.subcontractors.length,
     suppliers: backup.data.suppliers.length,
     userInvitations: backup.data.userInvitations.length,
+    feedback: backup.data.feedback.length,
     profiles: backup.data.profiles.length,
   })
   

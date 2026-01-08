@@ -63,6 +63,7 @@ export function verifyBackup(backup: BackupData): VerificationResult {
     'subcontractors',
     'suppliers',
     'userInvitations',
+    'feedback',
     'profiles',
   ]
 

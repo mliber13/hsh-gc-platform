@@ -31,11 +31,13 @@ import { QuickBooksCallback } from './components/QuickBooksCallback'
 import { VendorQuotePortal } from './components/VendorQuotePortal'
 import { QuoteReviewDashboard } from './components/QuoteReviewDashboard'
 import { Button } from './components/ui/button'
-import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2, FileText } from 'lucide-react'
+import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2, FileText, MessageSquare } from 'lucide-react'
 import { backupAllData } from './services/backupService'
 import { PartnerDirectory } from './components/PartnerDirectory'
 import { SOWManagement } from './components/SOWManagement'
 import { DealPipeline } from './components/DealPipeline'
+import { FeedbackForm } from './components/FeedbackForm'
+import { FeedbackManagement } from './components/FeedbackManagement'
 
 type View =
   | 'dashboard'
@@ -57,6 +59,7 @@ type View =
   | 'partner-directory'
   | 'sow-management'
   | 'deal-pipeline'
+  | 'feedback-management'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -237,6 +240,14 @@ function App() {
     setCurrentView('deal-pipeline')
   }
 
+  const handleViewFeedbackManagement = () => {
+    setCurrentView('feedback-management')
+  }
+
+  const handleOpenFeedbackForm = () => {
+    setShowFeedbackForm(true)
+  }
+
   const handleOpenPlanLibrary = () => {
     setCurrentView('plan-library')
   }
@@ -392,6 +403,28 @@ function App() {
                       >
                         <Database className="w-4 h-4" />
                         Migrate Data
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        handleOpenFeedbackForm()
+                        setShowUserMenu(false)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Submit Feedback
+                    </button>
+                    {userProfile?.role === 'admin' && (
+                      <button
+                        onClick={() => {
+                          handleViewFeedbackManagement()
+                          setShowUserMenu(false)
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        Manage Feedback
                       </button>
                     )}
                     <button
@@ -553,6 +586,24 @@ function App() {
             onViewProjects={handleBackToDashboard}
           />
         </div>
+      )}
+
+      {currentView === 'feedback-management' && (
+        <div className="container mx-auto py-6 px-4">
+          <FeedbackManagement
+            onBack={handleBackToDashboard}
+          />
+        </div>
+      )}
+
+      {showFeedbackForm && (
+        <FeedbackForm
+          onClose={() => setShowFeedbackForm(false)}
+          onSuccess={() => {
+            setShowFeedbackForm(false)
+            alert('✅ Thank you for your feedback! We\'ll review it soon.')
+          }}
+        />
       )}
 
       {currentView === 'data-migration' && (
