@@ -42,7 +42,8 @@ CREATE INDEX idx_feedback_submitted_by ON feedback(submitted_by);
 -- RLS Policies
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 
--- Users can view feedback in their organization
+-- Users can view ALL feedback in their organization (transparent system)
+-- Everyone can see all feedback, admin notes, and status updates
 CREATE POLICY "Users can view feedback in their organization"
   ON feedback FOR SELECT
   USING (
@@ -95,4 +96,4 @@ CREATE POLICY "Admins can delete feedback in their organization"
 COMMENT ON TABLE feedback IS 'User feedback, bug reports, and feature requests';
 COMMENT ON COLUMN feedback.type IS 'Type of feedback: bug, feature-request, or general-feedback';
 COMMENT ON COLUMN feedback.status IS 'Status: new, reviewing, in-progress, completed, rejected, or duplicate';
-COMMENT ON COLUMN feedback.admin_notes IS 'Internal notes for admins (not visible to submitter)';
+COMMENT ON COLUMN feedback.admin_notes IS 'Admin response/notes - visible to all team members (transparent system)';

@@ -284,8 +284,11 @@ export function FeedbackManagement({ onBack }: FeedbackManagementProps) {
 
                   {item.admin_notes && (
                     <div>
-                      <Label className="text-gray-500">Admin Notes</Label>
-                      <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded mt-1 whitespace-pre-wrap">
+                      <Label className="text-gray-500 flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" />
+                        Admin Response (Visible to all team members)
+                      </Label>
+                      <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded mt-1 whitespace-pre-wrap">
                         {item.admin_notes}
                       </p>
                     </div>
@@ -320,21 +323,24 @@ export function FeedbackManagement({ onBack }: FeedbackManagementProps) {
                       </div>
 
                       <div>
-                        <Label htmlFor="admin_notes">Admin Notes</Label>
+                        <Label htmlFor="admin_notes">Admin Response</Label>
+                        <p className="text-xs text-gray-500 mb-1">
+                          This response will be visible to all team members (transparent system)
+                        </p>
                         <Textarea
                           id="admin_notes"
                           value={adminNotes}
                           onChange={(e) => setAdminNotes(e.target.value)}
-                          placeholder="Internal notes (not visible to submitter)"
+                          placeholder="Add your response or update on this feedback..."
                           className="mt-1"
-                          rows={3}
+                          rows={4}
                         />
                         <Button
                           size="sm"
                           className="mt-2"
                           onClick={() => handleUpdateNotes(item.id)}
                         >
-                          Save Notes
+                          Save Response
                         </Button>
                       </div>
 

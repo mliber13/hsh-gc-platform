@@ -129,8 +129,8 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
             Back
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Feedback</h1>
-            <p className="text-gray-500 mt-1">View your submitted feedback and feature requests</p>
+            <h1 className="text-3xl font-bold text-gray-900">Feedback & Feature Requests</h1>
+            <p className="text-gray-500 mt-1">View all feedback, feature requests, and their status</p>
           </div>
         </div>
         <Button onClick={onNewFeedback}>
@@ -210,12 +210,12 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
               <p className="text-gray-600 text-lg mb-2">
                 {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
                   ? 'No feedback found matching your filters'
-                  : 'You haven\'t submitted any feedback yet'}
+                  : 'No feedback submitted yet'}
               </p>
               <p className="text-gray-500 mb-6">
                 {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
                   ? 'Try adjusting your search or filters'
-                  : 'Share your ideas, report bugs, or request features'}
+                  : 'Be the first to share your ideas, report bugs, or request features'}
               </p>
               <Button onClick={onNewFeedback}>
                 <MessageSquare className="w-4 h-4 mr-2" />
@@ -242,23 +242,43 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
                         {FEEDBACK_TYPE_LABELS[item.type]}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-500">
-                      Submitted {formatDate(item.submitted_at)}
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                      <div className="flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        <span>Submitted by {item.submitted_by === user?.id ? 'you' : 'team member'}</span>
+                      </div>
+                      <span>•</span>
+                      <span>Submitted {formatDate(item.submitted_at)}</span>
                       {item.resolved_at && (
-                        <span className="ml-2">
-                          • Resolved {formatDate(item.resolved_at)}
-                        </span>
+                        <>
+                          <span>•</span>
+                          <span>Resolved {formatDate(item.resolved_at)}</span>
+                        </>
                       )}
-                    </p>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Description</label>
-                  <p className="text-sm text-gray-900 whitespace-pre-wrap mt-1">
-                    {item.description}
-                  </p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Description</label>
+                    <p className="text-sm text-gray-900 whitespace-pre-wrap mt-1">
+                      {item.description}
+                    </p>
+                  </div>
+
+                  {item.admin_notes && (
+                    <div className="border-t pt-4">
+                      <label className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" />
+                        Admin Response
+                      </label>
+                      <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded mt-1 whitespace-pre-wrap">
+                        {item.admin_notes}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
