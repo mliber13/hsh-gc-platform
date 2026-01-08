@@ -33,11 +33,11 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 
 -- Indexes
-CREATE INDEX idx_feedback_organization_id ON feedback(organization_id);
-CREATE INDEX idx_feedback_status ON feedback(status);
-CREATE INDEX idx_feedback_type ON feedback(type);
-CREATE INDEX idx_feedback_submitted_at ON feedback(submitted_at DESC);
-CREATE INDEX idx_feedback_submitted_by ON feedback(submitted_by);
+CREATE INDEX IF NOT EXISTS idx_feedback_organization_id ON feedback(organization_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback(status);
+CREATE INDEX IF NOT EXISTS idx_feedback_type ON feedback(type);
+CREATE INDEX IF NOT EXISTS idx_feedback_submitted_at ON feedback(submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_submitted_by ON feedback(submitted_by);
 
 -- RLS Policies
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
