@@ -51,10 +51,17 @@ export async function submitFeedback(input: CreateFeedbackInput): Promise<Feedba
 
     // Send email notification to admin(s)
     try {
+      console.log('📧 Attempting to send feedback notification email...')
+      
       // Get all admins in the organization
       const orgUsers = await getOrganizationUsers()
+      console.log('👥 Organization users:', orgUsers.length)
+      
       const admins = orgUsers.filter(u => u.role === 'admin')
+      console.log('👑 Admins found:', admins.length)
+      
       const adminEmails = admins.map(a => a.email).filter(Boolean) as string[]
+      console.log('📮 Admin emails:', adminEmails)
 
       if (adminEmails.length > 0) {
         // Get submitter info
@@ -65,9 +72,10 @@ export async function submitFeedback(input: CreateFeedbackInput): Promise<Feedba
           .single()
 
         const submitterName = submitterProfile?.full_name || submitterProfile?.email || 'A team member'
+        console.log('✍️ Submitter:', submitterName)
 
         // Send email to all admins
-        await sendFeedbackNotification({
+        const emailSent = await sendFeedbackNotification({
           to: adminEmails,
           feedbackTitle: input.title,
           feedbackType: input.type,
@@ -75,10 +83,17 @@ export async function submitFeedback(input: CreateFeedbackInput): Promise<Feedba
           submittedBy: submitterName,
           notificationType: 'new',
         })
+        
+        console.log('📧 Email send result:', emailSent ? '✅ Success' : '❌ Failed')
+      } else {
+        console.warn('⚠️ No admin emails found to send notification to')
       }
     } catch (emailError) {
       // Don't fail feedback submission if email fails
-      console.error('Error sending feedback notification email:', emailError)
+      console.error('❌ Error sending feedback notification email:', emailError)
+      if (emailError instanceof Error) {
+        console.error('Error details:', emailError.message, emailError.stack)
+      }
     }
 
     return feedback
@@ -230,9 +245,14 @@ export async function updateFeedback(
     // Send email notification to all organization members if status or notes were updated
     if (updates.status !== undefined || updates.admin_notes !== undefined) {
       try {
+        console.log('📧 Attempting to send feedback update notification email...')
+        
         // Get all users in the organization
         const orgUsers = await getOrganizationUsers()
+        console.log('👥 Organization users:', orgUsers.length)
+        
         const userEmails = orgUsers.map(u => u.email).filter(Boolean) as string[]
+        console.log('📮 User emails to notify:', userEmails.length)
 
         if (userEmails.length > 0) {
           // Get updater info
@@ -243,9 +263,10 @@ export async function updateFeedback(
             .single()
 
           const updaterName = updaterProfile?.full_name || updaterProfile?.email || 'Admin'
+          console.log('✍️ Updater:', updaterName)
 
           // Send email to all organization members using the updated feedback
-          await sendFeedbackNotification({
+          const emailSent = await sendFeedbackNotification({
             to: userEmails,
             feedbackTitle: feedback.title,
             feedbackType: feedback.type,
@@ -256,10 +277,17 @@ export async function updateFeedback(
             adminNotes: feedback.admin_notes || undefined,
             updatedBy: updaterName,
           })
+          
+          console.log('📧 Email send result:', emailSent ? '✅ Success' : '❌ Failed')
+        } else {
+          console.warn('⚠️ No user emails found to send notification to')
         }
       } catch (emailError) {
         // Don't fail feedback update if email fails
-        console.error('Error sending feedback update notification email:', emailError)
+        console.error('❌ Error sending feedback update notification email:', emailError)
+        if (emailError instanceof Error) {
+          console.error('Error details:', emailError.message, emailError.stack)
+        }
       }
     }
 

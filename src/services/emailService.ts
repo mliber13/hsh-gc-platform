@@ -157,6 +157,13 @@ export interface SendFeedbackNotificationInput {
  */
 export async function sendFeedbackNotification(input: SendFeedbackNotificationInput): Promise<boolean> {
   try {
+    console.log('📧 Calling send-feedback-email Edge Function...')
+    console.log('📧 Email details:', {
+      to: input.to,
+      notificationType: input.notificationType,
+      feedbackTitle: input.feedbackTitle,
+    })
+    
     // Try using Supabase Edge Function first
     const { data, error } = await supabase.functions.invoke('send-feedback-email', {
       body: {
@@ -173,25 +180,39 @@ export async function sendFeedbackNotification(input: SendFeedbackNotificationIn
     })
 
     if (error) {
-      console.error('Error sending feedback email via Edge Function:', error)
+      console.error('❌ Error sending feedback email via Edge Function:', error)
+      console.error('Error details:', {
+        message: error.message,
+        status: error.status,
+        context: error.context,
+      })
       return false
     }
 
+    console.log('📧 Edge Function response:', data)
+
     if (data && typeof data === 'object' && 'success' in data) {
       if (data.success === true) {
-        console.log('Feedback email sent successfully via Edge Function')
+        console.log('✅ Feedback email sent successfully via Edge Function')
         return true
       } else {
-        console.warn('Edge Function returned success: false', data)
+        console.warn('⚠️ Edge Function returned success: false', data)
+        if ('error' in data) {
+          console.error('Edge Function error:', data.error)
+        }
         return false
       }
     }
 
     // If no success field, assume failure
-    console.warn('Edge Function response missing success field:', data)
+    console.warn('⚠️ Edge Function response missing success field:', data)
     return false
   } catch (error) {
-    console.error('Error sending feedback email:', error)
+    console.error('❌ Error sending feedback email:', error)
+    if (error instanceof Error) {
+      console.error('Error message:', error.message)
+      console.error('Error stack:', error.stack)
+    }
     return false
   }
 }
