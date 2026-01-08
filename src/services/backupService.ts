@@ -71,8 +71,8 @@ export async function exportAllData(): Promise<BackupData> {
 
   // Build organization filter for tables that use organization_id
   const orgFilter = organizationId 
-    ? (table: string) => supabase.from(table).select('*').eq('organization_id', organizationId).order('created_at', { ascending: false })
-    : (table: string) => supabase.from(table).select('*').order('created_at', { ascending: false })
+    ? (table: string, orderBy: string = 'created_at') => supabase.from(table).select('*').eq('organization_id', organizationId).order(orderBy, { ascending: false })
+    : (table: string, orderBy: string = 'created_at') => supabase.from(table).select('*').order(orderBy, { ascending: false })
 
   // Fetch all data in parallel
   const [
@@ -120,7 +120,7 @@ export async function exportAllData(): Promise<BackupData> {
     supabase.from('selection_room_spec_sheets').select('*').order('created_at', { ascending: false }),
     orgFilter('project_forms'),
     orgFilter('form_templates'),
-    orgFilter('form_responses'),
+    orgFilter('form_responses', 'responded_at'), // form_responses uses responded_at instead of created_at
     orgFilter('quote_requests'),
     orgFilter('quote_responses'),
   ])
