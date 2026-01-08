@@ -7,6 +7,8 @@
 
 import { supabase } from '@/lib/supabase'
 import type { Feedback, CreateFeedbackInput, UpdateFeedbackInput } from '@/types/feedback'
+import { sendFeedbackNotification } from './emailService'
+import { getOrganizationUsers } from './userService'
 
 /**
  * Submit new feedback
@@ -45,6 +47,38 @@ export async function submitFeedback(input: CreateFeedbackInput): Promise<Feedba
     if (error || !feedback) {
       console.error('Error submitting feedback:', error)
       return null
+    }
+
+    // Send email notification to admin(s)
+    try {
+      // Get all admins in the organization
+      const orgUsers = await getOrganizationUsers()
+      const admins = orgUsers.filter(u => u.role === 'admin')
+      const adminEmails = admins.map(a => a.email).filter(Boolean) as string[]
+
+      if (adminEmails.length > 0) {
+        // Get submitter info
+        const { data: submitterProfile } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', user.id)
+          .single()
+
+        const submitterName = submitterProfile?.full_name || submitterProfile?.email || 'A team member'
+
+        // Send email to all admins
+        await sendFeedbackNotification({
+          to: adminEmails,
+          feedbackTitle: input.title,
+          feedbackType: input.type,
+          feedbackDescription: input.description,
+          submittedBy: submitterName,
+          notificationType: 'new',
+        })
+      }
+    } catch (emailError) {
+      // Don't fail feedback submission if email fails
+      console.error('Error sending feedback notification email:', emailError)
     }
 
     return feedback
@@ -191,6 +225,42 @@ export async function updateFeedback(
     if (error || !feedback) {
       console.error('Error updating feedback:', error)
       return null
+    }
+
+    // Send email notification to all organization members if status or notes were updated
+    if (updates.status !== undefined || updates.admin_notes !== undefined) {
+      try {
+        // Get all users in the organization
+        const orgUsers = await getOrganizationUsers()
+        const userEmails = orgUsers.map(u => u.email).filter(Boolean) as string[]
+
+        if (userEmails.length > 0) {
+          // Get updater info
+          const { data: updaterProfile } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', user.id)
+            .single()
+
+          const updaterName = updaterProfile?.full_name || updaterProfile?.email || 'Admin'
+
+          // Send email to all organization members using the updated feedback
+          await sendFeedbackNotification({
+            to: userEmails,
+            feedbackTitle: feedback.title,
+            feedbackType: feedback.type,
+            feedbackDescription: feedback.description,
+            submittedBy: 'Team', // Not relevant for updates
+            notificationType: 'update',
+            status: feedback.status,
+            adminNotes: feedback.admin_notes || undefined,
+            updatedBy: updaterName,
+          })
+        }
+      } catch (emailError) {
+        // Don't fail feedback update if email fails
+        console.error('Error sending feedback update notification email:', emailError)
+      }
     }
 
     return feedback

@@ -140,3 +140,59 @@ HSH Contractor`
   return `mailto:${input.to}?subject=${subject}&body=${body}`
 }
 
+export interface SendFeedbackNotificationInput {
+  to: string[]
+  feedbackTitle: string
+  feedbackType: 'bug' | 'feature-request' | 'general-feedback'
+  feedbackDescription: string
+  submittedBy: string
+  notificationType: 'new' | 'update'
+  status?: string
+  adminNotes?: string
+  updatedBy?: string
+}
+
+/**
+ * Send feedback notification email
+ */
+export async function sendFeedbackNotification(input: SendFeedbackNotificationInput): Promise<boolean> {
+  try {
+    // Try using Supabase Edge Function first
+    const { data, error } = await supabase.functions.invoke('send-feedback-email', {
+      body: {
+        to: input.to,
+        feedbackTitle: input.feedbackTitle,
+        feedbackType: input.feedbackType,
+        feedbackDescription: input.feedbackDescription,
+        submittedBy: input.submittedBy,
+        notificationType: input.notificationType,
+        status: input.status,
+        adminNotes: input.adminNotes,
+        updatedBy: input.updatedBy,
+      },
+    })
+
+    if (error) {
+      console.error('Error sending feedback email via Edge Function:', error)
+      return false
+    }
+
+    if (data && typeof data === 'object' && 'success' in data) {
+      if (data.success === true) {
+        console.log('Feedback email sent successfully via Edge Function')
+        return true
+      } else {
+        console.warn('Edge Function returned success: false', data)
+        return false
+      }
+    }
+
+    // If no success field, assume failure
+    console.warn('Edge Function response missing success field:', data)
+    return false
+  } catch (error) {
+    console.error('Error sending feedback email:', error)
+    return false
+  }
+}
+
