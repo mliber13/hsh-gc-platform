@@ -12,6 +12,8 @@ import {
   UpdatePlanEstimateTemplateInput
 } from '@/types/estimateTemplate'
 import { Trade } from '@/types'
+import { isOnlineMode } from '@/lib/supabase'
+import * as supabaseService from './supabaseService'
 
 // Storage key
 const STORAGE_KEY = 'hsh_gc_estimate_templates'
@@ -28,67 +30,87 @@ const dateReviver = (key: string, value: any) => {
 // Template CRUD Operations
 // ============================================================================
 
-export function getAllEstimateTemplates(): PlanEstimateTemplate[] {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY)
-    if (!data) return []
-    return JSON.parse(data, dateReviver) as PlanEstimateTemplate[]
-  } catch (error) {
-    console.error('Error reading estimate templates:', error)
-    return []
+export async function getAllEstimateTemplates(): Promise<PlanEstimateTemplate[]> {
+  if (isOnlineMode()) {
+    // Fetch from Supabase in online mode
+    return await supabaseService.fetchEstimateTemplates()
+  } else {
+    // Use localStorage in offline mode
+    try {
+      const data = localStorage.getItem(STORAGE_KEY)
+      if (!data) return []
+      return JSON.parse(data, dateReviver) as PlanEstimateTemplate[]
+    } catch (error) {
+      console.error('Error reading estimate templates:', error)
+      return []
+    }
   }
 }
 
-export function getEstimateTemplateById(templateId: string): PlanEstimateTemplate | null {
-  const templates = getAllEstimateTemplates()
+export async function getEstimateTemplateById(templateId: string): Promise<PlanEstimateTemplate | null> {
+  const templates = await getAllEstimateTemplates()
   return templates.find(t => t.id === templateId) || null
 }
 
-export function createEstimateTemplate(input: CreatePlanEstimateTemplateInput): PlanEstimateTemplate {
-  const templates = getAllEstimateTemplates()
-  
-  // Convert trades to template format (remove IDs)
-  const templateTrades = input.trades.map(trade => {
-    const { id, estimateId, ...tradeData } = trade
-    return tradeData
-  })
-  
-  const newTemplate: PlanEstimateTemplate = {
-    id: uuidv4(),
-    name: input.name,
-    description: input.description,
-    trades: templateTrades,
-    defaultMarkupPercent: input.defaultMarkupPercent || 11.1,
-    defaultContingencyPercent: input.defaultContingencyPercent || 10,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    usageCount: 0,
-    linkedPlanIds: [],
+export async function createEstimateTemplate(input: CreatePlanEstimateTemplateInput): Promise<PlanEstimateTemplate> {
+  if (isOnlineMode()) {
+    // Use Supabase service for online mode
+    const template = await supabaseService.createEstimateTemplateInDB(input)
+    if (!template) throw new Error('Failed to create template in database')
+    return template
+  } else {
+    // Use localStorage for offline mode
+    const templates = await getAllEstimateTemplates()
+    
+    // Convert trades to template format (remove IDs)
+    const templateTrades = input.trades.map(trade => {
+      const { id, estimateId, ...tradeData } = trade
+      return tradeData
+    })
+    
+    const newTemplate: PlanEstimateTemplate = {
+      id: uuidv4(),
+      name: input.name,
+      description: input.description,
+      trades: templateTrades,
+      defaultMarkupPercent: input.defaultMarkupPercent || 11.1,
+      defaultContingencyPercent: input.defaultContingencyPercent || 10,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      usageCount: 0,
+      linkedPlanIds: [],
+    }
+    
+    templates.push(newTemplate)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(templates))
+    
+    return newTemplate
   }
-  
-  templates.push(newTemplate)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(templates))
-  
-  return newTemplate
 }
 
-export function updateEstimateTemplate(
+export async function updateEstimateTemplate(
   templateId: string,
   updates: UpdatePlanEstimateTemplateInput
-): PlanEstimateTemplate | null {
-  const templates = getAllEstimateTemplates()
-  const index = templates.findIndex(t => t.id === templateId)
-  
-  if (index === -1) return null
-  
-  templates[index] = {
-    ...templates[index],
-    ...updates,
-    updatedAt: new Date(),
+): Promise<PlanEstimateTemplate | null> {
+  if (isOnlineMode()) {
+    // TODO: Implement Supabase update for online mode
+    console.warn('Update template in online mode not yet implemented')
+    return null
+  } else {
+    const templates = await getAllEstimateTemplates()
+    const index = templates.findIndex(t => t.id === templateId)
+    
+    if (index === -1) return null
+    
+    templates[index] = {
+      ...templates[index],
+      ...updates,
+      updatedAt: new Date(),
+    }
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(templates))
+    return templates[index]
   }
-  
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(templates))
-  return templates[index]
 }
 
 export function deleteEstimateTemplate(templateId: string): boolean {
@@ -105,33 +127,33 @@ export function deleteEstimateTemplate(templateId: string): boolean {
 // Template Usage
 // ============================================================================
 
-export function incrementTemplateUsage(templateId: string): void {
-  const template = getEstimateTemplateById(templateId)
+export async function incrementTemplateUsage(templateId: string): Promise<void> {
+  const template = await getEstimateTemplateById(templateId)
   if (!template) return
   
-  updateEstimateTemplate(templateId, {
+  await updateEstimateTemplate(templateId, {
     ...template,
     usageCount: template.usageCount + 1,
   })
 }
 
-export function linkTemplateToPlan(templateId: string, planId: string): void {
-  const template = getEstimateTemplateById(templateId)
+export async function linkTemplateToPlan(templateId: string, planId: string): Promise<void> {
+  const template = await getEstimateTemplateById(templateId)
   if (!template) return
   
   if (!template.linkedPlanIds.includes(planId)) {
-    updateEstimateTemplate(templateId, {
+    await updateEstimateTemplate(templateId, {
       ...template,
       linkedPlanIds: [...template.linkedPlanIds, planId],
     })
   }
 }
 
-export function unlinkTemplateFromPlan(templateId: string, planId: string): void {
-  const template = getEstimateTemplateById(templateId)
+export async function unlinkTemplateFromPlan(templateId: string, planId: string): Promise<void> {
+  const template = await getEstimateTemplateById(templateId)
   if (!template) return
   
-  updateEstimateTemplate(templateId, {
+  await updateEstimateTemplate(templateId, {
     ...template,
     linkedPlanIds: template.linkedPlanIds.filter(id => id !== planId),
   })
@@ -145,11 +167,11 @@ export function unlinkTemplateFromPlan(templateId: string, planId: string): void
  * Apply a template's trades to an estimate
  * This creates new Trade objects from the template
  */
-export function applyTemplateToEstimate(
+export async function applyTemplateToEstimate(
   templateId: string,
   estimateId: string
-): Trade[] {
-  const template = getEstimateTemplateById(templateId)
+): Promise<Trade[]> {
+  const template = await getEstimateTemplateById(templateId)
   if (!template) return []
   
   // Create new trades from template
@@ -161,7 +183,7 @@ export function applyTemplateToEstimate(
   }))
   
   // Increment usage count
-  incrementTemplateUsage(templateId)
+  await incrementTemplateUsage(templateId)
   
   return newTrades
 }

@@ -164,7 +164,7 @@ export async function exportAllData(): Promise<BackupData> {
     orgFilter('subcontractors'),
     orgFilter('suppliers'),
     orgFilter('user_invitations'),
-    orgFilter('feedback'),
+    orgFilter('feedback', 'submitted_at'), // feedback uses submitted_at instead of created_at
     orgFilter('profiles'), // Get all profiles in the organization
   ])
 

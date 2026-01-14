@@ -1361,9 +1361,16 @@ export async function fetchEstimateTemplates(): Promise<PlanEstimateTemplate[]> 
   }
 
   return data.map(template => ({
-    ...template,
+    id: template.id,
+    name: template.name,
+    description: template.description || undefined,
+    trades: template.trades || [],
+    defaultMarkupPercent: template.default_markup_percent,
+    defaultContingencyPercent: template.default_contingency_percent,
     createdAt: new Date(template.created_at),
     updatedAt: new Date(template.updated_at),
+    usageCount: template.usage_count || 0,
+    linkedPlanIds: template.linked_plan_ids || [],
   })) as PlanEstimateTemplate[]
 }
 

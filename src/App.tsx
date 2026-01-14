@@ -156,7 +156,7 @@ function App() {
     let projectToSet: Project | null = newProject
 
     if (formData.estimateTemplateId && newProject.estimate) {
-      const templateTrades = applyTemplateToEstimate(formData.estimateTemplateId, newProject.estimate.id)
+      const templateTrades = await applyTemplateToEstimate(formData.estimateTemplateId, newProject.estimate.id)
       if (templateTrades.length > 0) {
         for (const templateTrade of templateTrades) {
           await addTrade_Hybrid(newProject.estimate.id, {

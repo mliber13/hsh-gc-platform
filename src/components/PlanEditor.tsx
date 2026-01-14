@@ -60,8 +60,11 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
 
   useEffect(() => {
     // Load estimate templates
-    const templates = getAllEstimateTemplates()
-    setEstimateTemplates(templates)
+    const loadTemplates = async () => {
+      const templates = await getAllEstimateTemplates()
+      setEstimateTemplates(templates)
+    }
+    loadTemplates()
 
     if (plan) {
       setFormData({

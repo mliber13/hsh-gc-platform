@@ -512,7 +512,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     setIsAddingTrade(false)
   }
 
-  const handleAddDefaultCategories = () => {
+  const handleAddDefaultCategories = async () => {
     if (!projectData) return
 
     const defaultCategories = [
@@ -522,37 +522,45 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       'interior-finishes', 'kitchen', 'bath', 'appliances'
     ]
 
-    const newTrades: Trade[] = defaultCategories.map((category, index) => {
-      const tradeId = uuidv4()
-      return {
-        id: tradeId,
-        estimateId: projectData.estimate.id,
-        category: category as any,
-        name: `${TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category} - To Be Determined`,
-        description: '',
-        quantity: 0,
-        unit: 'each',
-        laborCost: 0,
-        laborRate: 0,
-        laborHours: 0,
-        materialCost: 0,
-        materialRate: 0,
-        subcontractorCost: 0,
-        isSubcontracted: false,
-        wasteFactor: DEFAULT_VALUES.WASTE_FACTOR,
-        totalCost: 0,
-        sortOrder: index,
-        notes: '',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+    try {
+      // Create and save each trade to the database
+      const newTrades: Trade[] = []
+      for (let i = 0; i < defaultCategories.length; i++) {
+        const category = defaultCategories[i]
+        const tradeInput: TradeInput = {
+          category: category as any,
+          name: `${TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category} - To Be Determined`,
+          description: '',
+          quantity: 0,
+          unit: 'each',
+          laborCost: 0,
+          laborRate: 0,
+          laborHours: 0,
+          materialCost: 0,
+          materialRate: 0,
+          subcontractorCost: 0,
+          isSubcontracted: false,
+          wasteFactor: DEFAULT_VALUES.WASTE_FACTOR,
+          markupPercent: markupPercent,
+          notes: '',
+        }
+        
+        const savedTrade = await addTrade_Hybrid(projectData.estimate.id, tradeInput)
+        newTrades.push(savedTrade)
       }
-    })
 
-    const updatedTrades = [...trades, ...newTrades]
-    setTrades(updatedTrades)
+      // Reload trades from database to get all trades
+      const refreshedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
+      setTrades(refreshedTrades)
 
-    // Update local state
-    setProjectData({ ...projectData, updatedAt: new Date() })
+      // Update local state
+      setProjectData({ ...projectData, updatedAt: new Date() })
+      
+      alert(`Successfully added ${newTrades.length} default category items.`)
+    } catch (error) {
+      console.error('Error adding default categories:', error)
+      alert('Failed to add default categories. Please try again.')
+    }
   }
 
   // ----------------------------------------------------------------------------
@@ -597,7 +605,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     setShowPrintReport(true)
   }
 
-  const handleSaveAsTemplate = () => {
+  const handleSaveAsTemplate = async () => {
     if (!templateName.trim()) {
       alert('Please enter a template name')
       return
@@ -609,7 +617,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     }
 
     try {
-      const template = createEstimateTemplate({
+      const template = await createEstimateTemplate({
         name: templateName.trim(),
         description: templateDescription.trim() || undefined,
         trades,
@@ -627,8 +635,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     }
   }
 
-  const handleOpenApplyTemplate = () => {
-    const templates = getAllEstimateTemplates()
+  const handleOpenApplyTemplate = async () => {
+    const templates = await getAllEstimateTemplates()
     setAvailableTemplates(templates)
     setShowApplyTemplateDialog(true)
   }
@@ -662,7 +670,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       console.log('📋 Applying template:', selectedTemplateToApply)
       
       // Apply template creates new trades from the template
-      const templateTrades = applyTemplateToEstimate(selectedTemplateToApply, projectData.estimate.id)
+      const templateTrades = await applyTemplateToEstimate(selectedTemplateToApply, projectData.estimate.id)
       console.log('✅ Template trades created:', templateTrades.length)
       
       if (templateTrades.length === 0) {
