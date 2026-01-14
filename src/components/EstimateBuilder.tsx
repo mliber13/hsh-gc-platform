@@ -479,6 +479,35 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     }
   }
 
+  const handleBulkUpdateMarkup = async () => {
+    if (!projectData) return
+
+    const newMarkup = parseFloat(bulkMarkupPercent)
+    if (isNaN(newMarkup) || newMarkup < 0) {
+      alert('Please enter a valid markup percentage')
+      return
+    }
+
+    try {
+      // Update all trades
+      const updatePromises = trades.map(trade => 
+        updateTrade_Hybrid(trade.id, { markupPercent: newMarkup })
+      )
+
+      await Promise.all(updatePromises)
+
+      // Reload trades
+      const refreshedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
+      setTrades(refreshedTrades)
+      setMarkupPercent(newMarkup)
+      setShowBulkMarkupDialog(false)
+      alert(`Successfully updated markup to ${newMarkup.toFixed(1)}% for all ${trades.length} item(s).`)
+    } catch (error) {
+      console.error('Error updating bulk markup:', error)
+      alert('Failed to update markup. Please try again.')
+    }
+  }
+
   const handleClearAll = async () => {
     if (!projectData) return
 
