@@ -499,11 +499,29 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
 
       // Reload trades
       const refreshedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
-      setTrades(refreshedTrades)
+      
+      // Ensure all trades have correct totalCost (recalculate in memory if needed)
+      // This fixes any trades that might have had totalCost set to 0 from previous updates
+      const tradesWithCorrectTotals = refreshedTrades.map(trade => {
+        const calculatedTotalCost = trade.laborCost + trade.materialCost + trade.subcontractorCost
+        // If totalCost is 0 or significantly different, recalculate it
+        if (trade.totalCost === 0 || Math.abs(trade.totalCost - calculatedTotalCost) > 0.01) {
+          // Update in database to fix it permanently
+          updateTrade_Hybrid(trade.id, {
+            laborCost: trade.laborCost,
+            materialCost: trade.materialCost,
+            subcontractorCost: trade.subcontractorCost,
+          }).catch(err => console.error('Error fixing trade totalCost:', err))
+          return { ...trade, totalCost: calculatedTotalCost }
+        }
+        return trade
+      })
+      
+      setTrades(tradesWithCorrectTotals)
       setMarkupPercent(newMarkup)
       
       // Manually calculate and update totals immediately
-      const basePriceTotal = refreshedTrades.reduce((sum, trade) => sum + trade.totalCost, 0)
+      const basePriceTotal = tradesWithCorrectTotals.reduce((sum, trade) => sum + trade.totalCost, 0)
       const contingency = basePriceTotal * (contingencyPercent / 100)
       const grossProfitTotal = refreshedTrades.reduce((sum, trade) => {
         const itemMarkup = trade.markupPercent || newMarkup
@@ -1710,7 +1728,7 @@ function TradeTable({
                 <th className="p-3 border-r-2 border-gray-300"></th>
                 <th className="text-center p-3 text-[#913E00] text-3xl font-bold border-r-2 border-gray-300" colSpan={2}>Material</th>
                 <th className="text-center p-3 text-[#913E00] text-3xl font-bold border-r-2 border-gray-300" colSpan={2}>Labor</th>
-                <th className="text-center p-3 text-[#D95C00] text-3xl font-bold border-r-2 border-gray-300" colSpan={2}>Subcontractor</th>
+                <th className="text-center p-3 text-[#913E00] text-3xl font-bold border-r-2 border-gray-300" colSpan={2}>Subcontractor</th>
                 <th className="p-3"></th>
                 <th className="p-3"></th>
                 <th className="p-3"></th>

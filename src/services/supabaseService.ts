@@ -455,7 +455,18 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
 export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInput>): Promise<Trade | null> {
   if (!isOnlineMode()) return null
 
-  const totalCost = (updates.laborCost || 0) + (updates.materialCost || 0) + (updates.subcontractorCost || 0)
+  // Fetch existing trade to get current values if cost fields aren't being updated
+  const { data: existingTrade } = await supabase
+    .from('trades')
+    .select('labor_cost, material_cost, subcontractor_cost')
+    .eq('id', tradeId)
+    .single()
+
+  // Calculate totalCost using updated values or existing values
+  const laborCost = updates.laborCost !== undefined ? updates.laborCost : (existingTrade?.labor_cost || 0)
+  const materialCost = updates.materialCost !== undefined ? updates.materialCost : (existingTrade?.material_cost || 0)
+  const subcontractorCost = updates.subcontractorCost !== undefined ? updates.subcontractorCost : (existingTrade?.subcontractor_cost || 0)
+  const totalCost = laborCost + materialCost + subcontractorCost
 
   const updateData: any = {}
   if (updates.category !== undefined) updateData.category = updates.category
@@ -479,6 +490,8 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
   if ((updates as any).quoteDate !== undefined) updateData.quote_date = (updates as any).quoteDate
   if ((updates as any).quoteReference !== undefined) updateData.quote_reference = (updates as any).quoteReference
   if ((updates as any).quoteFileUrl !== undefined) updateData.quote_file_url = (updates as any).quoteFileUrl
+  
+  // Always update total_cost to ensure it's correct (calculated from existing or updated values)
   updateData.total_cost = totalCost
 
   // Check if there's anything to update
