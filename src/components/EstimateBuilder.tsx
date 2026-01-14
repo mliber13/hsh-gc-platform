@@ -43,6 +43,7 @@ import {
 } from '@/services/estimateTemplateService'
 import {
   createProject_Hybrid,
+  getProject_Hybrid,
   updateProject_Hybrid,
   addTrade_Hybrid,
   updateTrade_Hybrid,
@@ -500,6 +501,45 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       const refreshedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
       setTrades(refreshedTrades)
       setMarkupPercent(newMarkup)
+      
+      // Manually calculate and update totals immediately
+      const basePriceTotal = refreshedTrades.reduce((sum, trade) => sum + trade.totalCost, 0)
+      const contingency = basePriceTotal * (contingencyPercent / 100)
+      const grossProfitTotal = refreshedTrades.reduce((sum, trade) => {
+        const itemMarkup = trade.markupPercent || newMarkup
+        const markup = trade.totalCost * (itemMarkup / 100)
+        return sum + markup
+      }, 0)
+      const totalEstimated = basePriceTotal + contingency + grossProfitTotal
+      const marginOfProfit = totalEstimated > 0 ? (grossProfitTotal / totalEstimated) * 100 : 0
+      
+      const updatedEstimate = {
+        ...projectData.estimate,
+        totals: {
+          basePriceTotal,
+          contingency,
+          grossProfitTotal,
+          totalEstimated,
+          marginOfProfit,
+        },
+        subtotal: basePriceTotal,
+        overhead: 0,
+        profit: grossProfitTotal,
+        contingency: contingency,
+        totalEstimate: totalEstimated,
+        updatedAt: new Date(),
+      }
+      
+      // Update project with new estimate totals
+      const updated = await updateProject_Hybrid(projectData.id, {
+        id: projectData.id,
+        estimate: updatedEstimate,
+      })
+      
+      if (updated) {
+        setProjectData(updated)
+      }
+      
       setShowBulkMarkupDialog(false)
       alert(`Successfully updated markup to ${newMarkup.toFixed(1)}% for all ${trades.length} item(s).`)
     } catch (error) {
