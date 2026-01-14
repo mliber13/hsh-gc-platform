@@ -498,32 +498,37 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       await Promise.all(updatePromises)
 
       // Reload trades
-      const refreshedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
+      let refreshedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
       
-      // Ensure all trades have correct totalCost (recalculate in memory if needed)
-      // This fixes any trades that might have had totalCost set to 0 from previous updates
-      const tradesWithCorrectTotals = refreshedTrades.map(trade => {
+      // Fix any trades that have incorrect totalCost (0 or wrong value)
+      // This fixes trades that were affected by the previous bug
+      const fixPromises = refreshedTrades.map(async (trade) => {
         const calculatedTotalCost = trade.laborCost + trade.materialCost + trade.subcontractorCost
-        // If totalCost is 0 or significantly different, recalculate it
+        // If totalCost is 0 or significantly different, fix it in the database
         if (trade.totalCost === 0 || Math.abs(trade.totalCost - calculatedTotalCost) > 0.01) {
           // Update in database to fix it permanently
-          updateTrade_Hybrid(trade.id, {
+          await updateTrade_Hybrid(trade.id, {
             laborCost: trade.laborCost,
             materialCost: trade.materialCost,
             subcontractorCost: trade.subcontractorCost,
-          }).catch(err => console.error('Error fixing trade totalCost:', err))
+          })
+          // Return trade with corrected totalCost
           return { ...trade, totalCost: calculatedTotalCost }
         }
         return trade
       })
       
+      // Wait for all fixes to complete
+      const tradesWithCorrectTotals = await Promise.all(fixPromises)
+      
+      // Use corrected trades for calculations and state
       setTrades(tradesWithCorrectTotals)
       setMarkupPercent(newMarkup)
       
-      // Manually calculate and update totals immediately
+      // Manually calculate and update totals immediately using corrected trades
       const basePriceTotal = tradesWithCorrectTotals.reduce((sum, trade) => sum + trade.totalCost, 0)
       const contingency = basePriceTotal * (contingencyPercent / 100)
-      const grossProfitTotal = refreshedTrades.reduce((sum, trade) => {
+      const grossProfitTotal = tradesWithCorrectTotals.reduce((sum, trade) => {
         const itemMarkup = trade.markupPercent || newMarkup
         const markup = trade.totalCost * (itemMarkup / 100)
         return sum + markup
