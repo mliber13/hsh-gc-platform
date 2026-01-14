@@ -142,6 +142,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set())
   const [editingSubItem, setEditingSubItem] = useState<{ tradeId: string; subItem?: SubItem } | null>(null)
   const [subItemsByTrade, setSubItemsByTrade] = useState<Record<string, SubItem[]>>({})
+  const [showBulkMarkupDialog, setShowBulkMarkupDialog] = useState(false)
+  const [bulkMarkupPercent, setBulkMarkupPercent] = useState(markupPercent.toString())
 
   // Initialize project if none provided
   useEffect(() => {
@@ -745,6 +747,10 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           onAddTrade={handleAddTrade}
           onAddDefaultCategories={handleAddDefaultCategories}
           onClearAll={handleClearAll}
+          onBulkUpdateMarkup={() => {
+            setBulkMarkupPercent(markupPercent.toString())
+            setShowBulkMarkupDialog(true)
+          }}
           onRequestQuote={(trade) => {
             setSelectedTradeForQuote(trade)
             setShowQuoteRequestForm(true)
@@ -860,6 +866,48 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
                       setTemplateName('')
                       setTemplateDescription('')
                     }}
+                    variant="outline"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Bulk Markup Dialog */}
+        {showBulkMarkupDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Update Markup for All Items</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="bulk-markup">Markup Percentage *</Label>
+                  <Input
+                    id="bulk-markup"
+                    type="number"
+                    step="0.1"
+                    value={bulkMarkupPercent}
+                    onChange={(e) => setBulkMarkupPercent(e.target.value)}
+                    placeholder="11.1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    This will update the markup percentage for all {trades.length} cost item(s) in this estimate.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleBulkUpdateMarkup}
+                    className="flex-1 bg-gradient-to-r from-[#D95C00] to-[#C04F00] hover:from-[#C04F00] hover:to-[#A93226]"
+                  >
+                    <Percent className="w-4 h-4 mr-2" />
+                    Update All Items
+                  </Button>
+                  <Button
+                    onClick={() => setShowBulkMarkupDialog(false)}
                     variant="outline"
                   >
                     Cancel
@@ -1322,6 +1370,7 @@ interface TradeTableProps {
   onAddTrade: () => void
   onAddDefaultCategories: () => void
   onClearAll: () => void
+  onBulkUpdateMarkup?: () => void
   onRequestQuote?: (trade: Trade) => void
   defaultMarkupPercent: number
   expandedTrades: Set<string>
@@ -1339,6 +1388,7 @@ function TradeTable({
   onAddTrade, 
   onAddDefaultCategories, 
   onClearAll,
+  onBulkUpdateMarkup,
   onRequestQuote, 
   defaultMarkupPercent,
   expandedTrades,
@@ -1385,15 +1435,28 @@ function TradeTable({
           <CardTitle>Estimate Breakdown</CardTitle>
           <div className="flex flex-col sm:flex-row gap-2">
             {trades.length > 0 && (
-              <Button 
-                onClick={onClearAll}
-                variant="outline"
-                size="sm"
-                className="border-red-500 text-red-600 hover:bg-red-50 hover:border-red-600 w-full sm:w-auto"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Clear All
-              </Button>
+              <>
+                <Button 
+                  onClick={onClearAll}
+                  variant="outline"
+                  size="sm"
+                  className="border-red-500 text-red-600 hover:bg-red-50 hover:border-red-600 w-full sm:w-auto"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Clear All
+                </Button>
+                {onBulkUpdateMarkup && (
+                  <Button 
+                    onClick={onBulkUpdateMarkup}
+                    variant="outline"
+                    size="sm"
+                    className="border-[#D95C00] text-[#D95C00] hover:bg-[#D95C00] hover:text-white w-full sm:w-auto"
+                  >
+                    <Percent className="w-4 h-4 mr-2" />
+                    Bulk Markup
+                  </Button>
+                )}
+              </>
             )}
             <Button 
               onClick={onAddDefaultCategories}
@@ -1515,6 +1578,10 @@ function TradeTable({
                               <span className="text-gray-500">Labor:</span>
                               <span className="ml-1 font-medium">{formatCurrency(trade.laborCost)}</span>
                             </div>
+                            <div>
+                              <span className="text-gray-500">Subcontractor:</span>
+                              <span className="ml-1 font-medium">{formatCurrency(trade.subcontractorCost)}</span>
+                            </div>
                           </div>
 
                           <div className="flex gap-2">
@@ -1566,7 +1633,7 @@ function TradeTable({
         {/* Desktop View - Table */}
         <div className="hidden md:block">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse min-w-[1200px]">
+            <table className="w-full border-collapse min-w-[1400px]">
             <thead>
               <tr className="border-b">
                 <th className="p-3"></th>
@@ -1574,6 +1641,7 @@ function TradeTable({
                 <th className="p-3 border-r-2 border-gray-300"></th>
                 <th className="text-center p-3 text-[#913E00] text-3xl font-bold border-r-2 border-gray-300" colSpan={2}>Material</th>
                 <th className="text-center p-3 text-[#913E00] text-3xl font-bold border-r-2 border-gray-300" colSpan={2}>Labor</th>
+                <th className="text-center p-3 text-[#D95C00] text-3xl font-bold border-r-2 border-gray-300" colSpan={2}>Subcontractor</th>
                 <th className="p-3"></th>
                 <th className="p-3"></th>
                 <th className="p-3"></th>
@@ -1586,6 +1654,8 @@ function TradeTable({
                 <th className="text-left p-3 bg-[#213069] text-white border-r-2 border-gray-300">Category & Items</th>
                 <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Qty</th>
                 <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Unit</th>
+                <th className="text-center p-3 bg-[#213069] text-white">Unit Cost</th>
+                <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Cost</th>
                 <th className="text-center p-3 bg-[#213069] text-white">Unit Cost</th>
                 <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Cost</th>
                 <th className="text-center p-3 bg-[#213069] text-white">Unit Cost</th>
@@ -1604,6 +1674,7 @@ function TradeTable({
                 const groupTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.totalCost, 0)
                 const groupMaterialTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.materialCost, 0)
                 const groupLaborTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.laborCost, 0)
+                const groupSubcontractorTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.subcontractorCost, 0)
                 const groupMarkupTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.totalCost * ((t.markupPercent || defaultMarkupPercent) / 100), 0)
                 const groupFinalTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.totalCost * (1 + (t.markupPercent || defaultMarkupPercent) / 100), 0)
                 
@@ -1626,6 +1697,8 @@ function TradeTable({
                       <td className="p-3 text-center border-b border-r-2 border-gray-300 font-bold text-blue-800">{formatCurrency(groupMaterialTotal)}</td>
                       <td className="p-3 text-center border-b"></td>
                       <td className="p-3 text-center border-b border-r-2 border-gray-300 font-bold text-blue-800">{formatCurrency(groupLaborTotal)}</td>
+                      <td className="p-3 text-center border-b"></td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-bold text-blue-800">{formatCurrency(groupSubcontractorTotal)}</td>
                       <td className="p-3 text-center border-b font-bold border-r-2 border-gray-300 text-blue-800">{formatCurrency(groupTotal)}</td>
                       <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500">-</td>
                       <td className="p-3 text-center border-b border-r-2 border-gray-300 font-bold text-blue-800">{formatCurrency(groupMarkupTotal)}</td>
@@ -1656,6 +1729,8 @@ function TradeTable({
                             <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.materialCost, 0))}</td>
                             <td className="p-3 text-center border-b"></td>
                             <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.laborCost, 0))}</td>
+                            <td className="p-3 text-center border-b"></td>
+                            <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.subcontractorCost, 0))}</td>
                             <td className="p-3 text-center border-b font-bold border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.totalCost, 0))}</td>
                             <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500">-</td>
                             <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.totalCost * ((t.markupPercent || defaultMarkupPercent) / 100), 0))}</td>
@@ -1706,6 +1781,8 @@ function TradeTable({
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.materialCost)}</td>
                                   <td className="p-3 text-center border-b">{trade.laborRate ? formatCurrency(trade.laborRate) : '-'}</td>
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.laborCost)}</td>
+                                  <td className="p-3 text-center border-b">{trade.subcontractorRate ? formatCurrency(trade.subcontractorRate) : '-'}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.subcontractorCost)}</td>
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost)}</td>
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300">{(trade.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * ((trade.markupPercent || defaultMarkupPercent) / 100))}</td>
@@ -1753,6 +1830,8 @@ function TradeTable({
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.materialCost)}</td>
                                     <td className="p-3 text-center border-b text-sm">{subItem.laborRate ? formatCurrency(subItem.laborRate) : '-'}</td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.laborCost)}</td>
+                                    <td className="p-3 text-center border-b text-sm">{subItem.subcontractorRate ? formatCurrency(subItem.subcontractorRate) : '-'}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.subcontractorCost)}</td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold">{formatCurrency(subItem.totalCost)}</td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{(subItem.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.totalCost * ((subItem.markupPercent || defaultMarkupPercent) / 100))}</td>
@@ -1777,7 +1856,7 @@ function TradeTable({
               })}
               {trades.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="p-8 text-center text-gray-500">
+                  <td colSpan={15} className="p-8 text-center text-gray-500">
                     No cost items added yet. Click "Add Cost Item" to get started.
                   </td>
                 </tr>
