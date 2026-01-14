@@ -170,6 +170,7 @@ export interface SubItem {
   materialRate?: number     // $/unit for reference
   
   subcontractorCost: number // Subcontractor cost for this sub-item
+  subcontractorRate?: number // $/unit for reference
   isSubcontracted: boolean
   
   // Waste factors
@@ -216,6 +217,7 @@ export interface Trade {
   materialRate?: number     // $/unit for reference
   
   subcontractorCost: number // If using sub (includes sub-items)
+  subcontractorRate?: number // $/unit for reference
   isSubcontracted: boolean
   
   // Waste factors

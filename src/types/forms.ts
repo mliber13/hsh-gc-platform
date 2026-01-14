@@ -104,6 +104,7 @@ export interface TradeInput {
   materialCost: number
   materialRate?: number
   subcontractorCost: number
+  subcontractorRate?: number
   isSubcontracted: boolean
   wasteFactor: number
   markupPercent?: number

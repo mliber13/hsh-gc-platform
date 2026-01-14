@@ -351,6 +351,7 @@ function transformTrade(row: any): Trade {
     materialCost: row.material_cost || 0,
     materialRate: row.material_rate || 0,
     subcontractorCost: row.subcontractor_cost || 0,
+    subcontractorRate: row.subcontractor_rate || 0,
     totalCost: row.total_cost || 0,
     isSubcontracted: row.is_subcontracted || false,
     wasteFactor: row.waste_factor || 10,
@@ -426,6 +427,7 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
       material_cost: input.materialCost || 0,
       material_rate: input.materialRate || 0,
       subcontractor_cost: input.subcontractorCost || 0,
+      subcontractor_rate: input.subcontractorRate || 0,
       total_cost: totalCost,
       is_subcontracted: input.isSubcontracted || false,
       waste_factor: input.wasteFactor || 10,
@@ -543,6 +545,7 @@ function transformSubItem(row: any): SubItem {
     materialCost: row.material_cost || 0,
     materialRate: row.material_rate || 0,
     subcontractorCost: row.subcontractor_cost || 0,
+    subcontractorRate: row.subcontractor_rate || 0,
     totalCost: row.total_cost || 0,
     isSubcontracted: row.is_subcontracted || false,
     wasteFactor: row.waste_factor || 10,
@@ -588,6 +591,7 @@ export async function createSubItemInDB(
     materialCost: number
     materialRate?: number
     subcontractorCost: number
+    subcontractorRate?: number
     isSubcontracted: boolean
     wasteFactor?: number
     markupPercent?: number
@@ -639,6 +643,7 @@ export async function createSubItemInDB(
       material_cost: input.materialCost || 0,
       material_rate: input.materialRate || 0,
       subcontractor_cost: input.subcontractorCost || 0,
+      subcontractor_rate: input.subcontractorRate || 0,
       total_cost: totalCost,
       is_subcontracted: input.isSubcontracted || false,
       waste_factor: input.wasteFactor || 10,
@@ -725,6 +730,7 @@ export async function updateSubItemInDB(
   if (updates.materialCost !== undefined) updateData.material_cost = updates.materialCost
   if (updates.materialRate !== undefined) updateData.material_rate = updates.materialRate
   if (updates.subcontractorCost !== undefined) updateData.subcontractor_cost = updates.subcontractorCost
+  if ((updates as any).subcontractorRate !== undefined) updateData.subcontractor_rate = (updates as any).subcontractorRate
   if (updates.isSubcontracted !== undefined) updateData.is_subcontracted = updates.isSubcontracted
   if (updates.wasteFactor !== undefined) updateData.waste_factor = updates.wasteFactor
   if (updates.markupPercent !== undefined) updateData.markup_percent = updates.markupPercent

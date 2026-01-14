@@ -298,6 +298,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       materialCost: trade.materialCost,
       materialRate: trade.materialRate,
       subcontractorCost: trade.subcontractorCost,
+      subcontractorRate: trade.subcontractorRate,
       isSubcontracted: trade.isSubcontracted,
       wasteFactor: trade.wasteFactor,
       markupPercent: trade.markupPercent || markupPercent,
@@ -2181,24 +2182,42 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
               </div>
             </div>
 
-            {/* Subcontractor Cost */}
-            <div>
-              <Label htmlFor="subcontractorCost">Subcontractor Cost</Label>
-              <Input
-                id="subcontractorCost"
-                type="number"
-                step="0.01"
-                value={formData.subcontractorCost}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  subcontractorCost: parseFloat(e.target.value) || 0,
-                }))}
-                placeholder="Enter quoted price from subcontractor"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Use quote request feature to get quotes from subcontractors in your directory
-              </p>
+            {/* Subcontractor Costs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="subcontractorRate">Subcontractor Unit Cost</Label>
+                <Input
+                  id="subcontractorRate"
+                  type="number"
+                  step="0.01"
+                  value={formData.subcontractorRate || ''}
+                  onChange={(e) => {
+                    const rate = parseFloat(e.target.value) || 0
+                    const cost = rate * formData.quantity
+                    setFormData(prev => ({ ...prev, subcontractorRate: rate, subcontractorCost: cost }))
+                  }}
+                  placeholder="Enter unit cost"
+                />
+              </div>
+              <div>
+                <Label htmlFor="subcontractorCost">Subcontractor Cost</Label>
+                <Input
+                  id="subcontractorCost"
+                  type="number"
+                  step="0.01"
+                  value={formData.subcontractorCost}
+                  onChange={(e) => {
+                    const cost = parseFloat(e.target.value) || 0
+                    const rate = formData.quantity > 0 ? cost / formData.quantity : 0
+                    setFormData(prev => ({ ...prev, subcontractorCost: cost, subcontractorRate: rate }))
+                  }}
+                  placeholder="Total cost"
+                />
+              </div>
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Use quote request feature to get quotes from subcontractors in your directory
+            </p>
 
               <div>
               <Label htmlFor="markupPercent">Markup % (for this item)</Label>
@@ -2282,6 +2301,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
     materialCost: subItem?.materialCost || 0,
     materialRate: subItem?.materialRate || 0,
     subcontractorCost: subItem?.subcontractorCost || 0,
+    subcontractorRate: subItem?.subcontractorRate || 0,
     isSubcontracted: subItem?.isSubcontracted || false,
     wasteFactor: subItem?.wasteFactor || 10,
     markupPercent: subItem?.markupPercent || defaultMarkupPercent,
@@ -2417,18 +2437,35 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="subItemSubcontractorCost">Subcontractor Cost</Label>
-              <Input
-                id="subItemSubcontractorCost"
-                type="number"
-                step="0.01"
-                value={formData.subcontractorCost || 0}
-                onChange={(e) => setFormData((prev: Partial<SubItem>) => ({
-                  ...prev,
-                  subcontractorCost: parseFloat(e.target.value) || 0,
-                }))}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="subItemSubcontractorRate">Subcontractor Unit Cost</Label>
+                <Input
+                  id="subItemSubcontractorRate"
+                  type="number"
+                  step="0.01"
+                  value={formData.subcontractorRate || ''}
+                  onChange={(e) => {
+                    const rate = parseFloat(e.target.value) || 0
+                    const cost = rate * (formData.quantity || 0)
+                    setFormData((prev: Partial<SubItem>) => ({ ...prev, subcontractorRate: rate, subcontractorCost: cost }))
+                  }}
+                />
+              </div>
+              <div>
+                <Label htmlFor="subItemSubcontractorCost">Subcontractor Cost</Label>
+                <Input
+                  id="subItemSubcontractorCost"
+                  type="number"
+                  step="0.01"
+                  value={formData.subcontractorCost || 0}
+                  onChange={(e) => {
+                    const cost = parseFloat(e.target.value) || 0
+                    const rate = (formData.quantity || 0) > 0 ? cost / (formData.quantity || 0) : 0
+                    setFormData((prev: Partial<SubItem>) => ({ ...prev, subcontractorCost: cost, subcontractorRate: rate }))
+                  }}
+                />
+              </div>
             </div>
 
             <div>
