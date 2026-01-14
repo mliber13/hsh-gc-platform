@@ -113,14 +113,20 @@ export async function updateEstimateTemplate(
   }
 }
 
-export function deleteEstimateTemplate(templateId: string): boolean {
-  const templates = getAllEstimateTemplates()
-  const filtered = templates.filter(t => t.id !== templateId)
-  
-  if (filtered.length === templates.length) return false
-  
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
-  return true
+export async function deleteEstimateTemplate(templateId: string): Promise<boolean> {
+  if (isOnlineMode()) {
+    // TODO: Implement Supabase delete for online mode
+    console.warn('Delete template in online mode not yet implemented')
+    return false
+  } else {
+    const templates = await getAllEstimateTemplates()
+    const filtered = templates.filter(t => t.id !== templateId)
+    
+    if (filtered.length === templates.length) return false
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
+    return true
+  }
 }
 
 // ============================================================================
