@@ -469,6 +469,7 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
   if (updates.materialCost !== undefined) updateData.material_cost = updates.materialCost
   if (updates.materialRate !== undefined) updateData.material_rate = updates.materialRate
   if (updates.subcontractorCost !== undefined) updateData.subcontractor_cost = updates.subcontractorCost
+  if (updates.subcontractorRate !== undefined) updateData.subcontractor_rate = updates.subcontractorRate
   if (updates.isSubcontracted !== undefined) updateData.is_subcontracted = updates.isSubcontracted
   if (updates.wasteFactor !== undefined) updateData.waste_factor = updates.wasteFactor
   if (updates.markupPercent !== undefined) updateData.markup_percent = updates.markupPercent
@@ -480,6 +481,22 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
   if ((updates as any).quoteFileUrl !== undefined) updateData.quote_file_url = (updates as any).quoteFileUrl
   updateData.total_cost = totalCost
 
+  // Check if there's anything to update
+  if (Object.keys(updateData).length === 0) {
+    console.warn('No fields to update for trade:', tradeId)
+    // Fetch the existing trade and return it
+    const { data: existing } = await supabase
+      .from('trades')
+      .select('*')
+      .eq('id', tradeId)
+      .single()
+    
+    if (existing) {
+      return transformTrade(existing)
+    }
+    return null
+  }
+
   const { data, error } = await supabase
     .from('trades')
     .update(updateData)
@@ -489,6 +506,21 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
 
   if (error) {
     console.error('Error updating trade:', error)
+    return null
+  }
+
+  if (!data) {
+    console.error('Update succeeded but no data returned for trade:', tradeId)
+    // Try to fetch the trade directly
+    const { data: fetched } = await supabase
+      .from('trades')
+      .select('*')
+      .eq('id', tradeId)
+      .single()
+    
+    if (fetched) {
+      return transformTrade(fetched)
+    }
     return null
   }
 
