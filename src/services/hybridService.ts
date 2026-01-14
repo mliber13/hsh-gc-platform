@@ -133,6 +133,15 @@ export async function deleteTrade_Hybrid(tradeId: string): Promise<boolean> {
   }
 }
 
+export async function deleteAllTrades_Hybrid(estimateId: string): Promise<boolean> {
+  if (isOnlineMode()) {
+    return await supabaseService.deleteAllTradesForEstimate(estimateId)
+  } else {
+    const { deleteAllTrades } = await import('./estimateService')
+    return deleteAllTrades(estimateId)
+  }
+}
+
 // ============================================================================
 // QUOTE OPERATIONS (Online-only - requires email links and vendor access)
 // ============================================================================

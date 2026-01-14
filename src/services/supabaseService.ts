@@ -509,6 +509,22 @@ export async function deleteTradeFromDB(tradeId: string): Promise<boolean> {
   return true
 }
 
+export async function deleteAllTradesForEstimate(estimateId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  const { error } = await supabase
+    .from('trades')
+    .delete()
+    .eq('estimate_id', estimateId)
+
+  if (error) {
+    console.error('Error deleting all trades:', error)
+    return false
+  }
+
+  return true
+}
+
 // ============================================================================
 // SUB-ITEMS OPERATIONS
 // ============================================================================

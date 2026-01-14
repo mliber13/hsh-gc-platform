@@ -47,6 +47,7 @@ import {
   addTrade_Hybrid,
   updateTrade_Hybrid,
   deleteTrade_Hybrid,
+  deleteAllTrades_Hybrid,
   getTradesForEstimate_Hybrid,
 } from '@/services/hybridService'
 import {
@@ -475,6 +476,37 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     }
   }
 
+  const handleClearAll = async () => {
+    if (!projectData) return
+
+    const tradeCount = trades.length
+    if (tradeCount === 0) {
+      alert('There are no cost items to clear.')
+      return
+    }
+
+    const confirmed = confirm(
+      `Are you sure you want to delete all ${tradeCount} cost item(s) from this estimate?\n\nThis action cannot be undone.`
+    )
+
+    if (!confirmed) return
+
+    try {
+      const success = await deleteAllTrades_Hybrid(projectData.estimate.id)
+      if (success) {
+        setTrades([])
+        setSubItemsByTrade({})
+        setProjectData({ ...projectData, updatedAt: new Date() })
+        alert(`Successfully cleared all ${tradeCount} cost item(s) from the estimate.`)
+      } else {
+        alert('Failed to clear all cost items. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error clearing all trades:', error)
+      alert('Failed to clear all cost items. Please try again.')
+    }
+  }
+
   const handleCancelEdit = () => {
     setEditingTrade(null)
     setIsAddingTrade(false)
@@ -703,6 +735,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           onDeleteTrade={handleDeleteTrade}
           onAddTrade={handleAddTrade}
           onAddDefaultCategories={handleAddDefaultCategories}
+          onClearAll={handleClearAll}
           onRequestQuote={(trade) => {
             setSelectedTradeForQuote(trade)
             setShowQuoteRequestForm(true)
@@ -1279,6 +1312,7 @@ interface TradeTableProps {
   onDeleteTrade: (tradeId: string) => void
   onAddTrade: () => void
   onAddDefaultCategories: () => void
+  onClearAll: () => void
   onRequestQuote?: (trade: Trade) => void
   defaultMarkupPercent: number
   expandedTrades: Set<string>
@@ -1295,6 +1329,7 @@ function TradeTable({
   onDeleteTrade, 
   onAddTrade, 
   onAddDefaultCategories, 
+  onClearAll,
   onRequestQuote, 
   defaultMarkupPercent,
   expandedTrades,
@@ -1340,6 +1375,17 @@ function TradeTable({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <CardTitle>Estimate Breakdown</CardTitle>
           <div className="flex flex-col sm:flex-row gap-2">
+            {trades.length > 0 && (
+              <Button 
+                onClick={onClearAll}
+                variant="outline"
+                size="sm"
+                className="border-red-500 text-red-600 hover:bg-red-50 hover:border-red-600 w-full sm:w-auto"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Clear All
+              </Button>
+            )}
             <Button 
               onClick={onAddDefaultCategories}
               variant="outline"

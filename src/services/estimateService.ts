@@ -216,6 +216,23 @@ export function deleteTrade(tradeId: string): boolean {
 }
 
 /**
+ * Delete all trades for an estimate
+ */
+export function deleteAllTrades(estimateId: string): boolean {
+  const trades = getTradesForEstimate(estimateId)
+  
+  // Delete all trades
+  trades.forEach(trade => {
+    tradeStorage.delete(trade.id)
+  })
+
+  // Recalculate estimate totals
+  recalculateEstimate(estimateId)
+
+  return true
+}
+
+/**
  * Reorder trades
  */
 export function reorderTrades(estimateId: string, tradeIds: string[]): void {
