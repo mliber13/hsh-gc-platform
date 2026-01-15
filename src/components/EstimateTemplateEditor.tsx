@@ -16,7 +16,7 @@ import {
   updateEstimateTemplate,
 } from '@/services/estimateTemplateService'
 import { getItemTemplatesByCategory } from '@/services/itemTemplateService'
-import { fetchSubcontractors } from '@/services/partnerService'
+import { fetchSubcontractors } from '@/services/partnerDirectoryService'
 import { TRADE_CATEGORIES, UNIT_TYPES, formatCurrency } from '@/types/constants'
 import { UnitType } from '@/types'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -95,7 +95,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
   const handleAddTrade = () => {
     const newTrade: EditableTrade = {
       tempId: `temp_new_${Date.now()}`,
-      category: 'general',
+      category: 'site-prep',
       name: '',
       description: '',
       quantity: 1,
