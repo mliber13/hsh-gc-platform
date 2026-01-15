@@ -93,9 +93,8 @@ export async function updateEstimateTemplate(
   updates: UpdatePlanEstimateTemplateInput
 ): Promise<PlanEstimateTemplate | null> {
   if (isOnlineMode()) {
-    // TODO: Implement Supabase update for online mode
-    console.warn('Update template in online mode not yet implemented')
-    return null
+    // Use Supabase service for online mode
+    return await supabaseService.updateEstimateTemplateInDB(templateId, updates)
   } else {
     const templates = await getAllEstimateTemplates()
     const index = templates.findIndex(t => t.id === templateId)
@@ -115,9 +114,8 @@ export async function updateEstimateTemplate(
 
 export async function deleteEstimateTemplate(templateId: string): Promise<boolean> {
   if (isOnlineMode()) {
-    // TODO: Implement Supabase delete for online mode
-    console.warn('Delete template in online mode not yet implemented')
-    return false
+    // Use Supabase service for online mode
+    return await supabaseService.deleteEstimateTemplateFromDB(templateId)
   } else {
     const templates = await getAllEstimateTemplates()
     const filtered = templates.filter(t => t.id !== templateId)

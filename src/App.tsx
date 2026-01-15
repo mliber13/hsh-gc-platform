@@ -35,6 +35,7 @@ import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2,
 import { backupAllData } from './services/backupService'
 import { PartnerDirectory } from './components/PartnerDirectory'
 import { SOWManagement } from './components/SOWManagement'
+import { EstimateTemplateManagement } from './components/EstimateTemplateManagement'
 import { DealPipeline } from './components/DealPipeline'
 import { FeedbackForm } from './components/FeedbackForm'
 import { MyFeedback } from './components/MyFeedback'
@@ -58,6 +59,7 @@ type View =
   | 'quote-review'
   | 'partner-directory'
   | 'sow-management'
+  | 'estimate-template-management'
   | 'deal-pipeline'
   | 'my-feedback'
 
@@ -389,6 +391,16 @@ function App() {
                           <FileText className="w-4 h-4" />
                           SOW Templates
                         </button>
+                        <button
+                          onClick={() => {
+                            setCurrentView('estimate-template-management');
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Estimate Templates
+                        </button>
                       </>
                     )}
                     {userProfile?.role === 'admin' && (
@@ -561,6 +573,12 @@ function App() {
 
       {currentView === 'sow-management' && (
         <SOWManagement
+          onBack={handleBackToDashboard}
+        />
+      )}
+
+      {currentView === 'estimate-template-management' && (
+        <EstimateTemplateManagement
           onBack={handleBackToDashboard}
         />
       )}

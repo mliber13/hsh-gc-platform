@@ -19,6 +19,7 @@ import {
   SubcontractorEntry,
   PlanEstimateTemplate,
   CreatePlanEstimateTemplateInput,
+  UpdatePlanEstimateTemplateInput,
   ProjectDocument,
   DocumentType,
 } from '@/types'
@@ -1471,10 +1472,84 @@ export async function createEstimateTemplateInDB(input: CreatePlanEstimateTempla
   }
 
   return {
-    ...data,
+    id: data.id,
+    name: data.name,
+    description: data.description || undefined,
+    trades: data.trades || [],
+    defaultMarkupPercent: data.default_markup_percent,
+    defaultContingencyPercent: data.default_contingency_percent,
     createdAt: new Date(data.created_at),
     updatedAt: new Date(data.updated_at),
+    usageCount: data.usage_count || 0,
+    linkedPlanIds: data.linked_plan_ids || [],
   } as PlanEstimateTemplate
+}
+
+export async function updateEstimateTemplateInDB(
+  templateId: string,
+  updates: UpdatePlanEstimateTemplateInput
+): Promise<PlanEstimateTemplate | null> {
+  if (!isOnlineMode()) return null
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  // Build update object
+  const updateData: any = {}
+  if (updates.name !== undefined) updateData.name = updates.name
+  if (updates.description !== undefined) updateData.description = updates.description
+  if (updates.trades !== undefined) {
+    // Convert trades to template format (remove IDs)
+    updateData.trades = updates.trades.map(trade => {
+      const { id, estimateId, ...tradeData } = trade
+      return tradeData
+    })
+  }
+  if (updates.defaultMarkupPercent !== undefined) updateData.default_markup_percent = updates.defaultMarkupPercent
+  if (updates.defaultContingencyPercent !== undefined) updateData.default_contingency_percent = updates.defaultContingencyPercent
+  if (updates.usageCount !== undefined) updateData.usage_count = updates.usageCount
+  if (updates.linkedPlanIds !== undefined) updateData.linked_plan_ids = updates.linkedPlanIds
+
+  const { data, error } = await supabase
+    .from('estimate_templates')
+    .update(updateData)
+    .eq('id', templateId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating estimate template:', error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    description: data.description || undefined,
+    trades: data.trades || [],
+    defaultMarkupPercent: data.default_markup_percent,
+    defaultContingencyPercent: data.default_contingency_percent,
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at),
+    usageCount: data.usage_count || 0,
+    linkedPlanIds: data.linked_plan_ids || [],
+  } as PlanEstimateTemplate
+}
+
+export async function deleteEstimateTemplateFromDB(templateId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  const { error } = await supabase
+    .from('estimate_templates')
+    .delete()
+    .eq('id', templateId)
+
+  if (error) {
+    console.error('Error deleting estimate template:', error)
+    return false
+  }
+
+  return true
 }
 
 // ============================================================================
