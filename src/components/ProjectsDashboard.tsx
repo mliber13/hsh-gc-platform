@@ -15,9 +15,8 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Eye, FileSpreadsheet, ChevronDown, TrendingUp } from 'lucide-react'
+import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Eye, ChevronDown, TrendingUp } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
-import ImportEstimate from './ImportEstimate'
 
 interface ProjectsDashboardProps {
   onCreateProject: () => void
@@ -37,7 +36,6 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const [showImportEstimate, setShowImportEstimate] = useState(false)
   const [showMobileActions, setShowMobileActions] = useState(false)
   const { canCreate, isViewer } = usePermissions()
 
@@ -131,24 +129,6 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
   }
 
 
-  // Handle import estimate success
-  const handleImportEstimateSuccess = async (projectId: string) => {
-    // Reload projects to show the new imported project
-    const allProjects = await getProjects_Hybrid()
-    
-    // Calculate stats for each project
-    const projectsWithStats = await Promise.all(
-      allProjects.map(async (project) => {
-        const estimatedValue = await calculateEstimatedValue(project)
-        const actualCosts = await calculateActualCosts(project)
-        const tradeCount = await calculateTradeCount(project)
-        return { ...project, estimatedValue, actualCosts, tradeCount }
-      })
-    )
-    
-    setProjects(projectsWithStats)
-    setShowImportEstimate(false)
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -164,20 +144,6 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
               </div>
             </div>
             
-            {/* Data Management Buttons */}
-            <div className="hidden sm:flex items-center gap-3">
-              {canCreate && (
-                <Button
-                  onClick={() => setShowImportEstimate(true)}
-                  variant="outline"
-                  size="sm"
-                  className="border-[#D95C00] text-[#D95C00] hover:bg-[#D95C00] hover:text-white"
-                >
-                  <FileSpreadsheet className="w-4 h-4 mr-2" />
-                  Import Estimate
-                </Button>
-              )}
-            </div>
           </div>
         </div>
       </header>
@@ -487,23 +453,6 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                     </div>
                   </button>
                 )}
-                {canCreate && (
-                  <button
-                    onClick={() => {
-                      setShowImportEstimate(true)
-                      setShowMobileActions(false)
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
-                  >
-                    <div className="bg-[#D95C00] text-white rounded-full p-2">
-                      <FileSpreadsheet className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Import Estimate</p>
-                      <p className="text-xs text-gray-500">Import from Excel file</p>
-                    </div>
-                  </button>
-                )}
               </div>
             </div>
           )}
@@ -521,13 +470,6 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
         </div>
       </main>
 
-      {/* Import Estimate Dialog */}
-      <ImportEstimate
-        isOpen={showImportEstimate}
-        onClose={() => setShowImportEstimate(false)}
-        onImportSuccess={handleImportEstimateSuccess}
-        existingProjects={projects}
-      />
     </div>
   )
 }
