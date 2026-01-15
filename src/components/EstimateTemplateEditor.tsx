@@ -17,7 +17,7 @@ import {
 } from '@/services/estimateTemplateService'
 import { getItemTemplatesByCategory } from '@/services/itemTemplateService'
 import { fetchSubcontractors } from '@/services/partnerDirectoryService'
-import { TRADE_CATEGORIES, UNIT_TYPES, formatCurrency } from '@/types/constants'
+import { TRADE_CATEGORIES, UNIT_TYPES, DEFAULT_VALUES, formatCurrency } from '@/types/constants'
 import { UnitType } from '@/types'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -106,6 +106,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
       totalCost: 0,
       markupPercent: template?.defaultMarkupPercent || 11.1,
       isSubcontracted: false,
+      wasteFactor: DEFAULT_VALUES.WASTE_FACTOR,
       notes: '',
       sortOrder: trades.length,
     }
