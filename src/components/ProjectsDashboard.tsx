@@ -10,12 +10,12 @@ import { Project } from '@/types'
 import { getAllProjects } from '@/services/projectService'
 import { getProjects_Hybrid, getTradesForEstimate_Hybrid } from '@/services/hybridService'
 import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
-import { getTradesForEstimate, exportAllData, importAllData } from '@/services'
+import { getTradesForEstimate } from '@/services'
 import { usePermissions } from '@/hooks/usePermissions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Download, Upload, Eye, FileSpreadsheet, ChevronDown, TrendingUp } from 'lucide-react'
+import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Eye, FileSpreadsheet, ChevronDown, TrendingUp } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import ImportEstimate from './ImportEstimate'
 
@@ -130,78 +130,6 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
 
-  // Export all localStorage data
-  const handleExportData = () => {
-    try {
-      const data = exportAllData()
-
-      const jsonString = JSON.stringify(data, null, 2)
-      const blob = new Blob([jsonString], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `hsh-backup-${new Date().toISOString().split('T')[0]}.json`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-
-      alert('✅ Data exported successfully!')
-    } catch (error) {
-      console.error('Export failed:', error)
-      alert('❌ Failed to export data. Please try again.')
-    }
-  }
-
-  // Import data from JSON file
-  const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const content = e.target?.result as string
-        
-        // Parse with date reviver
-        const data = JSON.parse(content, (key, value) => {
-          if (typeof value === 'string') {
-            const dateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
-            if (dateRegex.test(value)) {
-              return new Date(value)
-            }
-          }
-          return value
-        })
-
-        console.log('Importing data:', {
-          projects: data.projects?.length || 0,
-          estimates: data.estimates?.length || 0,
-          trades: data.trades?.length || 0,
-          actuals: data.actuals?.length || 0,
-          laborEntries: data.laborEntries?.length || 0,
-          materialEntries: data.materialEntries?.length || 0,
-          itemTemplates: data.itemTemplates?.length || 0,
-        })
-
-        // Import all data (replace existing)
-        importAllData(data, false)
-
-        console.log('Import complete, data saved to localStorage')
-
-        // Small delay to ensure localStorage is written
-        setTimeout(() => {
-          alert('✅ Data imported successfully! Refreshing page...')
-          window.location.reload()
-        }, 100)
-      } catch (error) {
-        console.error('Import failed:', error)
-        alert(`❌ Failed to import data: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      }
-    }
-    reader.readAsText(file)
-  }
 
   // Handle import estimate success
   const handleImportEstimateSuccess = async (projectId: string) => {
@@ -249,36 +177,6 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                   Import Estimate
                 </Button>
               )}
-              <Button
-                onClick={handleExportData}
-                variant="outline"
-                size="sm"
-                className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export Data
-              </Button>
-              <label htmlFor="import-file" className="cursor-pointer">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    document.getElementById('import-file')?.click()
-                  }}
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Import Data
-                </Button>
-              </label>
-              <input
-                id="import-file"
-                type="file"
-                accept=".json"
-                onChange={handleImportData}
-                className="hidden"
-              />
             </div>
           </div>
         </div>
@@ -606,45 +504,6 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                     </div>
                   </button>
                 )}
-                <button
-                  onClick={() => {
-                    handleExportData()
-                    setShowMobileActions(false)
-                  }}
-                  className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
-                >
-                  <div className="bg-[#34AB8A] text-white rounded-full p-2">
-                    <Download className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">Export Data</p>
-                    <p className="text-xs text-gray-500">Download backup</p>
-                  </div>
-                </button>
-                <label htmlFor="import-file-mobile" className="block">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault()
-                      document.getElementById('import-file-mobile')?.click()
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
-                  >
-                    <div className="bg-[#0E79C9] text-white rounded-full p-2">
-                      <Upload className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Import Data</p>
-                      <p className="text-xs text-gray-500">Restore from backup</p>
-                    </div>
-                  </button>
-                </label>
-                <input
-                  id="import-file-mobile"
-                  type="file"
-                  accept=".json"
-                  onChange={handleImportData}
-                  className="hidden"
-                />
               </div>
             </div>
           )}
