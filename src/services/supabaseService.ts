@@ -1499,11 +1499,8 @@ export async function updateEstimateTemplateInDB(
   if (updates.name !== undefined) updateData.name = updates.name
   if (updates.description !== undefined) updateData.description = updates.description
   if (updates.trades !== undefined) {
-    // Convert trades to template format (remove IDs)
-    updateData.trades = updates.trades.map(trade => {
-      const { id, estimateId, ...tradeData } = trade
-      return tradeData
-    })
+    // Trades are already in template format (Omit<Trade, 'id' | 'estimateId'>)
+    updateData.trades = updates.trades
   }
   if (updates.defaultMarkupPercent !== undefined) updateData.default_markup_percent = updates.defaultMarkupPercent
   if (updates.defaultContingencyPercent !== undefined) updateData.default_contingency_percent = updates.defaultContingencyPercent
