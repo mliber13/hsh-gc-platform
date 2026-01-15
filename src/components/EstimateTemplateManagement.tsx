@@ -28,8 +28,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Edit, Trash2, ArrowLeft, FileText, TrendingUp, Link2 } from 'lucide-react'
+import { Edit, Trash2, ArrowLeft, FileText, TrendingUp, Link2, Settings } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
+import { EstimateTemplateEditor } from './EstimateTemplateEditor'
 
 interface EstimateTemplateManagementProps {
   onBack: () => void
@@ -40,6 +41,7 @@ export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagemen
   const [loading, setLoading] = useState(true)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<PlanEstimateTemplate | null>(null)
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
 
@@ -123,12 +125,32 @@ export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagemen
     }
   }
 
+  const handleEditItems = (templateId: string) => {
+    setEditingTemplateId(templateId)
+  }
+
+  const handleTemplateEditorBack = () => {
+    setEditingTemplateId(null)
+    loadTemplates() // Reload to get updated template
+  }
+
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     })
+  }
+
+  // If editing template items, show editor instead
+  if (editingTemplateId) {
+    return (
+      <EstimateTemplateEditor
+        templateId={editingTemplateId}
+        onBack={handleTemplateEditorBack}
+        onSave={handleTemplateEditorBack}
+      />
+    )
   }
 
   return (
@@ -189,8 +211,19 @@ export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagemen
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => handleEditItems(template.id)}
+                        className="h-8 px-2"
+                        title="Edit Items"
+                      >
+                        <Settings className="w-4 h-4 mr-1" />
+                        Edit Items
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleEditTemplate(template)}
                         className="h-8 w-8 p-0"
+                        title="Edit Name/Description"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
@@ -200,6 +233,7 @@ export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagemen
                         onClick={() => handleDeleteTemplate(template.id)}
                         disabled={deleting === template.id}
                         className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        title="Delete Template"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
