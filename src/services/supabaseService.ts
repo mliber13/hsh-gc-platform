@@ -23,6 +23,10 @@ import {
   ProjectDocument,
   DocumentType,
 } from '@/types'
+import {
+  DealDocument,
+  DealDocumentType,
+} from '@/types/deal'
 
 // ============================================================================
 // PROJECT OPERATIONS
@@ -2505,6 +2509,415 @@ export async function updateProjectDocument(
     }
   } catch (error) {
     console.error('Error in updateProjectDocument:', error)
+    return null
+  }
+}
+
+// ============================================================================
+// DEAL DOCUMENTS OPERATIONS
+// ============================================================================
+
+/**
+ * Upload a deal document to Supabase Storage
+ * Files are organized by organization/deal/filename
+ */
+export async function uploadDealDocument(
+  file: File,
+  dealId: string,
+  documentType: DealDocumentType,
+  description?: string,
+  category?: string,
+  tags?: string[]
+): Promise<DealDocument | null> {
+  if (!isOnlineMode()) {
+    console.warn('Cannot upload files in offline mode')
+    return null
+  }
+
+  try {
+    // Get current user and their organization
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.error('User not authenticated:', authError)
+      return null
+    }
+
+    // Fetch user profile to get organization_id
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError || !profile) {
+      console.error('Error fetching user profile:', profileError)
+      return null
+    }
+
+    if (!profile.organization_id) {
+      console.error('User profile missing organization_id')
+      return null
+    }
+
+    // Create a unique filename with timestamp
+    const timestamp = Date.now()
+    const fileExt = file.name.split('.').pop()
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+    const fileName = `${timestamp}-${sanitizedName}`
+    const filePath = `${profile.organization_id}/${dealId}/${fileName}`
+
+    // Upload to storage (deal documents go to deal-documents bucket)
+    let bucketName = 'deal-documents'
+    let { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      })
+
+    // If that fails with "Bucket not found", try alternative bucket name (with underscore)
+    if (uploadError && uploadError.message?.includes('Bucket not found')) {
+      console.warn(`Bucket "${bucketName}" not found, trying "deal_documents" (with underscore)`)
+      bucketName = 'deal_documents'
+      const retryResult = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+      uploadData = retryResult.data
+      uploadError = retryResult.error
+    }
+
+    if (uploadError) {
+      console.error('Error uploading deal document:', uploadError)
+      return null
+    }
+
+    if (!uploadData) {
+      console.error('Upload succeeded but no data returned')
+      return null
+    }
+
+    // Generate signed URL (private bucket requires signed URLs)
+    let { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      .from(bucketName)
+      .createSignedUrl(filePath, 31536000) // 1 year
+
+    // If that fails, try alternative bucket name
+    if (signedUrlError && signedUrlError.message?.includes('Bucket not found')) {
+      bucketName = bucketName === 'deal-documents' ? 'deal_documents' : 'deal-documents'
+      const retryResult = await supabase.storage
+        .from(bucketName)
+        .createSignedUrl(filePath, 31536000)
+      signedUrlData = retryResult.data
+      signedUrlError = retryResult.error
+    }
+
+    if (signedUrlError || !signedUrlData?.signedUrl) {
+      console.error('Error generating signed URL:', signedUrlError)
+      // Try to delete the uploaded file if signed URL generation failed
+      await supabase.storage.from(bucketName).remove([filePath])
+      return null
+    }
+
+    const signedUrl = signedUrlData.signedUrl
+
+    // Create document record in database
+    let insertData: any = {
+      deal_id: dealId,
+      organization_id: profile.organization_id,
+      name: file.name,
+      type: documentType,
+      file_url: signedUrl, // Store signed URL
+      file_path: filePath, // Store file path for regenerating signed URLs
+      file_size: file.size,
+      mime_type: file.type,
+      uploaded_by: user.id,
+      description: description || null,
+      category: category || null,
+      tags: tags || null,
+    }
+
+    let { data: docData, error: docError } = await supabase
+      .from('deal_documents')
+      .insert(insertData)
+      .select()
+      .single()
+
+    // If file_path column doesn't exist yet (migration not applied), retry without it
+    if (docError && docError.message?.includes("file_path") && docError.message?.includes("schema cache")) {
+      console.warn('file_path column not found, inserting without it. Please run migration 030_create_deal_documents.sql')
+      delete insertData.file_path
+      const retryResult = await supabase
+        .from('deal_documents')
+        .insert(insertData)
+        .select()
+        .single()
+      docData = retryResult.data
+      docError = retryResult.error
+    }
+
+    if (docError || !docData) {
+      console.error('Error creating document record:', docError)
+      // Try to delete the uploaded file if database insert failed
+      await supabase.storage.from(bucketName).remove([filePath])
+      return null
+    }
+
+    // Transform to DealDocument
+    return {
+      id: docData.id,
+      dealId: docData.deal_id,
+      name: docData.name,
+      type: docData.type as DealDocumentType,
+      fileUrl: docData.file_url,
+      filePath: docData.file_path || undefined,
+      fileSize: docData.file_size,
+      mimeType: docData.mime_type,
+      category: docData.category || undefined,
+      tags: docData.tags || undefined,
+      uploadedBy: docData.uploaded_by,
+      uploadedAt: new Date(docData.uploaded_at),
+      description: docData.description || undefined,
+      version: docData.version || undefined,
+      replacesDocumentId: docData.replaces_document_id || undefined,
+    }
+  } catch (error) {
+    console.error('Error in uploadDealDocument:', error)
+    return null
+  }
+}
+
+/**
+ * Fetch all documents for a deal
+ */
+export async function fetchDealDocuments(dealId: string): Promise<DealDocument[]> {
+  if (!isOnlineMode()) return []
+
+  try {
+    const { data, error } = await supabase
+      .from('deal_documents')
+      .select('id, deal_id, name, type, file_url, file_path, file_size, mime_type, category, tags, uploaded_by, uploaded_at, description, version, replaces_document_id')
+      .eq('deal_id', dealId)
+      .order('uploaded_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching deal documents:', error)
+      return []
+    }
+
+    if (!data) {
+      return []
+    }
+
+    // Generate signed URLs for documents if needed
+    const documentsWithUrls = await Promise.all(
+      data.map(async (row: any) => {
+        let fileUrl = row.file_url
+        let filePath = row.file_path
+        
+        // If we have file_path, always regenerate signed URL (URLs expire after 1 year)
+        if (filePath) {
+          // Try primary bucket name first
+          let bucketName = 'deal-documents'
+          let { data: signedUrlData, error: signedUrlError } = await supabase.storage
+            .from(bucketName)
+            .createSignedUrl(filePath, 31536000) // 1 year
+          
+          // If that fails, try alternative bucket name
+          if (signedUrlError && signedUrlError.message?.includes('Bucket not found')) {
+            bucketName = 'deal_documents'
+            const retryResult = await supabase.storage
+              .from(bucketName)
+              .createSignedUrl(filePath, 31536000)
+            signedUrlData = retryResult.data
+            signedUrlError = retryResult.error
+          }
+          
+          if (signedUrlData?.signedUrl) {
+            fileUrl = signedUrlData.signedUrl
+          } else if (signedUrlError) {
+            console.warn('Could not generate signed URL for document:', row.id, signedUrlError)
+            // If signed URL generation fails, try to use existing URL as fallback
+            if (!fileUrl || !fileUrl.startsWith('http')) {
+              console.error('No valid URL available for document:', row.id)
+            }
+          }
+        } else if (fileUrl) {
+          // For legacy documents without file_path, try to extract path from URL and regenerate
+          const urlParts = fileUrl.split('/deal-documents/')
+          if (urlParts && urlParts.length >= 2) {
+            const extractedPath = urlParts[1].split('?')[0]
+            const { data: signedUrlData } = await supabase.storage
+              .from('deal-documents')
+              .createSignedUrl(extractedPath, 31536000)
+            if (signedUrlData?.signedUrl) {
+              fileUrl = signedUrlData.signedUrl
+            }
+          }
+        }
+        
+        return {
+          id: row.id,
+          dealId: row.deal_id,
+          name: row.name,
+          type: row.type as DealDocumentType,
+          fileUrl: fileUrl,
+          filePath: row.file_path || undefined,
+          fileSize: row.file_size,
+          mimeType: row.mime_type,
+          category: row.category || undefined,
+          tags: row.tags || undefined,
+          uploadedBy: row.uploaded_by,
+          uploadedAt: new Date(row.uploaded_at),
+          description: row.description || undefined,
+          version: row.version || undefined,
+          replacesDocumentId: row.replaces_document_id || undefined,
+        }
+      })
+    )
+    
+    return documentsWithUrls
+  } catch (error) {
+    console.error('Error in fetchDealDocuments:', error)
+    return []
+  }
+}
+
+/**
+ * Delete a deal document
+ */
+export async function deleteDealDocument(documentId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  try {
+    // First, get the document to find the file path
+    const { data: doc, error: fetchError } = await supabase
+      .from('deal_documents')
+      .select('file_url, file_path')
+      .eq('id', documentId)
+      .single()
+
+    if (fetchError || !doc) {
+      console.error('Error fetching document:', fetchError)
+      return false
+    }
+
+    // Use file_path if available, otherwise extract from URL
+    let filePath: string | null = doc.file_path || null
+    let bucketName = 'deal-documents'
+
+    if (!filePath && doc.file_url) {
+      // Try to extract from URL
+      const urlParts = doc.file_url.split('/deal-documents/')
+      if (urlParts && urlParts.length >= 2) {
+        filePath = urlParts[1].split('?')[0]
+      } else {
+        // Try alternative bucket name
+        const altUrlParts = doc.file_url.split('/deal_documents/')
+        if (altUrlParts && altUrlParts.length >= 2) {
+          filePath = altUrlParts[1].split('?')[0]
+          bucketName = 'deal_documents'
+        }
+      }
+    }
+
+    if (!filePath) {
+      console.warn('Could not determine file path for document:', documentId, 'URL:', doc.file_url)
+      // Continue to delete database record even if we can't delete from storage
+    } else {
+      // Delete from storage
+      let { error: storageError } = await supabase.storage
+        .from(bucketName)
+        .remove([filePath])
+
+      // If that fails, try alternative bucket name
+      if (storageError && storageError.message?.includes('Bucket not found')) {
+        bucketName = bucketName === 'deal-documents' ? 'deal_documents' : 'deal-documents'
+        const retryResult = await supabase.storage
+          .from(bucketName)
+          .remove([filePath])
+        storageError = retryResult.error
+      }
+
+      if (storageError) {
+        console.error('Error deleting file from storage:', storageError)
+        // Continue to delete the database record even if storage delete fails
+      }
+    }
+
+    // Delete from database
+    const { error: dbError } = await supabase
+      .from('deal_documents')
+      .delete()
+      .eq('id', documentId)
+
+    if (dbError) {
+      console.error('Error deleting document record:', dbError)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in deleteDealDocument:', error)
+    return false
+  }
+}
+
+/**
+ * Update deal document metadata
+ */
+export async function updateDealDocument(
+  documentId: string,
+  updates: {
+    type?: DealDocumentType
+    description?: string
+    category?: string
+    tags?: string[]
+  }
+): Promise<DealDocument | null> {
+  if (!isOnlineMode()) return null
+
+  try {
+    const updateData: any = {}
+    if (updates.type !== undefined) updateData.type = updates.type
+    if (updates.description !== undefined) updateData.description = updates.description
+    if (updates.category !== undefined) updateData.category = updates.category
+    if (updates.tags !== undefined) updateData.tags = updates.tags
+    updateData.updated_at = new Date().toISOString()
+
+    const { data, error } = await supabase
+      .from('deal_documents')
+      .update(updateData)
+      .eq('id', documentId)
+      .select()
+      .single()
+
+    if (error || !data) {
+      console.error('Error updating document:', error)
+      return null
+    }
+
+    return {
+      id: data.id,
+      dealId: data.deal_id,
+      name: data.name,
+      type: data.type as DealDocumentType,
+      fileUrl: data.file_url,
+      filePath: data.file_path || undefined,
+      fileSize: data.file_size,
+      mimeType: data.mime_type,
+      category: data.category || undefined,
+      tags: data.tags || undefined,
+      uploadedBy: data.uploaded_by,
+      uploadedAt: new Date(data.uploaded_at),
+      description: data.description || undefined,
+      version: data.version || undefined,
+      replacesDocumentId: data.replaces_document_id || undefined,
+    }
+  } catch (error) {
+    console.error('Error in updateDealDocument:', error)
     return null
   }
 }

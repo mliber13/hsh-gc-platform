@@ -96,3 +96,58 @@ export interface ConvertDealToProjectsInput {
   startDateOffset?: number // Days offset from expected_start_date for each project
 }
 
+// ============================================================================
+// Deal Documents
+// ============================================================================
+
+export type DealDocumentType = 
+  | 'proposal'
+  | 'contract'
+  | 'plan'
+  | 'specification'
+  | 'permit'
+  | 'financial-document'
+  | 'photo'
+  | 'other'
+
+export interface DealDocument {
+  id: string
+  dealId: string
+  
+  // File info
+  name: string
+  type: DealDocumentType
+  fileUrl: string
+  filePath?: string // Storage path for regenerating signed URLs
+  fileSize: number          // Bytes
+  mimeType: string
+  
+  // Organization
+  category?: string
+  tags?: string[]
+  
+  // Metadata
+  uploadedBy: string
+  uploadedAt: Date
+  description?: string
+  
+  // Version control
+  version?: number
+  replacesDocumentId?: string
+}
+
+export interface CreateDealDocumentInput {
+  dealId: string
+  name: string
+  type: DealDocumentType
+  description?: string
+  category?: string
+  tags?: string[]
+}
+
+export interface UpdateDealDocumentInput {
+  type?: DealDocumentType
+  description?: string
+  category?: string
+  tags?: string[]
+}

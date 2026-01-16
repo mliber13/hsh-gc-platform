@@ -46,6 +46,7 @@ import {
   convertDealToProjects,
 } from '@/services/dealService'
 import type { Deal, DealNote, DealType, DealStatus, CreateDealInput } from '@/types/deal'
+import { DealDocuments } from './DealDocuments'
 
 interface DealPipelineProps {
   onBack?: () => void
@@ -892,6 +893,13 @@ function DealDetailView({
           ) : (
             <p className="text-gray-500 text-center py-4">No notes yet. Add your first note above.</p>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Documents */}
+      <Card>
+        <CardContent className="pt-6">
+          <DealDocuments dealId={deal.id} />
         </CardContent>
       </Card>
         </div>
