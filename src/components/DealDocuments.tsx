@@ -13,6 +13,7 @@ import {
   deleteDealDocument,
   updateDealDocument,
 } from '@/services/supabaseService'
+import { sendDealDocumentShare } from '@/services/emailService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +26,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   FileText,
   Upload,
   Trash2,
@@ -33,6 +40,7 @@ import {
   X,
   Save,
   Eye,
+  Share2,
 } from 'lucide-react'
 
 interface DealDocumentsProps {
@@ -56,6 +64,12 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
   const [uploading, setUploading] = useState(false)
   const [showUploadForm, setShowUploadForm] = useState(false)
   const [editingDoc, setEditingDoc] = useState<DealDocument | null>(null)
+
+  // Share by email state
+  const [shareDoc, setShareDoc] = useState<DealDocument | null>(null)
+  const [shareToEmail, setShareToEmail] = useState('')
+  const [shareMessage, setShareMessage] = useState('')
+  const [shareSending, setShareSending] = useState(false)
   
   // Upload form state
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -219,6 +233,54 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
       month: 'short',
       day: 'numeric',
     })
+  }
+
+  const handleShare = (doc: DealDocument) => {
+    setShareDoc(doc)
+    setShareToEmail('')
+    setShareMessage('')
+  }
+
+  const handleShareClose = () => {
+    if (!shareSending) {
+      setShareDoc(null)
+      setShareToEmail('')
+      setShareMessage('')
+    }
+  }
+
+  const handleShareSubmit = async () => {
+    if (!shareDoc || !shareToEmail.trim()) {
+      alert('Please enter a recipient email address.')
+      return
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(shareToEmail.trim())) {
+      alert('Please enter a valid email address.')
+      return
+    }
+    setShareSending(true)
+    try {
+      const success = await sendDealDocumentShare({
+        documentId: shareDoc.id,
+        documentName: shareDoc.name,
+        toEmail: shareToEmail.trim(),
+        message: shareMessage.trim() || undefined,
+      })
+      if (success) {
+        alert(`Document "${shareDoc.name}" shared successfully with ${shareToEmail.trim()}.`)
+        setShareDoc(null)
+        setShareToEmail('')
+        setShareMessage('')
+      } else {
+        alert('Failed to send share email. Please try again or check that the Edge Function is deployed and email is configured.')
+      }
+    } catch (error) {
+      console.error('Error sharing document:', error)
+      alert('Failed to send share email. Please try again.')
+    } finally {
+      setShareSending(false)
+    }
   }
 
   // Group documents by type
@@ -519,6 +581,14 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => handleShare(doc)}
+                          title="Share by email"
+                        >
+                          <Share2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleEdit(doc)}
                           title="Edit Document"
                         >
@@ -541,6 +611,54 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
           ))}
         </div>
       )}
+
+      {/* Share by email dialog */}
+      <Dialog open={!!shareDoc} onOpenChange={(open) => !open && handleShareClose()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Share document by email</DialogTitle>
+          </DialogHeader>
+          {shareDoc && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Send a link to <strong>{shareDoc.name}</strong>. The link will expire in 24 hours.
+              </p>
+              <div>
+                <Label htmlFor="share-email">Recipient email</Label>
+                <Input
+                  id="share-email"
+                  type="email"
+                  placeholder="email@example.com"
+                  value={shareToEmail}
+                  onChange={(e) => setShareToEmail(e.target.value)}
+                  disabled={shareSending}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="share-message">Message (optional)</Label>
+                <textarea
+                  id="share-message"
+                  className="mt-1 flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Add a short message for the recipient..."
+                  value={shareMessage}
+                  onChange={(e) => setShareMessage(e.target.value)}
+                  disabled={shareSending}
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={handleShareClose} disabled={shareSending}>
+                  Cancel
+                </Button>
+                <Button onClick={handleShareSubmit} disabled={shareSending || !shareToEmail.trim()}>
+                  {shareSending ? 'Sending...' : 'Send'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

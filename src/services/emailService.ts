@@ -217,3 +217,41 @@ export async function sendFeedbackNotification(input: SendFeedbackNotificationIn
   }
 }
 
+export interface SendDealDocumentShareInput {
+  documentId: string
+  documentName: string
+  toEmail: string
+  message?: string
+}
+
+/**
+ * Share a deal document by email (sends a time-limited link via Edge Function).
+ */
+export async function sendDealDocumentShare(input: SendDealDocumentShareInput): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.functions.invoke('send-deal-document-share', {
+      body: {
+        documentId: input.documentId,
+        toEmail: input.toEmail.trim(),
+        message: input.message?.trim() || undefined,
+      },
+    })
+
+    if (error) {
+      console.error('Error sending deal document share email:', error)
+      return false
+    }
+
+    if (data && typeof data === 'object' && 'success' in data) {
+      if (data.success === true) return true
+      if (data.error) console.error('Edge Function error:', data.error)
+      return false
+    }
+
+    return false
+  } catch (error) {
+    console.error('Error sending deal document share:', error)
+    return false
+  }
+}
+

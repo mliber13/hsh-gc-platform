@@ -187,6 +187,17 @@ The following document types are supported:
 - Verify the `deal_documents` table exists and has data
 - Check that RLS policies allow SELECT operations
 
+## Share by Email (Optional)
+
+Users can share a deal document with someone by email from the Deal Documents UI. This uses an Edge Function that sends a time-limited (24-hour) link via Resend.
+
+1. **Deploy the Edge Function** (same Resend setup as feedback emails):
+   ```bash
+   supabase functions deploy send-deal-document-share
+   ```
+2. **Secrets**: Uses the same `RESEND_API_KEY` and `FROM_EMAIL` as `send-feedback-email`. No extra setup if those are already set.
+3. In the app, open a deal → Deal Documents → click the **Share** (Share2) icon on a document → enter recipient email and optional message → **Send**.
+
 ## Next Steps
 
 After setup is complete, you can:
