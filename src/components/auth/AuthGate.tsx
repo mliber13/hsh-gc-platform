@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Login } from './Login'
 import { Signup } from './Signup'
 import { ResetPassword } from './ResetPassword'
+import { SetNewPassword } from './SetNewPassword'
 
 type AuthView = 'login' | 'signup' | 'reset'
 
@@ -18,8 +19,19 @@ interface AuthGateProps {
 }
 
 export function AuthGate({ children }: AuthGateProps) {
-  const { user, loading, isOnline } = useAuth()
+  const { user, loading, isOnline, needsNewPassword, clearRecoveryMode } = useAuth()
   const [authView, setAuthView] = useState<AuthView>('login')
+
+  // User landed via password-reset link: show set-new-password form instead of app
+  if (user && needsNewPassword) {
+    return (
+      <SetNewPassword
+        onSuccess={() => {
+          clearRecoveryMode()
+        }}
+      />
+    )
+  }
 
   // Show loading state
   if (loading) {

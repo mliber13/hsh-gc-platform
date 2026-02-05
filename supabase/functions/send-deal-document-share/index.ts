@@ -16,8 +16,8 @@ import { corsHeaders } from '../_shared/cors.ts'
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'onboarding@resend.dev'
 
-// 24 hours
-const SIGNED_URL_EXPIRY_SEC = 86400
+// 7 days
+const SIGNED_URL_EXPIRY_SEC = 604800
 
 interface ShareRequest {
   documentId: string
@@ -181,9 +181,9 @@ serve(async (req) => {
               ${message?.trim() ? `<p style="white-space: pre-wrap;">${message.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>` : ''}
               <p>Click the link below to view or download the document:</p>
               <div class="link-box">
-                <a href="${signedData.signedUrl}">${signedData.signedUrl}</a>
+                <a href="${signedData.signedUrl}">${doc.name}</a>
               </div>
-              <p class="expiry">This link expires in 24 hours.</p>
+              <p class="expiry">This link expires in 7 days.</p>
             </div>
             <div class="footer">
               <p>Thank you,<br>HSH GC Platform</p>

@@ -15,6 +15,9 @@ interface AuthContextType {
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>
   isOnline: boolean
+  /** True when user landed via password-reset link; they must set a new password before using the app */
+  needsNewPassword: boolean
+  clearRecoveryMode: () => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -24,12 +27,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [isOnline] = useState(isOnlineMode())
+  // User landed via password-reset link; must set new password before using app
+  const [needsNewPassword, setNeedsNewPassword] = useState(false)
 
   useEffect(() => {
     // Only set up auth if we're in online mode
     if (!isOnline) {
       setLoading(false)
       return
+    }
+
+    // Detect password-reset link: URL is /reset-password with type=recovery in hash (read before Supabase consumes it)
+    const pathname = window.location.pathname
+    const hash = window.location.hash || ''
+    if (pathname === '/reset-password' && hash.includes('type=recovery')) {
+      setNeedsNewPassword(true)
     }
 
     // Check active sessions and sets the user
@@ -48,6 +60,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe()
   }, [isOnline])
+
+  const clearRecoveryMode = () => {
+    setNeedsNewPassword(false)
+    // Clean URL so the recovery link is no longer in the address bar
+    if (window.history.replaceState) {
+      const cleanUrl = window.location.pathname.replace(/^\/reset-password\/?$/, '/') || '/'
+      window.history.replaceState({}, '', cleanUrl)
+    }
+  }
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -100,6 +121,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     resetPassword,
     isOnline,
+    needsNewPassword,
+    clearRecoveryMode,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

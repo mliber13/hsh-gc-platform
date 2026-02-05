@@ -254,4 +254,3 @@ export async function sendDealDocumentShare(input: SendDealDocumentShareInput): 
     return false
   }
 }
-
