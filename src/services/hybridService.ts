@@ -12,7 +12,8 @@ import {
   getProject as getProjectLS,
   createProject as createProjectLS,
   updateProject as updateProjectLS,
-  deleteProject as deleteProjectLS
+  deleteProject as deleteProjectLS,
+  beginProject as beginProjectLS,
 } from './projectService'
 import {
   addTrade as addTradeLS,
@@ -30,17 +31,44 @@ import {
   SubmitQuoteInput, 
   UpdateQuoteStatusInput 
 } from '@/types/quote'
+import type { WorkPackage, CreateWorkPackageInput, UpdateWorkPackageInput } from '@/types/workPackage'
+import type {
+  ProjectMilestone,
+  MilestoneSourceApp,
+  CreateMilestoneInput,
+  UpdateMilestoneInput,
+} from '@/types/projectMilestone'
 
 // ============================================================================
 // PROJECT OPERATIONS
 // ============================================================================
 
+/** When true, project list includes Drywall-only projects (for admin). Default false so GC users do not see them. */
+const INCLUDE_DRYWALL_ONLY_PROJECTS = import.meta.env.VITE_INCLUDE_DRYWALL_ONLY_PROJECTS === 'true'
+
+/**
+ * Drywall-only: exclude from GC list when metadata.visibility.gc === false OR metadata.app_scope === 'DRYWALL_ONLY'.
+ * Used to hide legacy drywall-only jobs from GC dashboard/list by default.
+ */
+function isDrywallOnlyProject(project: Project): boolean {
+  const m = project.metadata as Record<string, unknown> | undefined
+  if (!m) return false
+  const visibility = m.visibility as Record<string, unknown> | undefined
+  if (visibility && visibility.gc === false) return true
+  if (m.app_scope === 'DRYWALL_ONLY') return true
+  return false
+}
+
+function filterProjectsForGC(projects: Project[]): Project[] {
+  if (INCLUDE_DRYWALL_ONLY_PROJECTS) return projects
+  return projects.filter((p) => !isDrywallOnlyProject(p))
+}
+
 export async function getProjects_Hybrid(): Promise<Project[]> {
-  if (isOnlineMode()) {
-    return await supabaseService.fetchProjects()
-  } else {
-    return getAllProjects()
-  }
+  const raw = isOnlineMode()
+    ? await supabaseService.fetchProjects()
+    : getAllProjects()
+  return filterProjectsForGC(Array.isArray(raw) ? raw : [])
 }
 
 export async function getProject_Hybrid(projectId: string): Promise<Project | null> {
@@ -69,9 +97,32 @@ export async function createProject_Hybrid(input: CreateProjectInput): Promise<P
 
 export async function updateProject_Hybrid(projectId: string, updates: UpdateProjectInput): Promise<Project | null> {
   if (isOnlineMode()) {
+    if (updates.status === 'in-progress') {
+      const activated = await supabaseService.activateProjectInDB(projectId, {})
+      if (!activated) return null
+      const { status, id: _id, ...rest } = updates
+      if (Object.keys(rest).length > 0) {
+        return await supabaseService.updateProjectInDB(projectId, rest)
+      }
+      return activated
+    }
     return await supabaseService.updateProjectInDB(projectId, updates)
   } else {
     return updateProjectLS(projectId, updates)
+  }
+}
+
+export type ActivateProjectOptions = { reason?: string; notes?: string }
+
+export async function activateProject_Hybrid(
+  projectId: string,
+  options: ActivateProjectOptions = {}
+): Promise<Project | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.activateProjectInDB(projectId, options)
+  } else {
+    const updated = beginProjectLS(projectId)
+    return updated ? getProjectLS(projectId) : null
   }
 }
 
@@ -81,6 +132,83 @@ export async function deleteProject_Hybrid(projectId: string): Promise<boolean> 
   } else {
     return deleteProjectLS(projectId)
   }
+}
+
+// ============================================================================
+// WORK PACKAGES
+// ============================================================================
+
+export async function fetchWorkPackages_Hybrid(projectId: string): Promise<WorkPackage[]> {
+  if (isOnlineMode()) {
+    return await supabaseService.fetchWorkPackages(projectId)
+  }
+  return []
+}
+
+export async function createWorkPackage_Hybrid(
+  projectId: string,
+  input: CreateWorkPackageInput
+): Promise<WorkPackage | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.createWorkPackage(projectId, input)
+  }
+  return null
+}
+
+export async function updateWorkPackage_Hybrid(
+  id: string,
+  updates: UpdateWorkPackageInput
+): Promise<WorkPackage | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.updateWorkPackage(id, updates)
+  }
+  return null
+}
+
+export async function deleteWorkPackage_Hybrid(id: string): Promise<boolean> {
+  if (isOnlineMode()) {
+    return await supabaseService.deleteWorkPackage(id)
+  }
+  return false
+}
+
+// ============================================================================
+// PROJECT MILESTONES
+// ============================================================================
+
+export async function fetchMilestones_Hybrid(projectId: string): Promise<ProjectMilestone[]> {
+  if (isOnlineMode()) {
+    return await supabaseService.fetchMilestones(projectId)
+  }
+  return []
+}
+
+export async function upsertMilestone_Hybrid(
+  projectId: string,
+  sourceApp: MilestoneSourceApp,
+  input: CreateMilestoneInput
+): Promise<ProjectMilestone | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.upsertMilestone(projectId, sourceApp, input)
+  }
+  return null
+}
+
+export async function updateMilestone_Hybrid(
+  id: string,
+  updates: UpdateMilestoneInput
+): Promise<ProjectMilestone | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.updateMilestone(id, updates)
+  }
+  return null
+}
+
+export async function deleteMilestone_Hybrid(id: string): Promise<boolean> {
+  if (isOnlineMode()) {
+    return await supabaseService.deleteMilestone(id)
+  }
+  return false
 }
 
 // ============================================================================

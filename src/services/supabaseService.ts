@@ -27,6 +27,13 @@ import {
   DealDocument,
   DealDocumentType,
 } from '@/types/deal'
+import type { WorkPackage, CreateWorkPackageInput, UpdateWorkPackageInput } from '@/types/workPackage'
+import type {
+  ProjectMilestone,
+  MilestoneSourceApp,
+  CreateMilestoneInput,
+  UpdateMilestoneInput,
+} from '@/types/projectMilestone'
 
 // ============================================================================
 // PROJECT OPERATIONS
@@ -225,6 +232,373 @@ export async function deleteProjectFromDB(projectId: string): Promise<boolean> {
 
   if (error) {
     console.error('Error deleting project:', error)
+    return false
+  }
+
+  return true
+}
+
+// ---------------------------------------------------------------------------
+// Activate project (idempotent: event + status 'in-progress')
+// ---------------------------------------------------------------------------
+
+export interface ActivateProjectOptions {
+  reason?: string
+  notes?: string
+}
+
+export async function activateProjectInDB(
+  projectId: string,
+  options: ActivateProjectOptions = {}
+): Promise<Project | null> {
+  if (!isOnlineMode()) return null
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  const profileOrgId = profile?.organization_id ?? null
+
+  const { data: projectRow, error: fetchError } = await supabase
+    .from('projects')
+    .select('id, status, organization_id')
+    .eq('id', projectId)
+    .single()
+
+  if (fetchError || !projectRow) {
+    console.warn('Project not found for activation:', projectId, fetchError)
+    return null
+  }
+
+  if (projectRow.status === 'in-progress') {
+    return await fetchProjectById(projectId)
+  }
+
+  const orgId = projectRow.organization_id || profileOrgId || 'default-org'
+
+  const { error: eventError } = await supabase
+    .from('project_events')
+    .insert({
+      project_id: projectId,
+      organization_id: orgId,
+      event_type: 'ACTIVATED',
+      source_app: 'GC',
+      payload: (options.reason || options.notes) ? { reason: options.reason ?? null, notes: options.notes ?? null } : null,
+      created_by: user.id,
+    })
+
+  if (eventError) {
+    console.error('Error inserting project_events on activate:', eventError)
+    return null
+  }
+
+  const { data: updatedRow, error: updateError } = await supabase
+    .from('projects')
+    .update({ status: 'in-progress' })
+    .eq('id', projectId)
+    .select()
+    .single()
+
+  if (updateError || !updatedRow) {
+    console.error('Error updating project status on activate:', updateError)
+    return null
+  }
+
+  return await transformProject(updatedRow)
+}
+
+// ============================================================================
+// WORK PACKAGES (public.work_packages)
+// ============================================================================
+
+function transformWorkPackage(row: any): WorkPackage {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    organizationId: row.organization_id,
+    tradeId: row.trade_id ?? null,
+    subItemId: row.sub_item_id ?? null,
+    packageType: row.package_type,
+    status: row.status,
+    ownerTeam: row.owner_team,
+    responsiblePartyType: row.responsible_party_type,
+    responsiblePartyId: row.responsible_party_id ?? null,
+    targetStart: row.target_start ?? null,
+    targetFinish: row.target_finish ?? null,
+    forecastStart: row.forecast_start ?? null,
+    forecastFinish: row.forecast_finish ?? null,
+    actualStart: row.actual_start ?? null,
+    actualFinish: row.actual_finish ?? null,
+    notes: row.notes ?? null,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  }
+}
+
+export async function fetchWorkPackages(projectId: string): Promise<WorkPackage[]> {
+  if (!isOnlineMode()) return []
+
+  const { data, error } = await supabase
+    .from('work_packages')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching work packages:', error)
+    return []
+  }
+
+  return (data || []).map(transformWorkPackage)
+}
+
+export async function createWorkPackage(
+  projectId: string,
+  input: CreateWorkPackageInput
+): Promise<WorkPackage | null> {
+  if (!isOnlineMode()) return null
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  const profileOrgId = profile?.organization_id ?? null
+
+  const { data: projectRow } = await supabase
+    .from('projects')
+    .select('organization_id')
+    .eq('id', projectId)
+    .single()
+
+  const orgId = projectRow?.organization_id || profileOrgId || 'default-org'
+
+  const { data, error } = await supabase
+    .from('work_packages')
+    .insert({
+      project_id: projectId,
+      organization_id: orgId,
+      trade_id: input.tradeId ?? null,
+      sub_item_id: input.subItemId ?? null,
+      package_type: input.packageType,
+      status: 'PLANNED',
+      owner_team: 'GC',
+      responsible_party_type: input.responsiblePartyType ?? 'IN_HOUSE',
+      target_start: input.targetStart ?? null,
+      target_finish: input.targetFinish ?? null,
+      notes: input.notes ?? null,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating work package:', error)
+    return null
+  }
+
+  return transformWorkPackage(data)
+}
+
+export async function updateWorkPackage(
+  id: string,
+  updates: UpdateWorkPackageInput
+): Promise<WorkPackage | null> {
+  if (!isOnlineMode()) return null
+
+  const updateData: Record<string, unknown> = {}
+  if (updates.packageType !== undefined) updateData.package_type = updates.packageType
+  if (updates.status !== undefined) updateData.status = updates.status
+  if (updates.responsiblePartyType !== undefined) updateData.responsible_party_type = updates.responsiblePartyType
+  if (updates.tradeId !== undefined) updateData.trade_id = updates.tradeId
+  if (updates.subItemId !== undefined) updateData.sub_item_id = updates.subItemId
+  if (updates.targetStart !== undefined) updateData.target_start = updates.targetStart
+  if (updates.targetFinish !== undefined) updateData.target_finish = updates.targetFinish
+  if (updates.notes !== undefined) updateData.notes = updates.notes
+
+  if (Object.keys(updateData).length === 0) {
+    const { data: existing } = await supabase.from('work_packages').select('*').eq('id', id).single()
+    return existing ? transformWorkPackage(existing) : null
+  }
+
+  const { data, error } = await supabase
+    .from('work_packages')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating work package:', error)
+    return null
+  }
+
+  return transformWorkPackage(data)
+}
+
+export async function deleteWorkPackage(id: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  const { error } = await supabase.from('work_packages').delete().eq('id', id)
+
+  if (error) {
+    console.error('Error deleting work package:', error)
+    return false
+  }
+
+  return true
+}
+
+// ============================================================================
+// PROJECT MILESTONES (public.project_milestones)
+// ============================================================================
+
+function transformMilestone(row: any): ProjectMilestone {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    organizationId: row.organization_id,
+    createdBy: row.created_by ?? null,
+    sourceApp: row.source_app,
+    milestoneKey: row.milestone_key,
+    milestoneName: row.milestone_name,
+    targetDate: row.target_date ?? null,
+    forecastDate: row.forecast_date ?? null,
+    actualDate: row.actual_date ?? null,
+    status: row.status,
+    notes: row.notes ?? null,
+    metadata: row.metadata ?? null,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  }
+}
+
+export async function fetchMilestones(projectId: string): Promise<ProjectMilestone[]> {
+  if (!isOnlineMode()) return []
+
+  const { data, error } = await supabase
+    .from('project_milestones')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching milestones:', error)
+    return []
+  }
+
+  return (data || []).map(transformMilestone)
+}
+
+export async function upsertMilestone(
+  projectId: string,
+  sourceApp: MilestoneSourceApp,
+  input: CreateMilestoneInput
+): Promise<ProjectMilestone | null> {
+  if (!isOnlineMode()) return null
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  const profileOrgId = profile?.organization_id ?? null
+
+  const { data: projectRow } = await supabase
+    .from('projects')
+    .select('organization_id')
+    .eq('id', projectId)
+    .single()
+
+  const orgId = projectRow?.organization_id || profileOrgId || 'default-org'
+
+  const row = {
+    project_id: projectId,
+    organization_id: orgId,
+    created_by: user.id,
+    source_app: sourceApp,
+    milestone_key: input.milestoneKey.trim(),
+    milestone_name: input.milestoneName.trim(),
+    target_date: input.targetDate?.trim() || null,
+    forecast_date: input.forecastDate?.trim() || null,
+    actual_date: input.actualDate?.trim() || null,
+    status: input.status ?? 'PLANNED',
+    notes: input.notes?.trim() || null,
+  }
+
+  const { data, error } = await supabase
+    .from('project_milestones')
+    .upsert(row, {
+      onConflict: 'project_id,source_app,milestone_key',
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error upserting milestone:', error)
+    return null
+  }
+
+  return transformMilestone(data)
+}
+
+export async function updateMilestone(
+  id: string,
+  updates: UpdateMilestoneInput
+): Promise<ProjectMilestone | null> {
+  if (!isOnlineMode()) return null
+
+  const updateData: Record<string, unknown> = {}
+  if (updates.milestoneName !== undefined) updateData.milestone_name = updates.milestoneName
+  if (updates.targetDate !== undefined) updateData.target_date = updates.targetDate
+  if (updates.forecastDate !== undefined) updateData.forecast_date = updates.forecastDate
+  if (updates.actualDate !== undefined) updateData.actual_date = updates.actualDate
+  if (updates.status !== undefined) updateData.status = updates.status
+  if (updates.notes !== undefined) updateData.notes = updates.notes
+
+  if (Object.keys(updateData).length === 0) {
+    const { data: existing } = await supabase
+      .from('project_milestones')
+      .select('*')
+      .eq('id', id)
+      .single()
+    return existing ? transformMilestone(existing) : null
+  }
+
+  const { data, error } = await supabase
+    .from('project_milestones')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating milestone:', error)
+    return null
+  }
+
+  return transformMilestone(data)
+}
+
+export async function deleteMilestone(id: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  const { error } = await supabase.from('project_milestones').delete().eq('id', id)
+
+  if (error) {
+    console.error('Error deleting milestone:', error)
     return false
   }
 

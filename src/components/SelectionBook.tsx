@@ -455,13 +455,13 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
               }
             }}
             onImageUpload={async (file, category, description) => {
-              const image = await uploadSelectionImage(
+              const result = await uploadSelectionImage(
                 selectedRoom.id,
                 file,
                 category,
                 description
               )
-              if (image) {
+              if (result.image) {
                 await loadSelectionBook()
                 const updatedBook = await getSelectionBookWithRooms(projectId)
                 if (updatedBook) {
@@ -470,6 +470,8 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
                     setSelectedRoom(updatedRoom)
                   }
                 }
+              } else if (result.error) {
+                throw new Error(result.error)
               }
             }}
             onImageDelete={async (imageId) => {
@@ -486,13 +488,13 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
               }
             }}
             onSpecSheetUpload={async (file, category, description) => {
-              const specSheet = await uploadSelectionSpecSheet(
+              const result = await uploadSelectionSpecSheet(
                 selectedRoom.id,
                 file,
                 category,
                 description
               )
-              if (specSheet) {
+              if (result.specSheet) {
                 await loadSelectionBook()
                 const updatedBook = await getSelectionBookWithRooms(projectId)
                 if (updatedBook) {
@@ -501,6 +503,8 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
                     setSelectedRoom(updatedRoom)
                   }
                 }
+              } else if (result.error) {
+                throw new Error(result.error)
               }
             }}
             onSpecSheetDelete={async (specSheetId) => {
@@ -903,7 +907,8 @@ const RoomView: React.FC<RoomViewProps> = ({
       e.target.value = ''
     } catch (error) {
       console.error('Error uploading image:', error)
-      alert('Failed to upload image. Please try again.')
+      const msg = error instanceof Error ? error.message : 'Failed to upload image. Please try again.'
+      alert(msg)
     } finally {
       setUploading(false)
     }
@@ -1025,9 +1030,11 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
       e.target.value = ''
     } catch (error) {
       console.error('Error uploading image:', error)
-      alert('Failed to upload image. Please try again.')
+      const msg = error instanceof Error ? error.message : 'Failed to upload image. Please try again.'
+      alert(msg)
     } finally {
       setUploadingCategory(null)
+      e.target.value = '' // Reset so same file can be selected again
     }
   }
 
@@ -1068,9 +1075,11 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
       e.target.value = ''
     } catch (error) {
       console.error('Error uploading spec sheet:', error)
-      alert('Failed to upload spec sheet. Please try again.')
+      const msg = error instanceof Error ? error.message : 'Failed to upload. Please try again.'
+      alert(msg)
     } finally {
       setUploadingCategory(null)
+      e.target.value = '' // Reset so same file can be selected again
     }
   }
 

@@ -22,6 +22,8 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail, TrendingUp, FolderOpen, Palette } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import { ProFormaGenerator } from './ProFormaGenerator'
+import { WorkPackagesSection } from './WorkPackagesSection'
+import { ProjectMilestonesSection } from './ProjectMilestonesSection'
 
 interface ProjectDetailViewProps {
   project: Project
@@ -796,6 +798,16 @@ export function ProjectDetailView({
               </button>
             </Card>
           )}
+        </div>
+
+        {/* Work Packages (Targets) */}
+        <div className="mt-6">
+          <WorkPackagesSection projectId={project.id} />
+        </div>
+
+        {/* Project Milestones (GC <-> Drywall bridge) */}
+        <div className="mt-6">
+          <ProjectMilestonesSection projectId={project.id} />
         </div>
       </main>
       

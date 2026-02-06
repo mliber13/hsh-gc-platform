@@ -461,6 +461,8 @@ export async function reorderRooms(
 // IMAGE OPERATIONS
 // ============================================================================
 
+export type UploadImageResult = { image: SelectionRoomImage } | { image: null; error: string }
+
 /**
  * Upload image for a selection room
  */
@@ -470,13 +472,12 @@ export async function uploadSelectionImage(
   category?: ImageCategory,
   description?: string,
   organizationId?: string
-): Promise<SelectionRoomImage | null> {
+): Promise<UploadImageResult> {
   try {
-    // Get user profile for organization_id
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       console.error('User not authenticated')
-      return null
+      return { image: null, error: 'You must be signed in to upload.' }
     }
 
     const { data: profile, error: profileError } = await supabase
@@ -487,17 +488,16 @@ export async function uploadSelectionImage(
 
     if (profileError) {
       console.error('Error fetching user profile:', profileError)
-      return null
+      return { image: null, error: 'Could not load your account. Please refresh and try again.' }
     }
 
     if (!profile?.organization_id) {
       console.error('User profile missing organization_id')
-      return null
+      return { image: null, error: 'Account setup is incomplete. Please contact support.' }
     }
 
     const orgId = organizationId || profile.organization_id
 
-    // Get room to find book and project, and verify organization_id matches
     const { data: room, error: roomError } = await supabase
       .from('selection_rooms')
       .select('selection_book_id, organization_id')
@@ -506,13 +506,12 @@ export async function uploadSelectionImage(
 
     if (roomError || !room) {
       console.error('Room not found:', roomError)
-      return null
+      return { image: null, error: 'This room could not be found. Please refresh the page and try again.' }
     }
 
-    // Verify room belongs to user's organization
     if (room.organization_id !== orgId) {
       console.error('Room organization_id does not match user organization_id')
-      return null
+      return { image: null, error: "You don't have permission to add images to this room." }
     }
 
     const { data: book } = await supabase
@@ -523,17 +522,15 @@ export async function uploadSelectionImage(
 
     if (!book) {
       console.error('Book not found')
-      return null
+      return { image: null, error: 'Selection book not found. Please refresh and try again.' }
     }
 
-    // Create unique filename
     const timestamp = Date.now()
     const fileExt = file.name.split('.').pop()
     const fileName = `${roomId}-${timestamp}.${fileExt}`
     const filePath = `${orgId}/${book.project_id}/${roomId}/${fileName}`
 
-    // Upload to storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('selection-images')
       .upload(filePath, file, {
         cacheControl: '3600',
@@ -542,42 +539,36 @@ export async function uploadSelectionImage(
 
     if (uploadError) {
       console.error('Error uploading image:', uploadError)
-      return null
+      const msg = uploadError.message || 'Upload failed'
+      if (msg.toLowerCase().includes('size') || msg.toLowerCase().includes('limit')) {
+        return { image: null, error: 'File is too large. Use an image under 10 MB.' }
+      }
+      if (msg.toLowerCase().includes('type') || msg.toLowerCase().includes('mime')) {
+        return { image: null, error: 'This file type is not allowed. Use JPG, PNG, GIF, or WebP.' }
+      }
+      return { image: null, error: `Upload failed: ${msg}` }
     }
 
-    // Generate signed URL for private bucket (valid for 1 year)
     const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from('selection-images')
-      .createSignedUrl(filePath, 31536000) // 1 year
+      .createSignedUrl(filePath, 31536000)
 
     if (signedUrlError) {
       console.error('Error creating signed URL:', signedUrlError)
-      // Try to delete uploaded file
       try {
-        await supabase.storage
-          .from('selection-images')
-          .remove([filePath])
-      } catch (storageError) {
-        console.error('Error deleting uploaded file:', storageError)
-      }
-      return null
+        await supabase.storage.from('selection-images').remove([filePath])
+      } catch (_) {}
+      return { image: null, error: 'Upload succeeded but the link could not be created. Please try again.' }
     }
 
     const signedUrl = signedUrlData?.signedUrl || null
     if (!signedUrl) {
-      console.error('Failed to generate signed URL')
-      // Try to delete uploaded file
       try {
-        await supabase.storage
-          .from('selection-images')
-          .remove([filePath])
-      } catch (storageError) {
-        console.error('Error deleting uploaded file:', storageError)
-      }
-      return null
+        await supabase.storage.from('selection-images').remove([filePath])
+      } catch (_) {}
+      return { image: null, error: 'Upload succeeded but the link could not be created. Please try again.' }
     }
 
-    // Get current max display_order
     const { data: existingImages } = await supabase
       .from('selection_room_images')
       .select('display_order')
@@ -589,28 +580,12 @@ export async function uploadSelectionImage(
       ? (existingImages[0].display_order || 0) + 1
       : 0
 
-    // Verify organization_id before insert (for debugging)
-    console.log('About to insert image record with:')
-    console.log('- organization_id:', orgId)
-    console.log('- selection_room_id:', roomId)
-    console.log('- User ID:', user.id)
-    
-    // Double-check user's organization_id
-    const { data: verifyProfile } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
-    console.log('- User profile organization_id:', verifyProfile?.organization_id)
-    console.log('- Match:', orgId === verifyProfile?.organization_id)
-
-    // Save image record
     const { data: imageRecord, error: recordError } = await supabase
       .from('selection_room_images')
       .insert({
         organization_id: orgId,
         selection_room_id: roomId,
-        image_url: signedUrl, // Store signed URL
+        image_url: signedUrl,
         image_path: filePath,
         file_name: file.name,
         file_size: file.size,
@@ -624,34 +599,17 @@ export async function uploadSelectionImage(
 
     if (recordError) {
       console.error('Error saving image record:', recordError)
-      console.error('Organization ID being inserted:', orgId)
-      console.error('User ID:', user.id)
-      console.error('Room ID:', roomId)
-      console.error('Room organization_id:', room.organization_id)
-      
-      // Check what the user's organization_id is
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single()
-      console.error('User profile organization_id:', userProfile?.organization_id)
-      
-      // Try to delete uploaded file
       try {
-        await supabase.storage
-          .from('selection-images')
-          .remove([filePath])
-      } catch (storageError) {
-        console.error('Error deleting uploaded file:', storageError)
-      }
-      return null
+        await supabase.storage.from('selection-images').remove([filePath])
+      } catch (_) {}
+      return { image: null, error: `Could not save image: ${recordError.message}` }
     }
 
-    return imageRecord as SelectionRoomImage
+    return { image: imageRecord as SelectionRoomImage }
   } catch (error) {
     console.error('Error in uploadSelectionImage:', error)
-    return null
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return { image: null, error: `Upload failed: ${message}` }
   }
 }
 
@@ -756,22 +714,23 @@ export async function updateSelectionImage(
 // SPEC SHEET OPERATIONS
 // ============================================================================
 
+export type UploadSpecSheetResult = { specSheet: SelectionRoomSpecSheet } | { specSheet: null; error: string }
+
 /**
  * Upload spec sheet for a selection room category
  */
 export async function uploadSelectionSpecSheet(
   roomId: string,
   file: File,
-  category: string, // Category name (paint, flooring, lighting, or custom category)
+  category: string,
   description?: string,
   organizationId?: string
-): Promise<SelectionRoomSpecSheet | null> {
+): Promise<UploadSpecSheetResult> {
   try {
-    // Get user profile for organization_id
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       console.error('User not authenticated')
-      return null
+      return { specSheet: null, error: 'You must be signed in to upload.' }
     }
 
     const { data: profile, error: profileError } = await supabase
@@ -782,17 +741,15 @@ export async function uploadSelectionSpecSheet(
 
     if (profileError) {
       console.error('Error fetching user profile:', profileError)
-      return null
+      return { specSheet: null, error: 'Could not load your account. Please refresh and try again.' }
     }
 
     if (!profile?.organization_id) {
-      console.error('User profile missing organization_id')
-      return null
+      return { specSheet: null, error: 'Account setup is incomplete. Please contact support.' }
     }
 
     const orgId = organizationId || profile.organization_id
 
-    // Get room to find book and project, and verify organization_id matches
     const { data: room, error: roomError } = await supabase
       .from('selection_rooms')
       .select('selection_book_id, organization_id')
@@ -801,13 +758,11 @@ export async function uploadSelectionSpecSheet(
 
     if (roomError || !room) {
       console.error('Room not found:', roomError)
-      return null
+      return { specSheet: null, error: 'This room could not be found. Please refresh the page and try again.' }
     }
 
-    // Verify room belongs to user's organization
     if (room.organization_id !== orgId) {
-      console.error('Room organization_id does not match user organization_id')
-      return null
+      return { specSheet: null, error: "You don't have permission to add files to this room." }
     }
 
     const { data: book } = await supabase
@@ -817,18 +772,15 @@ export async function uploadSelectionSpecSheet(
       .single()
 
     if (!book) {
-      console.error('Book not found')
-      return null
+      return { specSheet: null, error: 'Selection book not found. Please refresh and try again.' }
     }
 
-    // Create unique filename
     const timestamp = Date.now()
     const fileExt = file.name.split('.').pop()
     const fileName = `${roomId}-spec-${timestamp}.${fileExt}`
     const filePath = `${orgId}/${book.project_id}/${roomId}/specs/${fileName}`
 
-    // Upload to storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('selection-images')
       .upload(filePath, file, {
         cacheControl: '3600',
@@ -837,42 +789,36 @@ export async function uploadSelectionSpecSheet(
 
     if (uploadError) {
       console.error('Error uploading spec sheet:', uploadError)
-      return null
+      const msg = uploadError.message || 'Upload failed'
+      if (msg.toLowerCase().includes('size') || msg.toLowerCase().includes('limit')) {
+        return { specSheet: null, error: 'File is too large. Use a file under 10 MB.' }
+      }
+      if (msg.toLowerCase().includes('type') || msg.toLowerCase().includes('mime')) {
+        return { specSheet: null, error: 'This file type is not allowed. Use PDF or an image (JPG, PNG, etc.).' }
+      }
+      return { specSheet: null, error: `Upload failed: ${msg}` }
     }
 
-    // Generate signed URL for private bucket (valid for 1 year)
     const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from('selection-images')
-      .createSignedUrl(filePath, 31536000) // 1 year
+      .createSignedUrl(filePath, 31536000)
 
     if (signedUrlError) {
       console.error('Error creating signed URL:', signedUrlError)
-      // Try to delete uploaded file
       try {
-        await supabase.storage
-          .from('selection-images')
-          .remove([filePath])
-      } catch (storageError) {
-        console.error('Error deleting uploaded file:', storageError)
-      }
-      return null
+        await supabase.storage.from('selection-images').remove([filePath])
+      } catch (_) {}
+      return { specSheet: null, error: 'Upload succeeded but the link could not be created. Please try again.' }
     }
 
     const signedUrl = signedUrlData?.signedUrl || null
     if (!signedUrl) {
-      console.error('Failed to generate signed URL')
-      // Try to delete uploaded file
       try {
-        await supabase.storage
-          .from('selection-images')
-          .remove([filePath])
-      } catch (storageError) {
-        console.error('Error deleting uploaded file:', storageError)
-      }
-      return null
+        await supabase.storage.from('selection-images').remove([filePath])
+      } catch (_) {}
+      return { specSheet: null, error: 'Upload succeeded but the link could not be created. Please try again.' }
     }
 
-    // Get current max display_order
     const { data: existingSpecSheets } = await supabase
       .from('selection_room_spec_sheets')
       .select('display_order')
@@ -885,13 +831,12 @@ export async function uploadSelectionSpecSheet(
       ? (existingSpecSheets[0].display_order || 0) + 1
       : 0
 
-    // Save spec sheet record
     const { data: specSheetRecord, error: recordError } = await supabase
       .from('selection_room_spec_sheets')
       .insert({
         organization_id: orgId,
         selection_room_id: roomId,
-        file_url: signedUrl, // Store signed URL
+        file_url: signedUrl,
         file_path: filePath,
         file_name: file.name,
         file_size: file.size,
@@ -905,21 +850,17 @@ export async function uploadSelectionSpecSheet(
 
     if (recordError) {
       console.error('Error saving spec sheet record:', recordError)
-      // Try to delete uploaded file
       try {
-        await supabase.storage
-          .from('selection-images')
-          .remove([filePath])
-      } catch (storageError) {
-        console.error('Error deleting uploaded file:', storageError)
-      }
-      return null
+        await supabase.storage.from('selection-images').remove([filePath])
+      } catch (_) {}
+      return { specSheet: null, error: `Could not save file: ${recordError.message}` }
     }
 
-    return specSheetRecord as SelectionRoomSpecSheet
+    return { specSheet: specSheetRecord as SelectionRoomSpecSheet }
   } catch (error) {
     console.error('Error in uploadSelectionSpecSheet:', error)
-    return null
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return { specSheet: null, error: `Upload failed: ${message}` }
   }
 }
 
