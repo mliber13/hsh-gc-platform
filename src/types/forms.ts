@@ -65,7 +65,7 @@ export interface CreateProjectInput {
 }
 
 export interface UpdateProjectInput extends Partial<CreateProjectInput> {
-  id: string
+  id?: string  // optional when projectId is passed separately (e.g. updateProject_Hybrid(projectId, updates))
   status?: Project['status']
   estimate?: Estimate
   actuals?: any // ProjectActuals type
