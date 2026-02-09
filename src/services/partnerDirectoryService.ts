@@ -9,8 +9,14 @@ import { supabase, isOnlineMode } from '@/lib/supabase'
 import {
   Subcontractor,
   Supplier,
+  Developer,
+  Municipality,
+  Lender,
   SubcontractorInput,
   SupplierInput,
+  DeveloperInput,
+  MunicipalityInput,
+  LenderInput,
 } from '@/types'
 import { getCurrentUserProfile } from './userService'
 
@@ -73,6 +79,51 @@ const toSupplier = (row: any): Supplier => ({
   updatedAt: new Date(row.updated_at),
 })
 
+const toDeveloper = (row: any): Developer => ({
+  id: row.id,
+  organizationId: row.organization_id,
+  name: row.name,
+  type: row.type,
+  contactName: row.contact_name,
+  email: row.email,
+  phone: row.phone,
+  website: row.website,
+  notes: row.notes,
+  isActive: row.is_active,
+  createdAt: new Date(row.created_at),
+  updatedAt: new Date(row.updated_at),
+})
+
+const toMunicipality = (row: any): Municipality => ({
+  id: row.id,
+  organizationId: row.organization_id,
+  name: row.name,
+  jurisdiction: row.jurisdiction,
+  contactName: row.contact_name,
+  email: row.email,
+  phone: row.phone,
+  website: row.website,
+  notes: row.notes,
+  isActive: row.is_active,
+  createdAt: new Date(row.created_at),
+  updatedAt: new Date(row.updated_at),
+})
+
+const toLender = (row: any): Lender => ({
+  id: row.id,
+  organizationId: row.organization_id,
+  name: row.name,
+  type: row.type,
+  contactName: row.contact_name,
+  email: row.email,
+  phone: row.phone,
+  website: row.website,
+  notes: row.notes,
+  isActive: row.is_active,
+  createdAt: new Date(row.created_at),
+  updatedAt: new Date(row.updated_at),
+})
+
 const buildSubcontractorPayload = (
   input: Partial<SubcontractorInput>,
   organizationId?: string
@@ -105,6 +156,49 @@ const buildSupplierPayload = (input: Partial<SupplierInput>, organizationId?: st
   if (input.notes !== undefined) payload.notes = sanitize(input.notes)
   if (input.isActive !== undefined) payload.is_active = input.isActive
 
+  return payload
+}
+
+const buildDeveloperPayload = (input: Partial<DeveloperInput>, organizationId?: string) => {
+  const payload: Record<string, any> = {}
+
+  if (organizationId) payload.organization_id = organizationId
+  if (input.name !== undefined) payload.name = input.name.trim()
+  if (input.type !== undefined) payload.type = sanitize(input.type)
+  if (input.contactName !== undefined) payload.contact_name = sanitize(input.contactName)
+  if (input.email !== undefined) payload.email = sanitizeEmail(input.email)
+  if (input.phone !== undefined) payload.phone = sanitize(input.phone)
+  if (input.website !== undefined) payload.website = sanitize(input.website)
+  if (input.notes !== undefined) payload.notes = sanitize(input.notes)
+  if (input.isActive !== undefined) payload.is_active = input.isActive
+
+  return payload
+}
+
+const buildMunicipalityPayload = (input: Partial<MunicipalityInput>, organizationId?: string) => {
+  const payload: Record<string, any> = {}
+  if (organizationId) payload.organization_id = organizationId
+  if (input.name !== undefined) payload.name = input.name.trim()
+  if (input.contactName !== undefined) payload.contact_name = sanitize(input.contactName)
+  if (input.email !== undefined) payload.email = sanitizeEmail(input.email)
+  if (input.phone !== undefined) payload.phone = sanitize(input.phone)
+  if (input.website !== undefined) payload.website = sanitize(input.website)
+  if (input.notes !== undefined) payload.notes = sanitize(input.notes)
+  if (input.isActive !== undefined) payload.is_active = input.isActive
+  return payload
+}
+
+const buildLenderPayload = (input: Partial<LenderInput>, organizationId?: string) => {
+  const payload: Record<string, any> = {}
+  if (organizationId) payload.organization_id = organizationId
+  if (input.name !== undefined) payload.name = input.name.trim()
+  if (input.type !== undefined) payload.type = sanitize(input.type)
+  if (input.contactName !== undefined) payload.contact_name = sanitize(input.contactName)
+  if (input.email !== undefined) payload.email = sanitizeEmail(input.email)
+  if (input.phone !== undefined) payload.phone = sanitize(input.phone)
+  if (input.website !== undefined) payload.website = sanitize(input.website)
+  if (input.notes !== undefined) payload.notes = sanitize(input.notes)
+  if (input.isActive !== undefined) payload.is_active = input.isActive
   return payload
 }
 
@@ -292,3 +386,251 @@ export async function deleteSupplier(id: string): Promise<void> {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Developers
+// -----------------------------------------------------------------------------
+
+export async function fetchDevelopers(options?: {
+  includeInactive?: boolean
+}): Promise<Developer[]> {
+  const organizationId = await requireOrganizationId()
+
+  let query = supabase
+    .from('developers')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .order('name', { ascending: true })
+
+  if (!options?.includeInactive) {
+    query = query.eq('is_active', true)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching developers:', error)
+    throw error
+  }
+
+  return (data || []).map(toDeveloper)
+}
+
+export async function createDeveloper(input: DeveloperInput): Promise<Developer> {
+  const organizationId = await requireOrganizationId()
+  const payload = buildDeveloperPayload(input, organizationId)
+
+  const { data, error } = await supabase
+    .from('developers')
+    .insert(payload)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating developer:', error)
+    throw error
+  }
+
+  return toDeveloper(data)
+}
+
+export async function updateDeveloper(
+  id: string,
+  updates: Partial<DeveloperInput>
+): Promise<Developer> {
+  await requireOnlineMode()
+
+  const payload = buildDeveloperPayload(updates)
+
+  const { data, error } = await supabase
+    .from('developers')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating developer:', error)
+    throw error
+  }
+
+  return toDeveloper(data)
+}
+
+export async function setDeveloperActive(
+  id: string,
+  isActive: boolean
+): Promise<Developer> {
+  return updateDeveloper(id, { isActive })
+}
+
+export async function deleteDeveloper(id: string): Promise<void> {
+  await requireOnlineMode()
+
+  const { error } = await supabase
+    .from('developers')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting developer:', error)
+    throw error
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Municipalities
+// -----------------------------------------------------------------------------
+
+export async function fetchMunicipalities(options?: {
+  includeInactive?: boolean
+}): Promise<Municipality[]> {
+  const organizationId = await requireOrganizationId()
+
+  let query = supabase
+    .from('municipalities')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .order('name', { ascending: true })
+
+  if (!options?.includeInactive) {
+    query = query.eq('is_active', true)
+  }
+
+  const { data, error } = await query
+  if (error) {
+    console.error('Error fetching municipalities:', error)
+    throw error
+  }
+  return (data || []).map(toMunicipality)
+}
+
+export async function createMunicipality(input: MunicipalityInput): Promise<Municipality> {
+  const organizationId = await requireOrganizationId()
+  const payload = buildMunicipalityPayload(input, organizationId)
+
+  const { data, error } = await supabase
+    .from('municipalities')
+    .insert(payload)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating municipality:', error)
+    throw error
+  }
+  return toMunicipality(data)
+}
+
+export async function updateMunicipality(
+  id: string,
+  updates: Partial<MunicipalityInput>
+): Promise<Municipality> {
+  await requireOnlineMode()
+  const payload = buildMunicipalityPayload(updates)
+  const { data, error } = await supabase
+    .from('municipalities')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) {
+    console.error('Error updating municipality:', error)
+    throw error
+  }
+  return toMunicipality(data)
+}
+
+export async function setMunicipalityActive(
+  id: string,
+  isActive: boolean
+): Promise<Municipality> {
+  return updateMunicipality(id, { isActive })
+}
+
+export async function deleteMunicipality(id: string): Promise<void> {
+  await requireOnlineMode()
+  const { error } = await supabase.from('municipalities').delete().eq('id', id)
+  if (error) {
+    console.error('Error deleting municipality:', error)
+    throw error
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Lenders
+// -----------------------------------------------------------------------------
+
+export async function fetchLenders(options?: {
+  includeInactive?: boolean
+}): Promise<Lender[]> {
+  const organizationId = await requireOrganizationId()
+
+  let query = supabase
+    .from('lenders')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .order('name', { ascending: true })
+
+  if (!options?.includeInactive) {
+    query = query.eq('is_active', true)
+  }
+
+  const { data, error } = await query
+  if (error) {
+    console.error('Error fetching lenders:', error)
+    throw error
+  }
+  return (data || []).map(toLender)
+}
+
+export async function createLender(input: LenderInput): Promise<Lender> {
+  const organizationId = await requireOrganizationId()
+  const payload = buildLenderPayload(input, organizationId)
+
+  const { data, error } = await supabase
+    .from('lenders')
+    .insert(payload)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating lender:', error)
+    throw error
+  }
+  return toLender(data)
+}
+
+export async function updateLender(
+  id: string,
+  updates: Partial<LenderInput>
+): Promise<Lender> {
+  await requireOnlineMode()
+  const payload = buildLenderPayload(updates)
+  const { data, error } = await supabase
+    .from('lenders')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) {
+    console.error('Error updating lender:', error)
+    throw error
+  }
+  return toLender(data)
+}
+
+export async function setLenderActive(
+  id: string,
+  isActive: boolean
+): Promise<Lender> {
+  return updateLender(id, { isActive })
+}
+
+export async function deleteLender(id: string): Promise<void> {
+  await requireOnlineMode()
+  const { error } = await supabase.from('lenders').delete().eq('id', id)
+  if (error) {
+    console.error('Error deleting lender:', error)
+    throw error
+  }
+}

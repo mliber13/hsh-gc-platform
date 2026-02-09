@@ -13,6 +13,7 @@ export interface UserProfile {
   full_name: string | null;
   organization_id: string;
   role: UserRole;
+  is_active?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -42,6 +43,30 @@ export async function getOrganizationUsers(): Promise<UserProfile[]> {
 
   if (error) throw error;
   return data || [];
+}
+
+/**
+ * Get org users keyed by email (lowercase) for matching contacts to app users.
+ */
+export async function getOrganizationUsersByEmail(): Promise<Map<string, UserProfile>> {
+  const users = await getOrganizationUsers();
+  const map = new Map<string, UserProfile>();
+  for (const u of users) {
+    if (u.email) map.set(u.email.toLowerCase().trim(), u);
+  }
+  return map;
+}
+
+/**
+ * Set user active/inactive (revoke or restore app access). Admin only.
+ */
+export async function setUserActive(userId: string, isActive: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+
+  if (error) throw error;
 }
 
 /**

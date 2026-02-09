@@ -246,9 +246,7 @@ export async function sendDealDocumentShare(input: SendDealDocumentShareInput): 
       if (data.success === true) return true
       if (data.error) console.error('Edge Function error:', data.error)
       return false
-    }
-
-    return false
+    }    return false
   } catch (error) {
     console.error('Error sending deal document share:', error)
     return false

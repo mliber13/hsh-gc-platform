@@ -160,10 +160,25 @@ export type {
   PartnerBase,
   Subcontractor,
   Supplier,
+  Developer,
+  Municipality,
+  Lender,
   SubcontractorInput,
   SupplierInput,
+  DeveloperInput,
+  MunicipalityInput,
+  LenderInput,
   PartnerDirectoryEntity,
 } from './partners'
+
+export type {
+  Contact,
+  ContactInput,
+  ContactLabel,
+  StandaloneContactLabel,
+  ContactEntityType,
+} from './contactDirectory'
+export { STANDALONE_CONTACT_LABELS, MUNICIPALITY_CONTACT_ROLES } from './contactDirectory'
 
 export type {
   PlanEstimateTemplate,

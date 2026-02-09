@@ -33,7 +33,7 @@ import { QuoteReviewDashboard } from './components/QuoteReviewDashboard'
 import { Button } from './components/ui/button'
 import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2, FileText, MessageSquare } from 'lucide-react'
 import { backupAllData } from './services/backupService'
-import { PartnerDirectory } from './components/PartnerDirectory'
+import { ContactDirectory } from './components/ContactDirectory'
 import { SOWManagement } from './components/SOWManagement'
 import { EstimateTemplateManagement } from './components/EstimateTemplateManagement'
 import { DealPipeline } from './components/DealPipeline'
@@ -57,7 +57,7 @@ type View =
   | 'qb-settings'
   | 'qb-callback'
   | 'quote-review'
-  | 'partner-directory'
+  | 'contact-directory'
   | 'sow-management'
   | 'estimate-template-management'
   | 'deal-pipeline'
@@ -373,13 +373,13 @@ function App() {
                       <>
                         <button
                           onClick={() => {
-                            setCurrentView('partner-directory');
+                            setCurrentView('contact-directory');
                             setShowUserMenu(false);
                           }}
                           className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
                         >
-                          <Building2 className="w-4 h-4" />
-                          Partner Directory
+                          <User className="w-4 h-4" />
+                          Contact Directory
                         </button>
                         <button
                           onClick={() => {
@@ -565,10 +565,8 @@ function App() {
         />
       )}
 
-      {currentView === 'partner-directory' && (
-        <PartnerDirectory
-          onBack={handleBackToDashboard}
-        />
+      {currentView === 'contact-directory' && (
+        <ContactDirectory onBack={handleBackToDashboard} userProfile={userProfile} />
       )}
 
       {currentView === 'sow-management' && (
