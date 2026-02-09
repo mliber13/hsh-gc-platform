@@ -56,15 +56,21 @@ export interface ContactInput {
   lenderId?: string | null
 }
 
-/** Default labels for UI (standalone). Municipality and Lender are entity-based (Partners tab). */
+/** Labels shown in People tab only (Architect, Engineer, Title/Closing, Insurance are under Partners). */
 export const STANDALONE_CONTACT_LABELS: { value: StandaloneContactLabel; label: string }[] = [
   { value: 'USER', label: 'User (set category)' },
   { value: 'EMPLOYEE', label: 'Employee' },
   { value: 'INDEPENDENT_1099', label: "1099" },
-  { value: 'ARCHITECT', label: 'Architect' },
-  { value: 'ENGINEER', label: 'Engineer' },
-  { value: 'TITLE_CLOSING', label: 'Title / Closing' },
-  { value: 'INSURANCE', label: 'Insurance' },
+]
+
+export type PartnerLabelTab = 'architects' | 'engineers' | 'title_closing' | 'insurance'
+
+/** Partner tabs that are label-only (no company entity). Shown under Partners tab. */
+export const PARTNER_LABEL_TABS: { tab: PartnerLabelTab; label: StandaloneContactLabel; title: string }[] = [
+  { tab: 'architects', label: 'ARCHITECT', title: 'Architects' },
+  { tab: 'engineers', label: 'ENGINEER', title: 'Engineers' },
+  { tab: 'title_closing', label: 'TITLE_CLOSING', title: 'Title / Closing' },
+  { tab: 'insurance', label: 'INSURANCE', title: 'Insurance' },
 ]
 
 /** Role/label options when adding a contact under a Municipality (e.g. Inspector, City Manager). Use "Other" in UI to show custom role input. */

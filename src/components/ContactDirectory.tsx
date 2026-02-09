@@ -24,7 +24,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { Contact, ContactInput, Subcontractor, Supplier, Developer, Municipality, Lender } from '@/types'
-import { STANDALONE_CONTACT_LABELS, MUNICIPALITY_CONTACT_ROLES } from '@/types'
+import { STANDALONE_CONTACT_LABELS, MUNICIPALITY_CONTACT_ROLES, PARTNER_LABEL_TABS } from '@/types'
+import type { PartnerLabelTab } from '@/types'
 import {
   fetchSubcontractors,
   fetchSuppliers,
@@ -71,7 +72,7 @@ interface ContactDirectoryProps {
   userProfile?: UserProfile | null
 }
 
-type PartnerTab = 'subcontractors' | 'suppliers' | 'developers' | 'municipalities' | 'lenders'
+type PartnerTab = 'subcontractors' | 'suppliers' | 'developers' | 'municipalities' | 'lenders' | PartnerLabelTab
 
 export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps) {
   const isAdmin = userProfile?.role === 'admin'
@@ -95,6 +96,8 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
   const [loadingMunicipalities, setLoadingMunicipalities] = useState(false)
   const [loadingLenders, setLoadingLenders] = useState(false)
   const [loadingContacts, setLoadingContacts] = useState(false)
+  const [partnerLabelContacts, setPartnerLabelContacts] = useState<Contact[]>([])
+  const [loadingPartnerLabelContacts, setLoadingPartnerLabelContacts] = useState(false)
 
   const [contactFormOpen, setContactFormOpen] = useState(false)
   const [contactFormLabel, setContactFormLabel] = useState<ContactLabel>('EMPLOYEE')
@@ -246,6 +249,21 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
     }
   }, [mainTab, peopleLabel, loadContacts])
 
+  const loadPartnerLabelContacts = useCallback(async (label: string) => {
+    setLoadingPartnerLabelContacts(true)
+    try {
+      const data = await fetchContacts({ label })
+      setPartnerLabelContacts(data)
+    } catch (e: unknown) {
+      console.error(e)
+    } finally {
+      setLoadingPartnerLabelContacts(false)
+    }
+  }, [])
+
+  const isPartnerLabelTab = (t: PartnerTab): t is PartnerLabelTab =>
+    t === 'architects' || t === 'engineers' || t === 'title_closing' || t === 'insurance'
+
   useEffect(() => {
     if (mainTab !== 'partners') return
     if (partnerTab === 'subcontractors') loadSubcontractors()
@@ -253,7 +271,11 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
     else if (partnerTab === 'developers') loadDevelopers()
     else if (partnerTab === 'municipalities') loadMunicipalities()
     else if (partnerTab === 'lenders') loadLenders()
-  }, [mainTab, partnerTab, showInactive, loadSubcontractors, loadSuppliers, loadDevelopers, loadMunicipalities, loadLenders])
+    else if (isPartnerLabelTab(partnerTab)) {
+      const config = PARTNER_LABEL_TABS.find((c) => c.tab === partnerTab)
+      if (config) loadPartnerLabelContacts(config.label)
+    }
+  }, [mainTab, partnerTab, showInactive, loadSubcontractors, loadSuppliers, loadDevelopers, loadMunicipalities, loadLenders, loadPartnerLabelContacts])
 
   useEffect(() => {
     if (!expandedEntityId) return
@@ -407,23 +429,26 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
 
   const peopleContacts = mainTab === 'people' ? contacts : []
   const currentPartnerList =
-    partnerTab === 'subcontractors' ? subcontractors
+    isPartnerLabelTab(partnerTab) ? []
+    : partnerTab === 'subcontractors' ? subcontractors
     : partnerTab === 'suppliers' ? suppliers
     : partnerTab === 'developers' ? developers
     : partnerTab === 'municipalities' ? municipalities
     : lenders
   const isLoadingPartners =
-    partnerTab === 'subcontractors' ? loadingSubs
+    isPartnerLabelTab(partnerTab) ? loadingPartnerLabelContacts
+    : partnerTab === 'subcontractors' ? loadingSubs
     : partnerTab === 'suppliers' ? loadingSuppliers
     : partnerTab === 'developers' ? loadingDevs
     : partnerTab === 'municipalities' ? loadingMunicipalities
     : loadingLenders
+  const currentPartnerLabelConfig = mainTab === 'partners' && isPartnerLabelTab(partnerTab) ? PARTNER_LABEL_TABS.find((c) => c.tab === partnerTab) : null
 
-  const openAddContact = (entity?: { type: 'subcontractor' | 'supplier' | 'developer' | 'municipality' | 'lender'; id: string; name: string }) => {
+  const openAddContact = (entity?: { type: 'subcontractor' | 'supplier' | 'developer' | 'municipality' | 'lender'; id: string; name: string }, overrideLabel?: ContactLabel) => {
     setContactFormEntity(entity ?? null)
-    const entityLabel: ContactLabel = entity
+    const entityLabel: ContactLabel = overrideLabel ?? (entity
       ? (entity.type === 'subcontractor' ? 'SUBCONTRACTOR' : entity.type === 'supplier' ? 'SUPPLIER' : entity.type === 'developer' ? 'DEVELOPER' : entity.type === 'municipality' ? 'MUNICIPALITY' : 'LENDER')
-      : peopleLabel
+      : peopleLabel)
     setContactFormLabel(entityLabel)
     setContactForm({ name: '', email: '', phone: '', role: '', notes: '' })
     setEditingContactId(null)
@@ -486,6 +511,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       }
       setContactFormOpen(false)
       if (mainTab === 'people') loadContacts(peopleLabel)
+      if (mainTab === 'partners' && currentPartnerLabelConfig) loadPartnerLabelContacts(currentPartnerLabelConfig.label)
       if (expandedEntityId) {
         const key = partnerTab === 'subcontractors' ? 'subcontractorId' : partnerTab === 'suppliers' ? 'supplierId' : partnerTab === 'developers' ? 'developerId' : partnerTab === 'municipalities' ? 'municipalityId' : 'lenderId'
         loadEntityContacts(expandedEntityId, key)
@@ -502,6 +528,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
     try {
       await deleteContact(id)
       if (mainTab === 'people') loadContacts(peopleLabel)
+      if (mainTab === 'partners' && currentPartnerLabelConfig) loadPartnerLabelContacts(currentPartnerLabelConfig.label)
       if (expandedEntityId) {
         const key = partnerTab === 'subcontractors' ? 'subcontractorId' : partnerTab === 'suppliers' ? 'supplierId' : partnerTab === 'developers' ? 'developerId' : partnerTab === 'municipalities' ? 'municipalityId' : 'lenderId'
         loadEntityContacts(expandedEntityId, key)
@@ -869,6 +896,16 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                 >
                   Lenders
                 </button>
+                {PARTNER_LABEL_TABS.map(({ tab, title }) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setPartnerTab(tab)}
+                    className={`px-3 py-1.5 text-sm rounded ${partnerTab === tab ? 'bg-slate-200 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    {title}
+                  </button>
+                ))}
               </div>
               <label className="flex items-center gap-2 text-sm text-slate-600">
                 <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
@@ -902,6 +939,12 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                 <Button size="sm" onClick={openAddDeveloper}>
                   <Plus className="w-4 h-4 mr-1" />
                   Add Developer
+                </Button>
+              )}
+              {currentPartnerLabelConfig && (
+                <Button size="sm" onClick={() => openAddContact(undefined, currentPartnerLabelConfig.label)}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Contact
                 </Button>
               )}
             </>
@@ -1003,20 +1046,81 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
 
         {mainTab === 'partners' && (
           <Card>
-            <CardHeader>
-              <CardTitle>
-                {partnerTab === 'subcontractors' && 'Subcontractors'}
-                {partnerTab === 'suppliers' && 'Suppliers'}
-                {partnerTab === 'developers' && 'Developers'}
-                {partnerTab === 'municipalities' && 'Municipalities'}
-                {partnerTab === 'lenders' && 'Lenders'}
-              </CardTitle>
-              <p className="text-sm text-slate-500 mt-1">
-                Primary contact is on the company row. Expand a row to see and add additional contacts.
-              </p>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>
+                  {currentPartnerLabelConfig ? currentPartnerLabelConfig.title : null}
+                  {partnerTab === 'subcontractors' && 'Subcontractors'}
+                  {partnerTab === 'suppliers' && 'Suppliers'}
+                  {partnerTab === 'developers' && 'Developers'}
+                  {partnerTab === 'municipalities' && 'Municipalities'}
+                  {partnerTab === 'lenders' && 'Lenders'}
+                </CardTitle>
+                <p className="text-sm text-slate-500 mt-1">
+                  {currentPartnerLabelConfig ? 'Contacts for this partner type.' : 'Primary contact is on the company row. Expand a row to see and add additional contacts.'}
+                </p>
+              </div>
+              {currentPartnerLabelConfig && (
+                <Button size="sm" onClick={() => openAddContact(undefined, currentPartnerLabelConfig.label)}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Contact
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
-              {isLoadingPartners ? (
+              {currentPartnerLabelConfig ? (
+                <>
+                  {isLoadingPartners ? (
+                    <p className="text-sm text-slate-500 py-8">Loading...</p>
+                  ) : partnerLabelContacts.length === 0 ? (
+                    <p className="text-sm text-slate-500 py-8">No contacts yet. Add one above.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {partnerLabelContacts.map((c) => {
+                        const appUser = isAdmin && c.email ? getAppUserForContact(c) : null
+                        return (
+                          <div key={c.id} className="flex items-center justify-between border rounded-lg p-3 text-sm">
+                            <div>
+                              <span className="font-medium">{c.name}</span>
+                              {c.role && <span className="text-slate-500 ml-2">({c.role})</span>}
+                              <div className="text-slate-600 text-xs mt-1">
+                                {c.email && <span>{c.email}</span>}
+                                {c.phone && <span className="ml-2">{c.phone}</span>}
+                              </div>
+                              {isAdmin && c.email && (
+                                <div className="mt-1 flex items-center gap-2">
+                                  {appUser ? (
+                                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${appUser.is_active === false ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+                                      {appUser.is_active === false ? <ShieldOff className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
+                                      App: {appUser.is_active === false ? 'Inactive' : appUser.role}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-slate-500">No app access</span>
+                                  )}
+                                </div>
+                              )}
+                              {c.notes && <p className="text-slate-500 text-xs mt-1">{c.notes}</p>}
+                            </div>
+                            <div className="flex gap-1 items-center">
+                              {isAdmin && c.email && (
+                                appUser
+                                  ? <Button variant="outline" size="sm" onClick={() => openAccessDialog(c)}>Edit access</Button>
+                                  : <Button variant="outline" size="sm" onClick={() => openInviteInfo(c)}><UserPlus className="w-4 h-4 mr-1" />Invite to app</Button>
+                              )}
+                              <Button variant="ghost" size="sm" onClick={() => openEditContact(c)}>
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleDeleteContact(c.id)}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </>
+              ) : isLoadingPartners ? (
                 <p className="text-sm text-slate-500 py-8">Loading...</p>
               ) : currentPartnerList.length === 0 ? (
                 <p className="text-sm text-slate-500 py-8">
@@ -1205,25 +1309,33 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
               <DialogDescription>
                 {contactFormEntity
                   ? `Additional contact for ${contactFormEntity.name}.`
-                  : 'Standalone contact. Choose a label.'}
+                  : ['ARCHITECT', 'ENGINEER', 'TITLE_CLOSING', 'INSURANCE'].includes(contactFormLabel)
+                    ? `Contact for ${PARTNER_LABEL_TABS.find((c) => c.label === contactFormLabel)?.title ?? contactFormLabel}.`
+                    : 'Standalone contact. Choose a label.'}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               {!contactFormEntity && (
                 <div>
                   <Label>Label</Label>
-                  <Select value={contactFormLabel} onValueChange={(v) => setContactFormLabel(v as StandaloneContactLabel)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STANDALONE_CONTACT_LABELS.map((l) => (
-                        <SelectItem key={l.value} value={l.value}>
-                          {l.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {['ARCHITECT', 'ENGINEER', 'TITLE_CLOSING', 'INSURANCE'].includes(contactFormLabel) ? (
+                    <p className="text-sm text-slate-600 py-2">
+                      {PARTNER_LABEL_TABS.find((c) => c.label === contactFormLabel)?.title ?? contactFormLabel}
+                    </p>
+                  ) : (
+                    <Select value={contactFormLabel} onValueChange={(v) => setContactFormLabel(v as StandaloneContactLabel)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STANDALONE_CONTACT_LABELS.map((l) => (
+                          <SelectItem key={l.value} value={l.value}>
+                            {l.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               )}
               <div>
