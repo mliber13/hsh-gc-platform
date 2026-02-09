@@ -34,6 +34,17 @@ import type {
   CreateMilestoneInput,
   UpdateMilestoneInput,
 } from '@/types/projectMilestone'
+import type {
+  GameplanPlay,
+  CreateGameplanPlayInput,
+  UpdateGameplanPlayInput,
+  PlaybookPlay,
+  CreatePlaybookPlayInput,
+  UpdatePlaybookPlayInput,
+  DefaultPlaybookPlay,
+  CreateDefaultPlaybookPlayInput,
+  UpdateDefaultPlaybookPlayInput,
+} from '@/types/gameplan'
 
 // ============================================================================
 // PROJECT OPERATIONS
@@ -602,6 +613,370 @@ export async function deleteMilestone(id: string): Promise<boolean> {
     return false
   }
 
+  return true
+}
+
+// ============================================================================
+// GAMEPLAN PLAYS (public.gameplan_plays)
+// ============================================================================
+
+function transformGameplanPlay(row: any): GameplanPlay {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    organizationId: row.organization_id,
+    chapterKey: row.chapter_key,
+    title: row.title,
+    description: row.description ?? null,
+    owner: row.owner,
+    status: row.status,
+    targetStart: row.target_start ?? null,
+    targetFinish: row.target_finish ?? null,
+    sortOrder: row.sort_order ?? 0,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  }
+}
+
+export async function fetchGameplanPlays(projectId: string): Promise<GameplanPlay[]> {
+  if (!isOnlineMode()) return []
+
+  const { data, error } = await supabase
+    .from('gameplan_plays')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching gameplan plays:', error)
+    return []
+  }
+  return (data || []).map(transformGameplanPlay)
+}
+
+export async function createGameplanPlay(
+  projectId: string,
+  input: CreateGameplanPlayInput
+): Promise<GameplanPlay | null> {
+  if (!isOnlineMode()) return null
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+  const profileOrgId = profile?.organization_id ?? null
+
+  const { data: projectRow } = await supabase
+    .from('projects')
+    .select('organization_id')
+    .eq('id', projectId)
+    .single()
+  const orgId = projectRow?.organization_id || profileOrgId || 'default-org'
+
+  const row = {
+    project_id: projectId,
+    organization_id: orgId,
+    chapter_key: input.chapterKey,
+    title: input.title.trim(),
+    description: input.description?.trim() || null,
+    owner: input.owner,
+    status: input.status ?? 'NOT_STARTED',
+    target_start: input.targetStart?.trim() || null,
+    target_finish: input.targetFinish?.trim() || null,
+    sort_order: input.sortOrder ?? 0,
+  }
+
+  const { data, error } = await supabase
+    .from('gameplan_plays')
+    .insert(row)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating gameplan play:', error)
+    return null
+  }
+  return transformGameplanPlay(data)
+}
+
+export async function updateGameplanPlay(
+  id: string,
+  updates: UpdateGameplanPlayInput
+): Promise<GameplanPlay | null> {
+  if (!isOnlineMode()) return null
+
+  const updateData: Record<string, unknown> = {}
+  if (updates.title !== undefined) updateData.title = updates.title.trim()
+  if (updates.description !== undefined) updateData.description = updates.description?.trim() || null
+  if (updates.owner !== undefined) updateData.owner = updates.owner
+  if (updates.status !== undefined) updateData.status = updates.status
+  if (updates.targetStart !== undefined) updateData.target_start = updates.targetStart
+  if (updates.targetFinish !== undefined) updateData.target_finish = updates.targetFinish
+  if (updates.sortOrder !== undefined) updateData.sort_order = updates.sortOrder
+
+  if (Object.keys(updateData).length === 0) {
+    const { data: existing } = await supabase.from('gameplan_plays').select('*').eq('id', id).single()
+    return existing ? transformGameplanPlay(existing) : null
+  }
+
+  const { data, error } = await supabase
+    .from('gameplan_plays')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating gameplan play:', error)
+    return null
+  }
+  return transformGameplanPlay(data)
+}
+
+export async function deleteGameplanPlay(id: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+  const { error } = await supabase.from('gameplan_plays').delete().eq('id', id)
+  if (error) {
+    console.error('Error deleting gameplan play:', error)
+    return false
+  }
+  return true
+}
+
+export async function deleteGameplanPlaysByProject(projectId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+  const { error } = await supabase.from('gameplan_plays').delete().eq('project_id', projectId)
+  if (error) {
+    console.error('Error deleting gameplan plays by project:', error)
+    return false
+  }
+  return true
+}
+
+// ============================================================================
+// GAMEPLAN PLAYBOOK (org-level template)
+// ============================================================================
+
+function transformPlaybookPlay(row: any): PlaybookPlay {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    chapterKey: row.chapter_key,
+    title: row.title,
+    description: row.description ?? null,
+    owner: row.owner,
+    sortOrder: row.sort_order ?? 0,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  }
+}
+
+export async function fetchPlaybookPlays(organizationId: string): Promise<PlaybookPlay[]> {
+  if (!isOnlineMode()) return []
+
+  const { data, error } = await supabase
+    .from('gameplan_playbook')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching playbook plays:', error)
+    return []
+  }
+  return (data || []).map(transformPlaybookPlay)
+}
+
+export async function createPlaybookPlay(
+  organizationId: string,
+  input: CreatePlaybookPlayInput
+): Promise<PlaybookPlay | null> {
+  if (!isOnlineMode()) return null
+
+  const row = {
+    organization_id: organizationId,
+    chapter_key: input.chapterKey,
+    title: input.title.trim(),
+    description: input.description?.trim() || null,
+    owner: input.owner,
+    sort_order: input.sortOrder ?? 0,
+  }
+
+  const { data, error } = await supabase
+    .from('gameplan_playbook')
+    .insert(row)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating playbook play:', error)
+    return null
+  }
+  return transformPlaybookPlay(data)
+}
+
+export async function updatePlaybookPlay(
+  id: string,
+  updates: UpdatePlaybookPlayInput
+): Promise<PlaybookPlay | null> {
+  if (!isOnlineMode()) return null
+
+  const updateData: Record<string, unknown> = {}
+  if (updates.title !== undefined) updateData.title = updates.title.trim()
+  if (updates.description !== undefined) updateData.description = updates.description?.trim() || null
+  if (updates.owner !== undefined) updateData.owner = updates.owner
+  if (updates.sortOrder !== undefined) updateData.sort_order = updates.sortOrder
+
+  if (Object.keys(updateData).length === 0) {
+    const { data: existing } = await supabase.from('gameplan_playbook').select('*').eq('id', id).single()
+    return existing ? transformPlaybookPlay(existing) : null
+  }
+
+  const { data, error } = await supabase
+    .from('gameplan_playbook')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating playbook play:', error)
+    return null
+  }
+  return transformPlaybookPlay(data)
+}
+
+export async function deletePlaybookPlay(id: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+  const { error } = await supabase.from('gameplan_playbook').delete().eq('id', id)
+  if (error) {
+    console.error('Error deleting playbook play:', error)
+    return false
+  }
+  return true
+}
+
+export async function deleteAllPlaybookPlays(organizationId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+  const { error } = await supabase.from('gameplan_playbook').delete().eq('organization_id', organizationId)
+  if (error) {
+    console.error('Error deleting all playbook plays:', error)
+    return false
+  }
+  return true
+}
+
+// ============================================================================
+// GAMEPLAN DEFAULT PLAYBOOK (global HSH default, admin can edit)
+// ============================================================================
+
+function transformDefaultPlaybookPlay(row: any): DefaultPlaybookPlay {
+  return {
+    id: row.id,
+    chapterKey: row.chapter_key,
+    title: row.title,
+    description: row.description ?? null,
+    owner: row.owner,
+    sortOrder: row.sort_order ?? 0,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  }
+}
+
+export async function fetchDefaultPlaybookPlays(): Promise<DefaultPlaybookPlay[]> {
+  if (!isOnlineMode()) return []
+
+  const { data, error } = await supabase
+    .from('gameplan_default_playbook')
+    .select('*')
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching default playbook:', error)
+    return []
+  }
+  return (data || []).map(transformDefaultPlaybookPlay)
+}
+
+export async function createDefaultPlaybookPlay(input: CreateDefaultPlaybookPlayInput): Promise<DefaultPlaybookPlay | null> {
+  if (!isOnlineMode()) return null
+
+  const row = {
+    chapter_key: input.chapterKey,
+    title: input.title.trim(),
+    description: input.description?.trim() || null,
+    owner: input.owner,
+    sort_order: input.sortOrder ?? 0,
+  }
+
+  const { data, error } = await supabase
+    .from('gameplan_default_playbook')
+    .insert(row)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating default playbook play:', error)
+    return null
+  }
+  return transformDefaultPlaybookPlay(data)
+}
+
+export async function updateDefaultPlaybookPlay(
+  id: string,
+  updates: UpdateDefaultPlaybookPlayInput
+): Promise<DefaultPlaybookPlay | null> {
+  if (!isOnlineMode()) return null
+
+  const updateData: Record<string, unknown> = {}
+  if (updates.title !== undefined) updateData.title = updates.title.trim()
+  if (updates.description !== undefined) updateData.description = updates.description?.trim() || null
+  if (updates.owner !== undefined) updateData.owner = updates.owner
+  if (updates.sortOrder !== undefined) updateData.sort_order = updates.sortOrder
+
+  if (Object.keys(updateData).length === 0) {
+    const { data: existing } = await supabase.from('gameplan_default_playbook').select('*').eq('id', id).single()
+    return existing ? transformDefaultPlaybookPlay(existing) : null
+  }
+
+  const { data, error } = await supabase
+    .from('gameplan_default_playbook')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating default playbook play:', error)
+    return null
+  }
+  return transformDefaultPlaybookPlay(data)
+}
+
+export async function deleteDefaultPlaybookPlay(id: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+  const { error } = await supabase.from('gameplan_default_playbook').delete().eq('id', id)
+  if (error) {
+    console.error('Error deleting default playbook play:', error)
+    return false
+  }
+  return true
+}
+
+export async function deleteAllDefaultPlaybookPlays(): Promise<boolean> {
+  if (!isOnlineMode()) return false
+  const { error } = await supabase.from('gameplan_default_playbook').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  if (error) {
+    console.error('Error deleting all default playbook plays:', error)
+    return false
+  }
   return true
 }
 

@@ -24,6 +24,7 @@ import hshLogo from '/HSH Contractor Logo - Color.png'
 import { ProFormaGenerator } from './ProFormaGenerator'
 import { WorkPackagesSection } from './WorkPackagesSection'
 import { ProjectMilestonesSection } from './ProjectMilestonesSection'
+import { GameplanBoard } from './GameplanBoard'
 
 interface ProjectDetailViewProps {
   project: Project
@@ -798,6 +799,11 @@ export function ProjectDetailView({
               </button>
             </Card>
           )}
+        </div>
+
+        {/* Gameplan - Chapters (readiness-first); schedule is constraint layer */}
+        <div className="mt-6">
+          <GameplanBoard projectId={project.id} />
         </div>
 
         {/* Work Packages (Targets) */}

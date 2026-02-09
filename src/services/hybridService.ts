@@ -38,6 +38,17 @@ import type {
   CreateMilestoneInput,
   UpdateMilestoneInput,
 } from '@/types/projectMilestone'
+import type {
+  GameplanPlay,
+  CreateGameplanPlayInput,
+  UpdateGameplanPlayInput,
+  PlaybookPlay,
+  CreatePlaybookPlayInput,
+  UpdatePlaybookPlayInput,
+  DefaultPlaybookPlay,
+  CreateDefaultPlaybookPlayInput,
+  UpdateDefaultPlaybookPlayInput,
+} from '@/types/gameplan'
 
 // ============================================================================
 // PROJECT OPERATIONS
@@ -207,6 +218,140 @@ export async function updateMilestone_Hybrid(
 export async function deleteMilestone_Hybrid(id: string): Promise<boolean> {
   if (isOnlineMode()) {
     return await supabaseService.deleteMilestone(id)
+  }
+  return false
+}
+
+// ============================================================================
+// GAMEPLAN PLAYS
+// ============================================================================
+
+export async function fetchGameplanPlays_Hybrid(projectId: string): Promise<GameplanPlay[]> {
+  if (isOnlineMode()) {
+    return await supabaseService.fetchGameplanPlays(projectId)
+  }
+  return []
+}
+
+export async function createGameplanPlay_Hybrid(
+  projectId: string,
+  input: CreateGameplanPlayInput
+): Promise<GameplanPlay | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.createGameplanPlay(projectId, input)
+  }
+  return null
+}
+
+export async function updateGameplanPlay_Hybrid(
+  id: string,
+  updates: UpdateGameplanPlayInput
+): Promise<GameplanPlay | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.updateGameplanPlay(id, updates)
+  }
+  return null
+}
+
+export async function deleteGameplanPlay_Hybrid(id: string): Promise<boolean> {
+  if (isOnlineMode()) {
+    return await supabaseService.deleteGameplanPlay(id)
+  }
+  return false
+}
+
+export async function deleteGameplanPlaysByProject_Hybrid(projectId: string): Promise<boolean> {
+  if (isOnlineMode()) {
+    return await supabaseService.deleteGameplanPlaysByProject(projectId)
+  }
+  return false
+}
+
+// ============================================================================
+// GAMEPLAN PLAYBOOK (org-level template)
+// ============================================================================
+
+export async function fetchPlaybookPlays_Hybrid(organizationId: string): Promise<PlaybookPlay[]> {
+  if (isOnlineMode()) {
+    return await supabaseService.fetchPlaybookPlays(organizationId)
+  }
+  return []
+}
+
+export async function createPlaybookPlay_Hybrid(
+  organizationId: string,
+  input: CreatePlaybookPlayInput
+): Promise<PlaybookPlay | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.createPlaybookPlay(organizationId, input)
+  }
+  return null
+}
+
+export async function updatePlaybookPlay_Hybrid(
+  id: string,
+  updates: UpdatePlaybookPlayInput
+): Promise<PlaybookPlay | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.updatePlaybookPlay(id, updates)
+  }
+  return null
+}
+
+export async function deletePlaybookPlay_Hybrid(id: string): Promise<boolean> {
+  if (isOnlineMode()) {
+    return await supabaseService.deletePlaybookPlay(id)
+  }
+  return false
+}
+
+export async function deleteAllPlaybookPlays_Hybrid(organizationId: string): Promise<boolean> {
+  if (isOnlineMode()) {
+    return await supabaseService.deleteAllPlaybookPlays(organizationId)
+  }
+  return false
+}
+
+// ============================================================================
+// GAMEPLAN DEFAULT PLAYBOOK (HSH default, admin can edit)
+// ============================================================================
+
+export async function fetchDefaultPlaybookPlays_Hybrid(): Promise<DefaultPlaybookPlay[]> {
+  if (isOnlineMode()) {
+    return await supabaseService.fetchDefaultPlaybookPlays()
+  }
+  return []
+}
+
+export async function createDefaultPlaybookPlay_Hybrid(
+  input: CreateDefaultPlaybookPlayInput
+): Promise<DefaultPlaybookPlay | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.createDefaultPlaybookPlay(input)
+  }
+  return null
+}
+
+export async function updateDefaultPlaybookPlay_Hybrid(
+  id: string,
+  updates: UpdateDefaultPlaybookPlayInput
+): Promise<DefaultPlaybookPlay | null> {
+  if (isOnlineMode()) {
+    return await supabaseService.updateDefaultPlaybookPlay(id, updates)
+  }
+  return null
+}
+
+export async function deleteDefaultPlaybookPlay_Hybrid(id: string): Promise<boolean> {
+  if (isOnlineMode()) {
+    return await supabaseService.deleteDefaultPlaybookPlay(id)
+  }
+  return false
+}
+
+export async function deleteAllDefaultPlaybookPlays_Hybrid(): Promise<boolean> {
+  if (isOnlineMode()) {
+    return await supabaseService.deleteAllDefaultPlaybookPlays()
   }
   return false
 }

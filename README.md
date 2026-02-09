@@ -33,6 +33,7 @@ Unlike traditional systems that keep estimating and execution separate, this pla
 - **Baseline Creation**: Establishes project baseline for variance tracking
 
 ### 2. Project Execution
+- **Gameplan (Chapters & Plays)**: Primary view for readiness—phases (chapters) and gates (plays). You look at what’s READY, BLOCKED, IN_PROGRESS, or COMPLETE; dates are a constraint layer underneath. (See Project Detail → Gameplan.)
 - **Cost Tracking**: Track actual labor hours, materials, and subcontractor costs
 - **Progress Tracking**: Monitor completion percentages and milestone dates
 - **Change Orders**: Manage scope changes with cost impact analysis
