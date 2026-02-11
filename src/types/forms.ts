@@ -109,6 +109,12 @@ export interface TradeInput {
   wasteFactor: number
   markupPercent?: number
   notes?: string
+  /** Optional: force total (e.g. when reverting quote to budget); backend uses when provided */
+  totalCost?: number
+  /** Optional: set budget total (e.g. preserve before accepting quote); backend uses when provided */
+  budgetTotalCost?: number
+  /** Optional: estimate status (e.g. 'budget' | 'quoted' | 'approved') */
+  estimateStatus?: 'budget' | 'quoted' | 'approved'
 }
 
 export interface TakeoffInput {

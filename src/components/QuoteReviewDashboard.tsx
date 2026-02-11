@@ -341,7 +341,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
           totalCost: budgetTotal,
           isSubcontracted: false,
           estimateStatus: 'budget' as const,
-        } as Parameters<typeof updateTrade_Hybrid>[1])
+        })
       }
       await updateQuoteStatus_Hybrid({ quoteId: quote.id, status: 'pending' })
     }

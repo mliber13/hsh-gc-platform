@@ -1358,7 +1358,6 @@ function transformSubItem(row: any): SubItem {
     subcontractorCost: row.subcontractor_cost || 0,
     subcontractorRate: row.subcontractor_rate || 0,
     totalCost: row.total_cost || 0,
-    budgetTotalCost: row.budget_total_cost != null ? row.budget_total_cost : undefined,
     isSubcontracted: row.is_subcontracted || false,
     wasteFactor: row.waste_factor || 10,
     markupPercent: row.markup_percent || 0,
