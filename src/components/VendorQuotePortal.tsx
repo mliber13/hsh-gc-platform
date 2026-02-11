@@ -292,6 +292,26 @@ export function VendorQuotePortal({ token: tokenProp }: VendorQuotePortalProps =
                 </a>
               </div>
             )}
+            {quoteRequest.attachmentUrls && quoteRequest.attachmentUrls.length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Attached documents</p>
+                <ul className="space-y-1">
+                  {quoteRequest.attachmentUrls.map((url, i) => (
+                    <li key={i}>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#0E79C9] hover:underline flex items-center gap-2"
+                      >
+                        <FileText className="w-4 h-4" />
+                        {quoteRequest.attachmentNames?.[i]?.trim() || `Document ${i + 1}`}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </CardContent>
         </Card>
 

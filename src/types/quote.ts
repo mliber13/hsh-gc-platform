@@ -38,6 +38,10 @@ export interface QuoteRequest {
   token: string
   scopeOfWork: string
   drawingsUrl?: string
+  /** URLs of attached project documents (for vendor download) */
+  attachmentUrls?: string[]
+  /** Display names for attachments (same order as attachmentUrls; used in email and portal) */
+  attachmentNames?: string[]
   projectInfo?: {
     projectName: string
     address?: string
@@ -76,6 +80,8 @@ export interface CreateQuoteRequestInput {
   vendorTypes?: QuoteVendorType[]
   scopeOfWork: string
   drawingsFile?: File // Will be uploaded to storage
+  /** Files from selected project documents (uploaded to quote-attachments) */
+  attachmentFiles?: File[]
   projectInfo?: QuoteRequest['projectInfo']
   dueDate?: Date
   expiresInDays?: number // Default 30

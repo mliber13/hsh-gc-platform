@@ -16,6 +16,10 @@ export interface SendQuoteRequestEmailInput {
   scopeOfWork: string
   dueDate?: Date | null
   expiresAt: Date | null
+  /** Direct links to attached documents (included in email so vendor can open without visiting portal) */
+  attachmentUrls?: string[]
+  /** Display names for attachments (same order as attachmentUrls); e.g. file names */
+  attachmentNames?: string[]
 }
 
 /**
@@ -37,10 +41,12 @@ export async function sendQuoteRequestEmail(input: SendQuoteRequestEmailInput): 
         tradeName: input.tradeName,
         quoteLink: input.quoteLink,
         scopeOfWork: input.scopeOfWork,
-        dueDate: input.dueDate instanceof Date && !isNaN(input.dueDate.getTime()) 
-          ? input.dueDate.toISOString() 
+        dueDate: input.dueDate instanceof Date && !isNaN(input.dueDate.getTime())
+          ? input.dueDate.toISOString()
           : undefined,
         expiresAt: expiresAtDate.toISOString(),
+        attachmentUrls: input.attachmentUrls ?? [],
+        attachmentNames: input.attachmentNames ?? [],
       },
     })
 
@@ -130,6 +136,7 @@ ${input.scopeOfWork}
 
 Please submit your quote using the following link:
 ${input.quoteLink}
+${(input.attachmentUrls?.length ?? 0) > 0 ? `\n\nAttached documents:\n${input.attachmentUrls!.map((url, i) => `${(input.attachmentNames?.[i]?.trim()) || `Document ${i + 1}`}: ${url}`).join('\n')}` : ''}
 
 ${input.expiresAt ? `This link will expire on ${input.expiresAt.toLocaleDateString()}.` : 'This link will expire in 30 days.'}
 

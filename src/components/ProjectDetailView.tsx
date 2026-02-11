@@ -63,6 +63,7 @@ export function ProjectDetailView({
   const [formsCount, setFormsCount] = useState(0)
   const [selectionBookRoomsCount, setSelectionBookRoomsCount] = useState(0)
   const [quotesCount, setQuotesCount] = useState(0)
+  const [quoteRequestsCount, setQuoteRequestsCount] = useState(0)
   const [quotesStats, setQuotesStats] = useState({
     total: 0,
     pending: 0,
@@ -209,6 +210,7 @@ export function ProjectDetailView({
             else if (quote.status === 'revision-requested') stats.revisionRequested++
           })
         }
+        setQuoteRequestsCount(quoteRequests.length)
         setQuotesCount(totalQuotes)
         setQuotesStats(stats)
       } catch (error) {
@@ -636,8 +638,8 @@ export function ProjectDetailView({
                       <Mail className="w-8 h-8" />
                     </div>
                     <div className="text-right">
-                      <p className="text-sm opacity-80">Total Quotes</p>
-                      <p className="text-3xl font-bold">{quotesCount}</p>
+                      <p className="text-sm opacity-80">Requests sent</p>
+                      <p className="text-3xl font-bold">{quoteRequestsCount}</p>
                     </div>
                   </div>
                 </CardHeader>
@@ -646,6 +648,12 @@ export function ProjectDetailView({
                   <p className="text-white/80 mb-4">
                     Review and manage vendor quotes. Accept quotes, assign to trades, and track quote status.
                   </p>
+                  <div className="bg-white/10 rounded-lg p-3 mb-3 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Quotes received</span>
+                      <span className="font-semibold">{quotesCount}</span>
+                    </div>
+                  </div>
                   <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
                     <div className="flex justify-between text-sm">
                       <span>For Review</span>

@@ -1661,6 +1661,9 @@ function TradeTable({
                             <div>
                               <span className="text-gray-500">Base:</span>
                               <span className="ml-1 font-medium">{formatCurrency(trade.totalCost)}</span>
+                              {trade.budgetTotalCost != null && trade.budgetTotalCost !== trade.totalCost && (
+                                <span className="block text-xs text-gray-500 mt-0.5">Budget: {formatCurrency(trade.budgetTotalCost)}</span>
+                              )}
                             </div>
                             <div>
                               <span className="text-gray-500">Material:</span>
@@ -1875,7 +1878,12 @@ function TradeTable({
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.laborCost)}</td>
                                   <td className="p-3 text-center border-b">{trade.subcontractorRate ? formatCurrency(trade.subcontractorRate) : '-'}</td>
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.subcontractorCost)}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">
+                                    {formatCurrency(trade.totalCost)}
+                                    {trade.budgetTotalCost != null && trade.budgetTotalCost !== trade.totalCost && (
+                                      <span className="block text-xs text-gray-500">Budget: {formatCurrency(trade.budgetTotalCost)}</span>
+                                    )}
+                                  </td>
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300">{(trade.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * ((trade.markupPercent || defaultMarkupPercent) / 100))}</td>
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300">{(((trade.markupPercent || defaultMarkupPercent) / (100 + (trade.markupPercent || defaultMarkupPercent))) * 100).toFixed(1)}%</td>

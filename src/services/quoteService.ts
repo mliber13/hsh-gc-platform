@@ -126,28 +126,50 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
     if (input.drawingsFile) {
       const fileExt = input.drawingsFile.name.split('.').pop()
       const fileName = `quote-drawings-${token}.${fileExt}`
-      // Use organization_id if valid, otherwise use user_id for file path
       const orgPath = organizationId || user.id
       const filePath = `${orgPath}/${input.projectId}/${fileName}`
-      
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('quote-attachments')
         .upload(filePath, input.drawingsFile, {
           cacheControl: '3600',
           upsert: false
         })
-      
+
       if (uploadError) {
         console.error('Failed to upload drawings file:', uploadError)
-        console.error('File path attempted:', filePath)
-        console.error('Bucket: quote-attachments')
-        // Continue without drawingsUrl - the quote request will still be created
       } else if (uploadData) {
         const { data: { publicUrl } } = supabase.storage
           .from('quote-attachments')
           .getPublicUrl(filePath)
         drawingsUrl = publicUrl
-        console.log('Drawings uploaded successfully:', publicUrl)
+      }
+    }
+
+    // Upload attachment files (e.g. from project documents); collect names for link text
+    const attachmentUrls: string[] = []
+    const attachmentNames: string[] = []
+    const filesToAttach = input.attachmentFiles || []
+    for (let a = 0; a < filesToAttach.length; a++) {
+      const file = filesToAttach[a]
+      const fileExt = file.name.split('.').pop() || 'pdf'
+      const fileName = `quote-attachment-${token}-${a}.${fileExt}`
+      const orgPath = organizationId || user.id
+      const filePath = `${orgPath}/${input.projectId}/${fileName}`
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('quote-attachments')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (!uploadError && uploadData) {
+        const { data: { publicUrl } } = supabase.storage
+          .from('quote-attachments')
+          .getPublicUrl(filePath)
+        attachmentUrls.push(publicUrl)
+        attachmentNames.push(file.name || `Document ${a + 1}`)
       }
     }
 
@@ -164,6 +186,8 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
         token,
         scope_of_work: input.scopeOfWork,
         drawings_url: drawingsUrl || null,
+        attachment_urls: attachmentUrls.length > 0 ? attachmentUrls : null,
+        attachment_names: attachmentNames.length > 0 ? attachmentNames : null,
         project_info: input.projectInfo || null,
         status: 'sent',
         due_date: input.dueDate?.toISOString() || null,
@@ -189,6 +213,8 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
       token: data.token,
       scopeOfWork: data.scope_of_work,
       drawingsUrl: data.drawings_url,
+      attachmentUrls: data.attachment_urls || undefined,
+      attachmentNames: data.attachment_names || undefined,
       projectInfo: data.project_info,
       status: data.status,
       dueDate: data.due_date ? new Date(data.due_date) : undefined,
@@ -255,6 +281,8 @@ export async function fetchQuoteRequestByToken(token: string): Promise<QuoteRequ
     token: data.token,
     scopeOfWork: data.scope_of_work,
     drawingsUrl: data.drawings_url,
+    attachmentUrls: data.attachment_urls || undefined,
+    attachmentNames: data.attachment_names || undefined,
     projectInfo: data.project_info,
     status: data.viewed_at ? 'viewed' : 'sent',
     dueDate: data.due_date ? new Date(data.due_date) : undefined,
@@ -299,6 +327,8 @@ export async function fetchQuoteRequestsForProject(projectId: string): Promise<Q
     token: row.token,
     scopeOfWork: row.scope_of_work,
     drawingsUrl: row.drawings_url,
+    attachmentUrls: row.attachment_urls || undefined,
+    attachmentNames: row.attachment_names || undefined,
     projectInfo: row.project_info,
     status: row.status,
     dueDate: row.due_date ? new Date(row.due_date) : undefined,
@@ -383,7 +413,7 @@ export async function resendQuoteRequestEmail(quoteRequest: QuoteRequest, projec
   // Generate the quote link
   const quoteLink = buildVendorPortalLink(quoteRequest.token)
 
-  // Send the email
+  // Send the email (include attachment links so vendor can open from email)
   const emailSent = await sendQuoteRequestEmail({
     to: quoteRequest.vendorEmail,
     vendorName: quoteRequest.vendorName,
@@ -393,6 +423,8 @@ export async function resendQuoteRequestEmail(quoteRequest: QuoteRequest, projec
     scopeOfWork: quoteRequest.scopeOfWork,
     dueDate: quoteRequest.dueDate || null,
     expiresAt: quoteRequest.expiresAt || null,
+    attachmentUrls: quoteRequest.attachmentUrls?.length ? quoteRequest.attachmentUrls : undefined,
+    attachmentNames: quoteRequest.attachmentNames?.length ? quoteRequest.attachmentNames : undefined,
   })
 
   if (emailSent) {
@@ -588,6 +620,10 @@ export async function updateQuoteStatus(input: UpdateQuoteStatusInput): Promise<
     updateData.assigned_trade_id = input.assignedTradeId
     updateData.assigned_by = user.id
     updateData.assigned_at = new Date().toISOString()
+  } else if (input.status === 'pending') {
+    updateData.assigned_trade_id = null
+    updateData.assigned_by = null
+    updateData.assigned_at = null
   }
 
   const { data, error } = await supabase

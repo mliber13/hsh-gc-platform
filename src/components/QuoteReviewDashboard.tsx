@@ -264,27 +264,33 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
           try {
             const tradeToUpdate = trades.find(t => t.id === input.assignedTradeId)
             if (tradeToUpdate) {
+              // Preserve budget (estimate-book amount) before overwriting with quote
+              if (tradeToUpdate.budgetTotalCost == null) {
+                await updateTrade_Hybrid(input.assignedTradeId, { budgetTotalCost: tradeToUpdate.totalCost })
+              }
+
               const vendorType = getVendorTypeForQuote(quote)
-              // When accepting a quote, clear conflicting costs:
-              // - Supplier quote: set materialCost, clear subcontractorCost (keep laborCost)
-              // - Subcontractor quote: set subcontractorCost, clear laborCost (keep materialCost)
+              // Option A: Accepted quote = line total. Put full quote in the right bucket and zero the others so total = quote amount.
               const updates =
                 vendorType === 'supplier'
                   ? { 
                       materialCost: quote.totalAmount, 
-                      subcontractorCost: 0, // Clear sub cost when using supplier
-                      isSubcontracted: false 
+                      laborCost: 0,
+                      subcontractorCost: 0,
+                      isSubcontracted: false,
+                      estimateStatus: 'quoted' as const,
                     }
                   : { 
+                      materialCost: 0,
+                      laborCost: 0,
                       subcontractorCost: quote.totalAmount, 
-                      laborCost: 0, // Clear labor cost when using subcontractor
-                      isSubcontracted: true 
+                      isSubcontracted: true,
+                      estimateStatus: 'quoted' as const,
                     }
 
               await updateTrade_Hybrid(input.assignedTradeId, updates)
-              const clearedLabel = vendorType === 'supplier' ? 'subcontractor' : 'labor'
               console.log(
-                `✅ Updated trade ${input.assignedTradeId} with ${vendorType} quote amount: $${quote.totalAmount} (cleared ${clearedLabel} cost)`
+                `✅ Updated trade ${input.assignedTradeId}: quote $${quote.totalAmount} set as line total (${vendorType})`
               )
             } else {
               console.warn(`Trade ${input.assignedTradeId} not found`)
@@ -316,6 +322,39 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
       console.error('Error updating quote status:', error)
       alert('Failed to update quote status')
     }
+  }
+
+  const handleUnacceptQuote = async (quote: SubmittedQuote) => {
+    if (!quote.assignedTradeId) {
+      await updateQuoteStatus_Hybrid({ quoteId: quote.id, status: 'pending' })
+    } else {
+      const tradeToRevert = trades.find(t => t.id === quote.assignedTradeId)
+      if (tradeToRevert?.budgetTotalCost != null) {
+        const budgetTotal = tradeToRevert.budgetTotalCost
+        await updateTrade_Hybrid(quote.assignedTradeId, {
+          laborCost: budgetTotal,
+          laborRate: budgetTotal,
+          materialCost: 0,
+          materialRate: 0,
+          subcontractorCost: 0,
+          subcontractorRate: 0,
+          totalCost: budgetTotal,
+          isSubcontracted: false,
+          estimateStatus: 'budget' as const,
+        } as Parameters<typeof updateTrade_Hybrid>[1])
+      }
+      await updateQuoteStatus_Hybrid({ quoteId: quote.id, status: 'pending' })
+    }
+    const quotes = await fetchSubmittedQuotesForRequest_Hybrid(quote.quoteRequestId)
+    setSubmittedQuotes(prev => {
+      const newMap = new Map(prev)
+      newMap.set(quote.quoteRequestId, quotes)
+      return newMap
+    })
+    setSelectedQuote(null)
+    setSelectedTradeId('')
+    getTradesForEstimate_Hybrid(project.estimate!.id).then(setTrades)
+    alert('Quote unaccepted. Trade reverted to budget total where applicable.')
   }
 
   const getStatusBadge = (status: SubmittedQuote['status']) => {
@@ -717,20 +756,31 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                   {/* Assignment Info */}
                   {quote.assignedTradeId && (
                     <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
                         <p className="text-sm font-medium text-blue-900">
                           Assigned to: {trades.find(t => t.id === quote.assignedTradeId)?.name || 'Unknown Trade'}
                         </p>
                         {quote.status === 'accepted' && (
-                          <Button
-                            onClick={() => applyQuoteToTrade(quote, quote.assignedTradeId!)}
-                            size="sm"
-                            variant="outline"
-                            className="border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
-                          >
-                            <RefreshCw className="w-3 h-3 mr-1" />
-                            Apply to Trade
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => applyQuoteToTrade(quote, quote.assignedTradeId!)}
+                              size="sm"
+                              variant="outline"
+                              className="border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
+                            >
+                              <RefreshCw className="w-3 h-3 mr-1" />
+                              Apply to Trade
+                            </Button>
+                            <Button
+                              onClick={() => handleUnacceptQuote(quote)}
+                              size="sm"
+                              variant="outline"
+                              className="border-amber-600 text-amber-700 hover:bg-amber-50"
+                            >
+                              <XCircle className="w-3 h-3 mr-1" />
+                              Unaccept
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>

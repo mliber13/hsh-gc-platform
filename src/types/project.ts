@@ -227,8 +227,10 @@ export interface Trade {
   markupPercent?: number    // Percentage markup for this line item
   
   // Total for this trade (includes sub-items)
-  totalCost: number         // labor + material + sub
-  
+  totalCost: number         // labor + material + sub (after quote: quoted amount)
+  /** Original estimate-book amount; preserved when accepting a quote for Budget vs Quote vs Actual comparison */
+  budgetTotalCost?: number
+
   // Sub-items (optional - for detailed breakdown)
   subItems?: SubItem[]
   

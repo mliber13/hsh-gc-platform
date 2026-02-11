@@ -19,7 +19,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { X, Plus, FileText } from 'lucide-react'
+import { X, Plus, FileText, Paperclip } from 'lucide-react'
 import {
   Select,
   SelectTrigger,
@@ -30,10 +30,12 @@ import {
   SelectLabel,
 } from '@/components/ui/select'
 import { fetchSubcontractors, fetchSuppliers } from '@/services/partnerDirectoryService'
+import { fetchProjectDocuments } from '@/services/supabaseService'
 import { TRADE_CATEGORIES } from '@/types/constants'
 import { fetchSOWTemplates, formatSOWForQuoteRequest, incrementSOWTemplateUseCount } from '@/services/sowService'
 import { buildVendorPortalLink } from '@/config/appConfig'
 import { SOWTemplate } from '@/types/sow'
+import type { ProjectDocument } from '@/types/project'
 
 interface QuoteRequestFormProps {
   project: Project
@@ -57,6 +59,9 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
   const [availableSuppliers, setAvailableSuppliers] = useState<DirectorySupplier[]>([])
   const [availableSOWTemplates, setAvailableSOWTemplates] = useState<SOWTemplate[]>([])
   const [selectedSOWTemplate, setSelectedSOWTemplate] = useState<string>('none')
+  const [projectDocuments, setProjectDocuments] = useState<ProjectDocument[]>([])
+  const [loadingProjectDocs, setLoadingProjectDocs] = useState(false)
+  const [selectedProjectDocIds, setSelectedProjectDocIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const loadSubcontractors = async () => {
@@ -92,6 +97,30 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
     loadSuppliers()
     loadSOWTemplates()
   }, [trade])
+
+  useEffect(() => {
+    const loadProjectDocs = async () => {
+      setLoadingProjectDocs(true)
+      try {
+        const docs = await fetchProjectDocuments(project.id)
+        setProjectDocuments(docs)
+      } catch (err) {
+        console.warn('Unable to load project documents for quote request:', err)
+      } finally {
+        setLoadingProjectDocs(false)
+      }
+    }
+    loadProjectDocs()
+  }, [project.id])
+
+  const toggleProjectDoc = (docId: string) => {
+    setSelectedProjectDocIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(docId)) next.delete(docId)
+      else next.add(docId)
+      return next
+    })
+  }
 
   const handleAddVendor = () => {
     setVendorEmails([...vendorEmails, ''])
@@ -227,6 +256,24 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
       const alignedVendorNames = sanitizedVendors.map(v => v.name || '')
       const alignedVendorTypes = sanitizedVendors.map(v => v.type)
 
+      // Resolve selected project documents to Files (fetch from signed URL and re-upload to quote-attachments)
+      let attachmentFiles: File[] = []
+      if (selectedProjectDocIds.size > 0) {
+        const selectedDocs = projectDocuments.filter((d) => selectedProjectDocIds.has(d.id))
+        for (const doc of selectedDocs) {
+          if (!doc.fileUrl || !doc.fileUrl.startsWith('http')) continue
+          try {
+            const res = await fetch(doc.fileUrl)
+            if (!res.ok) continue
+            const blob = await res.blob()
+            const file = new File([blob], doc.name, { type: doc.mimeType || 'application/octet-stream' })
+            attachmentFiles.push(file)
+          } catch (e) {
+            console.warn('Failed to fetch project document for attachment:', doc.id, e)
+          }
+        }
+      }
+
       const input: CreateQuoteRequestInput = {
         projectId: project.id,
         tradeId: trade?.id,
@@ -235,6 +282,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
         vendorTypes: alignedVendorTypes,
         scopeOfWork: scopeOfWork.trim(),
         drawingsFile: drawingsFile || undefined,
+        attachmentFiles: attachmentFiles.length > 0 ? attachmentFiles : undefined,
         projectInfo: {
           projectName: project.name,
           address: typeof project.address === 'string' 
@@ -294,6 +342,8 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
             scopeOfWork: scopeOfWork.trim(),
             dueDate: dueDate ? new Date(dueDate) : null,
             expiresAt: qr.expiresAt || null,
+            attachmentUrls: qr.attachmentUrls?.length ? qr.attachmentUrls : undefined,
+            attachmentNames: qr.attachmentNames?.length ? qr.attachmentNames : undefined,
           })
 
           return {
@@ -542,6 +592,39 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
                   </p>
                 )}
               </div>
+            </div>
+
+            {/* Attach from project documents */}
+            <div>
+              <Label className="flex items-center gap-2">
+                <Paperclip className="w-4 h-4" />
+                Attach from project documents
+              </Label>
+              {loadingProjectDocs ? (
+                <p className="text-sm text-gray-500 mt-2">Loading project documents...</p>
+              ) : projectDocuments.length === 0 ? (
+                <p className="text-sm text-gray-500 mt-2">No documents in this project yet. Upload docs in Project → Documents.</p>
+              ) : (
+                <div className="mt-2 border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2 bg-gray-50">
+                  {projectDocuments.map((doc) => (
+                    <label key={doc.id} className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 rounded p-2 -m-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedProjectDocIds.has(doc.id)}
+                        onChange={() => toggleProjectDoc(doc.id)}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm font-medium truncate flex-1">{doc.name}</span>
+                      <span className="text-xs text-gray-500 capitalize">{doc.type.replace(/-/g, ' ')}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {selectedProjectDocIds.size > 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {selectedProjectDocIds.size} document(s) will be attached for vendors to download.
+                </p>
+              )}
             </div>
 
             {/* Due Date & Expiration */}

@@ -1107,6 +1107,7 @@ function transformTrade(row: any): Trade {
     subcontractorCost: row.subcontractor_cost || 0,
     subcontractorRate: row.subcontractor_rate || 0,
     totalCost: row.total_cost || 0,
+    budgetTotalCost: row.budget_total_cost != null ? row.budget_total_cost : undefined,
     isSubcontracted: row.is_subcontracted || false,
     wasteFactor: row.waste_factor || 10,
     markupPercent: row.markup_percent || 0,
@@ -1183,6 +1184,7 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
       subcontractor_cost: input.subcontractorCost || 0,
       subcontractor_rate: input.subcontractorRate || 0,
       total_cost: totalCost,
+      budget_total_cost: totalCost,
       is_subcontracted: input.isSubcontracted || false,
       waste_factor: input.wasteFactor || 10,
       markup_percent: input.markupPercent || 0,
@@ -1212,15 +1214,15 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
   // Fetch existing trade to get current values if cost fields aren't being updated
   const { data: existingTrade } = await supabase
     .from('trades')
-    .select('labor_cost, material_cost, subcontractor_cost')
+    .select('labor_cost, material_cost, subcontractor_cost, estimate_status')
     .eq('id', tradeId)
     .single()
 
-  // Calculate totalCost using updated values or existing values
+  // Calculate totalCost using updated values or existing values (or use explicit totalCost when reverting quote)
   const laborCost = updates.laborCost !== undefined ? updates.laborCost : (existingTrade?.labor_cost || 0)
   const materialCost = updates.materialCost !== undefined ? updates.materialCost : (existingTrade?.material_cost || 0)
   const subcontractorCost = updates.subcontractorCost !== undefined ? updates.subcontractorCost : (existingTrade?.subcontractor_cost || 0)
-  const totalCost = laborCost + materialCost + subcontractorCost
+  const totalCost = (updates as any).totalCost !== undefined ? (updates as any).totalCost : (laborCost + materialCost + subcontractorCost)
 
   const updateData: any = {}
   if (updates.category !== undefined) updateData.category = updates.category
@@ -1244,7 +1246,17 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
   if ((updates as any).quoteDate !== undefined) updateData.quote_date = (updates as any).quoteDate
   if ((updates as any).quoteReference !== undefined) updateData.quote_reference = (updates as any).quoteReference
   if ((updates as any).quoteFileUrl !== undefined) updateData.quote_file_url = (updates as any).quoteFileUrl
-  
+  if ((updates as any).budgetTotalCost !== undefined) {
+    updateData.budget_total_cost = (updates as any).budgetTotalCost
+  } else if (
+    existingTrade?.estimate_status === 'budget' &&
+    (updates as any).estimateStatus !== 'quoted' &&
+    (updates as any).estimateStatus !== 'approved'
+  ) {
+    // Keep budget in sync with estimate book until a quote is accepted
+    updateData.budget_total_cost = totalCost
+  }
+
   // Always update total_cost to ensure it's correct (calculated from existing or updated values)
   updateData.total_cost = totalCost
 
@@ -1346,6 +1358,7 @@ function transformSubItem(row: any): SubItem {
     subcontractorCost: row.subcontractor_cost || 0,
     subcontractorRate: row.subcontractor_rate || 0,
     totalCost: row.total_cost || 0,
+    budgetTotalCost: row.budget_total_cost != null ? row.budget_total_cost : undefined,
     isSubcontracted: row.is_subcontracted || false,
     wasteFactor: row.waste_factor || 10,
     markupPercent: row.markup_percent || 0,
