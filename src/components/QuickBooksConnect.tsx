@@ -110,9 +110,6 @@ export function QuickBooksConnect() {
 
         {connected ? (
           <div className="space-y-3">
-            <p className="text-sm text-gray-600">
-              ✅ Project actuals will automatically sync to QuickBooks as Check payments
-            </p>
             <Button
               onClick={handleDisconnect}
               variant="outline"
