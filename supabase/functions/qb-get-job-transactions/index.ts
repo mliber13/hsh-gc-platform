@@ -66,15 +66,22 @@ function getLineAmount(line: any): number {
   return Number(line?.Amount ?? 0)
 }
 
+/** QBO often returns "Customer:Job" for ref.name; use only the job part (after the first colon) for display */
+function jobDisplayName(rawName: string): string {
+  if (!rawName) return ''
+  const i = rawName.indexOf(':')
+  return i >= 0 ? rawName.slice(i + 1).trim() : rawName.trim()
+}
+
 /** Get project/job from header or from first line that has ClassRef/CustomerRef/ProjectRef (QBO often puts job on line) */
 function getProjectRefFromTransaction(t: any): { id: string; name: string } | null {
   const headerRef = t.ProjectRef || t.ClassRef
-  if (headerRef?.value) return { id: String(headerRef.value), name: headerRef.name ?? '' }
+  if (headerRef?.value) return { id: String(headerRef.value), name: jobDisplayName(headerRef.name ?? '') }
   const lines = t.Line || []
   for (const line of lines) {
     const detail = line?.AccountBasedExpenseLineDetail || line?.ExpenseDetail || line
     const ref = detail?.ClassRef || detail?.CustomerRef || detail?.ProjectRef || line?.ClassRef
-    if (ref?.value) return { id: String(ref.value), name: ref.name ?? '' }
+    if (ref?.value) return { id: String(ref.value), name: jobDisplayName(ref.name ?? '') }
   }
   return null
 }
