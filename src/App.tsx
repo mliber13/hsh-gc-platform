@@ -27,6 +27,7 @@ import { applyTemplateToEstimate } from './services/estimateTemplateService'
 import { getCurrentUserProfile, UserProfile } from './services/userService'
 import { DataMigration } from './components/DataMigration'
 import { QuickBooksConnect } from './components/QuickBooksConnect'
+import { QuickBooksImport } from './components/QuickBooksImport'
 import { QuickBooksCallback } from './components/QuickBooksCallback'
 import { VendorQuotePortal } from './components/VendorQuotePortal'
 import { QuoteReviewDashboard } from './components/QuoteReviewDashboard'
@@ -454,6 +455,7 @@ function App() {
             onOpenPlanLibrary={handleOpenPlanLibrary}
             onOpenItemLibrary={handleOpenItemLibrary}
             onOpenDealPipeline={handleViewDealPipeline}
+            onOpenQBSettings={() => setCurrentView('qb-settings')}
           />
         )}
 
@@ -624,7 +626,7 @@ function App() {
 
       {currentView === 'qb-settings' && (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto space-y-6">
             <Button
               onClick={handleBackToDashboard}
               variant="outline"
@@ -633,6 +635,7 @@ function App() {
               ← Back to Dashboard
             </Button>
             <QuickBooksConnect />
+            <QuickBooksImport />
           </div>
         </div>
       )}

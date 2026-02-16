@@ -13,7 +13,6 @@ import {
   MaterialEntry,
   SubcontractorEntry,
   TradeCategory,
-  getCategoryGroup,
 } from '@/types'
 import {
   projectStorage,
@@ -206,7 +205,6 @@ export function addMaterialEntry(
     vendor: data.vendor,
     invoiceNumber: data.invoiceNumber,
     createdAt: new Date(),
-    group: getCategoryGroup(data.category),
   }
 
   // Save material entry

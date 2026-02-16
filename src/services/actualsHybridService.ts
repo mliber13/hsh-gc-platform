@@ -5,7 +5,6 @@
  */
 
 import { isOnlineMode, supabase } from '@/lib/supabase'
-import { getCategoryGroup } from '@/types'
 import { createQBCheck, isQBConnected } from './quickbooksService'
 import {
   addLaborEntry as addLaborEntryLS,
@@ -39,17 +38,11 @@ import {
 // ============================================================================
 
 export async function addLaborEntry_Hybrid(projectId: string, entry: any): Promise<any | null> {
-  // Auto-populate group field based on trade category
-  const entryWithGroup = {
-    ...entry,
-    group: entry.trade ? getCategoryGroup(entry.trade) : undefined
-  }
-
   if (isOnlineMode()) {
-    const created = await createLaborEntryInDB(projectId, entryWithGroup)
+    const created = await createLaborEntryInDB(projectId, entry)
     if (!created) {
       console.warn('Failed to create labor entry in Supabase, falling back to localStorage')
-      return addLaborEntryLS(projectId, entryWithGroup)
+      return addLaborEntryLS(projectId, entry)
     }
     
     // Auto-sync to QuickBooks if connected
@@ -96,21 +89,15 @@ export async function deleteLaborEntry_Hybrid(entryId: string): Promise<boolean>
 // ============================================================================
 
 export async function addMaterialEntry_Hybrid(projectId: string, entry: any): Promise<any | null> {
-  // Auto-populate group field based on category
-  const entryWithGroup = {
-    ...entry,
-    group: entry.category ? getCategoryGroup(entry.category) : undefined
-  }
-
   if (isOnlineMode()) {
-    const created = await createMaterialEntryInDB(projectId, entryWithGroup)
+    const created = await createMaterialEntryInDB(projectId, entry)
     if (!created) {
       console.warn('Failed to create material entry in Supabase, falling back to localStorage')
-      return addMaterialEntryLS(projectId, entryWithGroup)
+      return addMaterialEntryLS(projectId, entry)
     }
     
-    // Auto-sync to QuickBooks if connected
-    if (await isQBConnected()) {
+    // Auto-sync to QuickBooks if connected (skip when entry was imported from QB)
+    if (await isQBConnected() && !entry.qbTransactionId) {
       syncEntryToQB('material', created, entry).catch(err => {
         console.error('Background QB sync failed:', err)
       })
@@ -153,21 +140,15 @@ export async function deleteMaterialEntry_Hybrid(entryId: string): Promise<boole
 // ============================================================================
 
 export async function addSubcontractorEntry_Hybrid(projectId: string, entry: any): Promise<any | null> {
-  // Auto-populate group field based on trade category
-  const entryWithGroup = {
-    ...entry,
-    group: entry.trade ? getCategoryGroup(entry.trade) : undefined
-  }
-
   if (isOnlineMode()) {
-    const created = await createSubcontractorEntryInDB(projectId, entryWithGroup)
+    const created = await createSubcontractorEntryInDB(projectId, entry)
     if (!created) {
       console.warn('Failed to create subcontractor entry in Supabase, falling back to localStorage')
-      return addSubcontractorEntryLS(projectId, entryWithGroup)
+      return addSubcontractorEntryLS(projectId, entry)
     }
     
-    // Auto-sync to QuickBooks if connected
-    if (await isQBConnected()) {
+    // Auto-sync to QuickBooks if connected (skip when entry was imported from QB)
+    if (await isQBConnected() && !entry.qbTransactionId) {
       syncEntryToQB('subcontractor', created, entry).catch(err => {
         console.error('Background QB sync failed:', err)
       })

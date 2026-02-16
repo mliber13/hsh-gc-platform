@@ -45,6 +45,10 @@ export interface Project {
   // Documents
   documents?: ProjectDocument[]
   
+  // QuickBooks linking (for Import from QB)
+  qbProjectId?: string | null
+  qbProjectName?: string | null
+
   // Metadata
   createdAt: Date
   updatedAt: Date

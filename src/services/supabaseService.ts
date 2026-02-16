@@ -93,6 +93,8 @@ async function transformProject(row: any): Promise<Project> {
     endDate: row.end_date ? new Date(row.end_date) : undefined,
     metadata: row.metadata || {},
     specs: row.specs || undefined,
+    qbProjectId: row.qb_project_id ?? undefined,
+    qbProjectName: row.qb_project_name ?? undefined,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     estimate: finalEstimate,
@@ -1898,6 +1900,8 @@ export async function createMaterialEntryInDB(projectId: string, entry: any): Pr
       split_parent_id: entry.splitParentId || null,
       split_allocation: entry.splitAllocation || null,
       notes: entry.notes || '',
+      qb_transaction_id: entry.qbTransactionId || null,
+      qb_transaction_type: entry.qbTransactionType || null,
     })
     .select()
     .single()
@@ -2021,11 +2025,13 @@ export async function createSubcontractorEntryInDB(projectId: string, entry: any
       trade_id: entry.tradeId || null,
       sub_item_id: entry.subItemId || null,
       description: entry.scopeOfWork,
-      date: new Date().toISOString(),
+      date: (entry.date ? new Date(entry.date).toISOString() : new Date().toISOString()),
       amount: entry.totalPaid,
       subcontractor_name: entry.subcontractorName,
       invoice_number: entry.invoiceNumber || '',
       notes: entry.notes || '',
+      qb_transaction_id: entry.qbTransactionId || null,
+      qb_transaction_type: entry.qbTransactionType || null,
     })
     .select()
     .single()

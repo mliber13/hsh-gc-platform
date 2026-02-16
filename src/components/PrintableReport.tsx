@@ -7,7 +7,7 @@
 
 import React from 'react'
 import { Project, Trade } from '@/types'
-import { TRADE_CATEGORIES, CATEGORY_GROUPS, getCategoryGroup } from '@/types'
+import { TRADE_CATEGORIES } from '@/types'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 export type ReportDepth = 'summary' | 'category' | 'full'
@@ -64,32 +64,21 @@ export function PrintableReport({
   const actualTotals = calculateActualTotals()
   const variance = actualTotals.total - estimateTotals.totalEstimated
 
-  // Group trades by group, then by category
-  const groupedTrades = trades.reduce((acc, trade) => {
-    const group = trade.group || getCategoryGroup(trade.category)
-    if (!acc[group]) {
-      acc[group] = {}
-    }
-    if (!acc[group][trade.category]) {
-      acc[group][trade.category] = []
-    }
-    acc[group][trade.category].push(trade)
+  // Group trades by category only (no group level)
+  const categoryOrder = (Object.keys(TRADE_CATEGORIES) as string[]).filter((cat) =>
+    trades.some((t) => t.category === cat)
+  )
+  const tradesByCategory = trades.reduce((acc, trade) => {
+    if (!acc[trade.category]) acc[trade.category] = []
+    acc[trade.category].push(trade)
     return acc
-  }, {} as Record<string, Record<string, Trade[]>>)
+  }, {} as Record<string, Trade[]>)
 
   // Debug logging
   console.log('PrintableReport Data:', {
     totalTrades: trades.length,
-    groups: Object.keys(groupedTrades),
-    tradesPerGroup: Object.entries(groupedTrades).map(([group, groupCategories]) => ({
-      group: CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group,
-      categories: Object.entries(groupCategories).map(([cat, items]) => ({
-        category: TRADE_CATEGORIES[cat as keyof typeof TRADE_CATEGORIES]?.label || cat,
-        count: items.length
-      }))
-    }))
+    categories: categoryOrder,
   })
-  console.log('All categories:', Object.keys(groupedTrades))
 
   const handlePrint = () => {
     // Get the printable content
@@ -200,23 +189,16 @@ export function PrintableReport({
                 <li>• Project: <strong>{project.name}</strong></li>
                 <li>• Date: <strong>{new Date().toLocaleDateString()}</strong></li>
                 <li>• Total Line Items: <strong>{trades.length}</strong></li>
-                <li>• Groups: <strong>{Object.keys(groupedTrades).length}</strong> ({Object.keys(groupedTrades).map(group => CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group).join(', ')})</li>
+                <li>• Categories: <strong>{categoryOrder.length}</strong> ({categoryOrder.map(cat => TRADE_CATEGORIES[cat as keyof typeof TRADE_CATEGORIES]?.label || cat).join(', ')})</li>
               </ul>
             </div>
 
             <div className="bg-yellow-50 border border-yellow-200 rounded p-4 max-h-40 overflow-y-auto">
               <p className="text-sm font-semibold text-yellow-900 mb-2">Preview - Items to Print:</p>
               <div className="text-xs text-yellow-800 space-y-1">
-                {Object.entries(groupedTrades).map(([group, groupCategories]) => (
-                  <div key={group}>
-                    <strong>{CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}:</strong>
-                    <div className="ml-4 space-y-1">
-                      {Object.entries(groupCategories).map(([category, catTrades]) => (
-                        <div key={category}>
-                          {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}: {catTrades.length} items
-                        </div>
-                      ))}
-                    </div>
+                {categoryOrder.map((category) => (
+                  <div key={category}>
+                    {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}: {(tradesByCategory[category]?.length ?? 0)} items
                   </div>
                 ))}
               </div>
@@ -250,7 +232,8 @@ export function PrintableReport({
           estimateTotals={estimateTotals}
           actualTotals={actualTotals}
           variance={variance}
-          groupedTrades={groupedTrades}
+          tradesByCategory={tradesByCategory}
+          categoryOrder={categoryOrder}
           actualEntries={actualEntries}
           changeOrders={changeOrders}
         />
@@ -271,7 +254,8 @@ interface PrintableContentProps {
   estimateTotals: any
   actualTotals: any
   variance: number
-  groupedTrades: Record<string, Record<string, Trade[]>>
+  tradesByCategory: Record<string, Trade[]>
+  categoryOrder: string[]
   actualEntries: any[]
   changeOrders: any[]
 }
@@ -284,7 +268,8 @@ function PrintableContent({
   estimateTotals,
   actualTotals,
   variance,
-  groupedTrades,
+  tradesByCategory,
+  categoryOrder,
   actualEntries,
   changeOrders,
 }: PrintableContentProps) {
@@ -377,15 +362,15 @@ function PrintableContent({
 
       {/* Detailed Breakdown */}
       {depth === 'summary' && (
-        <CategorySummaryView groupedTrades={groupedTrades} reportType={reportType} actualEntries={actualEntries} />
+        <CategorySummaryView tradesByCategory={tradesByCategory} categoryOrder={categoryOrder} reportType={reportType} actualEntries={actualEntries} />
       )}
 
       {depth === 'category' && (
-        <CategoryDetailView groupedTrades={groupedTrades} reportType={reportType} actualEntries={actualEntries} />
+        <CategoryDetailView tradesByCategory={tradesByCategory} categoryOrder={categoryOrder} reportType={reportType} actualEntries={actualEntries} />
       )}
 
       {depth === 'full' && (
-        <FullDetailView groupedTrades={groupedTrades} reportType={reportType} actualEntries={actualEntries} changeOrders={changeOrders} />
+        <FullDetailView tradesByCategory={tradesByCategory} categoryOrder={categoryOrder} reportType={reportType} actualEntries={actualEntries} changeOrders={changeOrders} />
       )}
 
       {/* Footer */}
@@ -402,7 +387,7 @@ function PrintableContent({
 // Category Summary View (High Level)
 // ----------------------------------------------------------------------------
 
-function CategorySummaryView({ groupedTrades, reportType, actualEntries }: any) {
+function CategorySummaryView({ tradesByCategory, categoryOrder, reportType, actualEntries }: any) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
@@ -420,82 +405,38 @@ function CategorySummaryView({ groupedTrades, reportType, actualEntries }: any) 
           </tr>
         </thead>
         <tbody>
-          {Object.entries(groupedTrades).map(([group, groupCategories]: [string, any]) => {
-            // Calculate group totals
-            const groupEstimate = Object.values(groupCategories).flat().reduce((sum: number, t: any) => {
+          {categoryOrder.map((category: string) => {
+            const categoryTrades = tradesByCategory[category] || []
+            const categoryEstimate = categoryTrades.reduce((sum: number, t: any) => {
               const total = t.totalCost * (1 + (t.markupPercent || 11.1) / 100)
               return sum + total
             }, 0)
-            
-            const groupActual = Object.values(groupCategories).flat().reduce((sum: number, categoryTrades: any) => {
-              return sum + actualEntries
-                .filter((e: any) => categoryTrades.some((trade: any) => trade.category === e.category))
-                .reduce((entrySum: number, e: any) => entrySum + e.amount, 0)
-            }, 0)
+            const categoryActual = actualEntries
+              .filter((e: any) => e.category === category)
+              .reduce((sum: number, e: any) => sum + e.amount, 0)
 
             return (
-              <React.Fragment key={group}>
-                {/* Group Row */}
-                <tr style={{ background: '#EFF6FF' }}>
-                  <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', lineHeight: '1.6', fontWeight: 'bold' }}>
-                    {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
+              <tr key={category}>
+                <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', lineHeight: '1.6', fontWeight: '600' }}>
+                  {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                </td>
+                <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', lineHeight: '1.6' }}>{categoryTrades.length}</td>
+                {reportType !== 'actuals' && (
+                  <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', lineHeight: '1.6' }}>
+                    {formatCurrency(categoryEstimate)}
                   </td>
-                  <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', lineHeight: '1.6', fontWeight: 'bold' }}>
-                    {Object.values(groupCategories).flat().length}
+                )}
+                {reportType !== 'estimate' && (
+                  <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', lineHeight: '1.6' }}>
+                    {formatCurrency(categoryActual)}
                   </td>
-                  {reportType !== 'actuals' && (
-                    <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: 'bold', lineHeight: '1.6' }}>
-                      {formatCurrency(groupEstimate)}
-                    </td>
-                  )}
-                  {reportType !== 'estimate' && (
-                    <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: 'bold', lineHeight: '1.6' }}>
-                      {formatCurrency(groupActual)}
-                    </td>
-                  )}
-                  {reportType === 'comparison' && (
-                    <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: 'bold', lineHeight: '1.6' }}>
-                      {formatCurrency(groupActual - groupEstimate)}
-                    </td>
-                  )}
-                </tr>
-                
-                {/* Category rows within group */}
-                {Object.entries(groupCategories).map(([category, categoryTrades]: [string, any]) => {
-                  const categoryEstimate = categoryTrades.reduce((sum: number, t: any) => {
-                    const total = t.totalCost * (1 + (t.markupPercent || 11.1) / 100)
-                    return sum + total
-                  }, 0)
-                  
-                  const categoryActual = actualEntries
-                    .filter((e: any) => e.category === category)
-                    .reduce((sum: number, e: any) => sum + e.amount, 0)
-
-                  return (
-                    <tr key={category}>
-                      <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px 12px 30px', lineHeight: '1.6' }}>
-                        {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
-                      </td>
-                      <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', lineHeight: '1.6' }}>{categoryTrades.length}</td>
-                      {reportType !== 'actuals' && (
-                        <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', lineHeight: '1.6' }}>
-                          {formatCurrency(categoryEstimate)}
-                        </td>
-                      )}
-                      {reportType !== 'estimate' && (
-                        <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', lineHeight: '1.6' }}>
-                          {formatCurrency(categoryActual)}
-                        </td>
-                      )}
-                      {reportType === 'comparison' && (
-                        <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', color: categoryActual - categoryEstimate >= 0 ? '#DC2626' : '#16A34A', lineHeight: '1.6' }}>
-                          {formatCurrency(Math.abs(categoryActual - categoryEstimate))}
-                        </td>
-                      )}
-                    </tr>
-                  )
-                })}
-              </React.Fragment>
+                )}
+                {reportType === 'comparison' && (
+                  <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', fontWeight: '600', color: categoryActual - categoryEstimate >= 0 ? '#DC2626' : '#16A34A', lineHeight: '1.6' }}>
+                    {formatCurrency(Math.abs(categoryActual - categoryEstimate))}
+                  </td>
+                )}
+              </tr>
             )
           })}
         </tbody>
@@ -508,61 +449,53 @@ function CategorySummaryView({ groupedTrades, reportType, actualEntries }: any) 
 // Category Detail View (Category + Subtotals)
 // ----------------------------------------------------------------------------
 
-function CategoryDetailView({ groupedTrades, reportType, actualEntries }: any) {
+function CategoryDetailView({ tradesByCategory, categoryOrder, reportType, actualEntries }: any) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
   return (
     <div style={{ display: 'block' }}>
-      {Object.entries(groupedTrades).map(([group, groupCategories]: [string, any]) => (
-        <div key={group} style={{ pageBreakInside: 'avoid', marginBottom: '20mm' }} className="page-break-inside-avoid print-section">
-          <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#111', marginBottom: '16px', background: '#EFF6FF', padding: '12px', borderRadius: '4px' }}>
-            {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.icon || '📦'} {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
-          </h2>
-          
-          {Object.entries(groupCategories).map(([category, categoryTrades]: [string, any]) => {
-            const categoryEstimate = categoryTrades.reduce((sum: number, t: any) => {
-              return sum + t.totalCost * (1 + (t.markupPercent || 11.1) / 100)
-            }, 0)
-            
-            const categoryActual = actualEntries
-              .filter((e: any) => e.category === category)
-              .reduce((sum: number, e: any) => sum + e.amount, 0)
+      {categoryOrder.map((category: string) => {
+        const categoryTrades = tradesByCategory[category] || []
+        const categoryEstimate = categoryTrades.reduce((sum: number, t: any) => {
+          return sum + t.totalCost * (1 + (t.markupPercent || 11.1) / 100)
+        }, 0)
+        const categoryActual = actualEntries
+          .filter((e: any) => e.category === category)
+          .reduce((sum: number, e: any) => sum + e.amount, 0)
 
-            return (
-              <div key={category} style={{ pageBreakInside: 'avoid', marginBottom: '10mm' }} className="page-break-inside-avoid print-section">
-                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111', marginBottom: '16px', background: '#F3F4F6', padding: '12px', borderRadius: '4px' }}>
-                  {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
-                  {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
-                </h3>
-                <div style={{ marginLeft: '20px', marginBottom: '16px', fontSize: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
-                  {reportType !== 'actuals' && (
-                    <div>
-                      <p style={{ color: '#6B7280', marginBottom: '6px', lineHeight: '1.5' }}>Estimated Total:</p>
-                      <p style={{ fontWeight: 'bold', fontSize: '18px', lineHeight: '1.4' }}>{formatCurrency(categoryEstimate)}</p>
-                    </div>
-                  )}
-                  {reportType !== 'estimate' && (
-                    <div>
-                      <p style={{ color: '#6B7280', marginBottom: '6px', lineHeight: '1.5' }}>Actual Total:</p>
-                      <p style={{ fontWeight: 'bold', fontSize: '18px', lineHeight: '1.4' }}>{formatCurrency(categoryActual)}</p>
-                    </div>
-                  )}
-                  {reportType === 'comparison' && (
-                    <div>
-                      <p style={{ color: '#6B7280', marginBottom: '6px', lineHeight: '1.5' }}>Variance:</p>
-                      <p style={{ fontWeight: 'bold', fontSize: '18px', color: categoryActual - categoryEstimate >= 0 ? '#DC2626' : '#16A34A', lineHeight: '1.4' }}>
-                        {formatCurrency(Math.abs(categoryActual - categoryEstimate))}
-                      </p>
-                    </div>
-                  )}
+        return (
+          <div key={category} style={{ pageBreakInside: 'avoid', marginBottom: '10mm' }} className="page-break-inside-avoid print-section">
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111', marginBottom: '16px', background: '#F3F4F6', padding: '12px', borderRadius: '4px' }}>
+              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
+              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+            </h3>
+            <div style={{ marginLeft: '20px', marginBottom: '16px', fontSize: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+              {reportType !== 'actuals' && (
+                <div>
+                  <p style={{ color: '#6B7280', marginBottom: '6px', lineHeight: '1.5' }}>Estimated Total:</p>
+                  <p style={{ fontWeight: 'bold', fontSize: '18px', lineHeight: '1.4' }}>{formatCurrency(categoryEstimate)}</p>
                 </div>
-                <p style={{ marginLeft: '20px', fontSize: '14px', color: '#6B7280', lineHeight: '1.5' }}>{categoryTrades.length} line items</p>
-              </div>
-            )
-          })}
-        </div>
-      ))}
+              )}
+              {reportType !== 'estimate' && (
+                <div>
+                  <p style={{ color: '#6B7280', marginBottom: '6px', lineHeight: '1.5' }}>Actual Total:</p>
+                  <p style={{ fontWeight: 'bold', fontSize: '18px', lineHeight: '1.4' }}>{formatCurrency(categoryActual)}</p>
+                </div>
+              )}
+              {reportType === 'comparison' && (
+                <div>
+                  <p style={{ color: '#6B7280', marginBottom: '6px', lineHeight: '1.5' }}>Variance:</p>
+                  <p style={{ fontWeight: 'bold', fontSize: '18px', color: categoryActual - categoryEstimate >= 0 ? '#DC2626' : '#16A34A', lineHeight: '1.4' }}>
+                    {formatCurrency(Math.abs(categoryActual - categoryEstimate))}
+                  </p>
+                </div>
+              )}
+            </div>
+            <p style={{ marginLeft: '20px', fontSize: '14px', color: '#6B7280', lineHeight: '1.5' }}>{categoryTrades.length} line items</p>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -571,24 +504,20 @@ function CategoryDetailView({ groupedTrades, reportType, actualEntries }: any) {
 // Full Detail View (All Line Items)
 // ----------------------------------------------------------------------------
 
-function FullDetailView({ groupedTrades, reportType, actualEntries, changeOrders }: any) {
+function FullDetailView({ tradesByCategory, categoryOrder, reportType, actualEntries, changeOrders }: any) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
   return (
     <div style={{ display: 'block' }}>
-      {Object.entries(groupedTrades).map(([group, groupCategories]: [string, any]) => (
-        <div key={group} style={{ pageBreakInside: 'avoid', marginBottom: '20mm' }} className="page-break-inside-avoid print-section">
-          <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#111', marginBottom: '16px', background: '#EFF6FF', padding: '12px', borderRadius: '4px' }}>
-            {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.icon || '📦'} {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
-          </h2>
-          
-          {Object.entries(groupCategories).map(([category, categoryTrades]: [string, any]) => (
-            <div key={category} style={{ pageBreakInside: 'avoid', marginBottom: '10mm' }} className="page-break-inside-avoid print-section">
-              <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111', marginBottom: '16px', background: '#F3F4F6', padding: '12px', borderRadius: '4px' }}>
-                {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
-                {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
-              </h3>
+      {categoryOrder.map((category: string) => {
+        const categoryTrades = tradesByCategory[category] || []
+        return (
+          <div key={category} style={{ pageBreakInside: 'avoid', marginBottom: '10mm' }} className="page-break-inside-avoid print-section">
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111', marginBottom: '16px', background: '#F3F4F6', padding: '12px', borderRadius: '4px' }}>
+              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
+              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+            </h3>
           
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', tableLayout: 'fixed', marginTop: '12px' }}>
             <thead>
@@ -636,11 +565,10 @@ function FullDetailView({ groupedTrades, reportType, actualEntries, changeOrders
                 )
               })}
             </tbody>
-              </table>
-            </div>
-          ))}
-        </div>
-      ))}
+          </table>
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { TRADE_CATEGORIES, CATEGORY_GROUPS, getCategoryGroup, UNIT_TYPES } from '@/types'
+import { TRADE_CATEGORIES, UNIT_TYPES } from '@/types'
 import {
   ArrowLeft,
   PlusCircle,
@@ -105,18 +105,15 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
     }
   }
 
-  // Group items by group, then by category
-  const groupedItems = items.reduce((acc, item) => {
-    const group = item.group || getCategoryGroup(item.category)
-    if (!acc[group]) {
-      acc[group] = {}
-    }
-    if (!acc[group][item.category]) {
-      acc[group][item.category] = []
-    }
-    acc[group][item.category].push(item)
+  const itemsByCategory = items.reduce((acc, item) => {
+    const cat = item.category
+    if (!acc[cat]) acc[cat] = []
+    acc[cat].push(item)
     return acc
-  }, {} as Record<string, Record<string, ItemTemplate[]>>)
+  }, {} as Record<string, ItemTemplate[]>)
+  const categoryOrder = (Object.keys(TRADE_CATEGORIES) as string[]).filter((cat) =>
+    (itemsByCategory[cat]?.length ?? 0) > 0
+  )
 
   const formatCurrency = (amount: number | undefined) =>
     amount !== undefined ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount) : '$0.00'
@@ -154,65 +151,40 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {Object.entries(groupedItems).length === 0 ? (
+                {categoryOrder.length === 0 ? (
                   <div className="text-center py-12 text-gray-500">
                     <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <p className="text-lg font-medium mb-2">No item templates</p>
                     <p>Click "Add New Item" to create your first template</p>
                   </div>
                 ) : (
-                  Object.entries(groupedItems).map(([group, groupCategories]) => {
-                    const isGroupExpanded = expandedCategories.has(`group_${group}`)
-                    const totalItems = Object.values(groupCategories).flat().length
+                  categoryOrder.map((category) => {
+                    const categoryItems = itemsByCategory[category] || []
+                    const isCategoryExpanded = expandedCategories.has(category)
 
                     return (
-                      <Card key={group} className="border-2 border-blue-200">
+                      <Card key={category} className="border-2 border-blue-200">
                         <button
-                          onClick={() => toggleCategory(`group_${group}`)}
+                          onClick={() => toggleCategory(category)}
                           className="w-full p-3 sm:p-4 flex items-center justify-between hover:bg-blue-50 transition-colors"
                         >
                           <div className="flex items-center gap-3">
                             <span className="text-2xl">
-                              {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.icon || '📦'}
+                              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
                             </span>
                             <div className="text-left">
                               <p className="font-bold text-blue-800">
-                                {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
+                                {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
                               </p>
-                              <p className="text-xs text-blue-600">{totalItems} items</p>
+                              <p className="text-xs text-blue-600">{categoryItems.length} items</p>
                             </div>
                           </div>
-                          {isGroupExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                          {isCategoryExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                         </button>
 
-                        {isGroupExpanded && (
+                        {isCategoryExpanded && (
                           <div className="border-t border-blue-200 bg-blue-50 p-4 space-y-3">
-                            {Object.entries(groupCategories).map(([category, categoryItems]) => {
-                              const isCategoryExpanded = expandedCategories.has(category)
-
-                              return (
-                                <Card key={category} className="border border-gray-200">
-                                  <button
-                                    onClick={() => toggleCategory(category)}
-                                    className="w-full p-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <span className="text-lg">
-                                        {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
-                                      </span>
-                                      <div className="text-left">
-                                        <p className="font-semibold text-gray-900">
-                                          {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
-                                        </p>
-                                        <p className="text-xs text-gray-500">{categoryItems.length} items</p>
-                                      </div>
-                                    </div>
-                                    {isCategoryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                  </button>
-
-                                  {isCategoryExpanded && (
-                                    <div className="border-t border-gray-200 bg-gray-50 p-3 space-y-3">
-                                      {categoryItems.map((item) => (
+                            {categoryItems.map((item) => (
                               <div key={item.id} className="bg-white rounded-lg p-4 border border-gray-200">
                                 <div className="flex items-start justify-between mb-2">
                                   <div className="flex-1">
@@ -264,12 +236,7 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
                                   </div>
                                 </div>
                               </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </Card>
-                              )
-                            })}
+                            ))}
                           </div>
                         )}
                       </Card>

@@ -1,5 +1,5 @@
-// QuickBooks Get Vendors
-// Fetches list of vendors from QuickBooks (refreshes token if expired)
+// QuickBooks Test Connection
+// Verifies the stored token works by fetching company info (refreshes token if expired)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -21,8 +21,8 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'No authorization header' }),
-        { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+        JSON.stringify({ connected: false, error: 'No authorization header', details: null }),
+        { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       )
     }
 
@@ -35,21 +35,21 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
     if (userError || !user) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+        JSON.stringify({ connected: false, error: 'Unauthorized', details: null }),
+        { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       )
     }
 
     const tokenResult = await getValidQbToken(supabaseClient, user.id)
     if (!tokenResult) {
       return new Response(
-        JSON.stringify({ vendors: [] }),
+        JSON.stringify({ connected: false, error: 'QuickBooks not connected or token refresh failed', details: null }),
         { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       )
     }
 
-    // Get all active vendors
-    const query = `SELECT * FROM Vendor WHERE Active = true MAXRESULTS 1000`
+    // Verify token by fetching company info
+    const query = 'SELECT * FROM CompanyInfo MAXRESULTS 1'
     const response = await fetch(
       `${QB_API_BASE}/${tokenResult.realmId}/query?query=${encodeURIComponent(query)}&minorversion=65`,
       {
@@ -61,34 +61,40 @@ serve(async (req) => {
     )
 
     if (!response.ok) {
-      const error = await response.text()
-      console.error('Failed to fetch vendors:', error)
+      const errText = await response.text()
+      console.error('QB API error:', errText)
       return new Response(
-        JSON.stringify({ vendors: [], error: 'Failed to fetch vendors' }),
+        JSON.stringify({
+          connected: false,
+          error: 'QuickBooks API request failed',
+          details: { status: response.status, body: errText }
+        }),
         { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       )
     }
 
     const result = await response.json()
-    const vendors = result.QueryResponse?.Vendor || []
-    
-    // Return simplified vendor list
-    const vendorList = vendors.map((v: any) => ({
-      id: v.Id,
-      name: v.DisplayName,
-      companyName: v.CompanyName
-    }))
+    const companyInfo = result.QueryResponse?.CompanyInfo?.[0]
+    const companyName = companyInfo?.CompanyName ?? 'QuickBooks Company'
 
     return new Response(
-      JSON.stringify({ vendors: vendorList }),
+      JSON.stringify({
+        connected: true,
+        company: companyName,
+        bankAccounts: [],
+        expenseAccounts: []
+      }),
       { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
     )
   } catch (error) {
-    console.error('Error in qb-get-vendors:', error)
+    console.error('qb-test-connection error:', error)
     return new Response(
-      JSON.stringify({ vendors: [], error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      JSON.stringify({
+        connected: false,
+        error: (error as Error).message,
+        details: null
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
     )
   }
 })
-

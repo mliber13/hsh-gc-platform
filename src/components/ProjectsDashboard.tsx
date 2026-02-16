@@ -12,10 +12,11 @@ import { getProjects_Hybrid, getTradesForEstimate_Hybrid } from '@/services/hybr
 import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
 import { getTradesForEstimate } from '@/services'
 import { usePermissions } from '@/hooks/usePermissions'
+import { isQBConnected, getQBJobTransactions } from '@/services/quickbooksService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Eye, ChevronDown, TrendingUp } from 'lucide-react'
+import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Eye, ChevronDown, TrendingUp, Download } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface ProjectsDashboardProps {
@@ -24,6 +25,8 @@ interface ProjectsDashboardProps {
   onOpenPlanLibrary: () => void
   onOpenItemLibrary: () => void
   onOpenDealPipeline?: () => void
+  /** Open QuickBooks settings / import flow (e.g. for "X pending from QB" link) */
+  onOpenQBSettings?: () => void
 }
 
 interface ProjectWithStats extends Project {
@@ -32,12 +35,29 @@ interface ProjectWithStats extends Project {
   tradeCount?: number
 }
 
-export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlanLibrary, onOpenItemLibrary, onOpenDealPipeline }: ProjectsDashboardProps) {
+export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlanLibrary, onOpenItemLibrary, onOpenDealPipeline, onOpenQBSettings }: ProjectsDashboardProps) {
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [showMobileActions, setShowMobileActions] = useState(false)
+  const [qbPendingCount, setQbPendingCount] = useState<number | null>(null)
   const { canCreate, isViewer } = usePermissions()
+
+  useEffect(() => {
+    const loadQBPending = async () => {
+      try {
+        if (await isQBConnected()) {
+          const { transactions } = await getQBJobTransactions()
+          setQbPendingCount(transactions.length)
+        } else {
+          setQbPendingCount(null)
+        }
+      } catch {
+        setQbPendingCount(null)
+      }
+    }
+    loadQBPending()
+  }, [])
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -226,6 +246,24 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
           )}
 
           {/* Stats Cards */}
+        </div>
+
+        {/* QuickBooks pending - primary link to import flow */}
+        {qbPendingCount !== null && qbPendingCount > 0 && onOpenQBSettings && (
+          <Card className="mb-6 border-green-200 bg-green-50">
+            <CardContent className="py-3 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm text-green-800">
+                You have <strong>{qbPendingCount}</strong> pending transaction{qbPendingCount !== 1 ? 's' : ''} from QuickBooks.
+              </span>
+              <Button onClick={onOpenQBSettings} variant="outline" size="sm" className="border-green-300 text-green-800 hover:bg-green-100">
+                <Download className="w-4 h-4 mr-1" />
+                Import
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <Card className="bg-white shadow-lg">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">

@@ -18,9 +18,6 @@ import {
   UnitType,
   Subcontractor as DirectorySubcontractor,
   TRADE_CATEGORIES,
-  CATEGORY_GROUPS,
-  CATEGORY_TO_GROUP,
-  getCategoryGroup,
   UNIT_TYPES,
   DEFAULT_VALUES,
   PROJECT_TYPES,
@@ -1507,18 +1504,15 @@ function TradeTable({
     setExpandedCategories(newExpanded)
   }
 
-  // Group trades by group, then by category
-  const groupedTrades = trades.reduce((acc, trade) => {
-    const group = trade.group || getCategoryGroup(trade.category)
-    if (!acc[group]) {
-      acc[group] = {}
-    }
-    if (!acc[group][trade.category]) {
-      acc[group][trade.category] = []
-    }
-    acc[group][trade.category].push(trade)
+  // Group trades by category only (no group level)
+  const categoryOrder = (Object.keys(TRADE_CATEGORIES) as string[]).filter((cat) =>
+    trades.some((t) => t.category === cat)
+  )
+  const tradesByCategory = trades.reduce((acc, trade) => {
+    if (!acc[trade.category]) acc[trade.category] = []
+    acc[trade.category].push(trade)
     return acc
-  }, {} as Record<string, Record<string, Trade[]>>)
+  }, {} as Record<string, Trade[]>)
 
   return (
     <Card>
@@ -1573,80 +1567,47 @@ function TradeTable({
       <CardContent>
         {/* Mobile View - Accordion Style */}
         <div className="md:hidden space-y-2">
-          {Object.keys(groupedTrades).length === 0 ? (
+          {categoryOrder.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               No cost items added yet. Click "Add Cost Item" to get started.
             </div>
           ) : (
-            Object.entries(groupedTrades).map(([group, groupCategories]) => {
-              const groupTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.totalCost, 0)
-              const groupMarkup = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.totalCost * ((t.markupPercent || defaultMarkupPercent) / 100), 0)
-              const groupEstimated = groupTotal + groupMarkup
-              const isGroupExpanded = expandedCategories.has(`group_${group}`)
+            categoryOrder.map((category) => {
+              const categoryTrades = tradesByCategory[category] || []
+              const isCategoryExpanded = expandedCategories.has(category)
+              const categoryTotal = categoryTrades.reduce((sum, t) => sum + t.totalCost, 0)
+              const categoryMarkup = categoryTrades.reduce((sum, t) => sum + t.totalCost * ((t.markupPercent || defaultMarkupPercent) / 100), 0)
+              const categoryEstimated = categoryTotal + categoryMarkup
 
               return (
-                <Card key={group} className="border-2 border-blue-200">
+                <Card key={category} className="border-2 border-blue-200">
                   <button
-                    onClick={() => toggleCategory(`group_${group}`)}
+                    onClick={() => toggleCategory(category)}
                     className="w-full p-4 flex items-center justify-between hover:bg-blue-50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">
-                        {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.icon || '📦'}
+                        {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
                       </span>
                       <div className="text-left">
                         <p className="font-bold text-blue-800">
-                          {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
+                          {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
                         </p>
-                        <p className="text-xs text-gray-500">{Object.values(groupCategories).flat().length} items</p>
+                        <p className="text-xs text-gray-500">{categoryTrades.length} items</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <p className="text-sm text-gray-600">Total</p>
-                        <p className="font-bold text-[#34AB8A]">{formatCurrency(groupEstimated)}</p>
+                        <p className="font-bold text-[#34AB8A]">{formatCurrency(categoryEstimated)}</p>
                       </div>
-                      {isGroupExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                      {isCategoryExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                     </div>
                   </button>
 
-                  {isGroupExpanded && (
+                  {isCategoryExpanded && (
                     <div className="border-t border-blue-200 bg-blue-50 p-3 space-y-3">
-                      {Object.entries(groupCategories).map(([category, categoryTrades]) => {
-                        const isCategoryExpanded = expandedCategories.has(category)
-                        const categoryTotal = categoryTrades.reduce((sum, t) => sum + t.totalCost, 0)
-                        const categoryMarkup = categoryTrades.reduce((sum, t) => sum + t.totalCost * ((t.markupPercent || defaultMarkupPercent) / 100), 0)
-                        const categoryEstimated = categoryTotal + categoryMarkup
-
-                        return (
-                          <div key={category} className="bg-white rounded-lg border border-gray-200">
-                            <button
-                              onClick={() => toggleCategory(category)}
-                              className="w-full p-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className="text-lg">
-                                  {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
-                                </span>
-                                <div className="text-left">
-                                  <p className="font-semibold text-gray-900">
-                                    {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
-                                  </p>
-                                  <p className="text-xs text-gray-500">{categoryTrades.length} items</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <div className="text-right">
-                                  <p className="text-sm text-gray-600">Total</p>
-                                  <p className="font-bold text-[#34AB8A]">{formatCurrency(categoryEstimated)}</p>
-                                </div>
-                                {isCategoryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                              </div>
-                            </button>
-
-                            {isCategoryExpanded && (
-                              <div className="border-t border-gray-200 bg-gray-50 p-3 space-y-3">
-                                {categoryTrades.map((trade) => (
+                      {categoryTrades.map((trade) => (
                         <div key={trade.id} className="bg-white rounded-lg p-3 border border-gray-200">
                           <div className="flex items-start justify-between mb-2">
                             <h4 className="font-semibold text-gray-900">{trade.name}</h4>
@@ -1710,13 +1671,8 @@ function TradeTable({
                               Delete
                             </Button>
                           </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </Card>
@@ -1764,82 +1720,53 @@ function TradeTable({
               </tr>
             </thead>
             <tbody>
-              {Object.entries(groupedTrades).map(([group, groupCategories]) => {
-                const isGroupExpanded = expandedCategories.has(`group_${group}`)
-                const groupTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.totalCost, 0)
-                const groupMaterialTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.materialCost, 0)
-                const groupLaborTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.laborCost, 0)
-                const groupSubcontractorTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.subcontractorCost, 0)
-                const groupMarkupTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.totalCost * ((t.markupPercent || defaultMarkupPercent) / 100), 0)
-                const groupFinalTotal = Object.values(groupCategories).flat().reduce((sum, t) => sum + t.totalCost * (1 + (t.markupPercent || defaultMarkupPercent) / 100), 0)
-                
+              {categoryOrder.map((category) => {
+                const categoryTrades = tradesByCategory[category] || []
+                const isCategoryExpanded = expandedCategories.has(category)
+                const categoryTotal = categoryTrades.reduce((sum, t) => sum + t.totalCost, 0)
+                const categoryMaterialTotal = categoryTrades.reduce((sum, t) => sum + t.materialCost, 0)
+                const categoryLaborTotal = categoryTrades.reduce((sum, t) => sum + t.laborCost, 0)
+                const categorySubcontractorTotal = categoryTrades.reduce((sum, t) => sum + t.subcontractorCost, 0)
+                const categoryMarkupTotal = categoryTrades.reduce((sum, t) => sum + t.totalCost * ((t.markupPercent || defaultMarkupPercent) / 100), 0)
+                const categoryFinalTotal = categoryTrades.reduce((sum, t) => sum + t.totalCost * (1 + (t.markupPercent || defaultMarkupPercent) / 100), 0)
+
                 return (
-                  <React.Fragment key={group}>
-                    {/* Group Header Row */}
+                  <React.Fragment key={category}>
+                    {/* Category Header Row */}
                     <tr 
-                      className="bg-blue-50 font-bold cursor-pointer hover:bg-blue-100 transition-colors border-b-2 border-blue-200"
-                      onClick={() => toggleCategory(`group_${group}`)}
+                      className="bg-gray-50 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => toggleCategory(category)}
                     >
-                      <td className="p-3 border-b border-r-2 border-gray-300">
+                      <td className="p-3 border-b border-r-2 border-gray-300 pl-8">
                         <div className="flex items-center gap-2">
-                          {isGroupExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
-                          <span className="text-blue-800">{CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}</span>
+                          {isCategoryExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
+                          {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
                         </div>
                       </td>
                       <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
                       <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
                       <td className="p-3 text-center border-b"></td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-bold text-blue-800">{formatCurrency(groupMaterialTotal)}</td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryMaterialTotal)}</td>
                       <td className="p-3 text-center border-b"></td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-bold text-blue-800">{formatCurrency(groupLaborTotal)}</td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryLaborTotal)}</td>
                       <td className="p-3 text-center border-b"></td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-bold text-blue-800">{formatCurrency(groupSubcontractorTotal)}</td>
-                      <td className="p-3 text-center border-b font-bold border-r-2 border-gray-300 text-blue-800">{formatCurrency(groupTotal)}</td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categorySubcontractorTotal)}</td>
+                      <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300">{formatCurrency(categoryTotal)}</td>
                       <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500">-</td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-bold text-blue-800">{formatCurrency(groupMarkupTotal)}</td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryMarkupTotal)}</td>
                       <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500">-</td>
-                      <td className="p-3 text-center border-b font-bold border-r-2 border-gray-300 text-blue-800">{formatCurrency(groupFinalTotal)}</td>
+                      <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300">{formatCurrency(categoryFinalTotal)}</td>
                       <td className="p-3 text-center border-b"></td>
                     </tr>
-                    
-                    {/* Category rows within group */}
-                    {isGroupExpanded && Object.entries(groupCategories).map(([category, categoryTrades]) => {
-                      const isCategoryExpanded = expandedCategories.has(category)
-                      
+
+                    {/* Trade rows within category */}
+                    {isCategoryExpanded && categoryTrades.map((trade) => {
+                      const isTradeExpanded = expandedTrades.has(trade.id)
+                      const tradeSubItems = subItemsByTrade[trade.id] || []
+                      const hasSubItems = tradeSubItems.length > 0
+
                       return (
-                        <React.Fragment key={category}>
-                          <tr 
-                            className="bg-gray-50 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
-                            onClick={() => toggleCategory(category)}
-                          >
-                            <td className="p-3 border-b border-r-2 border-gray-300 pl-8">
-                              <div className="flex items-center gap-2">
-                                {isCategoryExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
-                                {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
-                              </div>
-                            </td>
-                            <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
-                            <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
-                            <td className="p-3 text-center border-b"></td>
-                            <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.materialCost, 0))}</td>
-                            <td className="p-3 text-center border-b"></td>
-                            <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.laborCost, 0))}</td>
-                            <td className="p-3 text-center border-b"></td>
-                            <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.subcontractorCost, 0))}</td>
-                            <td className="p-3 text-center border-b font-bold border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.totalCost, 0))}</td>
-                            <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500">-</td>
-                            <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.totalCost * ((t.markupPercent || defaultMarkupPercent) / 100), 0))}</td>
-                            <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500">-</td>
-                            <td className="p-3 text-center border-b font-bold border-r-2 border-gray-300">{formatCurrency(categoryTrades.reduce((sum, t) => sum + t.totalCost * (1 + (t.markupPercent || defaultMarkupPercent) / 100), 0))}</td>
-                            <td className="p-3 text-center border-b"></td>
-                          </tr>
-                          {isCategoryExpanded && categoryTrades.map((trade) => {
-                            const isTradeExpanded = expandedTrades.has(trade.id)
-                            const tradeSubItems = subItemsByTrade[trade.id] || []
-                            const hasSubItems = tradeSubItems.length > 0
-                            
-                            return (
-                              <React.Fragment key={trade.id}>
+                        <React.Fragment key={trade.id}>
                                 <tr className="hover:bg-gray-50">
                                   <td className="p-3 border-b pl-12 border-r-2 border-gray-300">
                                     <div className="flex items-center gap-2">
@@ -1945,9 +1872,6 @@ function TradeTable({
                                     </td>
                                   </tr>
                                 ))}
-                              </React.Fragment>
-                            )
-                          })}
                         </React.Fragment>
                       )
                     })}

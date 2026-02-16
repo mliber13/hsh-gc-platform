@@ -8,8 +8,8 @@
 
 import { supabase } from '@/lib/supabase'
 
-// QuickBooks API Configuration
-const QB_API_BASE = 'https://quickbooks.api.intuit.com/v3/company'
+// QuickBooks API Configuration (sandbox for development; switch to production when going live)
+const QB_API_BASE = 'https://sandbox-quickbooks.api.intuit.com/v3/company'
 const QB_OAUTH_BASE = 'https://appcenter.intuit.com/connect/oauth2'
 
 // Environment variables - Set these in your .env file
@@ -281,6 +281,73 @@ export async function findOrCreateQBVendor(vendorName: string): Promise<QBVendor
   } catch (error) {
     console.error('Error finding/creating QB vendor:', error)
     return null
+  }
+}
+
+// Job transactions (for Import from QuickBooks / pending list)
+export interface QBJobTransaction {
+  qbTransactionId: string
+  qbTransactionType: string
+  vendorName: string
+  txnDate: string
+  docNumber: string
+  amount: number
+  accountType: 'Job Materials' | 'Subcontractor Expense'
+  qbProjectId: string | null
+  qbProjectName: string | null
+  description: string
+}
+
+export interface QBProject {
+  id: string
+  name: string
+}
+
+/**
+ * Get transactions that hit Job Materials or Subcontractor Expense accounts (for pending import list).
+ * Pass debug: true to get _debug in the response (accounts/classes/Bill structure from QB).
+ */
+export async function getQBJobTransactions(debug?: boolean): Promise<{
+  transactions: QBJobTransaction[]
+  error?: string
+  _debug?: unknown
+}> {
+  try {
+    const { data, error } = await supabase.functions.invoke('qb-get-job-transactions', {
+      body: debug ? { debug: true } : undefined,
+    })
+    if (error) {
+      console.error('Error fetching QB job transactions:', error)
+      return { transactions: [], error: error.message }
+    }
+    return {
+      transactions: data?.transactions ?? [],
+      error: data?.error,
+      _debug: data?._debug,
+    }
+  } catch (err) {
+    console.error('Error fetching QB job transactions:', err)
+    return { transactions: [], error: (err as Error).message }
+  }
+}
+
+/**
+ * Get QuickBooks Projects (jobs) for linking to app projects
+ */
+export async function getQBProjects(): Promise<{ projects: QBProject[]; error?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('qb-get-projects')
+    if (error) {
+      console.error('Error fetching QB projects:', error)
+      return { projects: [], error: error.message }
+    }
+    return {
+      projects: data?.projects ?? [],
+      error: data?.error,
+    }
+  } catch (err) {
+    console.error('Error fetching QB projects:', err)
+    return { projects: [], error: (err as Error).message }
   }
 }
 

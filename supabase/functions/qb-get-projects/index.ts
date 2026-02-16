@@ -1,9 +1,11 @@
-// QuickBooks Get Vendors
-// Fetches list of vendors from QuickBooks (refreshes token if expired)
+// QuickBooks Get Projects
+// Lists QB Projects (jobs) for linking to app projects
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getValidQbToken, getQBApiBase } from '../_shared/qb.ts'
+
+const MINOR_VERSION = 65
 
 serve(async (req) => {
   const QB_API_BASE = getQBApiBase()
@@ -21,7 +23,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'No authorization header' }),
+        JSON.stringify({ error: 'No authorization header', projects: [] }),
         { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       )
     }
@@ -35,7 +37,7 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
     if (userError || !user) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Unauthorized', projects: [] }),
         { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       )
     }
@@ -43,52 +45,56 @@ serve(async (req) => {
     const tokenResult = await getValidQbToken(supabaseClient, user.id)
     if (!tokenResult) {
       return new Response(
-        JSON.stringify({ vendors: [] }),
+        JSON.stringify({ projects: [], error: 'QuickBooks not connected' }),
         { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       )
     }
 
-    // Get all active vendors
-    const query = `SELECT * FROM Vendor WHERE Active = true MAXRESULTS 1000`
+    const { accessToken, realmId } = tokenResult
+
+    // Try REST Query for Project entity (supported in some QBO versions)
+    const query = 'SELECT * FROM Project WHERE Active = true MAXRESULTS 500'
     const response = await fetch(
-      `${QB_API_BASE}/${tokenResult.realmId}/query?query=${encodeURIComponent(query)}&minorversion=65`,
+      `${QB_API_BASE}/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=${MINOR_VERSION}`,
       {
         headers: {
-          'Authorization': `Bearer ${tokenResult.accessToken}`,
-          'Accept': 'application/json',
-        }
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
       }
     )
 
     if (!response.ok) {
-      const error = await response.text()
-      console.error('Failed to fetch vendors:', error)
+      const errText = await response.text()
+      console.error('QB get projects failed:', response.status, errText)
       return new Response(
-        JSON.stringify({ vendors: [], error: 'Failed to fetch vendors' }),
+        JSON.stringify({
+          projects: [],
+          error: 'Could not fetch projects (Project entity may require a different API)',
+        }),
         { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       )
     }
 
     const result = await response.json()
-    const vendors = result.QueryResponse?.Vendor || []
-    
-    // Return simplified vendor list
-    const vendorList = vendors.map((v: any) => ({
-      id: v.Id,
-      name: v.DisplayName,
-      companyName: v.CompanyName
+    const raw = result.QueryResponse?.Project || []
+    const projects = raw.map((p: any) => ({
+      id: String(p.Id),
+      name: p.Name ?? p.DisplayName ?? '',
     }))
 
     return new Response(
-      JSON.stringify({ vendors: vendorList }),
+      JSON.stringify({ projects }),
       { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
     )
   } catch (error) {
-    console.error('Error in qb-get-vendors:', error)
+    console.error('qb-get-projects error:', error)
     return new Response(
-      JSON.stringify({ vendors: [], error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      JSON.stringify({
+        projects: [],
+        error: (error as Error).message,
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
     )
   }
 })
-

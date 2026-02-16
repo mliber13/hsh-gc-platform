@@ -40,7 +40,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { TRADE_CATEGORIES, CATEGORY_GROUPS, getCategoryGroup } from '@/types'
+import { TRADE_CATEGORIES, UNIT_TYPES } from '@/types'
+import type { UnitType } from '@/types'
+import { QuickBooksImport } from '@/components/QuickBooksImport'
 import { 
   ArrowLeft, 
   PlusCircle, 
@@ -124,6 +126,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const [availableSuppliers, setAvailableSuppliers] = useState<Supplier[]>([])
   const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set())
   const [subItemsByTrade, setSubItemsByTrade] = useState<Record<string, SubItem[]>>({})
+  const [actualsRefreshKey, setActualsRefreshKey] = useState(0)
 
   // Load trades for the estimate
   useEffect(() => {
@@ -224,7 +227,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     }
     
     loadActuals()
-  }, [project.id])
+  }, [project.id, actualsRefreshKey])
 
   // Load subcontractor and supplier directories
   useEffect(() => {
@@ -366,17 +369,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     }
   }
 
-  const getGroupActualsByType = (group: string, groupCategories: Record<string, Trade[]>) => {
-    const categories = Object.keys(groupCategories)
-    const groupEntries = categories.flatMap(category => getActualsByCategory(category))
-    return {
-      labor: groupEntries.filter(e => e.type === 'labor').reduce((sum, entry) => sum + entry.amount, 0),
-      material: groupEntries.filter(e => e.type === 'material').reduce((sum, entry) => sum + entry.amount, 0),
-      subcontractor: groupEntries.filter(e => e.type === 'subcontractor').reduce((sum, entry) => sum + entry.amount, 0),
-      generalCount: groupEntries.filter(e => !e.tradeId).length,
-    }
-  }
-
   // Calculate estimated costs by type from trades
   const getCategoryEstimateByType = (category: string) => {
     const categoryTrades = trades.filter(t => t.category === category)
@@ -384,15 +376,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
       labor: categoryTrades.reduce((sum, trade) => sum + (trade.laborCost || 0), 0),
       material: categoryTrades.reduce((sum, trade) => sum + (trade.materialCost || 0), 0),
       subcontractor: categoryTrades.reduce((sum, trade) => sum + (trade.subcontractorCost || 0), 0),
-    }
-  }
-
-  const getGroupEstimateByType = (group: string, groupCategories: Record<string, Trade[]>) => {
-    const allTrades = Object.values(groupCategories).flat()
-    return {
-      labor: allTrades.reduce((sum, trade) => sum + (trade.laborCost || 0), 0),
-      material: allTrades.reduce((sum, trade) => sum + (trade.materialCost || 0), 0),
-      subcontractor: allTrades.reduce((sum, trade) => sum + (trade.subcontractorCost || 0), 0),
     }
   }
 
@@ -429,18 +412,15 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     setExpandedCategories(newExpanded)
   }
 
-  // Group trades by group, then by category
-  const groupedTrades = trades.reduce((acc, trade) => {
-    const group = trade.group || getCategoryGroup(trade.category)
-    if (!acc[group]) {
-      acc[group] = {}
-    }
-    if (!acc[group][trade.category]) {
-      acc[group][trade.category] = []
-    }
-    acc[group][trade.category].push(trade)
+  // Group trades by category only (no group level)
+  const categoryOrder = (Object.keys(TRADE_CATEGORIES) as string[]).filter(
+    (cat) => trades.some((t) => t.category === cat)
+  )
+  const tradesByCategory = trades.reduce((acc, trade) => {
+    if (!acc[trade.category]) acc[trade.category] = []
+    acc[trade.category].push(trade)
     return acc
-  }, {} as Record<string, Record<string, Trade[]>>)
+  }, {} as Record<string, Trade[]>)
 
   // Handle print report
   const handlePrintReport = (type: 'actuals' | 'comparison', depth: ReportDepth) => {
@@ -706,6 +686,17 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   Add Subcontractor Entry
                 </Button>
               </div>
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <QuickBooksImport
+                  trigger="button"
+                  preSelectedProject={{
+                    id: project.id,
+                    name: project.name,
+                    estimateId: project.estimate?.id,
+                  }}
+                  onSuccess={() => setActualsRefreshKey((k) => k + 1)}
+                />
+              </div>
             </CardContent>
           </Card>
 
@@ -808,298 +799,57 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           {/* Actuals by Category */}
           <Card>
             <CardHeader>
-              <CardTitle>Actuals by Group & Category</CardTitle>
+              <CardTitle>Actuals by Category</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {Object.entries(groupedTrades).map(([group, groupCategories]) => {
-                  const isGroupExpanded = expandedCategories.has(group)
-                  
-                  // Calculate group totals
-                  const groupEstimate = Object.values(groupCategories).flat().reduce((sum, trade) => {
-                    return sum + (trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100))
-                  }, 0)
-                  
-                  const groupActual = Object.keys(groupCategories).reduce((sum, category) => {
-                    return sum + getCategoryActual(category)
-                  }, 0)
-                  
-                  const groupVariance = groupActual - groupEstimate
-                  const isGroupOver = groupVariance > 0
-                  
-                  // Calculate breakdown for header display
-                  const groupBreakdown = getGroupActualsByType(group, groupCategories)
-                  const groupEstimateBreakdown = getGroupEstimateByType(group, groupCategories)
-                  const groupEntries = Object.keys(groupCategories).flatMap(category => getActualsByCategory(category))
-                  const hasGroupActuals = groupEntries.length > 0
+              {/* Mobile - Cards (match EstimateBuilder card style) */}
+              <div className="md:hidden space-y-4">
+                {categoryOrder.map((category) => {
+                  const categoryTrades = tradesByCategory[category] || []
+                  const isCategoryExpanded = expandedCategories.has(category)
+                  const categoryEstimate = getCategoryEstimate(category)
+                  const categoryActual = getCategoryActual(category)
+                  const categoryVariance = categoryActual - categoryEstimate
+                  const isOver = categoryVariance > 0
+                  const categoryActualBreakdown = getCategoryActualsByType(category)
+                  const categoryEstimateBreakdown = getCategoryEstimateByType(category)
+                  const categoryEntries = getActualsByCategory(category)
+                  const unlinkedEntries = categoryEntries.filter(entry => !entry.tradeId)
+                  const categoryLaborVariance = categoryActualBreakdown.labor - categoryEstimateBreakdown.labor
+                  const categoryMaterialVariance = categoryActualBreakdown.material - categoryEstimateBreakdown.material
+                  const categorySubVariance = categoryActualBreakdown.subcontractor - categoryEstimateBreakdown.subcontractor
 
                   return (
-                    <Card key={group} className="border-2">
+                    <Card key={category} className="border-2 border-blue-200">
                       <button
-                        onClick={() => toggleCategory(group)}
-                        className="w-full p-3 sm:p-4 hover:bg-gray-50 transition-colors"
+                        onClick={() => toggleCategory(category)}
+                        className="w-full p-4 flex items-center justify-between hover:bg-blue-50 transition-colors"
                       >
-                        {/* Mobile Layout - Stacked */}
-                        <div className="sm:hidden">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xl">
-                                {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.icon || '📦'}
-                              </span>
-                              <div className="text-left">
-                                <p className="font-bold text-gray-900 text-sm">
-                                  {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {Object.values(groupCategories).flat().length} items
-                                </p>
-                              </div>
-                            </div>
-                            {isGroupExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">
+                            {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
+                          </span>
+                          <div className="text-left">
+                            <p className="font-bold text-blue-800">
+                              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {categoryTrades.length} items • {getActualsByCategory(category).length} entries
+                            </p>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-xs mb-2">
-                            <div className="text-center bg-blue-50 rounded p-2">
-                              <p className="text-gray-600 mb-1">Est.</p>
-                              <p className="font-bold text-gray-900">{formatCurrency(groupEstimate)}</p>
-                            </div>
-                            <div className="text-center bg-orange-50 rounded p-2">
-                              <p className="text-gray-600 mb-1">Actual</p>
-                              <p className="font-bold text-gray-900">{formatCurrency(groupActual)}</p>
-                            </div>
-                            <div className={`text-center rounded p-2 ${isGroupOver ? 'bg-red-50' : 'bg-green-50'}`}>
-                              <p className="text-gray-600 mb-1">Var.</p>
-                              <p className={`font-bold ${isGroupOver ? 'text-red-600' : 'text-green-600'}`}>
-                                {formatCurrency(Math.abs(groupVariance))}
-                                {isGroupOver ? ' ⚠️' : ' ✓'}
-                              </p>
-                            </div>
-                          </div>
-                          {/* Breakdown in collapsed header - Mobile */}
-                          {(hasGroupActuals || groupEstimateBreakdown.labor > 0 || groupEstimateBreakdown.material > 0 || groupEstimateBreakdown.subcontractor > 0) && (
-                            <div className="space-y-1.5 mt-2 pt-2 border-t border-gray-200 text-[10px]">
-                              <div className="flex flex-wrap gap-1.5">
-                                <span className={`px-2 py-0.5 rounded ${groupEstimateBreakdown.labor > 0 || groupBreakdown.labor > 0 ? 'bg-blue-100 text-blue-800' : 'text-gray-400'}`}>
-                                  👷 Est: {formatCurrency(groupEstimateBreakdown.labor)} | Act: {formatCurrency(groupBreakdown.labor)}
-                                </span>
-                                <span className={`px-2 py-0.5 rounded ${groupEstimateBreakdown.material > 0 || groupBreakdown.material > 0 ? 'bg-green-100 text-green-800' : 'text-gray-400'}`}>
-                                  📦 Est: {formatCurrency(groupEstimateBreakdown.material)} | Act: {formatCurrency(groupBreakdown.material)}
-                                </span>
-                                <span className={`px-2 py-0.5 rounded ${groupEstimateBreakdown.subcontractor > 0 || groupBreakdown.subcontractor > 0 ? 'bg-orange-100 text-orange-800' : 'text-gray-400'}`}>
-                                  👷‍♂️ Est: {formatCurrency(groupEstimateBreakdown.subcontractor)} | Act: {formatCurrency(groupBreakdown.subcontractor)}
-                                </span>
-                              </div>
-                            </div>
-                          )}
                         </div>
-
-                        {/* Desktop Layout - Row */}
-                        <div className="hidden sm:block">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-3">
-                              <span className="text-2xl">
-                                {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.icon || '📦'}
-                              </span>
-                              <div className="text-left">
-                                <p className="font-bold text-gray-900">
-                                  {CATEGORY_GROUPS[group as keyof typeof CATEGORY_GROUPS]?.label || group}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {Object.values(groupCategories).flat().length} items
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                              <div className="text-right">
-                                <p className="text-sm text-gray-600">Estimated</p>
-                                <p className="font-bold text-gray-900">{formatCurrency(groupEstimate)}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm text-gray-600">Actual</p>
-                                <p className="font-bold text-gray-900">{formatCurrency(groupActual)}</p>
-                              </div>
-                              <div className="text-right min-w-[100px]">
-                                <p className="text-sm text-gray-600">Variance</p>
-                                <p className={`font-bold ${isGroupOver ? 'text-red-600' : 'text-green-600'}`}>
-                                  {formatCurrency(Math.abs(groupVariance))}
-                                  {isGroupOver ? ' ⚠️' : ' ✓'}
-                                </p>
-                              </div>
-                              {isGroupExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                            </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-sm text-gray-600">Est / Act</p>
+                            <p className="font-bold text-[#34AB8A]">{formatCurrency(categoryEstimate)} / <span className={isOver ? 'text-red-600' : 'text-green-600'}>{formatCurrency(categoryActual)}</span></p>
                           </div>
-                          {/* Breakdown in collapsed header - Desktop */}
-                          {(hasGroupActuals || groupEstimateBreakdown.labor > 0 || groupEstimateBreakdown.material > 0 || groupEstimateBreakdown.subcontractor > 0) && (
-                            <div className="flex flex-wrap items-center gap-3 text-xs pt-2 border-t border-gray-200">
-                              <span className="text-gray-600 font-semibold">Breakdown:</span>
-                              <span className={`px-2 py-1 rounded ${groupEstimateBreakdown.labor > 0 || groupBreakdown.labor > 0 ? 'bg-blue-100 text-blue-800' : 'text-gray-400'}`}>
-                                👷 Labor: Est {formatCurrency(groupEstimateBreakdown.labor)} | Act {formatCurrency(groupBreakdown.labor)}
-                              </span>
-                              <span className={`px-2 py-1 rounded ${groupEstimateBreakdown.material > 0 || groupBreakdown.material > 0 ? 'bg-green-100 text-green-800' : 'text-gray-400'}`}>
-                                📦 Material: Est {formatCurrency(groupEstimateBreakdown.material)} | Act {formatCurrency(groupBreakdown.material)}
-                              </span>
-                              <span className={`px-2 py-1 rounded ${groupEstimateBreakdown.subcontractor > 0 || groupBreakdown.subcontractor > 0 ? 'bg-orange-100 text-orange-800' : 'text-gray-400'}`}>
-                                👷‍♂️ Sub: Est {formatCurrency(groupEstimateBreakdown.subcontractor)} | Act {formatCurrency(groupBreakdown.subcontractor)}
-                              </span>
-                            </div>
-                          )}
+                          {isCategoryExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                         </div>
                       </button>
 
-                      {isGroupExpanded && (
-                        <div className="border-t border-gray-200 bg-gray-50 p-4 space-y-4">
-                          {/* Group Breakdown - Always show if group has any entries */}
-                          {(() => {
-                            const groupEntries = Object.keys(groupCategories).flatMap(category => getActualsByCategory(category))
-                            if (groupEntries.length === 0) return null
-                            
-                            const groupBreakdown = getGroupActualsByType(group, groupCategories)
-                            const groupEstimateBreakdown = getGroupEstimateByType(group, groupCategories)
-                            const unlinkedGroupEntries = groupEntries.filter(entry => !entry.tradeId)
-                            const laborVariance = groupBreakdown.labor - groupEstimateBreakdown.labor
-                            const materialVariance = groupBreakdown.material - groupEstimateBreakdown.material
-                            const subVariance = groupBreakdown.subcontractor - groupEstimateBreakdown.subcontractor
-                            
-                            return (
-                              <div className="mb-4 pb-4 border-b-2 border-gray-400 bg-white rounded-lg p-4 shadow-sm">
-                                <p className="text-base font-bold text-gray-900 mb-3">💰 Group Breakdown: Estimate vs Actual</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                  <div className={`px-3 py-3 rounded-md border text-sm ${
-                                    groupEstimateBreakdown.labor > 0 || groupBreakdown.labor > 0
-                                      ? 'bg-blue-50 border-blue-300' 
-                                      : 'bg-gray-50 border-gray-200'
-                                  }`}>
-                                    <div className="font-semibold mb-2 text-blue-900">👷 Labor</div>
-                                    <div className="space-y-1 text-xs">
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600">Estimate:</span>
-                                        <span className="font-semibold">{formatCurrency(groupEstimateBreakdown.labor)}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600">Actual:</span>
-                                        <span className="font-semibold">{formatCurrency(groupBreakdown.labor)}</span>
-                                      </div>
-                                      <div className={`flex justify-between pt-1 border-t ${laborVariance > 0 ? 'text-red-600' : laborVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
-                                        <span className="font-semibold">Variance:</span>
-                                        <span className="font-bold">{formatCurrency(Math.abs(laborVariance))} {laborVariance > 0 ? '⚠️' : laborVariance < 0 ? '✓' : ''}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className={`px-3 py-3 rounded-md border text-sm ${
-                                    groupEstimateBreakdown.material > 0 || groupBreakdown.material > 0
-                                      ? 'bg-green-50 border-green-300' 
-                                      : 'bg-gray-50 border-gray-200'
-                                  }`}>
-                                    <div className="font-semibold mb-2 text-green-900">📦 Material</div>
-                                    <div className="space-y-1 text-xs">
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600">Estimate:</span>
-                                        <span className="font-semibold">{formatCurrency(groupEstimateBreakdown.material)}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600">Actual:</span>
-                                        <span className="font-semibold">{formatCurrency(groupBreakdown.material)}</span>
-                                      </div>
-                                      <div className={`flex justify-between pt-1 border-t ${materialVariance > 0 ? 'text-red-600' : materialVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
-                                        <span className="font-semibold">Variance:</span>
-                                        <span className="font-bold">{formatCurrency(Math.abs(materialVariance))} {materialVariance > 0 ? '⚠️' : materialVariance < 0 ? '✓' : ''}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className={`px-3 py-3 rounded-md border text-sm ${
-                                    groupEstimateBreakdown.subcontractor > 0 || groupBreakdown.subcontractor > 0
-                                      ? 'bg-orange-50 border-orange-300' 
-                                      : 'bg-gray-50 border-gray-200'
-                                  }`}>
-                                    <div className="font-semibold mb-2 text-orange-900">👷‍♂️ Subcontractor</div>
-                                    <div className="space-y-1 text-xs">
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600">Estimate:</span>
-                                        <span className="font-semibold">{formatCurrency(groupEstimateBreakdown.subcontractor)}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600">Actual:</span>
-                                        <span className="font-semibold">{formatCurrency(groupBreakdown.subcontractor)}</span>
-                                      </div>
-                                      <div className={`flex justify-between pt-1 border-t ${subVariance > 0 ? 'text-red-600' : subVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
-                                        <span className="font-semibold">Variance:</span>
-                                        <span className="font-bold">{formatCurrency(Math.abs(subVariance))} {subVariance > 0 ? '⚠️' : subVariance < 0 ? '✓' : ''}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                                {unlinkedGroupEntries.length > 0 && (
-                                  <div className="mt-3 px-3 py-2 rounded-md border bg-yellow-50 border-yellow-300 text-yellow-800 text-sm">
-                                    <div className="font-semibold mb-1">📋 General Entries ({unlinkedGroupEntries.length})</div>
-                                    <div className="text-lg font-bold">{formatCurrency(unlinkedGroupEntries.reduce((sum, e) => sum + e.amount, 0))}</div>
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })()}
-                          
-                          {Object.entries(groupCategories).map(([category, categoryTrades]) => {
-                            const categoryKey = `${group}-${category}`
-                            const isCategoryExpanded = expandedCategories.has(categoryKey)
-                            const categoryEstimate = getCategoryEstimate(category)
-                            const categoryActual = getCategoryActual(category)
-                            const categoryVariance = categoryActual - categoryEstimate
-                            const isOver = categoryVariance > 0
-                            const categoryActualBreakdown = getCategoryActualsByType(category)
-                            const categoryEstimateBreakdown = getCategoryEstimateByType(category)
-                            const categoryEntries = getActualsByCategory(category)
-                            const unlinkedEntries = categoryEntries.filter(entry => !entry.tradeId)
-                            const categoryLaborVariance = categoryActualBreakdown.labor - categoryEstimateBreakdown.labor
-                            const categoryMaterialVariance = categoryActualBreakdown.material - categoryEstimateBreakdown.material
-                            const categorySubVariance = categoryActualBreakdown.subcontractor - categoryEstimateBreakdown.subcontractor
-                            
-                            return (
-                              <div key={category} className="bg-white rounded-lg border border-gray-200">
-                                <button
-                                  onClick={() => toggleCategory(categoryKey)}
-                                  className="w-full p-3 hover:bg-gray-50 transition-colors"
-                                >
-                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-lg">
-                                        {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
-                                      </span>
-                                      <div>
-                                        <h4 className="font-semibold text-gray-900 text-sm">
-                                          {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
-                                        </h4>
-                                        <p className="text-xs text-gray-500">
-                                          {categoryTrades.length} items • {getActualsByCategory(category).length} entries
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                      <div className="flex items-center gap-4 text-sm">
-                                        <div className="text-right">
-                                          <span className="text-gray-500">Est:</span>
-                                          <span className="font-semibold ml-1">{formatCurrency(categoryEstimate)}</span>
-                                        </div>
-                                        <div className="text-right">
-                                          <span className="text-gray-500">Act:</span>
-                                          <span className={`font-semibold ml-1 ${isOver ? 'text-red-600' : 'text-green-600'}`}>
-                                            {formatCurrency(categoryActual)}
-                                          </span>
-                                        </div>
-                                        <div className="text-right">
-                                          <span className="text-gray-500">Var:</span>
-                                          <span className={`font-semibold ml-1 ${isOver ? 'text-red-600' : 'text-green-600'}`}>
-                                            {formatCurrency(Math.abs(categoryVariance))}
-                                          </span>
-                                        </div>
-                                      </div>
-                                      {isCategoryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                    </div>
-                                  </div>
-                                </button>
-                                
-                                {isCategoryExpanded && (
-                                  <div className="px-3 pb-3">
-                                    {/* Inline Breakdown in Category Header */}
-                                {(categoryEntries.length > 0 || categoryEstimateBreakdown.labor > 0 || categoryEstimateBreakdown.material > 0 || categoryEstimateBreakdown.subcontractor > 0) && (
+                      {isCategoryExpanded && (
+                        <div className="border-t border-blue-200 bg-blue-50 p-4">
+                          {(categoryEntries.length > 0 || categoryEstimateBreakdown.labor > 0 || categoryEstimateBreakdown.material > 0 || categoryEstimateBreakdown.subcontractor > 0) && (
                                   <div className="mb-3 pb-2 border-b border-gray-300">
                                     <div className="flex flex-wrap items-center gap-2 text-xs">
                                       <span className="text-gray-600 font-semibold">Breakdown:</span>
@@ -1617,22 +1367,212 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     )
                                   })}
                                 </div>
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </Card>
-                  )
-                })}
+                      </div>
+                    )}
+                  </Card>
+                )
+              })}
 
-                {Object.keys(groupedTrades).length === 0 && (
+                {categoryOrder.length === 0 && (
                   <div className="text-center py-12 text-gray-500">
                     No estimate items found. Please add items to your estimate first.
                   </div>
                 )}
+              </div>
+
+              {/* Desktop - Table (match EstimateBuilder spreadsheet style) */}
+              <div className="hidden md:block">
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse min-w-[1200px]">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="p-3"></th>
+                        <th className="p-3"></th>
+                        <th className="p-3 border-r-2 border-gray-300"></th>
+                        <th className="text-center p-3 text-[#913E00] text-2xl font-bold border-r-2 border-gray-300" colSpan={2}>Labor</th>
+                        <th className="text-center p-3 text-[#913E00] text-2xl font-bold border-r-2 border-gray-300" colSpan={2}>Material</th>
+                        <th className="text-center p-3 text-[#913E00] text-2xl font-bold border-r-2 border-gray-300" colSpan={2}>Subcontractor</th>
+                        <th className="p-3 border-r-2 border-gray-300"></th>
+                        <th className="p-3 border-r-2 border-gray-300"></th>
+                        <th className="p-3"></th>
+                        <th className="p-3"></th>
+                      </tr>
+                      <tr className="border-b">
+                        <th className="text-left p-3 bg-[#213069] text-white border-r-2 border-gray-300">Category & Items</th>
+                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Qty</th>
+                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Unit</th>
+                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Labor Est</th>
+                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Labor Act</th>
+                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Material Est</th>
+                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Material Act</th>
+                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Sub Est</th>
+                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Sub Act</th>
+                        <th className="text-center p-3 bg-[#0E79C9] text-white border-r-2 border-gray-300">Total Est</th>
+                        <th className="text-center p-3 bg-[#34AB8A] text-white border-r-2 border-gray-300">Total Act</th>
+                        <th className="text-center p-3 bg-[#D95C00] text-white border-r-2 border-gray-300">Variance</th>
+                        <th className="text-center p-3 bg-[#34AB8A] text-white">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {categoryOrder.map((category) => {
+                        const categoryTrades = tradesByCategory[category] || []
+                        const isCategoryExpanded = expandedCategories.has(category)
+                        const categoryEstimateBreakdown = getCategoryEstimateByType(category)
+                        const categoryActualBreakdown = getCategoryActualsByType(category)
+                        const categoryEstimate = getCategoryEstimate(category)
+                        const categoryActual = getCategoryActual(category)
+                        const categoryVariance = categoryActual - categoryEstimate
+
+                        return (
+                          <React.Fragment key={category}>
+                            <tr
+                              className="bg-gray-50 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                              onClick={() => toggleCategory(category)}
+                            >
+                              <td className="p-3 border-b border-r-2 border-gray-300 pl-8">
+                                <div className="flex items-center gap-2">
+                                  {isCategoryExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
+                                  {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                                </div>
+                              </td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryEstimateBreakdown.labor)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryActualBreakdown.labor)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryEstimateBreakdown.material)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryActualBreakdown.material)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryEstimateBreakdown.subcontractor)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryActualBreakdown.subcontractor)}</td>
+                              <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300">{formatCurrency(categoryEstimate)}</td>
+                              <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300">{formatCurrency(categoryActual)}</td>
+                              <td className={`p-3 text-center border-b border-r-2 border-gray-300 font-semibold ${categoryVariance > 0 ? 'text-red-600' : categoryVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                                {formatCurrency(Math.abs(categoryVariance))}
+                              </td>
+                              <td className="p-3 text-center border-b"></td>
+                            </tr>
+                            {isCategoryExpanded && categoryTrades.map((trade) => {
+                              const tradeActuals = getActualsByTrade(trade.id)
+                              const tradeSubItems = subItemsByTrade[trade.id] || []
+                              const subItemActuals = tradeSubItems.flatMap(si => getActualsBySubItem(si.id))
+                              const tradeActualTotal = tradeActuals.reduce((sum, entry) => sum + entry.amount, 0) + subItemActuals.reduce((sum, entry) => sum + entry.amount, 0)
+                              const tradeEstimate = trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100)
+                              const tradeEstimateBreakdown = getTradeEstimateByType(trade)
+                              const tradeActualBreakdown = {
+                                labor: tradeActuals.filter(e => e.type === 'labor').reduce((s, e) => s + e.amount, 0) + subItemActuals.filter(e => e.type === 'labor').reduce((s, e) => s + e.amount, 0),
+                                material: tradeActuals.filter(e => e.type === 'material').reduce((s, e) => s + e.amount, 0) + subItemActuals.filter(e => e.type === 'material').reduce((s, e) => s + e.amount, 0),
+                                subcontractor: tradeActuals.filter(e => e.type === 'subcontractor').reduce((s, e) => s + e.amount, 0) + subItemActuals.filter(e => e.type === 'subcontractor').reduce((s, e) => s + e.amount, 0),
+                              }
+                              const tradeVariance = tradeActualTotal - tradeEstimate
+                              const varianceType = getVarianceType(trade.id, tradeVariance)
+                              const isTradeExpanded = expandedTrades.has(trade.id)
+                              const hasSubItems = tradeSubItems.length > 0
+
+                              return (
+                                <React.Fragment key={trade.id}>
+                                  <tr className="hover:bg-gray-50">
+                                    <td className="p-3 border-b pl-12 border-r-2 border-gray-300">
+                                      <div className="flex items-center gap-2">
+                                        {hasSubItems && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); toggleTradeExpansion(trade.id) }}
+                                            className="p-1 hover:bg-gray-200 rounded"
+                                            title={isTradeExpanded ? 'Collapse' : 'Expand'}
+                                          >
+                                            {isTradeExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
+                                          </button>
+                                        )}
+                                        <span>{trade.name}</span>
+                                        {hasSubItems && <span className="text-xs text-gray-500">({tradeSubItems.length} sub)</span>}
+                                      </div>
+                                    </td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{trade.quantity}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{UNIT_TYPES[trade.unit as UnitType]?.abbreviation || trade.unit}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimateBreakdown.labor)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeActualBreakdown.labor)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimateBreakdown.material)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeActualBreakdown.material)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimateBreakdown.subcontractor)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeActualBreakdown.subcontractor)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimate)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeActualTotal)}</td>
+                                    <td className={`p-3 text-center border-b border-r-2 border-gray-300 font-medium ${getVarianceColor(varianceType)}`}>
+                                      {formatCurrency(Math.abs(tradeVariance))} {getVarianceIcon(varianceType)}
+                                    </td>
+                                    <td className="p-3 text-center border-b">
+                                      <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setEditingEntry(null); setEntryType('material'); setShowEntryForm(true); }} className="h-7 px-2" title="Add entry">Add</Button>
+                                    </td>
+                                  </tr>
+                                  {isTradeExpanded && hasSubItems && tradeSubItems.map((subItem) => {
+                                    const siActuals = getActualsBySubItem(subItem.id)
+                                    const siActualTotal = siActuals.reduce((s, e) => s + e.amount, 0)
+                                    const siLaborAct = siActuals.filter(e => e.type === 'labor').reduce((s, e) => s + e.amount, 0)
+                                    const siMaterialAct = siActuals.filter(e => e.type === 'material').reduce((s, e) => s + e.amount, 0)
+                                    const siSubAct = siActuals.filter(e => e.type === 'subcontractor').reduce((s, e) => s + e.amount, 0)
+                                    const siEstimate = subItem.totalCost * (1 + (subItem.markupPercent || 11.1) / 100)
+                                    const siVariance = siActualTotal - siEstimate
+                                    return (
+                                      <tr key={subItem.id} className="bg-blue-50/50 hover:bg-blue-50">
+                                        <td className="p-3 border-b pl-20 border-r-2 border-gray-300 text-sm">{subItem.name}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{subItem.quantity}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{UNIT_TYPES[subItem.unit as UnitType]?.abbreviation || subItem.unit}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.laborCost || 0)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siLaborAct)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.materialCost || 0)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siMaterialAct)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.subcontractorCost || 0)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siSubAct)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siEstimate)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siActualTotal)}</td>
+                                        <td className={`p-3 text-center border-b border-r-2 border-gray-300 text-sm ${siVariance > 0 ? 'text-red-600' : siVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>{formatCurrency(Math.abs(siVariance))}</td>
+                                        <td className="p-3 text-center border-b"></td>
+                                      </tr>
+                                    )
+                                  })}
+                                  {isTradeExpanded && (
+                                    <tr>
+                                      <td colSpan={13} className="p-0 align-top bg-gray-50">
+                                        <div className="px-4 py-3 border-b border-gray-200 text-sm space-y-2 max-h-64 overflow-y-auto">
+                                          {tradeActuals.length > 0 && (
+                                            <div>
+                                              <p className="font-semibold text-gray-700 mb-1">Entries</p>
+                                              {tradeActuals.map((entry) => (
+                                                <div key={entry.id} className={`flex items-center justify-between py-1.5 px-2 rounded border ${getEntryColor(entry.type)}`}>
+                                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                    {getEntryIcon(entry.type)}
+                                                    <span className="truncate">{entry.description}</span>
+                                                    <span className="text-gray-500 text-xs shrink-0">{formatDate(entry.date)}</span>
+                                                  </div>
+                                                  <div className="flex items-center gap-1 shrink-0">
+                                                    <span className="font-semibold">{formatCurrency(entry.amount)}</span>
+                                                    <Button size="sm" variant="outline" className="h-6 px-1.5" onClick={() => handleEditEntry(entry)}><Edit className="w-3 h-3" /></Button>
+                                                    <Button size="sm" variant="destructive" className="h-6 px-1.5" onClick={() => handleDeleteEntry(entry)}><Trash2 className="w-3 h-3" /></Button>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                          {tradeActuals.length === 0 && <p className="text-gray-500 italic">No entries yet</p>}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
+                              )
+                            })}
+                          </React.Fragment>
+                        )
+                      })}
+                      {categoryOrder.length === 0 && (
+                        <tr>
+                          <td colSpan={13} className="p-8 text-center text-gray-500">
+                            No estimate items found. Please add items to your estimate first.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1783,7 +1723,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   subItemId: entry.subItemId,
                   vendor: entry.vendor,
                   invoiceNumber: entry.invoiceNumber,
-                  group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
                   isSplitEntry: false,
                 })
 
@@ -1804,7 +1743,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     subItemId: allocation.subItemId,
                     vendor: entry.vendor,
                     invoiceNumber: entry.invoiceNumber,
-                    group: allocCategory ? getCategoryGroup(allocCategory) : undefined,
                     isSplitEntry: true,
                     splitParentId: parentEntry.id,
                     splitAllocation: allocation.amount,
@@ -1940,7 +1878,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     subItemId: entry.subItemId,
                     vendor: entry.vendor,
                     invoiceNumber: entry.invoiceNumber,
-                    group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
                     isSplitEntry: false,
                   })
 
@@ -1961,7 +1898,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       subItemId: allocation.subItemId,
                       vendor: entry.vendor,
                       invoiceNumber: entry.invoiceNumber,
-                      group: allocCategory ? getCategoryGroup(allocCategory) : undefined,
                       isSplitEntry: true,
                       splitParentId: parentEntry.id,
                       splitAllocation: allocation.amount,
@@ -2115,7 +2051,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     subItemId: entry.subItemId,
                     vendor: entry.vendor,
                     invoiceNumber: entry.invoiceNumber,
-                    group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
                   })
                 } else if (entry.type === 'subcontractor') {
                   await addSubcontractorEntry_Hybrid(project.id, {
@@ -2149,7 +2084,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     category: materialCategory,
                     tradeId: entry.tradeId,
                     subItemId: entry.subItemId,
-                    group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
                   })
                 } else if (entry.type === 'subcontractor') {
                   await updateSubcontractorEntry_Hybrid(entry.id, {
@@ -2183,7 +2117,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   subItemId: entry.subItemId,
                   vendor: entry.vendor,
                   invoiceNumber: entry.invoiceNumber,
-                  group: materialCategory ? getCategoryGroup(materialCategory) : undefined,
                 })
               } else if (entry.type === 'subcontractor') {
                 await addSubcontractorEntry_Hybrid(project.id, {

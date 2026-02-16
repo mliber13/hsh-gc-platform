@@ -1,10 +1,10 @@
 // QuickBooks Create Check
-// Creates a check payment in QuickBooks Online
+// Creates a check payment in QuickBooks Online (refreshes token if expired)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getValidQbToken, getQBApiBase } from '../_shared/qb.ts'
 
-const QB_API_BASE = 'https://quickbooks.api.intuit.com/v3/company'
 const QB_DEFAULT_EXPENSE_ACCOUNT = '80' // Default expense account - user should configure this
 const QB_DEFAULT_BANK_ACCOUNT = '35' // Default bank account - user should configure this
 
@@ -21,6 +21,7 @@ serve(async (req) => {
   }
 
   try {
+    const QB_API_BASE = getQBApiBase()
     // Get user from authorization header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
@@ -58,16 +59,10 @@ serve(async (req) => {
       )
     }
 
-    // Get QB tokens from user profile
-    const { data: profile, error: profileError } = await supabaseClient
-      .from('profiles')
-      .select('qb_access_token, qb_realm_id, qb_token_expires_at')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError || !profile?.qb_access_token) {
+    const tokenResult = await getValidQbToken(supabaseClient, user.id)
+    if (!tokenResult) {
       return new Response(
-        JSON.stringify({ error: 'QuickBooks not connected' }),
+        JSON.stringify({ error: 'QuickBooks not connected or token refresh failed' }),
         { 
           status: 400, 
           headers: { 
@@ -78,16 +73,13 @@ serve(async (req) => {
       )
     }
 
-    // Check if token is expired (refresh if needed)
-    // For now, we'll just use the token - token refresh can be added later
-
     const { vendorName, amount, description, date, projectName, category } = await req.json()
 
     // Step 1: Find or create vendor
-    let vendorId = await findVendor(profile.qb_access_token, profile.qb_realm_id, vendorName)
+    let vendorId = await findVendor(tokenResult.accessToken, tokenResult.realmId, vendorName)
     
     if (!vendorId) {
-      vendorId = await createVendor(profile.qb_access_token, profile.qb_realm_id, vendorName)
+      vendorId = await createVendor(tokenResult.accessToken, tokenResult.realmId, vendorName)
     }
 
     if (!vendorId) {
@@ -129,11 +121,11 @@ serve(async (req) => {
     }
 
     const checkResponse = await fetch(
-      `${QB_API_BASE}/${profile.qb_realm_id}/check?minorversion=65`,
+      `${QB_API_BASE}/${tokenResult.realmId}/check?minorversion=65`,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${profile.qb_access_token}`,
+          'Authorization': `Bearer ${tokenResult.accessToken}`,
           'Accept': 'application/json',
           'Content-Type': 'application/json',
         },

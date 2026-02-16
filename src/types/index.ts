@@ -268,9 +268,6 @@ export type {
 // Export constants and helpers
 export {
   TRADE_CATEGORIES,
-  CATEGORY_GROUPS,
-  CATEGORY_TO_GROUP,
-  GROUP_TO_CATEGORIES,
   DEFAULT_CATEGORY_ITEMS,
   ESTIMATE_STATUS,
   UNIT_TYPES,
@@ -290,8 +287,6 @@ export {
   formatNumber,
   formatPercentage,
   getTradeLabel,
-  getCategoryGroup,
-  getGroupLabel,
   getEstimateStatusLabel,
   getEstimateStatusBadgeClass,
   getUnitLabel,

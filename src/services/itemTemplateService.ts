@@ -6,7 +6,7 @@
 //
 
 import { v4 as uuidv4 } from 'uuid'
-import { ItemTemplate, ItemTemplateInput, getCategoryGroup } from '@/types'
+import { ItemTemplate, ItemTemplateInput } from '@/types'
 import { isOnlineMode } from '@/lib/supabase'
 import * as supabaseService from './supabaseService'
 
@@ -69,20 +69,14 @@ export async function getItemTemplateById(id: string): Promise<ItemTemplate | nu
  * Create new item template
  */
 export async function createItemTemplate(input: ItemTemplateInput): Promise<ItemTemplate> {
-  // Auto-populate group field based on category
-  const inputWithGroup = {
-    ...input,
-    group: getCategoryGroup(input.category)
-  }
-
   if (isOnlineMode()) {
-    const created = await supabaseService.createItemTemplateInDB(inputWithGroup)
+    const created = await supabaseService.createItemTemplateInDB(input)
     if (!created) throw new Error('Failed to create item template')
     return created
   } else {
     const template: ItemTemplate = {
       id: uuidv4(),
-      ...inputWithGroup,
+      ...input,
       createdAt: new Date(),
       updatedAt: new Date(),
     }
@@ -99,14 +93,8 @@ export async function createItemTemplate(input: ItemTemplateInput): Promise<Item
  * Update existing item template
  */
 export async function updateItemTemplate(id: string, updates: Partial<ItemTemplateInput>): Promise<ItemTemplate | null> {
-  // Auto-populate group field if category is being updated
-  const updatesWithGroup = {
-    ...updates,
-    ...(updates.category && { group: getCategoryGroup(updates.category) })
-  }
-
   if (isOnlineMode()) {
-    return await supabaseService.updateItemTemplateInDB(id, updatesWithGroup)
+    return await supabaseService.updateItemTemplateInDB(id, updates)
   } else {
     const all = await getAllItemTemplates()
     const index = all.findIndex(item => item.id === id)
@@ -115,7 +103,7 @@ export async function updateItemTemplate(id: string, updates: Partial<ItemTempla
 
     all[index] = {
       ...all[index],
-      ...updatesWithGroup,
+      ...updates,
       updatedAt: new Date(),
     }
 
