@@ -350,10 +350,10 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                   <>
                     <div>
                       <Label>Estimate line (optional)</Label>
-                      <Select value={tradeId} onValueChange={setTradeId}>
+                      <Select value={tradeId || '__none__'} onValueChange={(v) => setTradeId(v === '__none__' ? '' : v)}>
                         <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="__none__">None</SelectItem>
                           {trades.map((t) => (
                             <SelectItem key={t.id} value={t.id}>
                               {t.name}
@@ -363,12 +363,12 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                       </Select>
                     </div>
                     {subItems.length > 0 && (
-                      <div>
+                        <div>
                         <Label>Sub-item (optional)</Label>
-                        <Select value={subItemId} onValueChange={setSubItemId}>
+                        <Select value={subItemId || '__none__'} onValueChange={(v) => setSubItemId(v === '__none__' ? '' : v)}>
                           <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">None</SelectItem>
+                            <SelectItem value="__none__">None</SelectItem>
                             {subItems.map((s) => (
                               <SelectItem key={s.id} value={s.id}>
                                 {s.name}
