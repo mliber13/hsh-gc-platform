@@ -107,6 +107,19 @@ function getLineAmount(line: any): number {
   return Number(line?.Amount ?? 0)
 }
 
+/** Get project/job from header or from first line that has ClassRef/CustomerRef/ProjectRef (QBO often puts job on line) */
+function getProjectRefFromTransaction(t: any): { id: string; name: string } | null {
+  const headerRef = t.ProjectRef || t.ClassRef
+  if (headerRef?.value) return { id: String(headerRef.value), name: headerRef.name ?? '' }
+  const lines = t.Line || []
+  for (const line of lines) {
+    const detail = line?.AccountBasedExpenseLineDetail || line?.ExpenseDetail || line
+    const ref = detail?.ClassRef || detail?.CustomerRef || detail?.ProjectRef || line?.ClassRef
+    if (ref?.value) return { id: String(ref.value), name: ref.name ?? '' }
+  }
+  return null
+}
+
 function classNameMatchesJobMaterials(name: string | null): boolean {
   if (!name) return false
   const n = name.toLowerCase()
@@ -262,13 +275,12 @@ serve(async (req) => {
       entityType: string,
       list: any[],
       getVendor: (t: any) => string,
-      getTotal: (t: any) => number,
-      getProjectRef: (t: any) => { id: string; name: string } | null
+      getTotal: (t: any) => number
     ) => {
       for (const t of list) {
         const { accountType, amount } = transactionHasAccountOrClass(t, accountIds, accountIdToType, classIds, classIdToType)
         if (!accountType || amount === 0) continue
-        const projectRef = getProjectRef(t)
+        const projectRef = getProjectRefFromTransaction(t)
         const firstLine = (t.Line || [])[0]
         const description = firstLine?.Description || (t.PrivateNote ?? '') || `${entityType} ${t.DocNumber || t.Id}`
         out.push({
@@ -286,27 +298,21 @@ serve(async (req) => {
       }
     }
 
-    const projectRefFrom = (t: any) => {
-      const ref = t.ProjectRef || t.ClassRef
-      if (!ref?.value) return null
-      return { id: ref.value, name: ref.name ?? '' }
-    }
-
     const billRes = await qbFetch(apiBase, accessToken, realmId, `SELECT * FROM Bill WHERE TxnDate >= '${startDate}' MAXRESULTS 500`)
     const bills: any[] = billRes.QueryResponse?.Bill || []
-    pushFrom('Bill', bills, (t) => t.VendorRef?.name ?? t.VendorRef?.value ?? 'Unknown', (t) => Number(t.TotalAmt ?? 0), projectRefFrom)
+    pushFrom('Bill', bills, (t) => t.VendorRef?.name ?? t.VendorRef?.value ?? 'Unknown', (t) => Number(t.TotalAmt ?? 0))
 
     const purchaseRes = await qbFetch(apiBase, accessToken, realmId, `SELECT * FROM Purchase WHERE TxnDate >= '${startDate}' MAXRESULTS 500`)
     const purchases: any[] = purchaseRes.QueryResponse?.Purchase || []
-    pushFrom('Purchase', purchases, (t) => t.EntityRef?.name ?? t.EntityRef?.value ?? 'Unknown', (t) => Number(t.TotalAmt ?? 0), projectRefFrom)
+    pushFrom('Purchase', purchases, (t) => t.EntityRef?.name ?? t.EntityRef?.value ?? 'Unknown', (t) => Number(t.TotalAmt ?? 0))
 
     const checkRes = await qbFetch(apiBase, accessToken, realmId, `SELECT * FROM Check WHERE TxnDate >= '${startDate}' MAXRESULTS 500`)
     const checks: any[] = checkRes.QueryResponse?.Check || []
-    pushFrom('Check', checks, (t) => t.VendorRef?.name ?? t.VendorRef?.value ?? 'Unknown', (t) => Number(t.TotalAmt ?? 0), projectRefFrom)
+    pushFrom('Check', checks, (t) => t.VendorRef?.name ?? t.VendorRef?.value ?? 'Unknown', (t) => Number(t.TotalAmt ?? 0))
 
     const creditRes = await qbFetch(apiBase, accessToken, realmId, `SELECT * FROM VendorCredit WHERE TxnDate >= '${startDate}' MAXRESULTS 500`)
     const vendorCredits: any[] = creditRes.QueryResponse?.VendorCredit || []
-    pushFrom('VendorCredit', vendorCredits, (t) => t.VendorRef?.name ?? t.VendorRef?.value ?? 'Unknown', (t) => -Math.abs(Number(t.TotalAmt ?? 0)), projectRefFrom)
+    pushFrom('VendorCredit', vendorCredits, (t) => t.VendorRef?.name ?? t.VendorRef?.value ?? 'Unknown', (t) => -Math.abs(Number(t.TotalAmt ?? 0)))
 
     // Only keep transactions for QB projects that are linked to an app project (if any are linked)
     const { data: projectRows } = await supabaseClient.from('projects').select('qb_project_id').not('qb_project_id', 'is', null)
