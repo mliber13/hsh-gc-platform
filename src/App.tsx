@@ -40,6 +40,8 @@ import { EstimateTemplateManagement } from './components/EstimateTemplateManagem
 import { DealPipeline } from './components/DealPipeline'
 import { FeedbackForm } from './components/FeedbackForm'
 import { MyFeedback } from './components/MyFeedback'
+import { PrivacyPolicy } from './components/PrivacyPolicy'
+import { TermsOfUse } from './components/TermsOfUse'
 
 type View =
   | 'dashboard'
@@ -63,6 +65,8 @@ type View =
   | 'estimate-template-management'
   | 'deal-pipeline'
   | 'my-feedback'
+  | 'privacy'
+  | 'terms'
 
 function App() {
   const { user, signOut, isOnline } = useAuth()
@@ -102,6 +106,8 @@ function App() {
       console.log('Detected QB callback, switching to qb-callback view')
       setCurrentView('qb-callback')
     }
+    if (pathname === '/privacy') setCurrentView('privacy')
+    if (pathname === '/terms') setCurrentView('terms')
   }, [])
 
   // Refresh project data when viewing project-related screens
@@ -330,6 +336,24 @@ function App() {
     return <VendorQuotePortal />
   }
 
+  // Public legal pages (no login required) – for Intuit compliance and user access
+  if (pathname === '/privacy') {
+    return (
+      <PrivacyPolicy
+        onBack={() => { window.location.href = '/' }}
+        showBackButton={true}
+      />
+    )
+  }
+  if (pathname === '/terms') {
+    return (
+      <TermsOfUse
+        onBack={() => { window.location.href = '/' }}
+        showBackButton={true}
+      />
+    )
+  }
+
   return (
     <AuthGate>
       <div className="min-h-screen bg-background">
@@ -426,6 +450,24 @@ function App() {
                       <MessageSquare className="w-4 h-4" />
                       Feedback & Requests
                     </button>
+                    <a
+                      href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2 text-gray-700"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Privacy Policy
+                    </a>
+                    <a
+                      href="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2 text-gray-700"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Terms of Use (EULA)
+                    </a>
                     <button
                       onClick={handleBackupData}
                       disabled={isBackingUp}
@@ -647,6 +689,26 @@ function App() {
             window.history.replaceState({}, '', '/')
             setCurrentView('qb-settings')
           }}
+        />
+      )}
+
+      {currentView === 'privacy' && (
+        <PrivacyPolicy
+          onBack={() => {
+            window.history.replaceState({}, '', '/')
+            setCurrentView('dashboard')
+          }}
+          showBackButton={true}
+        />
+      )}
+
+      {currentView === 'terms' && (
+        <TermsOfUse
+          onBack={() => {
+            window.history.replaceState({}, '', '/')
+            setCurrentView('dashboard')
+          }}
+          showBackButton={true}
         />
       )}
 

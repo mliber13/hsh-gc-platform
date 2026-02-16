@@ -69,6 +69,9 @@ export function QuickBooksConnect() {
             className="h-6"
           />
           QuickBooks Online
+          {import.meta.env.VITE_QB_USE_PRODUCTION === 'true' && (
+            <span className="text-xs font-normal bg-green-100 text-green-800 px-2 py-0.5 rounded">Production</span>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
