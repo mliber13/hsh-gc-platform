@@ -66,6 +66,31 @@ In **Supabase Dashboard** → **Project Settings** → **Edge Functions** → **
 
 ---
 
+## Troubleshooting
+
+### “Cross-Origin Request Blocked” / “authtype is not allowed” / “Sorry, an unexpected error has occurred”
+
+These errors come from **Intuit’s own OAuth/shell**, not from this app:
+
+- When you click **Connect to QuickBooks**, you are redirected to Intuit’s page (`appcenter.intuit.com`).
+- Intuit’s page loads a script from `plugin.intuitcdn.net` (sbg-web-shell-ui) that calls `https://zion.qbo.intuit.com/api/v1/logs`.
+- That request sends a custom header `authtype`, but Intuit’s server at `zion.qbo.intuit.com` does **not** include `authtype` in its CORS `Access-Control-Allow-Headers`, so the browser blocks the request and Intuit’s script shows “Sorry, an unexpected error has occurred.”
+
+**We cannot fix this in our app** — it’s Intuit’s script and Intuit’s CORS configuration.
+
+**What you can do:**
+
+1. **See if connect still works**  
+   Sometimes the failing call is only for logging. Try completing the flow: sign in, pick company, and see if you are redirected back to the app and end up connected. If you do, you can ignore the console error.
+
+2. **Try another browser or incognito**  
+   Extensions or cached responses can sometimes affect CORS. Try Chrome/Firefox/Edge in a private window.
+
+3. **Report to Intuit**  
+   If the connection consistently fails, report it to Intuit Developer Support. You can say: “On the OAuth connect page, the script from plugin.intuitcdn.net/sbg-web-shell-ui calls zion.qbo.intuit.com/api/v1/logs with header ‘authtype’, but that header is not in Access-Control-Allow-Headers, so the request is blocked by CORS and the UI shows ‘Sorry, an unexpected error has occurred.’ Please add ‘authtype’ to CORS for the logs endpoint or stop sending that header.”
+
+---
+
 ## Summary
 
 | Where | What to use |

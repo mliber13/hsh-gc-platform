@@ -310,6 +310,7 @@ export interface QBProject {
 export async function getQBJobTransactions(debug?: boolean): Promise<{
   transactions: QBJobTransaction[]
   error?: string
+  help?: string
   _debug?: unknown
 }> {
   try {
@@ -323,6 +324,7 @@ export async function getQBJobTransactions(debug?: boolean): Promise<{
     return {
       transactions: data?.transactions ?? [],
       error: data?.error,
+      help: data?.help,
       _debug: data?._debug,
     }
   } catch (err) {

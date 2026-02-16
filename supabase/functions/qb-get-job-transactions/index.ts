@@ -8,8 +8,8 @@ import { getValidQbToken, getQBApiBase } from '../_shared/qb.ts'
 const MINOR_VERSION = 65
 
 // Account name patterns to find Job Materials and Subcontractor Expense (case-insensitive; any of these matches)
-const JOB_MATERIALS_PATTERNS = ['job materials', 'job material']
-const SUB_EXPENSE_PATTERNS = ['subcontractor expense', 'sub expense']
+const JOB_MATERIALS_PATTERNS = ['job materials', 'job material', 'materials', 'job cost - materials', 'cost of materials']
+const SUB_EXPENSE_PATTERNS = ['subcontractor expense', 'sub expense', 'subcontractors', 'subcontractor', 'job cost - sub', 'subs']
 
 type AccountType = 'Job Materials' | 'Subcontractor Expense'
 
@@ -235,6 +235,7 @@ serve(async (req) => {
         JSON.stringify({
           transactions: [],
           error: 'Could not find Job Materials or Subcontractor Expense accounts or classes in QuickBooks',
+          help: 'In QuickBooks, add at least one Expense account or Class with a name containing "Job Materials" or "Materials", and/or "Subcontractor Expense" or "Subcontractors". Chart of Accounts: Settings → Chart of Accounts. Classes: Settings → All Lists → Classes. Then tag your bills/checks/expenses with that account or class so they appear here.',
         }),
         { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       )

@@ -50,12 +50,15 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
   const [subItemId, setSubItemId] = useState<string>('')
   const [allocating, setAllocating] = useState(false)
 
+  const [help, setHelp] = useState<string | null>(null)
   const loadPending = async () => {
     setLoading(true)
     setError(null)
-    const { transactions: list, error: err } = await getQBJobTransactions()
+    setHelp(null)
+    const { transactions: list, error: err, help: helpMsg } = await getQBJobTransactions()
     setTransactions(list)
     if (err) setError(err)
+    if (helpMsg) setHelp(helpMsg)
     setLoading(false)
   }
 
@@ -67,6 +70,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
   useEffect(() => {
     if (open) {
       setError(null)
+      setHelp(null)
       setStep('list')
       setSelectedTxn(null)
       setProjectId(preSelectedProject?.id ?? '')
@@ -227,7 +231,12 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                 </div>
               )}
               {error && (
-                <p className="text-sm text-amber-600 bg-amber-50 p-2 rounded mb-2">{error}</p>
+                <div className="mb-2 space-y-1">
+                  <p className="text-sm text-amber-600 bg-amber-50 p-2 rounded">{error}</p>
+                  {help && (
+                    <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-200 whitespace-pre-wrap">{help}</p>
+                  )}
+                </div>
               )}
               {!loading && transactions.length === 0 && !error && (
                 <p className="text-sm text-gray-500 py-4">No pending transactions. Add bills or expenses to Job Materials or Subcontractor Expense in QuickBooks.</p>
