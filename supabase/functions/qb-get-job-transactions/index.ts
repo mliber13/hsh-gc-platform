@@ -7,9 +7,15 @@ import { getValidQbToken, getQBApiBase } from '../_shared/qb.ts'
 
 const MINOR_VERSION = 65
 
-// Account name patterns to find Job Materials and Subcontractor Expense (case-insensitive; any of these matches)
-const JOB_MATERIALS_PATTERNS = ['job materials', 'job material', 'materials', 'job cost - materials', 'cost of materials']
-const SUB_EXPENSE_PATTERNS = ['subcontractor expense', 'sub expense', 'subcontractors', 'subcontractor', 'job cost - sub', 'subs']
+// Account/Class name patterns (case-insensitive; any of these matches)
+const JOB_MATERIALS_PATTERNS = [
+  'job materials', 'job material', 'materials', 'job cost - materials', 'cost of materials',
+  'material', 'job cost materials', 'materials expense', 'construction materials', 'job materials expense'
+]
+const SUB_EXPENSE_PATTERNS = [
+  'subcontractor expense', 'sub expense', 'subcontractors', 'subcontractor', 'job cost - sub', 'subs',
+  'subcontractor cost', 'subcontract', 'sub contractor', '1099', 'contract labor', 'job cost - subcontractor'
+]
 
 type AccountType = 'Job Materials' | 'Subcontractor Expense'
 
@@ -231,11 +237,15 @@ serve(async (req) => {
     }
 
     if (accountIds.size === 0 && classIds.size === 0) {
+      const accountList = accounts.map((a: any) => ({ name: a.Name ?? '', type: a.AccountType ?? '' }))
+      const classList = classes.map((c: any) => c.Name ?? '')
       return new Response(
         JSON.stringify({
           transactions: [],
           error: 'Could not find Job Materials or Subcontractor Expense accounts or classes in QuickBooks',
           help: 'In QuickBooks, add at least one Expense account or Class with a name containing "Job Materials" or "Materials", and/or "Subcontractor Expense" or "Subcontractors". Chart of Accounts: Settings → Chart of Accounts. Classes: Settings → All Lists → Classes. Then tag your bills/checks/expenses with that account or class so they appear here.',
+          yourAccounts: accountList,
+          yourClasses: classList,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       )

@@ -311,6 +311,8 @@ export async function getQBJobTransactions(debug?: boolean): Promise<{
   transactions: QBJobTransaction[]
   error?: string
   help?: string
+  yourAccounts?: { name: string; type: string }[]
+  yourClasses?: string[]
   _debug?: unknown
 }> {
   try {
@@ -325,6 +327,8 @@ export async function getQBJobTransactions(debug?: boolean): Promise<{
       transactions: data?.transactions ?? [],
       error: data?.error,
       help: data?.help,
+      yourAccounts: data?.yourAccounts,
+      yourClasses: data?.yourClasses,
       _debug: data?._debug,
     }
   } catch (err) {

@@ -51,14 +51,20 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
   const [allocating, setAllocating] = useState(false)
 
   const [help, setHelp] = useState<string | null>(null)
+  const [yourAccounts, setYourAccounts] = useState<{ name: string; type: string }[]>([])
+  const [yourClasses, setYourClasses] = useState<string[]>([])
   const loadPending = async () => {
     setLoading(true)
     setError(null)
     setHelp(null)
-    const { transactions: list, error: err, help: helpMsg } = await getQBJobTransactions()
+    setYourAccounts([])
+    setYourClasses([])
+    const { transactions: list, error: err, help: helpMsg, yourAccounts: accounts, yourClasses: classes } = await getQBJobTransactions()
     setTransactions(list)
     if (err) setError(err)
     if (helpMsg) setHelp(helpMsg)
+    if (accounts?.length) setYourAccounts(accounts)
+    if (classes?.length) setYourClasses(classes)
     setLoading(false)
   }
 
@@ -71,6 +77,8 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
     if (open) {
       setError(null)
       setHelp(null)
+      setYourAccounts([])
+      setYourClasses([])
       setStep('list')
       setSelectedTxn(null)
       setProjectId(preSelectedProject?.id ?? '')
@@ -231,10 +239,21 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                 </div>
               )}
               {error && (
-                <div className="mb-2 space-y-1">
+                <div className="mb-2 space-y-2">
                   <p className="text-sm text-amber-600 bg-amber-50 p-2 rounded">{error}</p>
                   {help && (
                     <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-200 whitespace-pre-wrap">{help}</p>
+                  )}
+                  {(yourAccounts.length > 0 || yourClasses.length > 0) && (
+                    <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded border border-gray-200 space-y-1">
+                      {yourAccounts.length > 0 && (
+                        <p><strong>Your QuickBooks accounts:</strong> {yourAccounts.map(a => `${a.name} (${a.type})`).join(', ')}</p>
+                      )}
+                      {yourClasses.length > 0 && (
+                        <p><strong>Your QuickBooks classes:</strong> {yourClasses.join(', ')}</p>
+                      )}
+                      <p className="mt-1">Rename or add an account/class with “Materials” or “Job Materials” and/or “Subcontractor” so transactions can be found.</p>
+                    </div>
                   )}
                 </div>
               )}
