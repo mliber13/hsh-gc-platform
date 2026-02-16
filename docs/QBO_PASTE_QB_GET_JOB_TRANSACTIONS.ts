@@ -321,10 +321,13 @@ serve(async (req) => {
     const vendorCredits: any[] = creditRes.QueryResponse?.VendorCredit || []
     pushFrom('VendorCredit', vendorCredits, (t) => t.VendorRef?.name ?? t.VendorRef?.value ?? 'Unknown', (t) => -Math.abs(Number(t.TotalAmt ?? 0)))
 
-    // Only keep transactions for QB projects that are linked to an app project (if any are linked)
-    const { data: projectRows } = await supabaseClient.from('projects').select('qb_project_id').not('qb_project_id', 'is', null)
-    const allowedQbProjectIds = new Set((projectRows ?? []).map((r: { qb_project_id: string }) => String(r.qb_project_id)))
-    const outFiltered = allowedQbProjectIds.size === 0 ? out : out.filter((t) => t.qbProjectId != null && allowedQbProjectIds.has(t.qbProjectId))
+    // Only keep transactions for jobs that exist in the app: by QB project ID (if linked) or by project name match
+    const { data: projectRows } = await supabaseClient.from('projects').select('name, qb_project_id')
+    const allowedQbProjectIds = new Set((projectRows ?? []).map((r: { qb_project_id?: string | null }) => r.qb_project_id).filter(Boolean).map(String))
+    const allowedProjectNames = new Set((projectRows ?? []).map((r: { name?: string | null }) => (r.name ?? '').trim().toLowerCase()).filter(Boolean))
+    const outFiltered = allowedQbProjectIds.size > 0
+      ? out.filter((t) => t.qbProjectId != null && allowedQbProjectIds.has(t.qbProjectId))
+      : out.filter((t) => { const jobName = (t.qbProjectName ?? '').trim().toLowerCase(); return jobName.length > 0 && allowedProjectNames.has(jobName) })
 
     const { data: materialRows } = await supabaseClient.from('material_entries').select('qb_transaction_id, qb_transaction_type').not('qb_transaction_id', 'is', null)
     const { data: subRows } = await supabaseClient.from('subcontractor_entries').select('qb_transaction_id, qb_transaction_type').not('qb_transaction_id', 'is', null)
