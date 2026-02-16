@@ -308,13 +308,18 @@ serve(async (req) => {
     const vendorCredits: any[] = creditRes.QueryResponse?.VendorCredit || []
     pushFrom('VendorCredit', vendorCredits, (t) => t.VendorRef?.name ?? t.VendorRef?.value ?? 'Unknown', (t) => -Math.abs(Number(t.TotalAmt ?? 0)), projectRefFrom)
 
+    // Only keep transactions for QB projects that are linked to an app project
+    const { data: projectRows } = await supabaseClient.from('projects').select('qb_project_id').not('qb_project_id', 'is', null)
+    const allowedQbProjectIds = new Set((projectRows ?? []).map((r: { qb_project_id: string }) => r.qb_project_id))
+    const outFiltered = out.filter((t) => t.qbProjectId != null && allowedQbProjectIds.has(t.qbProjectId))
+
     const { data: materialRows } = await supabaseClient.from('material_entries').select('qb_transaction_id, qb_transaction_type').not('qb_transaction_id', 'is', null)
     const { data: subRows } = await supabaseClient.from('subcontractor_entries').select('qb_transaction_id, qb_transaction_type').not('qb_transaction_id', 'is', null)
     const importedSet = new Set<string>()
     for (const r of [...(materialRows || []), ...(subRows || [])]) {
       if (r.qb_transaction_id && r.qb_transaction_type) importedSet.add(`${r.qb_transaction_type}:${r.qb_transaction_id}`)
     }
-    const pending = out.filter((t) => !importedSet.has(`${t.qbTransactionType}:${t.qbTransactionId}`))
+    const pending = outFiltered.filter((t) => !importedSet.has(`${t.qbTransactionType}:${t.qbTransactionId}`))
     pending.sort((a, b) => (b.txnDate || '').localeCompare(a.txnDate || ''))
 
     const payload: Record<string, unknown> = { transactions: pending }

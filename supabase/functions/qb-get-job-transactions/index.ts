@@ -239,14 +239,23 @@ serve(async (req) => {
     if (accountIds.size === 0 && classIds.size === 0) {
       const accountList = accounts.map((a: any) => ({ name: a.Name ?? '', type: a.AccountType ?? '' }))
       const classList = classes.map((c: any) => c.Name ?? '')
-      return new Response(
-        JSON.stringify({
-          transactions: [],
-          error: 'Could not find Job Materials or Subcontractor Expense accounts or classes in QuickBooks',
-          help: 'In QuickBooks, add at least one Expense account or Class with a name containing "Job Materials" or "Materials", and/or "Subcontractor Expense" or "Subcontractors". Chart of Accounts: Settings → Chart of Accounts. Classes: Settings → All Lists → Classes. Then tag your bills/checks/expenses with that account or class so they appear here.',
+      const payload: Record<string, unknown> = {
+        transactions: [],
+        error: 'Could not find Job Materials or Subcontractor Expense accounts or classes in QuickBooks',
+        help: 'In QuickBooks, add at least one Expense account or Class with a name containing "Job Materials" or "Materials", and/or "Subcontractor Expense" or "Subcontractors". Chart of Accounts: Settings → Chart of Accounts. Classes: Settings → All Lists → Classes. Then tag your bills/checks/expenses with that account or class so they appear here.',
+        yourAccounts: accountList,
+        yourClasses: classList,
+      }
+      if (debug) {
+        payload._debug = {
+          accountsMatched: { jobMaterialsIds: [], subExpenseIds: [], allAccountNames: accounts.map((a: any) => a.Name) },
+          classesMatched: { jobMaterialsClassId: null, subExpenseClassId: null, allClassNames: classes.map((c: any) => c.Name) },
           yourAccounts: accountList,
           yourClasses: classList,
-        }),
+        }
+      }
+      return new Response(
+        JSON.stringify(payload),
         { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       )
     }
@@ -354,6 +363,16 @@ serve(async (req) => {
       projectRefFrom
     )
 
+    // Only keep transactions for QB projects that are linked to an app project
+    const { data: projectRows } = await supabaseClient
+      .from('projects')
+      .select('qb_project_id')
+      .not('qb_project_id', 'is', null)
+    const allowedQbProjectIds = new Set((projectRows ?? []).map((r: { qb_project_id: string }) => r.qb_project_id))
+    const outFiltered = out.filter(
+      (t) => t.qbProjectId != null && allowedQbProjectIds.has(t.qbProjectId)
+    )
+
     // Filter out already-imported: fetch qb_transaction_id from our DB (material + sub entries)
     const { data: materialRows } = await supabaseClient
       .from('material_entries')
@@ -369,7 +388,7 @@ serve(async (req) => {
         importedSet.add(`${r.qb_transaction_type}:${r.qb_transaction_id}`)
       }
     }
-    const pending = out.filter(
+    const pending = outFiltered.filter(
       (t) => !importedSet.has(`${t.qbTransactionType}:${t.qbTransactionId}`)
     )
 
