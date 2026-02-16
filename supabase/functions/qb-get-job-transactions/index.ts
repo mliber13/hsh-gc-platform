@@ -363,15 +363,16 @@ serve(async (req) => {
       projectRefFrom
     )
 
-    // Only keep transactions for QB projects that are linked to an app project
+    // Only keep transactions for QB projects that are linked to an app project (if any are linked)
     const { data: projectRows } = await supabaseClient
       .from('projects')
       .select('qb_project_id')
       .not('qb_project_id', 'is', null)
-    const allowedQbProjectIds = new Set((projectRows ?? []).map((r: { qb_project_id: string }) => r.qb_project_id))
-    const outFiltered = out.filter(
-      (t) => t.qbProjectId != null && allowedQbProjectIds.has(t.qbProjectId)
-    )
+    const allowedQbProjectIds = new Set((projectRows ?? []).map((r: { qb_project_id: string }) => String(r.qb_project_id)))
+    const outFiltered =
+      allowedQbProjectIds.size === 0
+        ? out
+        : out.filter((t) => t.qbProjectId != null && allowedQbProjectIds.has(t.qbProjectId))
 
     // Filter out already-imported: fetch qb_transaction_id from our DB (material + sub entries)
     const { data: materialRows } = await supabaseClient
