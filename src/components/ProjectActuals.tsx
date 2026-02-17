@@ -128,11 +128,13 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const [availableSuppliers, setAvailableSuppliers] = useState<Supplier[]>([])
   const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set())
   const [viewEntriesCell, setViewEntriesCell] = useState<{
-    type: EntryType
+    type?: EntryType
     tradeId?: string
     subItemId?: string
     category?: string
     label: string
+    /** When true, show unlinked entries for this category (invoices not tied to an estimate line) */
+    generalOnly?: boolean
   } | null>(null)
   const [subItemsByTrade, setSubItemsByTrade] = useState<Record<string, SubItem[]>>({})
   const [actualsRefreshKey, setActualsRefreshKey] = useState(0)
@@ -572,7 +574,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const isOnBudget = Math.abs(variance) < 100 // Within $100
 
   const viewEntriesList = viewEntriesCell
-    ? getEntriesForCell(viewEntriesCell.type, viewEntriesCell.tradeId, viewEntriesCell.subItemId, viewEntriesCell.category)
+    ? viewEntriesCell.generalOnly && viewEntriesCell.category
+      ? actualEntries.filter(e => e.category === viewEntriesCell.category && !e.tradeId)
+      : getEntriesForCell(viewEntriesCell.type!, viewEntriesCell.tradeId, viewEntriesCell.subItemId, viewEntriesCell.category)
     : []
 
   return (
@@ -583,6 +587,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             <DialogTitle>{viewEntriesCell?.label ?? 'Entries'}</DialogTitle>
           </DialogHeader>
           <div className="overflow-auto flex-1 min-h-0 space-y-2 pr-2">
+            {viewEntriesCell?.generalOnly && (
+              <p className="text-xs text-gray-600 mb-2">Invoices and costs not tied to a specific estimate line. Use Edit to link to an item if needed.</p>
+            )}
             {viewEntriesList.length === 0 && <p className="text-sm text-gray-500">No entries</p>}
             {viewEntriesList.map((entry) => (
               <div
@@ -596,7 +603,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     <p className="text-xs text-gray-600">
                       {formatDate(entry.date)}
                       {entry.vendor && ` · ${entry.vendor}`}
-                      {entry.invoiceNumber && ` · ${entry.invoiceNumber}`}
+                      {entry.invoiceNumber && ` · Invoice: ${entry.invoiceNumber}`}
                       {entry.subcontractorName && ` · ${entry.subcontractorName}`}
                     </p>
                   </div>
@@ -763,68 +770,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
           {/* Debug Information removed */}
 
-          {/* Unlinked Entries Summary */}
-          {(() => {
-            const allUnlinkedEntries = actualEntries.filter(entry => !entry.tradeId)
-            return allUnlinkedEntries.length > 0 && (
-              <Card className="bg-yellow-50 border-yellow-200">
-                <CardHeader>
-                  <CardTitle className="text-yellow-800">General Entries (Not Linked to Specific Items)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {allUnlinkedEntries.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className={`flex items-center justify-between p-3 rounded border ${getEntryColor(entry.type)}`}
-                      >
-                        <div className="flex items-center gap-3 flex-1">
-                          {getEntryIcon(entry.type)}
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">{entry.description}</p>
-                            <p className="text-xs text-gray-600">
-                              {entry.date.toLocaleDateString()}
-                              {entry.category && ` • ${TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category}`}
-                              {entry.vendor && ` • ${entry.vendor}`}
-                              {entry.invoiceNumber && ` • Invoice: ${entry.invoiceNumber}`}
-                              {entry.subcontractorName && ` • ${entry.subcontractorName}`}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleEditEntry(entry)}
-                              className="h-7 px-2"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteEntry(entry)}
-                              className="h-7 px-2"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="pt-2 border-t border-yellow-300">
-                      <p className="text-sm font-semibold text-yellow-800">
-                        Total Unlinked Entries: {formatCurrency(allUnlinkedEntries.reduce((sum, entry) => sum + entry.amount, 0))}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })()}
-
           {/* Variance Legend */}
           {changeOrders.length > 0 && (
             <Card className="bg-blue-50 border-blue-200">
@@ -924,8 +869,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                         👷‍♂️ Sub: Est {formatCurrency(categoryEstimateBreakdown.subcontractor)} | Act {formatCurrency(categoryActualBreakdown.subcontractor)}
                                       </span>
                                       {unlinkedEntries.length > 0 && (
-                                        <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 border border-yellow-300">
+                                        <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 border border-yellow-300 inline-flex items-center gap-1">
                                           📋 General ({unlinkedEntries.length}) {formatCurrency(unlinkedEntries.reduce((sum, e) => sum + e.amount, 0))}
+                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ category: category, label: `${TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category} · General (invoices not tied to a line)`, generalOnly: true }) }} title="View invoices and entries">View ({unlinkedEntries.length})</Button>
                                         </span>
                                       )}
                                     </div>
@@ -1002,8 +948,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                       </div>
                                     </div>
                                     {unlinkedEntries.length > 0 && (
-                                      <div className="mt-3 px-3 py-2 rounded-md border bg-yellow-50 border-yellow-300 text-yellow-800 text-xs">
-                                        <span className="font-semibold">📋 General ({unlinkedEntries.length}):</span> {formatCurrency(unlinkedEntries.reduce((sum, e) => sum + e.amount, 0))}
+                                      <div className="mt-3 px-3 py-2 rounded-md border bg-yellow-50 border-yellow-300 text-yellow-800 text-xs flex items-center justify-between gap-2">
+                                        <span><span className="font-semibold">📋 General ({unlinkedEntries.length}):</span> {formatCurrency(unlinkedEntries.reduce((sum, e) => sum + e.amount, 0))}</span>
+                                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-yellow-800 hover:bg-yellow-100" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ category: category, label: `${TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category} · General (invoices not tied to a line)`, generalOnly: true }) }} title="View invoices and entries">View ({unlinkedEntries.length})</Button>
                                       </div>
                                     )}
                                   </div>
@@ -1672,6 +1619,34 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                 </React.Fragment>
                               )
                             })}
+                            {/* One row per category for general entries (invoices not tied to an estimate line) */}
+                            {isCategoryExpanded && (() => {
+                              const unlinkedForCategory = getActualsByCategory(category).filter(e => !e.tradeId)
+                              if (unlinkedForCategory.length === 0) return null
+                              const genLab = unlinkedForCategory.filter(e => e.type === 'labor').reduce((s, e) => s + e.amount, 0)
+                              const genMat = unlinkedForCategory.filter(e => e.type === 'material').reduce((s, e) => s + e.amount, 0)
+                              const genSub = unlinkedForCategory.filter(e => e.type === 'subcontractor').reduce((s, e) => s + e.amount, 0)
+                              const genTotal = genLab + genMat + genSub
+                              return (
+                                <tr className="bg-yellow-50/70 hover:bg-yellow-50" onClick={(e) => e.stopPropagation()}>
+                                  <td className="p-3 border-b pl-12 border-r-2 border-gray-300 text-sm italic text-yellow-900">— Other / General</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-xs text-gray-500">—</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm"></td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(genLab)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm"></td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(genMat)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm"></td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(genSub)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm"></td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-medium">{formatCurrency(genTotal)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">—</td>
+                                  <td className="p-3 text-center border-b">
+                                    <Button size="sm" variant="ghost" className="h-6 px-1 text-xs text-yellow-800" onClick={() => setViewEntriesCell({ category, label: `${TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category} · General (invoices not tied to a line)`, generalOnly: true })} title="View invoices and entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({unlinkedForCategory.length})</Button>
+                                  </td>
+                                </tr>
+                              )
+                            })()}
                           </React.Fragment>
                         )
                       })}
