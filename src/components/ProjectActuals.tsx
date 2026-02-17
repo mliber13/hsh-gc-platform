@@ -719,6 +719,48 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             </Card>
           </div>
 
+          {/* Actuals breakdown: Labor, Material, Subcontractor */}
+          <Card className="bg-white shadow-lg border-slate-200">
+            <CardContent className="pt-6">
+              <p className="text-sm font-medium text-gray-600 mb-3">Actuals by type</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="flex items-center gap-3 rounded-lg bg-blue-50 border border-blue-200 p-3">
+                  <div className="bg-blue-100 rounded-full p-2">
+                    <Users className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-700 font-medium">Labor</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {formatCurrency(actualEntries.filter(e => e.type === 'labor').reduce((sum, entry) => sum + entry.amount, 0))}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg bg-green-50 border border-green-200 p-3">
+                  <div className="bg-green-100 rounded-full p-2">
+                    <Package className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-green-700 font-medium">Material</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {formatCurrency(actualEntries.filter(e => e.type === 'material').reduce((sum, entry) => sum + entry.amount, 0))}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg bg-orange-50 border border-orange-200 p-3">
+                  <div className="bg-orange-100 rounded-full p-2">
+                    <HardHat className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-orange-700 font-medium">Subcontractor</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {formatCurrency(actualEntries.filter(e => e.type === 'subcontractor').reduce((sum, entry) => sum + entry.amount, 0))}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Quick Entry Buttons */}
           <Card>
             <CardContent className="pt-6">
