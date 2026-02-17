@@ -121,6 +121,15 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
     setSubItemId('')
   }, [tradeId])
 
+  // When category changes, clear estimate line and sub-item so they match the new category
+  useEffect(() => {
+    setTradeId('')
+    setSubItemId('')
+  }, [category])
+
+  // Only show estimate lines that belong to the selected category
+  const tradesInCategory = category ? trades.filter((t) => t.category === category) : []
+
   const handleSelectTransaction = (txn: QBJobTransaction) => {
     setSelectedTxn(txn)
     setStep('allocate')
@@ -138,7 +147,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
 
   const handleAllocate = async () => {
     if (!selectedTxn || !projectId || !category) {
-      alert('Please select project and category (trade).')
+      alert('Please select project and category.')
       return
     }
     setAllocating(true)
@@ -343,7 +352,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                   </Select>
                 </div>
                 <div>
-                  <Label>Category (trade)</Label>
+                  <Label>Category</Label>
                   <Select value={category} onValueChange={setCategory}>
                     <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                     <SelectContent>
@@ -353,7 +362,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                     </SelectContent>
                   </Select>
                 </div>
-                {trades.length > 0 && (
+                {tradesInCategory.length > 0 && (
                   <>
                     <div>
                       <Label>Estimate line (optional)</Label>
@@ -361,7 +370,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                         <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">None</SelectItem>
-                          {trades.map((t) => (
+                          {tradesInCategory.map((t) => (
                             <SelectItem key={t.id} value={t.id}>
                               {t.name}
                             </SelectItem>
