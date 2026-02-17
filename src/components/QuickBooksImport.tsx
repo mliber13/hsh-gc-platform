@@ -133,7 +133,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
   const handleSelectTransaction = (txn: QBJobTransaction) => {
     setSelectedTxn(txn)
     setStep('allocate')
-    setEntryType(txn.accountType === 'Job Materials' ? 'material' : 'subcontractor')
+    setEntryType(txn.accountType === 'Subcontractor Expense' ? 'subcontractor' : 'material')
     setCategory('')
     setTradeId('')
     setSubItemId('')
@@ -274,7 +274,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                 </div>
               )}
               {!loading && transactions.length === 0 && !error && (
-                <p className="text-sm text-gray-500 py-4">No pending transactions. Add bills or expenses to Job Materials or Subcontractor Expense in QuickBooks.</p>
+                <p className="text-sm text-gray-500 py-4">No pending transactions. Add bills or expenses to Job Materials, Subcontractor Expense, or Utilities in QuickBooks.</p>
               )}
               {!loading && transactions.length > 0 && (
                 <div className="border rounded overflow-auto max-h-[50vh]">

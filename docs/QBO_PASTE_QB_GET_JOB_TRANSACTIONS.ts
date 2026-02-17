@@ -67,8 +67,12 @@ const SUB_EXPENSE_PATTERNS = [
   'subcontractor expense', 'sub expense', 'subcontractors', 'subcontractor', 'job cost - sub', 'subs',
   'subcontractor cost', 'subcontract', 'sub contractor', '1099', 'contract labor', 'job cost - subcontractor'
 ]
+const UTILITIES_PATTERNS = [
+  'utilities', 'utility', 'job cost - utilities', 'job utilities', 'porta pott', 'propane',
+  'porta potty', 'port-a-potty', 'porta john', 'job cost utilities'
+]
 
-type AccountType = 'Job Materials' | 'Subcontractor Expense'
+type AccountType = 'Job Materials' | 'Subcontractor Expense' | 'Utilities'
 
 interface JobTransaction {
   qbTransactionId: string
@@ -137,6 +141,11 @@ function classNameMatchesSubExpense(name: string | null): boolean {
   const n = name.toLowerCase()
   return SUB_EXPENSE_PATTERNS.some((p) => n.includes(p))
 }
+function classNameMatchesUtilities(name: string | null): boolean {
+  if (!name) return false
+  const n = name.toLowerCase()
+  return UTILITIES_PATTERNS.some((p) => n.includes(p))
+}
 
 function transactionHasAccountOrClass(
   transaction: any,
@@ -157,6 +166,8 @@ function transactionHasAccountOrClass(
     matchedType = 'Job Materials'
   } else if (headerClassName && classNameMatchesSubExpense(headerClassName)) {
     matchedType = 'Subcontractor Expense'
+  } else if (headerClassName && classNameMatchesUtilities(headerClassName)) {
+    matchedType = 'Utilities'
   }
   if (matchedType && lines.length > 0) {
     totalForAccount = lines.reduce((sum: number, line: any) => sum + getLineAmount(line), 0)
@@ -170,7 +181,8 @@ function transactionHasAccountOrClass(
     const matchByClassId = classId && classIds.has(classId)
     const matchByClassName =
       (className && classNameMatchesJobMaterials(className)) ||
-      (className && classNameMatchesSubExpense(className))
+      (className && classNameMatchesSubExpense(className)) ||
+      (className && classNameMatchesUtilities(className))
     if (matchByAccount) {
       totalForAccount += amt
       if (!matchedType) matchedType = accountIdToType[accountId!] ?? null
@@ -179,7 +191,11 @@ function transactionHasAccountOrClass(
       if (!matchedType) matchedType = classIdToType[classId!] ?? null
     } else if (matchByClassName) {
       totalForAccount += amt
-      if (!matchedType) matchedType = classNameMatchesJobMaterials(className) ? 'Job Materials' : 'Subcontractor Expense'
+      if (!matchedType) {
+        matchedType = classNameMatchesJobMaterials(className) ? 'Job Materials'
+          : classNameMatchesSubExpense(className) ? 'Subcontractor Expense'
+          : 'Utilities'
+      }
     }
   }
   return { accountType: matchedType, amount: totalForAccount }
@@ -230,6 +246,7 @@ serve(async (req) => {
     const nameMatches = (name: string, patterns: string[]) => patterns.some((p) => (name || '').toLowerCase().includes(p))
     const jobMaterialsAccounts = accounts.filter((a: any) => nameMatches(a.Name, JOB_MATERIALS_PATTERNS))
     const subExpenseAccounts = accounts.filter((a: any) => nameMatches(a.Name, SUB_EXPENSE_PATTERNS))
+    const utilitiesAccounts = accounts.filter((a: any) => nameMatches(a.Name, UTILITIES_PATTERNS))
 
     const accountIds = new Set<string>()
     const accountIdToType: Record<string, AccountType> = {}
@@ -243,31 +260,38 @@ serve(async (req) => {
       accountIds.add(id)
       accountIdToType[id] = 'Subcontractor Expense'
     }
+    for (const a of utilitiesAccounts) {
+      const id = String(a.Id)
+      accountIds.add(id)
+      accountIdToType[id] = 'Utilities'
+    }
 
     const classRes = await qbFetch(apiBase, accessToken, realmId, `SELECT * FROM Class WHERE Active = true MAXRESULTS 1000`)
     const classes: any[] = classRes.QueryResponse?.Class || []
     const jobMaterialsClassId = classes.find((c: any) => nameMatches(c.Name, JOB_MATERIALS_PATTERNS))?.Id
     const subExpenseClassId = classes.find((c: any) => nameMatches(c.Name, SUB_EXPENSE_PATTERNS))?.Id
+    const utilitiesClassId = classes.find((c: any) => nameMatches(c.Name, UTILITIES_PATTERNS))?.Id
 
     const classIds = new Set<string>()
     const classIdToType: Record<string, AccountType> = {}
     if (jobMaterialsClassId) { classIds.add(jobMaterialsClassId); classIdToType[jobMaterialsClassId] = 'Job Materials' }
     if (subExpenseClassId) { classIds.add(subExpenseClassId); classIdToType[subExpenseClassId] = 'Subcontractor Expense' }
+    if (utilitiesClassId) { classIds.add(utilitiesClassId); classIdToType[utilitiesClassId] = 'Utilities' }
 
     if (accountIds.size === 0 && classIds.size === 0) {
       const accountList = accounts.map((a: any) => ({ name: a.Name ?? '', type: a.AccountType ?? '' }))
       const classList = classes.map((c: any) => c.Name ?? '')
       const payload: Record<string, unknown> = {
         transactions: [],
-        error: 'Could not find Job Materials or Subcontractor Expense accounts or classes in QuickBooks',
-        help: 'In QuickBooks, add at least one Expense account or Class with a name containing "Job Materials" or "Materials", and/or "Subcontractor Expense" or "Subcontractors". Chart of Accounts: Settings → Chart of Accounts. Classes: Settings → All Lists → Classes. Then tag your bills/checks/expenses with that account or class so they appear here.',
+        error: 'Could not find Job Materials, Subcontractor Expense, or Utilities accounts or classes in QuickBooks',
+        help: 'In QuickBooks, add at least one Expense account or Class with a name containing "Job Materials" or "Materials", "Subcontractor Expense" or "Subcontractors", and/or "Utilities" (e.g. for Porta Potties, Propane). Chart of Accounts: Settings → Chart of Accounts. Classes: Settings → All Lists → Classes. Then tag your bills/checks/expenses with that account or class so they appear here.',
         yourAccounts: accountList,
         yourClasses: classList,
       }
       if (debug) {
         payload._debug = {
-          accountsMatched: { jobMaterialsIds: [], subExpenseIds: [], allAccountNames: accounts.map((a: any) => a.Name) },
-          classesMatched: { jobMaterialsClassId: null, subExpenseClassId: null, allClassNames: classes.map((c: any) => c.Name) },
+          accountsMatched: { jobMaterialsIds: [], subExpenseIds: [], utilitiesIds: [], allAccountNames: accounts.map((a: any) => a.Name) },
+          classesMatched: { jobMaterialsClassId: null, subExpenseClassId: null, utilitiesClassId: null, allClassNames: classes.map((c: any) => c.Name) },
           yourAccounts: accountList,
           yourClasses: classList,
         }
@@ -357,8 +381,8 @@ serve(async (req) => {
     if (debug) {
       const firstBill = bills[0]
       payload._debug = {
-        accountsMatched: { jobMaterialsIds: jobMaterialsAccounts.map((a: any) => String(a.Id)), subExpenseIds: subExpenseAccounts.map((a: any) => String(a.Id)), allAccountNames: accounts.map((a: any) => a.Name) },
-        classesMatched: { jobMaterialsClassId: jobMaterialsClassId ?? null, subExpenseClassId: subExpenseClassId ?? null, allClassNames: classes.map((c: any) => c.Name) },
+        accountsMatched: { jobMaterialsIds: jobMaterialsAccounts.map((a: any) => String(a.Id)), subExpenseIds: subExpenseAccounts.map((a: any) => String(a.Id)), utilitiesIds: utilitiesAccounts.map((a: any) => String(a.Id)), allAccountNames: accounts.map((a: any) => a.Name) },
+        classesMatched: { jobMaterialsClassId: jobMaterialsClassId ?? null, subExpenseClassId: subExpenseClassId ?? null, utilitiesClassId: utilitiesClassId ?? null, allClassNames: classes.map((c: any) => c.Name) },
         billsCount: bills.length,
         allBillsSummary: bills.map((b: any) => ({ Id: b.Id, TotalAmt: b.TotalAmt, DocNumber: b.DocNumber, VendorRef: b.VendorRef?.name ?? b.VendorRef?.value, headerClassRef: b.ClassRef, firstLine: (b.Line || [])[0] ? { Amount: (b.Line || [])[0].Amount, DetailType: (b.Line || [])[0].DetailType, AccountRef: (b.Line || [])[0].AccountBasedExpenseLineDetail?.AccountRef, ClassRef: (b.Line || [])[0].AccountBasedExpenseLineDetail?.ClassRef ?? (b.Line || [])[0].ClassRef } : null })),
         firstBillFullFirstLine: firstBill?.Line?.[0] ?? null,

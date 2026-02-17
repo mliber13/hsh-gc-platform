@@ -292,7 +292,7 @@ export interface QBJobTransaction {
   txnDate: string
   docNumber: string
   amount: number
-  accountType: 'Job Materials' | 'Subcontractor Expense'
+  accountType: 'Job Materials' | 'Subcontractor Expense' | 'Utilities'
   qbProjectId: string | null
   qbProjectName: string | null
   description: string
