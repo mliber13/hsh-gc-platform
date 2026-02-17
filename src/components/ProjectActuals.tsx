@@ -1406,9 +1406,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                         <th className="p-3"></th>
                         <th className="p-3"></th>
                         <th className="p-3 border-r-2 border-gray-300"></th>
-                        <th className="text-center p-3 text-[#913E00] text-2xl font-bold border-r-2 border-gray-300" colSpan={2}>Labor</th>
-                        <th className="text-center p-3 text-[#913E00] text-2xl font-bold border-r-2 border-gray-300" colSpan={2}>Material</th>
-                        <th className="text-center p-3 text-[#913E00] text-2xl font-bold border-r-2 border-gray-300" colSpan={2}>Subcontractor</th>
+                        <th className="text-center p-3 bg-blue-600 text-white text-2xl font-bold border-r-2 border-blue-700" colSpan={2}>Labor</th>
+                        <th className="text-center p-3 bg-emerald-600 text-white text-2xl font-bold border-r-2 border-emerald-700" colSpan={2}>Material</th>
+                        <th className="text-center p-3 bg-amber-600 text-white text-2xl font-bold border-r-2 border-amber-700" colSpan={2}>Subcontractor</th>
                         <th className="p-3 border-r-2 border-gray-300"></th>
                         <th className="p-3 border-r-2 border-gray-300"></th>
                         <th className="p-3"></th>
@@ -1418,12 +1418,12 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                         <th className="text-left p-3 bg-[#213069] text-white border-r-2 border-gray-300">Category & Items</th>
                         <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Qty</th>
                         <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Unit</th>
-                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Labor Est</th>
-                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Labor Act</th>
-                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Material Est</th>
-                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Material Act</th>
-                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Sub Est</th>
-                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Sub Act</th>
+                        <th className="text-center p-3 bg-blue-700 text-white border-r-2 border-blue-800">Labor Est</th>
+                        <th className="text-center p-3 bg-blue-700 text-white border-r-2 border-blue-800">Labor Act</th>
+                        <th className="text-center p-3 bg-emerald-700 text-white border-r-2 border-emerald-800">Material Est</th>
+                        <th className="text-center p-3 bg-emerald-700 text-white border-r-2 border-emerald-800">Material Act</th>
+                        <th className="text-center p-3 bg-amber-700 text-white border-r-2 border-amber-800">Sub Est</th>
+                        <th className="text-center p-3 bg-amber-700 text-white border-r-2 border-amber-800">Sub Act</th>
                         <th className="text-center p-3 bg-[#0E79C9] text-white border-r-2 border-gray-300">Total Est</th>
                         <th className="text-center p-3 bg-[#34AB8A] text-white border-r-2 border-gray-300">Total Act</th>
                         <th className="text-center p-3 bg-[#D95C00] text-white border-r-2 border-gray-300">Variance</th>
@@ -1446,26 +1446,26 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                               className="bg-gray-50 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
                               onClick={() => toggleCategory(category)}
                             >
-                              <td className="p-3 border-b border-r-2 border-gray-300 pl-8">
+                              <td className="p-3 border-b border-r-2 border-l-4 border-l-slate-400 border-gray-300 pl-8 bg-gray-50">
                                 <div className="flex items-center gap-2">
                                   {isCategoryExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
                                   {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
                                 </div>
                               </td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryEstimateBreakdown.labor)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryActualBreakdown.labor)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryEstimateBreakdown.material)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryActualBreakdown.material)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryEstimateBreakdown.subcontractor)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryActualBreakdown.subcontractor)}</td>
-                              <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300">{formatCurrency(categoryEstimate)}</td>
-                              <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300">{formatCurrency(categoryActual)}</td>
-                              <td className={`p-3 text-center border-b border-r-2 border-gray-300 font-semibold ${categoryVariance > 0 ? 'text-red-600' : categoryVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-blue-50">{formatCurrency(categoryEstimateBreakdown.labor)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-blue-50">{formatCurrency(categoryActualBreakdown.labor)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-emerald-50">{formatCurrency(categoryEstimateBreakdown.material)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-emerald-50">{formatCurrency(categoryActualBreakdown.material)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-amber-50">{formatCurrency(categoryEstimateBreakdown.subcontractor)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-amber-50">{formatCurrency(categoryActualBreakdown.subcontractor)}</td>
+                              <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300 bg-gray-50">{formatCurrency(categoryEstimate)}</td>
+                              <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300 bg-gray-50">{formatCurrency(categoryActual)}</td>
+                              <td className={`p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-gray-50 ${categoryVariance > 0 ? 'text-red-600' : categoryVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
                                 {formatCurrency(Math.abs(categoryVariance))}
                               </td>
-                              <td className="p-3 text-center border-b"></td>
+                              <td className="p-3 text-center border-b bg-gray-50"></td>
                             </tr>
                             {isCategoryExpanded && categoryTrades.map((trade) => {
                               const tradeActuals = getActualsByTrade(trade.id)
@@ -1486,8 +1486,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
                               return (
                                 <React.Fragment key={trade.id}>
-                                  <tr className="hover:bg-gray-50">
-                                    <td className="p-3 border-b pl-12 border-r-2 border-gray-300">
+                                  <tr className="hover:bg-gray-50/80 bg-white">
+                                    <td className="p-3 border-b pl-12 border-r-2 border-l-2 border-l-slate-200 border-gray-300 bg-white">
                                       <div className="flex items-center gap-2">
                                         {hasSubItems && (
                                           <button
@@ -1503,10 +1503,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                         {hasSubItems && <span className="text-xs text-gray-500">({tradeSubItems.length} sub)</span>}
                                       </div>
                                     </td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{trade.quantity}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{UNIT_TYPES[trade.unit as UnitType]?.abbreviation || trade.unit}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimateBreakdown.labor)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{trade.quantity}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{UNIT_TYPES[trade.unit as UnitType]?.abbreviation || trade.unit}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-blue-50">{formatCurrency(tradeEstimateBreakdown.labor)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-blue-50">
                                       <div className="flex flex-col items-center gap-0.5">
                                         <span>{formatCurrency(tradeActualBreakdown.labor)}</span>
                                         {(() => { const entries = getEntriesForCell('labor', trade.id); return entries.length > 0 && (
@@ -1514,8 +1514,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                         ); })()}
                                       </div>
                                     </td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimateBreakdown.material)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-emerald-50">{formatCurrency(tradeEstimateBreakdown.material)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-emerald-50">
                                       <div className="flex flex-col items-center gap-0.5">
                                         <span>{formatCurrency(tradeActualBreakdown.material)}</span>
                                         {(() => { const entries = getEntriesForCell('material', trade.id); return entries.length > 0 && (
@@ -1523,8 +1523,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                         ); })()}
                                       </div>
                                     </td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimateBreakdown.subcontractor)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-amber-50">{formatCurrency(tradeEstimateBreakdown.subcontractor)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-amber-50">
                                       <div className="flex flex-col items-center gap-0.5">
                                         <span>{formatCurrency(tradeActualBreakdown.subcontractor)}</span>
                                         {(() => { const entries = getEntriesForCell('subcontractor', trade.id); return entries.length > 0 && (
@@ -1532,12 +1532,12 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                         ); })()}
                                       </div>
                                     </td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimate)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeActualTotal)}</td>
-                                    <td className={`p-3 text-center border-b border-r-2 border-gray-300 font-medium ${getVarianceColor(varianceType)}`}>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{formatCurrency(tradeEstimate)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{formatCurrency(tradeActualTotal)}</td>
+                                    <td className={`p-3 text-center border-b border-r-2 border-gray-300 font-medium bg-white ${getVarianceColor(varianceType)}`}>
                                       {formatCurrency(Math.abs(tradeVariance))} {getVarianceIcon(varianceType)}
                                     </td>
-                                    <td className="p-3 text-center border-b">
+                                    <td className="p-3 text-center border-b bg-white">
                                       <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setEditingEntry(null); setEntryType('material'); setShowEntryForm(true); }} className="h-7 px-2" title="Add entry">Add</Button>
                                     </td>
                                   </tr>
@@ -1550,12 +1550,12 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     const siEstimate = subItem.totalCost * (1 + (subItem.markupPercent || 11.1) / 100)
                                     const siVariance = siActualTotal - siEstimate
                                     return (
-                                      <tr key={subItem.id} className="bg-blue-50/50 hover:bg-blue-50">
-                                        <td className="p-3 border-b pl-20 border-r-2 border-gray-300 text-sm">{subItem.name}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{subItem.quantity}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{UNIT_TYPES[subItem.unit as UnitType]?.abbreviation || subItem.unit}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.laborCost || 0)}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">
+                                      <tr key={subItem.id} className="bg-blue-50/40 hover:bg-blue-50/60">
+                                        <td className="p-3 border-b pl-20 border-r-2 border-l-2 border-l-blue-200 border-gray-300 text-sm bg-blue-50/40">{subItem.name}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.quantity}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{UNIT_TYPES[subItem.unit as UnitType]?.abbreviation || subItem.unit}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50">{formatCurrency(subItem.laborCost || 0)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50">
                                           <div className="flex flex-col items-center gap-0.5">
                                             <span>{formatCurrency(siLaborAct)}</span>
                                             {siActuals.filter(e => e.type === 'labor').length > 0 && (
@@ -1563,8 +1563,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                             )}
                                           </div>
                                         </td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.materialCost || 0)}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50">{formatCurrency(subItem.materialCost || 0)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50">
                                           <div className="flex flex-col items-center gap-0.5">
                                             <span>{formatCurrency(siMaterialAct)}</span>
                                             {siActuals.filter(e => e.type === 'material').length > 0 && (
@@ -1572,8 +1572,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                             )}
                                           </div>
                                         </td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.subcontractorCost || 0)}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50">{formatCurrency(subItem.subcontractorCost || 0)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50">
                                           <div className="flex flex-col items-center gap-0.5">
                                             <span>{formatCurrency(siSubAct)}</span>
                                             {siActuals.filter(e => e.type === 'subcontractor').length > 0 && (
@@ -1581,10 +1581,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                             )}
                                           </div>
                                         </td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siEstimate)}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siActualTotal)}</td>
-                                        <td className={`p-3 text-center border-b border-r-2 border-gray-300 text-sm ${siVariance > 0 ? 'text-red-600' : siVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>{formatCurrency(Math.abs(siVariance))}</td>
-                                        <td className="p-3 text-center border-b"></td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{formatCurrency(siEstimate)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{formatCurrency(siActualTotal)}</td>
+                                        <td className={`p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40 ${siVariance > 0 ? 'text-red-600' : siVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>{formatCurrency(Math.abs(siVariance))}</td>
+                                        <td className="p-3 text-center border-b bg-blue-50/40"></td>
                                       </tr>
                                     )
                                   })}
@@ -1628,20 +1628,20 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                               const genSub = unlinkedForCategory.filter(e => e.type === 'subcontractor').reduce((s, e) => s + e.amount, 0)
                               const genTotal = genLab + genMat + genSub
                               return (
-                                <tr className="bg-yellow-50/70 hover:bg-yellow-50" onClick={(e) => e.stopPropagation()}>
-                                  <td className="p-3 border-b pl-12 border-r-2 border-gray-300 text-sm italic text-yellow-900">— Other / General</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-xs text-gray-500">—</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm"></td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(genLab)}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm"></td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(genMat)}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm"></td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(genSub)}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm"></td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-medium">{formatCurrency(genTotal)}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">—</td>
-                                  <td className="p-3 text-center border-b">
+                                <tr className="bg-yellow-50/80 hover:bg-yellow-50" onClick={(e) => e.stopPropagation()}>
+                                  <td className="p-3 border-b pl-12 border-r-2 border-l-2 border-l-amber-300 border-gray-300 text-sm italic text-yellow-900 bg-yellow-50/80">— Other / General</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-yellow-50/80"></td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-xs text-gray-500 bg-yellow-50/80">—</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50"></td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50">{formatCurrency(genLab)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50"></td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50">{formatCurrency(genMat)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50"></td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50">{formatCurrency(genSub)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-yellow-50/80"></td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-medium bg-yellow-50/80">{formatCurrency(genTotal)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-yellow-50/80">—</td>
+                                  <td className="p-3 text-center border-b bg-yellow-50/80">
                                     <Button size="sm" variant="ghost" className="h-6 px-1 text-xs text-yellow-800" onClick={() => setViewEntriesCell({ category, label: `${TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category} · General (invoices not tied to a line)`, generalOnly: true })} title="View invoices and entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({unlinkedForCategory.length})</Button>
                                   </td>
                                 </tr>

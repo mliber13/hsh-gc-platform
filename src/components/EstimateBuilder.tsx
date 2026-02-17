@@ -1690,10 +1690,10 @@ function TradeTable({
                 <th className="p-3"></th>
                 <th className="p-3"></th>
                 <th className="p-3 border-r-2 border-gray-300"></th>
-                <th className="text-center p-3 text-[#913E00] text-3xl font-bold border-r-2 border-gray-300" colSpan={2}>Material</th>
-                <th className="text-center p-3 text-[#913E00] text-3xl font-bold border-r-2 border-gray-300" colSpan={2}>Labor</th>
-                <th className="text-center p-3 text-[#913E00] text-3xl font-bold border-r-2 border-gray-300" colSpan={2}>Subcontractor</th>
-                <th className="p-3"></th>
+                <th className="text-center p-3 bg-emerald-600 text-white text-2xl font-bold border-r-2 border-emerald-700" colSpan={2}>Material</th>
+                <th className="text-center p-3 bg-blue-600 text-white text-2xl font-bold border-r-2 border-blue-700" colSpan={2}>Labor</th>
+                <th className="text-center p-3 bg-amber-600 text-white text-2xl font-bold border-r-2 border-amber-700" colSpan={2}>Subcontractor</th>
+                <th className="p-3 border-r-2 border-gray-300"></th>
                 <th className="p-3"></th>
                 <th className="p-3"></th>
                 <th className="p-3"></th>
@@ -1705,12 +1705,12 @@ function TradeTable({
                 <th className="text-left p-3 bg-[#213069] text-white border-r-2 border-gray-300">Category & Items</th>
                 <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Qty</th>
                 <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Unit</th>
-                <th className="text-center p-3 bg-[#213069] text-white">Unit Cost</th>
-                <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Cost</th>
-                <th className="text-center p-3 bg-[#213069] text-white">Unit Cost</th>
-                <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Cost</th>
-                <th className="text-center p-3 bg-[#213069] text-white">Unit Cost</th>
-                <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Cost</th>
+                <th className="text-center p-3 bg-emerald-700 text-white">Unit Cost</th>
+                <th className="text-center p-3 bg-emerald-700 text-white border-r-2 border-emerald-800">Cost</th>
+                <th className="text-center p-3 bg-blue-700 text-white">Unit Cost</th>
+                <th className="text-center p-3 bg-blue-700 text-white border-r-2 border-blue-800">Cost</th>
+                <th className="text-center p-3 bg-amber-700 text-white">Unit Cost</th>
+                <th className="text-center p-3 bg-amber-700 text-white border-r-2 border-amber-800">Cost</th>
                 <th className="text-center p-3 bg-[#0E79C9] text-white border-r-2 border-gray-300">Base Price</th>
                 <th className="text-center p-3 bg-[#D95C00] text-white border-r-2 border-gray-300">Markup</th>
                 <th className="text-center p-3 bg-[#D95C00] text-white border-r-2 border-gray-300">Gross Profit</th>
@@ -1737,26 +1737,26 @@ function TradeTable({
                       className="bg-gray-50 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => toggleCategory(category)}
                     >
-                      <td className="p-3 border-b border-r-2 border-gray-300 pl-8">
+                      <td className="p-3 border-b border-r-2 border-l-4 border-l-slate-400 border-gray-300 pl-8 bg-gray-50">
                         <div className="flex items-center gap-2">
                           {isCategoryExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
                           {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
                         </div>
                       </td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300"></td>
-                      <td className="p-3 text-center border-b"></td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryMaterialTotal)}</td>
-                      <td className="p-3 text-center border-b"></td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryLaborTotal)}</td>
-                      <td className="p-3 text-center border-b"></td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categorySubcontractorTotal)}</td>
-                      <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300">{formatCurrency(categoryTotal)}</td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500">-</td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold">{formatCurrency(categoryMarkupTotal)}</td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500">-</td>
-                      <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300">{formatCurrency(categoryFinalTotal)}</td>
-                      <td className="p-3 text-center border-b"></td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
+                      <td className="p-3 text-center border-b bg-emerald-50"></td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-emerald-50">{formatCurrency(categoryMaterialTotal)}</td>
+                      <td className="p-3 text-center border-b bg-blue-50"></td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-blue-50">{formatCurrency(categoryLaborTotal)}</td>
+                      <td className="p-3 text-center border-b bg-amber-50"></td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-amber-50">{formatCurrency(categorySubcontractorTotal)}</td>
+                      <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300 bg-gray-50">{formatCurrency(categoryTotal)}</td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500 bg-gray-50">-</td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-gray-50">{formatCurrency(categoryMarkupTotal)}</td>
+                      <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500 bg-gray-50">-</td>
+                      <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300 bg-gray-50">{formatCurrency(categoryFinalTotal)}</td>
+                      <td className="p-3 text-center border-b bg-gray-50"></td>
                     </tr>
 
                     {/* Trade rows within category */}
@@ -1767,8 +1767,8 @@ function TradeTable({
 
                       return (
                         <React.Fragment key={trade.id}>
-                                <tr className="hover:bg-gray-50">
-                                  <td className="p-3 border-b pl-12 border-r-2 border-gray-300">
+                                <tr className="hover:bg-gray-50/80 bg-white">
+                                  <td className="p-3 border-b pl-12 border-r-2 border-l-2 border-l-slate-200 border-gray-300 bg-white">
                                     <div className="flex items-center gap-2">
                                       {hasSubItems && (
                                         <button
@@ -1797,25 +1797,25 @@ function TradeTable({
                                       )}
                                     </div>
                                   </td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{trade.quantity}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{UNIT_TYPES[trade.unit]?.abbreviation || trade.unit}</td>
-                                  <td className="p-3 text-center border-b">{trade.materialRate ? formatCurrency(trade.materialRate) : '-'}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.materialCost)}</td>
-                                  <td className="p-3 text-center border-b">{trade.laborRate ? formatCurrency(trade.laborRate) : '-'}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.laborCost)}</td>
-                                  <td className="p-3 text-center border-b">{trade.subcontractorRate ? formatCurrency(trade.subcontractorRate) : '-'}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.subcontractorCost)}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{trade.quantity}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{UNIT_TYPES[trade.unit]?.abbreviation || trade.unit}</td>
+                                  <td className="p-3 text-center border-b bg-emerald-50">{trade.materialRate ? formatCurrency(trade.materialRate) : '-'}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-emerald-50">{formatCurrency(trade.materialCost)}</td>
+                                  <td className="p-3 text-center border-b bg-blue-50">{trade.laborRate ? formatCurrency(trade.laborRate) : '-'}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-blue-50">{formatCurrency(trade.laborCost)}</td>
+                                  <td className="p-3 text-center border-b bg-amber-50">{trade.subcontractorRate ? formatCurrency(trade.subcontractorRate) : '-'}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-amber-50">{formatCurrency(trade.subcontractorCost)}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">
                                     {formatCurrency(trade.totalCost)}
                                     {trade.budgetTotalCost != null && trade.budgetTotalCost !== trade.totalCost && (
                                       <span className="block text-xs text-gray-500">Budget: {formatCurrency(trade.budgetTotalCost)}</span>
                                     )}
                                   </td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{(trade.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * ((trade.markupPercent || defaultMarkupPercent) / 100))}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{(((trade.markupPercent || defaultMarkupPercent) / (100 + (trade.markupPercent || defaultMarkupPercent))) * 100).toFixed(1)}%</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(trade.totalCost * (1 + (trade.markupPercent || defaultMarkupPercent) / 100))}</td>
-                                  <td className="p-3 text-center border-b">
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{(trade.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{formatCurrency(trade.totalCost * ((trade.markupPercent || defaultMarkupPercent) / 100))}</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{(((trade.markupPercent || defaultMarkupPercent) / (100 + (trade.markupPercent || defaultMarkupPercent))) * 100).toFixed(1)}%</td>
+                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{formatCurrency(trade.totalCost * (1 + (trade.markupPercent || defaultMarkupPercent) / 100))}</td>
+                                  <td className="p-3 text-center border-b bg-white">
                                     <div className="flex gap-1 flex-wrap">
                                       <Button size="sm" variant="outline" onClick={() => onEditTrade(trade)}>Edit</Button>
                                       {isOnlineMode() && (
@@ -1845,26 +1845,26 @@ function TradeTable({
                                   </td>
                                 </tr>
                                 {isTradeExpanded && tradeSubItems.map((subItem: SubItem) => (
-                                  <tr key={subItem.id} className="bg-blue-50 hover:bg-blue-100">
-                                    <td className="p-3 border-b pl-20 border-r-2 border-gray-300">
+                                  <tr key={subItem.id} className="bg-blue-50/40 hover:bg-blue-50/60">
+                                    <td className="p-3 border-b pl-20 border-r-2 border-l-2 border-l-blue-200 border-gray-300 bg-blue-50/40">
                                       <div className="flex items-center gap-2">
                                         <span className="text-sm">{subItem.name}</span>
                                       </div>
                                     </td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{subItem.quantity}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{(UNIT_TYPES[subItem.unit as UnitType]?.abbreviation) || subItem.unit}</td>
-                                    <td className="p-3 text-center border-b text-sm">{subItem.materialRate ? formatCurrency(subItem.materialRate) : '-'}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.materialCost)}</td>
-                                    <td className="p-3 text-center border-b text-sm">{subItem.laborRate ? formatCurrency(subItem.laborRate) : '-'}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.laborCost)}</td>
-                                    <td className="p-3 text-center border-b text-sm">{subItem.subcontractorRate ? formatCurrency(subItem.subcontractorRate) : '-'}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.subcontractorCost)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold">{formatCurrency(subItem.totalCost)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{(subItem.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.totalCost * ((subItem.markupPercent || defaultMarkupPercent) / 100))}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{(((subItem.markupPercent || defaultMarkupPercent) / (100 + (subItem.markupPercent || defaultMarkupPercent))) * 100).toFixed(1)}%</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold">{formatCurrency(subItem.totalCost * (1 + (subItem.markupPercent || defaultMarkupPercent) / 100))}</td>
-                                    <td className="p-3 text-center border-b">
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.quantity}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{(UNIT_TYPES[subItem.unit as UnitType]?.abbreviation) || subItem.unit}</td>
+                                    <td className="p-3 text-center border-b text-sm bg-emerald-50">{subItem.materialRate ? formatCurrency(subItem.materialRate) : '-'}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50">{formatCurrency(subItem.materialCost)}</td>
+                                    <td className="p-3 text-center border-b text-sm bg-blue-50">{subItem.laborRate ? formatCurrency(subItem.laborRate) : '-'}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50">{formatCurrency(subItem.laborCost)}</td>
+                                    <td className="p-3 text-center border-b text-sm bg-amber-50">{subItem.subcontractorRate ? formatCurrency(subItem.subcontractorRate) : '-'}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50">{formatCurrency(subItem.subcontractorCost)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold bg-blue-50/40">{formatCurrency(subItem.totalCost)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{(subItem.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{formatCurrency(subItem.totalCost * ((subItem.markupPercent || defaultMarkupPercent) / 100))}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{(((subItem.markupPercent || defaultMarkupPercent) / (100 + (subItem.markupPercent || defaultMarkupPercent))) * 100).toFixed(1)}%</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold bg-blue-50/40">{formatCurrency(subItem.totalCost * (1 + (subItem.markupPercent || defaultMarkupPercent) / 100))}</td>
+                                    <td className="p-3 text-center border-b bg-blue-50/40">
                                       <div className="flex gap-1">
                                         <Button size="sm" variant="outline" onClick={() => onEditSubItem(trade.id, subItem)}>Edit</Button>
                                         <Button size="sm" variant="destructive" onClick={() => onDeleteSubItem(subItem.id, trade.id)}>Delete</Button>
