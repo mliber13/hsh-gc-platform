@@ -2,6 +2,8 @@
 
 If you can't run `supabase functions deploy` from the terminal, you can update the **qb-get-job-transactions** Edge Function using the Supabase Dashboard.
 
+**Important:** The function in the repo (`supabase/functions/qb-get-job-transactions/index.ts`) imports from `../_shared/qb.ts`. Dashboard deploy often only has the single function folder, so you get "Module not found _shared/qb.ts". **Always use the paste file below** for Dashboard deploy; it has no shared import.
+
 ## Steps
 
 1. **Open Supabase Dashboard**  

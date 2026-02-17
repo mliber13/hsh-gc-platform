@@ -321,10 +321,18 @@ serve(async (req) => {
     const vendorCredits: any[] = creditRes.QueryResponse?.VendorCredit || []
     pushFrom('VendorCredit', vendorCredits, (t) => t.VendorRef?.name ?? t.VendorRef?.value ?? 'Unknown', (t) => -Math.abs(Number(t.TotalAmt ?? 0)))
 
-    // Only keep transactions for jobs that exist in the app: by QB project ID (if linked) or by project name match
-    const { data: projectRows } = await supabaseClient.from('projects').select('name, qb_project_id')
-    const allowedQbProjectIds = new Set((projectRows ?? []).map((r: { qb_project_id?: string | null }) => r.qb_project_id).filter(Boolean).map(String))
-    const allowedProjectNames = new Set((projectRows ?? []).map((r: { name?: string | null }) => (r.name ?? '').trim().toLowerCase()).filter(Boolean))
+    // Only keep transactions for jobs that exist in the GC app (exclude Drywall-only projects)
+    const { data: projectRows } = await supabaseClient.from('projects').select('name, qb_project_id, metadata')
+    const isGCVisible = (r: { metadata?: { app_scope?: string; visibility?: { gc?: boolean } } | null }) => {
+      const m = r.metadata
+      if (!m) return true
+      if (m.app_scope === 'DRYWALL_ONLY') return false
+      if (m.visibility && (m.visibility as { gc?: boolean }).gc === false) return false
+      return true
+    }
+    const gcProjects = (projectRows ?? []).filter(isGCVisible)
+    const allowedQbProjectIds = new Set(gcProjects.map((r: { qb_project_id?: string | null }) => r.qb_project_id).filter(Boolean).map(String))
+    const allowedProjectNames = new Set(gcProjects.map((r: { name?: string | null }) => (r.name ?? '').trim().toLowerCase()).filter(Boolean))
     const outFiltered = allowedQbProjectIds.size > 0
       ? out.filter((t) => t.qbProjectId != null && allowedQbProjectIds.has(t.qbProjectId))
       : out.filter((t) => { const jobName = (t.qbProjectName ?? '').trim().toLowerCase(); return jobName.length > 0 && allowedProjectNames.has(jobName) })

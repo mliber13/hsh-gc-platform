@@ -128,8 +128,12 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
     setCategory('')
     setTradeId('')
     setSubItemId('')
-    const mapped = projects.find((p) => (p as { qbProjectId?: string }).qbProjectId === txn.qbProjectId)
-    setProjectId(preSelectedProject?.id ?? mapped?.id ?? '')
+    const mappedById = projects.find((p) => (p as { qbProjectId?: string }).qbProjectId === txn.qbProjectId)
+    const jobName = (txn.qbProjectName ?? '').trim().toLowerCase()
+    const mappedByName = !mappedById && jobName
+      ? projects.find((p) => (p.name ?? '').trim().toLowerCase() === jobName)
+      : null
+    setProjectId(preSelectedProject?.id ?? mappedById?.id ?? mappedByName?.id ?? '')
   }
 
   const handleAllocate = async () => {
@@ -179,7 +183,10 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
   }
 
   const mappedProject = selectedTxn
-    ? projects.find((p) => (p as { qbProjectId?: string }).qbProjectId === selectedTxn.qbProjectId)
+    ? projects.find((p) => (p as { qbProjectId?: string }).qbProjectId === selectedTxn.qbProjectId) ??
+        (selectedTxn.qbProjectName
+          ? projects.find((p) => (p.name ?? '').trim().toLowerCase() === (selectedTxn.qbProjectName ?? '').trim().toLowerCase())
+          : null)
     : null
 
   return (
