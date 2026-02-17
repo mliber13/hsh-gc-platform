@@ -311,7 +311,8 @@ serve(async (req) => {
 
     const purchaseRes = await qbFetch(apiBase, accessToken, realmId, `SELECT * FROM Purchase WHERE TxnDate >= '${startDate}' MAXRESULTS 500`)
     const purchases: any[] = purchaseRes.QueryResponse?.Purchase || []
-    pushFrom('Purchase', purchases, (t) => t.EntityRef?.name ?? t.EntityRef?.value ?? 'Unknown', (t) => Number(t.TotalAmt ?? 0))
+    // Credit card credits (Credit === true) are negated so credits reduce cost in our calculations
+    pushFrom('Purchase', purchases, (t) => t.EntityRef?.name ?? t.EntityRef?.value ?? 'Unknown', (t) => (t.Credit === true ? -Math.abs(Number(t.TotalAmt ?? 0)) : Number(t.TotalAmt ?? 0)))
 
     const checkRes = await qbFetch(apiBase, accessToken, realmId, `SELECT * FROM Check WHERE TxnDate >= '${startDate}' MAXRESULTS 500`)
     const checks: any[] = checkRes.QueryResponse?.Check || []

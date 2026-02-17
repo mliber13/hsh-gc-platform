@@ -327,7 +327,7 @@ serve(async (req) => {
       (t) => Number(t.TotalAmt ?? 0)
     )
 
-    // 3) Purchase (expenses)
+    // 3) Purchase (expenses); credit card credits (Credit === true) are negated so credits reduce cost
     const purchaseRes = await qbFetch(
       apiBase,
       accessToken,
@@ -339,7 +339,7 @@ serve(async (req) => {
       'Purchase',
       purchases,
       (t) => t.EntityRef?.name ?? t.EntityRef?.value ?? 'Unknown',
-      (t) => Number(t.TotalAmt ?? 0)
+      (t) => (t.Credit === true ? -Math.abs(Number(t.TotalAmt ?? 0)) : Number(t.TotalAmt ?? 0))
     )
 
     // 4) Check

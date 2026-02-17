@@ -43,6 +43,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TRADE_CATEGORIES, UNIT_TYPES } from '@/types'
 import type { UnitType } from '@/types'
 import { QuickBooksImport } from '@/components/QuickBooksImport'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { 
   ArrowLeft, 
   PlusCircle, 
@@ -59,7 +60,8 @@ import {
   HardHat,
   Edit,
   Trash2,
-  Printer
+  Printer,
+  List
 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
@@ -125,6 +127,13 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const [availableSubcontractors, setAvailableSubcontractors] = useState<DirectorySubcontractor[]>([])
   const [availableSuppliers, setAvailableSuppliers] = useState<Supplier[]>([])
   const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set())
+  const [viewEntriesCell, setViewEntriesCell] = useState<{
+    type: EntryType
+    tradeId?: string
+    subItemId?: string
+    category?: string
+    label: string
+  } | null>(null)
   const [subItemsByTrade, setSubItemsByTrade] = useState<Record<string, SubItem[]>>({})
   const [actualsRefreshKey, setActualsRefreshKey] = useState(0)
 
@@ -330,6 +339,19 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
   const getActualsBySubItem = (subItemId: string) => {
     return actualEntries.filter(entry => entry.subItemId === subItemId)
+  }
+
+  /** Entries for a single Act cell (one type, one row: trade or sub-item) */
+  const getEntriesForCell = (type: EntryType, tradeId?: string, subItemId?: string, category?: string): ActualEntry[] => {
+    if (subItemId) return actualEntries.filter(e => e.subItemId === subItemId && e.type === type)
+    if (tradeId) {
+      const tradeEntries = actualEntries.filter(e => e.tradeId === tradeId && !e.subItemId && e.type === type)
+      const subItems = subItemsByTrade[tradeId] || []
+      const subEntries = subItems.flatMap(si => actualEntries.filter(e => e.subItemId === si.id && e.type === type))
+      return [...tradeEntries, ...subEntries]
+    }
+    if (category) return actualEntries.filter(e => e.category === category && e.type === type)
+    return []
   }
 
   const toggleTradeExpansion = (tradeId: string) => {
@@ -549,8 +571,47 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const isUnderBudget = variance < 0
   const isOnBudget = Math.abs(variance) < 100 // Within $100
 
+  const viewEntriesList = viewEntriesCell
+    ? getEntriesForCell(viewEntriesCell.type, viewEntriesCell.tradeId, viewEntriesCell.subItemId, viewEntriesCell.category)
+    : []
+
   return (
     <div className="min-h-screen bg-background pb-20 sm:pb-0">
+      <Dialog open={!!viewEntriesCell} onOpenChange={(open) => !open && setViewEntriesCell(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{viewEntriesCell?.label ?? 'Entries'}</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-auto flex-1 min-h-0 space-y-2 pr-2">
+            {viewEntriesList.length === 0 && <p className="text-sm text-gray-500">No entries</p>}
+            {viewEntriesList.map((entry) => (
+              <div
+                key={entry.id}
+                className={`flex items-center justify-between p-2 rounded border text-sm ${getEntryColor(entry.type)}`}
+              >
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  {getEntryIcon(entry.type)}
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 truncate">{entry.description}</p>
+                    <p className="text-xs text-gray-600">
+                      {formatDate(entry.date)}
+                      {entry.vendor && ` · ${entry.vendor}`}
+                      {entry.invoiceNumber && ` · ${entry.invoiceNumber}`}
+                      {entry.subcontractorName && ` · ${entry.subcontractorName}`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="font-semibold">{formatCurrency(entry.amount)}</span>
+                  <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => { setViewEntriesCell(null); handleEditEntry(entry) }}><Edit className="w-3 h-3" /></Button>
+                  <Button size="sm" variant="destructive" className="h-7 px-2" onClick={() => { setViewEntriesCell(null); handleDeleteEntry(entry) }}><Trash2 className="w-3 h-3" /></Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
         <div className="w-full space-y-4 sm:space-y-6">
           {/* Header */}
@@ -1108,6 +1169,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                       <span className="text-gray-600">Act:</span>
                                                       <span className="font-semibold">{formatCurrency(tradeBreakdown.labor)}</span>
                                                     </div>
+                                                    {allTradeActuals.filter(e => e.type === 'labor').length > 0 && (
+                                                      <button type="button" onClick={() => setViewEntriesCell({ type: 'labor', tradeId: trade.id, label: `${trade.name} · Labor` })} className="flex items-center gap-0.5 text-blue-700 hover:underline mt-0.5"><List className="w-2.5 h-2.5" /> View ({allTradeActuals.filter(e => e.type === 'labor').length})</button>
+                                                    )}
                                                     <div className={`flex justify-between pt-0.5 border-t ${itemLaborVariance > 0 ? 'text-red-600' : itemLaborVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
                                                       <span className="font-semibold">Var:</span>
                                                       <span className="font-bold">{formatCurrency(Math.abs(itemLaborVariance))} {itemLaborVariance > 0 ? '⚠️' : itemLaborVariance < 0 ? '✓' : ''}</span>
@@ -1129,6 +1193,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                       <span className="text-gray-600">Act:</span>
                                                       <span className="font-semibold">{formatCurrency(tradeBreakdown.material)}</span>
                                                     </div>
+                                                    {allTradeActuals.filter(e => e.type === 'material').length > 0 && (
+                                                      <button type="button" onClick={() => setViewEntriesCell({ type: 'material', tradeId: trade.id, label: `${trade.name} · Material` })} className="flex items-center gap-0.5 text-green-800 hover:underline mt-0.5"><List className="w-2.5 h-2.5" /> View ({allTradeActuals.filter(e => e.type === 'material').length})</button>
+                                                    )}
                                                     <div className={`flex justify-between pt-0.5 border-t ${itemMaterialVariance > 0 ? 'text-red-600' : itemMaterialVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
                                                       <span className="font-semibold">Var:</span>
                                                       <span className="font-bold">{formatCurrency(Math.abs(itemMaterialVariance))} {itemMaterialVariance > 0 ? '⚠️' : itemMaterialVariance < 0 ? '✓' : ''}</span>
@@ -1150,6 +1217,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                       <span className="text-gray-600">Act:</span>
                                                       <span className="font-semibold">{formatCurrency(tradeBreakdown.subcontractor)}</span>
                                                     </div>
+                                                    {allTradeActuals.filter(e => e.type === 'subcontractor').length > 0 && (
+                                                      <button type="button" onClick={() => setViewEntriesCell({ type: 'subcontractor', tradeId: trade.id, label: `${trade.name} · Subcontractor` })} className="flex items-center gap-0.5 text-orange-800 hover:underline mt-0.5"><List className="w-2.5 h-2.5" /> View ({allTradeActuals.filter(e => e.type === 'subcontractor').length})</button>
+                                                    )}
                                                     <div className={`flex justify-between pt-0.5 border-t ${itemSubVariance > 0 ? 'text-red-600' : itemSubVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
                                                       <span className="font-semibold">Var:</span>
                                                       <span className="font-bold">{formatCurrency(Math.abs(itemSubVariance))} {itemSubVariance > 0 ? '⚠️' : itemSubVariance < 0 ? '✓' : ''}</span>
@@ -1489,11 +1559,32 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300">{trade.quantity}</td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300">{UNIT_TYPES[trade.unit as UnitType]?.abbreviation || trade.unit}</td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimateBreakdown.labor)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeActualBreakdown.labor)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <span>{formatCurrency(tradeActualBreakdown.labor)}</span>
+                                        {(() => { const entries = getEntriesForCell('labor', trade.id); return entries.length > 0 && (
+                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'labor', tradeId: trade.id, label: `${trade.name} · Labor` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({entries.length})</Button>
+                                        ); })()}
+                                      </div>
+                                    </td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimateBreakdown.material)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeActualBreakdown.material)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <span>{formatCurrency(tradeActualBreakdown.material)}</span>
+                                        {(() => { const entries = getEntriesForCell('material', trade.id); return entries.length > 0 && (
+                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'material', tradeId: trade.id, label: `${trade.name} · Material` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({entries.length})</Button>
+                                        ); })()}
+                                      </div>
+                                    </td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimateBreakdown.subcontractor)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeActualBreakdown.subcontractor)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300">
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <span>{formatCurrency(tradeActualBreakdown.subcontractor)}</span>
+                                        {(() => { const entries = getEntriesForCell('subcontractor', trade.id); return entries.length > 0 && (
+                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'subcontractor', tradeId: trade.id, label: `${trade.name} · Subcontractor` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({entries.length})</Button>
+                                        ); })()}
+                                      </div>
+                                    </td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeEstimate)}</td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300">{formatCurrency(tradeActualTotal)}</td>
                                     <td className={`p-3 text-center border-b border-r-2 border-gray-300 font-medium ${getVarianceColor(varianceType)}`}>
@@ -1517,11 +1608,32 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                         <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{subItem.quantity}</td>
                                         <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{UNIT_TYPES[subItem.unit as UnitType]?.abbreviation || subItem.unit}</td>
                                         <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.laborCost || 0)}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siLaborAct)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">
+                                          <div className="flex flex-col items-center gap-0.5">
+                                            <span>{formatCurrency(siLaborAct)}</span>
+                                            {siActuals.filter(e => e.type === 'labor').length > 0 && (
+                                              <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'labor', subItemId: subItem.id, label: `${subItem.name} · Labor` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View</Button>
+                                            )}
+                                          </div>
+                                        </td>
                                         <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.materialCost || 0)}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siMaterialAct)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">
+                                          <div className="flex flex-col items-center gap-0.5">
+                                            <span>{formatCurrency(siMaterialAct)}</span>
+                                            {siActuals.filter(e => e.type === 'material').length > 0 && (
+                                              <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'material', subItemId: subItem.id, label: `${subItem.name} · Material` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View</Button>
+                                            )}
+                                          </div>
+                                        </td>
                                         <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(subItem.subcontractorCost || 0)}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siSubAct)}</td>
+                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">
+                                          <div className="flex flex-col items-center gap-0.5">
+                                            <span>{formatCurrency(siSubAct)}</span>
+                                            {siActuals.filter(e => e.type === 'subcontractor').length > 0 && (
+                                              <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'subcontractor', subItemId: subItem.id, label: `${subItem.name} · Subcontractor` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View</Button>
+                                            )}
+                                          </div>
+                                        </td>
                                         <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siEstimate)}</td>
                                         <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm">{formatCurrency(siActualTotal)}</td>
                                         <td className={`p-3 text-center border-b border-r-2 border-gray-300 text-sm ${siVariance > 0 ? 'text-red-600' : siVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>{formatCurrency(Math.abs(siVariance))}</td>
