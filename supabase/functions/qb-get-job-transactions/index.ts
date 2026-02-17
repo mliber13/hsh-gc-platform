@@ -327,7 +327,7 @@ serve(async (req) => {
       (t) => Number(t.TotalAmt ?? 0)
     )
 
-    // 3) Purchase (expenses); credit card credits (Credit === true) are negated so credits reduce cost
+    // 3) Purchase (expenses); credit card credits are negated so credits reduce cost
     const purchaseRes = await qbFetch(
       apiBase,
       accessToken,
@@ -335,11 +335,18 @@ serve(async (req) => {
       `SELECT * FROM Purchase WHERE TxnDate >= '${startDate}' MAXRESULTS 500`
     )
     const purchases: any[] = purchaseRes.QueryResponse?.Purchase || []
+    const isCreditCardCredit = (t: any) =>
+      t.Credit === true || t.Credit === 1 || (typeof t.Credit === 'string' && t.Credit.toLowerCase() === 'true') ||
+      t.credit === true || t.credit === 1
     pushFrom(
       'Purchase',
       purchases,
       (t) => t.EntityRef?.name ?? t.EntityRef?.value ?? 'Unknown',
-      (t) => (t.Credit === true ? -Math.abs(Number(t.TotalAmt ?? 0)) : Number(t.TotalAmt ?? 0))
+      (t) => {
+        const amt = Number(t.TotalAmt ?? 0)
+        if (isCreditCardCredit(t)) return -Math.abs(amt)
+        return amt
+      }
     )
 
     // 4) Check
@@ -449,6 +456,19 @@ serve(async (req) => {
             : null,
         })),
         firstBillFullFirstLine: firstBill?.Line?.[0] ?? null,
+        purchasesWithPositiveAmt: purchases
+          .filter((p: any) => Number(p.TotalAmt ?? 0) > 0)
+          .slice(0, 5)
+          .map((p: any) => ({
+            Id: p.Id,
+            TotalAmt: p.TotalAmt,
+            Credit: p.Credit,
+            credit: p.credit,
+            PaymentType: p.PaymentType,
+            TxnDate: p.TxnDate,
+            DocNumber: p.DocNumber,
+            topLevelKeys: Object.keys(p),
+          })),
       }
     }
 
