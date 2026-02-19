@@ -157,11 +157,16 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
     return actuals.totalActualCost || 0
   }
 
+  const addressSearchStr = (addr: ProjectWithStats['address']): string => {
+    if (!addr) return ''
+    if (typeof addr === 'string') return addr
+    return 'street' in addr ? (addr.street ?? '') : ''
+  }
   const filteredProjects = projects
     .filter(project =>
       project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (typeof project.address === 'string' ? project.address.toLowerCase().includes(searchQuery.toLowerCase()) : project.address?.street?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      project.city?.toLowerCase().includes(searchQuery.toLowerCase())
+      addressSearchStr(project.address).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (project.city ?? '').toLowerCase().includes(searchQuery.toLowerCase())
     )
     .filter(project => statusFilter === 'all' || project.status === statusFilter)
     .slice()

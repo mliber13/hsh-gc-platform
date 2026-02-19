@@ -643,7 +643,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="font-semibold">{formatCurrency(entry.amount)}</span>
                   {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
-                    <Button size="sm" variant="outline" className="h-7 px-2" title="Reassign to another project" onClick={() => { setViewEntriesCell(null); setReassignEntry({ entry, type: entry.type }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
+                    <Button size="sm" variant="outline" className="h-7 px-2" title="Reassign to another project" onClick={() => { setViewEntriesCell(null); setReassignEntry({ entry, type: entry.type as 'material' | 'subcontractor' }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
                   )}
                   <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => { setViewEntriesCell(null); handleEditEntry(entry) }}><Edit className="w-3 h-3" /></Button>
                   <Button size="sm" variant="destructive" className="h-7 px-2" onClick={() => { setViewEntriesCell(null); handleDeleteEntry(entry) }}><Trash2 className="w-3 h-3" /></Button>
@@ -771,7 +771,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                             Recon
                           </label>
                           {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
-                            <Button size="sm" variant="outline" title="Reassign to another project" onClick={() => { setReassignEntry({ entry, type: entry.type }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
+                            <Button size="sm" variant="outline" title="Reassign to another project" onClick={() => { setReassignEntry({ entry, type: entry.type as 'material' | 'subcontractor' }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
                           )}
                           <Button size="sm" variant="outline" onClick={() => { setAllEntriesModalType(null); handleEditEntry(entry) }}>Edit</Button>
                           <Button size="sm" variant="destructive" onClick={() => { setAllEntriesModalType(null); handleDeleteEntry(entry) }}>Delete</Button>
@@ -1502,7 +1502,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                           <div className="flex items-center gap-1">
                                                             <p className="font-semibold text-gray-900">{formatCurrency(entry.amount)}</p>
                                                             {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
-                                                              <Button size="sm" variant="outline" className="h-6 px-1.5" title="Reassign to another project" onClick={() => setReassignEntry({ entry, type: entry.type })}><ArrowRightLeft className="w-3 h-3" /></Button>
+                                                              <Button size="sm" variant="outline" className="h-6 px-1.5" title="Reassign to another project" onClick={() => setReassignEntry({ entry, type: entry.type as 'material' | 'subcontractor' })}><ArrowRightLeft className="w-3 h-3" /></Button>
                                                             )}
                                                             <Button
                                                               size="sm"
@@ -1558,7 +1558,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                   <p className="font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
                                                   <div className="flex gap-1">
                                                     {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
-                                                      <Button size="sm" variant="outline" className="h-7 px-2" title="Reassign to another project" onClick={(e) => { e.stopPropagation(); setReassignEntry({ entry, type: entry.type }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
+                                                      <Button size="sm" variant="outline" className="h-7 px-2" title="Reassign to another project" onClick={(e) => { e.stopPropagation(); setReassignEntry({ entry, type: entry.type as 'material' | 'subcontractor' }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
                                                     )}
                                                     <Button
                                                       size="sm"
@@ -1904,7 +1904,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                   <div className="flex items-center gap-1 shrink-0">
                                                     <span className="font-semibold">{formatCurrency(entry.amount)}</span>
                                                     {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
-                                                      <Button size="sm" variant="outline" className="h-6 px-1.5" title="Reassign to another project" onClick={() => { setReassignEntry({ entry, type: entry.type }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
+                                                      <Button size="sm" variant="outline" className="h-6 px-1.5" title="Reassign to another project" onClick={() => { setReassignEntry({ entry, type: entry.type as 'material' | 'subcontractor' }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
                                                     )}
                                                     <Button size="sm" variant="outline" className="h-6 px-1.5" onClick={() => handleEditEntry(entry)}><Edit className="w-3 h-3" /></Button>
                                                     <Button size="sm" variant="destructive" className="h-6 px-1.5" onClick={() => handleDeleteEntry(entry)}><Trash2 className="w-3 h-3" /></Button>

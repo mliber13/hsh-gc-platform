@@ -336,7 +336,9 @@ export interface LaborEntry {
   totalHours: number        // Sum of all crew hours
   laborRate: number         // Blended rate or individual
   totalCost: number
-  
+  grossWages?: number       // Wages before burden (QBO labor)
+  burdenAmount?: number    // Burden amount (QBO labor)
+
   // Progress
   quantityCompleted?: number
   unit?: UnitType
