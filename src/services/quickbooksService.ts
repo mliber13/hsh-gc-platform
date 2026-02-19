@@ -288,11 +288,12 @@ export async function findOrCreateQBVendor(vendorName: string): Promise<QBVendor
 export interface QBJobTransaction {
   qbTransactionId: string
   qbTransactionType: string
+  qbLineId?: string | null
   vendorName: string
   txnDate: string
   docNumber: string
   amount: number
-  accountType: 'Job Materials' | 'Subcontractor Expense' | 'Utilities'
+  accountType: 'Job Materials' | 'Subcontractor Expense' | 'Utilities' | 'Disposal Fees' | 'Fuel Expense'
   qbProjectId: string | null
   qbProjectName: string | null
   description: string
@@ -303,21 +304,58 @@ export interface QBProject {
   name: string
 }
 
+/** One account from QBO Chart of Accounts (for wage-account selection). */
+export interface QBAccount {
+  id: string
+  name: string
+  accountType: string
+  accountNumber: string
+}
+
+/**
+ * Fetch Chart of Accounts from QuickBooks (Id, Name, AccountType, AcctNum).
+ * Use in Import labor to pick wage allocation accounts by name (e.g. 7100, 7125).
+ */
+export async function getQBChartOfAccounts(): Promise<{ accounts: QBAccount[]; error?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('qb-list-accounts')
+    if (error) {
+      return { accounts: [], error: error.message }
+    }
+    const list = (data?.accounts ?? []).map((a: { id: string; name: string; accountType: string; accountNumber: string }) => ({
+      id: a.id,
+      name: a.name,
+      accountType: a.accountType ?? '',
+      accountNumber: a.accountNumber ?? '',
+    }))
+    return { accounts: list, error: data?.error }
+  } catch (err) {
+    return { accounts: [], error: (err as Error).message }
+  }
+}
+
 /**
  * Get transactions that hit Job Materials or Subcontractor Expense accounts (for pending import list).
  * Pass debug: true to get _debug in the response (accounts/classes/Bill structure from QB).
  */
-export async function getQBJobTransactions(debug?: boolean): Promise<{
+export async function getQBJobTransactions(debug?: boolean, includeUnassigned?: boolean): Promise<{
   transactions: QBJobTransaction[]
   error?: string
   help?: string
   yourAccounts?: { name: string; type: string }[]
   yourClasses?: string[]
+  checkEntityUnsupported?: boolean
+  /** Per-project totals from QBO (key = qb_project_id or project name) for reconciliation */
+  projectTotals?: Record<string, number>
   _debug?: unknown
+  _excluded?: unknown[]
 }> {
   try {
+    const body: { debug?: boolean; includeUnassigned?: boolean } = {}
+    if (debug) body.debug = true
+    if (includeUnassigned) body.includeUnassigned = true
     const { data, error } = await supabase.functions.invoke('qb-get-job-transactions', {
-      body: debug ? { debug: true } : undefined,
+      body: Object.keys(body).length ? body : undefined,
     })
     if (error) {
       console.error('Error fetching QB job transactions:', error)
@@ -329,7 +367,10 @@ export async function getQBJobTransactions(debug?: boolean): Promise<{
       help: data?.help,
       yourAccounts: data?.yourAccounts,
       yourClasses: data?.yourClasses,
+      checkEntityUnsupported: data?.checkEntityUnsupported === true,
+      projectTotals: data?.projectTotals,
       _debug: data?._debug,
+      _excluded: data?._excluded,
     }
   } catch (err) {
     console.error('Error fetching QB job transactions:', err)

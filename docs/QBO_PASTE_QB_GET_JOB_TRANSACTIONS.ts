@@ -65,14 +65,23 @@ const JOB_MATERIALS_PATTERNS = [
 ]
 const SUB_EXPENSE_PATTERNS = [
   'subcontractor expense', 'sub expense', 'subcontractors', 'subcontractor', 'job cost - sub', 'subs',
-  'subcontractor cost', 'subcontract', 'sub contractor', '1099', 'contract labor', 'job cost - subcontractor'
+  'subcontractor cost', 'subcontract', 'sub contractor', '1099', 'contract labor', 'job cost - subcontractor',
+  'outside services', 'outside service'
 ]
 const UTILITIES_PATTERNS = [
   'utilities', 'utility', 'job cost - utilities', 'job utilities', 'porta pott', 'propane',
   'porta potty', 'port-a-potty', 'porta john', 'job cost utilities'
 ]
+const DISPOSAL_PATTERNS = [
+  'disposal', 'disposal fees', 'dump fees', 'dumpster', 'job cost - disposal',
+  'trash', 'waste', 'debris removal', 'rubbish'
+]
+const FUEL_PATTERNS = [
+  'fuel', 'fuel expense', 'gas', 'job cost - fuel', 'fuel and gas',
+  'gasoline', 'diesel', 'job fuel'
+]
 
-type AccountType = 'Job Materials' | 'Subcontractor Expense' | 'Utilities'
+type AccountType = 'Job Materials' | 'Subcontractor Expense' | 'Utilities' | 'Disposal Fees' | 'Fuel Expense'
 
 interface JobTransaction {
   qbTransactionId: string
@@ -146,6 +155,16 @@ function classNameMatchesUtilities(name: string | null): boolean {
   const n = name.toLowerCase()
   return UTILITIES_PATTERNS.some((p) => n.includes(p))
 }
+function classNameMatchesDisposal(name: string | null): boolean {
+  if (!name) return false
+  const n = name.toLowerCase()
+  return DISPOSAL_PATTERNS.some((p) => n.includes(p))
+}
+function classNameMatchesFuel(name: string | null): boolean {
+  if (!name) return false
+  const n = name.toLowerCase()
+  return FUEL_PATTERNS.some((p) => n.includes(p))
+}
 
 function transactionHasAccountOrClass(
   transaction: any,
@@ -168,6 +187,10 @@ function transactionHasAccountOrClass(
     matchedType = 'Subcontractor Expense'
   } else if (headerClassName && classNameMatchesUtilities(headerClassName)) {
     matchedType = 'Utilities'
+  } else if (headerClassName && classNameMatchesDisposal(headerClassName)) {
+    matchedType = 'Disposal Fees'
+  } else if (headerClassName && classNameMatchesFuel(headerClassName)) {
+    matchedType = 'Fuel Expense'
   }
   if (matchedType && lines.length > 0) {
     totalForAccount = lines.reduce((sum: number, line: any) => sum + getLineAmount(line), 0)
@@ -182,7 +205,9 @@ function transactionHasAccountOrClass(
     const matchByClassName =
       (className && classNameMatchesJobMaterials(className)) ||
       (className && classNameMatchesSubExpense(className)) ||
-      (className && classNameMatchesUtilities(className))
+      (className && classNameMatchesUtilities(className)) ||
+      (className && classNameMatchesDisposal(className)) ||
+      (className && classNameMatchesFuel(className))
     if (matchByAccount) {
       totalForAccount += amt
       if (!matchedType) matchedType = accountIdToType[accountId!] ?? null
@@ -194,7 +219,9 @@ function transactionHasAccountOrClass(
       if (!matchedType) {
         matchedType = classNameMatchesJobMaterials(className) ? 'Job Materials'
           : classNameMatchesSubExpense(className) ? 'Subcontractor Expense'
-          : 'Utilities'
+          : classNameMatchesUtilities(className) ? 'Utilities'
+          : classNameMatchesDisposal(className) ? 'Disposal Fees'
+          : 'Fuel Expense'
       }
     }
   }
@@ -247,6 +274,8 @@ serve(async (req) => {
     const jobMaterialsAccounts = accounts.filter((a: any) => nameMatches(a.Name, JOB_MATERIALS_PATTERNS))
     const subExpenseAccounts = accounts.filter((a: any) => nameMatches(a.Name, SUB_EXPENSE_PATTERNS))
     const utilitiesAccounts = accounts.filter((a: any) => nameMatches(a.Name, UTILITIES_PATTERNS))
+    const disposalAccounts = accounts.filter((a: any) => nameMatches(a.Name, DISPOSAL_PATTERNS))
+    const fuelAccounts = accounts.filter((a: any) => nameMatches(a.Name, FUEL_PATTERNS))
 
     const accountIds = new Set<string>()
     const accountIdToType: Record<string, AccountType> = {}
@@ -265,33 +294,47 @@ serve(async (req) => {
       accountIds.add(id)
       accountIdToType[id] = 'Utilities'
     }
+    for (const a of disposalAccounts) {
+      const id = String(a.Id)
+      accountIds.add(id)
+      accountIdToType[id] = 'Disposal Fees'
+    }
+    for (const a of fuelAccounts) {
+      const id = String(a.Id)
+      accountIds.add(id)
+      accountIdToType[id] = 'Fuel Expense'
+    }
 
     const classRes = await qbFetch(apiBase, accessToken, realmId, `SELECT * FROM Class WHERE Active = true MAXRESULTS 1000`)
     const classes: any[] = classRes.QueryResponse?.Class || []
     const jobMaterialsClassId = classes.find((c: any) => nameMatches(c.Name, JOB_MATERIALS_PATTERNS))?.Id
     const subExpenseClassId = classes.find((c: any) => nameMatches(c.Name, SUB_EXPENSE_PATTERNS))?.Id
     const utilitiesClassId = classes.find((c: any) => nameMatches(c.Name, UTILITIES_PATTERNS))?.Id
+    const disposalClassId = classes.find((c: any) => nameMatches(c.Name, DISPOSAL_PATTERNS))?.Id
+    const fuelClassId = classes.find((c: any) => nameMatches(c.Name, FUEL_PATTERNS))?.Id
 
     const classIds = new Set<string>()
     const classIdToType: Record<string, AccountType> = {}
     if (jobMaterialsClassId) { classIds.add(jobMaterialsClassId); classIdToType[jobMaterialsClassId] = 'Job Materials' }
     if (subExpenseClassId) { classIds.add(subExpenseClassId); classIdToType[subExpenseClassId] = 'Subcontractor Expense' }
     if (utilitiesClassId) { classIds.add(utilitiesClassId); classIdToType[utilitiesClassId] = 'Utilities' }
+    if (disposalClassId) { classIds.add(disposalClassId); classIdToType[disposalClassId] = 'Disposal Fees' }
+    if (fuelClassId) { classIds.add(fuelClassId); classIdToType[fuelClassId] = 'Fuel Expense' }
 
     if (accountIds.size === 0 && classIds.size === 0) {
       const accountList = accounts.map((a: any) => ({ name: a.Name ?? '', type: a.AccountType ?? '' }))
       const classList = classes.map((c: any) => c.Name ?? '')
       const payload: Record<string, unknown> = {
         transactions: [],
-        error: 'Could not find Job Materials, Subcontractor Expense, or Utilities accounts or classes in QuickBooks',
-        help: 'In QuickBooks, add at least one Expense account or Class with a name containing "Job Materials" or "Materials", "Subcontractor Expense" or "Subcontractors", and/or "Utilities" (e.g. for Porta Potties, Propane). Chart of Accounts: Settings → Chart of Accounts. Classes: Settings → All Lists → Classes. Then tag your bills/checks/expenses with that account or class so they appear here.',
+        error: 'Could not find Job Materials, Subcontractor Expense, Utilities, Disposal Fees, or Fuel Expense accounts or classes in QuickBooks',
+        help: 'In QuickBooks, add at least one Expense account or Class with a name containing "Job Materials", "Subcontractor", "Utilities", "Disposal" (fees), or "Fuel". Chart of Accounts: Settings → Chart of Accounts. Classes: Settings → All Lists → Classes. Then tag your bills/checks/expenses so they appear here.',
         yourAccounts: accountList,
         yourClasses: classList,
       }
       if (debug) {
         payload._debug = {
-          accountsMatched: { jobMaterialsIds: [], subExpenseIds: [], utilitiesIds: [], allAccountNames: accounts.map((a: any) => a.Name) },
-          classesMatched: { jobMaterialsClassId: null, subExpenseClassId: null, utilitiesClassId: null, allClassNames: classes.map((c: any) => c.Name) },
+          accountsMatched: { jobMaterialsIds: [], subExpenseIds: [], utilitiesIds: [], disposalIds: [], fuelIds: [], allAccountNames: accounts.map((a: any) => a.Name) },
+          classesMatched: { jobMaterialsClassId: null, subExpenseClassId: null, utilitiesClassId: null, disposalClassId: null, fuelClassId: null, allClassNames: classes.map((c: any) => c.Name) },
           yourAccounts: accountList,
           yourClasses: classList,
         }

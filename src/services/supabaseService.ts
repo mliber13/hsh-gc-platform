@@ -1006,17 +1006,25 @@ export async function fetchEstimateByProjectId(projectId: string): Promise<any |
   }
 
   const estimate = data[0]
+  const totals = estimate.totals as {
+    basePriceTotal?: number
+    contingency?: number
+    totalEstimated?: number
+    total_estimated?: number
+  } | null
+  const totalEstimated = totals?.totalEstimated ?? (totals as any)?.total_estimated
 
   return {
     id: estimate.id,
     projectId: estimate.project_id,
     version: 1,
     trades: [],
-    subtotal: 0,
+    subtotal: totals?.basePriceTotal ?? 0,
     overhead: 0,
     profit: 0,
-    contingency: 0,
-    totalEstimate: 0,
+    contingency: totals?.contingency ?? 0,
+    totalEstimate: totalEstimated ?? 0,
+    totals: estimate.totals ?? undefined,
     createdAt: new Date(estimate.created_at),
     updatedAt: new Date(estimate.updated_at),
   }
@@ -1667,6 +1675,8 @@ export async function fetchLaborEntries(projectId: string): Promise<any[]> {
     totalHours: entry.hours,
     laborRate: entry.hourly_rate,
     totalCost: entry.amount,
+    grossWages: entry.gross_wages != null ? Number(entry.gross_wages) : undefined,
+    burdenAmount: entry.burden_amount != null ? Number(entry.burden_amount) : undefined,
     crew: [],
     createdAt: new Date(entry.created_at),
   }))
@@ -1902,6 +1912,7 @@ export async function createMaterialEntryInDB(projectId: string, entry: any): Pr
       notes: entry.notes || '',
       qb_transaction_id: entry.qbTransactionId || null,
       qb_transaction_type: entry.qbTransactionType || null,
+      qb_line_id: entry.qbLineId ?? null,
     })
     .select()
     .single()
@@ -2032,6 +2043,7 @@ export async function createSubcontractorEntryInDB(projectId: string, entry: any
       notes: entry.notes || '',
       qb_transaction_id: entry.qbTransactionId || null,
       qb_transaction_type: entry.qbTransactionType || null,
+      qb_line_id: entry.qbLineId ?? null,
     })
     .select()
     .single()
@@ -2164,6 +2176,70 @@ async function getOrCreateActualsId(projectId: string): Promise<string | null> {
   }
 
   return newActuals.id
+}
+
+/** Reassign a material entry to another project (updates project_id and actuals_id). */
+export async function reassignMaterialEntryToProject(entryId: string, newProjectId: string): Promise<any | null> {
+  if (!isOnlineMode()) return null
+  const actualsId = await getOrCreateActualsId(newProjectId)
+  if (!actualsId) return null
+  const updateData = { project_id: newProjectId, actuals_id: actualsId }
+  const { data, error } = await supabase
+    .from('material_entries')
+    .update(updateData)
+    .eq('id', entryId)
+    .select()
+    .single()
+  if (error) {
+    console.error('Error reassigning material entry:', error)
+    return null
+  }
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    tradeId: data.trade_id,
+    date: new Date(data.date),
+    materialName: data.description,
+    category: data.category,
+    quantity: data.quantity,
+    unit: 'each',
+    unitCost: data.unit_cost,
+    totalCost: data.amount,
+    vendor: data.vendor,
+    invoiceNumber: data.invoice_number,
+    createdAt: new Date(data.created_at),
+  }
+}
+
+/** Reassign a subcontractor entry to another project (updates project_id and actuals_id). */
+export async function reassignSubcontractorEntryToProject(entryId: string, newProjectId: string): Promise<any | null> {
+  if (!isOnlineMode()) return null
+  const actualsId = await getOrCreateActualsId(newProjectId)
+  if (!actualsId) return null
+  const updateData = { project_id: newProjectId, actuals_id: actualsId }
+  const { data, error } = await supabase
+    .from('subcontractor_entries')
+    .update(updateData)
+    .eq('id', entryId)
+    .select()
+    .single()
+  if (error) {
+    console.error('Error reassigning subcontractor entry:', error)
+    return null
+  }
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    tradeId: data.trade_id,
+    subcontractor: { name: data.subcontractor_name, company: data.subcontractor_name, email: '', phone: '' },
+    trade: data.category,
+    scopeOfWork: data.description,
+    contractAmount: data.amount,
+    payments: [],
+    totalPaid: data.amount,
+    balance: 0,
+    createdAt: new Date(data.created_at),
+  }
 }
 
 // ============================================================================

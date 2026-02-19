@@ -30,8 +30,10 @@ import {
   deleteLaborEntry_Hybrid,
   deleteMaterialEntry_Hybrid,
   deleteSubcontractorEntry_Hybrid,
+  reassignMaterialEntryToProject_Hybrid,
+  reassignSubcontractorEntryToProject_Hybrid,
 } from '@/services/actualsHybridService'
-import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
+import { getTradesForEstimate_Hybrid, getProjects_Hybrid } from '@/services/hybridService'
 import { fetchTradesForEstimate, fetchSubItemsForTrade } from '@/services/supabaseService'
 import { isOnlineMode } from '@/lib/supabase'
 import { fetchSubcontractors, fetchSuppliers } from '@/services/partnerDirectoryService'
@@ -61,7 +63,8 @@ import {
   Edit,
   Trash2,
   Printer,
-  List
+  List,
+  ArrowRightLeft,
 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
@@ -88,6 +91,9 @@ interface ActualEntry {
   
   // Labor specific
   payrollPeriod?: string
+  /** Imported wages (QBO); when set, amount = grossWages + burdenAmount */
+  grossWages?: number
+  burdenAmount?: number
   
   // Material specific
   vendor?: string
@@ -138,6 +144,22 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   } | null>(null)
   const [subItemsByTrade, setSubItemsByTrade] = useState<Record<string, SubItem[]>>({})
   const [actualsRefreshKey, setActualsRefreshKey] = useState(0)
+  /** 'all' = grouped Labor/Material/Sub; 'labor'|'material'|'subcontractor' = only that type */
+  const [allEntriesModalType, setAllEntriesModalType] = useState<null | 'all' | 'labor' | 'material' | 'subcontractor'>(null)
+  const [reassignEntry, setReassignEntry] = useState<{ entry: ActualEntry; type: 'material' | 'subcontractor' } | null>(null)
+  const [reassignProjects, setReassignProjects] = useState<Project[]>([])
+  const [reassignTargetId, setReassignTargetId] = useState<string>('')
+  const [reassigning, setReassigning] = useState(false)
+  /** Reconciliation checkboxes (session-only; for testing) */
+  const [reconciledEntryIds, setReconciledEntryIds] = useState<Set<string>>(new Set())
+  const toggleReconciled = (entryId: string) => {
+    setReconciledEntryIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(entryId)) next.delete(entryId)
+      else next.add(entryId)
+      return next
+    })
+  }
 
   // Load trades for the estimate
   useEffect(() => {
@@ -181,7 +203,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         const entries: ActualEntry[] = []
         
         // Convert labor entries
-        actuals.laborEntries?.forEach((labor: LaborEntry) => {
+        actuals.laborEntries?.forEach((labor: LaborEntry & { grossWages?: number; burdenAmount?: number }) => {
           entries.push({
             id: labor.id,
             type: 'labor',
@@ -192,6 +214,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             tradeId: labor.tradeId,
             subItemId: labor.subItemId,
             payrollPeriod: labor.date.toLocaleDateString(),
+            grossWages: labor.grossWages,
+            burdenAmount: labor.burdenAmount,
           })
         })
         
@@ -239,6 +263,12 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     
     loadActuals()
   }, [project.id, actualsRefreshKey])
+
+  // Load projects when reassign dialog opens
+  useEffect(() => {
+    if (reassignEntry === null) return
+    getProjects_Hybrid().then(setReassignProjects)
+  }, [reassignEntry])
 
   // Load subcontractor and supplier directories
   useEffect(() => {
@@ -515,7 +545,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
       if (actuals) {
         const entries: ActualEntry[] = []
         
-        actuals.laborEntries?.forEach((labor: LaborEntry) => {
+        actuals.laborEntries?.forEach((labor: LaborEntry & { grossWages?: number; burdenAmount?: number }) => {
           entries.push({
             id: labor.id,
             type: 'labor',
@@ -525,6 +555,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             category: labor.trade,
             tradeId: labor.tradeId,
             payrollPeriod: labor.date.toLocaleDateString(),
+            grossWages: labor.grossWages,
+            burdenAmount: labor.burdenAmount,
           })
         })
         
@@ -610,11 +642,190 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="font-semibold">{formatCurrency(entry.amount)}</span>
+                  {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
+                    <Button size="sm" variant="outline" className="h-7 px-2" title="Reassign to another project" onClick={() => { setViewEntriesCell(null); setReassignEntry({ entry, type: entry.type }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
+                  )}
                   <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => { setViewEntriesCell(null); handleEditEntry(entry) }}><Edit className="w-3 h-3" /></Button>
                   <Button size="sm" variant="destructive" className="h-7 px-2" onClick={() => { setViewEntriesCell(null); handleDeleteEntry(entry) }}><Trash2 className="w-3 h-3" /></Button>
                 </div>
               </div>
             ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reassign entry to another project */}
+      <Dialog open={reassignEntry !== null} onOpenChange={(open) => { if (!open) { setReassignEntry(null); setReassignTargetId('') } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Reassign to project</DialogTitle>
+            <p className="text-sm text-gray-500 font-normal">
+              Move this {reassignEntry?.type === 'material' ? 'material' : 'subcontractor'} expense to another project. It will no longer appear under the current project.
+            </p>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <Label>Target project</Label>
+            <Select value={reassignTargetId} onValueChange={setReassignTargetId}>
+              <SelectTrigger><SelectValue placeholder="Select project…" /></SelectTrigger>
+              <SelectContent>
+                {reassignProjects.filter((p) => p.id !== project.id).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setReassignEntry(null); setReassignTargetId('') }}>Cancel</Button>
+              <Button
+                disabled={!reassignTargetId || reassigning}
+                onClick={async () => {
+                  if (!reassignEntry || !reassignTargetId) return
+                  setReassigning(true)
+                  try {
+                    const fn = reassignEntry.type === 'material' ? reassignMaterialEntryToProject_Hybrid : reassignSubcontractorEntryToProject_Hybrid
+                    const ok = await fn(reassignEntry.entry.id, reassignTargetId)
+                    if (ok) {
+                      setActualsRefreshKey((k) => k + 1)
+                      setReassignEntry(null)
+                      setReassignTargetId('')
+                    } else {
+                      alert('Reassign is only available when online. Please check your connection and try again.')
+                    }
+                  } catch (e) {
+                    console.error(e)
+                    alert('Failed to reassign entry.')
+                  } finally {
+                    setReassigning(false)
+                  }
+                }}
+              >
+                {reassigning ? 'Moving…' : 'Reassign'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* All entries modal — opened from "View all entries" (grouped) or from Labor/Material/Sub header (single type) */}
+      <Dialog open={allEntriesModalType !== null} onOpenChange={(open) => !open && setAllEntriesModalType(null)}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {allEntriesModalType === 'all' && 'All actual entries'}
+              {allEntriesModalType === 'labor' && 'Labor entries'}
+              {allEntriesModalType === 'material' && 'Material entries'}
+              {allEntriesModalType === 'subcontractor' && 'Subcontractor entries'}
+            </DialogTitle>
+            <p className="text-sm text-gray-500 font-normal">
+              {allEntriesModalType === 'all' ? 'Edit or assign any entry. Grouped by Labor, Material, Subcontractor.' : 'Edit or assign entries.'}
+            </p>
+          </DialogHeader>
+          <div className="overflow-auto flex-1 min-h-0 space-y-6 pr-2">
+            {actualEntries.length === 0 ? (
+              <p className="text-gray-500 text-sm">No actual entries recorded yet.</p>
+            ) : (
+              (() => {
+                const parentEntries = actualEntries.filter(e => !e.isSplitEntry)
+                const labor = parentEntries.filter(e => e.type === 'labor')
+                const material = parentEntries.filter(e => e.type === 'material')
+                const subcontractor = parentEntries.filter(e => e.type === 'subcontractor')
+                const renderEntryRow = (entry: ActualEntry) => {
+                  const tradeName = entry.tradeId ? trades.find(t => t.id === entry.tradeId)?.name : null
+                  const splitChildren = ((entry.type === 'material' || entry.type === 'subcontractor') && entry.invoiceNumber)
+                    ? actualEntries.filter(e => e.isSplitEntry && e.splitParentId === entry.id)
+                    : []
+                  return (
+                    <div key={entry.id}>
+                      <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between border rounded-lg p-3 ${getEntryColor(entry.type)}`}>
+                        <div className="flex items-start gap-3 flex-1">
+                          {getEntryIcon(entry.type)}
+                          <div className="flex-1 space-y-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                              <span>{formatDate(entry.date)}</span>
+                              <span>•</span>
+                              <span>{entry.category ? (TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category) : 'No category'}</span>
+                              {splitChildren.length > 0 && (
+                                <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-semibold">Split ({splitChildren.length})</span>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-gray-900 truncate">{entry.description || entry.vendor || entry.subcontractorName || 'No description'}</p>
+                            <p className="text-xs text-gray-500">{tradeName ? <span className="text-green-700 font-semibold">Linked to {tradeName}</span> : <span className="text-red-600 font-semibold">Not linked</span>}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2 sm:mt-0 shrink-0 flex-wrap justify-end">
+                          {entry.type === 'labor' && (entry.grossWages != null || (entry.burdenAmount != null && entry.burdenAmount > 0)) ? (
+                            <div className="text-right text-sm">
+                              <p className="text-gray-700">Wages: {formatCurrency(entry.grossWages ?? entry.amount)}</p>
+                              <p className="text-gray-700">Burden: {formatCurrency(entry.burdenAmount ?? 0)}</p>
+                              <p className="text-base font-bold text-gray-900 border-t border-gray-200 pt-0.5">Total: {formatCurrency(entry.amount)}</p>
+                            </div>
+                          ) : (
+                            <p className="text-base font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
+                          )}
+                          <label className="flex items-center gap-1 shrink-0 text-xs text-gray-500 cursor-pointer" title="Reconciliation (testing)">
+                            <input
+                              type="checkbox"
+                              checked={reconciledEntryIds.has(entry.id)}
+                              onChange={() => toggleReconciled(entry.id)}
+                              className="rounded border-gray-400"
+                            />
+                            Recon
+                          </label>
+                          {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
+                            <Button size="sm" variant="outline" title="Reassign to another project" onClick={() => { setReassignEntry({ entry, type: entry.type }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => { setAllEntriesModalType(null); handleEditEntry(entry) }}>Edit</Button>
+                          <Button size="sm" variant="destructive" onClick={() => { setAllEntriesModalType(null); handleDeleteEntry(entry) }}>Delete</Button>
+                        </div>
+                      </div>
+                      {splitChildren.length > 0 && (
+                        <div className="ml-6 mt-2 space-y-1 border-l-2 border-blue-300 pl-3">
+                          {splitChildren.map((child) => (
+                            <div key={child.id} className="flex items-center justify-between p-2 bg-blue-50 border border-blue-200 rounded text-sm">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-gray-900 truncate">{child.description}</p>
+                                <p className="text-xs text-gray-600">{child.tradeId ? trades.find(t => t.id === child.tradeId)?.name : null}</p>
+                              </div>
+                              <p className="font-semibold text-gray-900 ml-2">{formatCurrency(child.amount)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+                if (allEntriesModalType === 'labor') {
+                  return <div className="space-y-2">{labor.length === 0 ? <p className="text-gray-500 text-sm italic">No labor entries</p> : labor.map(renderEntryRow)}</div>
+                }
+                if (allEntriesModalType === 'material') {
+                  return <div className="space-y-2">{material.length === 0 ? <p className="text-gray-500 text-sm italic">No material entries</p> : material.map(renderEntryRow)}</div>
+                }
+                if (allEntriesModalType === 'subcontractor') {
+                  return <div className="space-y-2">{subcontractor.length === 0 ? <p className="text-gray-500 text-sm italic">No subcontractor entries</p> : subcontractor.map(renderEntryRow)}</div>
+                }
+                return (
+                  <>
+                    <section>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                        <Users className="w-4 h-4" /> Labor ({labor.length})
+                      </h3>
+                      <div className="space-y-2">{labor.length === 0 ? <p className="text-gray-500 text-sm italic">No labor entries</p> : labor.map(renderEntryRow)}</div>
+                    </section>
+                    <section>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                        <Package className="w-4 h-4" /> Material ({material.length})
+                      </h3>
+                      <div className="space-y-2">{material.length === 0 ? <p className="text-gray-500 text-sm italic">No material entries</p> : material.map(renderEntryRow)}</div>
+                    </section>
+                    <section>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                        <HardHat className="w-4 h-4" /> Subcontractor ({subcontractor.length})
+                      </h3>
+                      <div className="space-y-2">{subcontractor.length === 0 ? <p className="text-gray-500 text-sm italic">No subcontractor entries</p> : subcontractor.map(renderEntryRow)}</div>
+                    </section>
+                  </>
+                )
+              })()
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -728,11 +939,25 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   <div className="bg-blue-100 rounded-full p-2">
                     <Users className="w-5 h-5 text-blue-600" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-blue-700 font-medium">Labor</p>
-                    <p className="text-lg font-bold text-gray-900">
-                      {formatCurrency(actualEntries.filter(e => e.type === 'labor').reduce((sum, entry) => sum + entry.amount, 0))}
-                    </p>
+                    {(() => {
+                      const laborEntries = actualEntries.filter(e => e.type === 'labor')
+                      const total = laborEntries.reduce((sum, e) => sum + e.amount, 0)
+                      const wages = laborEntries.reduce((sum, e) => sum + (e.grossWages ?? e.amount), 0)
+                      const burden = laborEntries.reduce((sum, e) => sum + (e.burdenAmount ?? 0), 0)
+                      const hasBreakdown = laborEntries.some(e => e.grossWages != null || e.burdenAmount != null)
+                      if (!hasBreakdown || (burden === 0 && wages === total)) {
+                        return <p className="text-lg font-bold text-gray-900">{formatCurrency(total)}</p>
+                      }
+                      return (
+                        <div className="text-sm space-y-0.5">
+                          <p className="text-gray-700">Wages: {formatCurrency(wages)}</p>
+                          <p className="text-gray-700">Burden: {formatCurrency(burden)}</p>
+                          <p className="text-lg font-bold text-gray-900 border-t border-blue-200 pt-1 mt-1">Total: {formatCurrency(total)}</p>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 rounded-lg bg-green-50 border border-green-200 p-3">
@@ -847,7 +1072,18 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           {/* Actuals by Category */}
           <Card>
             <CardHeader>
-              <CardTitle>Actuals by Category</CardTitle>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <CardTitle>Actuals by Category</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAllEntriesModalType('all')}
+                  className="shrink-0"
+                >
+                  <List className="w-4 h-4 mr-1.5" />
+                  View all entries
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {/* Mobile - Cards (match EstimateBuilder card style) */}
@@ -1265,6 +1501,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                           </div>
                                                           <div className="flex items-center gap-1">
                                                             <p className="font-semibold text-gray-900">{formatCurrency(entry.amount)}</p>
+                                                            {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
+                                                              <Button size="sm" variant="outline" className="h-6 px-1.5" title="Reassign to another project" onClick={() => setReassignEntry({ entry, type: entry.type })}><ArrowRightLeft className="w-3 h-3" /></Button>
+                                                            )}
                                                             <Button
                                                               size="sm"
                                                               variant="outline"
@@ -1318,6 +1557,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                 <div className="flex items-center gap-2">
                                                   <p className="font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
                                                   <div className="flex gap-1">
+                                                    {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
+                                                      <Button size="sm" variant="outline" className="h-7 px-2" title="Reassign to another project" onClick={(e) => { e.stopPropagation(); setReassignEntry({ entry, type: entry.type }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
+                                                    )}
                                                     <Button
                                                       size="sm"
                                                       variant="outline"
@@ -1448,9 +1690,24 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                         <th className="p-3"></th>
                         <th className="p-3"></th>
                         <th className="p-3 border-r-2 border-gray-300"></th>
-                        <th className="text-center p-3 bg-blue-600 text-white text-2xl font-bold border-r-2 border-blue-700" colSpan={2}>Labor</th>
-                        <th className="text-center p-3 bg-emerald-600 text-white text-2xl font-bold border-r-2 border-emerald-700" colSpan={2}>Material</th>
-                        <th className="text-center p-3 bg-amber-600 text-white text-2xl font-bold border-r-2 border-amber-700" colSpan={2}>Subcontractor</th>
+                        <th className="text-center p-3 bg-blue-600 text-white border-r-2 border-blue-700" colSpan={2}>
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="text-2xl font-bold">Labor</span>
+                            <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-xs bg-blue-500 hover:bg-blue-600 text-white border-0" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('labor') }} title="View labor entries"><List className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </th>
+                        <th className="text-center p-3 bg-emerald-600 text-white border-r-2 border-emerald-700" colSpan={2}>
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="text-2xl font-bold">Material</span>
+                            <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-xs bg-emerald-500 hover:bg-emerald-600 text-white border-0" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('material') }} title="View material entries"><List className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </th>
+                        <th className="text-center p-3 bg-amber-600 text-white border-r-2 border-amber-700" colSpan={2}>
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="text-2xl font-bold">Subcontractor</span>
+                            <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-xs bg-amber-500 hover:bg-amber-600 text-white border-0" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('subcontractor') }} title="View subcontractor entries"><List className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </th>
                         <th className="p-3 border-r-2 border-gray-300"></th>
                         <th className="p-3 border-r-2 border-gray-300"></th>
                         <th className="p-3"></th>
@@ -1646,6 +1903,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                   </div>
                                                   <div className="flex items-center gap-1 shrink-0">
                                                     <span className="font-semibold">{formatCurrency(entry.amount)}</span>
+                                                    {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
+                                                      <Button size="sm" variant="outline" className="h-6 px-1.5" title="Reassign to another project" onClick={() => { setReassignEntry({ entry, type: entry.type }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
+                                                    )}
                                                     <Button size="sm" variant="outline" className="h-6 px-1.5" onClick={() => handleEditEntry(entry)}><Edit className="w-3 h-3" /></Button>
                                                     <Button size="sm" variant="destructive" className="h-6 px-1.5" onClick={() => handleDeleteEntry(entry)}><Trash2 className="w-3 h-3" /></Button>
                                                   </div>
@@ -1707,111 +1967,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           </Card>
         </div>
       </div>
-
-      {/* All Actual Entries List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Actual Entries</CardTitle>
-          <p className="text-sm text-gray-500">
-            Use this list to quickly edit or assign any entry—even if it isn’t linked to a specific estimate item yet.
-          </p>
-        </CardHeader>
-        <CardContent>
-          {actualEntries.length === 0 ? (
-            <p className="text-gray-500 text-sm">No actual entries recorded yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {actualEntries
-                .filter(entry => !entry.isSplitEntry) // Only show parent entries and non-split entries
-                .map((entry) => {
-                  const tradeName = entry.tradeId ? trades.find(t => t.id === entry.tradeId)?.name : null
-                  const splitChildren = ((entry.type === 'material' || entry.type === 'subcontractor') && entry.invoiceNumber)
-                    ? actualEntries.filter(e => e.isSplitEntry && e.splitParentId === entry.id)
-                    : []
-                  
-                  return (
-                    <div key={entry.id}>
-                      <div
-                        className={`flex flex-col sm:flex-row sm:items-center sm:justify-between border rounded-lg p-3 ${getEntryColor(entry.type)}`}
-                      >
-                        <div className="flex items-start gap-3 flex-1">
-                          {getEntryIcon(entry.type)}
-                          <div className="flex-1 space-y-1">
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                              <span>{formatDate(entry.date)}</span>
-                              <span>•</span>
-                              <span className="font-semibold text-gray-800">
-                                {entry.category ? TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category : 'No category'}
-                              </span>
-                              <span>•</span>
-                              <span className="uppercase tracking-wide">{entry.type}</span>
-                              {splitChildren.length > 0 && (
-                                <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-semibold">
-                                  Split Invoice ({splitChildren.length} allocations)
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm font-medium text-gray-900">
-                              {entry.description || entry.vendor || entry.subcontractorName || 'No description'}
-                            </p>
-                            <div className="text-xs text-gray-500">
-                              {tradeName ? (
-                                <span className="text-green-700 font-semibold">Linked to {tradeName}</span>
-                              ) : (
-                                <span className="text-red-600 font-semibold">Not linked to a specific item</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between sm:flex-col sm:items-end gap-3 mt-3 sm:mt-0">
-                          <p className="text-base font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleEditEntry(entry)}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteEntry(entry)}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                      {splitChildren.length > 0 && (
-                        <div className="ml-8 mt-2 space-y-1 border-l-2 border-blue-300 pl-3">
-                          {splitChildren.map((child) => {
-                            const childTradeName = child.tradeId ? trades.find(t => t.id === child.tradeId)?.name : null
-                            return (
-                              <div
-                                key={child.id}
-                                className="flex items-center justify-between p-2 bg-blue-50 border border-blue-200 rounded text-sm"
-                              >
-                                <div className="flex-1">
-                                  <p className="font-medium text-gray-900">{child.description}</p>
-                                  <p className="text-xs text-gray-600">
-                                    {child.category && `${TRADE_CATEGORIES[child.category as keyof typeof TRADE_CATEGORIES]?.label || child.category}`}
-                                    {childTradeName && ` • ${childTradeName}`}
-                                  </p>
-                                </div>
-                                <p className="font-semibold text-gray-900 ml-2">{formatCurrency(child.amount)}</p>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Print Report */}
       {showPrintReport && (
@@ -1921,7 +2076,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
               if (actuals) {
                 const entries: ActualEntry[] = []
                 
-                actuals.laborEntries?.forEach((labor: LaborEntry) => {
+                actuals.laborEntries?.forEach((labor: LaborEntry & { grossWages?: number; burdenAmount?: number }) => {
                   entries.push({
                     id: labor.id,
                     type: 'labor',
@@ -1932,6 +2087,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     tradeId: labor.tradeId,
                     subItemId: labor.subItemId,
                     payrollPeriod: labor.date.toLocaleDateString(),
+                    grossWages: labor.grossWages,
+                    burdenAmount: labor.burdenAmount,
                   })
                 })
                 
@@ -2098,6 +2255,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       tradeId: labor.tradeId,
                       subItemId: labor.subItemId,
                       payrollPeriod: labor.date.toLocaleDateString(),
+                      grossWages: labor.grossWages,
+                      burdenAmount: labor.burdenAmount,
                     })
                   })
                   
@@ -2276,6 +2435,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   tradeId: labor.tradeId,
                   subItemId: labor.subItemId,
                   payrollPeriod: labor.date.toLocaleDateString(),
+                  grossWages: labor.grossWages,
+                  burdenAmount: labor.burdenAmount,
                 })
               })
               

@@ -28,6 +28,8 @@ import {
   createSubcontractorEntryInDB,
   updateSubcontractorEntryInDB,
   deleteSubcontractorEntryFromDB,
+  reassignMaterialEntryToProject as reassignMaterialEntryToProjectDB,
+  reassignSubcontractorEntryToProject as reassignSubcontractorEntryToProjectDB,
   fetchLaborEntries,
   fetchMaterialEntries,
   fetchSubcontractorEntries,
@@ -122,6 +124,11 @@ export async function updateMaterialEntry_Hybrid(entryId: string, updates: any):
   }
 }
 
+export async function reassignMaterialEntryToProject_Hybrid(entryId: string, newProjectId: string): Promise<any | null> {
+  if (!isOnlineMode()) return null
+  return reassignMaterialEntryToProjectDB(entryId, newProjectId)
+}
+
 export async function deleteMaterialEntry_Hybrid(entryId: string): Promise<boolean> {
   if (isOnlineMode()) {
     const deleted = await deleteMaterialEntryFromDB(entryId)
@@ -171,6 +178,11 @@ export async function updateSubcontractorEntry_Hybrid(entryId: string, updates: 
   } else {
     return updateSubcontractorEntryLS(entryId, updates)
   }
+}
+
+export async function reassignSubcontractorEntryToProject_Hybrid(entryId: string, newProjectId: string): Promise<any | null> {
+  if (!isOnlineMode()) return null
+  return reassignSubcontractorEntryToProjectDB(entryId, newProjectId)
 }
 
 export async function deleteSubcontractorEntry_Hybrid(entryId: string): Promise<boolean> {

@@ -5,10 +5,11 @@
 // Main dashboard for viewing and managing all projects
 //
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Project } from '@/types'
+import type { ProjectStatus } from '@/types'
 import { getAllProjects } from '@/services/projectService'
-import { getProjects_Hybrid, getTradesForEstimate_Hybrid } from '@/services/hybridService'
+import { getProjects_Hybrid, getTradesForEstimate_Hybrid, updateProject_Hybrid } from '@/services/hybridService'
 import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
 import { getTradesForEstimate } from '@/services'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -16,7 +17,8 @@ import { isQBConnected, getQBJobTransactions } from '@/services/quickbooksServic
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Eye, ChevronDown, TrendingUp, Download } from 'lucide-react'
+import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Eye, ChevronDown, TrendingUp, Download, Filter, ArrowUpDown } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface ProjectsDashboardProps {
@@ -30,6 +32,7 @@ interface ProjectsDashboardProps {
 }
 
 interface ProjectWithStats extends Project {
+  basePriceTotal?: number
   estimatedValue?: number
   actualCosts?: number
   tradeCount?: number
@@ -39,9 +42,26 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [sortBy, setSortBy] = useState<string>('newest')
   const [showMobileActions, setShowMobileActions] = useState(false)
   const [qbPendingCount, setQbPendingCount] = useState<number | null>(null)
+  const [statusMenuProjectId, setStatusMenuProjectId] = useState<string | null>(null)
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
+  const statusMenuRef = useRef<HTMLDivElement>(null)
   const { canCreate, isViewer } = usePermissions()
+
+  // Close status dropdown when clicking outside
+  useEffect(() => {
+    if (statusMenuProjectId === null) return
+    const handleClick = (e: MouseEvent) => {
+      if (statusMenuRef.current && !statusMenuRef.current.contains(e.target as Node)) {
+        setStatusMenuProjectId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [statusMenuProjectId])
 
   useEffect(() => {
     const loadQBPending = async () => {
@@ -67,32 +87,39 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
       const allProjects = await getProjects_Hybrid()
       
       // Show projects immediately without stats
-      setProjects(allProjects.map(p => ({ ...p, estimatedValue: 0, actualCosts: 0, tradeCount: 0 })))
+      setProjects(allProjects.map(p => ({ ...p, basePriceTotal: 0, estimatedValue: 0, actualCosts: 0, tradeCount: 0 })))
       setLoading(false)
       
       // Then load stats in the background (progressive enhancement)
       // Combine trade fetching to avoid duplicate calls
       const projectsWithStats = await Promise.all(
         allProjects.map(async (project) => {
-          // Fetch trades once and use for both estimated value and trade count
+          // Fetch trades once and use for estimated value and trade count
           const [trades, actuals] = await Promise.all([
             getTradesForEstimate_Hybrid(project.estimate.id),
             getProjectActuals_Hybrid(project.id)
           ])
           
-          // Calculate all stats from the single trades fetch
           const tradeCount = trades.length
-          const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
+          // Base price from estimate book first (totals.basePriceTotal or subtotal), else sum trades
+          const baseFromTrades = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
+          const basePriceTotal =
+            project.estimate?.totals?.basePriceTotal ??
+            (project.estimate?.subtotal != null && project.estimate.subtotal > 0 ? project.estimate.subtotal : null) ??
+            baseFromTrades
           const grossProfitTotal = trades.reduce((sum, trade) => {
             const markup = trade.markupPercent || 11.1
             return sum + (trade.totalCost * (markup / 100))
           }, 0)
-          const contingency = basePriceTotal * 0.10 // 10% default
-          const estimatedValue = basePriceTotal + grossProfitTotal + contingency
+          const contingency = (project.estimate?.totals?.contingency != null ? project.estimate.totals.contingency : basePriceTotal * 0.10)
+          const calculatedTotal = basePriceTotal + grossProfitTotal + contingency
+          const fromBook = project.estimate?.totals?.totalEstimated ?? project.estimate?.totalEstimate
+          const estimatedValue = (typeof fromBook === 'number' && fromBook > 0) ? fromBook : calculatedTotal
           const actualCosts = actuals?.totalActualCost || 0
           
           return { 
             ...project, 
+            basePriceTotal, 
             estimatedValue, 
             actualCosts, 
             tradeCount 
@@ -130,22 +157,72 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
     return actuals.totalActualCost || 0
   }
 
-  const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.address?.street?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.city?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredProjects = projects
+    .filter(project =>
+      project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (typeof project.address === 'string' ? project.address.toLowerCase().includes(searchQuery.toLowerCase()) : project.address?.street?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      project.city?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .filter(project => statusFilter === 'all' || project.status === statusFilter)
+    .slice()
+    .sort((a, b) => {
+      const dateMs = (d: Date | string | undefined) => (d instanceof Date ? d.getTime() : d ? new Date(d as string).getTime() : 0)
+      switch (sortBy) {
+        case 'name-asc':
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        case 'name-desc':
+          return b.name.localeCompare(a.name, undefined, { sensitivity: 'base' })
+        case 'oldest':
+          return dateMs(a.createdAt) - dateMs(b.createdAt)
+        case 'newest':
+        default:
+          return dateMs(b.createdAt) - dateMs(a.createdAt)
+        case 'estimate-desc':
+          return (b.estimatedValue ?? 0) - (a.estimatedValue ?? 0)
+        case 'estimate-asc':
+          return (a.estimatedValue ?? 0) - (b.estimatedValue ?? 0)
+        case 'actual-desc':
+          return (b.actualCosts ?? 0) - (a.actualCosts ?? 0)
+        case 'actual-asc':
+          return (a.actualCosts ?? 0) - (b.actualCosts ?? 0)
+      }
+    })
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
   const getStatusColor = (status: string) => {
-    const colors = {
+    const colors: Record<string, string> = {
       estimating: 'bg-blue-100 text-blue-800',
       'in-progress': 'bg-orange-100 text-orange-800',
       complete: 'bg-green-100 text-green-800',
     }
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
+    return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
+    { value: 'estimating', label: 'Estimating' },
+    { value: 'in-progress', label: 'In progress' },
+    { value: 'complete', label: 'Complete' },
+  ]
+
+  const handleStatusChange = async (project: ProjectWithStats, newStatus: ProjectStatus) => {
+    if (newStatus === project.status) {
+      setStatusMenuProjectId(null)
+      return
+    }
+    setUpdatingStatusId(project.id)
+    setStatusMenuProjectId(null)
+    try {
+      const updated = await updateProject_Hybrid(project.id, { status: newStatus })
+      if (updated) {
+        setProjects(prev => prev.map(p => p.id === project.id ? { ...p, ...updated, basePriceTotal: project.basePriceTotal, estimatedValue: project.estimatedValue, actualCosts: project.actualCosts, tradeCount: project.tradeCount } : p))
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setUpdatingStatusId(null)
+    }
   }
 
 
@@ -170,75 +247,62 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 sm:pb-8">
-        {/* Stats Cards - Show first on mobile, with action buttons on desktop */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          {/* Action Cards - Hidden on mobile, shown on desktop */}
+        {/* Action cards - compact */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
           {canCreate && (
-            <Card className="bg-gradient-to-br from-[#0E79C9] to-[#0A5A96] text-white hover:shadow-xl transition-shadow cursor-pointer border-none hidden sm:block">
-              <CardContent className="pt-6">
-                <button
-                  onClick={onCreateProject}
-                  className="w-full text-left"
-                >
-                  <div className="flex flex-col items-center justify-center py-3 sm:py-8">
-                    <div className="bg-white/20 rounded-full p-2 sm:p-4 mb-2 sm:mb-4">
-                      <PlusCircle className="w-8 sm:w-12 h-8 sm:h-12" />
+            <Card className="bg-gradient-to-br from-[#0E79C9] to-[#0A5A96] text-white hover:shadow-lg transition-shadow cursor-pointer border-none hidden sm:block">
+              <CardContent className="pt-4 pb-4 px-4">
+                <button onClick={onCreateProject} className="w-full text-left">
+                  <div className="flex flex-col items-center justify-center py-3 sm:py-4">
+                    <div className="bg-white/20 rounded-full p-1.5 sm:p-2 mb-1 sm:mb-2">
+                      <PlusCircle className="w-6 sm:w-8 h-6 sm:h-8" />
                     </div>
-                    <h3 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">Create New Project</h3>
-                    <p className="text-white/80 text-center text-sm sm:text-base hidden sm:block">Start a new construction project</p>
+                    <h3 className="text-lg sm:text-xl font-bold mb-0.5">Create New Project</h3>
+                    <p className="text-white/80 text-center text-sm hidden sm:block">Start a new construction project</p>
                   </div>
                 </button>
               </CardContent>
             </Card>
           )}
 
-          <Card className="bg-gradient-to-br from-[#D95C00] to-[#B34C00] text-white hover:shadow-xl transition-shadow cursor-pointer border-none hidden sm:block">
-            <CardContent className="pt-6">
-              <button
-                onClick={onOpenPlanLibrary}
-                className="w-full text-left"
-              >
-                <div className="flex flex-col items-center justify-center py-3 sm:py-8">
-                  <div className="bg-white/20 rounded-full p-2 sm:p-4 mb-2 sm:mb-4">
-                    <FileText className="w-8 sm:w-12 h-8 sm:h-12" />
+          <Card className="bg-gradient-to-br from-[#D95C00] to-[#B34C00] text-white hover:shadow-lg transition-shadow cursor-pointer border-none hidden sm:block">
+            <CardContent className="pt-4 pb-4 px-4">
+              <button onClick={onOpenPlanLibrary} className="w-full text-left">
+                <div className="flex flex-col items-center justify-center py-3 sm:py-4">
+                  <div className="bg-white/20 rounded-full p-1.5 sm:p-2 mb-1 sm:mb-2">
+                    <FileText className="w-6 sm:w-8 h-6 sm:h-8" />
                   </div>
-                  <h3 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">Plan Library</h3>
-                  <p className="text-white/80 text-center text-sm sm:text-base hidden sm:block">Manage plan templates</p>
+                  <h3 className="text-lg sm:text-xl font-bold mb-0.5">Plan Library</h3>
+                  <p className="text-white/80 text-center text-sm hidden sm:block">Manage plan templates</p>
                 </div>
               </button>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-[#34AB8A] to-[#2a8d6f] text-white hover:shadow-xl transition-shadow cursor-pointer border-none hidden sm:block">
-            <CardContent className="pt-6">
-              <button
-                onClick={onOpenItemLibrary}
-                className="w-full text-left"
-              >
-                <div className="flex flex-col items-center justify-center py-3 sm:py-8">
-                  <div className="bg-white/20 rounded-full p-2 sm:p-4 mb-2 sm:mb-4">
-                    <DollarSign className="w-8 sm:w-12 h-8 sm:h-12" />
+          <Card className="bg-gradient-to-br from-[#34AB8A] to-[#2a8d6f] text-white hover:shadow-lg transition-shadow cursor-pointer border-none hidden sm:block">
+            <CardContent className="pt-4 pb-4 px-4">
+              <button onClick={onOpenItemLibrary} className="w-full text-left">
+                <div className="flex flex-col items-center justify-center py-3 sm:py-4">
+                  <div className="bg-white/20 rounded-full p-1.5 sm:p-2 mb-1 sm:mb-2">
+                    <DollarSign className="w-6 sm:w-8 h-6 sm:h-8" />
                   </div>
-                  <h3 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">Item Library</h3>
-                  <p className="text-white/80 text-center text-sm sm:text-base hidden sm:block">Manage default rates</p>
+                  <h3 className="text-lg sm:text-xl font-bold mb-0.5">Item Library</h3>
+                  <p className="text-white/80 text-center text-sm hidden sm:block">Manage default rates</p>
                 </div>
               </button>
             </CardContent>
           </Card>
 
           {onOpenDealPipeline && (
-            <Card className="bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] text-white hover:shadow-xl transition-shadow cursor-pointer border-none hidden sm:block">
-              <CardContent className="pt-6">
-                <button
-                  onClick={onOpenDealPipeline}
-                  className="w-full text-left"
-                >
-                  <div className="flex flex-col items-center justify-center py-3 sm:py-8">
-                    <div className="bg-white/20 rounded-full p-2 sm:p-4 mb-2 sm:mb-4">
-                      <TrendingUp className="w-8 sm:w-12 h-8 sm:h-12" />
+            <Card className="bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] text-white hover:shadow-lg transition-shadow cursor-pointer border-none hidden sm:block">
+              <CardContent className="pt-4 pb-4 px-4">
+                <button onClick={onOpenDealPipeline} className="w-full text-left">
+                  <div className="flex flex-col items-center justify-center py-3 sm:py-4">
+                    <div className="bg-white/20 rounded-full p-1.5 sm:p-2 mb-1 sm:mb-2">
+                      <TrendingUp className="w-6 sm:w-8 h-6 sm:h-8" />
                     </div>
-                    <h3 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">Deal Pipeline</h3>
-                    <p className="text-white/80 text-center text-sm sm:text-base hidden sm:block">Manage deals before they become projects</p>
+                    <h3 className="text-lg sm:text-xl font-bold mb-0.5">Deal Pipeline</h3>
+                    <p className="text-white/80 text-center text-sm hidden sm:block">Manage deals before they become projects</p>
                   </div>
                 </button>
               </CardContent>
@@ -308,6 +372,42 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                 className="pl-10 h-12 text-lg"
               />
             </div>
+            <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-gray-500" />
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[180px] h-9">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="estimating">Estimating</SelectItem>
+                    <SelectItem value="bidding">Bidding</SelectItem>
+                    <SelectItem value="awarded">Awarded</SelectItem>
+                    <SelectItem value="in-progress">In progress</SelectItem>
+                    <SelectItem value="complete">Complete</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <ArrowUpDown className="w-4 h-4 text-gray-500" />
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-[200px] h-9">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Newest first</SelectItem>
+                    <SelectItem value="oldest">Oldest first</SelectItem>
+                    <SelectItem value="name-asc">Name A–Z</SelectItem>
+                    <SelectItem value="name-desc">Name Z–A</SelectItem>
+                    <SelectItem value="estimate-desc">Est. value: high → low</SelectItem>
+                    <SelectItem value="estimate-asc">Est. value: low → high</SelectItem>
+                    <SelectItem value="actual-desc">Actual costs: high → low</SelectItem>
+                    <SelectItem value="actual-asc">Actual costs: low → high</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -364,9 +464,38 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-xl font-semibold text-gray-900">{project.name}</h3>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
-                            {project.status.replace('-', ' ').toUpperCase()}
-                          </span>
+                          <div className="relative" ref={statusMenuProjectId === project.id ? statusMenuRef : undefined}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (isViewer) return
+                                setStatusMenuProjectId(prev => prev === project.id ? null : project.id)
+                              }}
+                              disabled={!!updatingStatusId}
+                              className={`px-3 py-1 rounded-full text-xs font-medium transition-opacity ${getStatusColor(project.status)} ${!isViewer ? 'hover:ring-2 hover:ring-offset-1 hover:ring-gray-400 cursor-pointer' : 'cursor-default'} ${updatingStatusId === project.id ? 'opacity-60' : ''}`}
+                              title={isViewer ? undefined : 'Click to change status'}
+                            >
+                              {updatingStatusId === project.id ? '…' : project.status.replace('-', ' ').toUpperCase()}
+                            </button>
+                            {statusMenuProjectId === project.id && (
+                              <div className="absolute left-0 top-full mt-1 z-10 min-w-[140px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                                {STATUS_OPTIONS.map((opt) => (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleStatusChange(project, opt.value)
+                                    }}
+                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg ${project.status === opt.value ? 'bg-gray-50 font-medium' : ''}`}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div className="space-y-1 text-sm text-gray-600">
                           <p className="flex items-center gap-2">
@@ -395,24 +524,63 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                           </p>
                         </div>
                       </div>
-                      <div className="text-left sm:text-right sm:ml-4 space-y-2">
-                        <div>
-                          <p className="text-sm text-gray-600">Estimated Value</p>
-                          <p className="text-xl sm:text-2xl font-bold text-[#0E79C9]">
-                            {formatCurrency(project.estimatedValue || 0)}
-                          </p>
-                        </div>
-                        {project.actualCosts && project.actualCosts > 0 ? (
-                          <div>
-                            <p className="text-sm text-gray-600">Actual Costs</p>
-                            <p className="text-lg sm:text-xl font-bold text-[#34AB8A]">
-                              {formatCurrency(project.actualCosts)}
-                            </p>
-                          </div>
-                        ) : null}
-                        <p className="text-xs text-gray-500">
-                          {project.tradeCount || 0} {project.tradeCount === 1 ? 'item' : 'items'}
-                        </p>
+                      <div className="text-left sm:text-right sm:ml-4 space-y-2 w-full sm:w-auto min-w-0">
+                        {(() => {
+                          const base = project.basePriceTotal ?? 0
+                          const est = project.estimatedValue ?? 0
+                          const actual = project.actualCosts ?? 0
+                          const maxVal = Math.max(base, est, actual, 1)
+                          const barMinPct = 2
+                          const baseBarPct = base > 0 ? (base / maxVal) * 100 : barMinPct
+                          const estBarPct = est > 0 ? (est / maxVal) * 100 : barMinPct
+                          const actualBarPct = actual > 0 ? (actual / maxVal) * 100 : barMinPct
+                          const barContainerClass = 'w-full max-w-[180px] h-2.5 rounded overflow-hidden bg-gray-100 shrink-0'
+                          return (
+                            <>
+                              <div
+                                className="grid gap-x-2 gap-y-1.5 items-center"
+                                style={{ gridTemplateColumns: '5.5rem minmax(0, 11rem) 1fr' }}
+                              >
+                                <span className="text-sm text-gray-600">Base Price</span>
+                                <div className={barContainerClass}>
+                                  <div
+                                    style={{ width: `${baseBarPct}%` }}
+                                    className={`h-full shrink-0 min-w-0 rounded-l ${base > 0 ? 'bg-slate-200' : 'bg-gray-200'}`}
+                                    title="Base Price Total"
+                                  />
+                                </div>
+                                <span className="text-base sm:text-lg font-bold text-gray-800 tabular-nums text-right">
+                                  {formatCurrency(base)}
+                                </span>
+                                <span className="text-sm text-gray-600">Total Est.</span>
+                                <div className={barContainerClass}>
+                                  <div
+                                    style={{ width: `${estBarPct}%` }}
+                                    className={`h-full shrink-0 min-w-0 rounded-l ${est > 0 ? 'bg-blue-200' : 'bg-gray-200'}`}
+                                    title="Total Estimated"
+                                  />
+                                </div>
+                                <span className="text-xl sm:text-2xl font-bold text-[#0E79C9] tabular-nums text-right">
+                                  {formatCurrency(est)}
+                                </span>
+                                <span className="text-sm text-gray-600">Actual to Date</span>
+                                <div className={barContainerClass}>
+                                  <div
+                                    style={{ width: `${actualBarPct}%` }}
+                                    className={`h-full shrink-0 min-w-0 rounded-l ${actual > 0 ? 'bg-emerald-200' : 'bg-gray-200'}`}
+                                    title="Actual Cost to Date"
+                                  />
+                                </div>
+                                <span className="text-lg sm:text-xl font-bold text-[#34AB8A] tabular-nums text-right">
+                                  {formatCurrency(actual)}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                {project.tradeCount || 0} {project.tradeCount === 1 ? 'item' : 'items'}
+                              </p>
+                            </>
+                          )
+                        })()}
                       </div>
                     </div>
                   </div>

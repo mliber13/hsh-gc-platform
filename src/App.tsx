@@ -87,7 +87,7 @@ function App() {
     }
   }, [isOnline, user])
 
-  // Check for special routes (vendor quote portal, QB callback)
+  // Check for special routes (vendor quote portal, QB callback, deep link to project actuals)
   useEffect(() => {
     const pathname = window.location.pathname
     const isVendorPortalRoute = pathname.startsWith('/vendor-quote/') || pathname.startsWith('/quote/')
@@ -98,10 +98,23 @@ function App() {
       return
     }
     
-    // Check for QB callback route
     const params = new URLSearchParams(window.location.search)
+    const projectId = params.get('project')
+    const viewParam = params.get('view')
+
+    // Deep link: ?project=ID&view=actuals (e.g. from Reconcile "Open project" in new tab)
+    if (projectId && viewParam === 'actuals') {
+      getProject_Hybrid(projectId).then((proj) => {
+        if (proj) {
+          setSelectedProject(proj)
+          setCurrentView('actuals')
+          window.history.replaceState({}, '', pathname || '/')
+        }
+      })
+      return
+    }
+
     const hasQBCode = params.get('code') && params.get('realmId')
-    
     if (hasQBCode || pathname === '/qb-callback') {
       console.log('Detected QB callback, switching to qb-callback view')
       setCurrentView('qb-callback')
