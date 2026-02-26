@@ -2425,6 +2425,9 @@ export async function fetchItemTemplates(): Promise<any[]> {
     isSubcontracted: item.is_subcontracted,
     notes: item.notes || '',
     description: item.notes || '',
+    rateSourceName: item.rate_source_name ?? null,
+    rateSourceDate: item.rate_source_date ?? null,
+    rateSourceNotes: item.rate_source_notes ?? null,
     createdAt: new Date(item.created_at),
     updatedAt: new Date(item.updated_at),
   }))
@@ -2460,6 +2463,9 @@ export async function createItemTemplateInDB(input: any): Promise<any | null> {
       default_subcontractor_cost: input.defaultSubcontractorCost || 0,
       is_subcontracted: input.isSubcontracted || false,
       notes: input.notes || input.description || '',
+      rate_source_name: input.rateSourceName || null,
+      rate_source_date: input.rateSourceDate || null,
+      rate_source_notes: input.rateSourceNotes || null,
       user_id: user.id,
       organization_id: profile.organization_id,
     })
@@ -2483,6 +2489,9 @@ export async function createItemTemplateInDB(input: any): Promise<any | null> {
     isSubcontracted: data.is_subcontracted,
     notes: data.notes || '',
     description: data.notes || '',
+    rateSourceName: data.rate_source_name ?? null,
+    rateSourceDate: data.rate_source_date ?? null,
+    rateSourceNotes: data.rate_source_notes ?? null,
     createdAt: new Date(data.created_at),
     updatedAt: new Date(data.updated_at),
   }
@@ -2502,6 +2511,9 @@ export async function updateItemTemplateInDB(id: string, updates: any): Promise<
   if (updates.isSubcontracted !== undefined) updateData.is_subcontracted = updates.isSubcontracted
   if (updates.notes !== undefined) updateData.notes = updates.notes
   if (updates.description !== undefined) updateData.notes = updates.description
+  if (updates.rateSourceName !== undefined) updateData.rate_source_name = updates.rateSourceName
+  if (updates.rateSourceDate !== undefined) updateData.rate_source_date = updates.rateSourceDate
+  if (updates.rateSourceNotes !== undefined) updateData.rate_source_notes = updates.rateSourceNotes
 
   const { data, error } = await supabase
     .from('item_templates')
@@ -2527,6 +2539,9 @@ export async function updateItemTemplateInDB(id: string, updates: any): Promise<
     isSubcontracted: data.is_subcontracted,
     notes: data.notes || '',
     description: data.notes || '',
+    rateSourceName: data.rate_source_name ?? null,
+    rateSourceDate: data.rate_source_date ?? null,
+    rateSourceNotes: data.rate_source_notes ?? null,
     createdAt: new Date(data.created_at),
     updatedAt: new Date(data.updated_at),
   }

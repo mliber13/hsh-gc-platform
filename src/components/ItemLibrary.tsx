@@ -6,7 +6,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
-import { ItemTemplate, ItemTemplateInput } from '@/types'
+import { ItemTemplate, ItemTemplateInput, Subcontractor } from '@/types'
 import {
   getAllItemTemplates,
   getItemTemplatesByCategory,
@@ -15,6 +15,7 @@ import {
   deleteItemTemplate,
   resetToDefaults,
 } from '@/services'
+import { fetchSubcontractors } from '@/services/partnerDirectoryService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -238,6 +239,12 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
                                         <span className="ml-2 font-medium">{item.defaultWasteFactor}%</span>
                                       </div>
                                     )}
+                                    {(item.rateSourceName || item.rateSourceDate) && (
+                                      <div className="text-xs text-gray-500 mt-1">
+                                        Rate: {[item.rateSourceName, item.rateSourceDate ? new Date(item.rateSourceDate).toLocaleDateString() : null].filter(Boolean).join(', ')}
+                                        {item.rateSourceNotes && ` — ${item.rateSourceNotes}`}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="flex gap-2 flex-shrink-0">
@@ -365,6 +372,9 @@ interface ItemFormProps {
   onCancel: () => void
 }
 
+const RATE_SOURCE_OTHER = '__other__'
+const RATE_SOURCE_NONE = '__none__'
+
 function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
   const [formData, setFormData] = useState<ItemTemplateInput>({
     category: item?.category || 'rough-framing',
@@ -376,9 +386,29 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
     defaultSubcontractorRate: item?.defaultSubcontractorRate,
     defaultSubcontractorCost: item?.defaultSubcontractorCost,
     isSubcontracted: item?.isSubcontracted || false,
-    defaultWasteFactor: item?.defaultWasteFactor || 10,
+    defaultWasteFactor: item?.defaultWasteFactor ?? 10,
     notes: item?.notes || '',
+    rateSourceName: item?.rateSourceName ?? undefined,
+    rateSourceDate: item?.rateSourceDate ?? undefined,
+    rateSourceNotes: item?.rateSourceNotes ?? undefined,
   })
+  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([])
+  const [subsLoaded, setSubsLoaded] = useState(false)
+
+  useEffect(() => {
+    fetchSubcontractors({ includeInactive: true })
+      .then((list) => setSubcontractors(list ?? []))
+      .catch(() => setSubcontractors([]))
+      .finally(() => setSubsLoaded(true))
+  }, [])
+
+  const subsWithNames = subcontractors.filter((s) => s?.name != null && String(s.name).trim() !== '')
+  const rateSourceSelectValue = (() => {
+    if (!formData.rateSourceName || String(formData.rateSourceName).trim() === '') return RATE_SOURCE_NONE
+    const name = String(formData.rateSourceName).trim()
+    if (subsWithNames.some((s) => s.name === name)) return name
+    return RATE_SOURCE_OTHER
+  })()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -556,6 +586,89 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
                 value={formData.notes}
                 onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
               />
+            </div>
+
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <p className="text-sm font-medium text-gray-700">Rate source (audit)</p>
+              <p className="text-xs text-gray-500">
+                Optional: who provided this rate and when, for reference and history.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="rateSourceName">Source (subcontractor)</Label>
+                  {subsLoaded ? (
+                    <>
+                      <Select
+                        value={rateSourceSelectValue}
+                        onValueChange={(value) => {
+                          if (value === RATE_SOURCE_NONE) {
+                            setFormData((prev) => ({ ...prev, rateSourceName: undefined }))
+                          } else if (value === RATE_SOURCE_OTHER) {
+                            setFormData((prev) => ({ ...prev, rateSourceName: prev.rateSourceName || '' }))
+                          } else {
+                            setFormData((prev) => ({ ...prev, rateSourceName: value }))
+                          }
+                        }}
+                      >
+                        <SelectTrigger id="rateSourceName">
+                          <SelectValue placeholder="Select or type below" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={RATE_SOURCE_NONE}>None</SelectItem>
+                          {subsWithNames.map((s) => (
+                            <SelectItem key={s.id} value={String(s.name)}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value={RATE_SOURCE_OTHER}>Other…</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {rateSourceSelectValue === RATE_SOURCE_OTHER && (
+                        <Input
+                          className="mt-2"
+                          value={formData.rateSourceName ?? ''}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, rateSourceName: e.target.value || undefined }))
+                          }
+                          placeholder="e.g. Tapco or vendor name"
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <Input
+                      id="rateSourceName"
+                      value={formData.rateSourceName ?? ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, rateSourceName: e.target.value || undefined }))
+                      }
+                      placeholder="Loading…"
+                      disabled
+                    />
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="rateSourceDate">Date provided</Label>
+                  <Input
+                    id="rateSourceDate"
+                    type="date"
+                    value={formData.rateSourceDate ?? ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, rateSourceDate: e.target.value || undefined }))
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="rateSourceNotes">Rate notes</Label>
+                <Input
+                  id="rateSourceNotes"
+                  value={formData.rateSourceNotes ?? ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, rateSourceNotes: e.target.value || undefined }))
+                  }
+                  placeholder="e.g. Per email; includes XYZ"
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-4 border-t">

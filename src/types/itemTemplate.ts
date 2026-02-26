@@ -21,6 +21,12 @@ export interface ItemTemplate {
   isSubcontracted: boolean
   defaultWasteFactor?: number
   notes?: string
+  /** Subcontractor/vendor who provided this rate (e.g. Tapco) */
+  rateSourceName?: string | null
+  /** Date the rate was provided or last updated */
+  rateSourceDate?: string | null
+  /** Optional notes (e.g. Per email; includes XYZ) */
+  rateSourceNotes?: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -37,5 +43,8 @@ export interface ItemTemplateInput {
   isSubcontracted: boolean
   defaultWasteFactor?: number
   notes?: string
+  rateSourceName?: string | null
+  rateSourceDate?: string | null
+  rateSourceNotes?: string | null
 }
 
