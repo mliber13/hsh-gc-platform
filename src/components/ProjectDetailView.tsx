@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react'
 import { Project, ProjectType, ProjectStatus, Plan } from '@/types'
 import { duplicateProject } from '@/services/projectService'
-import { getTradesForEstimate_Hybrid, updateProject_Hybrid, deleteProject_Hybrid, fetchQuoteRequestsForProject_Hybrid, fetchSubmittedQuotesForRequest_Hybrid } from '@/services/hybridService'
+import { getTradesForEstimate_Hybrid, updateProject_Hybrid, deleteProject_Hybrid } from '@/services/hybridService'
 import { getActivePlans_Hybrid } from '@/services/planHybridService'
 import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
 import { getSelectionBookRoomsCount } from '@/services/selectionBookService'
@@ -34,7 +34,7 @@ interface ProjectDetailViewProps {
   onViewChangeOrders?: () => void
   onViewForms: () => void
   onViewDocuments?: () => void
-  onViewQuotes?: () => void
+  onViewPOs?: () => void
   onViewSelectionBook?: () => void
   onProjectDuplicated?: (project: Project) => void
 }
@@ -47,7 +47,7 @@ export function ProjectDetailView({
   onViewChangeOrders,
   onViewForms,
   onViewDocuments,
-  onViewQuotes,
+  onViewPOs,
   onViewSelectionBook,
   onProjectDuplicated,
 }: ProjectDetailViewProps) {
@@ -62,16 +62,6 @@ export function ProjectDetailView({
   })
   const [formsCount, setFormsCount] = useState(0)
   const [selectionBookRoomsCount, setSelectionBookRoomsCount] = useState(0)
-  const [quotesCount, setQuotesCount] = useState(0)
-  const [quoteRequestsCount, setQuoteRequestsCount] = useState(0)
-  const [quotesStats, setQuotesStats] = useState({
-    total: 0,
-    pending: 0,
-    accepted: 0,
-    rejected: 0,
-    waitingForMore: 0,
-    revisionRequested: 0,
-  })
   const [actualTotals, setActualTotals] = useState({
     laborCost: 0,
     materialCost: 0,
@@ -181,43 +171,6 @@ export function ProjectDetailView({
       }
     }
     loadActuals()
-  }, [project.id])
-
-  // Load quotes count and stats
-  useEffect(() => {
-    const loadQuotesStats = async () => {
-      try {
-        const quoteRequests = await fetchQuoteRequestsForProject_Hybrid(project.id)
-        let totalQuotes = 0
-        const stats = {
-          total: 0,
-          pending: 0,
-          accepted: 0,
-          rejected: 0,
-          waitingForMore: 0,
-          revisionRequested: 0,
-        }
-        
-        for (const request of quoteRequests) {
-          const quotes = await fetchSubmittedQuotesForRequest_Hybrid(request.id)
-          totalQuotes += quotes.length
-          quotes.forEach(quote => {
-            stats.total++
-            if (quote.status === 'pending') stats.pending++
-            else if (quote.status === 'accepted') stats.accepted++
-            else if (quote.status === 'rejected') stats.rejected++
-            else if (quote.status === 'waiting-for-more') stats.waitingForMore++
-            else if (quote.status === 'revision-requested') stats.revisionRequested++
-          })
-        }
-        setQuoteRequestsCount(quoteRequests.length)
-        setQuotesCount(totalQuotes)
-        setQuotesStats(stats)
-      } catch (error) {
-        console.error('Error loading quotes stats:', error)
-      }
-    }
-    loadQuotesStats()
   }, [project.id])
 
   // Load selection book rooms count
@@ -628,58 +581,28 @@ export function ProjectDetailView({
             </button>
           </Card>
 
-          {/* Quotes Card */}
-          {onViewQuotes && (
-            <Card className="bg-gradient-to-br from-[#0E79C9] to-[#0A5A96] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
-              <button onClick={onViewQuotes} className="w-full text-left">
+          {/* Purchase Orders Card */}
+          {onViewPOs && (
+            <Card className="bg-gradient-to-br from-[#0F766E] to-[#0D9488] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
+              <button onClick={onViewPOs} className="w-full text-left">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
-                      <Mail className="w-8 h-8" />
+                      <ClipboardList className="w-8 h-8" />
                     </div>
                     <div className="text-right">
-                      <p className="text-sm opacity-80">Requests sent</p>
-                      <p className="text-3xl font-bold">{quoteRequestsCount}</p>
+                      <p className="text-sm opacity-80">Subcontractors</p>
+                      <p className="text-2xl font-bold">POs</p>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <h3 className="text-2xl font-bold mb-3">Quote Review</h3>
+                  <h3 className="text-2xl font-bold mb-3">Purchase Orders</h3>
                   <p className="text-white/80 mb-4">
-                    Review and manage vendor quotes. Accept quotes, assign to trades, and track quote status.
+                    Create and manage purchase orders for subcontractors from your estimate lines.
                   </p>
-                  <div className="bg-white/10 rounded-lg p-3 mb-3 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Quotes received</span>
-                      <span className="font-semibold">{quotesCount}</span>
-                    </div>
-                  </div>
-                  <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>For Review</span>
-                      <span className="font-semibold">{quotesStats.pending}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Accepted</span>
-                      <span className="font-semibold text-green-200">{quotesStats.accepted}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Waiting for More</span>
-                      <span className="font-semibold">{quotesStats.waitingForMore}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Revision Requested</span>
-                      <span className="font-semibold">{quotesStats.revisionRequested}</span>
-                    </div>
-                    {quotesStats.rejected > 0 && (
-                      <div className="flex justify-between text-sm pt-2 border-t border-white/20">
-                        <span>Rejected</span>
-                        <span className="font-semibold text-red-200">{quotesStats.rejected}</span>
-                      </div>
-                    )}
-                  </div>
                   <div className="flex items-center text-sm text-white/60">
-                    <span>Click to review quotes →</span>
+                    <span>View and issue POs →</span>
                   </div>
                 </CardContent>
               </button>

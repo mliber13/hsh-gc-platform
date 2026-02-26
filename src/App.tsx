@@ -30,7 +30,7 @@ import { QuickBooksConnect } from './components/QuickBooksConnect'
 import { QuickBooksImport } from './components/QuickBooksImport'
 import { QuickBooksCallback } from './components/QuickBooksCallback'
 import { VendorQuotePortal } from './components/VendorQuotePortal'
-import { QuoteReviewDashboard } from './components/QuoteReviewDashboard'
+import { PurchaseOrdersView } from './components/PurchaseOrdersView'
 import { Button } from './components/ui/button'
 import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2, FileText, MessageSquare } from 'lucide-react'
 import { backupAllData } from './services/backupService'
@@ -52,6 +52,7 @@ type View =
   | 'change-orders'
   | 'forms'
   | 'documents'
+  | 'purchase-orders'
   | 'selection-book'
   | 'plan-library'
   | 'plan-editor'
@@ -59,7 +60,6 @@ type View =
   | 'data-migration'
   | 'qb-settings'
   | 'qb-callback'
-  | 'quote-review'
   | 'contact-directory'
   | 'sow-management'
   | 'estimate-template-management'
@@ -125,7 +125,7 @@ function App() {
 
   // Refresh project data when viewing project-related screens
   useEffect(() => {
-    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms' || currentView === 'documents' || currentView === 'quote-review' || currentView === 'selection-book')) {
+    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms' || currentView === 'documents' || currentView === 'purchase-orders' || currentView === 'selection-book')) {
       getProject_Hybrid(selectedProject.id).then(refreshedProject => {
         if (refreshedProject) {
           setSelectedProject(refreshedProject)
@@ -255,14 +255,13 @@ function App() {
     }
   }
 
-  const handleViewQuotes = () => {
-    setCurrentView('quote-review')
-  }
-
   const handleViewDealPipeline = () => {
     setCurrentView('deal-pipeline')
   }
 
+  const handleViewPOs = () => {
+    setCurrentView('purchase-orders')
+  }
 
   const handleOpenFeedbackForm = () => {
     setShowFeedbackForm(true)
@@ -530,7 +529,7 @@ function App() {
           onViewChangeOrders={handleViewChangeOrders}
           onViewForms={handleViewForms}
           onViewDocuments={handleViewDocuments}
-          onViewQuotes={handleViewQuotes}
+          onViewPOs={handleViewPOs}
           onViewSelectionBook={handleViewSelectionBook}
           onProjectDuplicated={(newProject) => {
             setSelectedProject(newProject)
@@ -593,9 +592,10 @@ function App() {
         </div>
       )}
 
-      {currentView === 'quote-review' && selectedProject && (
-        <QuoteReviewDashboard
-          project={selectedProject}
+      {currentView === 'purchase-orders' && selectedProject && (
+        <PurchaseOrdersView
+          projectId={selectedProject.id}
+          projectName={selectedProject.name}
           onBack={handleBackToProjectDetail}
         />
       )}

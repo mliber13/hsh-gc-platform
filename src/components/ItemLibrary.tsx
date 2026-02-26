@@ -185,55 +185,78 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
                         {isCategoryExpanded && (
                           <div className="border-t border-blue-200 bg-blue-50 p-4 space-y-3">
                             {categoryItems.map((item) => (
-                              <div key={item.id} className="bg-white rounded-lg p-4 border border-gray-200">
-                                <div className="flex items-start justify-between mb-2">
-                                  <div className="flex-1">
-                                    <h4 className="font-semibold text-gray-900">{item.name}</h4>
-                                    {item.description && (
-                                      <p className="text-sm text-gray-600 mt-1">{item.description}</p>
+                              <div key={item.id} className="bg-white rounded-lg p-3 border border-gray-200 flex items-center gap-4 flex-wrap">
+                                <div className="min-w-0 flex-shrink-0" style={{ minWidth: '140px' }}>
+                                  <h4 className="font-semibold text-gray-900">{item.name}</h4>
+                                  {item.description && (
+                                    <p className="text-sm text-gray-600">{item.description}</p>
+                                  )}
+                                </div>
+                                <div className="flex gap-x-6 gap-y-1 text-sm flex-1 min-w-0 justify-center">
+                                  <div className="flex flex-col gap-0.5">
+                                    <div>
+                                      <span className="text-gray-600">Default Unit:</span>
+                                      <span className="ml-2 font-medium">
+                                        {UNIT_TYPES[item.defaultUnit]?.abbreviation || item.defaultUnit}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-600">Material Unit Cost:</span>
+                                      <span className="ml-2 font-medium">{formatCurrency(item.defaultMaterialRate)}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-600">Labor Unit Cost:</span>
+                                      <span className="ml-2 font-medium">{formatCurrency(item.defaultLaborRate)}</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col gap-0.5">
+                                    <div>
+                                      <span className="text-gray-600">Type:</span>
+                                      <span className="ml-2 font-medium">
+                                        {item.isSubcontracted ? 'Subcontracted' : 'Self-Performed'}
+                                      </span>
+                                    </div>
+                                    {item.isSubcontracted && (
+                                      <>
+                                        <div>
+                                          <span className="text-gray-600">Subcontractor unit:</span>
+                                          <span className="ml-2 font-medium">
+                                            {formatCurrency(item.defaultSubcontractorRate)}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-600">Subcontractor lump:</span>
+                                          <span className="ml-2 font-medium">
+                                            {formatCurrency(item.defaultSubcontractorCost)}
+                                          </span>
+                                        </div>
+                                      </>
+                                    )}
+                                    {item.defaultWasteFactor != null && item.defaultWasteFactor > 0 && (
+                                      <div>
+                                        <span className="text-gray-600">Waste %:</span>
+                                        <span className="ml-2 font-medium">{item.defaultWasteFactor}%</span>
+                                      </div>
                                     )}
                                   </div>
-                                  <div className="flex gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => handleEditItem(item)}
-                                    >
-                                      <Edit className="w-3 h-3 mr-1" />
-                                      Edit
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      onClick={() => handleDeleteItem(item.id)}
-                                    >
-                                      <Trash2 className="w-3 h-3 mr-1" />
-                                      Delete
-                                    </Button>
-                                  </div>
                                 </div>
-
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-sm">
-                                  <div>
-                                    <span className="text-gray-600">Unit:</span>
-                                    <span className="ml-2 font-medium">
-                                      {UNIT_TYPES[item.defaultUnit]?.abbreviation || item.defaultUnit}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-600">Material:</span>
-                                    <span className="ml-2 font-medium">{formatCurrency(item.defaultMaterialRate)}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-600">Labor:</span>
-                                    <span className="ml-2 font-medium">{formatCurrency(item.defaultLaborRate)}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-600">Type:</span>
-                                    <span className="ml-2 font-medium">
-                                      {item.isSubcontracted ? 'Subcontracted' : 'Self-Performed'}
-                                    </span>
-                                  </div>
+                                <div className="flex gap-2 flex-shrink-0">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleEditItem(item)}
+                                  >
+                                    <Edit className="w-3 h-3 mr-1" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleDeleteItem(item.id)}
+                                  >
+                                    <Trash2 className="w-3 h-3 mr-1" />
+                                    Delete
+                                  </Button>
                                 </div>
                               </div>
                             ))}
@@ -350,6 +373,7 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
     defaultUnit: item?.defaultUnit || 'each',
     defaultMaterialRate: item?.defaultMaterialRate,
     defaultLaborRate: item?.defaultLaborRate,
+    defaultSubcontractorRate: item?.defaultSubcontractorRate,
     defaultSubcontractorCost: item?.defaultSubcontractorCost,
     isSubcontracted: item?.isSubcontracted || false,
     defaultWasteFactor: item?.defaultWasteFactor || 10,
@@ -409,26 +433,95 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="defaultUnit">Default Unit *</Label>
-                <Select
-                  value={formData.defaultUnit}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, defaultUnit: value as any }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(UNIT_TYPES).map(([key, value]) => (
-                      <SelectItem key={key} value={key}>
-                        {value.abbreviation}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div>
+              <Label htmlFor="defaultUnit">Default Unit *</Label>
+              <Select
+                value={formData.defaultUnit}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, defaultUnit: value as any }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(UNIT_TYPES).map(([key, value]) => (
+                    <SelectItem key={key} value={key}>
+                      {value.abbreviation}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <Label htmlFor="defaultMaterialRate">
+                    {formData.isSubcontracted ? 'Material Unit Cost (optional)' : 'Material Unit Cost'}
+                  </Label>
+                  <Input
+                    id="defaultMaterialRate"
+                    type="number"
+                    step="0.01"
+                    value={formData.defaultMaterialRate ?? ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        defaultMaterialRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="defaultLaborRate">
+                    {formData.isSubcontracted ? 'Labor Unit Cost (optional)' : 'Labor Unit Cost'}
+                  </Label>
+                  <Input
+                    id="defaultLaborRate"
+                    type="number"
+                    step="0.01"
+                    value={formData.defaultLaborRate ?? ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        defaultLaborRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <Label htmlFor="defaultSubcontractorRate">Subcontractor Unit Cost (optional)</Label>
+                  <Input
+                    id="defaultSubcontractorRate"
+                    type="number"
+                    step="0.01"
+                    value={formData.defaultSubcontractorRate ?? ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        defaultSubcontractorRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                      }))
+                    }
+                    placeholder="Per unit"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="defaultSubcontractorCost">Subcontractor Lump Sum (optional)</Label>
+                  <Input
+                    id="defaultSubcontractorCost"
+                    type="number"
+                    step="0.01"
+                    value={formData.defaultSubcontractorCost ?? ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        defaultSubcontractorCost: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
               <div>
                 <Label htmlFor="isSubcontracted">Work Type</Label>
                 <Select
@@ -450,64 +543,10 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
                 </Select>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="defaultMaterialRate">
-                  {formData.isSubcontracted ? 'Default Material Rate (optional)' : 'Default Material Rate'}
-                </Label>
-                <Input
-                  id="defaultMaterialRate"
-                  type="number"
-                  step="0.01"
-                  value={formData.defaultMaterialRate ?? ''}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      defaultMaterialRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="defaultLaborRate">
-                  {formData.isSubcontracted ? 'Default Labor Rate (optional)' : 'Default Labor Rate'}
-                </Label>
-                <Input
-                  id="defaultLaborRate"
-                  type="number"
-                  step="0.01"
-                  value={formData.defaultLaborRate ?? ''}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      defaultLaborRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-            </div>
-
             {formData.isSubcontracted && (
-              <div>
-                <Label htmlFor="defaultSubcontractorCost">Default Subcontractor Lump Sum (optional)</Label>
-                <Input
-                  id="defaultSubcontractorCost"
-                  type="number"
-                  step="0.01"
-                  value={formData.defaultSubcontractorCost ?? ''}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      defaultSubcontractorCost: e.target.value === '' ? undefined : parseFloat(e.target.value),
-                    }))
-                  }
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Use this for lump sum pricing, or use the Material/Labor fields above for itemized pricing
-                </p>
-              </div>
+              <p className="text-xs text-gray-500 -mt-2">
+                Use unit cost for per-unit pricing (like material/labor), or lump sum for a fixed total.
+              </p>
             )}
 
             <div>

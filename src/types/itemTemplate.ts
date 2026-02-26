@@ -16,7 +16,8 @@ export interface ItemTemplate {
   defaultUnit: UnitType
   defaultMaterialRate?: number
   defaultLaborRate?: number
-  defaultSubcontractorCost?: number
+  defaultSubcontractorRate?: number   // Per-unit cost (like material/labor)
+  defaultSubcontractorCost?: number  // Lump sum (optional)
   isSubcontracted: boolean
   defaultWasteFactor?: number
   notes?: string
@@ -31,6 +32,7 @@ export interface ItemTemplateInput {
   defaultUnit: UnitType
   defaultMaterialRate?: number
   defaultLaborRate?: number
+  defaultSubcontractorRate?: number
   defaultSubcontractorCost?: number
   isSubcontracted: boolean
   defaultWasteFactor?: number

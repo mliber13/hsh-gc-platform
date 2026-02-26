@@ -2420,6 +2420,7 @@ export async function fetchItemTemplates(): Promise<any[]> {
     defaultUnit: item.default_unit,
     defaultMaterialRate: item.default_material_rate,
     defaultLaborRate: item.default_labor_rate,
+    defaultSubcontractorRate: item.default_subcontractor_rate,
     defaultSubcontractorCost: item.default_subcontractor_cost,
     isSubcontracted: item.is_subcontracted,
     notes: item.notes || '',
@@ -2455,6 +2456,7 @@ export async function createItemTemplateInDB(input: any): Promise<any | null> {
       default_unit: input.defaultUnit,
       default_material_rate: input.defaultMaterialRate || 0,
       default_labor_rate: input.defaultLaborRate || 0,
+      default_subcontractor_rate: input.defaultSubcontractorRate ?? 0,
       default_subcontractor_cost: input.defaultSubcontractorCost || 0,
       is_subcontracted: input.isSubcontracted || false,
       notes: input.notes || input.description || '',
@@ -2476,6 +2478,7 @@ export async function createItemTemplateInDB(input: any): Promise<any | null> {
     defaultUnit: data.default_unit,
     defaultMaterialRate: data.default_material_rate,
     defaultLaborRate: data.default_labor_rate,
+    defaultSubcontractorRate: data.default_subcontractor_rate,
     defaultSubcontractorCost: data.default_subcontractor_cost,
     isSubcontracted: data.is_subcontracted,
     notes: data.notes || '',
@@ -2494,6 +2497,7 @@ export async function updateItemTemplateInDB(id: string, updates: any): Promise<
   if (updates.defaultUnit !== undefined) updateData.default_unit = updates.defaultUnit
   if (updates.defaultMaterialRate !== undefined) updateData.default_material_rate = updates.defaultMaterialRate
   if (updates.defaultLaborRate !== undefined) updateData.default_labor_rate = updates.defaultLaborRate
+  if (updates.defaultSubcontractorRate !== undefined) updateData.default_subcontractor_rate = updates.defaultSubcontractorRate
   if (updates.defaultSubcontractorCost !== undefined) updateData.default_subcontractor_cost = updates.defaultSubcontractorCost
   if (updates.isSubcontracted !== undefined) updateData.is_subcontracted = updates.isSubcontracted
   if (updates.notes !== undefined) updateData.notes = updates.notes
@@ -2518,6 +2522,7 @@ export async function updateItemTemplateInDB(id: string, updates: any): Promise<
     defaultUnit: data.default_unit,
     defaultMaterialRate: data.default_material_rate,
     defaultLaborRate: data.default_labor_rate,
+    defaultSubcontractorRate: data.default_subcontractor_rate,
     defaultSubcontractorCost: data.default_subcontractor_cost,
     isSubcontracted: data.is_subcontracted,
     notes: data.notes || '',
@@ -2540,6 +2545,146 @@ export async function deleteItemTemplateFromDB(id: string): Promise<boolean> {
     return false
   }
 
+  return true
+}
+
+// ============================================================================
+// PURCHASE ORDERS (PO)
+// ============================================================================
+
+export interface CreatePOLineInput {
+  description: string
+  quantity: number
+  unit: string
+  unitPrice: number
+  amount: number
+  sourceTradeId?: string | null
+  sourceSubItemId?: string | null
+}
+
+export async function createPOInDB(
+  projectId: string,
+  subcontractorId: string,
+  lines: CreatePOLineInput[]
+): Promise<{ id: string } | null> {
+  if (!isOnlineMode()) return null
+
+  const { data: header, error: headerError } = await supabase
+    .from('po_headers')
+    .insert({
+      project_id: projectId,
+      subcontractor_id: subcontractorId,
+      status: 'draft',
+    })
+    .select('id')
+    .single()
+
+  if (headerError || !header?.id) {
+    console.error('Error creating PO header:', headerError)
+    return null
+  }
+
+  if (lines.length === 0) return { id: header.id }
+
+  const lineRows = lines.map((line, i) => ({
+    po_id: header.id,
+    sort_order: i,
+    description: line.description,
+    quantity: line.quantity,
+    unit: line.unit,
+    unit_price: line.unitPrice,
+    amount: line.amount,
+    source_trade_id: line.sourceTradeId || null,
+    source_sub_item_id: line.sourceSubItemId || null,
+  }))
+
+  const { error: linesError } = await supabase.from('po_lines').insert(lineRows)
+  if (linesError) {
+    console.error('Error creating PO lines:', linesError)
+    await supabase.from('po_headers').delete().eq('id', header.id)
+    return null
+  }
+
+  return { id: header.id }
+}
+
+export async function getPOsForProjectInDB(projectId: string): Promise<any[]> {
+  if (!isOnlineMode()) return []
+
+  const { data: headers, error: headersError } = await supabase
+    .from('po_headers')
+    .select(`
+      id,
+      project_id,
+      subcontractor_id,
+      po_number,
+      status,
+      issued_at,
+      created_at,
+      updated_at,
+      subcontractors ( id, name )
+    `)
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
+
+  if (headersError || !headers?.length) return []
+
+  const withLines = await Promise.all(
+    headers.map(async (h: any) => {
+      const { data: lineRows } = await supabase
+        .from('po_lines')
+        .select('*')
+        .eq('po_id', h.id)
+        .order('sort_order', { ascending: true })
+      const lines = (lineRows || []).map((r: any) => ({
+        id: r.id,
+        poId: r.po_id,
+        sortOrder: r.sort_order,
+        description: r.description,
+        quantity: r.quantity,
+        unit: r.unit,
+        unitPrice: r.unit_price,
+        amount: r.amount,
+        sourceTradeId: r.source_trade_id,
+        sourceSubItemId: r.source_sub_item_id,
+      }))
+      return {
+        id: h.id,
+        projectId: h.project_id,
+        subcontractorId: h.subcontractor_id,
+        subcontractorName: h.subcontractors?.name ?? null,
+        poNumber: h.po_number,
+        status: h.status,
+        issuedAt: h.issued_at ? new Date(h.issued_at) : null,
+        createdAt: new Date(h.created_at),
+        updatedAt: new Date(h.updated_at),
+        lines,
+      }
+    })
+  )
+  return withLines
+}
+
+export async function issuePOInDB(
+  poId: string,
+  poNumber: string,
+  issuedAt: Date
+): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  const { error } = await supabase
+    .from('po_headers')
+    .update({
+      po_number: poNumber.trim(),
+      status: 'issued',
+      issued_at: issuedAt.toISOString(),
+    })
+    .eq('id', poId)
+
+  if (error) {
+    console.error('Error issuing PO:', error)
+    return false
+  }
   return true
 }
 

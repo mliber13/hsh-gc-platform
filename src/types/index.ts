@@ -156,6 +156,16 @@ export type {
   ItemTemplateInput,
 } from './itemTemplate'
 
+// Export purchase order types
+export type {
+  POStatus,
+  POHeader,
+  POLine,
+  POHeaderWithLines,
+  CreatePOInput,
+  IssuePOInput,
+} from './po'
+
 export type {
   PartnerBase,
   Subcontractor,

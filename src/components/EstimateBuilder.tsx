@@ -55,7 +55,6 @@ import {
   deleteSubItemFromDB,
 } from '@/services/supabaseService'
 import { isOnlineMode } from '@/lib/supabase'
-import { QuoteRequestForm } from './QuoteRequestForm'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -63,6 +62,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { fetchSubcontractors } from '@/services/partnerDirectoryService'
+import { CreatePOModal } from './CreatePOModal'
 import { 
   Edit, 
   Trash2, 
@@ -134,14 +134,13 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   const [showApplyTemplateDialog, setShowApplyTemplateDialog] = useState(false)
   const [availableTemplates, setAvailableTemplates] = useState<any[]>([])
   const [selectedTemplateToApply, setSelectedTemplateToApply] = useState<string>('')
-  const [showQuoteRequestForm, setShowQuoteRequestForm] = useState(false)
-  const [selectedTradeForQuote, setSelectedTradeForQuote] = useState<Trade | null>(null)
   const [availableSubcontractors, setAvailableSubcontractors] = useState<DirectorySubcontractor[]>([])
   const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set())
   const [editingSubItem, setEditingSubItem] = useState<{ tradeId: string; subItem?: SubItem } | null>(null)
   const [subItemsByTrade, setSubItemsByTrade] = useState<Record<string, SubItem[]>>({})
   const [showBulkMarkupDialog, setShowBulkMarkupDialog] = useState(false)
   const [bulkMarkupPercent, setBulkMarkupPercent] = useState(markupPercent.toString())
+  const [showCreatePO, setShowCreatePO] = useState(false)
 
   // Initialize project if none provided
   useEffect(() => {
@@ -826,6 +825,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           onPrintReport={handlePrintReport}
           onSaveAsTemplate={() => setShowSaveTemplateDialog(true)}
           onApplyTemplate={handleOpenApplyTemplate}
+          onCreatePO={() => setShowCreatePO(true)}
         />
 
         {/* Main Trade Table */}
@@ -839,10 +839,6 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           onBulkUpdateMarkup={() => {
             setBulkMarkupPercent(markupPercent.toString())
             setShowBulkMarkupDialog(true)
-          }}
-          onRequestQuote={(trade) => {
-            setSelectedTradeForQuote(trade)
-            setShowQuoteRequestForm(true)
           }}
           defaultMarkupPercent={markupPercent}
           expandedTrades={expandedTrades}
@@ -865,21 +861,15 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           />
         )}
 
-        {/* Quote Request Form */}
-        {showQuoteRequestForm && projectData && (
-          <QuoteRequestForm
-            project={projectData}
-            trade={selectedTradeForQuote}
-            onClose={() => {
-              setShowQuoteRequestForm(false)
-              setSelectedTradeForQuote(null)
-            }}
-            onSuccess={() => {
-              // Emails are now sent automatically in QuoteRequestForm
-              // Just close the form
-              setShowQuoteRequestForm(false)
-              setSelectedTradeForQuote(null)
-            }}
+        {/* Create PO Modal */}
+        {showCreatePO && projectData && (
+          <CreatePOModal
+            projectId={projectData.id}
+            trades={trades}
+            subItemsByTrade={subItemsByTrade}
+            availableSubcontractors={availableSubcontractors}
+            onClose={() => setShowCreatePO(false)}
+            onSuccess={() => setShowCreatePO(false)}
           />
         )}
 
@@ -1278,9 +1268,10 @@ interface SummarySectionProps {
   onPrintReport: (depth: ReportDepth) => void
   onSaveAsTemplate: () => void
   onApplyTemplate: () => void
+  onCreatePO?: () => void
 }
 
-function SummarySection({ totals, onContingencyChange, onPrintReport, onSaveAsTemplate, onApplyTemplate }: SummarySectionProps) {
+function SummarySection({ totals, onContingencyChange, onPrintReport, onSaveAsTemplate, onApplyTemplate, onCreatePO }: SummarySectionProps) {
   const [isEditingContingency, setIsEditingContingency] = useState(false)
   const [tempContingency, setTempContingency] = useState(totals.contingencyPercent)
   const [showPrintMenu, setShowPrintMenu] = useState(false)
@@ -1300,7 +1291,18 @@ function SummarySection({ totals, onContingencyChange, onPrintReport, onSaveAsTe
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Estimate Summary</CardTitle>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {onCreatePO && (
+              <Button
+                onClick={onCreatePO}
+                variant="outline"
+                size="sm"
+                className="border-amber-600 text-amber-600 hover:bg-amber-600 hover:text-white"
+              >
+                <ClipboardList className="w-4 h-4 mr-2" />
+                Create PO
+              </Button>
+            )}
             <Button
               onClick={onApplyTemplate}
               variant="outline"
@@ -1460,7 +1462,6 @@ interface TradeTableProps {
   onAddDefaultCategories: () => void
   onClearAll: () => void
   onBulkUpdateMarkup?: () => void
-  onRequestQuote?: (trade: Trade) => void
   defaultMarkupPercent: number
   expandedTrades: Set<string>
   subItemsByTrade: Record<string, SubItem[]>
@@ -1478,7 +1479,6 @@ function TradeTable({
   onAddDefaultCategories, 
   onClearAll,
   onBulkUpdateMarkup,
-  onRequestQuote, 
   defaultMarkupPercent,
   expandedTrades,
   subItemsByTrade,
@@ -1650,17 +1650,6 @@ function TradeTable({
                               <Edit className="w-3 h-3 mr-1" />
                               Edit
                             </Button>
-                            {onRequestQuote && (
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => onRequestQuote(trade)}
-                                className="flex-1 border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
-                              >
-                                <Mail className="w-3 h-3 mr-1" />
-                                Quote
-                              </Button>
-                            )}
                             <Button 
                               size="sm" 
                               variant="destructive" 
@@ -1829,17 +1818,6 @@ function TradeTable({
                                           Sub-item
                                         </Button>
                                       )}
-                                      {onRequestQuote && (
-                                        <Button 
-                                          size="sm" 
-                                          variant="outline"
-                                          onClick={() => onRequestQuote(trade)}
-                                          className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
-                                        >
-                                          <Mail className="w-3 h-3 mr-1" />
-                                          Quote
-                                        </Button>
-                                      )}
                                       <Button size="sm" variant="destructive" onClick={() => onDeleteTrade(trade.id)}>Delete</Button>
                                     </div>
                                   </td>
@@ -1989,6 +1967,10 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                           // Use template defaults
                           setFormData(prev => {
                             const qty = prev.quantity || 1
+                            const subRate = template.defaultSubcontractorRate ?? 0
+                            const subCostFromRate = subRate * qty
+                            const subCost = template.defaultSubcontractorRate != null ? subCostFromRate : (template.defaultSubcontractorCost ?? 0)
+                            const subRateDisplay = template.defaultSubcontractorRate ?? (qty > 0 && (template.defaultSubcontractorCost ?? 0) > 0 ? (template.defaultSubcontractorCost ?? 0) / qty : 0)
                             return {
                               ...prev,
                               name: template.name,
@@ -1996,7 +1978,8 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                               isSubcontracted: template.isSubcontracted,
                               materialRate: template.defaultMaterialRate,
                               laborRate: template.defaultLaborRate,
-                              subcontractorCost: template.defaultSubcontractorCost || 0,
+                              subcontractorRate: subRateDisplay,
+                              subcontractorCost: subCost,
                               materialCost: (template.defaultMaterialRate || 0) * qty,
                               laborCost: (template.defaultLaborRate || 0) * qty,
                             }
@@ -2319,7 +2302,7 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Use quote request feature to get quotes from subcontractors in your directory
+              Enter subcontractor cost for this line (e.g. from a quote or PO).
             </p>
 
               <div>
