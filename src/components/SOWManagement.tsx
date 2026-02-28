@@ -21,7 +21,8 @@ import {
   deleteSOWTemplate,
   formatSOWForQuoteRequest,
 } from '@/services/sowService'
-import { TRADE_CATEGORIES, TradeCategory } from '@/types/constants'
+import { TradeCategory } from '@/types/constants'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,6 +50,7 @@ interface SOWManagementProps {
 }
 
 export function SOWManagement({ onBack }: SOWManagementProps) {
+  const { categories, byKey } = useTradeCategories()
   const [templates, setTemplates] = useState<SOWTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTradeCategory, setSelectedTradeCategory] = useState<string>('all')
@@ -300,9 +302,9 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Trade Categories</SelectItem>
-              {Object.entries(TRADE_CATEGORIES).map(([key, { label }]) => (
-                <SelectItem key={key} value={key}>
-                  {label}
+              {categories.map((c) => (
+                <SelectItem key={c.key} value={c.key}>
+                  {c.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -335,7 +337,7 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
                 <CardTitle className="text-lg">{template.name}</CardTitle>
                 {template.tradeCategory && (
                         <p className="text-xs text-gray-500 mt-1">
-                          {TRADE_CATEGORIES[template.tradeCategory]?.label || template.tradeCategory}
+                          {byKey[template.tradeCategory]?.label || template.tradeCategory}
                         </p>
                       )}
                     </div>
@@ -408,9 +410,9 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
-                    {Object.entries(TRADE_CATEGORIES).map(([key, { label }]) => (
-                      <SelectItem key={key} value={key}>
-                        {label}
+                    {categories.map((c) => (
+                      <SelectItem key={c.key} value={c.key}>
+                        {c.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -12,6 +12,7 @@ import {
 } from '@/types/estimateTemplate'
 import {
   getAllEstimateTemplates,
+  createEstimateTemplate,
   updateEstimateTemplate,
   deleteEstimateTemplate,
 } from '@/services/estimateTemplateService'
@@ -28,31 +29,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Edit, Trash2, ArrowLeft, FileText, TrendingUp, Link2, Settings } from 'lucide-react'
+import { Edit, Trash2, ArrowLeft, FileText, TrendingUp, Link2, Settings, PlusCircle } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import { EstimateTemplateEditor } from './EstimateTemplateEditor'
 
-interface EstimateTemplateManagementProps {
-  onBack: () => void
+/** Embeddable list + New template + edit/delete. Parent shows editor when onOpenEditor(id) is called. */
+export interface EstimateTemplatesContentProps {
+  onOpenEditor: (templateId: string) => void
 }
 
-export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagementProps) {
+export function EstimateTemplatesContent({ onOpenEditor }: EstimateTemplatesContentProps) {
   const [templates, setTemplates] = useState<PlanEstimateTemplate[]>([])
   const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<PlanEstimateTemplate | null>(null)
-  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
-
-  // Form state
   const [formName, setFormName] = useState('')
   const [formDescription, setFormDescription] = useState('')
-
-  // Load templates
-  useEffect(() => {
-    loadTemplates()
-  }, [])
 
   const loadTemplates = async () => {
     setLoading(true)
@@ -64,6 +59,26 @@ export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagemen
       alert('Failed to load estimate templates')
     } finally {
       setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadTemplates()
+  }, [])
+
+  const handleNewTemplate = async () => {
+    setCreating(true)
+    try {
+      const newTemplate = await createEstimateTemplate({
+        name: 'Untitled template',
+        trades: [],
+      })
+      onOpenEditor(newTemplate.id)
+    } catch (error) {
+      console.error('Error creating template:', error)
+      alert('Failed to create template')
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -80,15 +95,12 @@ export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagemen
       alert('Template name is required')
       return
     }
-
     setSaving(true)
     try {
-      const updates: UpdatePlanEstimateTemplateInput = {
+      const updated = await updateEstimateTemplate(editingTemplate.id, {
         name: formName.trim(),
         description: formDescription.trim() || undefined,
-      }
-
-      const updated = await updateEstimateTemplate(editingTemplate.id, updates)
+      })
       if (updated) {
         await loadTemplates()
         setShowEditDialog(false)
@@ -105,18 +117,12 @@ export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagemen
   }
 
   const handleDeleteTemplate = async (templateId: string) => {
-    if (!confirm('Are you sure you want to delete this template? This action cannot be undone.')) {
-      return
-    }
-
+    if (!confirm('Are you sure you want to delete this template? This action cannot be undone.')) return
     setDeleting(templateId)
     try {
       const success = await deleteEstimateTemplate(templateId)
-      if (success) {
-        await loadTemplates()
-      } else {
-        alert('Failed to delete template')
-      }
+      if (success) await loadTemplates()
+      else alert('Failed to delete template')
     } catch (error) {
       console.error('Error deleting template:', error)
       alert('Failed to delete template')
@@ -125,76 +131,40 @@ export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagemen
     }
   }
 
-  const handleEditItems = (templateId: string) => {
-    setEditingTemplateId(templateId)
-  }
-
-  const handleTemplateEditorBack = () => {
-    setEditingTemplateId(null)
-    loadTemplates() // Reload to get updated template
-  }
-
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
-
-  // If editing template items, show editor instead
-  if (editingTemplateId) {
-    return (
-      <EstimateTemplateEditor
-        templateId={editingTemplateId}
-        onBack={handleTemplateEditorBack}
-        onSave={handleTemplateEditorBack}
-      />
-    )
-  }
+  const formatDate = (date: Date) =>
+    new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <img src={hshLogo} alt="HSH Contractor" className="h-16 w-auto" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Estimate Templates</h1>
-                <p className="text-sm text-gray-600">Manage your estimate templates</p>
-              </div>
-            </div>
-            <Button onClick={onBack} variant="outline">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-          </div>
+    <>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+        <Button onClick={handleNewTemplate} disabled={creating} className="bg-[#0E79C9] hover:bg-[#0A5A96]">
+          <PlusCircle className="w-4 h-4 mr-2" />
+          {creating ? 'Creating…' : 'New template'}
+        </Button>
+      </div>
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-[#0E79C9]" />
+          <p className="mt-4 text-gray-500 text-sm">Loading templates…</p>
         </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0E79C9]"></div>
-            <p className="mt-4 text-gray-500">Loading templates...</p>
-          </div>
-        ) : templates.length === 0 ? (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center py-12">
-                <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-600 text-lg mb-2">No estimate templates yet</p>
-                <p className="text-gray-500 mb-6">
-                  Create templates by saving estimates in the Estimate Builder
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      ) : templates.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center py-12">
+              <FileText className="w-14 h-14 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-700 font-medium mb-1">No estimate templates yet</p>
+              <p className="text-gray-500 text-sm mb-6">
+                Create a template here or save one from the Estimate Builder on a project.
+              </p>
+              <Button onClick={handleNewTemplate} disabled={creating} size="sm" className="bg-[#0E79C9] hover:bg-[#0A5A96]">
+                <PlusCircle className="w-4 h-4 mr-2" />
+                {creating ? 'Creating…' : 'New template'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {templates.map((template) => (
               <Card key={template.id} className="hover:shadow-lg transition-shadow">
                 <CardHeader>
@@ -211,7 +181,7 @@ export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagemen
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleEditItems(template.id)}
+                        onClick={() => onOpenEditor(template.id)}
                         className="h-8 px-2"
                         title="Edit Items"
                       >
@@ -272,9 +242,7 @@ export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagemen
             ))}
           </div>
         )}
-      </main>
 
-      {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
           <DialogHeader>
@@ -325,6 +293,58 @@ export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagemen
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  )
+}
+
+interface EstimateTemplateManagementProps {
+  onBack: () => void
+}
+
+/** Full-page estimate templates view (with Back). Prefer Estimate Library → Estimate templates tab. */
+export function EstimateTemplateManagement({ onBack }: EstimateTemplateManagementProps) {
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
+
+  const handleOpenEditor = (templateId: string) => {
+    setEditingTemplateId(templateId)
+  }
+
+  const handleEditorBack = () => {
+    setEditingTemplateId(null)
+  }
+
+  if (editingTemplateId) {
+    return (
+      <EstimateTemplateEditor
+        templateId={editingTemplateId}
+        onBack={handleEditorBack}
+        onSave={handleEditorBack}
+      />
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <header className="bg-white shadow-md border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <img src={hshLogo} alt="HSH Contractor" className="h-16 w-auto" />
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Estimate Templates</h1>
+                <p className="text-sm text-gray-600">Manage your estimate templates</p>
+              </div>
+            </div>
+            <Button onClick={onBack} variant="outline">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back
+            </Button>
+          </div>
+        </div>
+      </header>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <EstimateTemplatesContent onOpenEditor={handleOpenEditor} />
+      </main>
     </div>
   )
 }

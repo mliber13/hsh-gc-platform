@@ -2305,7 +2305,7 @@ export async function createEstimateTemplateInDB(input: CreatePlanEstimateTempla
       name: input.name,
       description: input.description,
       trades: templateTrades,
-      default_markup_percent: input.defaultMarkupPercent || 11.1,
+      default_markup_percent: input.defaultMarkupPercent || 20,
       default_contingency_percent: input.defaultContingencyPercent || 10,
       usage_count: 0,
       linked_plan_ids: [],
@@ -2456,7 +2456,7 @@ export async function createItemTemplateInDB(input: any): Promise<any | null> {
     .insert({
       name: input.name,
       category: input.category,
-      default_unit: input.defaultUnit,
+      default_unit: input.defaultUnit ?? 'each',
       default_material_rate: input.defaultMaterialRate || 0,
       default_labor_rate: input.defaultLaborRate || 0,
       default_subcontractor_rate: input.defaultSubcontractorRate ?? 0,
@@ -2474,7 +2474,7 @@ export async function createItemTemplateInDB(input: any): Promise<any | null> {
 
   if (error) {
     console.error('Error creating item template:', error)
-    return null
+    throw new Error(error.message || 'Failed to create item template')
   }
 
   return {
@@ -2560,6 +2560,101 @@ export async function deleteItemTemplateFromDB(id: string): Promise<boolean> {
     return false
   }
 
+  return true
+}
+
+// ============================================================================
+// TRADE CATEGORIES (DB-backed; system + custom per org)
+// ============================================================================
+
+export async function fetchTradeCategoriesInDB(organizationId: string): Promise<{
+  id: string
+  key: string
+  label: string
+  icon: string
+  sort_order: number
+  is_system: boolean
+  created_at: string
+  updated_at: string
+}[]> {
+  if (!isOnlineMode()) return []
+  const { data, error } = await supabase
+    .from('trade_categories')
+    .select('id, key, label, icon, sort_order, is_system, created_at, updated_at')
+    .or(`organization_id.eq.system,organization_id.eq.${organizationId}`)
+    .order('sort_order', { ascending: true })
+  if (error) {
+    console.error('Error fetching trade categories:', error)
+    return []
+  }
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    key: row.key,
+    label: row.label,
+    icon: row.icon ?? '📦',
+    sort_order: row.sort_order ?? 0,
+    is_system: row.is_system ?? false,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }))
+}
+
+export async function createTradeCategoryInDB(
+  organizationId: string,
+  input: { key: string; label: string; icon?: string; sortOrder?: number }
+): Promise<{ id: string; key: string; label: string; icon: string; sortOrder: number; isSystem: boolean } | null> {
+  if (!isOnlineMode()) return null
+  const { data, error } = await supabase
+    .from('trade_categories')
+    .insert({
+      organization_id: organizationId,
+      key: input.key.trim(),
+      label: input.label.trim(),
+      icon: input.icon?.trim() ?? '📦',
+      sort_order: input.sortOrder ?? 999,
+      is_system: false,
+    })
+    .select('id, key, label, icon, sort_order, is_system')
+    .single()
+  if (error) {
+    console.error('Error creating trade category:', error)
+    throw new Error(error.code === '23505' ? 'KEY_EXISTS' : error.message || 'Failed to create category')
+  }
+  return {
+    id: data.id,
+    key: data.key,
+    label: data.label,
+    icon: data.icon ?? '📦',
+    sortOrder: data.sort_order ?? 0,
+    isSystem: data.is_system ?? false,
+  }
+}
+
+export async function updateTradeCategoryInDB(
+  id: string,
+  updates: { label?: string; icon?: string; sortOrder?: number }
+): Promise<boolean> {
+  if (!isOnlineMode()) return false
+  const payload: any = {}
+  if (updates.label !== undefined) payload.label = updates.label.trim()
+  if (updates.icon !== undefined) payload.icon = updates.icon.trim()
+  if (updates.sortOrder !== undefined) payload.sort_order = updates.sortOrder
+  if (Object.keys(payload).length === 0) return true
+  const { error } = await supabase.from('trade_categories').update(payload).eq('id', id)
+  if (error) {
+    console.error('Error updating trade category:', error)
+    return false
+  }
+  return true
+}
+
+export async function deleteTradeCategoryFromDB(id: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+  const { error } = await supabase.from('trade_categories').delete().eq('id', id)
+  if (error) {
+    console.error('Error deleting trade category:', error)
+    return false
+  }
   return true
 }
 

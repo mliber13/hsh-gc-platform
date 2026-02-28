@@ -5,13 +5,15 @@
 //
 
 import React, { useMemo, useState } from 'react'
-import { Trade, SubItem, TRADE_CATEGORIES } from '@/types'
+import { Trade, SubItem } from '@/types'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import { createPOInDB } from '@/services/supabaseService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FileText, X, ChevronDown, ChevronRight } from 'lucide-react'
+import { getCategoryAccentLeftBorderStyle } from '@/lib/categoryAccent'
 
 export interface SelectablePOLine {
   id: string
@@ -90,6 +92,7 @@ export function CreatePOModal({
   onClose,
   onSuccess,
 }: CreatePOModalProps) {
+  const { categories, byKey } = useTradeCategories()
   const [subcontractorId, setSubcontractorId] = useState<string>('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
@@ -113,7 +116,7 @@ export function CreatePOModal({
 
   const categoryOrder = useMemo(() => {
     const keys = Array.from(linesByCategory.keys())
-    const order = Object.keys(TRADE_CATEGORIES) as string[]
+    const order = categories.map((c) => c.key)
     return keys.sort((a, b) => {
       const i = order.indexOf(a)
       const j = order.indexOf(b)
@@ -122,7 +125,7 @@ export function CreatePOModal({
       if (j === -1) return -1
       return i - j
     })
-  }, [linesByCategory])
+  }, [linesByCategory, categories])
 
   const toggleCategory = (category: string) => {
     setExpandedCategories((prev) => {
@@ -254,12 +257,11 @@ export function CreatePOModal({
                 {categoryOrder.map((category) => {
                   const lines = linesByCategory.get(category) || []
                   const isExpanded = expandedCategories.has(category)
-                  const categoryLabel = TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label ?? category
-                  const categoryIcon = TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon ?? '📦'
+                  const categoryLabel = byKey[category]?.label ?? category
                   const categoryTotal = lines.reduce((s, l) => s + l.amount, 0)
                   const allInCatSelected = lines.length > 0 && lines.every((l) => selectedIds.has(l.id))
                   return (
-                    <div key={category} className="border-b last:border-b-0">
+                    <div key={category} className="border-b last:border-b-0 border-l-4" style={getCategoryAccentLeftBorderStyle(category)}>
                       <button
                         type="button"
                         onClick={() => toggleCategory(category)}
@@ -271,7 +273,7 @@ export function CreatePOModal({
                           ) : (
                             <ChevronRight className="w-4 h-4 shrink-0" />
                           )}
-                          <span>{categoryIcon} {categoryLabel}</span>
+                          <span>{categoryLabel}</span>
                           <span className="text-gray-500 font-normal">({lines.length} line{lines.length !== 1 ? 's' : ''})</span>
                         </span>
                         <span className="text-gray-600">{formatCurrency(categoryTotal)}</span>

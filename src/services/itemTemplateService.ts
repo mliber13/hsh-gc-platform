@@ -70,9 +70,13 @@ export async function getItemTemplateById(id: string): Promise<ItemTemplate | nu
  */
 export async function createItemTemplate(input: ItemTemplateInput): Promise<ItemTemplate> {
   if (isOnlineMode()) {
-    const created = await supabaseService.createItemTemplateInDB(input)
-    if (!created) throw new Error('Failed to create item template')
-    return created
+    try {
+      const created = await supabaseService.createItemTemplateInDB(input)
+      if (!created) throw new Error('Failed to create item template')
+      return created
+    } catch (e) {
+      throw e instanceof Error ? e : new Error('Failed to create item template')
+    }
   } else {
     const template: ItemTemplate = {
       id: uuidv4(),

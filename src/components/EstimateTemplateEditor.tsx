@@ -11,13 +11,16 @@ import {
   UpdatePlanEstimateTemplateInput,
 } from '@/types/estimateTemplate'
 import { Trade, TradeInput } from '@/types'
+import type { ItemTemplateInput } from '@/types/itemTemplate'
 import {
   getEstimateTemplateById,
   updateEstimateTemplate,
 } from '@/services/estimateTemplateService'
-import { getItemTemplatesByCategory } from '@/services/itemTemplateService'
+import { getItemTemplatesByCategory, createItemTemplate } from '@/services/itemTemplateService'
+import { createTradeCategory } from '@/services/tradeCategoryService'
 import { fetchSubcontractors } from '@/services/partnerDirectoryService'
-import { TRADE_CATEGORIES, UNIT_TYPES, DEFAULT_VALUES, formatCurrency } from '@/types/constants'
+import { UNIT_TYPES, DEFAULT_VALUES, formatCurrency } from '@/types/constants'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import { UnitType } from '@/types'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -31,7 +34,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ArrowLeft, Plus, Edit, Trash2, Save, X } from 'lucide-react'
+import { ArrowLeft, Plus, Edit, Trash2, Save, X, BookPlus, Layers, ChevronDown, ChevronUp } from 'lucide-react'
+import { getCategoryAccentColor } from '@/lib/categoryAccent'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface EstimateTemplateEditorProps {
@@ -46,6 +50,7 @@ interface EditableTrade extends Omit<Trade, 'id' | 'estimateId' | 'createdAt' | 
 }
 
 export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateTemplateEditorProps) {
+  const { categories, byKey } = useTradeCategories()
   const [template, setTemplate] = useState<PlanEstimateTemplate | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -104,7 +109,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
       materialCost: 0,
       subcontractorCost: 0,
       totalCost: 0,
-      markupPercent: template?.defaultMarkupPercent || 11.1,
+      markupPercent: effectiveDefaultMarkup,
       isSubcontracted: false,
       wasteFactor: DEFAULT_VALUES.WASTE_FACTOR,
       notes: '',
@@ -162,10 +167,39 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
     }
   }
 
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+
+  const toggleCategory = (category: string) => {
+    const next = new Set(expandedCategories)
+    if (next.has(category)) next.delete(category)
+    else next.add(category)
+    setExpandedCategories(next)
+  }
+
+  // Normalize legacy 11.1 to 20 so default margin is always 20%
+  const effectiveDefaultMarkup = (template?.defaultMarkupPercent === 11.1 || template?.defaultMarkupPercent == null)
+    ? 20
+    : template.defaultMarkupPercent
+
+  const order = categories.map((c) => c.key)
+  const categoryOrder = [...new Set(trades.map((t) => t.category))].sort((a, b) => {
+    const i = order.indexOf(a)
+    const j = order.indexOf(b)
+    if (i === -1 && j === -1) return a.localeCompare(b)
+    if (i === -1) return 1
+    if (j === -1) return -1
+    return i - j
+  })
+  const tradesByCategory = trades.reduce((acc, trade) => {
+    if (!acc[trade.category]) acc[trade.category] = []
+    acc[trade.category].push(trade)
+    return acc
+  }, {} as Record<string, EditableTrade[]>)
+
   const calculateTotals = () => {
     const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
     const grossProfitTotal = trades.reduce((sum, trade) => {
-      const markup = trade.markupPercent || template?.defaultMarkupPercent || 11.1
+      const markup = trade.markupPercent || effectiveDefaultMarkup
       return sum + (trade.totalCost * (markup / 100))
     }, 0)
     const contingency = basePriceTotal * ((template?.defaultContingencyPercent || 10) / 100)
@@ -273,50 +307,98 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
                 </Button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="p-3 text-left border-b border-r border-gray-300">Category</th>
-                      <th className="p-3 text-left border-b border-r border-gray-300">Item Name</th>
-                      <th className="p-3 text-center border-b border-r border-gray-300">Qty</th>
-                      <th className="p-3 text-center border-b border-r border-gray-300">Unit</th>
-                      <th className="p-3 text-center border-b border-r border-gray-300">Material Cost</th>
-                      <th className="p-3 text-center border-b border-r border-gray-300">Labor Cost</th>
-                      <th className="p-3 text-center border-b border-r border-gray-300">Sub Cost</th>
-                      <th className="p-3 text-center border-b border-r border-gray-300">Total Cost</th>
-                      <th className="p-3 text-center border-b border-r border-gray-300">Markup %</th>
-                      <th className="p-3 text-center border-b">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trades.map((trade) => (
-                      <tr key={trade.tempId} className="hover:bg-gray-50">
-                        <td className="p-3 border-b border-r border-gray-200">
-                          {TRADE_CATEGORIES[trade.category]?.label || trade.category}
-                        </td>
-                        <td className="p-3 border-b border-r border-gray-200">{trade.name}</td>
-                        <td className="p-3 text-center border-b border-r border-gray-200">{trade.quantity}</td>
-                        <td className="p-3 text-center border-b border-r border-gray-200">{trade.unit}</td>
-                        <td className="p-3 text-center border-b border-r border-gray-200">{formatCurrency(trade.materialCost)}</td>
-                        <td className="p-3 text-center border-b border-r border-gray-200">{formatCurrency(trade.laborCost)}</td>
-                        <td className="p-3 text-center border-b border-r border-gray-200">{formatCurrency(trade.subcontractorCost)}</td>
-                        <td className="p-3 text-center border-b border-r border-gray-200 font-semibold">{formatCurrency(trade.totalCost)}</td>
-                        <td className="p-3 text-center border-b border-r border-gray-200">{trade.markupPercent || template.defaultMarkupPercent || 11.1}%</td>
-                        <td className="p-3 text-center border-b">
-                          <div className="flex gap-1 justify-center">
-                            <Button size="sm" variant="outline" onClick={() => handleEditTrade(trade)}>
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleDeleteTrade(trade.tempId)}>
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
+              <div className="space-y-3">
+                {categoryOrder.map((category) => {
+                  const categoryTrades = tradesByCategory[category] || []
+                  const isExpanded = expandedCategories.has(category)
+                  const categoryTotal = categoryTrades.reduce((sum, t) => sum + t.totalCost, 0)
+
+                  return (
+                    <div key={category} className="flex rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm">
+                      <div
+                        className="shrink-0 w-1.5 rounded-l-md"
+                        style={{ backgroundColor: getCategoryAccentColor(category) }}
+                        aria-hidden
+                      />
+                      <div className="flex-1 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => toggleCategory(category)}
+                          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="text-left">
+                              <p className="font-semibold text-gray-900">
+                                {byKey[category]?.label || category}
+                              </p>
+                              <p className="text-xs text-gray-500">{categoryTrades.length} items</p>
+                            </div>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <p className="text-xs text-gray-500">Base Total</p>
+                              <p className="text-sm font-semibold text-gray-900">{formatCurrency(categoryTotal)}</p>
+                            </div>
+                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </div>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="border-t border-gray-200 bg-gray-50 px-3 py-2">
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse text-xs sm:text-sm">
+                                <thead>
+                                  <tr className="bg-gray-100 text-gray-600">
+                                    <th className="p-2 text-left border-b border-r border-gray-300">Item</th>
+                                    <th className="p-2 text-center border-b border-r border-gray-300">Qty</th>
+                                    <th className="p-2 text-center border-b border-r border-gray-300">Unit</th>
+                                    <th className="p-2 text-center border-b border-r border-gray-300">Material</th>
+                                    <th className="p-2 text-center border-b border-r border-gray-300">Labor</th>
+                                    <th className="p-2 text-center border-b border-r border-gray-300">Sub</th>
+                                    <th className="p-2 text-center border-b border-r border-gray-300">Total</th>
+                                    <th className="p-2 text-center border-b border-r border-gray-300">Markup %</th>
+                                    <th className="p-2 text-center border-b border-gray-300">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {categoryTrades.map((trade) => (
+                                    <tr key={trade.tempId} className="bg-white hover:bg-gray-50">
+                                      <td className="p-2 border-b border-r border-gray-200">
+                                        <div className="truncate font-medium text-gray-900">{trade.name}</div>
+                                        {trade.description && (
+                                          <div className="text-[11px] text-gray-500 truncate">{trade.description}</div>
+                                        )}
+                                      </td>
+                                      <td className="p-2 text-center border-b border-r border-gray-200">{trade.quantity}</td>
+                                      <td className="p-2 text-center border-b border-r border-gray-200">{trade.unit}</td>
+                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.materialCost)}</td>
+                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.laborCost)}</td>
+                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.subcontractorCost)}</td>
+                                      <td className="p-2 text-center border-b border-r border-gray-200 font-semibold">{formatCurrency(trade.totalCost)}</td>
+                                      <td className="p-2 text-center border-b border-r border-gray-200">
+                                        {trade.markupPercent || effectiveDefaultMarkup}%
+                                      </td>
+                                      <td className="p-2 text-center border-b border-gray-200">
+                                        <div className="flex gap-1 justify-center">
+                                          <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleEditTrade(trade)}>
+                                            <Edit className="w-3 h-3" />
+                                          </Button>
+                                          <Button size="icon" variant="destructive" className="h-7 w-7" onClick={() => handleDeleteTrade(trade.tempId)}>
+                                            <Trash2 className="w-3 h-3" />
+                                          </Button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </CardContent>
@@ -333,7 +415,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
             setIsAddingTrade(false)
           }}
           isAdding={isAddingTrade}
-          defaultMarkupPercent={template.defaultMarkupPercent || 11.1}
+          defaultMarkupPercent={effectiveDefaultMarkup}
           availableSubcontractors={availableSubcontractors}
         />
       )}
@@ -359,15 +441,38 @@ function TradeFormDialog({
   defaultMarkupPercent,
   availableSubcontractors,
 }: TradeFormDialogProps) {
+  const { categories, refetch: refetchCategories } = useTradeCategories()
   const [formData, setFormData] = useState<EditableTrade>(trade)
   const [itemTemplates, setItemTemplates] = useState<any[]>([])
+  const [showCreateItemModal, setShowCreateItemModal] = useState(false)
+  const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false)
+  const [createCategoryLabel, setCreateCategoryLabel] = useState('')
+  const [createCategoryKey, setCreateCategoryKey] = useState('')
+  const [createCategorySaving, setCreateCategorySaving] = useState(false)
+  const [createCategoryError, setCreateCategoryError] = useState<string | null>(null)
+  const [createItemSaving, setCreateItemSaving] = useState(false)
+  const [createItemForm, setCreateItemForm] = useState<ItemTemplateInput>({
+    category: trade.category as any,
+    name: trade.name || '',
+    description: trade.description || '',
+    defaultUnit: (trade.unit || 'each') as UnitType,
+    defaultMaterialRate: trade.materialRate ?? undefined,
+    defaultLaborRate: trade.laborRate ?? undefined,
+    defaultSubcontractorRate: trade.subcontractorRate ?? undefined,
+    defaultSubcontractorCost: trade.subcontractorCost ?? undefined,
+    isSubcontracted: trade.isSubcontracted || false,
+    defaultWasteFactor: trade.wasteFactor ?? 10,
+    notes: trade.notes || '',
+  })
+
+  const loadItemTemplates = () => {
+    if (formData.category) {
+      getItemTemplatesByCategory(formData.category).then(templates => setItemTemplates(templates || []))
+    }
+  }
 
   useEffect(() => {
-    if (formData.category) {
-      getItemTemplatesByCategory(formData.category).then(templates => {
-        setItemTemplates(templates)
-      })
-    }
+    loadItemTemplates()
   }, [formData.category])
 
   useEffect(() => {
@@ -393,6 +498,90 @@ function TradeFormDialog({
     }))
   }
 
+  const openCreateItemModal = () => {
+    setCreateItemForm({
+      category: formData.category as any,
+      name: formData.name || '',
+      description: formData.description || '',
+      defaultUnit: (formData.unit || 'each') as UnitType,
+      defaultMaterialRate: formData.materialRate ?? undefined,
+      defaultLaborRate: formData.laborRate ?? undefined,
+      defaultSubcontractorRate: formData.subcontractorRate ?? undefined,
+      defaultSubcontractorCost: formData.subcontractorCost ?? undefined,
+      isSubcontracted: formData.isSubcontracted || false,
+      defaultWasteFactor: formData.wasteFactor ?? 10,
+      notes: formData.notes || '',
+    })
+    setShowCreateItemModal(true)
+  }
+
+  const handleCreateItemTemplate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!createItemForm.name.trim()) return
+    setCreateItemSaving(true)
+    try {
+      const created = await createItemTemplate(createItemForm)
+      loadItemTemplates()
+      handleItemTemplateSelect({
+        ...created,
+        unit: created.defaultUnit,
+        laborRate: created.defaultLaborRate,
+        materialRate: created.defaultMaterialRate,
+        subcontractorRate: created.defaultSubcontractorRate,
+      })
+      setShowCreateItemModal(false)
+    } catch (err) {
+      console.error('Create item template failed:', err)
+      alert('Failed to add item to library.')
+    } finally {
+      setCreateItemSaving(false)
+    }
+  }
+
+  const slugifyCategory = (s: string) =>
+    s.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+
+  const openCreateCategoryModal = () => {
+    setCreateCategoryLabel('')
+    setCreateCategoryKey('')
+    setCreateCategoryError(null)
+    setShowCreateCategoryModal(true)
+  }
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const key = (createCategoryKey || slugifyCategory(createCategoryLabel)).trim()
+    const label = createCategoryLabel.trim()
+    if (!key || !label) {
+      setCreateCategoryError('Label is required.')
+      return
+    }
+    if (!/^[a-z0-9-]+$/.test(key)) {
+      setCreateCategoryError('Key must be lowercase letters, numbers, and hyphens only.')
+      return
+    }
+    setCreateCategoryError(null)
+    setCreateCategorySaving(true)
+    try {
+      const created = await createTradeCategory({ key, label })
+      if (created) {
+        await refetchCategories()
+        setFormData(prev => ({ ...prev, category: key }))
+        setShowCreateCategoryModal(false)
+      }
+    } catch (err) {
+      console.error('Create category failed:', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      setCreateCategoryError(
+        msg === 'KEY_EXISTS'
+          ? 'That key is already in use. Go to Estimate Library → Trade categories to edit or delete the existing one, or use a different key (e.g. flooring-2).'
+          : msg || 'Failed to create category.'
+      )
+    } finally {
+      setCreateCategorySaving(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -404,43 +593,53 @@ function TradeFormDialog({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="category">Category</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, category: value as any }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(TRADE_CATEGORIES).map(([key, value]) => (
-                      <SelectItem key={key} value={key}>
-                        {value.icon} {value.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {itemTemplates.length > 0 && (
-                <div>
-                  <Label htmlFor="item-template">Item Template (Optional)</Label>
-                  <Select onValueChange={(value) => {
-                    const template = itemTemplates.find(t => t.id === value)
-                    if (template) handleItemTemplateSelect(template)
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select template to auto-fill" />
+                <div className="flex gap-2 mt-1">
+                  <Select
+                    value={formData.category}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, category: value as any }))}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {itemTemplates.map((template) => (
-                        <SelectItem key={template.id} value={template.id}>
-                          {template.name}
-                        </SelectItem>
+                      {categories.map((c) => (
+                        <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <Button type="button" variant="outline" size="sm" onClick={openCreateCategoryModal} className="shrink-0">
+                    <Layers className="w-4 h-4 mr-1" />
+                    Add category
+                  </Button>
                 </div>
-              )}
+              </div>
+
+              <div>
+                <Label htmlFor="item-template">Item Template (Optional)</Label>
+                <div className="flex gap-2 mt-1">
+                  {itemTemplates.length > 0 && (
+                    <Select onValueChange={(value) => {
+                      const template = itemTemplates.find(t => t.id === value)
+                      if (template) handleItemTemplateSelect(template)
+                    }}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Select template to auto-fill" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {itemTemplates.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
+                            {template.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Button type="button" variant="outline" size="sm" onClick={openCreateItemModal} className="shrink-0">
+                    <BookPlus className="w-4 h-4 mr-1" />
+                    Add to library
+                  </Button>
+                </div>
+              </div>
 
               <div>
                 <Label htmlFor="name">Item Name *</Label>
@@ -564,6 +763,123 @@ function TradeFormDialog({
           </form>
         </CardContent>
       </Card>
+
+      {/* Create trade category modal */}
+      {showCreateCategoryModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Add trade category</CardTitle>
+              <p className="text-sm text-gray-500">Add a new category for estimates and the item library.</p>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleCreateCategory} className="space-y-4">
+                <div>
+                  <Label>Label (e.g. Flooring)</Label>
+                  <Input
+                    value={createCategoryLabel}
+                    onChange={(e) => {
+                      const label = e.target.value
+                      setCreateCategoryLabel(label)
+                      setCreateCategoryKey(slugifyCategory(label))
+                    }}
+                    placeholder="e.g. Flooring"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Key (optional)</Label>
+                  <Input
+                    value={createCategoryKey}
+                    onChange={(e) => setCreateCategoryKey(e.target.value)}
+                    placeholder="e.g. flooring — auto-filled from label"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Internal ID used in data. Leave blank to use a safe version of the label.</p>
+                </div>
+                {createCategoryError && <p className="text-sm text-red-600">{createCategoryError}</p>}
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setShowCreateCategoryModal(false)}>Cancel</Button>
+                  <Button type="submit" disabled={createCategorySaving || !createCategoryLabel.trim()}>
+                    {createCategorySaving ? 'Saving…' : 'Add category'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Create item template modal (add to library from this form) */}
+      {showCreateItemModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+          <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Add to item library</CardTitle>
+              <p className="text-sm text-gray-500">Save this as a reusable item template and apply to this line.</p>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleCreateItemTemplate} className="space-y-4">
+                <div>
+                  <Label>Category</Label>
+                  <Select
+                    value={createItemForm.category}
+                    onValueChange={(v) => setCreateItemForm(prev => ({ ...prev, category: v as any }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Item name *</Label>
+                  <Input
+                    value={createItemForm.name}
+                    onChange={(e) => setCreateItemForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g. 2x4 Stud"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label>Default unit</Label>
+                  <Select
+                    value={createItemForm.defaultUnit}
+                    onValueChange={(v) => setCreateItemForm(prev => ({ ...prev, defaultUnit: v as UnitType }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(UNIT_TYPES).map(([key, value]) => (
+                        <SelectItem key={key} value={key}>{value.abbreviation} - {value.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs">Material $</Label>
+                    <Input type="number" step="0.01" min="0" value={createItemForm.defaultMaterialRate ?? ''} onChange={(e) => setCreateItemForm(prev => ({ ...prev, defaultMaterialRate: parseFloat(e.target.value) || undefined }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Labor $</Label>
+                    <Input type="number" step="0.01" min="0" value={createItemForm.defaultLaborRate ?? ''} onChange={(e) => setCreateItemForm(prev => ({ ...prev, defaultLaborRate: parseFloat(e.target.value) || undefined }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Sub $</Label>
+                    <Input type="number" step="0.01" min="0" value={createItemForm.defaultSubcontractorRate ?? ''} onChange={(e) => setCreateItemForm(prev => ({ ...prev, defaultSubcontractorRate: parseFloat(e.target.value) || undefined }))} />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setShowCreateItemModal(false)}>Cancel</Button>
+                  <Button type="submit" disabled={createItemSaving || !createItemForm.name.trim()}>
+                    {createItemSaving ? 'Saving…' : 'Add to library & apply'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

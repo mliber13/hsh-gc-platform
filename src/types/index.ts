@@ -308,3 +308,5 @@ export {
   getConfidenceLevel,
 } from './constants'
 
+export type { TradeCategoryRecord, TradeCategoryInput } from './tradeCategory'
+

@@ -277,7 +277,7 @@ function transactionHasAccountOrClass(
   return { accountType: matchedType, amount: totalForAccount }
 }
 
-/** One row per line (or one row for whole txn if single-line): amount and project per line for correct allocation. */
+/** One row per line (or one row for whole txn if single-line): amount, project, and description per line. */
 function getLineLevelRows(
   t: any,
   accountIds: Set<string>,
@@ -285,7 +285,7 @@ function getLineLevelRows(
   classIds: Set<string>,
   classIdToType: Record<string, AccountType>,
   headerProjectRef: { id: string; name: string } | null
-): Array<{ lineId: string; amount: number; accountType: AccountType; projectRef: { id: string; name: string } | null }> {
+): Array<{ lineId: string; amount: number; accountType: AccountType; projectRef: { id: string; name: string } | null; description: string }> {
   const lines = t.Line || []
   const headerClassRef = t?.ClassRef || t?.ProjectRef
   const headerClassId = headerClassRef?.value ?? null
@@ -298,7 +298,8 @@ function getLineLevelRows(
   else if (headerClassName && classNameMatchesDisposal(headerClassName)) headerMatch = 'Disposal Fees'
   else if (headerClassName && classNameMatchesFuel(headerClassName)) headerMatch = 'Fuel Expense'
 
-  const rows: Array<{ lineId: string; amount: number; accountType: AccountType; projectRef: { id: string; name: string } | null }> = []
+  const txnFallbackDesc = (t.Line || [])[0]?.Description || (t.PrivateNote ?? '') || ''
+  const rows: Array<{ lineId: string; amount: number; accountType: AccountType; projectRef: { id: string; name: string } | null; description: string }> = []
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     const amt = getLineAmount(line)
@@ -334,7 +335,9 @@ function getLineLevelRows(
     if (!accountType) continue
     const lineId = line.Id != null ? String(line.Id) : String(i)
     const projectRef = getProjectRefFromLine(line, headerProjectRef)
-    rows.push({ lineId, amount: amt, accountType, projectRef })
+    const lineDesc = (line.Description ?? '').trim() || txnFallbackDesc
+    const description = (lineDesc || `Doc ${t.DocNumber ?? t.Id ?? ''}`).slice(0, 500)
+    rows.push({ lineId, amount: amt, accountType, projectRef, description })
   }
   return rows
 }
@@ -562,8 +565,6 @@ serve(async (req) => {
           }
           continue
         }
-        const firstLine = (t.Line || [])[0]
-        const description = firstLine?.Description || (t.PrivateNote ?? '') || `${entityType} ${t.DocNumber || t.Id}`
         const vendorName = getVendor(t)
         const txnDate = t.TxnDate || ''
         const docNumber = t.DocNumber ?? t.PrivateNote ?? ''
@@ -580,7 +581,7 @@ serve(async (req) => {
             accountType: row.accountType,
             qbProjectId: row.projectRef?.id ?? null,
             qbProjectName: row.projectRef?.name ?? null,
-            description: description.slice(0, 500),
+            description: row.description,
           })
         }
       }

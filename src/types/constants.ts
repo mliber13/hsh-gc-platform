@@ -45,6 +45,9 @@ export type UnitType =
   | 'hour'
   | 'day'
   | 'load'
+  | 'acre'
+  | 'ton'
+  | 'step'
 
 export type ProjectType = 'residential-renovation' | 'residential-new-build' | 'commercial-renovation' | 'commercial-new-build'
 
@@ -309,6 +312,9 @@ export const UNIT_TYPES: Record<UnitType, { label: string; abbreviation: string 
   'hour': { label: 'Hours', abbreviation: 'HR' },
   'day': { label: 'Days', abbreviation: 'DAY' },
   'load': { label: 'Loads', abbreviation: 'LOAD' },
+  'acre': { label: 'Acre', abbreviation: 'Acre' },
+  'ton': { label: 'Ton', abbreviation: 'Ton' },
+  'step': { label: 'Step', abbreviation: 'Step' },
 }
 
 // ----------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 // ============================================================================
-// HSH GC Platform - Item Library
+// HSH GC Platform - Estimate Library
 // ============================================================================
 //
-// Manage default item templates and rates for estimates
+// Item templates, trade categories, and estimate templates for the estimate book.
 //
 
 import React, { useState, useEffect } from 'react'
@@ -21,7 +21,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { TRADE_CATEGORIES, UNIT_TYPES } from '@/types'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
+import { TradeCategoriesEditor } from '@/components/TradeCategoriesManagement'
+import { getCategoryAccentLeftBorderStyle } from '@/lib/categoryAccent'
+import { EstimateTemplatesContent } from '@/components/EstimateTemplateManagement'
+import { EstimateTemplateEditor } from '@/components/EstimateTemplateEditor'
+import { UNIT_TYPES } from '@/types'
 import {
   ArrowLeft,
   PlusCircle,
@@ -31,6 +36,8 @@ import {
   ChevronUp,
   RotateCcw,
   Package,
+  Layers,
+  FileText,
 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
@@ -46,7 +53,12 @@ interface ItemLibraryProps {
 // Main Component
 // ----------------------------------------------------------------------------
 
+type ItemLibraryTab = 'items' | 'categories' | 'templates'
+
 export function ItemLibrary({ onBack }: ItemLibraryProps) {
+  const { categories, byKey } = useTradeCategories()
+  const [activeTab, setActiveTab] = useState<ItemLibraryTab>('items')
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
   const [items, setItems] = useState<ItemTemplate[]>([])
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [showItemForm, setShowItemForm] = useState(false)
@@ -112,12 +124,23 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
     acc[cat].push(item)
     return acc
   }, {} as Record<string, ItemTemplate[]>)
-  const categoryOrder = (Object.keys(TRADE_CATEGORIES) as string[]).filter((cat) =>
-    (itemsByCategory[cat]?.length ?? 0) > 0
-  )
+  const categoryOrder = categories
+    .map((c) => c.key)
+    .filter((cat) => (itemsByCategory[cat]?.length ?? 0) > 0)
 
   const formatCurrency = (amount: number | undefined) =>
     amount !== undefined ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount) : '$0.00'
+
+  // When editing a template from the Library, show full-page editor; Back returns to templates tab
+  if (activeTab === 'templates' && editingTemplateId) {
+    return (
+      <EstimateTemplateEditor
+        templateId={editingTemplateId}
+        onBack={() => setEditingTemplateId(null)}
+        onSave={() => setEditingTemplateId(null)}
+      />
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20 sm:pb-0">
@@ -126,6 +149,60 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
           {/* Header */}
           <ItemLibraryHeader onBack={onBack} />
 
+          {/* Tabs: Item templates | Trade categories | Estimate templates */}
+          <div className="flex border-b border-gray-200">
+            <button
+              type="button"
+              onClick={() => setActiveTab('items')}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === 'items'
+                  ? 'border-[#0E79C9] text-[#0E79C9]'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Package className="w-4 h-4" />
+                Item templates
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('categories')}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === 'categories'
+                  ? 'border-[#0E79C9] text-[#0E79C9]'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Layers className="w-4 h-4" />
+                Trade categories
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('templates')}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === 'templates'
+                  ? 'border-[#0E79C9] text-[#0E79C9]'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Estimate templates
+              </span>
+            </button>
+          </div>
+
+          {activeTab === 'categories' ? (
+            <div className="max-w-2xl">
+              <TradeCategoriesEditor />
+            </div>
+          ) : activeTab === 'templates' ? (
+            <EstimateTemplatesContent onOpenEditor={setEditingTemplateId} />
+          ) : (
+            <>
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
@@ -164,18 +241,15 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
                     const isCategoryExpanded = expandedCategories.has(category)
 
                     return (
-                      <Card key={category} className="border-2 border-blue-200">
+                      <Card key={category} className="border-2 border-blue-200 border-l-4" style={getCategoryAccentLeftBorderStyle(category)}>
                         <button
                           onClick={() => toggleCategory(category)}
                           className="w-full p-3 sm:p-4 flex items-center justify-between hover:bg-blue-50 transition-colors"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="text-2xl">
-                              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
-                            </span>
                             <div className="text-left">
                               <p className="font-bold text-blue-800">
-                                {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                                {byKey[category]?.label || category}
                               </p>
                               <p className="text-xs text-blue-600">{categoryItems.length} items</p>
                             </div>
@@ -276,6 +350,8 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
               </div>
             </CardContent>
           </Card>
+            </>
+          )}
         </div>
       </div>
 
@@ -321,8 +397,8 @@ function ItemLibraryHeader({ onBack }: ItemLibraryHeaderProps) {
           <div className="flex items-center space-x-3">
             <img src={hshLogo} alt="HSH Contractor" className="h-16 w-auto" />
             <div className="flex-1">
-              <h1 className="text-lg font-bold text-gray-900">Item Library</h1>
-              <p className="text-xs text-gray-600">Manage default items and rates</p>
+              <h1 className="text-lg font-bold text-gray-900">Estimate Library</h1>
+              <p className="text-xs text-gray-600">Items, categories, and estimate templates</p>
             </div>
           </div>
         </div>
@@ -337,8 +413,8 @@ function ItemLibraryHeader({ onBack }: ItemLibraryHeaderProps) {
                 <img src={hshLogo} alt="HSH Contractor Logo" className="h-20 sm:h-32 lg:h-40 w-auto" />
               </div>
               <div className="flex-shrink-0">
-                <h2 className="text-xl sm:text-4xl lg:text-5xl font-bold text-gray-900">Item Library</h2>
-                <p className="text-sm sm:text-base text-gray-600 mt-1">Manage default items and rates for estimates</p>
+                <h2 className="text-xl sm:text-4xl lg:text-5xl font-bold text-gray-900">Estimate Library</h2>
+                <p className="text-sm sm:text-base text-gray-600 mt-1">Item templates, trade categories, and estimate templates</p>
               </div>
             </div>
 
@@ -376,6 +452,7 @@ const RATE_SOURCE_OTHER = '__other__'
 const RATE_SOURCE_NONE = '__none__'
 
 function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
+  const { categories } = useTradeCategories()
   const [formData, setFormData] = useState<ItemTemplateInput>({
     category: item?.category || 'rough-framing',
     name: item?.name || '',
@@ -434,10 +511,8 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(TRADE_CATEGORIES).map(([key, value]) => (
-                      <SelectItem key={key} value={key}>
-                        {value.icon} {value.label}
-                      </SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

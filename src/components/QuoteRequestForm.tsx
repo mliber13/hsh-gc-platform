@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/select'
 import { fetchSubcontractors, fetchSuppliers } from '@/services/partnerDirectoryService'
 import { fetchProjectDocuments } from '@/services/supabaseService'
-import { TRADE_CATEGORIES } from '@/types/constants'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import { fetchSOWTemplates, formatSOWForQuoteRequest, incrementSOWTemplateUseCount } from '@/services/sowService'
 import { buildVendorPortalLink } from '@/config/appConfig'
 import { SOWTemplate } from '@/types/sow'
@@ -45,6 +45,7 @@ interface QuoteRequestFormProps {
 }
 
 export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRequestFormProps) {
+  const { byKey } = useTradeCategories()
   const [vendorEmails, setVendorEmails] = useState<string[]>([''])
   const [vendorNames, setVendorNames] = useState<string[]>([''])
   const [selectedDirectoryContacts, setSelectedDirectoryContacts] = useState<(string | null)[]>([null])
@@ -321,7 +322,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
 
       // Generate email links and send emails
       const safeLinkForRequest = (token: string) => buildVendorPortalLink(token)
-      const tradeCategoryLabel = trade?.category ? TRADE_CATEGORIES[trade.category]?.label : undefined
+      const tradeCategoryLabel = trade?.category ? byKey[trade.category]?.label : undefined
       const emailLinks = quoteRequests.map(qr => ({
         ...qr,
         link: safeLinkForRequest(qr.token),
@@ -419,7 +420,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-sm font-medium text-gray-700 mb-1">Project: {project.name}</p>
               {trade && (
-                <p className="text-sm text-gray-600">Trade: {TRADE_CATEGORIES[trade.category]?.label || trade.category}</p>
+                <p className="text-sm text-gray-600">Trade: {byKey[trade.category]?.label || trade.category}</p>
               )}
             </div>
 
@@ -545,7 +546,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
                     {availableSOWTemplates.map(template => (
                       <SelectItem key={template.id} value={template.id}>
                         {template.name}
-                        {template.tradeCategory && ` (${TRADE_CATEGORIES[template.tradeCategory]?.label || template.tradeCategory})`}
+                        {template.tradeCategory && ` (${byKey[template.tradeCategory]?.label || template.tradeCategory})`}
                       </SelectItem>
                     ))}
                   </SelectContent>

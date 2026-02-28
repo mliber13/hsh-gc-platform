@@ -140,7 +140,7 @@ export interface Estimate {
 import type { TradeCategory, CategoryGroup } from './constants'
 export type { TradeCategory, CategoryGroup }
 
-export type UnitType = 
+export type UnitType =
   | 'sqft'          // Square feet
   | 'linear_ft'     // Linear feet
   | 'cubic_yd'      // Cubic yards
@@ -149,6 +149,9 @@ export type UnitType =
   | 'hour'          // Labor hours
   | 'day'           // Days
   | 'load'          // Truck loads
+  | 'acre'          // Acre
+  | 'ton'           // Ton
+  | 'step'          // Step
 
 export type EstimateStatus =
   | 'budget'        // Rough/placeholder estimate

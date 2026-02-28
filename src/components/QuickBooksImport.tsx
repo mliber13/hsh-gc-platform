@@ -34,7 +34,7 @@ import {
   importLaborFromQBO,
   type LaborImportBatch,
 } from '@/services/laborImportService'
-import { TRADE_CATEGORIES } from '@/types'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import type { Project, Trade, SubItem } from '@/types'
 
 export interface QuickBooksImportProps {
@@ -47,6 +47,7 @@ export interface QuickBooksImportProps {
 }
 
 export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSuccess }: QuickBooksImportProps) {
+  const { categories } = useTradeCategories()
   const [open, setOpen] = useState(false)
   const [transactions, setTransactions] = useState<QBJobTransaction[]>([])
   const [loading, setLoading] = useState(false)
@@ -290,6 +291,36 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
     setSubItemId('')
   }, [category])
 
+  const suggestCategoryForTransaction = (txn: QBJobTransaction): string => {
+    const text = `${txn.description || ''} ${txn.vendorName || ''}`.toLowerCase()
+    if (txn.accountType === 'Utilities') return 'utilities'
+    if (txn.accountType === 'Disposal Fees') return 'site-prep'
+    if (txn.accountType === 'Fuel Expense') return 'site-prep'
+
+    const keywordMap: Array<{ category: string; keywords: string[] }> = [
+      { category: 'electrical', keywords: ['electrical', 'fixture', 'recessed', 'lighting', 'switch', 'outlet', 'panel', 'breaker'] },
+      { category: 'plumbing', keywords: ['plumb', 'toilet', 'faucet', 'water heater', 'sewer', 'drain', 'shower', 'tub'] },
+      { category: 'hvac', keywords: ['hvac', 'furnace', 'duct', 'air handler', 'condenser', 'heat pump', 'thermostat'] },
+      { category: 'roofing', keywords: ['roof', 'shingle', 'flashing', 'gutter'] },
+      { category: 'drywall', keywords: ['drywall', 'sheetrock', 'mud', 'tape', 'texture'] },
+      { category: 'rough-framing', keywords: ['framing', 'lumber', 'truss', 'joist', 'stud'] },
+      { category: 'windows-doors', keywords: ['window', 'door', 'garage door'] },
+      { category: 'interior-finishes', keywords: ['paint', 'floor', 'tile', 'trim', 'baseboard', 'casing'] },
+      { category: 'kitchen', keywords: ['cabinet', 'countertop', 'backsplash', 'kitchen'] },
+      { category: 'bath', keywords: ['bath', 'vanity', 'mirror', 'towel bar'] },
+      { category: 'appliances', keywords: ['appliance', 'refrigerator', 'dishwasher', 'range', 'oven', 'microwave'] },
+      { category: 'masonry-paving', keywords: ['concrete', 'masonry', 'brick', 'block', 'paving', 'asphalt'] },
+      { category: 'insulation', keywords: ['insulation', 'spray foam', 'batt'] },
+      { category: 'exterior-finishes', keywords: ['siding', 'soffit', 'fascia', 'stucco', 'exterior paint'] },
+    ]
+
+    for (const entry of keywordMap) {
+      if (entry.keywords.some((kw) => text.includes(kw))) return entry.category
+    }
+
+    return txn.accountType === 'Subcontractor Expense' ? 'other' : 'other'
+  }
+
   // Only show estimate lines that belong to the selected category
   const tradesInCategory = category ? trades.filter((t) => t.category === category) : []
 
@@ -297,7 +328,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
     setSelectedTxn(txn)
     setStep('allocate')
     setEntryType(txn.accountType === 'Subcontractor Expense' ? 'subcontractor' : 'material')
-    setCategory('')
+    setCategory(suggestCategoryForTransaction(txn))
     setTradeId('')
     setSubItemId('')
     const mappedById = projects.find((p) => (p as { qbProjectId?: string }).qbProjectId === txn.qbProjectId)
@@ -1086,6 +1117,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                         <th className="text-right p-2">Amount</th>
                         <th className="text-left p-2">Account</th>
                         <th className="text-left p-2">QB Project</th>
+                        <th className="text-left p-2 min-w-[120px]">Description</th>
                         <th className="w-24 p-2" />
                       </tr>
                     </thead>
@@ -1100,6 +1132,9 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                           </td>
                           <td className="p-2">{txn.accountType}</td>
                           <td className="p-2">{txn.qbProjectName || '—'}</td>
+                          <td className="p-2 max-w-[200px] truncate" title={txn.description || undefined}>
+                            {txn.description || '—'}
+                          </td>
                           <td className="p-2">
                             <Button size="sm" variant="outline" onClick={() => handleSelectTransaction(txn)}>
                               Allocate
@@ -1116,8 +1151,13 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
 
           {view === 'pending' && step === 'allocate' && selectedTxn && (
             <div className="space-y-4 overflow-auto">
-              <div className="p-3 bg-gray-50 rounded text-sm">
-                <strong>{selectedTxn.vendorName}</strong> · {selectedTxn.txnDate} · {selectedTxn.docNumber || '—'} · ${Math.abs(selectedTxn.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              <div className="p-3 bg-gray-50 rounded text-sm space-y-1">
+                <div>
+                  <strong>{selectedTxn.vendorName}</strong> · {selectedTxn.txnDate} · {selectedTxn.docNumber || '—'} · ${Math.abs(selectedTxn.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </div>
+                {selectedTxn.description && (
+                  <div className="text-gray-700">Description: {selectedTxn.description}</div>
+                )}
               </div>
               <div className="grid gap-3">
                 <div>
@@ -1155,8 +1195,8 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                   <Select value={category} onValueChange={setCategory}>
                     <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                     <SelectContent>
-                      {Object.entries(TRADE_CATEGORIES).map(([key, { label }]) => (
-                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                      {categories.map((c) => (
+                        <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

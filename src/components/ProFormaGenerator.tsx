@@ -308,7 +308,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
               const contingency = basePriceTotal * (contingencyPercent / 100)
               // Calculate gross profit from markup on each trade (same as EstimateBuilder)
               const grossProfitTotal = loadedTrades.reduce((sum, trade) => {
-                const itemMarkup = trade.markupPercent || 11.1 // Default markup
+                const itemMarkup = trade.markupPercent || 20 // Default markup
                 const markup = trade.totalCost * (itemMarkup / 100)
                 return sum + markup
               }, 0)
@@ -354,7 +354,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
               const contingency = basePriceTotal * (contingencyPercent / 100)
               // Calculate gross profit from markup on each trade (same as EstimateBuilder)
               const grossProfitTotal = loadedTrades.reduce((sum, trade) => {
-                const itemMarkup = trade.markupPercent || 11.1 // Default markup
+                const itemMarkup = trade.markupPercent || 20 // Default markup
                 const markup = trade.totalCost * (itemMarkup / 100)
                 return sum + markup
               }, 0)
@@ -383,7 +383,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           const contingency = basePriceTotal * (contingencyPercent / 100)
           // Calculate gross profit from markup on each trade (same as EstimateBuilder)
           const grossProfitTotal = loadedTrades.reduce((sum, trade) => {
-            const itemMarkup = trade.markupPercent || 11.1 // Default markup
+            const itemMarkup = trade.markupPercent || 20 // Default markup
             const markup = trade.totalCost * (itemMarkup / 100)
             return sum + markup
           }, 0)
@@ -426,7 +426,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           const contingency = basePriceTotal * (contingencyPercent / 100)
           // Calculate gross profit from markup on each trade (same as EstimateBuilder)
           const grossProfitTotal = trades.reduce((sum, trade) => {
-            const itemMarkup = trade.markupPercent || 11.1 // Default markup
+            const itemMarkup = trade.markupPercent || 20 // Default markup
             const markup = trade.totalCost * (itemMarkup / 100)
             return sum + markup
           }, 0)

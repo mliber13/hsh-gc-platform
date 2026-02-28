@@ -15,6 +15,7 @@ import { PlanEditor } from './components/PlanEditor'
 import { ItemLibrary } from './components/ItemLibrary'
 import { AuthGate } from './components/auth/AuthGate'
 import { useAuth } from './contexts/AuthContext'
+import { TradeCategoriesProvider } from './contexts/TradeCategoriesContext'
 import { createProject, getProject } from './services/projectService'
 import {
   createProject_Hybrid,
@@ -36,7 +37,6 @@ import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2,
 import { backupAllData } from './services/backupService'
 import { ContactDirectory } from './components/ContactDirectory'
 import { SOWManagement } from './components/SOWManagement'
-import { EstimateTemplateManagement } from './components/EstimateTemplateManagement'
 import { DealPipeline } from './components/DealPipeline'
 import { FeedbackForm } from './components/FeedbackForm'
 import { MyFeedback } from './components/MyFeedback'
@@ -56,13 +56,12 @@ type View =
   | 'selection-book'
   | 'plan-library'
   | 'plan-editor'
-  | 'item-library'
+  | 'estimate-library'
   | 'data-migration'
   | 'qb-settings'
   | 'qb-callback'
   | 'contact-directory'
   | 'sow-management'
-  | 'estimate-template-management'
   | 'deal-pipeline'
   | 'my-feedback'
   | 'privacy'
@@ -216,6 +215,12 @@ function App() {
     setCurrentView('project-detail')
   }
 
+  /** Open a project directly into a section (Estimate Book, Actuals, etc.) for faster navigation from dashboard. */
+  const handleOpenProjectSection = (project: Project, section: 'estimate' | 'actuals' | 'change-orders' | 'documents' | 'selection-book' | 'forms') => {
+    setSelectedProject(project)
+    setCurrentView(section)
+  }
+
   const handleBackToDashboard = () => {
     setSelectedProject(null)
     setCurrentView('dashboard')
@@ -271,8 +276,8 @@ function App() {
     setCurrentView('plan-library')
   }
 
-  const handleOpenItemLibrary = () => {
-    setCurrentView('item-library')
+  const handleOpenEstimateLibrary = () => {
+    setCurrentView('estimate-library')
   }
 
   const handleCreatePlan = () => {
@@ -368,19 +373,19 @@ function App() {
 
   return (
     <AuthGate>
+      <TradeCategoriesProvider>
       <div className="min-h-screen bg-background">
         {/* User Menu - Only show if online and authenticated */}
         {isOnline && user && (
-          <div className="fixed top-4 right-4 z-50">
+          <div className="fixed top-2 right-2 z-50">
             <div className="relative">
               <Button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 variant="outline"
-                size="sm"
-                className="bg-white shadow-lg"
+                size="icon"
+                className="bg-white shadow-lg h-8 w-8 rounded-full p-0 flex items-center justify-center"
               >
-                <User className="w-4 h-4 mr-2" />
-                {user.email}
+                <User className="w-4 h-4" />
               </Button>
               
               {showUserMenu && (
@@ -427,16 +432,6 @@ function App() {
                         >
                           <FileText className="w-4 h-4" />
                           SOW Templates
-                        </button>
-                        <button
-                          onClick={() => {
-                            setCurrentView('estimate-template-management');
-                            setShowUserMenu(false);
-                          }}
-                          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
-                        >
-                          <FileText className="w-4 h-4" />
-                          Estimate Templates
                         </button>
                       </>
                     )}
@@ -506,8 +501,9 @@ function App() {
           <ProjectsDashboard
             onCreateProject={handleCreateProject}
             onSelectProject={handleSelectProject}
+            onOpenProjectSection={handleOpenProjectSection}
             onOpenPlanLibrary={handleOpenPlanLibrary}
-            onOpenItemLibrary={handleOpenItemLibrary}
+            onOpenItemLibrary={handleOpenEstimateLibrary}
             onOpenDealPipeline={handleViewDealPipeline}
             onOpenQBSettings={() => setCurrentView('qb-settings')}
           />
@@ -616,7 +612,7 @@ function App() {
         />
       )}
 
-      {currentView === 'item-library' && (
+      {currentView === 'estimate-library' && (
         <ItemLibrary
           onBack={handleBackToDashboard}
         />
@@ -628,12 +624,6 @@ function App() {
 
       {currentView === 'sow-management' && (
         <SOWManagement
-          onBack={handleBackToDashboard}
-        />
-      )}
-
-      {currentView === 'estimate-template-management' && (
-        <EstimateTemplateManagement
           onBack={handleBackToDashboard}
         />
       )}
@@ -726,6 +716,7 @@ function App() {
       )}
 
       </div>
+      </TradeCategoriesProvider>
     </AuthGate>
   )
 }

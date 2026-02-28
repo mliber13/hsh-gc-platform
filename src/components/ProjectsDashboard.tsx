@@ -17,13 +17,17 @@ import { isQBConnected, getQBJobTransactions } from '@/services/quickbooksServic
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusCircle, Search, Building2, Calendar, DollarSign, FileText, Eye, ChevronDown, TrendingUp, Download, Filter, ArrowUpDown } from 'lucide-react'
+import { PlusCircle, Search, Building2, DollarSign, FileText, Eye, ChevronDown, TrendingUp, Download, BookOpen, ClipboardList, BookMarked } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import hshLogo from '/HSH Contractor Logo - Color.png'
+
+type ProjectSection = 'estimate' | 'actuals' | 'change-orders' | 'documents' | 'selection-book' | 'forms'
 
 interface ProjectsDashboardProps {
   onCreateProject: () => void
   onSelectProject: (project: Project) => void
+  /** Open project directly into a section (faster than project detail → section) */
+  onOpenProjectSection?: (project: Project, section: ProjectSection) => void
   onOpenPlanLibrary: () => void
   onOpenItemLibrary: () => void
   onOpenDealPipeline?: () => void
@@ -38,7 +42,15 @@ interface ProjectWithStats extends Project {
   tradeCount?: number
 }
 
-export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlanLibrary, onOpenItemLibrary, onOpenDealPipeline, onOpenQBSettings }: ProjectsDashboardProps) {
+const SECTION_BUTTONS: { section: ProjectSection; label: string; icon: React.ReactNode }[] = [
+  { section: 'estimate', label: 'Estimate', icon: <BookOpen className="w-3.5 h-3.5" /> },
+  { section: 'actuals', label: 'Actuals', icon: <DollarSign className="w-3.5 h-3.5" /> },
+  { section: 'selection-book', label: 'Selection', icon: <BookMarked className="w-3.5 h-3.5" /> },
+  { section: 'documents', label: 'Docs', icon: <FileText className="w-3.5 h-3.5" /> },
+  { section: 'change-orders', label: 'COs', icon: <ClipboardList className="w-3.5 h-3.5" /> },
+]
+
+export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProjectSection, onOpenPlanLibrary, onOpenItemLibrary, onOpenDealPipeline, onOpenQBSettings }: ProjectsDashboardProps) {
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -108,7 +120,7 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
             (project.estimate?.subtotal != null && project.estimate.subtotal > 0 ? project.estimate.subtotal : null) ??
             baseFromTrades
           const grossProfitTotal = trades.reduce((sum, trade) => {
-            const markup = trade.markupPercent || 11.1
+            const markup = trade.markupPercent || 20
             return sum + (trade.totalCost * (markup / 100))
           }, 0)
           const contingency = (project.estimate?.totals?.contingency != null ? project.estimate.totals.contingency : basePriceTotal * 0.10)
@@ -138,7 +150,7 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
     const trades = await getTradesForEstimate_Hybrid(project.estimate.id)
     const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
     const grossProfitTotal = trades.reduce((sum, trade) => {
-      const markup = trade.markupPercent || 11.1
+      const markup = trade.markupPercent || 20
       return sum + (trade.totalCost * (markup / 100))
     }, 0)
     const contingency = basePriceTotal * 0.10 // 10% default
@@ -196,13 +208,23 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      estimating: 'bg-blue-100 text-blue-800',
-      'in-progress': 'bg-orange-100 text-orange-800',
-      complete: 'bg-green-100 text-green-800',
+  const getStatusStyles = (status: string) => {
+    const borders: Record<string, string> = {
+      estimating: 'border-l-[#0E79C9]',
+      'in-progress': 'border-l-[#D95C00]',
+      complete: 'border-l-[#15803D]',
     }
-    return colors[status] || 'bg-gray-100 text-gray-800'
+    return `bg-gray-100 text-gray-700 border-l-4 ${borders[status] || 'border-l-gray-400'}`
+  }
+
+  /** Status colors for left bar + top border (same palette as header: blue, orange, green, purple). */
+  const getStatusAccentColor = (status: string): string => {
+    const colors: Record<string, string> = {
+      estimating: '#0E79C9',   // blue (aligns with New Project button)
+      'in-progress': '#D95C00', // orange (aligns with Plan Library)
+      complete: '#15803D',      // green (aligns with Estimate Library)
+    }
+    return colors[status] ?? '#9ca3af' // gray-400 fallback
   }
 
   const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
@@ -232,243 +254,179 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
 
 
 
+  const activeCount = projects.filter(p => p.status === 'in-progress').length
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3 sm:space-x-4">
-              <img src={hshLogo} alt="HSH Contractor" className="h-20 sm:h-24 lg:h-28 w-auto" />
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Projects Dashboard</h1>
-                <p className="text-xs sm:text-sm text-gray-600 mt-1 hidden sm:block">Manage your construction projects</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Slim app bar */}
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto shrink-0" />
+              <div className="min-w-0">
+                <h1 className="text-xl font-semibold text-gray-900 truncate">Projects Dashboard</h1>
+                <p className="text-xs text-gray-500 hidden sm:block">
+                  {activeCount} active · {projects.length} total
+                </p>
               </div>
             </div>
-            
+            <nav className="hidden sm:flex items-center gap-1 shrink-0">
+              {canCreate && (
+                <Button onClick={onCreateProject} size="sm" className="bg-[#0E79C9] hover:bg-[#0A5A96] text-white">
+                  <PlusCircle className="w-4 h-4 mr-1.5" />
+                  New Project
+                </Button>
+              )}
+              <Button
+                onClick={onOpenPlanLibrary}
+                variant="ghost"
+                size="sm"
+                className="bg-[#D95C00] text-white hover:bg-[#C04F00]"
+              >
+                Plan Library
+              </Button>
+              <Button
+                onClick={onOpenItemLibrary}
+                variant="ghost"
+                size="sm"
+                className="bg-[#15803D] text-white hover:bg-[#166534]"
+              >
+                Estimate Library
+              </Button>
+              {onOpenDealPipeline && (
+                <Button
+                  onClick={onOpenDealPipeline}
+                  variant="ghost"
+                  size="sm"
+                  className="bg-[#6D28D9] text-white hover:bg-[#5B21B6]"
+                >
+                  Deal Pipeline
+                </Button>
+              )}
+            </nav>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 sm:pb-8">
-        {/* Action cards - compact */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-          {canCreate && (
-            <Card className="bg-gradient-to-br from-[#0E79C9] to-[#0A5A96] text-white hover:shadow-lg transition-shadow cursor-pointer border-none hidden sm:block">
-              <CardContent className="pt-4 pb-4 px-4">
-                <button onClick={onCreateProject} className="w-full text-left">
-                  <div className="flex flex-col items-center justify-center py-3 sm:py-4">
-                    <div className="bg-white/20 rounded-full p-1.5 sm:p-2 mb-1 sm:mb-2">
-                      <PlusCircle className="w-6 sm:w-8 h-6 sm:h-8" />
-                    </div>
-                    <h3 className="text-lg sm:text-xl font-bold mb-0.5">Create New Project</h3>
-                    <p className="text-white/80 text-center text-sm hidden sm:block">Start a new construction project</p>
-                  </div>
-                </button>
-              </CardContent>
-            </Card>
-          )}
-
-          <Card className="bg-gradient-to-br from-[#D95C00] to-[#B34C00] text-white hover:shadow-lg transition-shadow cursor-pointer border-none hidden sm:block">
-            <CardContent className="pt-4 pb-4 px-4">
-              <button onClick={onOpenPlanLibrary} className="w-full text-left">
-                <div className="flex flex-col items-center justify-center py-3 sm:py-4">
-                  <div className="bg-white/20 rounded-full p-1.5 sm:p-2 mb-1 sm:mb-2">
-                    <FileText className="w-6 sm:w-8 h-6 sm:h-8" />
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-bold mb-0.5">Plan Library</h3>
-                  <p className="text-white/80 text-center text-sm hidden sm:block">Manage plan templates</p>
-                </div>
-              </button>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-[#34AB8A] to-[#2a8d6f] text-white hover:shadow-lg transition-shadow cursor-pointer border-none hidden sm:block">
-            <CardContent className="pt-4 pb-4 px-4">
-              <button onClick={onOpenItemLibrary} className="w-full text-left">
-                <div className="flex flex-col items-center justify-center py-3 sm:py-4">
-                  <div className="bg-white/20 rounded-full p-1.5 sm:p-2 mb-1 sm:mb-2">
-                    <DollarSign className="w-6 sm:w-8 h-6 sm:h-8" />
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-bold mb-0.5">Item Library</h3>
-                  <p className="text-white/80 text-center text-sm hidden sm:block">Manage default rates</p>
-                </div>
-              </button>
-            </CardContent>
-          </Card>
-
-          {onOpenDealPipeline && (
-            <Card className="bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] text-white hover:shadow-lg transition-shadow cursor-pointer border-none hidden sm:block">
-              <CardContent className="pt-4 pb-4 px-4">
-                <button onClick={onOpenDealPipeline} className="w-full text-left">
-                  <div className="flex flex-col items-center justify-center py-3 sm:py-4">
-                    <div className="bg-white/20 rounded-full p-1.5 sm:p-2 mb-1 sm:mb-2">
-                      <TrendingUp className="w-6 sm:w-8 h-6 sm:h-8" />
-                    </div>
-                    <h3 className="text-lg sm:text-xl font-bold mb-0.5">Deal Pipeline</h3>
-                    <p className="text-white/80 text-center text-sm hidden sm:block">Manage deals before they become projects</p>
-                  </div>
-                </button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Stats Cards */}
-        </div>
-
-        {/* QuickBooks pending - primary link to import flow */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-8">
+        {/* QuickBooks pending - slim one-line */}
         {qbPendingCount !== null && qbPendingCount > 0 && onOpenQBSettings && (
-          <Card className="mb-6 border-green-200 bg-green-50">
-            <CardContent className="py-3 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-sm text-green-800">
-                You have <strong>{qbPendingCount}</strong> pending transaction{qbPendingCount !== 1 ? 's' : ''} from QuickBooks.
-              </span>
-              <Button onClick={onOpenQBSettings} variant="outline" size="sm" className="border-green-300 text-green-800 hover:bg-green-100">
-                <Download className="w-4 h-4 mr-1" />
-                Import
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-2 py-2.5 px-4 rounded-lg border border-emerald-200 bg-emerald-50/80">
+            <span className="text-sm text-emerald-800">
+              <strong>{qbPendingCount}</strong> pending transaction{qbPendingCount !== 1 ? 's' : ''} from QuickBooks
+            </span>
+            <Button onClick={onOpenQBSettings} variant="outline" size="sm" className="border-emerald-300 text-emerald-800 hover:bg-emerald-100 shrink-0">
+              <Download className="w-4 h-4 mr-1" />
+              Import
+            </Button>
+          </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          <Card className="bg-white shadow-lg">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Active Projects</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">
-                    {projects.filter(p => p.status === 'in-progress').length}
-                  </p>
-                </div>
-                <div className="bg-orange-100 rounded-full p-3">
-                  <Building2 className="w-8 h-8 text-orange-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white shadow-lg">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Total Projects</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">{projects.length}</p>
-                </div>
-                <div className="bg-green-100 rounded-full p-3">
-                  <DollarSign className="w-8 h-8 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Search + filters toolbar */}
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              type="text"
+              placeholder="Search by name or address..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-10 text-base bg-white border-gray-200"
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[160px] h-10 bg-white border-gray-200">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="estimating">Estimating</SelectItem>
+                <SelectItem value="bidding">Bidding</SelectItem>
+                <SelectItem value="awarded">Awarded</SelectItem>
+                <SelectItem value="in-progress">In progress</SelectItem>
+                <SelectItem value="complete">Complete</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-[180px] h-10 bg-white border-gray-200">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+                <SelectItem value="name-asc">Name A–Z</SelectItem>
+                <SelectItem value="name-desc">Name Z–A</SelectItem>
+                <SelectItem value="estimate-desc">Est. value: high → low</SelectItem>
+                <SelectItem value="estimate-asc">Est. value: low → high</SelectItem>
+                <SelectItem value="actual-desc">Actual costs: high → low</SelectItem>
+                <SelectItem value="actual-asc">Actual costs: low → high</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        {/* Search Bar */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <Input
-                type="text"
-                placeholder="Search projects by name or address..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-12 text-lg"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-gray-100">
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-gray-500" />
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[180px] h-9">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All statuses</SelectItem>
-                    <SelectItem value="estimating">Estimating</SelectItem>
-                    <SelectItem value="bidding">Bidding</SelectItem>
-                    <SelectItem value="awarded">Awarded</SelectItem>
-                    <SelectItem value="in-progress">In progress</SelectItem>
-                    <SelectItem value="complete">Complete</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <ArrowUpDown className="w-4 h-4 text-gray-500" />
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-[200px] h-9">
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="newest">Newest first</SelectItem>
-                    <SelectItem value="oldest">Oldest first</SelectItem>
-                    <SelectItem value="name-asc">Name A–Z</SelectItem>
-                    <SelectItem value="name-desc">Name Z–A</SelectItem>
-                    <SelectItem value="estimate-desc">Est. value: high → low</SelectItem>
-                    <SelectItem value="estimate-asc">Est. value: low → high</SelectItem>
-                    <SelectItem value="actual-desc">Actual costs: high → low</SelectItem>
-                    <SelectItem value="actual-asc">Actual costs: low → high</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Projects List */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
+        <Card className="border-gray-200 shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between text-lg">
               <span>Your Projects</span>
-              <span className="text-sm font-normal text-gray-600">
+              <span className="text-sm font-normal text-gray-500">
                 {filteredProjects.length} {filteredProjects.length === 1 ? 'project' : 'projects'}
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {loading && projects.length === 0 ? (
               <div className="text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0E79C9]"></div>
-                <p className="mt-4 text-gray-500">Loading projects...</p>
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-[#0E79C9]"></div>
+                <p className="mt-4 text-gray-500 text-sm">Loading projects...</p>
               </div>
             ) : filteredProjects.length === 0 ? (
               <div className="text-center py-12">
-                <Building2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-600 text-lg mb-2">
+                <Building2 className="w-14 h-14 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-700 font-medium mb-1">
                   {searchQuery ? 'No projects found' : 'No projects yet'}
                 </p>
-                <p className="text-gray-500 mb-6">
+                <p className="text-gray-500 text-sm mb-6">
                   {searchQuery ? 'Try adjusting your search' : canCreate ? 'Create your first project to get started' : 'No projects yet'}
                 </p>
                 {!searchQuery && canCreate && (
-                  <Button
-                    onClick={onCreateProject}
-                    className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226]"
-                  >
+                  <Button onClick={onCreateProject} size="sm" className="bg-[#0E79C9] hover:bg-[#0A5A96]">
                     <PlusCircle className="w-4 h-4 mr-2" />
                     Create Project
                   </Button>
                 )}
                 {!searchQuery && isViewer && (
-                  <div className="flex items-center justify-center gap-2 text-gray-600">
-                    <Eye className="w-5 h-5" />
-                    <span>You have view-only access</span>
+                  <div className="flex items-center justify-center gap-2 text-gray-500 text-sm">
+                    <Eye className="w-4 h-4" />
+                    <span>View-only access</span>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="space-y-4">
-                {filteredProjects.map((project) => (
-                  <div
-                    key={project.id}
-                    onClick={() => onSelectProject(project)}
-                    className="border border-gray-200 rounded-lg p-3 sm:p-4 hover:shadow-lg hover:border-[#0E79C9] transition-all cursor-pointer bg-white"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-xl font-semibold text-gray-900">{project.name}</h3>
+              <div className="divide-y divide-gray-100">
+                {filteredProjects.map((project) => {
+                  const base = project.basePriceTotal ?? 0
+                  const est = project.estimatedValue ?? 0
+                  const actual = project.actualCosts ?? 0
+                  return (
+                    <div
+                      key={project.id}
+                      onClick={() => onSelectProject(project)}
+                      className="flex rounded-lg overflow-hidden hover:bg-gray-50/80 transition-colors cursor-pointer -mx-1 first:[&>*:last-child]:pt-0 border-t"
+                      style={{ borderTopColor: getStatusAccentColor(project.status) }}
+                    >
+                      <div
+                        className="shrink-0 w-1.5 rounded-l-md"
+                        style={{ backgroundColor: getStatusAccentColor(project.status) }}
+                        aria-hidden
+                      />
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-4 sm:py-5 flex-1 min-w-0 px-3 sm:px-4 rounded-r-lg items-center text-center sm:text-left">
+                      <div className="w-full sm:w-[300px] sm:shrink-0 min-w-0">
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
+                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{project.name}</h3>
                           <div className="relative" ref={statusMenuProjectId === project.id ? statusMenuRef : undefined}>
                             <button
                               type="button"
@@ -478,13 +436,13 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                                 setStatusMenuProjectId(prev => prev === project.id ? null : project.id)
                               }}
                               disabled={!!updatingStatusId}
-                              className={`px-3 py-1 rounded-full text-xs font-medium transition-opacity ${getStatusColor(project.status)} ${!isViewer ? 'hover:ring-2 hover:ring-offset-1 hover:ring-gray-400 cursor-pointer' : 'cursor-default'} ${updatingStatusId === project.id ? 'opacity-60' : ''}`}
-                              title={isViewer ? undefined : 'Click to change status'}
+                              className={`px-2.5 py-0.5 rounded text-xs font-medium transition-opacity ${getStatusStyles(project.status)} ${!isViewer ? 'hover:ring-1 hover:ring-gray-300 cursor-pointer' : 'cursor-default'} ${updatingStatusId === project.id ? 'opacity-60' : ''}`}
+                              title={isViewer ? undefined : 'Change status'}
                             >
-                              {updatingStatusId === project.id ? '…' : project.status.replace('-', ' ').toUpperCase()}
+                              {updatingStatusId === project.id ? '…' : project.status.replace('-', ' ')}
                             </button>
                             {statusMenuProjectId === project.id && (
-                              <div className="absolute left-0 top-full mt-1 z-10 min-w-[140px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                              <div className="absolute left-0 top-full mt-1 z-10 min-w-[140px] rounded-md border border-gray-200 bg-white py-1 shadow-lg">
                                 {STATUS_OPTIONS.map((opt) => (
                                   <button
                                     key={opt.value}
@@ -493,7 +451,7 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                                       e.stopPropagation()
                                       handleStatusChange(project, opt.value)
                                     }}
-                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg ${project.status === opt.value ? 'bg-gray-50 font-medium' : ''}`}
+                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 first:rounded-t-md last:rounded-b-md ${project.status === opt.value ? 'bg-gray-50 font-medium' : ''}`}
                                   >
                                     {opt.label}
                                   </button>
@@ -502,179 +460,99 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenPlan
                             )}
                           </div>
                         </div>
-                        <div className="space-y-1 text-sm text-gray-600">
-                          <p className="flex items-center gap-2">
-                            <Building2 className="w-4 h-4" />
-                            {typeof project.address === 'string' ? project.address : project.address?.street || 'No address'}
-                            {project.city && `, ${project.city}`}
-                            {project.state && `, ${project.state}`}
-                          </p>
-                          {project.metadata?.isCustomPlan || !project.metadata?.planId ? (
-                            <p className="flex items-center gap-2">
-                              <FileText className="w-4 h-4" />
-                              Plan: Custom
-                              <span className="text-xs bg-[#0E79C9] text-white px-1.5 py-0.5 rounded">
-                                Custom
-                              </span>
-                            </p>
-                          ) : (
-                            <p className="flex items-center gap-2">
-                              <FileText className="w-4 h-4" />
-                              Plan: {project.metadata.planId}
-                            </p>
-                          )}
-                          <p className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4" />
-                            Created: {project.createdAt.toLocaleDateString()}
-                          </p>
+                        <p className="text-sm sm:text-base text-gray-500 truncate">
+                          {typeof project.address === 'string' ? project.address : project.address?.street || 'No address'}
+                          {project.city && ` · ${project.city}`}
+                          {project.state && `, ${project.state}`}
+                        </p>
+                        <p className="text-xs sm:text-sm text-gray-400 mt-0.5 sm:mt-1">
+                          {project.metadata?.isCustomPlan || !project.metadata?.planId ? 'Custom plan' : `Plan: ${project.metadata.planId}`}
+                          {' · '}
+                          {project.createdAt.toLocaleDateString()}
+                          {project.tradeCount != null && project.tradeCount > 0 && ` · ${project.tradeCount} items`}
+                        </p>
+                      </div>
+                      {onOpenProjectSection && (
+                        <div className="w-full sm:w-[320px] sm:shrink-0 flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-start gap-1 py-1 sm:py-1.5 sm:pl-7" onClick={(e) => e.stopPropagation()}>
+                          {SECTION_BUTTONS.map(({ section, label, icon }) => (
+                            <button
+                              key={section}
+                              type="button"
+                              onClick={() => onOpenProjectSection(project, section)}
+                              className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-200 hover:text-gray-900 border border-transparent hover:border-gray-300 transition-colors whitespace-nowrap"
+                              title={section === 'change-orders' ? 'Change orders' : section === 'selection-book' ? 'Selection book' : section === 'documents' ? 'Project documents' : section === 'estimate' ? 'Estimate book' : section === 'actuals' ? 'Project actuals' : 'Forms'}
+                            >
+                              {icon}
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0 sm:min-w-[24px]" aria-hidden />
+                      <div className="flex items-baseline gap-4 sm:gap-6 shrink-0 text-center min-w-0 sm:w-[320px] sm:justify-end">
+                        <div className="sm:w-[100px] sm:text-center">
+                          <p className="text-xs text-gray-500">Base</p>
+                          <p className="text-base sm:text-lg font-semibold text-sky-700 tabular-nums">{formatCurrency(base)}</p>
+                        </div>
+                        <div className="sm:w-[100px] sm:text-center">
+                          <p className="text-xs text-gray-500">Est.</p>
+                          <p className="text-base sm:text-lg font-semibold text-gray-900 tabular-nums">{formatCurrency(est)}</p>
+                        </div>
+                        <div className="sm:w-[100px] sm:text-center">
+                          <p className="text-xs text-gray-500">Actual</p>
+                          <p className="text-base sm:text-lg font-semibold text-emerald-700 tabular-nums">{formatCurrency(actual)}</p>
                         </div>
                       </div>
-                      <div className="text-left sm:text-right sm:ml-4 space-y-2 w-full sm:w-auto min-w-0">
-                        {(() => {
-                          const base = project.basePriceTotal ?? 0
-                          const est = project.estimatedValue ?? 0
-                          const actual = project.actualCosts ?? 0
-                          const maxVal = Math.max(base, est, actual, 1)
-                          const barMinPct = 2
-                          const baseBarPct = base > 0 ? (base / maxVal) * 100 : barMinPct
-                          const estBarPct = est > 0 ? (est / maxVal) * 100 : barMinPct
-                          const actualBarPct = actual > 0 ? (actual / maxVal) * 100 : barMinPct
-                          const barContainerClass = 'w-full max-w-[180px] h-2.5 rounded overflow-hidden bg-gray-100 shrink-0'
-                          return (
-                            <>
-                              <div
-                                className="grid gap-x-2 gap-y-1.5 items-center"
-                                style={{ gridTemplateColumns: '5.5rem minmax(0, 11rem) 1fr' }}
-                              >
-                                <span className="text-sm text-gray-600">Base Price</span>
-                                <div className={barContainerClass}>
-                                  <div
-                                    style={{ width: `${baseBarPct}%` }}
-                                    className={`h-full shrink-0 min-w-0 rounded-l ${base > 0 ? 'bg-slate-200' : 'bg-gray-200'}`}
-                                    title="Base Price Total"
-                                  />
-                                </div>
-                                <span className="text-base sm:text-lg font-bold text-gray-800 tabular-nums text-right">
-                                  {formatCurrency(base)}
-                                </span>
-                                <span className="text-sm text-gray-600">Total Est.</span>
-                                <div className={barContainerClass}>
-                                  <div
-                                    style={{ width: `${estBarPct}%` }}
-                                    className={`h-full shrink-0 min-w-0 rounded-l ${est > 0 ? 'bg-blue-200' : 'bg-gray-200'}`}
-                                    title="Total Estimated"
-                                  />
-                                </div>
-                                <span className="text-xl sm:text-2xl font-bold text-[#0E79C9] tabular-nums text-right">
-                                  {formatCurrency(est)}
-                                </span>
-                                <span className="text-sm text-gray-600">Actual to Date</span>
-                                <div className={barContainerClass}>
-                                  <div
-                                    style={{ width: `${actualBarPct}%` }}
-                                    className={`h-full shrink-0 min-w-0 rounded-l ${actual > 0 ? 'bg-emerald-200' : 'bg-gray-200'}`}
-                                    title="Actual Cost to Date"
-                                  />
-                                </div>
-                                <span className="text-lg sm:text-xl font-bold text-[#34AB8A] tabular-nums text-right">
-                                  {formatCurrency(actual)}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-500">
-                                {project.tradeCount || 0} {project.tradeCount === 1 ? 'item' : 'items'}
-                              </p>
-                            </>
-                          )
-                        })()}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Mobile Action Menu - Fixed at bottom */}
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
+        {/* Mobile: bottom action bar */}
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
           {showMobileActions && (
-            <div className="border-b border-gray-200 p-2 bg-gray-50 max-h-80 overflow-y-auto">
-              <div className="space-y-1">
-                {canCreate && (
-                  <button
-                    onClick={() => {
-                      onCreateProject()
-                      setShowMobileActions(false)
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
-                  >
-                    <div className="bg-[#0E79C9] text-white rounded-full p-2">
-                      <PlusCircle className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">New Project</p>
-                      <p className="text-xs text-gray-500">Start a new construction project</p>
-                    </div>
-                  </button>
-                )}
+            <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
+              {canCreate && (
                 <button
-                  onClick={() => {
-                    onOpenPlanLibrary()
-                    setShowMobileActions(false)
-                  }}
-                  className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
+                  onClick={() => { onCreateProject(); setShowMobileActions(false) }}
+                  className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-[#0E79C9]/20 bg-[#0E79C9]/5"
                 >
-                  <div className="bg-[#D95C00] text-white rounded-full p-2">
-                    <FileText className="w-4 h-4" />
-                  </div>
+                  <PlusCircle className="w-5 h-5 text-[#0E79C9]" />
                   <div>
-                    <p className="font-medium text-gray-900">Plan Library</p>
-                    <p className="text-xs text-gray-500">Manage plan templates</p>
+                    <p className="font-medium text-gray-900">New Project</p>
+                    <p className="text-xs text-gray-500">Start a new project</p>
                   </div>
                 </button>
-                <button
-                  onClick={() => {
-                    onOpenItemLibrary()
-                    setShowMobileActions(false)
-                  }}
-                  className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
-                >
-                  <div className="bg-[#34AB8A] text-white rounded-full p-2">
-                    <DollarSign className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">Item Library</p>
-                    <p className="text-xs text-gray-500">Manage default rates</p>
-                  </div>
+              )}
+              <button onClick={() => { onOpenPlanLibrary(); setShowMobileActions(false) }} className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700">
+                <FileText className="w-5 h-5 text-gray-400" />
+                <span className="font-medium">Plan Library</span>
+              </button>
+              <button onClick={() => { onOpenItemLibrary(); setShowMobileActions(false) }} className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700">
+                <DollarSign className="w-5 h-5 text-gray-400" />
+                <span className="font-medium">Estimate Library</span>
+              </button>
+              {onOpenDealPipeline && (
+                <button onClick={() => { onOpenDealPipeline(); setShowMobileActions(false) }} className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700">
+                  <TrendingUp className="w-5 h-5 text-gray-400" />
+                  <span className="font-medium">Deal Pipeline</span>
                 </button>
-                {onOpenDealPipeline && (
-                  <button
-                    onClick={() => {
-                      onOpenDealPipeline()
-                      setShowMobileActions(false)
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-white rounded-lg flex items-center gap-3 transition-colors"
-                  >
-                    <div className="bg-[#0E79C9] text-white rounded-full p-2">
-                      <Building2 className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Deal Pipeline</p>
-                      <p className="text-xs text-gray-500">Manage deals before projects</p>
-                    </div>
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           )}
-          <div className="p-3">
+          <div className="p-2">
             <Button
               onClick={() => setShowMobileActions(!showMobileActions)}
-              className="w-full bg-gradient-to-r from-[#0E79C9] to-[#0A5A96] hover:from-[#0A5A96] hover:to-[#084577] text-white h-12"
+              variant="outline"
+              className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
             >
-              <span className="flex items-center justify-center gap-2">
+              <span className="flex items-center justify-center gap-2 text-gray-700">
                 Actions
-                <ChevronDown className={`w-5 h-5 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
               </span>
             </Button>
           </div>

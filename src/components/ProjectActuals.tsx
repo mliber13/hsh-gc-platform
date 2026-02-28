@@ -42,9 +42,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { TRADE_CATEGORIES, UNIT_TYPES } from '@/types'
+import { UNIT_TYPES } from '@/types'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import type { UnitType } from '@/types'
 import { QuickBooksImport } from '@/components/QuickBooksImport'
+import { getCategoryAccentColor } from '@/lib/categoryAccent'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { 
   ArrowLeft, 
@@ -119,6 +121,7 @@ interface SplitAllocation {
 // ----------------------------------------------------------------------------
 
 export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
+  const { categories, byKey } = useTradeCategories()
   const [trades, setTrades] = useState<Trade[]>([])
   const [actualEntries, setActualEntries] = useState<ActualEntry[]>([])
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
@@ -295,7 +298,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const calculateEstimatedTotal = () => {
     const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
     const grossProfitTotal = trades.reduce((sum, trade) => {
-      const markup = trade.markupPercent || 11.1
+      const markup = trade.markupPercent || 20
       return sum + (trade.totalCost * (markup / 100))
     }, 0)
     const contingency = basePriceTotal * 0.10
@@ -402,7 +405,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     const categoryTrades = trades.filter(t => t.category === category)
     return categoryTrades.reduce((sum, trade) => {
       const total = trade.totalCost
-      const markup = trade.markupPercent || 11.1
+      const markup = trade.markupPercent || 20
       return sum + total + (total * markup / 100)
     }, 0)
   }
@@ -466,10 +469,16 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     setExpandedCategories(newExpanded)
   }
 
-  // Group trades by category only (no group level)
-  const categoryOrder = (Object.keys(TRADE_CATEGORIES) as string[]).filter(
-    (cat) => trades.some((t) => t.category === cat)
-  )
+  // Group trades by category only (no group level); include custom categories
+  const order = categories.map((c) => c.key)
+  const categoryOrder = [...new Set(trades.map((t) => t.category))].sort((a, b) => {
+    const i = order.indexOf(a)
+    const j = order.indexOf(b)
+    if (i === -1 && j === -1) return a.localeCompare(b)
+    if (i === -1) return 1
+    if (j === -1) return -1
+    return i - j
+  })
   const tradesByCategory = trades.reduce((acc, trade) => {
     if (!acc[trade.category]) acc[trade.category] = []
     acc[trade.category].push(trade)
@@ -742,7 +751,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                             <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
                               <span>{formatDate(entry.date)}</span>
                               <span>•</span>
-                              <span>{entry.category ? (TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category) : 'No category'}</span>
+                              <span>{entry.category ? (byKey[entry.category]?.label || entry.category) : 'No category'}</span>
                               {splitChildren.length > 0 && (
                                 <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-semibold">Split ({splitChildren.length})</span>
                               )}
@@ -1104,18 +1113,21 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   const categorySubVariance = categoryActualBreakdown.subcontractor - categoryEstimateBreakdown.subcontractor
 
                   return (
-                    <Card key={category} className="border-2 border-blue-200">
+                    <div key={category} className="flex rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm">
+                      <div
+                        className="shrink-0 w-1.5 rounded-l-md"
+                        style={{ backgroundColor: getCategoryAccentColor(category) }}
+                        aria-hidden
+                      />
+                      <Card className="flex-1 rounded-none border-0 shadow-none min-w-0">
                       <button
                         onClick={() => toggleCategory(category)}
-                        className="w-full p-4 flex items-center justify-between hover:bg-blue-50 transition-colors"
+                        className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
                       >
                         <div className="flex items-center gap-3">
-                          <span className="text-2xl">
-                            {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
-                          </span>
                           <div className="text-left">
-                            <p className="font-bold text-blue-800">
-                              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                            <p className="font-bold text-gray-900">
+                              {byKey[category]?.label || category}
                             </p>
                             <p className="text-xs text-gray-500">
                               {categoryTrades.length} items • {getActualsByCategory(category).length} entries
@@ -1132,7 +1144,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       </button>
 
                       {isCategoryExpanded && (
-                        <div className="border-t border-blue-200 bg-blue-50 p-4">
+                        <div className="border-t border-gray-200 bg-gray-50 p-4">
                           {(categoryEntries.length > 0 || categoryEstimateBreakdown.labor > 0 || categoryEstimateBreakdown.material > 0 || categoryEstimateBreakdown.subcontractor > 0) && (
                                   <div className="mb-3 pb-2 border-b border-gray-300">
                                     <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -1149,7 +1161,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                       {unlinkedEntries.length > 0 && (
                                         <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 border border-yellow-300 inline-flex items-center gap-1">
                                           📋 General ({unlinkedEntries.length}) {formatCurrency(unlinkedEntries.reduce((sum, e) => sum + e.amount, 0))}
-                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ category: category, label: `${TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category} · General (invoices not tied to a line)`, generalOnly: true }) }} title="View invoices and entries">View ({unlinkedEntries.length})</Button>
+                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ category: category, label: `${byKey[category]?.label || category} · General (invoices not tied to a line)`, generalOnly: true }) }} title="View invoices and entries">View ({unlinkedEntries.length})</Button>
                                         </span>
                                       )}
                                     </div>
@@ -1228,7 +1240,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     {unlinkedEntries.length > 0 && (
                                       <div className="mt-3 px-3 py-2 rounded-md border bg-yellow-50 border-yellow-300 text-yellow-800 text-xs flex items-center justify-between gap-2">
                                         <span><span className="font-semibold">📋 General ({unlinkedEntries.length}):</span> {formatCurrency(unlinkedEntries.reduce((sum, e) => sum + e.amount, 0))}</span>
-                                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-yellow-800 hover:bg-yellow-100" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ category: category, label: `${TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category} · General (invoices not tied to a line)`, generalOnly: true }) }} title="View invoices and entries">View ({unlinkedEntries.length})</Button>
+                                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-yellow-800 hover:bg-yellow-100" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ category: category, label: `${byKey[category]?.label || category} · General (invoices not tied to a line)`, generalOnly: true }) }} title="View invoices and entries">View ({unlinkedEntries.length})</Button>
                                       </div>
                                     )}
                                   </div>
@@ -1241,7 +1253,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     const subItemActuals = tradeSubItems.flatMap(si => getActualsBySubItem(si.id))
                                     const tradeActualTotal = tradeActuals.reduce((sum, entry) => sum + entry.amount, 0) + 
                                                              subItemActuals.reduce((sum, entry) => sum + entry.amount, 0)
-                                    const tradeEstimate = trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100)
+                                    const tradeEstimate = trade.totalCost * (1 + (trade.markupPercent || 20) / 100)
                                     const tradeVariance = tradeActualTotal - tradeEstimate
                                     const isTradeOver = tradeVariance > 0
 
@@ -1463,7 +1475,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                             {tradeSubItems.map((subItem) => {
                                               const subItemActuals = getActualsBySubItem(subItem.id)
                                               const subItemActualTotal = subItemActuals.reduce((sum, entry) => sum + entry.amount, 0)
-                                              const subItemEstimate = subItem.totalCost * (1 + (subItem.markupPercent || 11.1) / 100)
+                                              const subItemEstimate = subItem.totalCost * (1 + (subItem.markupPercent || 20) / 100)
                                               const subItemVariance = subItemActualTotal - subItemEstimate
                                               
                                               return (
@@ -1546,7 +1558,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                     <p className="text-sm font-medium text-gray-900">{entry.description}</p>
                                             <p className="text-xs text-gray-600">
                                               {formatDate(entry.date)}
-                                              {entry.category && ` • ${TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category}`}
+                                              {entry.category && ` • ${byKey[entry.category]?.label || entry.category}`}
                                                       {entry.tradeId && trades.find(t => t.id === entry.tradeId) && ` • ${trades.find(t => t.id === entry.tradeId)?.name}`}
                                                       {entry.vendor && ` • ${entry.vendor}`}
                                                       {entry.invoiceNumber && ` • Invoice: ${entry.invoiceNumber}`}
@@ -1617,7 +1629,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                       <p className="text-sm font-medium text-gray-900">{entry.description}</p>
                                                       <p className="text-xs text-gray-600">
                                                         {formatDate(entry.date)}
-                                                        {entry.category && ` • ${TRADE_CATEGORIES[entry.category as keyof typeof TRADE_CATEGORIES]?.label || entry.category}`}
+                                                        {entry.category && ` • ${byKey[entry.category]?.label || entry.category}`}
                                                         {entry.vendor && ` • ${entry.vendor}`}
                                                         {entry.invoiceNumber && ` • Invoice: ${entry.invoiceNumber}`}
                                                         {entry.subcontractorName && ` • ${entry.subcontractorName}`}
@@ -1670,7 +1682,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                 </div>
                       </div>
                     )}
-                  </Card>
+                      </Card>
+                    </div>
                 )
               })}
 
@@ -1745,10 +1758,13 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                               className="bg-gray-50 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
                               onClick={() => toggleCategory(category)}
                             >
-                              <td className="p-3 border-b border-r-2 border-l-4 border-l-slate-400 border-gray-300 pl-8 bg-gray-50">
+                              <td 
+                                className="p-3 border-b border-r-2 border-gray-300 pl-8 bg-gray-50"
+                                style={{ borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: getCategoryAccentColor(category) }}
+                              >
                                 <div className="flex items-center gap-2">
                                   {isCategoryExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
-                                  {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                                  {byKey[category]?.label || category}
                                 </div>
                               </td>
                               <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
@@ -1771,7 +1787,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                               const tradeSubItems = subItemsByTrade[trade.id] || []
                               const subItemActuals = tradeSubItems.flatMap(si => getActualsBySubItem(si.id))
                               const tradeActualTotal = tradeActuals.reduce((sum, entry) => sum + entry.amount, 0) + subItemActuals.reduce((sum, entry) => sum + entry.amount, 0)
-                              const tradeEstimate = trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100)
+                              const tradeEstimate = trade.totalCost * (1 + (trade.markupPercent || 20) / 100)
                               const tradeEstimateBreakdown = getTradeEstimateByType(trade)
                               const tradeActualBreakdown = {
                                 labor: tradeActuals.filter(e => e.type === 'labor').reduce((s, e) => s + e.amount, 0) + subItemActuals.filter(e => e.type === 'labor').reduce((s, e) => s + e.amount, 0),
@@ -1846,7 +1862,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     const siLaborAct = siActuals.filter(e => e.type === 'labor').reduce((s, e) => s + e.amount, 0)
                                     const siMaterialAct = siActuals.filter(e => e.type === 'material').reduce((s, e) => s + e.amount, 0)
                                     const siSubAct = siActuals.filter(e => e.type === 'subcontractor').reduce((s, e) => s + e.amount, 0)
-                                    const siEstimate = subItem.totalCost * (1 + (subItem.markupPercent || 11.1) / 100)
+                                    const siEstimate = subItem.totalCost * (1 + (subItem.markupPercent || 20) / 100)
                                     const siVariance = siActualTotal - siEstimate
                                     return (
                                       <tr key={subItem.id} className="bg-blue-50/40 hover:bg-blue-50/60">
@@ -1944,7 +1960,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-medium bg-yellow-50/80">{formatCurrency(genTotal)}</td>
                                   <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-yellow-50/80">—</td>
                                   <td className="p-3 text-center border-b bg-yellow-50/80">
-                                    <Button size="sm" variant="ghost" className="h-6 px-1 text-xs text-yellow-800" onClick={() => setViewEntriesCell({ category, label: `${TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category} · General (invoices not tied to a line)`, generalOnly: true })} title="View invoices and entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({unlinkedForCategory.length})</Button>
+                                    <Button size="sm" variant="ghost" className="h-6 px-1 text-xs text-yellow-800" onClick={() => setViewEntriesCell({ category, label: `${byKey[category]?.label || category} · General (invoices not tied to a line)`, generalOnly: true })} title="View invoices and entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({unlinkedForCategory.length})</Button>
                                   </td>
                                 </tr>
                               )
@@ -3122,8 +3138,7 @@ function ActualEntryForm({
                               <SelectContent>
                                 {categories.map((category) => (
                                   <SelectItem key={category} value={category}>
-                                    {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
-                                    {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                                    {byKey[category]?.label || category}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -3384,8 +3399,7 @@ function ActualEntryForm({
                               <SelectContent>
                                 {categories.map((category) => (
                                   <SelectItem key={category} value={category}>
-                                    {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
-                                    {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                                    {byKey[category]?.label || category}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -3496,8 +3510,7 @@ function ActualEntryForm({
                 <SelectContent>
                   {categories.map((category) => (
                     <SelectItem key={category} value={category}>
-                      {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
-                      {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                      {byKey[category]?.label || category}
                     </SelectItem>
                   ))}
                 </SelectContent>

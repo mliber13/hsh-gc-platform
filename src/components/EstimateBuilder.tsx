@@ -17,7 +17,6 @@ import {
   TradeInput,
   UnitType,
   Subcontractor as DirectorySubcontractor,
-  TRADE_CATEGORIES,
   UNIT_TYPES,
   DEFAULT_VALUES,
   PROJECT_TYPES,
@@ -25,6 +24,7 @@ import {
   getEstimateStatusLabel,
   getEstimateStatusBadgeClass,
 } from '@/types'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import {
   addTrade,
   updateTrade,
@@ -63,6 +63,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils'
 import { fetchSubcontractors } from '@/services/partnerDirectoryService'
 import { CreatePOModal } from './CreatePOModal'
+import { getCategoryAccentColor } from '@/lib/categoryAccent'
 import { 
   Edit, 
   Trash2, 
@@ -119,12 +120,13 @@ interface TradeFormData extends TradeInput {
 // ----------------------------------------------------------------------------
 
 export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProps) {
+  const { categories, byKey } = useTradeCategories()
   // State
   const [projectData, setProjectData] = useState<Project | null>(project || null)
   const [trades, setTrades] = useState<Trade[]>([])
   const [editingTrade, setEditingTrade] = useState<TradeFormData | null>(null)
   const [isAddingTrade, setIsAddingTrade] = useState(false)
-  const [markupPercent, setMarkupPercent] = useState(11.1)
+  const [markupPercent, setMarkupPercent] = useState(20)
   const [contingencyPercent, setContingencyPercent] = useState(10)
   const [showPrintReport, setShowPrintReport] = useState(false)
   const [reportDepth, setReportDepth] = useState<ReportDepth>('full')
@@ -620,7 +622,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         const category = defaultCategories[i]
         const tradeInput: TradeInput = {
           category: category as any,
-          name: `${TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category} - To Be Determined`,
+          name: `${byKey[category]?.label || category} - To Be Determined`,
           description: '',
           quantity: 0,
           unit: 'each',
@@ -971,7 +973,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
                     step="0.1"
                     value={bulkMarkupPercent}
                     onChange={(e) => setBulkMarkupPercent(e.target.value)}
-                    placeholder="11.1"
+                    placeholder="20"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     This will update the markup percentage for all {trades.length} cost item(s) in this estimate.
@@ -1487,6 +1489,7 @@ function TradeTable({
   onEditSubItem,
   onDeleteSubItem,
 }: TradeTableProps) {
+  const { categories, byKey } = useTradeCategories()
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   
   const formatCurrency = (amount: number) => 
@@ -1504,10 +1507,16 @@ function TradeTable({
     setExpandedCategories(newExpanded)
   }
 
-  // Group trades by category only (no group level)
-  const categoryOrder = (Object.keys(TRADE_CATEGORIES) as string[]).filter((cat) =>
-    trades.some((t) => t.category === cat)
-  )
+  // Group trades by category only (no group level); include custom categories not in list
+  const order = categories.map((c) => c.key)
+  const categoryOrder = [...new Set(trades.map((t) => t.category))].sort((a, b) => {
+    const i = order.indexOf(a)
+    const j = order.indexOf(b)
+    if (i === -1 && j === -1) return a.localeCompare(b)
+    if (i === -1) return 1
+    if (j === -1) return -1
+    return i - j
+  })
   const tradesByCategory = trades.reduce((acc, trade) => {
     if (!acc[trade.category]) acc[trade.category] = []
     acc[trade.category].push(trade)
@@ -1580,18 +1589,21 @@ function TradeTable({
               const categoryEstimated = categoryTotal + categoryMarkup
 
               return (
-                <Card key={category} className="border-2 border-blue-200">
+                <div key={category} className="flex rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm">
+                  <div
+                    className="shrink-0 w-1.5 rounded-l-md"
+                    style={{ backgroundColor: getCategoryAccentColor(category) }}
+                    aria-hidden
+                  />
+                  <Card className="flex-1 rounded-none border-0 shadow-none min-w-0">
                   <button
                     onClick={() => toggleCategory(category)}
-                    className="w-full p-4 flex items-center justify-between hover:bg-blue-50 transition-colors"
+                    className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">
-                        {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
-                      </span>
                       <div className="text-left">
-                        <p className="font-bold text-blue-800">
-                          {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                        <p className="font-bold text-gray-900">
+                          {byKey[category]?.label || category}
                         </p>
                         <p className="text-xs text-gray-500">{categoryTrades.length} items</p>
                       </div>
@@ -1606,7 +1618,7 @@ function TradeTable({
                   </button>
 
                   {isCategoryExpanded && (
-                    <div className="border-t border-blue-200 bg-blue-50 p-3 space-y-3">
+                    <div className="border-t border-gray-200 bg-gray-50 p-3 space-y-3">
                       {categoryTrades.map((trade) => (
                         <div key={trade.id} className="bg-white rounded-lg p-3 border border-gray-200">
                           <div className="flex items-start justify-between mb-2">
@@ -1664,7 +1676,8 @@ function TradeTable({
                       ))}
                     </div>
                   )}
-                </Card>
+                  </Card>
+                </div>
               )
             })
           )}
@@ -1726,10 +1739,13 @@ function TradeTable({
                       className="bg-gray-50 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => toggleCategory(category)}
                     >
-                      <td className="p-3 border-b border-r-2 border-l-4 border-l-slate-400 border-gray-300 pl-8 bg-gray-50">
+                      <td 
+                        className="p-3 border-b border-r-2 border-gray-300 pl-8 bg-gray-50"
+                        style={{ borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: getCategoryAccentColor(category) }}
+                      >
                         <div className="flex items-center gap-2">
                           {isCategoryExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
-                          {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                          {byKey[category]?.label || category}
                         </div>
                       </td>
                       <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
@@ -1886,6 +1902,7 @@ interface TradeFormProps {
 }
 
 function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubcontractors }: TradeFormProps) {
+  const { categories } = useTradeCategories()
   const [formData, setFormData] = useState<TradeFormData>(trade)
   const [itemTemplates, setItemTemplates] = useState<any[]>([])
 
@@ -1945,10 +1962,8 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(TRADE_CATEGORIES).map(([key, value]) => (
-                      <SelectItem key={key} value={key}>
-                        {value.icon} {value.label}
-                      </SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -2313,7 +2328,7 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                 step="0.1"
                 value={formData.markupPercent || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, markupPercent: parseFloat(e.target.value) || 0 }))}
-                placeholder="e.g., 11.1"
+                placeholder="e.g., 20"
               />
               <p className="text-xs text-gray-500 mt-1">
                 Leave blank to use default markup percentage

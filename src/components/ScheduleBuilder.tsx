@@ -14,7 +14,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { TRADE_CATEGORIES } from '@/types'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
+import { getCategoryAccentLeftBorderStyle } from '@/lib/categoryAccent'
 import {
   ArrowLeft,
   Calendar,
@@ -41,6 +42,7 @@ interface ScheduleBuilderProps {
 // ----------------------------------------------------------------------------
 
 export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
+  const { byKey } = useTradeCategories()
   const [trades, setTrades] = useState<Trade[]>([])
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([])
   const [projectStartDate, setProjectStartDate] = useState<Date>(project.startDate || new Date())
@@ -407,14 +409,11 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
               ) : (
                 <div className="space-y-3">
                   {scheduleItems.map((item, index) => (
-                    <Card key={item.id} className="border-2">
+                    <Card key={item.id} className="border-2 border-l-4" style={getCategoryAccentLeftBorderStyle(item.trade)}>
                       <CardContent className="pt-4">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="text-xl">
-                                {TRADE_CATEGORIES[item.trade as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
-                              </span>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                   <h4 className="font-semibold text-gray-900">{item.name}</h4>
@@ -426,7 +425,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                                   )}
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                  {TRADE_CATEGORIES[item.trade as keyof typeof TRADE_CATEGORIES]?.label || item.trade}
+                                  {byKey[item.trade]?.label || item.trade}
                                 </p>
                               </div>
                             </div>

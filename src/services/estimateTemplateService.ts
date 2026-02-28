@@ -73,7 +73,7 @@ export async function createEstimateTemplate(input: CreatePlanEstimateTemplateIn
       name: input.name,
       description: input.description,
       trades: templateTrades,
-      defaultMarkupPercent: input.defaultMarkupPercent || 11.1,
+      defaultMarkupPercent: input.defaultMarkupPercent || 20,
       defaultContingencyPercent: input.defaultContingencyPercent || 10,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -179,11 +179,11 @@ export async function applyTemplateToEstimate(
   if (!template) return []
   
   // Create new trades from template
-  const newTrades: Trade[] = template.trades.map(templateTrade => ({
+    const newTrades: Trade[] = template.trades.map(templateTrade => ({
     ...templateTrade,
     id: uuidv4(),
     estimateId,
-    markupPercent: templateTrade.markupPercent || template.defaultMarkupPercent || 11.1,
+    markupPercent: templateTrade.markupPercent || template.defaultMarkupPercent || 20,
   }))
   
   // Increment usage count

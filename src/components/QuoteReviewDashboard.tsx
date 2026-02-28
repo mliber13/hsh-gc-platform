@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Project, Trade } from '@/types'
 import { QuoteRequest, SubmittedQuote, UpdateQuoteStatusInput } from '@/types/quote'
-import { TRADE_CATEGORIES } from '@/types/constants'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import {
   fetchQuoteRequestsForProject_Hybrid,
   fetchSubmittedQuotesForRequest_Hybrid,
@@ -46,6 +46,7 @@ interface QuoteReviewDashboardProps {
 }
 
 export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardProps) {
+  const { byKey } = useTradeCategories()
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([])
   const [submittedQuotes, setSubmittedQuotes] = useState<Map<string, SubmittedQuote[]>>(new Map())
   const [trades, setTrades] = useState<Trade[]>([])
@@ -143,7 +144,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
   const handleResendQuoteRequest = async (request: QuoteRequest) => {
     try {
       const trade = request.tradeId ? trades.find(t => t.id === request.tradeId) : undefined
-      const tradeCategoryLabel = trade?.category ? TRADE_CATEGORIES[trade.category]?.label : undefined
+      const tradeCategoryLabel = trade?.category ? byKey[trade.category]?.label : undefined
       const resent = await resendQuoteRequestEmail_Hybrid(request, project.name, tradeCategoryLabel)
       
       if (resent) {
@@ -502,7 +503,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                 {quoteRequests.map((request) => {
                   const submittedQuotesForRequest = submittedQuotes.get(request.id) || []
                   const trade = request.tradeId ? trades.find(t => t.id === request.tradeId) : undefined
-                  const tradeCategoryLabel = trade?.category ? TRADE_CATEGORIES[trade.category]?.label : undefined
+                  const tradeCategoryLabel = trade?.category ? byKey[trade.category]?.label : undefined
                   
                   return (
                     <Card key={request.id} className="hover:shadow-lg transition-shadow border border-gray-200">
@@ -665,7 +666,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
           <div className="space-y-4">
             {filteredQuotes.map(({ quote, request }) => {
               const requestTrade = request.tradeId ? trades.find(t => t.id === request.tradeId) : undefined
-              const requestTradeCategoryLabel = requestTrade?.category ? TRADE_CATEGORIES[requestTrade.category]?.label : undefined
+              const requestTradeCategoryLabel = requestTrade?.category ? byKey[requestTrade.category]?.label : undefined
               
               return (
               <Card key={quote.id} className="hover:shadow-lg transition-shadow border border-gray-200">
@@ -816,7 +817,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                               {Object.entries(
                                 trades.reduce((acc, trade) => {
                                   const category = trade.category || 'other'
-                                  const categoryLabel = TRADE_CATEGORIES[category]?.label || category
+                                  const categoryLabel = byKey[category]?.label || category
                                   if (!acc[categoryLabel]) {
                                     acc[categoryLabel] = []
                                   }
@@ -911,7 +912,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                                 {Object.entries(
                                   trades.reduce((acc, trade) => {
                                     const category = trade.category || 'other'
-                                    const categoryLabel = TRADE_CATEGORIES[category]?.label || category
+                                    const categoryLabel = byKey[category]?.label || category
                                     if (!acc[categoryLabel]) {
                                       acc[categoryLabel] = []
                                     }

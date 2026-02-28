@@ -163,7 +163,7 @@ CREATE TABLE trades (
   -- Flags
   is_subcontracted BOOLEAN DEFAULT false,
   waste_factor NUMERIC DEFAULT 0,
-  markup_percent NUMERIC DEFAULT 11.1,
+  markup_percent NUMERIC DEFAULT 20,
   
   notes TEXT,
   
@@ -578,7 +578,7 @@ CREATE TABLE estimate_templates (
   trades JSONB DEFAULT '[]',
   
   -- Default percentages
-  default_markup_percent NUMERIC DEFAULT 11.1,
+  default_markup_percent NUMERIC DEFAULT 20,
   default_contingency_percent NUMERIC DEFAULT 10,
   
   -- Metadata

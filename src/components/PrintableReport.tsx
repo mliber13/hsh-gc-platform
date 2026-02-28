@@ -7,7 +7,8 @@
 
 import React from 'react'
 import { Project, Trade } from '@/types'
-import { TRADE_CATEGORIES } from '@/types'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
+import { getCategoryAccentColor } from '@/lib/categoryAccent'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 export type ReportDepth = 'summary' | 'category' | 'full'
@@ -32,7 +33,8 @@ export function PrintableReport({
   changeOrders = [],
   onClose 
 }: PrintableReportProps) {
-  
+  const { categories, byKey } = useTradeCategories()
+
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
@@ -42,7 +44,7 @@ export function PrintableReport({
   const calculateEstimateTotals = () => {
     const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
     const grossProfitTotal = trades.reduce((sum, trade) => {
-      const markup = trade.markupPercent || 11.1
+      const markup = trade.markupPercent || 20
       return sum + (trade.totalCost * (markup / 100))
     }, 0)
     const contingency = basePriceTotal * 0.10
@@ -64,10 +66,16 @@ export function PrintableReport({
   const actualTotals = calculateActualTotals()
   const variance = actualTotals.total - estimateTotals.totalEstimated
 
-  // Group trades by category only (no group level)
-  const categoryOrder = (Object.keys(TRADE_CATEGORIES) as string[]).filter((cat) =>
-    trades.some((t) => t.category === cat)
-  )
+  // Group trades by category only (no group level); include custom categories
+  const order = categories.map((c) => c.key)
+  const categoryOrder = [...new Set(trades.map((t) => t.category))].sort((a, b) => {
+    const i = order.indexOf(a)
+    const j = order.indexOf(b)
+    if (i === -1 && j === -1) return a.localeCompare(b)
+    if (i === -1) return 1
+    if (j === -1) return -1
+    return i - j
+  })
   const tradesByCategory = trades.reduce((acc, trade) => {
     if (!acc[trade.category]) acc[trade.category] = []
     acc[trade.category].push(trade)
@@ -189,7 +197,7 @@ export function PrintableReport({
                 <li>• Project: <strong>{project.name}</strong></li>
                 <li>• Date: <strong>{new Date().toLocaleDateString()}</strong></li>
                 <li>• Total Line Items: <strong>{trades.length}</strong></li>
-                <li>• Categories: <strong>{categoryOrder.length}</strong> ({categoryOrder.map(cat => TRADE_CATEGORIES[cat as keyof typeof TRADE_CATEGORIES]?.label || cat).join(', ')})</li>
+                <li>• Categories: <strong>{categoryOrder.length}</strong> ({categoryOrder.map(cat => byKey[cat]?.label || cat).join(', ')})</li>
               </ul>
             </div>
 
@@ -198,7 +206,7 @@ export function PrintableReport({
               <div className="text-xs text-yellow-800 space-y-1">
                 {categoryOrder.map((category) => (
                   <div key={category}>
-                    {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}: {(tradesByCategory[category]?.length ?? 0)} items
+                    {byKey[category]?.label || category}: {(tradesByCategory[category]?.length ?? 0)} items
                   </div>
                 ))}
               </div>
@@ -362,15 +370,15 @@ function PrintableContent({
 
       {/* Detailed Breakdown */}
       {depth === 'summary' && (
-        <CategorySummaryView tradesByCategory={tradesByCategory} categoryOrder={categoryOrder} reportType={reportType} actualEntries={actualEntries} />
+        <CategorySummaryView tradesByCategory={tradesByCategory} categoryOrder={categoryOrder} reportType={reportType} actualEntries={actualEntries} byKey={byKey} />
       )}
 
       {depth === 'category' && (
-        <CategoryDetailView tradesByCategory={tradesByCategory} categoryOrder={categoryOrder} reportType={reportType} actualEntries={actualEntries} />
+        <CategoryDetailView tradesByCategory={tradesByCategory} categoryOrder={categoryOrder} reportType={reportType} actualEntries={actualEntries} byKey={byKey} />
       )}
 
       {depth === 'full' && (
-        <FullDetailView tradesByCategory={tradesByCategory} categoryOrder={categoryOrder} reportType={reportType} actualEntries={actualEntries} changeOrders={changeOrders} />
+        <FullDetailView tradesByCategory={tradesByCategory} categoryOrder={categoryOrder} reportType={reportType} actualEntries={actualEntries} changeOrders={changeOrders} byKey={byKey} />
       )}
 
       {/* Footer */}
@@ -387,7 +395,7 @@ function PrintableContent({
 // Category Summary View (High Level)
 // ----------------------------------------------------------------------------
 
-function CategorySummaryView({ tradesByCategory, categoryOrder, reportType, actualEntries }: any) {
+function CategorySummaryView({ tradesByCategory, categoryOrder, reportType, actualEntries, byKey = {} }: any) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
@@ -408,7 +416,7 @@ function CategorySummaryView({ tradesByCategory, categoryOrder, reportType, actu
           {categoryOrder.map((category: string) => {
             const categoryTrades = tradesByCategory[category] || []
             const categoryEstimate = categoryTrades.reduce((sum: number, t: any) => {
-              const total = t.totalCost * (1 + (t.markupPercent || 11.1) / 100)
+              const total = t.totalCost * (1 + (t.markupPercent || 20) / 100)
               return sum + total
             }, 0)
             const categoryActual = actualEntries
@@ -418,7 +426,7 @@ function CategorySummaryView({ tradesByCategory, categoryOrder, reportType, actu
             return (
               <tr key={category}>
                 <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', lineHeight: '1.6', fontWeight: '600' }}>
-                  {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+                  {byKey[category]?.label || category}
                 </td>
                 <td style={{ border: '1px solid #D1D5DB', padding: '12px 10px', textAlign: 'right', lineHeight: '1.6' }}>{categoryTrades.length}</td>
                 {reportType !== 'actuals' && (
@@ -449,7 +457,7 @@ function CategorySummaryView({ tradesByCategory, categoryOrder, reportType, actu
 // Category Detail View (Category + Subtotals)
 // ----------------------------------------------------------------------------
 
-function CategoryDetailView({ tradesByCategory, categoryOrder, reportType, actualEntries }: any) {
+function CategoryDetailView({ tradesByCategory, categoryOrder, reportType, actualEntries, byKey = {} }: any) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
@@ -458,7 +466,7 @@ function CategoryDetailView({ tradesByCategory, categoryOrder, reportType, actua
       {categoryOrder.map((category: string) => {
         const categoryTrades = tradesByCategory[category] || []
         const categoryEstimate = categoryTrades.reduce((sum: number, t: any) => {
-          return sum + t.totalCost * (1 + (t.markupPercent || 11.1) / 100)
+          return sum + t.totalCost * (1 + (t.markupPercent || 20) / 100)
         }, 0)
         const categoryActual = actualEntries
           .filter((e: any) => e.category === category)
@@ -466,9 +474,8 @@ function CategoryDetailView({ tradesByCategory, categoryOrder, reportType, actua
 
         return (
           <div key={category} style={{ pageBreakInside: 'avoid', marginBottom: '10mm' }} className="page-break-inside-avoid print-section">
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111', marginBottom: '16px', background: '#F3F4F6', padding: '12px', borderRadius: '4px' }}>
-              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
-              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111', marginBottom: '16px', background: '#F3F4F6', padding: '12px', borderRadius: '4px', borderLeft: `4px solid ${getCategoryAccentColor(category)}` }}>
+              {byKey[category]?.label || category}
             </h3>
             <div style={{ marginLeft: '20px', marginBottom: '16px', fontSize: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
               {reportType !== 'actuals' && (
@@ -504,7 +511,7 @@ function CategoryDetailView({ tradesByCategory, categoryOrder, reportType, actua
 // Full Detail View (All Line Items)
 // ----------------------------------------------------------------------------
 
-function FullDetailView({ tradesByCategory, categoryOrder, reportType, actualEntries, changeOrders }: any) {
+function FullDetailView({ tradesByCategory, categoryOrder, reportType, actualEntries, changeOrders, byKey = {} }: any) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
@@ -514,9 +521,8 @@ function FullDetailView({ tradesByCategory, categoryOrder, reportType, actualEnt
         const categoryTrades = tradesByCategory[category] || []
         return (
           <div key={category} style={{ pageBreakInside: 'avoid', marginBottom: '10mm' }} className="page-break-inside-avoid print-section">
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111', marginBottom: '16px', background: '#F3F4F6', padding: '12px', borderRadius: '4px' }}>
-              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}{' '}
-              {TRADE_CATEGORIES[category as keyof typeof TRADE_CATEGORIES]?.label || category}
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111', marginBottom: '16px', background: '#F3F4F6', padding: '12px', borderRadius: '4px', borderLeft: `4px solid ${getCategoryAccentColor(category)}` }}>
+              {byKey[category]?.label || category}
             </h3>
           
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', tableLayout: 'fixed', marginTop: '12px' }}>
@@ -531,7 +537,7 @@ function FullDetailView({ tradesByCategory, categoryOrder, reportType, actualEnt
             </thead>
             <tbody>
               {categoryTrades.map((trade: any) => {
-                const tradeEstimate = trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100)
+                const tradeEstimate = trade.totalCost * (1 + (trade.markupPercent || 20) / 100)
                 const tradeActual = actualEntries
                   .filter((e: any) => e.tradeId === trade.id)
                   .reduce((sum: number, e: any) => sum + e.amount, 0)

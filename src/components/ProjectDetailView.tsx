@@ -89,7 +89,7 @@ export function ProjectDetailView({
       const trades = await getTradesForEstimate_Hybrid(project.estimate.id)
       const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
       const grossProfitTotal = trades.reduce((sum, trade) => {
-        const markup = trade.markupPercent || 11.1
+        const markup = trade.markupPercent || 20
         return sum + (trade.totalCost * (markup / 100))
       }, 0)
       const contingency = basePriceTotal * 0.10 // 10% default

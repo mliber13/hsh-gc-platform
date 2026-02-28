@@ -12,7 +12,8 @@ import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
 import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { TRADE_CATEGORIES } from '@/types'
+import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
+import { getCategoryAccentLeftBorderStyle } from '@/lib/categoryAccent'
 import { 
   ArrowLeft,
   TrendingUp,
@@ -59,6 +60,7 @@ interface TradeVariance {
 // ----------------------------------------------------------------------------
 
 export function VarianceReport({ project, onBack }: VarianceReportProps) {
+  const { byKey } = useTradeCategories()
   const [trades, setTrades] = useState<Trade[]>([])
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [categoryVariances, setCategoryVariances] = useState<CategoryVariance[]>([])
@@ -80,7 +82,7 @@ export function VarianceReport({ project, onBack }: VarianceReportProps) {
       // Calculate total estimated (with markup and contingency)
       const basePriceTotal = loadedTrades.reduce((sum, trade) => sum + trade.totalCost, 0)
       const grossProfitTotal = loadedTrades.reduce((sum, trade) => {
-        const markup = trade.markupPercent || 11.1
+        const markup = trade.markupPercent || 20
         return sum + (trade.totalCost * (markup / 100))
       }, 0)
       const contingency = basePriceTotal * 0.10
@@ -101,7 +103,7 @@ export function VarianceReport({ project, onBack }: VarianceReportProps) {
       const categoryMap = new Map<string, CategoryVariance>()
       
       loadedTrades.forEach(trade => {
-        const tradeEstimated = trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100)
+        const tradeEstimated = trade.totalCost * (1 + (trade.markupPercent || 20) / 100)
         
         // Get actual costs for this trade
         const tradeActual = actuals 
@@ -289,18 +291,15 @@ export function VarianceReport({ project, onBack }: VarianceReportProps) {
                     const isUnder = categoryVar.variance < 0
 
                     return (
-                      <Card key={categoryVar.category} className="border-2">
+                      <Card key={categoryVar.category} className="border-2 border-l-4" style={getCategoryAccentLeftBorderStyle(categoryVar.category)}>
                         <button
                           onClick={() => toggleCategory(categoryVar.category)}
                           className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="text-2xl">
-                              {TRADE_CATEGORIES[categoryVar.category as keyof typeof TRADE_CATEGORIES]?.icon || '📦'}
-                            </span>
                             <div className="text-left">
                               <p className="font-bold text-gray-900">
-                                {TRADE_CATEGORIES[categoryVar.category as keyof typeof TRADE_CATEGORIES]?.label || categoryVar.category}
+                                {byKey[categoryVar.category]?.label || categoryVar.category}
                               </p>
                               <p className="text-xs text-gray-500">
                                 {categoryVar.trades.length} items
@@ -339,7 +338,7 @@ export function VarianceReport({ project, onBack }: VarianceReportProps) {
                           <div className="border-t border-gray-200 bg-gray-50 p-4">
                             <div className="space-y-3">
                               {categoryVar.trades.map((trade) => {
-                                const tradeEstimated = trade.totalCost * (1 + (trade.markupPercent || 11.1) / 100)
+                                const tradeEstimated = trade.totalCost * (1 + (trade.markupPercent || 20) / 100)
                                 
                                 // Get actuals for this specific trade (simplified for now)
                                 const tradeActual = 0 // TODO: Calculate from loaded actuals
