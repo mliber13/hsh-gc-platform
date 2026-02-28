@@ -244,6 +244,7 @@ export function PrintableReport({
           categoryOrder={categoryOrder}
           actualEntries={actualEntries}
           changeOrders={changeOrders}
+          byKey={byKey}
         />
       </div>
     </>
@@ -266,6 +267,7 @@ interface PrintableContentProps {
   categoryOrder: string[]
   actualEntries: any[]
   changeOrders: any[]
+  byKey?: Record<string, { label: string }>
 }
 
 function PrintableContent({ 
@@ -280,6 +282,7 @@ function PrintableContent({
   categoryOrder,
   actualEntries,
   changeOrders,
+  byKey = {},
 }: PrintableContentProps) {
   
   const formatCurrency = (amount: number) =>

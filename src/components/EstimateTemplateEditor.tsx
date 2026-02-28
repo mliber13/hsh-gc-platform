@@ -10,7 +10,7 @@ import {
   PlanEstimateTemplate,
   UpdatePlanEstimateTemplateInput,
 } from '@/types/estimateTemplate'
-import { Trade, TradeInput } from '@/types'
+import { Trade, TradeInput, TradeCategory } from '@/types'
 import type { ItemTemplateInput } from '@/types/itemTemplate'
 import {
   getEstimateTemplateById,
@@ -566,7 +566,7 @@ function TradeFormDialog({
       const created = await createTradeCategory({ key, label })
       if (created) {
         await refetchCategories()
-        setFormData(prev => ({ ...prev, category: key }))
+        setFormData(prev => ({ ...prev, category: key as TradeCategory }))
         setShowCreateCategoryModal(false)
       }
     } catch (err) {

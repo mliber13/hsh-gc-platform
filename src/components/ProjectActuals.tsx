@@ -2008,6 +2008,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           availableSubcontractors={availableSubcontractors}
           editingEntry={editingEntry}
           actualEntries={actualEntries}
+          byKey={byKey}
           onSave={async (entry, splitAllocations) => {
             // Handle split invoices
             if ((entry.type === 'material' || entry.type === 'subcontractor') && splitAllocations && splitAllocations.length > 0) {
@@ -2662,6 +2663,7 @@ interface ActualEntryFormProps {
   availableSubcontractors: DirectorySubcontractor[]
   editingEntry: ActualEntry | null
   actualEntries: ActualEntry[] // Pass all entries to check for split children
+  byKey: Record<string, { label: string }>
   onSave: (entry: ActualEntry, splitAllocations?: SplitAllocation[]) => void
   onCancel: () => void
 }
@@ -2675,6 +2677,7 @@ function ActualEntryForm({
   availableSubcontractors,
   editingEntry,
   actualEntries,
+  byKey = {},
   onSave,
   onCancel,
 }: ActualEntryFormProps) {
