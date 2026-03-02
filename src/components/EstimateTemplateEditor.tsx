@@ -264,11 +264,8 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
 
     setSaving(true)
     try {
-      // Convert editable trades back to template format (remove tempId; strip id/tradeId from sub-items)
-      const templateTrades = trades.map(({ tempId, subItems, ...trade }) => ({
-        ...trade,
-        subItems: subItems?.map(({ id, tradeId, ...s }) => s) ?? undefined,
-      }))
+      // Convert editable trades back to template format (remove tempId only; keep full subItems shape)
+      const templateTrades = trades.map(({ tempId, ...trade }) => trade)
 
       const updates: UpdatePlanEstimateTemplateInput = {
         trades: templateTrades,
