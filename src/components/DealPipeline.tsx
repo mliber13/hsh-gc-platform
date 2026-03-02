@@ -33,6 +33,7 @@ import {
   CheckCircle2,
   XCircle,
   PlusCircle,
+  ChevronDown,
 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import {
@@ -80,6 +81,7 @@ export function DealPipeline({ onBack, onViewProjects }: DealPipelineProps) {
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [showMobileActions, setShowMobileActions] = useState(false)
 
   useEffect(() => {
     loadDeals()
@@ -213,163 +215,212 @@ export function DealPipeline({ onBack, onViewProjects }: DealPipelineProps) {
     )
   }
 
+  // Deal status accent (align with dashboard palette: blue, orange, green, gray)
+  const getDealStatusAccent = (status: string): string => {
+    const colors: Record<string, string> = {
+      'active-pipeline': '#15803D',
+      'pending-docs': '#D95C00',
+      'early-stage': '#0E79C9',
+      'very-early': '#0E79C9',
+      'concept-pre-funding': '#0E79C9',
+      custom: '#9ca3af',
+    }
+    return colors[status] ?? '#9ca3af'
+  }
+
   // List view
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20 sm:pb-0">
-      <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
-        <div className="w-full space-y-4 sm:space-y-6">
-          {/* Header */}
-          <header className="bg-white shadow-md border-b border-gray-200">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto" />
-                  <div>
-                    <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Deal Pipeline</h1>
-                    <p className="text-xs sm:text-sm text-gray-600 mt-1">Manage deals before they become projects</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 sm:gap-3">
-                  {onBack && (
-                    <Button variant="outline" onClick={onBack} size="sm" className="hidden sm:flex">
-                      <ArrowLeft className="w-4 h-4 mr-2" />
-                      Back
-                    </Button>
-                  )}
-                  <Button onClick={handleCreateDeal} size="sm">
-                    <Plus className="w-4 h-4 mr-2" />
-                    New Deal
-                  </Button>
-                </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Slim app bar - match Projects Dashboard */}
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto shrink-0" />
+              <div className="min-w-0">
+                <h1 className="text-xl font-semibold text-gray-900 truncate">Deal Pipeline</h1>
+                <p className="text-xs text-gray-500 hidden sm:block">
+                  {deals.length} {deals.length === 1 ? 'deal' : 'deals'}
+                </p>
               </div>
             </div>
-          </header>
-
-          {/* Filters */}
-          <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="search">Search</Label>
-              <div className="relative mt-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  id="search"
-                  placeholder="Search deals by name, location, or contact..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="status">Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  {Object.entries(DEAL_STATUS_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Deals List */}
-      {loading ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center text-gray-500">Loading deals...</div>
-          </CardContent>
-        </Card>
-      ) : filteredDeals.length === 0 ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center">
-              <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 mb-2">No deals found</p>
-              <Button onClick={handleCreateDeal} variant="outline">
-                <Plus className="w-4 h-4 mr-2" />
-                Create Your First Deal
+            <nav className="hidden sm:flex items-center gap-1 shrink-0">
+              {onBack && (
+                <Button variant="outline" onClick={onBack} size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-1.5" />
+                  Back
+                </Button>
+              )}
+              <Button onClick={handleCreateDeal} size="sm" className="bg-[#0E79C9] hover:bg-[#0A5A96] text-white">
+                <PlusCircle className="w-4 h-4 mr-1.5" />
+                New Deal
               </Button>
-            </div>
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-8">
+        {/* Search + filters toolbar - match Projects Dashboard */}
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              type="text"
+              placeholder="Search by name, location, or contact..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-10 text-base bg-white border-gray-200"
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px] h-10 bg-white border-gray-200">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {Object.entries(DEAL_STATUS_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Deals List - single Card like Projects Dashboard */}
+        <Card className="border-gray-200 shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between text-lg">
+              <span>Your Deals</span>
+              <span className="text-sm font-normal text-gray-500">
+                {filteredDeals.length} {filteredDeals.length === 1 ? 'deal' : 'deals'}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {loading && deals.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-[#0E79C9]"></div>
+                <p className="mt-4 text-gray-500 text-sm">Loading deals...</p>
+              </div>
+            ) : filteredDeals.length === 0 ? (
+              <div className="text-center py-12">
+                <Building2 className="w-14 h-14 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-700 font-medium mb-1">
+                  {searchQuery || statusFilter !== 'all' ? 'No deals found' : 'No deals yet'}
+                </p>
+                <p className="text-gray-500 text-sm mb-6">
+                  {searchQuery || statusFilter !== 'all' ? 'Try adjusting your search or filters' : 'Create your first deal to get started'}
+                </p>
+                {!searchQuery && statusFilter === 'all' && (
+                  <Button onClick={handleCreateDeal} size="sm" className="bg-[#0E79C9] hover:bg-[#0A5A96]">
+                    <PlusCircle className="w-4 h-4 mr-2" />
+                    Create Deal
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {filteredDeals.map((deal) => (
+                  <div
+                    key={deal.id}
+                    onClick={() => handleViewDeal(deal.id)}
+                    className="flex rounded-lg overflow-hidden hover:bg-gray-50/80 transition-colors cursor-pointer -mx-1 border-t"
+                    style={{ borderTopColor: getDealStatusAccent(deal.status) }}
+                  >
+                    <div
+                      className="shrink-0 w-1.5 rounded-l-md"
+                      style={{ backgroundColor: getDealStatusAccent(deal.status) }}
+                      aria-hidden
+                    />
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 py-4 sm:py-5 flex-1 min-w-0 px-3 sm:px-4 rounded-r-lg text-center sm:text-left">
+                      <div className="flex-1 min-w-0 sm:max-w-[320px]">
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-0.5">
+                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{deal.deal_name}</h3>
+                          {deal.converted_to_projects ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800" title="Converted to projects">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Converted
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 border-l-4 border-transparent" style={{ borderLeftColor: getDealStatusAccent(deal.status) }}>
+                              {deal.custom_status || DEAL_STATUS_LABELS[deal.status]}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm sm:text-base text-gray-500 truncate flex items-center justify-center sm:justify-start gap-1">
+                          <MapPin className="w-3.5 h-3.5 shrink-0" />
+                          {deal.location}
+                        </p>
+                        <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
+                          {deal.custom_type || DEAL_TYPE_LABELS[deal.type]}
+                          {deal.projected_cost != null && ` · ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(deal.projected_cost)}`}
+                          {deal.contact?.name && ` · ${deal.contact.name}`}
+                        </p>
+                      </div>
+                      <div className="flex-1 min-w-0 sm:min-w-[24px]" aria-hidden />
+                      <div className="flex items-center justify-center sm:justify-end gap-4 sm:gap-6 shrink-0">
+                        <div className="text-center sm:w-[100px]">
+                          <p className="text-xs text-gray-500">Type</p>
+                          <p className="text-sm font-medium text-gray-900 truncate">{deal.custom_type || DEAL_TYPE_LABELS[deal.type]}</p>
+                        </div>
+                        {deal.projected_cost != null && (
+                          <div className="text-center sm:w-[100px]">
+                            <p className="text-xs text-gray-500">Projected</p>
+                            <p className="text-sm font-semibold text-sky-700 tabular-nums">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(deal.projected_cost)}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredDeals.map((deal) => (
-            <Card
-              key={deal.id}
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => handleViewDeal(deal.id)}
+
+        {/* Mobile: bottom action bar - match Projects Dashboard */}
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
+          {showMobileActions && (
+            <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
+              {onBack && (
+                <button
+                  onClick={() => { onBack(); setShowMobileActions(false) }}
+                  className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+                >
+                  <ArrowLeft className="w-5 h-5 text-gray-400" />
+                  <span className="font-medium">Back to Projects</span>
+                </button>
+              )}
+              <button
+                onClick={() => { handleCreateDeal(); setShowMobileActions(false) }}
+                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-[#0E79C9]/20 bg-[#0E79C9]/5"
+              >
+                <PlusCircle className="w-5 h-5 text-[#0E79C9]" />
+                <div>
+                  <p className="font-medium text-gray-900">New Deal</p>
+                  <p className="text-xs text-gray-500">Add a deal to the pipeline</p>
+                </div>
+              </button>
+            </div>
+          )}
+          <div className="p-2">
+            <Button
+              onClick={() => setShowMobileActions(!showMobileActions)}
+              variant="outline"
+              className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
             >
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{deal.deal_name}</CardTitle>
-                    <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
-                      <MapPin className="w-4 h-4" />
-                      <span>{deal.location}</span>
-                    </div>
-                  </div>
-                  <div title={deal.converted_to_projects ? "Converted to projects" : "Not converted"}>
-                    {deal.converted_to_projects ? (
-                      <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
-                    ) : (
-                      <XCircle className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Type:</span>
-                    <span className="font-medium">
-                      {deal.custom_type || DEAL_TYPE_LABELS[deal.type]}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Status:</span>
-                    <span className="font-medium">
-                      {deal.custom_status || DEAL_STATUS_LABELS[deal.status]}
-                    </span>
-                  </div>
-                  {deal.unit_count && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Units:</span>
-                      <span className="font-medium">{deal.unit_count}</span>
-                    </div>
-                  )}
-                  {deal.projected_cost && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Projected Cost:</span>
-                      <span className="font-medium">
-                        ${deal.projected_cost.toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                  {deal.contact?.name && (
-                    <div className="flex items-center gap-2 pt-2 border-t">
-                      <User className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-600">{deal.contact.name}</span>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+              <span className="flex items-center justify-center gap-2 text-gray-700">
+                Actions
+                <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
+              </span>
+            </Button>
+          </div>
         </div>
-      )}
-        </div>
-      </div>
+      </main>
     </div>
   )
 }
@@ -680,85 +731,83 @@ function DealDetailView({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20 sm:pb-0">
-      <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
-        <div className="w-full space-y-4 sm:space-y-6">
-          {/* Header */}
-          <header className="bg-white shadow-md border-b border-gray-200">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center space-x-3 sm:space-x-4">
-                  <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto" />
-                  <div>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-1">
-                      <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{deal.deal_name}</h1>
-                      <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
-                        deal.status === 'active-pipeline' ? 'bg-green-100 text-green-800' :
-                        deal.status === 'pending-docs' ? 'bg-yellow-100 text-yellow-800' :
-                        deal.status === 'early-stage' || deal.status === 'very-early' ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-800'
-                      } w-fit`}>
-                        {DEAL_STATUS_LABELS[deal.status]}
-                      </span>
-                    </div>
-                    <p className="text-xs sm:text-sm text-gray-600">
-                      <MapPin className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
-                      {deal.location}
-                    </p>
-                  </div>
+    <div className="min-h-screen bg-gray-50 pb-24 sm:pb-8">
+      {/* Slim app bar - match Projects Dashboard */}
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto shrink-0" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl font-semibold text-gray-900 truncate">{deal.deal_name}</h1>
+                  <span className={`px-2.5 py-0.5 rounded text-xs font-medium ${
+                    deal.status === 'active-pipeline' ? 'bg-green-100 text-green-800' :
+                    deal.status === 'pending-docs' ? 'bg-yellow-100 text-yellow-800' :
+                    deal.status === 'early-stage' || deal.status === 'very-early' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
+                  } shrink-0`}>
+                    {deal.custom_status || DEAL_STATUS_LABELS[deal.status]}
+                  </span>
                 </div>
-                {/* Desktop Buttons */}
-                <div className="hidden sm:flex gap-3">
-                  {onBack && (
-                    <Button variant="outline" onClick={onBack} size="sm">
-                      <ArrowLeft className="w-4 h-4 mr-2" />
-                      Back
-                    </Button>
-                  )}
-                  {!deal.converted_to_projects && (
-                    <Button onClick={onConvert} variant="default" size="sm">
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                      Convert to Projects
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={onEdit} size="sm">
-                    <Edit className="w-4 h-4 mr-2" />
-                    Edit
-                  </Button>
-                  <Button variant="outline" onClick={onDelete} size="sm">
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete
-                  </Button>
-                </div>
-              </div>
-              {/* Mobile Buttons */}
-              <div className="sm:hidden mt-4 flex flex-wrap gap-2">
-                {onBack && (
-                  <Button variant="outline" onClick={onBack} size="sm" className="flex-1">
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back
-                  </Button>
-                )}
-                {!deal.converted_to_projects && (
-                  <Button onClick={onConvert} variant="default" size="sm" className="flex-1">
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Convert
-                  </Button>
-                )}
-                <Button variant="outline" onClick={onEdit} size="sm" className="flex-1">
-                  <Edit className="w-4 h-4 mr-2" />
-                  Edit
-                </Button>
-                <Button variant="outline" onClick={onDelete} size="sm" className="flex-1">
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
-                </Button>
+                <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1 truncate">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  {deal.location}
+                </p>
               </div>
             </div>
-          </header>
+            <nav className="hidden sm:flex items-center gap-1 shrink-0">
+              {onBack && (
+                <Button variant="outline" onClick={onBack} size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-1.5" />
+                  Back
+                </Button>
+              )}
+              {!deal.converted_to_projects && (
+                <Button onClick={onConvert} size="sm" className="bg-[#15803D] hover:bg-[#166534] text-white">
+                  <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                  Convert to Projects
+                </Button>
+              )}
+              <Button variant="outline" onClick={onEdit} size="sm">
+                <Edit className="w-4 h-4 mr-1.5" />
+                Edit
+              </Button>
+              <Button variant="outline" onClick={onDelete} size="sm">
+                <Trash2 className="w-4 h-4 mr-1.5" />
+                Delete
+              </Button>
+            </nav>
+          </div>
+          {/* Mobile: action row */}
+          <div className="sm:hidden mt-3 flex flex-wrap gap-2">
+            {onBack && (
+              <Button variant="outline" onClick={onBack} size="sm" className="flex-1 min-w-0">
+                <ArrowLeft className="w-4 h-4 mr-1.5" />
+                Back
+              </Button>
+            )}
+            {!deal.converted_to_projects && (
+              <Button onClick={onConvert} size="sm" className="flex-1 min-w-0 bg-[#15803D] hover:bg-[#166534] text-white">
+                <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                Convert
+              </Button>
+            )}
+            <Button variant="outline" onClick={onEdit} size="sm" className="flex-1 min-w-0">
+              <Edit className="w-4 h-4 mr-1.5" />
+              Edit
+            </Button>
+            <Button variant="outline" onClick={onDelete} size="sm" className="flex-1 min-w-0">
+              <Trash2 className="w-4 h-4 mr-1.5" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      </header>
 
-          {/* Deal Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Deal Information */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Deal Details</CardTitle>
@@ -902,8 +951,7 @@ function DealDetailView({
           <DealDocuments dealId={deal.id} />
         </CardContent>
       </Card>
-        </div>
-      </div>
+      </main>
     </div>
   )
 }

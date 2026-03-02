@@ -44,11 +44,17 @@ export interface QuickBooksImportProps {
   preSelectedProject?: { id: string; name: string; estimateId?: string }
   /** Called after a successful import (e.g. to refresh Actuals) */
   onSuccess?: () => void
+  /** When provided, dialog open state is controlled by parent (e.g. for mobile Actions menu) */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSuccess }: QuickBooksImportProps) {
+export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSuccess, open: controlledOpen, onOpenChange }: QuickBooksImportProps) {
   const { categories } = useTradeCategories()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = controlledOpen !== undefined && onOpenChange !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = (v: boolean) => (isControlled ? onOpenChange?.(v) : setInternalOpen(v))
   const [transactions, setTransactions] = useState<QBJobTransaction[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

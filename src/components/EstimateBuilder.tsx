@@ -143,6 +143,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   const [showBulkMarkupDialog, setShowBulkMarkupDialog] = useState(false)
   const [bulkMarkupPercent, setBulkMarkupPercent] = useState(markupPercent.toString())
   const [showCreatePO, setShowCreatePO] = useState(false)
+  const [showMobileActions, setShowMobileActions] = useState(false)
 
   // Initialize project if none provided
   useEffect(() => {
@@ -1068,19 +1069,86 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         </div>
       </div>
       
-      {/* Mobile Back Button - Fixed at bottom */}
-      {onBack && (
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
+      {/* Mobile: bottom Actions menu - match Projects Dashboard / Deal Pipeline */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
+        {showMobileActions && (
+          <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
+            {onBack && (
+              <button
+                onClick={() => { onBack(); setShowMobileActions(false) }}
+                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-400" />
+                <span className="font-medium">{projectData ? 'Back to Project' : 'Back to Projects'}</span>
+              </button>
+            )}
+            <button
+              onClick={() => { setShowCreatePO(true); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-amber-500/30 bg-amber-50/50"
+            >
+              <ClipboardList className="w-5 h-5 text-amber-600" />
+              <div>
+                <p className="font-medium text-gray-900">Create PO</p>
+                <p className="text-xs text-gray-500">Create purchase order from estimate</p>
+              </div>
+            </button>
+            <button
+              onClick={() => { handleOpenApplyTemplate(); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+            >
+              <FileText className="w-5 h-5 text-purple-500" />
+              <div>
+                <p className="font-medium text-gray-900">Apply Template</p>
+                <p className="text-xs text-gray-500">Apply an estimate template</p>
+              </div>
+            </button>
+            <button
+              onClick={() => { setShowSaveTemplateDialog(true); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+            >
+              <Save className="w-5 h-5 text-blue-500" />
+              <div>
+                <p className="font-medium text-gray-900">Save as Template</p>
+                <p className="text-xs text-gray-500">Save this estimate as a template</p>
+              </div>
+            </button>
+            <p className="text-xs font-semibold text-gray-500 px-3 pt-2 pb-1">Export PDF</p>
+            <button
+              onClick={() => { handlePrintReport('summary'); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+            >
+              <Printer className="w-5 h-5 text-[#34AB8A]" />
+              <span className="text-sm">Summary only</span>
+            </button>
+            <button
+              onClick={() => { handlePrintReport('category'); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+            >
+              <Printer className="w-5 h-5 text-[#34AB8A]" />
+              <span className="text-sm">Category detail</span>
+            </button>
+            <button
+              onClick={() => { handlePrintReport('full'); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+            >
+              <Printer className="w-5 h-5 text-[#34AB8A]" />
+              <span className="text-sm">Full detail</span>
+            </button>
+          </div>
+        )}
+        <div className="p-2">
           <Button
-            onClick={onBack}
+            onClick={() => setShowMobileActions(!showMobileActions)}
             variant="outline"
-            className="border-gray-300 hover:bg-gray-50 w-full"
+            className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            {project ? 'Back to Project Detail' : 'Back to Projects'}
+            <span className="flex items-center justify-center gap-2 text-gray-700">
+              Actions
+              <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
+            </span>
           </Button>
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -1291,9 +1359,10 @@ function SummarySection({ totals, onContingencyChange, onPrintReport, onSaveAsTe
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Estimate Summary</CardTitle>
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-lg sm:text-xl shrink-0">Estimate Summary</CardTitle>
+          {/* Desktop: action buttons in header. Mobile: moved to bottom Actions menu */}
+          <div className="hidden sm:flex flex-wrap gap-2 w-auto">
             {onCreatePO && (
               <Button
                 onClick={onCreatePO}
@@ -1333,44 +1402,43 @@ function SummarySection({ totals, onContingencyChange, onPrintReport, onSaveAsTe
                 <Printer className="w-4 h-4 mr-2" />
                 Export PDF
               </Button>
-            
-            {showPrintMenu && (
-              <div className="absolute right-0 top-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[200px]">
-                <div className="p-2">
-                  <p className="text-xs font-semibold text-gray-700 mb-2 px-2">Select Detail Level:</p>
-                  <button
-                    onClick={() => {
-                      onPrintReport('summary')
-                      setShowPrintMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
-                  >
-                    📊 Summary Only
-                    <p className="text-xs text-gray-500">Category totals</p>
-                  </button>
-                  <button
-                    onClick={() => {
-                      onPrintReport('category')
-                      setShowPrintMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
-                  >
-                    📋 Category Detail
-                    <p className="text-xs text-gray-500">Subtotals by category</p>
-                  </button>
-                  <button
-                    onClick={() => {
-                      onPrintReport('full')
-                      setShowPrintMenu(false)
-                    }}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
-                  >
-                    📄 Full Detail
-                    <p className="text-xs text-gray-500">Every line item</p>
-                  </button>
+              {showPrintMenu && (
+                <div className="absolute right-0 top-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[200px]">
+                  <div className="p-2">
+                    <p className="text-xs font-semibold text-gray-700 mb-2 px-2">Select Detail Level:</p>
+                    <button
+                      onClick={() => {
+                        onPrintReport('summary')
+                        setShowPrintMenu(false)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                    >
+                      📊 Summary Only
+                      <p className="text-xs text-gray-500">Category totals</p>
+                    </button>
+                    <button
+                      onClick={() => {
+                        onPrintReport('category')
+                        setShowPrintMenu(false)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                    >
+                      📋 Category Detail
+                      <p className="text-xs text-gray-500">Subtotals by category</p>
+                    </button>
+                    <button
+                      onClick={() => {
+                        onPrintReport('full')
+                        setShowPrintMenu(false)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                    >
+                      📄 Full Detail
+                      <p className="text-xs text-gray-500">Every line item</p>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
             </div>
           </div>
         </div>

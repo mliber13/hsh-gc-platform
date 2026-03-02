@@ -574,18 +574,11 @@ function App() {
       )}
 
       {currentView === 'documents' && selectedProject && (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20 sm:pb-0">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-            <Button
-              onClick={handleBackToProjectDetail}
-              variant="outline"
-              className="mb-6"
-            >
-              ← Back to Project
-            </Button>
-            <ProjectDocuments projectId={selectedProject.id} />
-          </div>
-        </div>
+        <ProjectDocuments
+          projectId={selectedProject.id}
+          onBack={handleBackToProjectDetail}
+          projectName={selectedProject.name}
+        />
       )}
 
       {currentView === 'purchase-orders' && selectedProject && (

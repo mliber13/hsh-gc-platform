@@ -33,10 +33,16 @@ import {
   X,
   Save,
   Eye,
+  ArrowLeft,
+  ChevronDown,
 } from 'lucide-react'
+import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface ProjectDocumentsProps {
   projectId: string
+  /** When provided, renders full-page dashboard-style layout with header and back */
+  onBack?: () => void
+  projectName?: string
 }
 
 const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
@@ -56,7 +62,7 @@ const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   other: 'Other',
 }
 
-export function ProjectDocuments({ projectId }: ProjectDocumentsProps) {
+export function ProjectDocuments({ projectId, onBack, projectName }: ProjectDocumentsProps) {
   const [documents, setDocuments] = useState<ProjectDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -69,6 +75,7 @@ export function ProjectDocuments({ projectId }: ProjectDocumentsProps) {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
   const [tags, setTags] = useState('')
+  const [showMobileActions, setShowMobileActions] = useState(false)
 
   // Load documents
   useEffect(() => {
@@ -228,27 +235,17 @@ export function ProjectDocuments({ projectId }: ProjectDocumentsProps) {
     return acc
   }, {} as Record<DocumentType, ProjectDocument[]>)
 
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-gray-500">Loading documents...</div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Header with Upload Button */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Project Documents</h2>
+  const content = (
+    <>
+      {/* Header with Upload Button - hidden on mobile (use Actions menu at bottom) */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl font-bold text-gray-900 sm:text-2xl whitespace-nowrap">Project Documents</h2>
         <Button
           onClick={() => setShowUploadForm(!showUploadForm)}
-          className="flex items-center gap-2"
+          className="hidden sm:flex items-center justify-center gap-2 w-auto"
         >
-          <Upload className="h-4 w-4" />
-          Upload Document
+          <Upload className="h-4 w-4 shrink-0" />
+          <span>Upload Document</span>
         </Button>
       </div>
 
@@ -429,73 +426,79 @@ export function ProjectDocuments({ projectId }: ProjectDocumentsProps) {
 
       {/* Documents List */}
       {documents.length === 0 ? (
-        <Card>
+        <Card className="border-gray-200 shadow-sm">
           <CardContent className="p-6">
-            <div className="text-center text-gray-500">
-              <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>No documents uploaded yet.</p>
-              <p className="text-sm mt-2">Click "Upload Document" to get started.</p>
+            <div className="text-center py-12">
+              <FileText className="h-14 w-14 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-700 font-medium mb-1">No documents uploaded yet.</p>
+              <p className="text-gray-500 text-sm mb-6">Click "Upload Document" to get started.</p>
+              <Button onClick={() => setShowUploadForm(true)} size="sm" className="bg-[#0E79C9] hover:bg-[#0A5A96]">
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Document
+              </Button>
             </div>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
           {Object.entries(documentsByType).map(([type, docs]) => (
-            <Card key={type}>
-              <CardHeader>
-                <CardTitle className="text-lg">
+            <Card key={type} className="border-gray-200 shadow-sm">
+              <CardHeader className="py-3 sm:py-4">
+                <CardTitle className="text-base font-semibold">
                   {DOCUMENT_TYPE_LABELS[type as DocumentType]} ({docs.length})
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-0 text-sm">
                 <div className="space-y-3">
                   {docs.map((doc) => (
                     <div
                       key={doc.id}
-                      className="flex items-start justify-between p-3 border rounded-lg hover:bg-gray-50"
+                      className="flex flex-col gap-3 p-3 border rounded-lg hover:bg-gray-50 sm:flex-row sm:items-start sm:justify-between"
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-gray-900 truncate">
-                              {doc.name}
-                            </h4>
-                            <div className="flex flex-wrap gap-2 mt-1 text-sm text-gray-500">
-                              <span>{formatFileSize(doc.fileSize)}</span>
-                              <span>•</span>
-                              <span>Uploaded {formatDate(doc.uploadedAt)}</span>
-                              {doc.category && (
-                                <>
-                                  <span>•</span>
-                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded">
-                                    {doc.category}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                            {doc.description && (
-                              <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
-                            )}
-                            {doc.tags && doc.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {doc.tags.map((tag, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded"
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
+                      <div className="flex-1 min-w-0 flex items-start gap-2">
+                        <FileText className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <h4
+                            className="text-sm font-medium text-gray-900 truncate"
+                            title={doc.name}
+                          >
+                            {doc.name}
+                          </h4>
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-xs text-gray-500">
+                            <span>{formatFileSize(doc.fileSize)}</span>
+                            <span>•</span>
+                            <span>Uploaded {formatDate(doc.uploadedAt)}</span>
+                            {doc.category && (
+                              <>
+                                <span>•</span>
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded">
+                                  {doc.category}
+                                </span>
+                              </>
                             )}
                           </div>
+                          {doc.description && (
+                            <p className="text-xs text-gray-600 mt-0.5">{doc.description}</p>
+                          )}
+                          {doc.tags && doc.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {doc.tags.map((tag, idx) => (
+                                <span
+                                  key={idx}
+                                  className="text-[11px] px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 ml-4">
+                      <div className="flex items-center justify-end gap-2 flex-shrink-0 border-t border-gray-100 pt-3 sm:border-t-0 sm:pt-0 sm:ml-4">
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
+                          className="h-10 w-10 sm:h-8 sm:w-8"
                           onClick={() => window.open(doc.fileUrl, '_blank')}
                           title="View Document"
                         >
@@ -503,7 +506,8 @@ export function ProjectDocuments({ projectId }: ProjectDocumentsProps) {
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
+                          className="h-10 w-10 sm:h-8 sm:w-8"
                           onClick={() => {
                             const link = document.createElement('a')
                             link.href = doc.fileUrl
@@ -516,7 +520,8 @@ export function ProjectDocuments({ projectId }: ProjectDocumentsProps) {
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
+                          className="h-10 w-10 sm:h-8 sm:w-8"
                           onClick={() => handleEdit(doc)}
                           title="Edit Document"
                         >
@@ -524,11 +529,12 @@ export function ProjectDocuments({ projectId }: ProjectDocumentsProps) {
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
+                          className="h-10 w-10 sm:h-8 sm:w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                           onClick={() => handleDelete(doc)}
                           title="Delete Document"
                         >
-                          <Trash2 className="h-4 w-4 text-red-600" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -539,7 +545,114 @@ export function ProjectDocuments({ projectId }: ProjectDocumentsProps) {
           ))}
         </div>
       )}
-    </div>
+    </>
   )
+
+  if (loading) {
+    const loadingBlock = (
+      <Card className="border-gray-200 shadow-sm">
+        <CardContent className="py-12">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-[#0E79C9]"></div>
+            <p className="mt-4 text-gray-500 text-sm">Loading documents...</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+    if (onBack) {
+      return (
+        <div className="min-h-screen bg-gray-50">
+          <header className="bg-white border-b border-gray-200">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4 min-w-0">
+                  <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto shrink-0" />
+                  <div className="min-w-0">
+                    <h1 className="text-xl font-semibold text-gray-900 truncate">Project Documents</h1>
+                    {projectName && <p className="text-xs text-gray-500 hidden sm:block truncate">{projectName}</p>}
+                  </div>
+                </div>
+                <Button variant="outline" onClick={onBack} size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-1.5" />
+                  Back
+                </Button>
+              </div>
+            </div>
+          </header>
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-8">
+            {loadingBlock}
+          </main>
+        </div>
+      )
+    }
+    return loadingBlock
+  }
+
+  if (onBack) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto shrink-0" />
+                <div className="min-w-0">
+                  <h1 className="text-xl font-semibold text-gray-900 truncate">Project Documents</h1>
+                  {projectName && <p className="text-xs text-gray-500 hidden sm:block truncate">{projectName}</p>}
+                </div>
+              </div>
+              <nav className="hidden sm:flex items-center gap-1 shrink-0">
+                <Button variant="outline" onClick={onBack} size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-1.5" />
+                  Back
+                </Button>
+              </nav>
+            </div>
+          </div>
+        </header>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-8 space-y-4">
+          {content}
+        </main>
+        {/* Mobile: bottom action bar - match Projects Dashboard */}
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
+          {showMobileActions && (
+            <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
+              <button
+                onClick={() => { onBack(); setShowMobileActions(false) }}
+                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-400" />
+                <span className="font-medium">Back to Project</span>
+              </button>
+              <button
+                onClick={() => { setShowUploadForm(true); setShowMobileActions(false) }}
+                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-[#0E79C9]/20 bg-[#0E79C9]/5"
+              >
+                <Upload className="w-5 h-5 text-[#0E79C9]" />
+                <div>
+                  <p className="font-medium text-gray-900">Upload Document</p>
+                  <p className="text-xs text-gray-500">Add a document to this project</p>
+                </div>
+              </button>
+            </div>
+          )}
+          <div className="p-2">
+            <Button
+              onClick={() => setShowMobileActions(!showMobileActions)}
+              variant="outline"
+              className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
+            >
+              <span className="flex items-center justify-center gap-2 text-gray-700">
+                Actions
+                <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
+              </span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return <div className="space-y-4">{content}</div>
 }
 

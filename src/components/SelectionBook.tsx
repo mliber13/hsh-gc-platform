@@ -115,6 +115,7 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
   const [selectedQuickAddTypes, setSelectedQuickAddTypes] = useState<string[]>([])
   const [addingRoom, setAddingRoom] = useState(false)
   const [addingMultipleRooms, setAddingMultipleRooms] = useState(false)
+  const [showMobileActions, setShowMobileActions] = useState(false)
 
   useEffect(() => {
     loadSelectionBook()
@@ -405,7 +406,7 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ${viewMode === 'overview' ? 'pb-24 sm:pb-8' : ''}`}>
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-800">{error}</p>
@@ -523,6 +524,57 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
           />
         ) : null}
       </main>
+
+      {/* Mobile: bottom Actions menu when in overview - match Project Actuals / Estimate Builder */}
+      {viewMode === 'overview' && (
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
+          {showMobileActions && (
+            <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
+              {onBack && (
+                <button
+                  onClick={() => { onBack(); setShowMobileActions(false) }}
+                  className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+                >
+                  <ArrowLeft className="w-5 h-5 text-gray-400" />
+                  <span className="font-medium">Back to Project</span>
+                </button>
+              )}
+              <button
+                onClick={() => { setShowQuickAdd(true); setShowMobileActions(false) }}
+                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-blue-500/30 bg-blue-50/50"
+              >
+                <Plus className="w-5 h-5 text-blue-600" />
+                <div>
+                  <p className="font-medium text-gray-900">Quick Add Rooms</p>
+                  <p className="text-xs text-gray-500">Add multiple rooms at once</p>
+                </div>
+              </button>
+              <button
+                onClick={() => { setShowAddRoom(true); setShowMobileActions(false) }}
+                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-green-500/30 bg-green-50/50"
+              >
+                <Plus className="w-5 h-5 text-green-600" />
+                <div>
+                  <p className="font-medium text-gray-900">Add Single Room</p>
+                  <p className="text-xs text-gray-500">Add one room with name and type</p>
+                </div>
+              </button>
+            </div>
+          )}
+          <div className="p-2">
+            <Button
+              onClick={() => setShowMobileActions(!showMobileActions)}
+              variant="outline"
+              className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
+            >
+              <span className="flex items-center justify-center gap-2 text-gray-700">
+                Actions
+                <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
+              </span>
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -702,7 +754,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
           </CardContent>
         </Card>
       ) : (
-        <div className="flex justify-end gap-2">
+        <div className="hidden sm:flex justify-end gap-2">
           <Button variant="outline" onClick={() => setShowQuickAdd(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Quick Add Rooms
@@ -788,7 +840,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
             <p className="text-gray-500 mb-6">
               Add your first room to start building your selection book.
             </p>
-            <div className="flex gap-2 justify-center">
+            <div className="hidden sm:flex gap-2 justify-center">
               <Button variant="outline" onClick={() => setShowQuickAdd(true)}>
                 <Plus className="w-4 h-4 mr-2" />
                 Quick Add Rooms

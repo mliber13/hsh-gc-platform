@@ -67,6 +67,7 @@ import {
   Printer,
   List,
   ArrowRightLeft,
+  Download,
 } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
@@ -153,6 +154,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const [reassignProjects, setReassignProjects] = useState<Project[]>([])
   const [reassignTargetId, setReassignTargetId] = useState<string>('')
   const [reassigning, setReassigning] = useState(false)
+  const [showMobileActions, setShowMobileActions] = useState(false)
+  const [showQBImport, setShowQBImport] = useState(false)
   /** Reconciliation checkboxes (session-only; for testing) */
   const [reconciledEntryIds, setReconciledEntryIds] = useState<Set<string>>(new Set())
   const toggleReconciled = (entryId: string) => {
@@ -995,8 +998,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             </CardContent>
           </Card>
 
-          {/* Quick Entry Buttons */}
-          <Card>
+          {/* Quick Entry Buttons - hidden on mobile (moved to bottom Actions menu) */}
+          <Card className="hidden sm:block">
             <CardContent className="pt-6">
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button
@@ -1043,6 +1046,20 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
               </div>
             </CardContent>
           </Card>
+          {/* QuickBooksImport for mobile Actions - controlled open when opened from bottom menu */}
+          <div className="sm:hidden sr-only">
+            <QuickBooksImport
+              trigger="button"
+              preSelectedProject={{
+                id: project.id,
+                name: project.name,
+                estimateId: project.estimate?.id,
+              }}
+              onSuccess={() => setActualsRefreshKey((k) => k + 1)}
+              open={showQBImport}
+              onOpenChange={setShowQBImport}
+            />
+          </div>
 
           {/* Debug Information removed */}
 
@@ -2500,19 +2517,74 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         />
       )}
 
-      {/* Mobile Back Button */}
-      {onBack && (
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
+      {/* Mobile: bottom Actions menu - match Estimate Builder / Project Detail */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
+        {showMobileActions && (
+          <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
+            {onBack && (
+              <button
+                onClick={() => { onBack(); setShowMobileActions(false) }}
+                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-400" />
+                <span className="font-medium">Back to Project</span>
+              </button>
+            )}
+            <button
+              onClick={() => { setEntryType('labor'); setShowEntryForm(true); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-blue-500/30 bg-blue-50/50"
+            >
+              <Users className="w-5 h-5 text-blue-600" />
+              <div>
+                <p className="font-medium text-gray-900">Labor Entry</p>
+                <p className="text-xs text-gray-500">Add labor / time entry</p>
+              </div>
+            </button>
+            <button
+              onClick={() => { setEntryType('material'); setShowEntryForm(true); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-green-500/30 bg-green-50/50"
+            >
+              <Package className="w-5 h-5 text-green-600" />
+              <div>
+                <p className="font-medium text-gray-900">Material Entry</p>
+                <p className="text-xs text-gray-500">Add material or purchase</p>
+              </div>
+            </button>
+            <button
+              onClick={() => { setEntryType('subcontractor'); setShowEntryForm(true); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-orange-500/30 bg-orange-50/50"
+            >
+              <HardHat className="w-5 h-5 text-orange-600" />
+              <div>
+                <p className="font-medium text-gray-900">Subcontractor Entry</p>
+                <p className="text-xs text-gray-500">Add subcontractor cost</p>
+              </div>
+            </button>
+            <button
+              onClick={() => { setShowQBImport(true); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+            >
+              <Download className="w-5 h-5 text-gray-500" />
+              <div>
+                <p className="font-medium text-gray-900">Import from QuickBooks</p>
+                <p className="text-xs text-gray-500">Sync transactions or import labor</p>
+              </div>
+            </button>
+          </div>
+        )}
+        <div className="p-2">
           <Button
-            onClick={onBack}
+            onClick={() => setShowMobileActions(!showMobileActions)}
             variant="outline"
-            className="border-gray-300 hover:bg-gray-50 w-full"
+            className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Project Detail
+            <span className="flex items-center justify-center gap-2 text-gray-700">
+              Actions
+              <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
+            </span>
           </Button>
         </div>
-      )}
+      </div>
     </div>
   )
 }

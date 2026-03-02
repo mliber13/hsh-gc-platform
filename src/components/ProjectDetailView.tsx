@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PROJECT_TYPES, PROJECT_STATUS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail, TrendingUp, FolderOpen, Palette } from 'lucide-react'
+import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail, TrendingUp, FolderOpen, Palette, ChevronDown } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import { ProFormaGenerator } from './ProFormaGenerator'
 import { WorkPackagesSection } from './WorkPackagesSection'
@@ -53,6 +53,7 @@ export function ProjectDetailView({
 }: ProjectDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editedProject, setEditedProject] = useState(project)
+  const [showMobileActions, setShowMobileActions] = useState(false)
   const [availablePlans, setAvailablePlans] = useState<Plan[]>([])
   const [estimateTotals, setEstimateTotals] = useState({
     basePriceTotal: 0,
@@ -1316,45 +1317,60 @@ export function ProjectDetailView({
         </div>
       )}
       
-      {/* Mobile Action Buttons - Fixed at bottom */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              onClick={() => setIsEditing(true)}
-              variant="outline"
-              className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
+      {/* Mobile: bottom Actions menu - match Estimate Builder / Deal Pipeline */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
+        {showMobileActions && (
+          <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
+            <button
+              onClick={() => { onBack(); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
             >
-              <Edit className="w-4 h-4 mr-1" />
-              Edit
-            </Button>
-            <Button
-              onClick={handleDuplicate}
-              variant="outline"
-              className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
+              <ArrowLeft className="w-5 h-5 text-gray-400" />
+              <span className="font-medium">Back to Projects</span>
+            </button>
+            <button
+              onClick={() => { setIsEditing(true); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-[#0E79C9]/20 bg-[#0E79C9]/5"
             >
-              <Copy className="w-4 h-4 mr-1" />
-              Duplicate
-            </Button>
+              <Edit className="w-5 h-5 text-[#0E79C9]" />
+              <div>
+                <p className="font-medium text-gray-900">Edit Project</p>
+                <p className="text-xs text-gray-500">Update project details</p>
+              </div>
+            </button>
+            <button
+              onClick={() => { handleDuplicate(); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+            >
+              <Copy className="w-5 h-5 text-[#34AB8A]" />
+              <div>
+                <p className="font-medium text-gray-900">Duplicate Project</p>
+                <p className="text-xs text-gray-500">Create a copy of this project</p>
+              </div>
+            </button>
+            <button
+              onClick={() => { handleDelete(); setShowMobileActions(false) }}
+              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+            >
+              <Trash2 className="w-5 h-5 text-red-600" />
+              <div>
+                <p className="font-medium text-gray-900">Delete Project</p>
+                <p className="text-xs text-gray-500">Remove this project</p>
+              </div>
+            </button>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              onClick={handleDelete}
-              variant="outline"
-              className="border-red-600 text-red-600 hover:bg-red-600 hover:text-white"
-            >
-              <Trash2 className="w-4 h-4 mr-1" />
-              Delete
-            </Button>
-            <Button
-              onClick={onBack}
-              variant="outline"
-              className="border-gray-300 hover:bg-gray-50"
-            >
-              <ArrowLeft className="w-4 h-4 mr-1" />
-              Back
-            </Button>
-          </div>
+        )}
+        <div className="p-2">
+          <Button
+            onClick={() => setShowMobileActions(!showMobileActions)}
+            variant="outline"
+            className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
+          >
+            <span className="flex items-center justify-center gap-2 text-gray-700">
+              Actions
+              <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
+            </span>
+          </Button>
         </div>
       </div>
 

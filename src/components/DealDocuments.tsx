@@ -305,14 +305,14 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
   return (
     <div className="space-y-4">
       {/* Header with Upload Button */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Deal Documents</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl font-bold text-gray-900 sm:text-2xl whitespace-nowrap">Deal Documents</h2>
         <Button
           onClick={() => setShowUploadForm(!showUploadForm)}
-          className="flex items-center gap-2"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto"
         >
-          <Upload className="h-4 w-4" />
-          Upload Document
+          <Upload className="h-4 w-4 shrink-0" />
+          <span>Upload Document</span>
         </Button>
       </div>
 
@@ -506,60 +506,62 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
         <div className="space-y-4">
           {Object.entries(documentsByType).map(([type, docs]) => (
             <Card key={type}>
-              <CardHeader>
-                <CardTitle className="text-lg">
+              <CardHeader className="py-3 sm:py-4">
+                <CardTitle className="text-base font-semibold">
                   {DOCUMENT_TYPE_LABELS[type as DealDocumentType]} ({docs.length})
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-0 text-sm">
                 <div className="space-y-3">
                   {docs.map((doc) => (
                     <div
                       key={doc.id}
-                      className="flex items-start justify-between p-3 border rounded-lg hover:bg-gray-50"
+                      className="flex flex-col gap-3 p-3 border rounded-lg hover:bg-gray-50 sm:flex-row sm:items-start sm:justify-between"
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-gray-900 truncate">
-                              {doc.name}
-                            </h4>
-                            <div className="flex flex-wrap gap-2 mt-1 text-sm text-gray-500">
-                              <span>{formatFileSize(doc.fileSize)}</span>
-                              <span>•</span>
-                              <span>Uploaded {formatDate(doc.uploadedAt)}</span>
-                              {doc.category && (
-                                <>
-                                  <span>•</span>
-                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded">
-                                    {doc.category}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                            {doc.description && (
-                              <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
-                            )}
-                            {doc.tags && doc.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {doc.tags.map((tag, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded"
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
+                      <div className="flex-1 min-w-0 flex items-start gap-2">
+                        <FileText className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <h4
+                            className="text-sm font-medium text-gray-900 truncate"
+                            title={doc.name}
+                          >
+                            {doc.name}
+                          </h4>
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-xs text-gray-500">
+                            <span>{formatFileSize(doc.fileSize)}</span>
+                            <span>•</span>
+                            <span>Uploaded {formatDate(doc.uploadedAt)}</span>
+                            {doc.category && (
+                              <>
+                                <span>•</span>
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded">
+                                  {doc.category}
+                                </span>
+                              </>
                             )}
                           </div>
+                          {doc.description && (
+                            <p className="text-xs text-gray-600 mt-0.5">{doc.description}</p>
+                          )}
+                          {doc.tags && doc.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {doc.tags.map((tag, idx) => (
+                                <span
+                                  key={idx}
+                                  className="text-[11px] px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 ml-4">
+                      <div className="flex items-center justify-end gap-2 flex-shrink-0 border-t border-gray-100 pt-3 sm:border-t-0 sm:pt-0 sm:ml-4">
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
+                          className="h-10 w-10 sm:h-8 sm:w-8"
                           onClick={() => window.open(doc.fileUrl, '_blank')}
                           title="View Document"
                         >
@@ -567,7 +569,8 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
+                          className="h-10 w-10 sm:h-8 sm:w-8"
                           onClick={() => {
                             const link = document.createElement('a')
                             link.href = doc.fileUrl
@@ -580,7 +583,8 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
+                          className="h-10 w-10 sm:h-8 sm:w-8"
                           onClick={() => handleShare(doc)}
                           title="Share by email"
                         >
@@ -588,7 +592,8 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
+                          className="h-10 w-10 sm:h-8 sm:w-8"
                           onClick={() => handleEdit(doc)}
                           title="Edit Document"
                         >
@@ -596,11 +601,12 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
+                          className="h-10 w-10 sm:h-8 sm:w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                           onClick={() => handleDelete(doc)}
                           title="Delete Document"
                         >
-                          <Trash2 className="h-4 w-4 text-red-600" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
