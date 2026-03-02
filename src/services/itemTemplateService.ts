@@ -6,7 +6,7 @@
 //
 
 import { v4 as uuidv4 } from 'uuid'
-import { ItemTemplate, ItemTemplateInput } from '@/types'
+import { ItemTemplate, ItemTemplateInput, ItemSubItemTemplate } from '@/types'
 import { isOnlineMode } from '@/lib/supabase'
 import * as supabaseService from './supabaseService'
 
@@ -175,6 +175,7 @@ function getDefaultItemTemplates(): ItemTemplate[] {
       defaultMaterialRate: 11.44,
       defaultLaborRate: 5.50,
       isSubcontracted: false,
+      defaultSubItems: [] as ItemSubItemTemplate[],
       createdAt: now,
       updatedAt: now,
     },
@@ -187,6 +188,7 @@ function getDefaultItemTemplates(): ItemTemplate[] {
       defaultMaterialRate: 350,
       defaultLaborRate: 100,
       isSubcontracted: false,
+      defaultSubItems: [] as ItemSubItemTemplate[],
       createdAt: now,
       updatedAt: now,
     },
@@ -198,6 +200,7 @@ function getDefaultItemTemplates(): ItemTemplate[] {
       defaultMaterialRate: 1400,
       defaultLaborRate: 150,
       isSubcontracted: false,
+      defaultSubItems: [] as ItemSubItemTemplate[],
       createdAt: now,
       updatedAt: now,
     },

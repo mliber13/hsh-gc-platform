@@ -6,7 +6,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
-import { ItemTemplate, ItemTemplateInput, Subcontractor } from '@/types'
+import { ItemTemplate, ItemTemplateInput, ItemSubItemTemplate, Subcontractor } from '@/types'
 import {
   getAllItemTemplates,
   getItemTemplatesByCategory,
@@ -101,10 +101,18 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
   }
 
   const handleSaveItem = async (data: ItemTemplateInput) => {
+    const payload = {
+      ...data,
+      defaultSubItems: data.defaultSubItems ?? [],
+    }
     if (editingItem) {
-      await updateItemTemplate(editingItem.id, data)
+      const updated = await updateItemTemplate(editingItem.id, payload)
+      if (updated === null) {
+        alert('Failed to save item template. If you added sub-items, ensure the database has run the latest migration (default_sub_items column on item_templates).')
+        return
+      }
     } else {
-      await createItemTemplate(data)
+      await createItemTemplate(payload)
     }
     await loadItems()
     setShowItemForm(false)
@@ -319,6 +327,11 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
                                         {item.rateSourceNotes && ` — ${item.rateSourceNotes}`}
                                       </div>
                                     )}
+                                    {(item.defaultSubItems?.length ?? 0) > 0 && (
+                                      <div className="text-xs text-gray-600 mt-1">
+                                        {item.defaultSubItems!.length} sub-item{item.defaultSubItems!.length !== 1 ? 's' : ''}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="flex gap-2 flex-shrink-0">
@@ -465,12 +478,55 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
     isSubcontracted: item?.isSubcontracted || false,
     defaultWasteFactor: item?.defaultWasteFactor ?? 10,
     notes: item?.notes || '',
+    defaultSubItems: item?.defaultSubItems ?? [],
     rateSourceName: item?.rateSourceName ?? undefined,
     rateSourceDate: item?.rateSourceDate ?? undefined,
     rateSourceNotes: item?.rateSourceNotes ?? undefined,
   })
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([])
   const [subsLoaded, setSubsLoaded] = useState(false)
+  const [editingSubItem, setEditingSubItem] = useState<(ItemSubItemTemplate & { _editIndex?: number }) | null>(null)
+
+  // Sync form when opening Edit (so saved defaultSubItems show) or reset when Add
+  useEffect(() => {
+    if (item) {
+      setFormData({
+        category: item.category,
+        name: item.name || '',
+        description: item.description || '',
+        defaultUnit: item.defaultUnit || 'each',
+        defaultMaterialRate: item.defaultMaterialRate,
+        defaultLaborRate: item.defaultLaborRate,
+        defaultSubcontractorRate: item.defaultSubcontractorRate,
+        defaultSubcontractorCost: item.defaultSubcontractorCost,
+        isSubcontracted: item.isSubcontracted || false,
+        defaultWasteFactor: item.defaultWasteFactor ?? 10,
+        notes: item.notes || '',
+        defaultSubItems: item.defaultSubItems ?? [],
+        rateSourceName: item.rateSourceName ?? undefined,
+        rateSourceDate: item.rateSourceDate ?? undefined,
+        rateSourceNotes: item.rateSourceNotes ?? undefined,
+      })
+    } else {
+      setFormData({
+        category: 'rough-framing',
+        name: '',
+        description: '',
+        defaultUnit: 'each',
+        defaultMaterialRate: undefined,
+        defaultLaborRate: undefined,
+        defaultSubcontractorRate: undefined,
+        defaultSubcontractorCost: undefined,
+        isSubcontracted: false,
+        defaultWasteFactor: 10,
+        notes: '',
+        defaultSubItems: [],
+        rateSourceName: undefined,
+        rateSourceDate: undefined,
+        rateSourceNotes: undefined,
+      })
+    }
+  }, [item?.id])
 
   useEffect(() => {
     fetchSubcontractors({ includeInactive: true })
@@ -490,6 +546,33 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     await onSave(formData)
+  }
+
+  const handleSaveSubItem = (data: ItemSubItemTemplate & { _editIndex?: number }) => {
+    const existing = formData.defaultSubItems ?? []
+    const editIndex = data._editIndex
+    const clean: ItemSubItemTemplate = {
+      name: data.name,
+      description: data.description,
+      quantity: data.quantity ?? 0,
+      unit: data.unit ?? 'each',
+      laborRate: data.laborRate,
+      materialRate: data.materialRate,
+      subcontractorRate: data.subcontractorRate,
+      laborCost: data.laborCost,
+      materialCost: data.materialCost,
+      subcontractorCost: data.subcontractorCost,
+      isSubcontracted: data.isSubcontracted,
+      wasteFactor: data.wasteFactor,
+      markupPercent: data.markupPercent,
+      sortOrder: data.sortOrder ?? existing.length,
+    }
+    const next =
+      typeof editIndex === 'number' && editIndex >= 0 && editIndex < existing.length
+        ? existing.map((s, i) => (i === editIndex ? clean : s))
+        : [...existing, clean]
+    setFormData((prev) => ({ ...prev, defaultSubItems: next }))
+    setEditingSubItem(null)
   }
 
   return (
@@ -557,96 +640,93 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
               </Select>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-4">
-                <div>
-                  <Label htmlFor="defaultMaterialRate">
-                    {formData.isSubcontracted ? 'Material Unit Cost (optional)' : 'Material Unit Cost'}
-                  </Label>
-                  <Input
-                    id="defaultMaterialRate"
-                    type="number"
-                    step="0.01"
-                    value={formData.defaultMaterialRate ?? ''}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        defaultMaterialRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="defaultLaborRate">
-                    {formData.isSubcontracted ? 'Labor Unit Cost (optional)' : 'Labor Unit Cost'}
-                  </Label>
-                  <Input
-                    id="defaultLaborRate"
-                    type="number"
-                    step="0.01"
-                    value={formData.defaultLaborRate ?? ''}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        defaultLaborRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col gap-4">
-                <div>
-                  <Label htmlFor="defaultSubcontractorRate">Subcontractor Unit Cost (optional)</Label>
-                  <Input
-                    id="defaultSubcontractorRate"
-                    type="number"
-                    step="0.01"
-                    value={formData.defaultSubcontractorRate ?? ''}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        defaultSubcontractorRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
-                      }))
-                    }
-                    placeholder="Per unit"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="defaultSubcontractorCost">Subcontractor Lump Sum (optional)</Label>
-                  <Input
-                    id="defaultSubcontractorCost"
-                    type="number"
-                    step="0.01"
-                    value={formData.defaultSubcontractorCost ?? ''}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        defaultSubcontractorCost: e.target.value === '' ? undefined : parseFloat(e.target.value),
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="isSubcontracted">Work Type</Label>
-                <Select
-                  value={formData.isSubcontracted ? 'yes' : 'no'}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      isSubcontracted: value === 'yes',
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="no">Self-Performed</SelectItem>
-                    <SelectItem value="yes">Subcontracted</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Cost row: label column + input column so inputs stay aligned when labels wrap */}
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,200px)_1fr] gap-x-4 gap-y-3 sm:gap-y-4 sm:items-center">
+              <Label htmlFor="defaultMaterialRate" className="sm:min-w-0">
+                {formData.isSubcontracted ? 'Material Unit Cost (optional)' : 'Material Unit Cost'}
+              </Label>
+              <Input
+                id="defaultMaterialRate"
+                type="number"
+                step="0.01"
+                value={formData.defaultMaterialRate ?? ''}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    defaultMaterialRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
+              <Label htmlFor="defaultLaborRate" className="sm:min-w-0">
+                {formData.isSubcontracted ? 'Labor Unit Cost (optional)' : 'Labor Unit Cost'}
+              </Label>
+              <Input
+                id="defaultLaborRate"
+                type="number"
+                step="0.01"
+                value={formData.defaultLaborRate ?? ''}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    defaultLaborRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
+              <Label htmlFor="defaultSubcontractorRate" className="sm:min-w-0">
+                Subcontractor Unit Cost (optional)
+              </Label>
+              <Input
+                id="defaultSubcontractorRate"
+                type="number"
+                step="0.01"
+                value={formData.defaultSubcontractorRate ?? ''}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    defaultSubcontractorRate: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                  }))
+                }
+                placeholder="Per unit"
+                className="w-full"
+              />
+              <Label htmlFor="defaultSubcontractorCost" className="sm:min-w-0">
+                Subcontractor Lump Sum (optional)
+              </Label>
+              <Input
+                id="defaultSubcontractorCost"
+                type="number"
+                step="0.01"
+                value={formData.defaultSubcontractorCost ?? ''}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    defaultSubcontractorCost: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
+              <Label htmlFor="isSubcontracted" className="sm:min-w-0">
+                Work Type
+              </Label>
+              <Select
+                value={formData.isSubcontracted ? 'yes' : 'no'}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    isSubcontracted: value === 'yes',
+                  }))
+                }
+              >
+                <SelectTrigger id="isSubcontracted" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no">Self-Performed</SelectItem>
+                  <SelectItem value="yes">Subcontracted</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {formData.isSubcontracted && (
               <p className="text-xs text-gray-500 -mt-2">
@@ -661,6 +741,83 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
                 value={formData.notes}
                 onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
               />
+            </div>
+
+            {/* Default sub-items section */}
+            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-700">Default sub-items (optional)</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setEditingSubItem({
+                      name: '',
+                      quantity: 1,
+                      unit: formData.defaultUnit,
+                      materialRate: formData.defaultMaterialRate,
+                      laborRate: formData.defaultLaborRate,
+                      subcontractorRate: formData.defaultSubcontractorRate,
+                      materialCost: formData.defaultMaterialRate ?? 0,
+                      laborCost: formData.defaultLaborRate ?? 0,
+                      subcontractorCost: formData.defaultSubcontractorRate ?? 0,
+                      isSubcontracted: formData.isSubcontracted,
+                      wasteFactor: formData.defaultWasteFactor ?? 10,
+                      sortOrder: (formData.defaultSubItems ?? []).length,
+                    })
+                  }
+                >
+                  Add sub-item
+                </Button>
+              </div>
+              {(formData.defaultSubItems ?? []).length === 0 ? (
+                <p className="text-xs text-gray-500">
+                  Use sub-items to define a default breakdown (e.g. material + labor + hardware) for this template.
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {(formData.defaultSubItems ?? []).map((sub, idx) => (
+                    <li
+                      key={idx}
+                      className="flex items-center justify-between text-xs bg-white border rounded px-2 py-1"
+                    >
+                      <span className="font-medium">
+                        {sub.name || 'Sub-item'}{' '}
+                        <span className="text-gray-500">
+                          · {sub.quantity} {sub.unit}
+                        </span>
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500">
+                          ${(sub.materialCost ?? 0) + (sub.laborCost ?? 0) + (sub.subcontractorCost ?? 0)}
+                        </span>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setEditingSubItem({ ...sub, _editIndex: idx })}
+                        >
+                          <Edit className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              defaultSubItems: (prev.defaultSubItems ?? []).filter((_, i) => i !== idx),
+                            }))
+                          }
+                        >
+                          <Trash2 className="w-3 h-3 text-red-600" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
@@ -756,6 +913,177 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
               >
                 {item ? 'Save Changes' : 'Add Item'}
               </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {editingSubItem && (
+        <ItemTemplateSubItemForm
+          subItem={editingSubItem}
+          defaultUnit={formData.defaultUnit}
+          onSave={(data) => handleSaveSubItem({ ...data, _editIndex: editingSubItem._editIndex })}
+          onCancel={() => setEditingSubItem(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+interface ItemTemplateSubItemFormProps {
+  subItem: ItemSubItemTemplate
+  defaultUnit: string
+  onSave: (data: ItemSubItemTemplate) => void
+  onCancel: () => void
+}
+
+function ItemTemplateSubItemForm({ subItem, defaultUnit, onSave, onCancel }: ItemTemplateSubItemFormProps) {
+  const [formData, setFormData] = useState<ItemSubItemTemplate>({
+    name: subItem.name,
+    description: subItem.description,
+    quantity: subItem.quantity ?? 1,
+    unit: (subItem.unit as any) || (defaultUnit as any),
+    laborRate: subItem.laborRate,
+    materialRate: subItem.materialRate,
+    subcontractorRate: subItem.subcontractorRate,
+    laborCost: subItem.laborCost,
+    materialCost: subItem.materialCost,
+    subcontractorCost: subItem.subcontractorCost,
+    isSubcontracted: subItem.isSubcontracted,
+    wasteFactor: subItem.wasteFactor ?? 10,
+    markupPercent: subItem.markupPercent,
+    sortOrder: subItem.sortOrder,
+  })
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.name || !formData.name.trim()) return
+    onSave(formData)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-xl max-h-[90vh] overflow-y-auto">
+        <CardHeader>
+          <CardTitle className="text-lg">Sub-item</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <Label>Name *</Label>
+              <Input
+                value={formData.name}
+                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Quantity</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.quantity ?? 1}
+                  onChange={(e) => {
+                    const qty = parseFloat(e.target.value) || 0
+                    setFormData((prev) => ({
+                      ...prev,
+                      quantity: qty,
+                      materialCost: (prev.materialRate ?? 0) * qty,
+                      laborCost: (prev.laborRate ?? 0) * qty,
+                      subcontractorCost: (prev.subcontractorRate ?? 0) * qty,
+                    }))
+                  }}
+                />
+              </div>
+              <div>
+                <Label>Unit</Label>
+                <Select
+                  value={formData.unit as any}
+                  onValueChange={(value) => setFormData((prev) => ({ ...prev, unit: value as any }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(UNIT_TYPES).map(([key, value]) => (
+                      <SelectItem key={key} value={key}>
+                        {value.abbreviation}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>Material rate</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.materialRate ?? ''}
+                  onChange={(e) => {
+                    const rate = parseFloat(e.target.value) || 0
+                    setFormData((prev) => ({
+                      ...prev,
+                      materialRate: rate,
+                      materialCost: rate * (prev.quantity ?? 0),
+                    }))
+                  }}
+                />
+              </div>
+              <div>
+                <Label>Labor rate</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.laborRate ?? ''}
+                  onChange={(e) => {
+                    const rate = parseFloat(e.target.value) || 0
+                    setFormData((prev) => ({
+                      ...prev,
+                      laborRate: rate,
+                      laborCost: rate * (prev.quantity ?? 0),
+                    }))
+                  }}
+                />
+              </div>
+              <div>
+                <Label>Sub rate</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.subcontractorRate ?? ''}
+                  onChange={(e) => {
+                    const rate = parseFloat(e.target.value) || 0
+                    setFormData((prev) => ({
+                      ...prev,
+                      subcontractorRate: rate,
+                      subcontractorCost: rate * (prev.quantity ?? 0),
+                    }))
+                  }}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Markup %</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={formData.markupPercent ?? ''}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    markupPercent: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                  }))
+                }
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+              <Button type="submit">Save sub-item</Button>
             </div>
           </form>
         </CardContent>

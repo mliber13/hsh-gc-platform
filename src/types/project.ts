@@ -152,6 +152,8 @@ export type UnitType =
   | 'acre'          // Acre
   | 'ton'           // Ton
   | 'step'          // Step
+  | 'sheet'         // Sheet (e.g. drywall, plywood)
+  | 'roll'          // Roll (e.g. insulation, flooring)
 
 export type EstimateStatus =
   | 'budget'        // Rough/placeholder estimate

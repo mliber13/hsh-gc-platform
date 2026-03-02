@@ -10,8 +10,8 @@ import {
   PlanEstimateTemplate,
   UpdatePlanEstimateTemplateInput,
 } from '@/types/estimateTemplate'
-import { Trade, TradeInput, TradeCategory } from '@/types'
-import type { ItemTemplateInput } from '@/types/itemTemplate'
+import { Trade, TradeInput, TradeCategory, SubItem, UnitType } from '@/types'
+import type { ItemTemplate, ItemTemplateInput } from '@/types/itemTemplate'
 import {
   getEstimateTemplateById,
   updateEstimateTemplate,
@@ -21,7 +21,6 @@ import { createTradeCategory } from '@/services/tradeCategoryService'
 import { fetchSubcontractors } from '@/services/partnerDirectoryService'
 import { UNIT_TYPES, DEFAULT_VALUES, formatCurrency } from '@/types/constants'
 import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
-import { UnitType } from '@/types'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,7 +33,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ArrowLeft, Plus, Edit, Trash2, Save, X, BookPlus, Layers, ChevronDown, ChevronUp } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ArrowLeft, Plus, Edit, Trash2, Save, X, BookPlus, Layers, ChevronDown, ChevronUp, Library } from 'lucide-react'
 import { getCategoryAccentColor } from '@/lib/categoryAccent'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
@@ -58,6 +58,10 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
   const [editingTrade, setEditingTrade] = useState<EditableTrade | null>(null)
   const [isAddingTrade, setIsAddingTrade] = useState(false)
   const [availableSubcontractors, setAvailableSubcontractors] = useState<any[]>([])
+  const [showAddFromLibrary, setShowAddFromLibrary] = useState(false)
+  const [addFromLibraryCategory, setAddFromLibraryCategory] = useState<string>('')
+  const [addFromLibraryTemplates, setAddFromLibraryTemplates] = useState<ItemTemplate[]>([])
+  const [addFromLibrarySelectedIds, setAddFromLibrarySelectedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadTemplate()
@@ -70,10 +74,25 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
       const loadedTemplate = await getEstimateTemplateById(templateId)
       if (loadedTemplate) {
         setTemplate(loadedTemplate)
-        // Convert template trades to editable trades with temp IDs
+        // Convert template trades to editable trades with temp IDs; give sub-items stable ids for keys
         const editableTrades: EditableTrade[] = loadedTemplate.trades.map((trade, index) => ({
           ...trade,
           tempId: `temp_${index}_${Date.now()}`,
+          subItems: (trade as { subItems?: Array<Partial<SubItem> & { id?: string; tradeId?: string }> }).subItems?.map((sub, si) => ({
+            ...sub,
+            id: sub.id || `tempSub_${index}_${si}`,
+            tradeId: (sub as { tradeId?: string }).tradeId || '',
+            name: sub.name ?? '',
+            quantity: sub.quantity ?? 0,
+            unit: (sub.unit as UnitType) ?? 'each',
+            laborCost: sub.laborCost ?? 0,
+            materialCost: sub.materialCost ?? 0,
+            subcontractorCost: sub.subcontractorCost ?? 0,
+            totalCost: (sub.totalCost ?? (sub.laborCost ?? 0) + (sub.materialCost ?? 0) + (sub.subcontractorCost ?? 0)),
+            isSubcontracted: sub.isSubcontracted ?? false,
+            wasteFactor: sub.wasteFactor ?? 10,
+            sortOrder: sub.sortOrder ?? si,
+          })) ?? [],
         }))
         setTrades(editableTrades)
       } else {
@@ -97,6 +116,10 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
     }
   }
 
+  const effectiveDefaultMarkup = (template?.defaultMarkupPercent === 11.1 || template?.defaultMarkupPercent == null)
+    ? 20
+    : (template?.defaultMarkupPercent ?? 20)
+
   const handleAddTrade = () => {
     const newTrade: EditableTrade = {
       tempId: `temp_new_${Date.now()}`,
@@ -114,6 +137,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
       wasteFactor: DEFAULT_VALUES.WASTE_FACTOR,
       notes: '',
       sortOrder: trades.length,
+      subItems: [],
     }
     setEditingTrade(newTrade)
     setIsAddingTrade(true)
@@ -127,6 +151,102 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
   const handleDeleteTrade = (tempId: string) => {
     if (!confirm('Are you sure you want to delete this item?')) return
     setTrades(prev => prev.filter(t => t.tempId !== tempId))
+  }
+
+  // Open "Add from library" modal and load templates for a category
+  const openAddFromLibrary = () => {
+    setShowAddFromLibrary(true)
+    setAddFromLibrarySelectedIds(new Set())
+    if (categories.length > 0 && !addFromLibraryCategory) {
+      setAddFromLibraryCategory(categories[0].key)
+    }
+  }
+
+  useEffect(() => {
+    if (!showAddFromLibrary || !addFromLibraryCategory) return
+    getItemTemplatesByCategory(addFromLibraryCategory).then((list) => {
+      setAddFromLibraryTemplates(list || [])
+      setAddFromLibrarySelectedIds(new Set())
+    })
+  }, [showAddFromLibrary, addFromLibraryCategory])
+
+  const toggleAddFromLibrarySelection = (id: string) => {
+    setAddFromLibrarySelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectAllAddFromLibrary = () => {
+    setAddFromLibrarySelectedIds(new Set(addFromLibraryTemplates.map((t) => t.id)))
+  }
+
+  const clearAllAddFromLibrary = () => {
+    setAddFromLibrarySelectedIds(new Set())
+  }
+
+  const handleAddFromLibraryConfirm = () => {
+    const selected = addFromLibraryTemplates.filter((t) => addFromLibrarySelectedIds.has(t.id))
+    if (selected.length === 0) return
+    const newTrades: EditableTrade[] = selected.map((t, i) => {
+      const qty = 1
+      const materialCost = (t.defaultMaterialRate ?? 0) * qty
+      const laborCost = (t.defaultLaborRate ?? 0) * qty
+      const subCost = t.defaultSubcontractorCost ?? (t.defaultSubcontractorRate ?? 0) * qty
+      const totalCost = materialCost + laborCost + subCost
+      const baseSortOrder = trades.length + i
+      const subItems: SubItem[] = (t.defaultSubItems ?? []).map((sub, si) => {
+        const laborCostSub = sub.laborCost ?? (sub.laborRate ?? 0) * (sub.quantity ?? 0)
+        const materialCostSub = sub.materialCost ?? (sub.materialRate ?? 0) * (sub.quantity ?? 0)
+        const subcontractorCostSub = sub.subcontractorCost ?? (sub.subcontractorRate ?? 0) * (sub.quantity ?? 0)
+        const totalCostSub = laborCostSub + materialCostSub + subcontractorCostSub
+        return {
+          id: `tempSub_lib_${i}_${si}`,
+          tradeId: '',
+          name: sub.name ?? '',
+          description: sub.description,
+          quantity: sub.quantity ?? 0,
+          unit: (sub.unit ?? t.defaultUnit ?? 'each') as UnitType,
+          laborCost: laborCostSub,
+          laborRate: sub.laborRate,
+          materialCost: materialCostSub,
+          materialRate: sub.materialRate,
+          subcontractorCost: subcontractorCostSub,
+          subcontractorRate: sub.subcontractorRate,
+          isSubcontracted: sub.isSubcontracted ?? false,
+          wasteFactor: sub.wasteFactor ?? 10,
+          markupPercent: sub.markupPercent,
+          totalCost: totalCostSub,
+          sortOrder: sub.sortOrder ?? si,
+        }
+      })
+      return {
+        tempId: `temp_lib_${t.id}_${Date.now()}_${i}`,
+        category: t.category,
+        name: t.name,
+        description: t.description ?? '',
+        quantity: qty,
+        unit: t.defaultUnit,
+        laborCost,
+        materialCost,
+        subcontractorCost: subCost,
+        totalCost,
+        markupPercent: effectiveDefaultMarkup,
+        isSubcontracted: t.isSubcontracted,
+        wasteFactor: t.defaultWasteFactor ?? DEFAULT_VALUES.WASTE_FACTOR,
+        notes: t.notes ?? '',
+        sortOrder: baseSortOrder,
+        materialRate: t.defaultMaterialRate,
+        laborRate: t.defaultLaborRate,
+        subcontractorRate: t.defaultSubcontractorRate,
+        subItems: subItems.length > 0 ? subItems : undefined,
+      }
+    })
+    setTrades((prev) => [...prev, ...newTrades])
+    setShowAddFromLibrary(false)
+    setAddFromLibrarySelectedIds(new Set())
   }
 
   const handleSaveTrade = (tradeData: EditableTrade) => {
@@ -144,8 +264,11 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
 
     setSaving(true)
     try {
-      // Convert editable trades back to template format (remove tempId)
-      const templateTrades = trades.map(({ tempId, ...trade }) => trade)
+      // Convert editable trades back to template format (remove tempId; strip id/tradeId from sub-items)
+      const templateTrades = trades.map(({ tempId, subItems, ...trade }) => ({
+        ...trade,
+        subItems: subItems?.map(({ id, tradeId, ...s }) => s) ?? undefined,
+      }))
 
       const updates: UpdatePlanEstimateTemplateInput = {
         trades: templateTrades,
@@ -175,11 +298,6 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
     else next.add(category)
     setExpandedCategories(next)
   }
-
-  // Normalize legacy 11.1 to 20 so default margin is always 20%
-  const effectiveDefaultMarkup = (template?.defaultMarkupPercent === 11.1 || template?.defaultMarkupPercent == null)
-    ? 20
-    : template.defaultMarkupPercent
 
   const order = categories.map((c) => c.key)
   const categoryOrder = [...new Set(trades.map((t) => t.category))].sort((a, b) => {
@@ -289,12 +407,18 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
         {/* Trades List */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle>Template Items ({trades.length})</CardTitle>
-              <Button onClick={handleAddTrade}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Item
-              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={openAddFromLibrary}>
+                  <Library className="w-4 h-4 mr-2" />
+                  Add from library
+                </Button>
+                <Button onClick={handleAddTrade}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Item
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -405,6 +529,97 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
         </Card>
       </div>
 
+      {/* Add from library (multi-select) */}
+      <Dialog open={showAddFromLibrary} onOpenChange={setShowAddFromLibrary}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Add items from library</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">
+            Choose a category, then select one or more items to add to this template at once.
+          </p>
+          <div>
+            <Label htmlFor="add-lib-category">Category</Label>
+            <Select
+              value={addFromLibraryCategory}
+              onValueChange={setAddFromLibraryCategory}
+            >
+              <SelectTrigger id="add-lib-category" className="mt-1">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c.key} value={c.key}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <button
+              type="button"
+              onClick={selectAllAddFromLibrary}
+              className="text-primary hover:underline"
+            >
+              Select all
+            </button>
+            <span>·</span>
+            <button
+              type="button"
+              onClick={clearAllAddFromLibrary}
+              className="text-primary hover:underline"
+            >
+              Clear
+            </button>
+            {addFromLibraryTemplates.length > 0 && (
+              <span className="ml-auto">
+                {addFromLibrarySelectedIds.size} of {addFromLibraryTemplates.length} selected
+              </span>
+            )}
+          </div>
+          <div className="border rounded-lg overflow-auto flex-1 min-h-[200px] max-h-[40vh]">
+            {addFromLibraryTemplates.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">
+                {addFromLibraryCategory
+                  ? 'No items in this category. Add items in Estimate Library first.'
+                  : 'Select a category to see items.'}
+              </div>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {addFromLibraryTemplates.map((t) => (
+                  <li key={t.id}>
+                    <label className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={addFromLibrarySelectedIds.has(t.id)}
+                        onChange={() => toggleAddFromLibrarySelection(t.id)}
+                        className="rounded border-gray-300 h-4 w-4 text-primary focus:ring-primary"
+                      />
+                      <span className="font-medium text-gray-900 flex-1 truncate">{t.name}</span>
+                      <span className="text-xs text-gray-500 shrink-0">
+                        {UNIT_TYPES[t.defaultUnit]?.abbreviation ?? t.defaultUnit}
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button variant="outline" onClick={() => setShowAddFromLibrary(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddFromLibraryConfirm}
+              disabled={addFromLibrarySelectedIds.size === 0}
+            >
+              Add {addFromLibrarySelectedIds.size > 0 ? addFromLibrarySelectedIds.size : ''} selected
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Trade Form Dialog */}
       {editingTrade && (
         <TradeFormDialog
@@ -442,7 +657,8 @@ function TradeFormDialog({
   availableSubcontractors,
 }: TradeFormDialogProps) {
   const { categories, refetch: refetchCategories } = useTradeCategories()
-  const [formData, setFormData] = useState<EditableTrade>(trade)
+  const [formData, setFormData] = useState<EditableTrade>({ ...trade, subItems: trade.subItems ?? [] })
+  const [editingSubItem, setEditingSubItem] = useState<Partial<SubItem> & { id?: string } | null>(null)
   const [itemTemplates, setItemTemplates] = useState<any[]>([])
   const [showCreateItemModal, setShowCreateItemModal] = useState(false)
   const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false)
@@ -472,6 +688,10 @@ function TradeFormDialog({
   }
 
   useEffect(() => {
+    setFormData(prev => ({ ...trade, subItems: trade.subItems ?? prev.subItems ?? [] }))
+  }, [trade.tempId])
+
+  useEffect(() => {
     loadItemTemplates()
   }, [formData.category])
 
@@ -484,6 +704,19 @@ function TradeFormDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     onSave(formData)
+  }
+
+  const handleSaveSubItem = (data: Partial<SubItem> & { id?: string }) => {
+    const subItems = formData.subItems ?? []
+    const totalCost = (data.laborCost ?? 0) + (data.materialCost ?? 0) + (data.subcontractorCost ?? 0)
+    const withTotal = { ...data, totalCost, sortOrder: data.sortOrder ?? subItems.length }
+    const existingIdx = data.id ? subItems.findIndex(s => s.id === data.id) : -1
+    const nextSubItems =
+      existingIdx >= 0
+        ? subItems.map((s, i) => (i === existingIdx ? { ...s, ...withTotal, id: s.id, tradeId: s.tradeId } : s))
+        : [...subItems, { ...withTotal, id: data.id || `tempSub_${Date.now()}`, tradeId: '' } as SubItem]
+    setFormData(prev => ({ ...prev, subItems: nextSubItems }))
+    setEditingSubItem(null)
   }
 
   const handleItemTemplateSelect = (template: any) => {
@@ -748,6 +981,61 @@ function TradeFormDialog({
                   rows={2}
                 />
               </div>
+
+              {/* Sub-items (template-level breakdown) */}
+              <div className="sm:col-span-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Sub-items</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingSubItem({
+                      id: `tempSub_${Date.now()}`,
+                      name: '',
+                      quantity: 0,
+                      unit: 'each',
+                      laborCost: 0,
+                      materialCost: 0,
+                      subcontractorCost: 0,
+                      totalCost: 0,
+                      isSubcontracted: false,
+                      wasteFactor: 10,
+                      sortOrder: (formData.subItems ?? []).length,
+                    })}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add sub-item
+                  </Button>
+                </div>
+                {(formData.subItems ?? []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No sub-items. Add optional line-item breakdown (e.g. materials, labor).</p>
+                ) : (
+                  <ul className="border rounded-md divide-y">
+                    {(formData.subItems ?? []).map((sub) => (
+                      <li key={sub.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <span className="font-medium">{sub.name || 'Unnamed'}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {sub.quantity} {sub.unit} · {formatCurrency((sub.laborCost || 0) + (sub.materialCost || 0) + (sub.subcontractorCost || 0))}
+                        </span>
+                        <div className="flex gap-1">
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setEditingSubItem({ ...sub })}>
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setFormData(prev => ({ ...prev, subItems: (prev.subItems ?? []).filter(s => s.id !== sub.id) }))}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
@@ -880,6 +1168,183 @@ function TradeFormDialog({
           </Card>
         </div>
       )}
+
+      {/* Sub-item edit modal (template item) */}
+      {editingSubItem && (
+        <TemplateSubItemForm
+          subItem={editingSubItem}
+          defaultMarkupPercent={defaultMarkupPercent}
+          onSave={handleSaveSubItem}
+          onCancel={() => setEditingSubItem(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// Sub-item form for template trades (in-memory only)
+interface TemplateSubItemFormProps {
+  subItem: Partial<SubItem> & { id?: string }
+  defaultMarkupPercent: number
+  onSave: (data: Partial<SubItem> & { id?: string }) => void
+  onCancel: () => void
+}
+
+function TemplateSubItemForm({ subItem, defaultMarkupPercent, onSave, onCancel }: TemplateSubItemFormProps) {
+  const [formData, setFormData] = useState<Partial<SubItem>>({
+    name: subItem.name ?? '',
+    description: subItem.description ?? '',
+    quantity: subItem.quantity ?? 0,
+    unit: subItem.unit ?? 'each',
+    laborCost: subItem.laborCost ?? 0,
+    laborRate: subItem.laborRate ?? 0,
+    materialCost: subItem.materialCost ?? 0,
+    materialRate: subItem.materialRate ?? 0,
+    subcontractorCost: subItem.subcontractorCost ?? 0,
+    subcontractorRate: subItem.subcontractorRate ?? 0,
+    isSubcontracted: subItem.isSubcontracted ?? false,
+    wasteFactor: subItem.wasteFactor ?? 10,
+    markupPercent: subItem.markupPercent ?? defaultMarkupPercent,
+    sortOrder: subItem.sortOrder ?? 0,
+  })
+  useEffect(() => {
+    setFormData({
+      name: subItem.name ?? '',
+      description: subItem.description ?? '',
+      quantity: subItem.quantity ?? 0,
+      unit: subItem.unit ?? 'each',
+      laborCost: subItem.laborCost ?? 0,
+      laborRate: subItem.laborRate ?? 0,
+      materialCost: subItem.materialCost ?? 0,
+      materialRate: subItem.materialRate ?? 0,
+      subcontractorCost: subItem.subcontractorCost ?? 0,
+      subcontractorRate: subItem.subcontractorRate ?? 0,
+      isSubcontracted: subItem.isSubcontracted ?? false,
+      wasteFactor: subItem.wasteFactor ?? 10,
+      markupPercent: subItem.markupPercent ?? defaultMarkupPercent,
+      sortOrder: subItem.sortOrder ?? 0,
+    })
+  }, [subItem.id, subItem.name, defaultMarkupPercent])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.name?.trim()) {
+      alert('Please enter a name for the sub-item')
+      return
+    }
+    onSave({ ...formData, id: subItem.id })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Sub-item</CardTitle>
+          <p className="text-sm text-muted-foreground">Breakdown line for this template item (e.g. materials, labor).</p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label>Name *</Label>
+              <Input
+                value={formData.name ?? ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g. Towel bars, Recessed lights"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Quantity</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.quantity ?? 0}
+                  onChange={(e) => {
+                    const qty = parseFloat(e.target.value) || 0
+                    setFormData(prev => ({
+                      ...prev,
+                      quantity: qty,
+                      materialCost: (prev.materialRate ?? 0) * qty,
+                      laborCost: (prev.laborRate ?? 0) * qty,
+                      subcontractorCost: (prev.subcontractorRate ?? 0) * qty,
+                    }))
+                  }}
+                />
+              </div>
+              <div>
+                <Label>Unit</Label>
+                <Select
+                  value={formData.unit ?? 'each'}
+                  onValueChange={(v) => setFormData(prev => ({ ...prev, unit: v as UnitType }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(UNIT_TYPES).map(([key, value]) => (
+                      <SelectItem key={key} value={key}>{value.abbreviation} - {value.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">Material rate</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.materialRate ?? ''}
+                  onChange={(e) => {
+                    const rate = parseFloat(e.target.value) || 0
+                    setFormData(prev => ({ ...prev, materialRate: rate, materialCost: rate * (prev.quantity ?? 0) }))
+                  }}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Labor rate</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.laborRate ?? ''}
+                  onChange={(e) => {
+                    const rate = parseFloat(e.target.value) || 0
+                    setFormData(prev => ({ ...prev, laborRate: rate, laborCost: rate * (prev.quantity ?? 0) }))
+                  }}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Sub rate</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.subcontractorRate ?? ''}
+                  onChange={(e) => {
+                    const rate = parseFloat(e.target.value) || 0
+                    setFormData(prev => ({ ...prev, subcontractorRate: rate, subcontractorCost: rate * (prev.quantity ?? 0) }))
+                  }}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Markup %</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={formData.markupPercent ?? defaultMarkupPercent}
+                onChange={(e) => setFormData(prev => ({ ...prev, markupPercent: parseFloat(e.target.value) ?? 0 }))}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+              <Button type="submit" disabled={!formData.name?.trim()}>Save sub-item</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   )
 }

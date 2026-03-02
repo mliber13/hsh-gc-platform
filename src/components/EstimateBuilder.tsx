@@ -772,11 +772,11 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         return
       }
 
-      // Add each trade to the database using hybrid service
+      // Add each trade to the database using hybrid service; then create sub-items from template when online
       console.log('💾 Adding trades to database...')
       for (const templateTrade of templateTrades) {
         console.log('  Adding trade:', templateTrade.name)
-        await addTrade_Hybrid(projectData.estimate.id, {
+        const created = await addTrade_Hybrid(projectData.estimate.id, {
           category: templateTrade.category,
           name: templateTrade.name,
           description: templateTrade.description,
@@ -793,6 +793,28 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           markupPercent: templateTrade.markupPercent,
           notes: templateTrade.notes,
         })
+        if (created && isOnlineMode() && templateTrade.subItems?.length) {
+          for (let i = 0; i < templateTrade.subItems.length; i++) {
+            const sub = templateTrade.subItems[i]
+            await createSubItemInDB(created.id, projectData.estimate.id, {
+              name: sub.name ?? '',
+              description: sub.description,
+              quantity: sub.quantity ?? 0,
+              unit: sub.unit ?? 'each',
+              laborCost: sub.laborCost ?? 0,
+              laborRate: sub.laborRate,
+              laborHours: sub.laborHours,
+              materialCost: sub.materialCost ?? 0,
+              materialRate: sub.materialRate,
+              subcontractorCost: sub.subcontractorCost ?? 0,
+              subcontractorRate: sub.subcontractorRate,
+              isSubcontracted: sub.isSubcontracted ?? false,
+              wasteFactor: sub.wasteFactor ?? 10,
+              markupPercent: sub.markupPercent,
+              sortOrder: sub.sortOrder ?? i,
+            })
+          }
+        }
       }
 
       // Reload trades to show the new ones
@@ -2054,7 +2076,7 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                             const subCostFromRate = subRate * qty
                             const subCost = template.defaultSubcontractorRate != null ? subCostFromRate : (template.defaultSubcontractorCost ?? 0)
                             const subRateDisplay = template.defaultSubcontractorRate ?? (qty > 0 && (template.defaultSubcontractorCost ?? 0) > 0 ? (template.defaultSubcontractorCost ?? 0) / qty : 0)
-                            return {
+                            const next: TradeFormData = {
                               ...prev,
                               name: template.name,
                               unit: template.defaultUnit,
@@ -2066,6 +2088,9 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                               materialCost: (template.defaultMaterialRate || 0) * qty,
                               laborCost: (template.defaultLaborRate || 0) * qty,
                             }
+                            // If the item template has default sub-items, we could hook them up here in future
+                            // by opening the sub-item editor or pre-populating sub-items for this trade.
+                            return next
                           })
                         }
                       }}

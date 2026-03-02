@@ -25,6 +25,8 @@ import {
   addTrade_Hybrid,
 } from './services/hybridService'
 import { applyTemplateToEstimate } from './services/estimateTemplateService'
+import { createSubItemInDB } from './services/supabaseService'
+import { isOnlineMode } from './lib/supabase'
 import { getCurrentUserProfile, UserProfile } from './services/userService'
 import { DataMigration } from './components/DataMigration'
 import { QuickBooksConnect } from './components/QuickBooksConnect'
@@ -180,7 +182,7 @@ function App() {
       const templateTrades = await applyTemplateToEstimate(formData.estimateTemplateId, newProject.estimate.id)
       if (templateTrades.length > 0) {
         for (const templateTrade of templateTrades) {
-          await addTrade_Hybrid(newProject.estimate.id, {
+          const created = await addTrade_Hybrid(newProject.estimate!.id, {
             category: templateTrade.category,
             name: templateTrade.name,
             description: templateTrade.description,
@@ -197,6 +199,28 @@ function App() {
             markupPercent: templateTrade.markupPercent,
             notes: templateTrade.notes,
           })
+          if (created && isOnlineMode() && templateTrade.subItems?.length) {
+            for (let i = 0; i < templateTrade.subItems.length; i++) {
+              const sub = templateTrade.subItems[i]
+              await createSubItemInDB(created.id, newProject.estimate!.id, {
+                name: sub.name ?? '',
+                description: sub.description,
+                quantity: sub.quantity ?? 0,
+                unit: sub.unit ?? 'each',
+                laborCost: sub.laborCost ?? 0,
+                laborRate: sub.laborRate,
+                laborHours: sub.laborHours,
+                materialCost: sub.materialCost ?? 0,
+                materialRate: sub.materialRate,
+                subcontractorCost: sub.subcontractorCost ?? 0,
+                subcontractorRate: sub.subcontractorRate,
+                isSubcontracted: sub.isSubcontracted ?? false,
+                wasteFactor: sub.wasteFactor ?? 10,
+                markupPercent: sub.markupPercent,
+                sortOrder: sub.sortOrder ?? i,
+              })
+            }
+          }
         }
 
         const refreshed = await getProject_Hybrid(newProject.id)

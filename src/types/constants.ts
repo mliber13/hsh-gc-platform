@@ -48,6 +48,8 @@ export type UnitType =
   | 'acre'
   | 'ton'
   | 'step'
+  | 'sheet'
+  | 'roll'
 
 export type ProjectType = 'residential-renovation' | 'residential-new-build' | 'commercial-renovation' | 'commercial-new-build'
 
@@ -315,6 +317,8 @@ export const UNIT_TYPES: Record<UnitType, { label: string; abbreviation: string 
   'acre': { label: 'Acre', abbreviation: 'Acre' },
   'ton': { label: 'Ton', abbreviation: 'Ton' },
   'step': { label: 'Step', abbreviation: 'Step' },
+  'sheet': { label: 'Sheet', abbreviation: 'Sheet' },
+  'roll': { label: 'Roll', abbreviation: 'Roll' },
 }
 
 // ----------------------------------------------------------------------------

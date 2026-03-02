@@ -154,6 +154,7 @@ export type {
 export type {
   ItemTemplate,
   ItemTemplateInput,
+  ItemSubItemTemplate,
 } from './itemTemplate'
 
 // Export purchase order types
