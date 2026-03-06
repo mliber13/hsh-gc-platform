@@ -265,9 +265,11 @@ export interface ChangeOrderApproval {
 // ----------------------------------------------------------------------------
 
 export interface ScheduleItemInput {
+  type?: 'field' | 'office'
   name: string
   description?: string
-  trade: TradeCategory
+  trade?: TradeCategory
+  estimateTradeId?: string
   startDate: Date
   endDate: Date
   predecessorIds: string[]

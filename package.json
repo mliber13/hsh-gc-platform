@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "supabase:deploy": "supabase functions deploy"
   },
   "devDependencies": {
+    "vitest": "^2.1.0",
     "supabase": "^2.15.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",

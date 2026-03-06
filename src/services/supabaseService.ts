@@ -22,6 +22,8 @@ import {
   UpdatePlanEstimateTemplateInput,
   ProjectDocument,
   DocumentType,
+  ProjectSchedule,
+  ScheduleItem,
 } from '@/types'
 import {
   DealDocument,
@@ -78,7 +80,9 @@ async function transformProject(row: any): Promise<Project> {
   }
 
   console.log(`Project ${row.name} estimate ID: ${finalEstimate.id}`)
-  
+
+  const schedule = await fetchScheduleByProjectId(row.id)
+
   return {
     id: row.id,
     name: row.name,
@@ -98,6 +102,89 @@ async function transformProject(row: any): Promise<Project> {
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     estimate: finalEstimate,
+    schedule: schedule ?? undefined,
+  }
+}
+
+/** Parse schedule items from DB (dates may be ISO strings) */
+function parseScheduleItems(items: any[]): ScheduleItem[] {
+  if (!Array.isArray(items)) return []
+  return items.map((item: any) => ({
+    ...item,
+    type: item.type === 'office' ? 'office' : 'field',
+    startDate: item.startDate ? new Date(item.startDate) : new Date(),
+    endDate: item.endDate ? new Date(item.endDate) : new Date(),
+    actualStartDate: item.actualStartDate ? new Date(item.actualStartDate) : undefined,
+    actualEndDate: item.actualEndDate ? new Date(item.actualEndDate) : undefined,
+  }))
+}
+
+export async function fetchScheduleByProjectId(projectId: string): Promise<ProjectSchedule | null> {
+  if (!isOnlineMode()) return null
+  const { data, error } = await supabase
+    .from('schedules')
+    .select('*')
+    .eq('project_id', projectId)
+    .maybeSingle()
+  if (error || !data) return null
+  const startDate = data.start_date ? new Date(data.start_date) : new Date()
+  const endDate = data.end_date ? new Date(data.end_date) : new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000)
+  const items = parseScheduleItems(data.items || [])
+  const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+  const now = Date.now()
+  const daysElapsed = Math.ceil((now - startDate.getTime()) / (1000 * 60 * 60 * 24))
+  const daysRemaining = Math.ceil((endDate.getTime() - now) / (1000 * 60 * 60 * 24))
+  const totalDays = items.reduce((sum, i) => sum + (i.duration || 0), 0)
+  const completedDays = items.filter((i: ScheduleItem) => i.status === 'complete').reduce((sum, i) => sum + (i.duration || 0), 0)
+  const percentComplete = totalDays > 0 ? (completedDays / totalDays) * 100 : 0
+  return {
+    projectId,
+    startDate,
+    endDate,
+    duration,
+    items,
+    milestones: [],
+    percentComplete,
+    daysElapsed,
+    daysRemaining,
+    isOnSchedule: true,
+    daysAheadBehind: 0,
+  }
+}
+
+export async function upsertScheduleForProject(projectId: string, schedule: ProjectSchedule): Promise<void> {
+  if (!isOnlineMode()) return
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
+  if (!profile) return
+  const itemsJson = (schedule.items || []).map((item: ScheduleItem) => ({
+    ...item,
+    startDate: item.startDate instanceof Date ? item.startDate.toISOString() : item.startDate,
+    endDate: item.endDate instanceof Date ? item.endDate.toISOString() : item.endDate,
+    actualStartDate: item.actualStartDate instanceof Date ? item.actualStartDate.toISOString() : item.actualStartDate,
+    actualEndDate: item.actualEndDate instanceof Date ? item.actualEndDate.toISOString() : item.actualEndDate,
+  }))
+  const { data: existing } = await supabase.from('schedules').select('id').eq('project_id', projectId).maybeSingle()
+  if (existing) {
+    await supabase
+      .from('schedules')
+      .update({
+        start_date: schedule.startDate instanceof Date ? schedule.startDate.toISOString() : schedule.startDate,
+        end_date: schedule.endDate instanceof Date ? schedule.endDate.toISOString() : schedule.endDate,
+        items: itemsJson,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('project_id', projectId)
+  } else {
+    await supabase.from('schedules').insert({
+      project_id: projectId,
+      user_id: user.id,
+      organization_id: profile.organization_id,
+      start_date: schedule.startDate instanceof Date ? schedule.startDate.toISOString() : schedule.startDate,
+      end_date: schedule.endDate instanceof Date ? schedule.endDate.toISOString() : schedule.endDate,
+      items: itemsJson,
+    })
   }
 }
 
@@ -197,6 +284,10 @@ export async function updateProjectInDB(projectId: string, updates: UpdateProjec
     return null
   }
 
+  if (updates.schedule !== undefined) {
+    await upsertScheduleForProject(projectId, updates.schedule)
+  }
+
   const updateData: any = {
     name: updates.name,
     status: updates.status,
@@ -215,24 +306,19 @@ export async function updateProjectInDB(projectId: string, updates: UpdateProjec
     updateData.specs = updates.specs || null
   }
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('projects')
     .update(updateData)
     .eq('id', projectId)
-    .select()
-    .single()
 
   if (error) {
     console.error('Error updating project:', error)
     return null
   }
 
-  if (!data) {
-    console.warn(`Update succeeded but no data returned for project ${projectId}`)
-    return null
-  }
-
-  return transformProject(data)
+  // Don't use .select().single() on update — when RLS blocks the update we get 0 rows and 406.
+  // Fetch the project after update so we always return current state (schedule was already upserted above).
+  return fetchProjectById(projectId)
 }
 
 export async function deleteProjectFromDB(projectId: string): Promise<boolean> {

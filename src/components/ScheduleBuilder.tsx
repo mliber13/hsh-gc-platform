@@ -7,8 +7,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { Project, Trade, ScheduleItem, ProjectSchedule } from '@/types'
-import { getTradesForEstimate, updateProject } from '@/services'
+import { Project, Trade, ScheduleItem, ProjectSchedule, ScheduleItemType } from '@/types'
+import { getTradesForEstimate_Hybrid, updateProject_Hybrid } from '@/services/hybridService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,14 +18,39 @@ import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import { getCategoryAccentLeftBorderStyle } from '@/lib/categoryAccent'
 import {
   ArrowLeft,
-  Calendar,
+  Calendar as CalendarIcon,
+  CalendarDays,
   Clock,
   PlayCircle,
   CheckCircle,
   AlertCircle,
   RefreshCw,
   Link2,
+  Briefcase,
+  HardHat,
+  Plus,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  List,
 } from 'lucide-react'
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  isSameMonth,
+  isToday,
+  addMonths,
+  subMonths,
+  isWithinInterval,
+  startOfDay,
+  endOfDay,
+  addDays,
+} from 'date-fns'
+import { toLocalDate, toLocalEndOfDay, getItemColsForWeek as getItemColsForWeekUtil } from '@/lib/scheduleCalendarUtils'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 // ----------------------------------------------------------------------------
@@ -48,24 +73,29 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
   const [projectStartDate, setProjectStartDate] = useState<Date>(project.startDate || new Date())
   const [projectEndDate, setProjectEndDate] = useState<Date>(project.endDate || new Date())
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [scheduleView, setScheduleView] = useState<'list' | 'calendar'>('list')
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => project.startDate ? new Date(project.startDate) : new Date())
 
-  // Load trades and initialize schedule
+  // Load trades and initialize schedule (async when using hybrid)
   useEffect(() => {
+    let cancelled = false
     if (project) {
-      const loadedTrades = getTradesForEstimate(project.estimate.id)
-      setTrades(loadedTrades)
+      ;(async () => {
+        const loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
+        if (cancelled) return
+        setTrades(loadedTrades)
 
-      // Load existing schedule or auto-generate
-      if (project.schedule && project.schedule.items.length > 0) {
-        setScheduleItems(project.schedule.items)
-        setProjectStartDate(project.schedule.startDate)
-        setProjectEndDate(project.schedule.endDate)
-      } else {
-        // Auto-generate schedule items from trades
-        generateScheduleFromTrades(loadedTrades)
-      }
+        if (project.schedule && project.schedule.items.length > 0) {
+          setScheduleItems(project.schedule.items)
+          setProjectStartDate(project.schedule.startDate)
+          setProjectEndDate(project.schedule.endDate)
+        } else {
+          generateScheduleFromTrades(loadedTrades)
+        }
+      })()
+      return () => { cancelled = true }
     }
-  }, [project])
+  }, [project?.id])
 
   const generateScheduleFromTrades = (tradeList: Trade[]) => {
     // Group trades by category
@@ -91,9 +121,11 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
         items.push({
           id: uuidv4(),
           scheduleId: '', // Will be set when schedule is created
+          type: 'field',
           name: trade.name,
           description: trade.description,
           trade: trade.category,
+          estimateTradeId: trade.id,
           startDate,
           endDate,
           duration,
@@ -122,6 +154,36 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
       generateScheduleFromTrades(trades)
       setHasUnsavedChanges(true)
     }
+  }
+
+  const handleAddOfficeItem = () => {
+    const lastEnd = scheduleItems.length > 0
+      ? new Date(scheduleItems[scheduleItems.length - 1].endDate)
+      : new Date(projectStartDate)
+    lastEnd.setDate(lastEnd.getDate() + 1)
+    const startDate = new Date(lastEnd)
+    const duration = 1
+    const endDate = new Date(lastEnd)
+    endDate.setDate(endDate.getDate() + duration)
+    setScheduleItems(items => [...items, {
+      id: uuidv4(),
+      scheduleId: '',
+      type: 'office',
+      name: 'New office task',
+      startDate,
+      endDate,
+      duration,
+      predecessorIds: [],
+      status: 'not-started',
+      percentComplete: 0,
+    }])
+    setHasUnsavedChanges(true)
+  }
+
+  const handleRemoveScheduleItem = (itemId: string) => {
+    if (!confirm('Remove this schedule item?')) return
+    setScheduleItems(items => items.filter(i => i.id !== itemId))
+    setHasUnsavedChanges(true)
   }
 
   const handleUpdateScheduleItem = (itemId: string, updates: Partial<ScheduleItem>) => {
@@ -218,7 +280,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     setHasUnsavedChanges(true)
   }
 
-  const handleSaveSchedule = () => {
+  const handleSaveSchedule = async () => {
     const schedule: ProjectSchedule = {
       projectId: project.id,
       startDate: projectStartDate,
@@ -233,9 +295,13 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
       daysAheadBehind: 0,
     }
 
-    updateProject(project.id, { schedule })
-    setHasUnsavedChanges(false)
-    alert('✅ Schedule saved successfully!')
+    const updated = await updateProject_Hybrid(project.id, { schedule })
+    if (updated) {
+      setHasUnsavedChanges(false)
+      alert('✅ Schedule saved successfully!')
+    } else {
+      alert('Failed to save schedule. Please try again.')
+    }
   }
 
   // Auto-save changes after a delay
@@ -276,6 +342,26 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     .reduce((sum, item) => sum + item.duration, 0)
   const percentComplete = totalDays > 0 ? (completedDays / totalDays) * 100 : 0
 
+  // Calendar: get schedule items that overlap a given day (used for any day-scoped logic)
+  const getItemsForDay = (day: Date): ScheduleItem[] => {
+    const d = startOfDay(day)
+    return scheduleItems.filter((item) => {
+      const start = toLocalDate(item.startDate)
+      const end = toLocalEndOfDay(item.endDate)
+      return isWithinInterval(d, { start, end })
+    })
+  }
+
+  // Calendar: build grid of days for current month (including leading/trailing from adjacent months)
+  const calendarStart = startOfWeek(startOfMonth(calendarMonth), { weekStartsOn: 0 })
+  const calendarEnd = endOfWeek(endOfMonth(calendarMonth), { weekStartsOn: 0 })
+  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd })
+  const weekRows = Array.from({ length: Math.ceil(calendarDays.length / 7) }, (_, i) => calendarDays.slice(i * 7, (i + 1) * 7))
+  const weekDayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  const getItemColsForWeek = (item: ScheduleItem, weekIdx: number) =>
+    getItemColsForWeekUtil(calendarStart, item, weekIdx)
+
   return (
     <div className="min-h-screen bg-background pb-20 sm:pb-0">
       <div className="p-2 sm:p-4 lg:p-6">
@@ -312,7 +398,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                     </p>
                   </div>
                   <div className="bg-blue-100 rounded-full p-3">
-                    <Calendar className="w-8 h-8 text-blue-600" />
+                    <CalendarIcon className="w-8 h-8 text-blue-600" />
                   </div>
                 </div>
               </CardContent>
@@ -328,7 +414,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                     </p>
                   </div>
                   <div className="bg-orange-100 rounded-full p-3">
-                    <Calendar className="w-8 h-8 text-orange-600" />
+                    <CalendarIcon className="w-8 h-8 text-orange-600" />
                   </div>
                 </div>
               </CardContent>
@@ -392,45 +478,242 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
               <RefreshCw className="w-4 h-4 mr-2" />
               Regenerate from Estimate
             </Button>
+            <Button
+              onClick={handleAddOfficeItem}
+              variant="outline"
+              className="flex-1 sm:flex-none border-slate-400 text-slate-600 hover:bg-slate-100"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Office Item
+            </Button>
           </div>
 
           {/* Schedule Items */}
           <Card>
-            <CardHeader>
-              <CardTitle>Schedule Items</CardTitle>
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+              <CardTitle className="mb-0">Schedule Items</CardTitle>
+              {scheduleItems.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+                    <button
+                      type="button"
+                      onClick={() => setScheduleView('list')}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'list' ? 'bg-white text-gray-900 shadow' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                      <List className="w-4 h-4" />
+                      List
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScheduleView('calendar')}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'calendar' ? 'bg-white text-gray-900 shadow' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                      <CalendarDays className="w-4 h-4" />
+                      Calendar
+                    </button>
+                  </div>
+                  {scheduleView === 'calendar' && (
+                    <div className="flex items-center gap-1 border border-gray-200 rounded-lg bg-gray-50 px-1 py-0.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setCalendarMonth((m) => subMonths(m, 1))}
+                        aria-label="Previous month"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <span className="min-w-[140px] text-center text-sm font-medium text-gray-700">
+                        {format(calendarMonth, 'MMMM yyyy')}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setCalendarMonth((m) => addMonths(m, 1))}
+                        aria-label="Next month"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               {scheduleItems.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
-                  <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <CalendarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <p className="text-lg font-medium mb-2">No Schedule Items</p>
                   <p>Add items to your estimate first, then click "Regenerate from Estimate"</p>
+                </div>
+              ) : scheduleView === 'calendar' ? (
+                <div className="overflow-x-auto overflow-y-visible">
+                  <p className="text-xs text-gray-500 mb-2">One bar per schedule item (spans across its days). Bars appear under the week they belong to.</p>
+                  <div className="min-w-[600px]">
+                    {/* One 7-column grid: header then per-week date row + bar rows so bars align under that week */}
+                    <div className="grid grid-cols-7 border-b border-gray-200">
+                      {weekDayNames.map((name) => (
+                        <div key={name} className="p-2 text-center text-xs font-semibold text-gray-500 uppercase border-r border-gray-200 last:border-r-0">
+                          {name}
+                        </div>
+                      ))}
+                      {weekRows.map((row, weekIdx) => {
+                        // Precompute which items actually have columns in this week
+                        const itemsForWeek = scheduleItems
+                          .map((item) => ({
+                            item,
+                            cols: getItemColsForWeek(item, weekIdx),
+                          }))
+                          .filter(({ cols }) => cols.length > 0)
+
+                        return (
+                          <React.Fragment key={`week-${weekIdx}`}>
+                            {/* Date row for this week */}
+                            {row.map((day) => (
+                              <div
+                                key={day.toISOString()}
+                                className={`min-h-[48px] border-r border-gray-100 last:border-r-0 p-1.5 flex flex-col ${!isSameMonth(day, calendarMonth) ? 'bg-gray-50/50' : 'bg-white'}`}
+                              >
+                                <div
+                                  className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full ${!isSameMonth(day, calendarMonth) ? 'text-gray-400' : isToday(day) ? 'bg-[#E65133] text-white' : 'text-gray-700'}`}
+                                >
+                                  {format(day, 'd')}
+                                </div>
+                              </div>
+                            ))}
+                            {/* Bar segments for this week, one row per schedule item that actually spans this week */}
+                            {itemsForWeek.map(({ item, cols }) => {
+                              const start = toLocalDate(item.startDate)
+                              const end = toLocalDate(item.endDate)
+                              const accent = getCategoryAccentLeftBorderStyle(item.trade ?? '')
+                              const isOffice = (item.type ?? 'field') === 'office'
+                              const bg = isOffice ? 'rgb(241 245 249)' : 'rgb(254 243 199)'
+                              const weekStart = addDays(calendarStart, weekIdx * 7)
+                              const weekEnd = addDays(weekStart, 6)
+                              const isStartWeek = isWithinInterval(start, { start: weekStart, end: weekEnd })
+                              return (
+                                <React.Fragment key={`${item.id}-w${weekIdx}`}>
+                                  {[0, 1, 2, 3, 4, 5, 6].map((c) => {
+                                    const filled = cols.includes(c)
+                                    const isLeftEdge = filled && (c === 0 || !cols.includes(c - 1))
+                                    const showName = isStartWeek && filled && c === cols[0]
+                                    return (
+                                      <div
+                                        key={c}
+                                        className={`h-9 flex items-center border-r border-b border-gray-200 last:border-r-0 px-1.5 py-0.5 ${filled ? '' : 'bg-transparent'}`}
+                                        style={{
+                                          backgroundColor: filled ? bg : undefined,
+                                          borderLeft: filled && isLeftEdge ? `4px solid ${accent.borderLeftColor}` : undefined,
+                                          borderRadius: filled && isLeftEdge && c > 0 ? 0 : filled && !cols.includes(c + 1) ? '0 4px 4px 0' : 0,
+                                        }}
+                                        title={showName ? `${item.name} • ${format(start, 'MMM d')} – ${format(end, 'MMM d')}` : undefined}
+                                      >
+                                        {showName && (
+                                          <span className="text-xs font-medium text-gray-800 truncate block">{item.name}</span>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </React.Fragment>
+                              )
+                            })}
+                          </React.Fragment>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {scheduleItems.map((item, index) => (
-                    <Card key={item.id} className="border-2 border-l-4" style={getCategoryAccentLeftBorderStyle(item.trade)}>
+                    <Card key={item.id} className="border-2 border-l-4" style={getCategoryAccentLeftBorderStyle(item.trade ?? '')}>
                       <CardContent className="pt-4">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <h4 className="font-semibold text-gray-900">{item.name}</h4>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded ${(item.type ?? 'field') === 'office' ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-800'}`}>
+                                    {(item.type ?? 'field') === 'office' ? <Briefcase className="w-3 h-3" /> : <HardHat className="w-3 h-3" />}
+                                    {(item.type ?? 'field') === 'office' ? 'Office' : 'Field'}
+                                  </span>
+                                  <Input
+                                    value={item.name}
+                                    onChange={(e) => handleUpdateScheduleItem(item.id, { name: e.target.value })}
+                                    className="font-semibold text-gray-900 h-8 max-w-md border-gray-200"
+                                    placeholder="Item name"
+                                  />
                                   {item.predecessorIds.length > 0 && (
                                     <span className="flex items-center gap-1 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
                                       <Link2 className="w-3 h-3" />
                                       Has Dependency
                                     </span>
                                   )}
+                                  {item.estimateTradeId && (
+                                    <span className="text-xs text-gray-500">
+                                      Linked: {trades.find(t => t.id === item.estimateTradeId)?.name ?? '—'}
+                                    </span>
+                                  )}
                                 </div>
-                                <p className="text-xs text-gray-500">
-                                  {byKey[item.trade]?.label || item.trade}
-                                </p>
+                                {(item.trade != null) && (
+                                  <p className="text-xs text-gray-500">
+                                    {byKey[item.trade]?.label || item.trade}
+                                  </p>
+                                )}
                               </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="text-gray-400 hover:text-red-600 shrink-0"
+                                onClick={() => handleRemoveScheduleItem(item.id)}
+                                aria-label="Remove schedule item"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
                             </div>
                             
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                              <div>
+                                <Label htmlFor={`type-${item.id}`} className="text-xs">Type</Label>
+                                <Select
+                                  value={item.type ?? 'field'}
+                                  onValueChange={(value: ScheduleItemType) => handleUpdateScheduleItem(item.id, { type: value })}
+                                >
+                                  <SelectTrigger className="text-sm" id={`type-${item.id}`}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="field">Field</SelectItem>
+                                    <SelectItem value="office">Office</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {(item.type ?? 'field') === 'office' && (
+                                <div className="col-span-2">
+                                  <Label htmlFor={`trade-${item.id}`} className="text-xs">Related trade (optional)</Label>
+                                  <Select
+                                    value={item.estimateTradeId ?? 'none'}
+                                    onValueChange={(value) => handleUpdateScheduleItem(item.id, {
+                                      estimateTradeId: value === 'none' ? undefined : value,
+                                      trade: value === 'none' ? undefined : trades.find(t => t.id === value)?.category,
+                                    })}
+                                  >
+                                    <SelectTrigger className="text-sm" id={`trade-${item.id}`}>
+                                      <SelectValue placeholder="None" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">None</SelectItem>
+                                      {trades.map((t) => (
+                                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
                               <div>
                                 <Label htmlFor={`start-${item.id}`} className="text-xs">Start Date</Label>
                                 <Input

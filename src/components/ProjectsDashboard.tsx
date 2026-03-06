@@ -17,11 +17,11 @@ import { isQBConnected, getQBJobTransactions } from '@/services/quickbooksServic
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusCircle, Search, Building2, DollarSign, FileText, Eye, ChevronDown, TrendingUp, Download, BookOpen, ClipboardList, BookMarked } from 'lucide-react'
+import { PlusCircle, Search, Building2, DollarSign, FileText, Eye, ChevronDown, TrendingUp, Download, BookOpen, ClipboardList, BookMarked, Calendar } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
-type ProjectSection = 'estimate' | 'actuals' | 'change-orders' | 'documents' | 'selection-book' | 'forms'
+type ProjectSection = 'estimate' | 'actuals' | 'change-orders' | 'documents' | 'selection-book' | 'schedule' | 'forms'
 
 interface ProjectsDashboardProps {
   onCreateProject: () => void
@@ -45,6 +45,7 @@ interface ProjectWithStats extends Project {
 const SECTION_BUTTONS: { section: ProjectSection; label: string; icon: React.ReactNode }[] = [
   { section: 'estimate', label: 'Estimate', icon: <BookOpen className="w-3.5 h-3.5" /> },
   { section: 'actuals', label: 'Actuals', icon: <DollarSign className="w-3.5 h-3.5" /> },
+  { section: 'schedule', label: 'Schedule', icon: <Calendar className="w-3.5 h-3.5" /> },
   { section: 'selection-book', label: 'Selection', icon: <BookMarked className="w-3.5 h-3.5" /> },
   { section: 'documents', label: 'Docs', icon: <FileText className="w-3.5 h-3.5" /> },
   { section: 'change-orders', label: 'COs', icon: <ClipboardList className="w-3.5 h-3.5" /> },
@@ -473,14 +474,14 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
                         </p>
                       </div>
                       {onOpenProjectSection && (
-                        <div className="w-full sm:w-[320px] sm:shrink-0 flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-start gap-1 py-1 sm:py-1.5 sm:pl-7" onClick={(e) => e.stopPropagation()}>
+                        <div className="w-full sm:w-[380px] sm:shrink-0 flex flex-wrap items-center justify-center sm:justify-start gap-1 py-1 sm:py-1.5 sm:pl-7" onClick={(e) => e.stopPropagation()}>
                           {SECTION_BUTTONS.map(({ section, label, icon }) => (
                             <button
                               key={section}
                               type="button"
                               onClick={() => onOpenProjectSection(project, section)}
                               className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-200 hover:text-gray-900 border border-transparent hover:border-gray-300 transition-colors whitespace-nowrap"
-                              title={section === 'change-orders' ? 'Change orders' : section === 'selection-book' ? 'Selection book' : section === 'documents' ? 'Project documents' : section === 'estimate' ? 'Estimate book' : section === 'actuals' ? 'Project actuals' : 'Forms'}
+                              title={section === 'change-orders' ? 'Change orders' : section === 'selection-book' ? 'Selection book' : section === 'schedule' ? 'Schedule' : section === 'documents' ? 'Project documents' : section === 'estimate' ? 'Estimate book' : section === 'actuals' ? 'Project actuals' : 'Forms'}
                             >
                               {icon}
                               {label}

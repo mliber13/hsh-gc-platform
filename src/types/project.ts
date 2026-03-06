@@ -609,14 +609,18 @@ export interface ProjectSchedule {
   daysAheadBehind: number   // Positive = ahead, negative = behind
 }
 
+export type ScheduleItemType = 'field' | 'office'
+
 export interface ScheduleItem {
   id: string
   scheduleId: string
   
   // What
+  type: ScheduleItemType   // Field = construction task; Office = ordering, permits, selections, etc.
   name: string
   description?: string
-  trade: TradeCategory
+  trade?: TradeCategory    // Optional: office items may have no trade or a "related" trade (e.g. order for Electrical)
+  estimateTradeId?: string // Optional link to estimate trade (for cost/schedule alignment)
   
   // When
   startDate: Date

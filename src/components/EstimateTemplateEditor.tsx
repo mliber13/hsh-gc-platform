@@ -473,6 +473,9 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
                                     <th className="p-2 text-left border-b border-r border-gray-300">Item</th>
                                     <th className="p-2 text-center border-b border-r border-gray-300">Qty</th>
                                     <th className="p-2 text-center border-b border-r border-gray-300">Unit</th>
+                                    <th className="p-2 text-center border-b border-r border-gray-300" title="Material $/unit">Mat $/u</th>
+                                    <th className="p-2 text-center border-b border-r border-gray-300" title="Labor $/unit">Lab $/u</th>
+                                    <th className="p-2 text-center border-b border-r border-gray-300" title="Subcontractor $/unit">Sub $/u</th>
                                     <th className="p-2 text-center border-b border-r border-gray-300">Material</th>
                                     <th className="p-2 text-center border-b border-r border-gray-300">Labor</th>
                                     <th className="p-2 text-center border-b border-r border-gray-300">Sub</th>
@@ -492,6 +495,9 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
                                       </td>
                                       <td className="p-2 text-center border-b border-r border-gray-200">{trade.quantity}</td>
                                       <td className="p-2 text-center border-b border-r border-gray-200">{trade.unit}</td>
+                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.materialRate ?? 0)}</td>
+                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.laborRate ?? 0)}</td>
+                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.subcontractorRate ?? 0)}</td>
                                       <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.materialCost)}</td>
                                       <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.laborCost)}</td>
                                       <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.subcontractorCost)}</td>
@@ -888,8 +894,17 @@ function TradeFormDialog({
                   type="number"
                   step="0.01"
                   min="0"
-                  value={formData.quantity || 1}
-                  onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 1 }))}
+                  value={formData.quantity ?? 1}
+                  onChange={(e) => {
+                    const qty = parseFloat(e.target.value) || 1
+                    setFormData(prev => ({
+                      ...prev,
+                      quantity: qty,
+                      laborCost: (prev.laborRate ?? 0) * qty,
+                      materialCost: (prev.materialRate ?? 0) * qty,
+                      subcontractorCost: (prev.subcontractorRate ?? 0) * qty,
+                    }))
+                  }}
                 />
               </div>
 
@@ -924,39 +939,78 @@ function TradeFormDialog({
               </div>
 
               <div>
-                <Label htmlFor="labor-cost">Labor Cost</Label>
+                <Label htmlFor="labor-unit-cost">Labor Unit Cost ($/unit)</Label>
                 <Input
-                  id="labor-cost"
+                  id="labor-unit-cost"
                   type="number"
                   step="0.01"
                   min="0"
-                  value={formData.laborCost || 0}
-                  onChange={(e) => setFormData(prev => ({ ...prev, laborCost: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0"
+                  value={formData.laborRate ?? ''}
+                  onChange={(e) => {
+                    const rate = e.target.value === '' ? undefined : parseFloat(e.target.value) || 0
+                    setFormData(prev => ({
+                      ...prev,
+                      laborRate: rate,
+                      laborCost: (rate ?? 0) * (prev.quantity ?? 0),
+                    }))
+                  }}
                 />
+                {(formData.quantity ?? 0) > 0 && (formData.laborRate ?? 0) !== 0 && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Line total: {formatCurrency((formData.laborRate ?? 0) * (formData.quantity ?? 0))}
+                  </p>
+                )}
               </div>
 
               <div>
-                <Label htmlFor="material-cost">Material Cost</Label>
+                <Label htmlFor="material-unit-cost">Material Unit Cost ($/unit)</Label>
                 <Input
-                  id="material-cost"
+                  id="material-unit-cost"
                   type="number"
                   step="0.01"
                   min="0"
-                  value={formData.materialCost || 0}
-                  onChange={(e) => setFormData(prev => ({ ...prev, materialCost: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0"
+                  value={formData.materialRate ?? ''}
+                  onChange={(e) => {
+                    const rate = e.target.value === '' ? undefined : parseFloat(e.target.value) || 0
+                    setFormData(prev => ({
+                      ...prev,
+                      materialRate: rate,
+                      materialCost: (rate ?? 0) * (prev.quantity ?? 0),
+                    }))
+                  }}
                 />
+                {(formData.quantity ?? 0) > 0 && (formData.materialRate ?? 0) !== 0 && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Line total: {formatCurrency((formData.materialRate ?? 0) * (formData.quantity ?? 0))}
+                  </p>
+                )}
               </div>
 
               <div>
-                <Label htmlFor="subcontractor-cost">Subcontractor Cost</Label>
+                <Label htmlFor="subcontractor-unit-cost">Subcontractor Unit Cost ($/unit)</Label>
                 <Input
-                  id="subcontractor-cost"
+                  id="subcontractor-unit-cost"
                   type="number"
                   step="0.01"
                   min="0"
-                  value={formData.subcontractorCost || 0}
-                  onChange={(e) => setFormData(prev => ({ ...prev, subcontractorCost: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0"
+                  value={formData.subcontractorRate ?? ''}
+                  onChange={(e) => {
+                    const rate = e.target.value === '' ? undefined : parseFloat(e.target.value) || 0
+                    setFormData(prev => ({
+                      ...prev,
+                      subcontractorRate: rate,
+                      subcontractorCost: (rate ?? 0) * (prev.quantity ?? 0),
+                    }))
+                  }}
                 />
+                {(formData.quantity ?? 0) > 0 && (formData.subcontractorRate ?? 0) !== 0 && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Line total: {formatCurrency((formData.subcontractorRate ?? 0) * (formData.quantity ?? 0))}
+                  </p>
+                )}
               </div>
 
               <div className="sm:col-span-2">

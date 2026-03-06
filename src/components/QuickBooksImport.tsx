@@ -443,7 +443,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
       )}
 
       <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogDescription className="sr-only">
             {step === 'list' ? 'Import from QuickBooks: view pending transactions or reconcile to QBO.' : 'Allocate selected transaction to a project and trade.'}
           </DialogDescription>

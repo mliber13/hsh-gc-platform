@@ -9,6 +9,7 @@ import { ChangeOrders } from './components/ChangeOrders'
 import { ProjectForms } from './components/ProjectForms'
 import { ProjectDocuments } from './components/ProjectDocuments'
 import { SelectionBook } from './components/SelectionBook'
+import { ScheduleBuilder } from './components/ScheduleBuilder'
 import { CreateProjectForm, ProjectFormData } from './components/CreateProjectForm'
 import { PlanLibrary } from './components/PlanLibrary'
 import { PlanEditor } from './components/PlanEditor'
@@ -56,6 +57,7 @@ type View =
   | 'documents'
   | 'purchase-orders'
   | 'selection-book'
+  | 'schedule'
   | 'plan-library'
   | 'plan-editor'
   | 'estimate-library'
@@ -126,7 +128,7 @@ function App() {
 
   // Refresh project data when viewing project-related screens
   useEffect(() => {
-    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms' || currentView === 'documents' || currentView === 'purchase-orders' || currentView === 'selection-book')) {
+    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms' || currentView === 'documents' || currentView === 'purchase-orders' || currentView === 'selection-book' || currentView === 'schedule')) {
       getProject_Hybrid(selectedProject.id).then(refreshedProject => {
         if (refreshedProject) {
           setSelectedProject(refreshedProject)
@@ -240,7 +242,7 @@ function App() {
   }
 
   /** Open a project directly into a section (Estimate Book, Actuals, etc.) for faster navigation from dashboard. */
-  const handleOpenProjectSection = (project: Project, section: 'estimate' | 'actuals' | 'change-orders' | 'documents' | 'selection-book' | 'forms') => {
+  const handleOpenProjectSection = (project: Project, section: 'estimate' | 'actuals' | 'change-orders' | 'documents' | 'selection-book' | 'schedule' | 'forms') => {
     setSelectedProject(project)
     setCurrentView(section)
   }
@@ -281,6 +283,12 @@ function App() {
   const handleViewSelectionBook = () => {
     if (selectedProject) {
       setCurrentView('selection-book')
+    }
+  }
+
+  const handleViewSchedule = () => {
+    if (selectedProject) {
+      setCurrentView('schedule')
     }
   }
 
@@ -551,6 +559,7 @@ function App() {
           onViewDocuments={handleViewDocuments}
           onViewPOs={handleViewPOs}
           onViewSelectionBook={handleViewSelectionBook}
+          onViewSchedule={handleViewSchedule}
           onProjectDuplicated={(newProject) => {
             setSelectedProject(newProject)
             // Stay on project detail view to see the new project
@@ -592,6 +601,13 @@ function App() {
       {currentView === 'selection-book' && selectedProject && (
         <SelectionBook
           projectId={selectedProject.id}
+          project={selectedProject}
+          onBack={handleBackToProjectDetail}
+        />
+      )}
+
+      {currentView === 'schedule' && selectedProject && (
+        <ScheduleBuilder
           project={selectedProject}
           onBack={handleBackToProjectDetail}
         />

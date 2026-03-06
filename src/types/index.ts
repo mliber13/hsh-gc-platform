@@ -58,6 +58,7 @@ export type {
   // Schedule
   ProjectSchedule,
   ScheduleItem,
+  ScheduleItemType,
   Milestone,
   
   // Documents
