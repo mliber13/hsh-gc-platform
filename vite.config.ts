@@ -48,6 +48,8 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          // Allow main chunk > 2 MiB (default limit) so Vercel build succeeds
+          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
           // Clean up old caches on update
           cleanupOutdatedCaches: true,
           // Skip waiting and claim clients immediately
