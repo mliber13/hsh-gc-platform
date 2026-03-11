@@ -942,11 +942,22 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             </Card>
           </div>
 
-          {/* Actuals breakdown: Labor, Material, Subcontractor */}
+                      {/* Actuals breakdown: Material, Labor, Subcontractor (match estimate book order) */}
           <Card className="bg-white shadow-lg border-slate-200">
             <CardContent className="pt-6">
               <p className="text-sm font-medium text-gray-600 mb-3">Actuals by type</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="flex items-center gap-3 rounded-lg bg-green-50 border border-green-200 p-3">
+                  <div className="bg-green-100 rounded-full p-2">
+                    <Package className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-green-700 font-medium">Material</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {formatCurrency(actualEntries.filter(e => e.type === 'material').reduce((sum, entry) => sum + entry.amount, 0))}
+                    </p>
+                  </div>
+                </div>
                 <div className="flex items-center gap-3 rounded-lg bg-blue-50 border border-blue-200 p-3">
                   <div className="bg-blue-100 rounded-full p-2">
                     <Users className="w-5 h-5 text-blue-600" />
@@ -972,17 +983,6 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     })()}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg bg-green-50 border border-green-200 p-3">
-                  <div className="bg-green-100 rounded-full p-2">
-                    <Package className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-green-700 font-medium">Material</p>
-                    <p className="text-lg font-bold text-gray-900">
-                      {formatCurrency(actualEntries.filter(e => e.type === 'material').reduce((sum, entry) => sum + entry.amount, 0))}
-                    </p>
-                  </div>
-                </div>
                 <div className="flex items-center gap-3 rounded-lg bg-orange-50 border border-orange-200 p-3">
                   <div className="bg-orange-100 rounded-full p-2">
                     <HardHat className="w-5 h-5 text-orange-600" />
@@ -998,20 +998,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
             </CardContent>
           </Card>
 
-          {/* Quick Entry Buttons - hidden on mobile (moved to bottom Actions menu) */}
+          {/* Quick Entry Buttons - hidden on mobile (moved to bottom Actions menu). Order: Material, Labor, Subcontractor (match columns). */}
           <Card className="hidden sm:block">
             <CardContent className="pt-6">
               <div className="flex flex-col sm:flex-row gap-3">
-                <Button
-                  onClick={() => {
-                    setEntryType('labor')
-                    setShowEntryForm(true)
-                  }}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
-                >
-                  <Users className="w-4 h-4 mr-2" />
-                  Add Labor Entry
-                </Button>
                 <Button
                   onClick={() => {
                     setEntryType('material')
@@ -1021,6 +1011,16 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 >
                   <Package className="w-4 h-4 mr-2" />
                   Add Material Entry
+                </Button>
+                <Button
+                  onClick={() => {
+                    setEntryType('labor')
+                    setShowEntryForm(true)
+                  }}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  Add Labor Entry
                 </Button>
                 <Button
                   onClick={() => {
@@ -1720,16 +1720,16 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                         <th className="p-3"></th>
                         <th className="p-3"></th>
                         <th className="p-3 border-r-2 border-gray-300"></th>
-                        <th className="text-center p-3 bg-blue-600 text-white border-r-2 border-blue-700" colSpan={2}>
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="text-2xl font-bold">Labor</span>
-                            <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-xs bg-blue-500 hover:bg-blue-600 text-white border-0" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('labor') }} title="View labor entries"><List className="w-3.5 h-3.5" /></Button>
-                          </div>
-                        </th>
                         <th className="text-center p-3 bg-emerald-600 text-white border-r-2 border-emerald-700" colSpan={2}>
                           <div className="flex items-center justify-center gap-2">
                             <span className="text-2xl font-bold">Material</span>
                             <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-xs bg-emerald-500 hover:bg-emerald-600 text-white border-0" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('material') }} title="View material entries"><List className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </th>
+                        <th className="text-center p-3 bg-blue-600 text-white border-r-2 border-blue-700" colSpan={2}>
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="text-2xl font-bold">Labor</span>
+                            <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-xs bg-blue-500 hover:bg-blue-600 text-white border-0" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('labor') }} title="View labor entries"><List className="w-3.5 h-3.5" /></Button>
                           </div>
                         </th>
                         <th className="text-center p-3 bg-amber-600 text-white border-r-2 border-amber-700" colSpan={2}>
@@ -1747,10 +1747,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                         <th className="text-left p-3 bg-[#213069] text-white border-r-2 border-gray-300">Category & Items</th>
                         <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Qty</th>
                         <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Unit</th>
-                        <th className="text-center p-3 bg-blue-700 text-white border-r-2 border-blue-800">Labor Est</th>
-                        <th className="text-center p-3 bg-blue-700 text-white border-r-2 border-blue-800">Labor Act</th>
                         <th className="text-center p-3 bg-emerald-700 text-white border-r-2 border-emerald-800">Material Est</th>
                         <th className="text-center p-3 bg-emerald-700 text-white border-r-2 border-emerald-800">Material Act</th>
+                        <th className="text-center p-3 bg-blue-700 text-white border-r-2 border-blue-800">Labor Est</th>
+                        <th className="text-center p-3 bg-blue-700 text-white border-r-2 border-blue-800">Labor Act</th>
                         <th className="text-center p-3 bg-amber-700 text-white border-r-2 border-amber-800">Sub Est</th>
                         <th className="text-center p-3 bg-amber-700 text-white border-r-2 border-amber-800">Sub Act</th>
                         <th className="text-center p-3 bg-[#0E79C9] text-white border-r-2 border-gray-300">Total Est</th>
@@ -1786,10 +1786,10 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                               </td>
                               <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
                               <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-blue-50">{formatCurrency(categoryEstimateBreakdown.labor)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-blue-50">{formatCurrency(categoryActualBreakdown.labor)}</td>
                               <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-emerald-50">{formatCurrency(categoryEstimateBreakdown.material)}</td>
                               <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-emerald-50">{formatCurrency(categoryActualBreakdown.material)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-blue-50">{formatCurrency(categoryEstimateBreakdown.labor)}</td>
+                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-blue-50">{formatCurrency(categoryActualBreakdown.labor)}</td>
                               <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-amber-50">{formatCurrency(categoryEstimateBreakdown.subcontractor)}</td>
                               <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-amber-50">{formatCurrency(categoryActualBreakdown.subcontractor)}</td>
                               <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300 bg-gray-50">{formatCurrency(categoryEstimate)}</td>
@@ -1837,21 +1837,21 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     </td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{trade.quantity}</td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{UNIT_TYPES[trade.unit as UnitType]?.abbreviation || trade.unit}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-blue-50">{formatCurrency(tradeEstimateBreakdown.labor)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-blue-50">
-                                      <div className="flex flex-col items-center gap-0.5">
-                                        <span>{formatCurrency(tradeActualBreakdown.labor)}</span>
-                                        {(() => { const entries = getEntriesForCell('labor', trade.id); return entries.length > 0 && (
-                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'labor', tradeId: trade.id, label: `${trade.name} · Labor` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({entries.length})</Button>
-                                        ); })()}
-                                      </div>
-                                    </td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-emerald-50">{formatCurrency(tradeEstimateBreakdown.material)}</td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-emerald-50">
                                       <div className="flex flex-col items-center gap-0.5">
                                         <span>{formatCurrency(tradeActualBreakdown.material)}</span>
                                         {(() => { const entries = getEntriesForCell('material', trade.id); return entries.length > 0 && (
                                           <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'material', tradeId: trade.id, label: `${trade.name} · Material` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({entries.length})</Button>
+                                        ); })()}
+                                      </div>
+                                    </td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-blue-50">{formatCurrency(tradeEstimateBreakdown.labor)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-blue-50">
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <span>{formatCurrency(tradeActualBreakdown.labor)}</span>
+                                        {(() => { const entries = getEntriesForCell('labor', trade.id); return entries.length > 0 && (
+                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'labor', tradeId: trade.id, label: `${trade.name} · Labor` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({entries.length})</Button>
                                         ); })()}
                                       </div>
                                     </td>

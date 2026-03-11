@@ -258,10 +258,10 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
   const activeCount = projects.filter(p => p.status === 'in-progress').length
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Slim app bar */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Header - match Project Detail weight */}
+      <header className="bg-white shadow-md border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 min-w-0">
               <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto shrink-0" />
@@ -333,12 +333,12 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
               placeholder="Search by name or address..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-10 text-base bg-white border-gray-200"
+              className="pl-9 h-10 text-base bg-white border-gray-200 shadow-sm"
             />
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[160px] h-10 bg-white border-gray-200">
+              <SelectTrigger className="w-[160px] h-10 bg-white border-gray-200 shadow-sm">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -351,7 +351,7 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
               </SelectContent>
             </Select>
             <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-[180px] h-10 bg-white border-gray-200">
+              <SelectTrigger className="w-[180px] h-10 bg-white border-gray-200 shadow-sm">
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
               <SelectContent>
@@ -368,24 +368,27 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
           </div>
         </div>
 
-        {/* Projects List */}
-        <Card className="border-gray-200 shadow-sm">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center justify-between text-lg">
-              <span>Your Projects</span>
-              <span className="text-sm font-normal text-gray-500">
-                {filteredProjects.length} {filteredProjects.length === 1 ? 'project' : 'projects'}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {loading && projects.length === 0 ? (
-              <div className="text-center py-12">
+        {/* Your Projects - one card per project */}
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Your Projects</h2>
+          <p className="text-sm text-gray-500">
+            {filteredProjects.length} {filteredProjects.length === 1 ? 'project' : 'projects'}
+          </p>
+        </div>
+
+        {loading && projects.length === 0 ? (
+          <Card className="bg-white shadow-lg">
+            <CardContent className="py-12">
+              <div className="text-center">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-[#0E79C9]"></div>
                 <p className="mt-4 text-gray-500 text-sm">Loading projects...</p>
               </div>
-            ) : filteredProjects.length === 0 ? (
-              <div className="text-center py-12">
+            </CardContent>
+          </Card>
+        ) : filteredProjects.length === 0 ? (
+          <Card className="bg-white shadow-lg">
+            <CardContent className="py-12">
+              <div className="text-center">
                 <Building2 className="w-14 h-14 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-700 font-medium mb-1">
                   {searchQuery ? 'No projects found' : 'No projects yet'}
@@ -406,112 +409,111 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {filteredProjects.map((project) => {
-                  const base = project.basePriceTotal ?? 0
-                  const est = project.estimatedValue ?? 0
-                  const actual = project.actualCosts ?? 0
-                  return (
-                    <div
-                      key={project.id}
-                      onClick={() => onSelectProject(project)}
-                      className="flex rounded-lg overflow-hidden hover:bg-gray-50/80 transition-colors cursor-pointer -mx-1 first:[&>*:last-child]:pt-0 border-t"
-                      style={{ borderTopColor: getStatusAccentColor(project.status) }}
-                    >
-                      <div
-                        className="shrink-0 w-1.5 rounded-l-md"
-                        style={{ backgroundColor: getStatusAccentColor(project.status) }}
-                        aria-hidden
-                      />
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-4 sm:py-5 flex-1 min-w-0 px-3 sm:px-4 rounded-r-lg items-center text-center sm:text-left">
-                      <div className="w-full sm:w-[300px] sm:shrink-0 min-w-0">
-                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
-                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{project.name}</h3>
-                          <div className="relative" ref={statusMenuProjectId === project.id ? statusMenuRef : undefined}>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (isViewer) return
-                                setStatusMenuProjectId(prev => prev === project.id ? null : project.id)
-                              }}
-                              disabled={!!updatingStatusId}
-                              className={`px-2.5 py-0.5 rounded text-xs font-medium transition-opacity ${getStatusStyles(project.status)} ${!isViewer ? 'hover:ring-1 hover:ring-gray-300 cursor-pointer' : 'cursor-default'} ${updatingStatusId === project.id ? 'opacity-60' : ''}`}
-                              title={isViewer ? undefined : 'Change status'}
-                            >
-                              {updatingStatusId === project.id ? '…' : project.status.replace('-', ' ')}
-                            </button>
-                            {statusMenuProjectId === project.id && (
-                              <div className="absolute left-0 top-full mt-1 z-10 min-w-[140px] rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                                {STATUS_OPTIONS.map((opt) => (
-                                  <button
-                                    key={opt.value}
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleStatusChange(project, opt.value)
-                                    }}
-                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 first:rounded-t-md last:rounded-b-md ${project.status === opt.value ? 'bg-gray-50 font-medium' : ''}`}
-                                  >
-                                    {opt.label}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <p className="text-sm sm:text-base text-gray-500 truncate">
-                          {typeof project.address === 'string' ? project.address : project.address?.street || 'No address'}
-                          {project.city && ` · ${project.city}`}
-                          {project.state && `, ${project.state}`}
-                        </p>
-                        <p className="text-xs sm:text-sm text-gray-400 mt-0.5 sm:mt-1">
-                          {project.metadata?.isCustomPlan || !project.metadata?.planId ? 'Custom plan' : `Plan: ${project.metadata.planId}`}
-                          {' · '}
-                          {project.createdAt.toLocaleDateString()}
-                          {project.tradeCount != null && project.tradeCount > 0 && ` · ${project.tradeCount} items`}
-                        </p>
-                      </div>
-                      {onOpenProjectSection && (
-                        <div className="w-full sm:w-[380px] sm:shrink-0 flex flex-wrap items-center justify-center sm:justify-start gap-1 py-1 sm:py-1.5 sm:pl-7" onClick={(e) => e.stopPropagation()}>
-                          {SECTION_BUTTONS.map(({ section, label, icon }) => (
-                            <button
-                              key={section}
-                              type="button"
-                              onClick={() => onOpenProjectSection(project, section)}
-                              className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-200 hover:text-gray-900 border border-transparent hover:border-gray-300 transition-colors whitespace-nowrap"
-                              title={section === 'change-orders' ? 'Change orders' : section === 'selection-book' ? 'Selection book' : section === 'schedule' ? 'Schedule' : section === 'documents' ? 'Project documents' : section === 'estimate' ? 'Estimate book' : section === 'actuals' ? 'Project actuals' : 'Forms'}
-                            >
-                              {icon}
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0 sm:min-w-[24px]" aria-hidden />
-                      <div className="flex items-baseline gap-4 sm:gap-6 shrink-0 text-center min-w-0 sm:w-[320px] sm:justify-end">
-                        <div className="sm:w-[100px] sm:text-center">
-                          <p className="text-xs text-gray-500">Base</p>
-                          <p className="text-base sm:text-lg font-semibold text-sky-700 tabular-nums">{formatCurrency(base)}</p>
-                        </div>
-                        <div className="sm:w-[100px] sm:text-center">
-                          <p className="text-xs text-gray-500">Est.</p>
-                          <p className="text-base sm:text-lg font-semibold text-gray-900 tabular-nums">{formatCurrency(est)}</p>
-                        </div>
-                        <div className="sm:w-[100px] sm:text-center">
-                          <p className="text-xs text-gray-500">Actual</p>
-                          <p className="text-base sm:text-lg font-semibold text-emerald-700 tabular-nums">{formatCurrency(actual)}</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {filteredProjects.map((project) => {
+              const base = project.basePriceTotal ?? 0
+              const est = project.estimatedValue ?? 0
+              const actual = project.actualCosts ?? 0
+              return (
+                <Card
+                  key={project.id}
+                  onClick={() => onSelectProject(project)}
+                  className="bg-white shadow-lg rounded-xl overflow-hidden hover:shadow-xl transition-all cursor-pointer border border-gray-200 flex flex-row"
+                >
+                  <div
+                    className="shrink-0 w-1.5 sm:w-2 rounded-l-xl"
+                    style={{ backgroundColor: getStatusAccentColor(project.status) }}
+                    aria-hidden
+                  />
+                  <CardContent className="flex flex-col sm:flex-row sm:items-center gap-3 py-4 sm:py-5 flex-1 min-w-0 px-4 sm:px-6 rounded-r-xl items-center text-center sm:text-left pt-6">
+                    <div className="w-full sm:w-[300px] sm:shrink-0 min-w-0">
+                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{project.name}</h3>
+                        <div className="relative" ref={statusMenuProjectId === project.id ? statusMenuRef : undefined}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (isViewer) return
+                              setStatusMenuProjectId(prev => prev === project.id ? null : project.id)
+                            }}
+                            disabled={!!updatingStatusId}
+                            className={`px-2.5 py-0.5 rounded text-xs font-medium transition-opacity ${getStatusStyles(project.status)} ${!isViewer ? 'hover:ring-1 hover:ring-gray-300 cursor-pointer' : 'cursor-default'} ${updatingStatusId === project.id ? 'opacity-60' : ''}`}
+                            title={isViewer ? undefined : 'Change status'}
+                          >
+                            {updatingStatusId === project.id ? '…' : project.status.replace('-', ' ')}
+                          </button>
+                          {statusMenuProjectId === project.id && (
+                            <div className="absolute left-0 top-full mt-1 z-10 min-w-[140px] rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                              {STATUS_OPTIONS.map((opt) => (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleStatusChange(project, opt.value)
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 first:rounded-t-md last:rounded-b-md ${project.status === opt.value ? 'bg-gray-50 font-medium' : ''}`}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
+                      <p className="text-sm sm:text-base text-gray-500 truncate">
+                        {typeof project.address === 'string' ? project.address : project.address?.street || 'No address'}
+                        {project.city && ` · ${project.city}`}
+                        {project.state && `, ${project.state}`}
+                      </p>
+                      <p className="text-xs sm:text-sm text-gray-400 mt-0.5 sm:mt-1">
+                        {project.metadata?.isCustomPlan || !project.metadata?.planId ? 'Custom plan' : `Plan: ${project.metadata.planId}`}
+                        {' · '}
+                        {project.createdAt.toLocaleDateString()}
+                        {project.tradeCount != null && project.tradeCount > 0 && ` · ${project.tradeCount} items`}
+                      </p>
+                    </div>
+                    {onOpenProjectSection && (
+                      <div className="w-full sm:w-[380px] sm:shrink-0 flex flex-wrap items-center justify-center sm:justify-start gap-1 py-1 sm:py-1.5 sm:pl-2" onClick={(e) => e.stopPropagation()}>
+                        {SECTION_BUTTONS.map(({ section, label, icon }) => (
+                          <button
+                            key={section}
+                            type="button"
+                            onClick={() => onOpenProjectSection(project, section)}
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-200 hover:text-gray-900 border border-transparent hover:border-gray-300 transition-colors whitespace-nowrap"
+                            title={section === 'change-orders' ? 'Change orders' : section === 'selection-book' ? 'Selection book' : section === 'schedule' ? 'Schedule' : section === 'documents' ? 'Project documents' : section === 'estimate' ? 'Estimate book' : section === 'actuals' ? 'Project actuals' : 'Forms'}
+                          >
+                            {icon}
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0 sm:min-w-[24px]" aria-hidden />
+                    <div className="flex items-baseline gap-4 sm:gap-6 shrink-0 text-center min-w-0 sm:w-[320px] sm:justify-end">
+                      <div className="sm:w-[100px] sm:text-center">
+                        <p className="text-xs text-gray-500">Base</p>
+                        <p className="text-base sm:text-lg font-semibold text-sky-700 tabular-nums">{formatCurrency(base)}</p>
+                      </div>
+                      <div className="sm:w-[100px] sm:text-center">
+                        <p className="text-xs text-gray-500">Est.</p>
+                        <p className="text-base sm:text-lg font-semibold text-gray-900 tabular-nums">{formatCurrency(est)}</p>
+                      </div>
+                      <div className="sm:w-[100px] sm:text-center">
+                        <p className="text-xs text-gray-500">Actual</p>
+                        <p className="text-base sm:text-lg font-semibold text-emerald-700 tabular-nums">{formatCurrency(actual)}</p>
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
 
         {/* Mobile: bottom action bar */}
         <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
