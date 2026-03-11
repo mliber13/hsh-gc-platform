@@ -1457,13 +1457,15 @@ function transformSubItem(row: any): SubItem {
     isSubcontracted: row.is_subcontracted || false,
     wasteFactor: row.waste_factor || 10,
     markupPercent: row.markup_percent || 0,
+    sortOrder: row.sort_order || 0,
+    selectionOnly: row.selection_only || false,
+    selection: row.selection ?? undefined,
     estimateStatus: row.estimate_status || 'budget',
     quoteVendor: row.quote_vendor,
     quoteDate: row.quote_date ? new Date(row.quote_date) : undefined,
     quoteReference: row.quote_reference,
     quoteFileUrl: row.quote_file_url,
     notes: row.notes || '',
-    sortOrder: row.sort_order || 0,
   }
 }
 
@@ -1509,6 +1511,8 @@ export async function createSubItemInDB(
     quoteFileUrl?: string
     notes?: string
     sortOrder?: number
+    selectionOnly?: boolean
+    selection?: Record<string, unknown>
   }
 ): Promise<SubItem | null> {
   if (!isOnlineMode()) return null
@@ -1532,7 +1536,8 @@ export async function createSubItemInDB(
   const existingSubItems = await fetchSubItemsForTrade(tradeId)
   const sortOrder = input.sortOrder !== undefined ? input.sortOrder : existingSubItems.length
 
-  const totalCost = (input.laborCost || 0) + (input.materialCost || 0) + (input.subcontractorCost || 0)
+  const selectionOnly = input.selectionOnly || false
+  const totalCost = selectionOnly ? 0 : (input.laborCost || 0) + (input.materialCost || 0) + (input.subcontractorCost || 0)
 
   const { data, error } = await supabase
     .from('sub_items')
@@ -1544,17 +1549,19 @@ export async function createSubItemInDB(
       description: input.description || '',
       quantity: input.quantity || 0,
       unit: input.unit,
-      labor_cost: input.laborCost || 0,
+      labor_cost: selectionOnly ? 0 : (input.laborCost || 0),
       labor_rate: input.laborRate || 0,
       labor_hours: input.laborHours || 0,
-      material_cost: input.materialCost || 0,
+      material_cost: selectionOnly ? 0 : (input.materialCost || 0),
       material_rate: input.materialRate || 0,
-      subcontractor_cost: input.subcontractorCost || 0,
+      subcontractor_cost: selectionOnly ? 0 : (input.subcontractorCost || 0),
       subcontractor_rate: input.subcontractorRate || 0,
       total_cost: totalCost,
       is_subcontracted: input.isSubcontracted || false,
       waste_factor: input.wasteFactor || 10,
       markup_percent: input.markupPercent || 0,
+      selection_only: selectionOnly,
+      selection: input.selection ?? null,
       estimate_status: input.estimateStatus || 'budget',
       quote_vendor: input.quoteVendor || null,
       quote_date: input.quoteDate || null,
@@ -1600,29 +1607,37 @@ export async function updateSubItemInDB(
     quoteFileUrl: string
     notes: string
     sortOrder: number
+    selectionOnly: boolean
+    selection: Record<string, unknown>
   }>
 ): Promise<SubItem | null> {
   if (!isOnlineMode()) return null
 
-  // Calculate total cost if cost fields are being updated
+  // Calculate total cost if cost fields are being updated (and not selection-only)
   let totalCost: number | undefined
+  const selectionOnly = updates.selectionOnly
   if (
     updates.laborCost !== undefined ||
     updates.materialCost !== undefined ||
-    updates.subcontractorCost !== undefined
+    updates.subcontractorCost !== undefined ||
+    selectionOnly !== undefined
   ) {
-    // Need to fetch current values for fields not being updated
     const { data: current } = await supabase
       .from('sub_items')
-      .select('labor_cost, material_cost, subcontractor_cost')
+      .select('labor_cost, material_cost, subcontractor_cost, selection_only')
       .eq('id', subItemId)
       .single()
 
     if (current) {
-      totalCost =
-        (updates.laborCost ?? current.labor_cost) +
-        (updates.materialCost ?? current.material_cost) +
-        (updates.subcontractorCost ?? current.subcontractor_cost)
+      const isSelectionOnly = selectionOnly ?? current.selection_only
+      if (isSelectionOnly) {
+        totalCost = 0
+      } else {
+        totalCost =
+          (updates.laborCost ?? current.labor_cost) +
+          (updates.materialCost ?? current.material_cost) +
+          (updates.subcontractorCost ?? current.subcontractor_cost)
+      }
     }
   }
 
@@ -1648,7 +1663,14 @@ export async function updateSubItemInDB(
   if (updates.quoteFileUrl !== undefined) updateData.quote_file_url = updates.quoteFileUrl
   if (updates.notes !== undefined) updateData.notes = updates.notes
   if (updates.sortOrder !== undefined) updateData.sort_order = updates.sortOrder
+  if (updates.selectionOnly !== undefined) updateData.selection_only = updates.selectionOnly
+  if (updates.selection !== undefined) updateData.selection = updates.selection
   if (totalCost !== undefined) updateData.total_cost = totalCost
+  if (updates.selectionOnly === true) {
+    updateData.labor_cost = 0
+    updateData.material_cost = 0
+    updateData.subcontractor_cost = 0
+  }
 
   const { data, error } = await supabase
     .from('sub_items')
@@ -1698,16 +1720,15 @@ export async function deleteSubItemFromDB(subItemId: string): Promise<boolean> {
   return true
 }
 
-// Helper function to recalculate trade totals from sub-items
+// Helper function to recalculate trade totals from sub-items (excludes selection-only sub-items)
 async function recalculateTradeTotals(tradeId: string): Promise<void> {
   const subItems = await fetchSubItemsForTrade(tradeId)
-  
-  // Sum up sub-item costs
-  const totalLaborCost = subItems.reduce((sum, item) => sum + (item.laborCost || 0), 0)
-  const totalMaterialCost = subItems.reduce((sum, item) => sum + (item.materialCost || 0), 0)
-  const totalSubcontractorCost = subItems.reduce((sum, item) => sum + (item.subcontractorCost || 0), 0)
-  
-  // Get current trade to preserve non-sub-item costs
+  const costingItems = subItems.filter((item) => !item.selectionOnly)
+
+  const totalLaborCost = costingItems.reduce((sum, item) => sum + (item.laborCost || 0), 0)
+  const totalMaterialCost = costingItems.reduce((sum, item) => sum + (item.materialCost || 0), 0)
+  const totalSubcontractorCost = costingItems.reduce((sum, item) => sum + (item.subcontractorCost || 0), 0)
+
   const { data: trade } = await supabase
     .from('trades')
     .select('labor_cost, material_cost, subcontractor_cost')
@@ -1715,10 +1736,9 @@ async function recalculateTradeTotals(tradeId: string): Promise<void> {
     .single()
 
   if (trade) {
-    // If trade has sub-items, use sub-item totals; otherwise keep existing values
-    const newLaborCost = subItems.length > 0 ? totalLaborCost : trade.labor_cost
-    const newMaterialCost = subItems.length > 0 ? totalMaterialCost : trade.material_cost
-    const newSubcontractorCost = subItems.length > 0 ? totalSubcontractorCost : trade.subcontractor_cost
+    const newLaborCost = costingItems.length > 0 ? totalLaborCost : (subItems.length > 0 ? 0 : trade.labor_cost)
+    const newMaterialCost = costingItems.length > 0 ? totalMaterialCost : (subItems.length > 0 ? 0 : trade.material_cost)
+    const newSubcontractorCost = costingItems.length > 0 ? totalSubcontractorCost : (subItems.length > 0 ? 0 : trade.subcontractor_cost)
     const newTotalCost = newLaborCost + newMaterialCost + newSubcontractorCost
 
     await supabase

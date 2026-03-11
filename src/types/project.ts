@@ -194,6 +194,11 @@ export interface SubItem {
   // Order/grouping
   sortOrder: number
   
+  // Selection only: when true, this sub-item does not contribute to trade cost; it holds selections (e.g. paint, fixture choice)
+  selectionOnly?: boolean
+  /** Structured selection data (paint, fixture, cabinetry, etc.); shape varies by type */
+  selection?: Record<string, unknown>
+  
   // Estimate status tracking (inherits from parent trade by default)
   estimateStatus?: EstimateStatus
   quoteVendor?: string

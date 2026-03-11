@@ -220,6 +220,8 @@ function App() {
                 wasteFactor: sub.wasteFactor ?? 10,
                 markupPercent: sub.markupPercent,
                 sortOrder: sub.sortOrder ?? i,
+                selectionOnly: sub.selectionOnly,
+                selection: sub.selection,
               })
             }
           }

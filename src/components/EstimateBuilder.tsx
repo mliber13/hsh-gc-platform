@@ -394,15 +394,17 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           description: subItemData.description,
           quantity: subItemData.quantity!,
           unit: subItemData.unit!,
-          laborCost: subItemData.laborCost!,
+          laborCost: subItemData.laborCost ?? 0,
           laborRate: subItemData.laborRate,
           laborHours: subItemData.laborHours,
-          materialCost: subItemData.materialCost!,
+          materialCost: subItemData.materialCost ?? 0,
           materialRate: subItemData.materialRate,
-          subcontractorCost: subItemData.subcontractorCost!,
+          subcontractorCost: subItemData.subcontractorCost ?? 0,
           isSubcontracted: subItemData.isSubcontracted || false,
           wasteFactor: subItemData.wasteFactor || 10,
           markupPercent: subItemData.markupPercent,
+          selectionOnly: subItemData.selectionOnly,
+          selection: subItemData.selection,
         })
       } else {
         // Create new sub-item
@@ -412,17 +414,19 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           {
             name: subItemData.name!,
             description: subItemData.description,
-            quantity: subItemData.quantity || 0,
+            quantity: subItemData.quantity ?? 0,
             unit: subItemData.unit || 'each',
-            laborCost: subItemData.laborCost || 0,
+            laborCost: subItemData.laborCost ?? 0,
             laborRate: subItemData.laborRate,
             laborHours: subItemData.laborHours,
-            materialCost: subItemData.materialCost || 0,
+            materialCost: subItemData.materialCost ?? 0,
             materialRate: subItemData.materialRate,
-            subcontractorCost: subItemData.subcontractorCost || 0,
+            subcontractorCost: subItemData.subcontractorCost ?? 0,
             isSubcontracted: subItemData.isSubcontracted || false,
             wasteFactor: subItemData.wasteFactor || 10,
             markupPercent: subItemData.markupPercent,
+            selectionOnly: subItemData.selectionOnly,
+            selection: subItemData.selection,
           }
         )
       }
@@ -812,6 +816,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
               wasteFactor: sub.wasteFactor ?? 10,
               markupPercent: sub.markupPercent,
               sortOrder: sub.sortOrder ?? i,
+              selectionOnly: sub.selectionOnly,
+              selection: sub.selection,
             })
           }
         }
@@ -1931,23 +1937,28 @@ function TradeTable({
                                 {isTradeExpanded && tradeSubItems.map((subItem: SubItem) => (
                                   <tr key={subItem.id} className="bg-blue-50/40 hover:bg-blue-50/60">
                                     <td className="p-3 border-b pl-20 border-r-2 border-l-2 border-l-blue-200 border-gray-300 bg-blue-50/40">
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-2 flex-wrap">
                                         <span className="text-sm">{subItem.name}</span>
+                                        {subItem.selectionOnly && (
+                                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-700" title="This line is for selections only; it does not affect the trade total.">
+                                            Selection only
+                                          </span>
+                                        )}
                                       </div>
                                     </td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.quantity}</td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{(UNIT_TYPES[subItem.unit as UnitType]?.abbreviation) || subItem.unit}</td>
-                                    <td className="p-3 text-center border-b text-sm bg-emerald-50">{subItem.materialRate ? formatCurrency(subItem.materialRate) : '-'}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50">{formatCurrency(subItem.materialCost)}</td>
-                                    <td className="p-3 text-center border-b text-sm bg-blue-50">{subItem.laborRate ? formatCurrency(subItem.laborRate) : '-'}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50">{formatCurrency(subItem.laborCost)}</td>
-                                    <td className="p-3 text-center border-b text-sm bg-amber-50">{subItem.subcontractorRate ? formatCurrency(subItem.subcontractorRate) : '-'}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50">{formatCurrency(subItem.subcontractorCost)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold bg-blue-50/40">{formatCurrency(subItem.totalCost)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{(subItem.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{formatCurrency(subItem.totalCost * ((subItem.markupPercent || defaultMarkupPercent) / 100))}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{(((subItem.markupPercent || defaultMarkupPercent) / (100 + (subItem.markupPercent || defaultMarkupPercent))) * 100).toFixed(1)}%</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold bg-blue-50/40">{formatCurrency(subItem.totalCost * (1 + (subItem.markupPercent || defaultMarkupPercent) / 100))}</td>
+                                    <td className="p-3 text-center border-b text-sm bg-emerald-50">{subItem.selectionOnly ? '-' : (subItem.materialRate ? formatCurrency(subItem.materialRate) : '-')}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50">{subItem.selectionOnly ? '-' : formatCurrency(subItem.materialCost)}</td>
+                                    <td className="p-3 text-center border-b text-sm bg-blue-50">{subItem.selectionOnly ? '-' : (subItem.laborRate ? formatCurrency(subItem.laborRate) : '-')}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50">{subItem.selectionOnly ? '-' : formatCurrency(subItem.laborCost)}</td>
+                                    <td className="p-3 text-center border-b text-sm bg-amber-50">{subItem.selectionOnly ? '-' : (subItem.subcontractorRate ? formatCurrency(subItem.subcontractorRate) : '-')}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50">{subItem.selectionOnly ? '-' : formatCurrency(subItem.subcontractorCost)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold bg-blue-50/40">{subItem.selectionOnly ? '-' : formatCurrency(subItem.totalCost)}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.selectionOnly ? '-' : `${(subItem.markupPercent ?? defaultMarkupPercent).toFixed(1)}%`}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.selectionOnly ? '-' : formatCurrency(subItem.totalCost * ((subItem.markupPercent ?? defaultMarkupPercent) / 100))}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.selectionOnly ? '-' : (((subItem.markupPercent ?? defaultMarkupPercent) / (100 + (subItem.markupPercent ?? defaultMarkupPercent))) * 100).toFixed(1) + '%'}</td>
+                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold bg-blue-50/40">{subItem.selectionOnly ? '-' : formatCurrency(subItem.totalCost * (1 + (subItem.markupPercent ?? defaultMarkupPercent) / 100))}</td>
                                     <td className="p-3 text-center border-b bg-blue-50/40">
                                       <div className="flex gap-1">
                                         <Button size="sm" variant="outline" onClick={() => onEditSubItem(trade.id, subItem)}>Edit</Button>
@@ -2072,10 +2083,15 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                           // Use template defaults
                           setFormData(prev => {
                             const qty = prev.quantity || 1
-                            const subRate = template.defaultSubcontractorRate ?? 0
-                            const subCostFromRate = subRate * qty
-                            const subCost = template.defaultSubcontractorRate != null ? subCostFromRate : (template.defaultSubcontractorCost ?? 0)
-                            const subRateDisplay = template.defaultSubcontractorRate ?? (qty > 0 && (template.defaultSubcontractorCost ?? 0) > 0 ? (template.defaultSubcontractorCost ?? 0) / qty : 0)
+                            const hasSubRate = template.defaultSubcontractorRate != null && template.defaultSubcontractorRate > 0
+                            const subRateFromTemplate = template.defaultSubcontractorRate ?? 0
+                            const subCostFromRate = subRateFromTemplate * qty
+                            const subCost = hasSubRate ? subCostFromRate : (template.defaultSubcontractorCost ?? 0)
+                            const subRateDisplay = hasSubRate
+                              ? subRateFromTemplate
+                              : (qty > 0 && (template.defaultSubcontractorCost ?? 0) > 0
+                                  ? (template.defaultSubcontractorCost ?? 0) / qty
+                                  : 0)
                             const next: TradeFormData = {
                               ...prev,
                               name: template.name,
@@ -2132,12 +2148,14 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                       // Recalculate costs if rates are already set
                       const newMaterialCost = prev.materialRate ? qty * prev.materialRate : prev.materialCost
                       const newLaborCost = prev.laborRate ? qty * prev.laborRate : prev.laborCost
+                      const newSubcontractorCost = prev.subcontractorRate ? qty * prev.subcontractorRate : prev.subcontractorCost
                       
                       return {
                         ...prev,
                         quantity: qty,
                         materialCost: newMaterialCost,
                         laborCost: newLaborCost,
+                        subcontractorCost: newSubcontractorCost,
                       }
                     })
                   }}
@@ -2500,7 +2518,10 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
     wasteFactor: subItem?.wasteFactor || 10,
     markupPercent: subItem?.markupPercent || defaultMarkupPercent,
     notes: subItem?.notes || '',
+    selectionOnly: subItem?.selectionOnly ?? false,
+    selection: subItem?.selection,
   })
+  const selectionOnly = formData.selectionOnly ?? false
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -2530,14 +2551,44 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="subItemSelectionOnly"
+                checked={selectionOnly}
+                onChange={(e) => {
+                  const checked = e.target.checked
+                  setFormData((prev: Partial<SubItem>) => ({
+                    ...prev,
+                    selectionOnly: checked,
+                    ...(checked
+                      ? {
+                          laborCost: 0,
+                          laborRate: 0,
+                          laborHours: 0,
+                          materialCost: 0,
+                          materialRate: 0,
+                          subcontractorCost: 0,
+                          subcontractorRate: 0,
+                        }
+                      : {}),
+                  }))
+                }}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <Label htmlFor="subItemSelectionOnly" className="font-normal cursor-pointer">
+                Selection only (no cost — e.g. paint color per room, fixture choice)
+              </Label>
+            </div>
+
+            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${selectionOnly ? 'opacity-60 pointer-events-none' : ''}`}>
               <div>
                 <Label htmlFor="subItemQuantity">Quantity</Label>
                 <Input
                   id="subItemQuantity"
                   type="number"
                   step="0.01"
-                  value={formData.quantity || 0}
+                  value={formData.quantity ?? 0}
                   onChange={(e) => {
                     const qty = parseFloat(e.target.value) || 0
                     setFormData((prev: Partial<SubItem>) => ({
@@ -2569,7 +2620,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${selectionOnly ? 'opacity-60 pointer-events-none' : ''}`}>
               <div>
                 <Label htmlFor="subItemMaterialRate">Material Unit Cost</Label>
                 <Input
@@ -2600,7 +2651,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${selectionOnly ? 'opacity-60 pointer-events-none' : ''}`}>
               <div>
                 <Label htmlFor="subItemLaborRate">Labor Unit Cost</Label>
                 <Input
@@ -2631,7 +2682,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${selectionOnly ? 'opacity-60 pointer-events-none' : ''}`}>
               <div>
                 <Label htmlFor="subItemSubcontractorRate">Subcontractor Unit Cost</Label>
                 <Input
@@ -2662,13 +2713,13 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
               </div>
             </div>
 
-            <div>
+            <div className={selectionOnly ? 'opacity-60 pointer-events-none' : ''}>
               <Label htmlFor="subItemMarkupPercent">Markup %</Label>
               <Input
                 id="subItemMarkupPercent"
                 type="number"
                 step="0.1"
-                value={formData.markupPercent || defaultMarkupPercent}
+                value={formData.markupPercent ?? defaultMarkupPercent}
                 onChange={(e) => setFormData((prev: Partial<SubItem>) => ({ ...prev, markupPercent: parseFloat(e.target.value) || 0 }))}
               />
             </div>
