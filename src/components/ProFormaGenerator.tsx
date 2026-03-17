@@ -912,7 +912,6 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       annualDepreciation,
       annualAppreciationPercent,
       valueMethod,
-      underwritingEstimatedConstructionCost,
     }
 
     const result = calculateProForma(project, trades, input)

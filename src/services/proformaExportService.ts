@@ -70,7 +70,10 @@ export function exportProFormaToPDF(
 
     const assumptionsData: Array<[string, string]> = [
       ['Deal Value / Contract Value', formatCurrency(projection.contractValue)],
-      ['Estimated Construction Cost', formatCurrency(underwritingMeta.underwritingEstimatedConstructionCost)],
+      [
+        'Estimated Construction Cost',
+        formatCurrency(underwritingMeta.underwritingEstimatedConstructionCost || 0),
+      ],
     ]
 
     if (typeof underwritingMeta.landCost === 'number' && underwritingMeta.landCost !== 0) {

@@ -224,6 +224,8 @@ export interface ProFormaInput {
   // --- Display-only annual value growth (optional) ---
   /** Optional annual appreciation rate used only for annual value schedule display (% per year) */
   annualAppreciationPercent?: number
+  /** Display-only value method for annual proforma (stabilized vs NOI-based) */
+  valueMethod?: 'stabilized' | 'noi-based'
 }
 
 export interface ProFormaProjection {
