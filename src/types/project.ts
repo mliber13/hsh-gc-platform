@@ -247,6 +247,9 @@ export interface Trade {
 
   // Sub-items (optional - for detailed breakdown)
   subItems?: SubItem[]
+
+  /** Optional structured selection attached at the item (trade) level (e.g. siding, gutters, soffit system). Shape can vary by category. */
+  selection?: Record<string, unknown>
   
   // Historical reference
   historicalRate?: number   // From past projects

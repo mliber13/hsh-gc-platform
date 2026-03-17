@@ -109,6 +109,8 @@ export interface TradeInput {
   wasteFactor: number
   markupPercent?: number
   notes?: string
+  /** Optional structured selection attached at the item (trade) level */
+  selection?: Record<string, unknown>
   /** Optional: force total (e.g. when reverting quote to budget); backend uses when provided */
   totalCost?: number
   /** Optional: set budget total (e.g. preserve before accepting quote); backend uses when provided */

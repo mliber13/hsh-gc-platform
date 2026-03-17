@@ -10,7 +10,9 @@ export interface PaymentMilestone {
   name: string
   date: Date
   amount: number // Dollar amount
-  percentComplete: number // 0-100, when this milestone triggers
+  percentComplete: number // 0-100 cumulative percent complete when this milestone triggers
+  /** Optional derived incremental percent for this milestone (cumulative delta) */
+  percentIncremental?: number
   description?: string
 }
 
@@ -60,6 +62,54 @@ export interface DebtService {
   paymentType: 'interest-only' | 'principal-interest' // During construction vs. permanent loan
 }
 
+export interface DealSummaryIncentiveInput {
+  id: string
+  label: string
+  perUnitAmount?: number
+  totalAmount?: number
+}
+
+export interface DealSummaryInputs {
+  totalUnits?: number
+  averageUnitSize?: number
+  targetSalePricePerUnit?: number
+  marketPricePerSF?: number
+  incentives?: DealSummaryIncentiveInput[]
+  publicBenefits?: string[]
+  conclusionText?: string
+}
+
+export interface DealSummaryIncentive {
+  label: string
+  perUnitAmount: number
+  totalAmount: number
+}
+
+export interface DealSummaryCapitalStackItem {
+  label: string
+  amount: number
+}
+
+export interface DealSummary {
+  totalUnits: number
+  averageUnitSize: number
+  targetSalePricePerUnit: number
+  targetPricePerSF?: number
+  marketPricePerSF?: number
+  baseProjectCost: number
+  baseCostPerUnit: number
+  gapPerUnit: number
+  incentives: DealSummaryIncentive[]
+  totalIncentivesPerUnit: number
+  totalIncentives: number
+  adjustedCostPerUnit: number
+  profitPerUnit: number
+  totalProfit: number
+  capitalStack: DealSummaryCapitalStackItem[]
+  publicBenefits?: string[]
+  conclusionText?: string
+}
+
 export interface MonthlyCashFlow {
   month: string // "YYYY-MM" format
   monthLabel: string // "January 2024"
@@ -68,6 +118,8 @@ export interface MonthlyCashFlow {
   // Inflows
   milestonePayments: number
   rentalIncome: number
+  /** Loan draw during construction (full development proforma) */
+  constructionDraw?: number
   totalInflow: number
   
   // Outflows (Construction phase)
@@ -75,6 +127,8 @@ export interface MonthlyCashFlow {
   materialCost: number
   subcontractorCost: number
   overheadAllocation: number
+  /** Interest accrued during construction (full development proforma) */
+  interestDuringConstruction?: number
   
   // Outflows (Post-construction phase)
   operatingExpenses: number
@@ -87,17 +141,66 @@ export interface MonthlyCashFlow {
   cumulativeBalance: number
 }
 
+/** Sources & Uses (full development proforma) */
+export interface SourcesAndUses {
+  uses: {
+    landCost: number
+    constructionCost: number
+    softCost: number
+    contingency: number
+    totalDevelopmentCost: number
+  }
+  sources: {
+    loanAmount: number
+    equityRequired: number
+  }
+}
+
+/** One row of the construction draw schedule */
+export interface ConstructionDrawRow {
+  month: string
+  monthLabel: string
+  draw: number
+  cumulativeDraw: number
+  loanBalance: number
+  interestAccrued: number
+}
+
 export interface ProFormaInput {
   projectId: string
   contractValue: number
   paymentMilestones: PaymentMilestone[]
   monthlyOverhead: number
   overheadAllocationMethod: 'proportional' | 'flat' | 'none'
-  projectionMonths: 6 | 12 | 24 | 36 | 60 // Extended to support longer projections
+  projectionMonths: 6 | 12 | 24 | 36 | 60 | 120 // Extended to support longer projections (up to 10 years)
   startDate: Date
   
   // Project details
   totalProjectSquareFootage?: number // Total square footage of the project
+  /** Optional estimated construction cost used for deal underwriting when no detailed trades exist */
+  underwritingEstimatedConstructionCost?: number
+  
+  // --- Full development proforma (Sources & Uses, Draw Schedule, IDC) ---
+  useDevelopmentProforma?: boolean // When true, compute total dev cost, LTC, draw schedule, interest during construction
+  landCost?: number
+  softCostPercent?: number // % of construction cost
+  contingencyPercent?: number // % of construction cost
+  constructionMonths?: number // Number of months to spread construction draws (default from dates)
+  loanToCostPercent?: number // Loan-to-cost %; loan = totalDevCost * this / 100
+
+  // --- Capital structure & LP-GP waterfall (Phase 3) ---
+  /** LP equity share as a percentage of total equity (e.g. 50 for 50/50 LP/GP) */
+  lpEquityPercent?: number
+  /** Simple (non-compounding) annual preferred return to LP on original equity (e.g. 8 for 8%) */
+  lpPreferredReturnPercent?: number
+  /** LP share of above-pref profit (remaining cash after pref) as a percentage (e.g. 70 for 70/30) */
+  lpAbovePrefProfitSharePercent?: number
+
+  // --- Tax modeling (optional, for after-tax view) ---
+  /** Flat marginal tax rate applied to taxable income (%), e.g. 25 for 25% */
+  taxRatePercent?: number
+  /** Annual depreciation amount used to reduce taxable income (from basis / schedule in spreadsheet) */
+  annualDepreciation?: number
   
   // Rental income
   rentalUnits: RentalUnit[]
@@ -113,6 +216,14 @@ export interface ProFormaInput {
   
   // Construction completion
   constructionCompletionDate?: Date // When construction ends and rental income begins
+
+  // --- Refinance / Exit (Phase 2) ---
+  exitCapRate?: number // %; stabilized property value = annual NOI / exit cap rate
+  refinanceLTVPercent?: number // %; refinance loan = property value × this
+
+  // --- Display-only annual value growth (optional) ---
+  /** Optional annual appreciation rate used only for annual value schedule display (% per year) */
+  annualAppreciationPercent?: number
 }
 
 export interface ProFormaProjection {
@@ -129,6 +240,9 @@ export interface ProFormaProjection {
     netCashFlow: number
     peakCashNeeded: number
     monthsNegative: number
+    
+    // Full development proforma
+    totalInterestDuringConstruction?: number
     
     // Rental income summary
     totalRentalIncome: number
@@ -148,7 +262,76 @@ export interface ProFormaProjection {
     cashFlowAfterDebt: number // NOI - debt service
     capRate?: number // NOI / property value (if available)
     cashOnCashReturn?: number // Annual cash flow / initial investment
+
+    // Refinance / Exit (Phase 2)
+    exitValue?: number // Stabilized value = annual NOI / exit cap rate
+    refinanceLoanAmount?: number // Property value × refinance LTV %
+    cashOutRefinance?: number // Refinance proceeds − construction loan balance
+    irr?: number // Internal rate of return on equity cash flows (%)
+    equityMultiple?: number // Total cash distributed ÷ initial equity
+    /** After-tax IRR using simple tax/depreciation model (if configured) */
+    afterTaxIrr?: number
+
+    // LP-GP waterfall metrics (Phase 3)
+    lpIrr?: number
+    lpEquityMultiple?: number
+    lpCashOnCashReturn?: number
+    gpIrr?: number
+    gpEquityMultiple?: number
+    gpCashOnCashReturn?: number
   }
+  /** Full development proforma: sources & uses */
+  sourcesAndUses?: SourcesAndUses
+  /** Full development proforma: construction draw schedule with loan balance and IDC */
+  constructionDrawSchedule?: ConstructionDrawRow[]
+  /** LP-GP annual waterfall detail (Phase 3) */
+  lpGpAnnual?: Array<{
+    year: number
+    /** LP capital at start of year */
+    lpCapitalStart: number
+    /** LP capital returned this year */
+    lpCapitalReturned: number
+    /** LP capital at end of year */
+    lpCapitalEnd: number
+    /** LP preferred return accrued for this year (on beginning capital) */
+    lpPrefAccrued: number
+    /** LP preferred return actually paid this year */
+    lpPrefPaid: number
+    /** LP preferred return balance carried forward after this year */
+    lpPrefBalanceEnd: number
+    /** Cash remaining after pref but before capital return (for legacy table column) */
+    remainingAfterPref: number
+    /** Total LP cash for the year (pref + capital + profit share) */
+    lpShare: number
+    /** Total GP cash for the year */
+    gpShare: number
+    /** Cumulative LP+GP cash distributed through this year */
+    totalDistributed: number
+  }>
+  /** LP-GP exit detail (Phase 3) */
+  lpGpExit?: {
+    exitYear: number
+    projectedValue: number
+    /** Modeled loan balance at exit (amortized if applicable) */
+    loanBalance: number
+    netEquity: number
+    unpaidPrefAtExit: number
+    capitalReturnedAtExit: number
+    remainingProfitAfterPrefAndCapital: number
+    cashToLp: number
+    cashToGp: number
+  }
+  /** Annual debt schedule for permanent loan */
+  annualDebtSchedule?: Array<{
+    year: number
+    beginningBalance: number
+    payment: number
+    interestPaid: number
+    principalPaid: number
+    endingBalance: number
+  }>
+  /** Annual value schedule for display in Annual Proforma (may apply optional appreciation) */
+  annualValueSchedule?: Array<{ year: number; value: number }>
   costBreakdown: {
     laborPercent: number
     materialPercent: number
@@ -163,6 +346,20 @@ export interface ProFormaProjection {
     averageRentPerSqft: number
     stabilizedOccupancy: number // Average occupancy rate
   }
+  /** Display-only underwriting metadata for exports / reporting (deal pipeline mode) */
+  underwritingExportMeta?: {
+    underwritingEstimatedConstructionCost?: number
+    landCost?: number
+    softCostPercent?: number
+    contingencyPercent?: number
+    loanToCostPercent?: number
+    exitCapRate?: number
+    refinanceLTVPercent?: number
+    valueMethod?: 'stabilized' | 'noi-based'
+    annualAppreciationPercent?: number
+  }
+  /** Optional deal-level attainable housing summary (display/reporting only) */
+  dealSummary?: DealSummary
 }
 
 export interface ProFormaExportOptions {

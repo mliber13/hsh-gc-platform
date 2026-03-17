@@ -1207,6 +1207,7 @@ function transformTrade(row: any): Trade {
     isSubcontracted: row.is_subcontracted || false,
     wasteFactor: row.waste_factor || 10,
     markupPercent: row.markup_percent || 0,
+    selection: row.selection ?? undefined,
     estimateStatus: row.estimate_status || 'budget',
     quoteVendor: row.quote_vendor,
     quoteDate: row.quote_date ? new Date(row.quote_date) : undefined,
@@ -1284,6 +1285,7 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
       is_subcontracted: input.isSubcontracted || false,
       waste_factor: input.wasteFactor || 10,
       markup_percent: input.markupPercent || 0,
+      selection: input.selection ?? null,
       notes: input.notes || '',
       estimate_status: (input as any).estimateStatus || 'budget',
       quote_vendor: (input as any).quoteVendor || null,
@@ -1342,6 +1344,7 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
   if ((updates as any).quoteDate !== undefined) updateData.quote_date = (updates as any).quoteDate
   if ((updates as any).quoteReference !== undefined) updateData.quote_reference = (updates as any).quoteReference
   if ((updates as any).quoteFileUrl !== undefined) updateData.quote_file_url = (updates as any).quoteFileUrl
+  if (updates.selection !== undefined) updateData.selection = updates.selection
   if ((updates as any).budgetTotalCost !== undefined) {
     updateData.budget_total_cost = (updates as any).budgetTotalCost
   } else if (
@@ -3079,7 +3082,7 @@ export async function saveProFormaInputs(
     paymentMilestones: any[]
     monthlyOverhead: number
     overheadMethod: 'proportional' | 'flat' | 'none'
-    projectionMonths: 6 | 12 | 24 | 36 | 60
+    projectionMonths: 6 | 12 | 24 | 36 | 60 | 120
     startDate: string
     totalProjectSquareFootage?: number
     includeRentalIncome: boolean
@@ -3089,6 +3092,21 @@ export async function saveProFormaInputs(
     includeDebtService: boolean
     debtService: any
     constructionCompletionDate?: string
+    useDevelopmentProforma?: boolean
+    landCost?: number
+    softCostPercent?: number
+    contingencyPercent?: number
+    constructionMonths?: number
+    loanToCostPercent?: number
+    exitCapRate?: number
+    refinanceLTVPercent?: number
+    lpEquityPercent?: number
+    lpPreferredReturnPercent?: number
+    lpAbovePrefProfitSharePercent?: number
+    taxRatePercent?: number
+    annualDepreciation?: number
+    annualAppreciationPercent?: number
+    dealSummaryInputs?: any
   }
 ): Promise<boolean> {
   if (!isOnlineMode()) return false
@@ -3149,6 +3167,22 @@ export async function saveProFormaInputs(
       operating_expenses: inputs.operatingExpenses,
       include_debt_service: inputs.includeDebtService,
       debt_service: serializedDebtService,
+      use_development_proforma: inputs.useDevelopmentProforma ?? false,
+      land_cost: inputs.landCost ?? 0,
+      soft_cost_percent: inputs.softCostPercent ?? 0,
+      contingency_percent: inputs.contingencyPercent ?? 0,
+      construction_months: inputs.constructionMonths ?? null,
+      loan_to_cost_percent: inputs.loanToCostPercent ?? 0,
+      exit_cap_rate: inputs.exitCapRate ?? null,
+      refinance_ltv_percent: inputs.refinanceLTVPercent ?? null,
+      lp_equity_percent: inputs.lpEquityPercent ?? null,
+      lp_preferred_return_percent: inputs.lpPreferredReturnPercent ?? null,
+      lp_above_pref_profit_share_percent: inputs.lpAbovePrefProfitSharePercent ?? null,
+      tax_rate_percent: inputs.taxRatePercent ?? null,
+      annual_depreciation: inputs.annualDepreciation ?? null,
+      annual_appreciation_percent: inputs.annualAppreciationPercent ?? null,
+      // Optional JSON blob for display-only deal summary inputs; ignored if column is absent
+      deal_summary_inputs: inputs.dealSummaryInputs ?? null,
     }
 
     // Try to update first, then insert if not found
@@ -3253,6 +3287,16 @@ export async function loadProFormaInputs(projectId: string): Promise<any | null>
       includeDebtService: data.include_debt_service,
       debtService,
       constructionCompletionDate: data.construction_completion_date || undefined,
+      useDevelopmentProforma: data.use_development_proforma ?? false,
+      landCost: data.land_cost ?? 0,
+      softCostPercent: data.soft_cost_percent ?? 0,
+      contingencyPercent: data.contingency_percent ?? 0,
+      constructionMonths: data.construction_months ?? undefined,
+      loanToCostPercent: data.loan_to_cost_percent ?? 0,
+      exitCapRate: data.exit_cap_rate ?? 0,
+      refinanceLTVPercent: data.refinance_ltv_percent ?? 0,
+      annualAppreciationPercent: data.annual_appreciation_percent ?? 0,
+      dealSummaryInputs: data.deal_summary_inputs ?? undefined,
     }
   } catch (error) {
     console.error('Error in loadProFormaInputs:', error)

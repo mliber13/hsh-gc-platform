@@ -5,7 +5,7 @@
 // Main component for building estimates, matching the Excel "Estimate Book" structure
 //
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import { PrintableReport, ReportDepth } from './PrintableReport'
@@ -53,6 +53,7 @@ import {
   createSubItemInDB,
   updateSubItemInDB,
   deleteSubItemFromDB,
+  updateEstimateTotalsInDB,
 } from '@/services/supabaseService'
 import { isOnlineMode } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -689,6 +690,36 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   }
 
   const totals = calculateTotals()
+
+  // Persist estimate totals to Supabase when they change (online mode only)
+  const lastSyncedTotalsRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!projectData) return
+    if (!isOnlineMode()) return
+
+    const estimateId = projectData.estimate.id
+    const syncTotals = {
+      basePriceTotal: totals.basePriceTotal,
+      contingency: totals.contingency,
+      grossProfitTotal: totals.grossProfitTotal,
+      totalEstimated: totals.totalEstimated,
+      marginOfProfit: totals.marginOfProfit,
+    }
+    const serialized = JSON.stringify({ estimateId, ...syncTotals })
+    if (serialized === lastSyncedTotalsRef.current) return
+    lastSyncedTotalsRef.current = serialized
+
+    updateEstimateTotalsInDB(estimateId, syncTotals).catch((err) => {
+      console.error('Error syncing estimate totals to Supabase:', err)
+    })
+  }, [
+    projectData,
+    totals.basePriceTotal,
+    totals.contingency,
+    totals.grossProfitTotal,
+    totals.totalEstimated,
+    totals.marginOfProfit,
+  ])
 
   // ----------------------------------------------------------------------------
   // Render
@@ -2431,6 +2462,28 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
               Enter subcontractor cost for this line (e.g. from a quote or PO).
             </p>
 
+            {/* Item-level Selection (e.g. siding, gutters, soffit) */}
+            <div>
+              <Label htmlFor="tradeSelection">Selection (optional)</Label>
+              <Input
+                id="tradeSelection"
+                value={((formData.selection as any)?.summary as string) || ''}
+                onChange={(e) => {
+                  const summary = e.target.value
+                  setFormData(prev => ({
+                    ...prev,
+                    selection: summary
+                      ? { ...(prev.selection as any), summary }
+                      : undefined,
+                  }))
+                }}
+                placeholder="e.g., James Hardie lap siding, Color: Arctic White"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                High-level selection for this cost item (product/system and color). Use this when the whole line shares one selection.
+              </p>
+            </div>
+
               <div>
               <Label htmlFor="markupPercent">Markup % (for this item)</Label>
                 <Input
@@ -2740,6 +2793,28 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
                 value={formData.notes || ''}
                 onChange={(e) => setFormData((prev: Partial<SubItem>) => ({ ...prev, notes: e.target.value }))}
               />
+            </div>
+
+            {/* Selection summary for this sub-item (especially when Selection only is checked) */}
+            <div>
+              <Label htmlFor="subItemSelection">Selection (optional)</Label>
+              <Input
+                id="subItemSelection"
+                value={((formData.selection as any)?.summary as string) || ''}
+                onChange={(e) => {
+                  const summary = e.target.value
+                  setFormData((prev: Partial<SubItem>) => ({
+                    ...prev,
+                    selection: summary
+                      ? { ...(prev.selection as any), summary }
+                      : undefined,
+                  }))
+                }}
+                placeholder="e.g., Sherwin-Williams Agreeable Gray – walls; Extra White – trim"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Use this to capture the specific selection for this sub-item (room/fixture/color), especially when marked as Selection only.
+              </p>
             </div>
 
             <div className="flex justify-end gap-2 pt-4">

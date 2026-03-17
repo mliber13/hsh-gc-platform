@@ -48,6 +48,8 @@ import {
 } from '@/services/dealService'
 import type { Deal, DealNote, DealType, DealStatus, CreateDealInput } from '@/types/deal'
 import { DealDocuments } from './DealDocuments'
+import type { Project } from '@/types'
+import { ProFormaGenerator } from './ProFormaGenerator'
 
 interface DealPipelineProps {
   onBack?: () => void
@@ -682,6 +684,74 @@ interface DealDetailViewProps {
   onRefresh: () => Promise<void>
 }
 
+function buildUnderwritingProjectFromDeal(deal: Deal): Project {
+  const syntheticId = `deal-${deal.id}`
+
+  return {
+    id: syntheticId,
+    name: deal.deal_name,
+    projectNumber: undefined,
+    client: {
+      id: `${syntheticId}-client`,
+      name: deal.contact?.name || deal.deal_name,
+      email: deal.contact?.email,
+      phone: deal.contact?.phone,
+      company: deal.contact?.company,
+      address: deal.location,
+    },
+    type: 'residential-new-build',
+    status: 'estimating',
+    address: {
+      street: deal.location,
+      city: '',
+      state: '',
+      zip: '',
+    },
+    estimate: {
+      id: `${syntheticId}-estimate`,
+      projectId: syntheticId,
+      version: 1,
+      trades: [],
+      takeoff: [],
+      subtotal: 0,
+      overhead: 0,
+      profit: 0,
+      contingency: 0,
+      totalEstimate: 0,
+      totals: {
+        basePriceTotal: 0,
+        contingency: 0,
+        grossProfitTotal: 0,
+        totalEstimated: 0,
+        marginOfProfit: 0,
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      notes: 'Underwriting-only estimate generated from Deal Pipeline',
+    },
+    actuals: undefined,
+    schedule: undefined,
+    documents: undefined,
+    qbProjectId: null,
+    qbProjectName: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    startDate: undefined,
+    endDate: undefined,
+    estimatedCompletionDate: undefined,
+    actualCompletionDate: undefined,
+    metadata: {
+      source: 'deal-pipeline',
+      dealId: deal.id,
+    },
+    specs: undefined,
+    city: undefined,
+    state: undefined,
+    zipCode: undefined,
+    notes: undefined,
+  }
+}
+
 function DealDetailView({
   deal,
   onBack,
@@ -692,6 +762,7 @@ function DealDetailView({
 }: DealDetailViewProps) {
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
+  const [showProForma, setShowProForma] = useState(false)
 
   const handleAddNote = async () => {
     if (!newNote.trim()) return
@@ -730,6 +801,8 @@ function DealDetailView({
     })
   }
 
+  const underwritingProject = buildUnderwritingProjectFromDeal(deal)
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24 sm:pb-8">
       {/* Slim app bar - match Projects Dashboard */}
@@ -763,8 +836,16 @@ function DealDetailView({
                   Back
                 </Button>
               )}
+              <Button
+                onClick={() => setShowProForma(true)}
+                size="sm"
+                className="bg-[#059669] hover:bg-[#047857] text-white"
+              >
+                <DollarSign className="w-4 h-4 mr-1.5" />
+                Pro Forma
+              </Button>
               {!deal.converted_to_projects && (
-                <Button onClick={onConvert} size="sm" className="bg-[#15803D] hover:bg-[#166534] text-white">
+                <Button onClick={onConvert} size="sm" className="bg-[#0E79C9] hover:bg-[#0A5A96] text-white">
                   <CheckCircle2 className="w-4 h-4 mr-1.5" />
                   Convert to Projects
                 </Button>
@@ -787,6 +868,14 @@ function DealDetailView({
                 Back
               </Button>
             )}
+            <Button
+              onClick={() => setShowProForma(true)}
+              size="sm"
+              className="flex-1 min-w-0 bg-[#059669] hover:bg-[#047857] text-white"
+            >
+              <DollarSign className="w-4 h-4 mr-1.5" />
+              Pro Forma
+            </Button>
             {!deal.converted_to_projects && (
               <Button onClick={onConvert} size="sm" className="flex-1 min-w-0 bg-[#15803D] hover:bg-[#166534] text-white">
                 <CheckCircle2 className="w-4 h-4 mr-1.5" />
@@ -952,6 +1041,13 @@ function DealDetailView({
         </CardContent>
       </Card>
       </main>
+
+      {showProForma && (
+        <ProFormaGenerator
+          project={underwritingProject}
+          onClose={() => setShowProForma(false)}
+        />
+      )}
     </div>
   )
 }
