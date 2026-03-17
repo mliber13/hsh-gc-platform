@@ -15,7 +15,6 @@ import {
   RentalUnit,
   OperatingExpenses,
   DebtService,
-  ValueMethod,
   DealSummaryInputs,
 } from '@/types/proforma'
 import { calculateProForma, generateDefaultMilestones } from '@/services/proformaService'
