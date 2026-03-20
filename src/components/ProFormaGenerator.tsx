@@ -12,6 +12,7 @@ import {
   ProFormaInput,
   ProFormaProjection,
   PaymentMilestone,
+  RentalLeaseTerm,
   RentalUnit,
   OperatingExpenses,
   DebtService,
@@ -20,7 +21,19 @@ import {
 import { calculateProForma, generateDefaultMilestones } from '@/services/proformaService'
 import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
 import { exportProFormaToPDF, exportProFormaToExcel } from '@/services/proformaExportService'
-import { saveProFormaInputs as saveProFormaInputsDB, loadProFormaInputs as loadProFormaInputsDB } from '@/services/supabaseService'
+import {
+  saveProFormaInputs as saveProFormaInputsDB,
+  loadProFormaInputs as loadProFormaInputsDB,
+  saveDealProFormaDraft,
+  saveDealProFormaVersion,
+  loadDealProFormaInputs,
+  listDealProFormaVersions,
+  type DealProFormaVersionMeta,
+  saveProjectProFormaVersion,
+  loadProjectProFormaVersionInputs,
+  listProjectProFormaVersions,
+  type ProjectProFormaVersionMeta,
+} from '@/services/supabaseService'
 import { isOnlineMode } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -120,6 +133,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   })
   // Raw textarea value for public benefit bullets so users can freely add newlines
   const [publicBenefitsText, setPublicBenefitsText] = useState<string>('')
+  const [dealProFormaVersions, setDealProFormaVersions] = useState<DealProFormaVersionMeta[]>([])
+  const [selectedDealVersionId, setSelectedDealVersionId] = useState<string>('latest')
+  const [projectProFormaVersions, setProjectProFormaVersions] = useState<ProjectProFormaVersionMeta[]>([])
+  const [selectedProjectVersionId, setSelectedProjectVersionId] = useState<string>('latest')
+  const [newVersionLabel, setNewVersionLabel] = useState<string>('')
   
   // Track if we've loaded saved data (to prevent overwriting with defaults)
   const [hasLoadedSavedData, setHasLoadedSavedData] = useState<boolean>(false)
@@ -128,6 +146,10 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
 
   // Storage key for this project's pro forma inputs
   const storageKey = `hsh_gc_proforma_${project.id}`
+  const dealIdForUnderwriting =
+    isDealUnderwriting
+      ? (project.metadata?.dealId as string | undefined) || project.id.replace(/^deal-/, '')
+      : undefined
 
   // Interface for saved pro forma inputs (serialized to JSON)
   interface SavedProFormaInputsSerialized {
@@ -139,7 +161,18 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     startDate: string
     totalProjectSquareFootage?: number
     includeRentalIncome: boolean
-    rentalUnits: Array<Omit<RentalUnit, 'occupancyStartDate'> & { occupancyStartDate?: string }>
+    rentalUnits: Array<
+      Omit<RentalUnit, 'occupancyStartDate' | 'occupancyEndDate' | 'leaseTerms'> & {
+        occupancyStartDate?: string
+        occupancyEndDate?: string
+        leaseTerms?: Array<
+          Omit<RentalLeaseTerm, 'startDate' | 'endDate'> & {
+            startDate?: string
+            endDate?: string
+          }
+        >
+      }
+    >
     includeOperatingExpenses: boolean
     operatingExpenses: OperatingExpenses
     includeDebtService: boolean
@@ -199,62 +232,91 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     dealSummaryInputs?: DealSummaryInputs
   }
 
+  const buildSavedInputs = (): SavedProFormaInputsSerialized => ({
+    contractValue,
+    paymentMilestones: paymentMilestones.map(m => ({
+      ...m,
+      date: m.date instanceof Date ? m.date.toISOString() : (m.date as any).toISOString(),
+    })),
+    monthlyOverhead,
+    overheadMethod,
+    projectionMonths,
+    startDate,
+    totalProjectSquareFootage,
+    includeRentalIncome,
+    rentalUnits: rentalUnits.map(u => ({
+      ...u,
+      occupancyStartDate: u.occupancyStartDate instanceof Date
+        ? u.occupancyStartDate.toISOString()
+        : u.occupancyStartDate,
+      occupancyEndDate: u.occupancyEndDate instanceof Date
+        ? u.occupancyEndDate.toISOString()
+        : u.occupancyEndDate,
+      leaseTerms: Array.isArray(u.leaseTerms)
+        ? u.leaseTerms.map((term) => ({
+            ...term,
+            startDate: term.startDate instanceof Date ? term.startDate.toISOString() : term.startDate,
+            endDate: term.endDate instanceof Date ? term.endDate.toISOString() : term.endDate,
+          }))
+        : undefined,
+    })),
+    includeOperatingExpenses,
+    operatingExpenses,
+    includeDebtService,
+    debtService: {
+      ...debtService,
+      startDate: debtService.startDate instanceof Date
+        ? debtService.startDate.toISOString()
+        : (debtService.startDate as any).toISOString(),
+    },
+    constructionCompletionDate,
+    useDevelopmentProforma,
+    landCost,
+    softCostPercent,
+    contingencyPercent,
+    constructionMonths: constructionMonthsInput || undefined,
+    loanToCostPercent,
+    exitCapRate,
+    refinanceLTVPercent,
+    lpEquityPercent,
+    lpPreferredReturnPercent,
+    lpAbovePrefProfitSharePercent,
+    taxRatePercent,
+    annualDepreciation,
+    annualAppreciationPercent,
+    valueMethod,
+    underwritingEstimatedConstructionCost: isDealUnderwriting ? underwritingEstimatedConstructionCost : undefined,
+    dealSummaryInputs: isDealUnderwriting ? dealSummaryInputs : undefined,
+  })
+
+  const refreshDealVersions = async () => {
+    if (!isDealUnderwriting || !dealIdForUnderwriting || !isOnlineMode()) return
+    const versions = await listDealProFormaVersions(dealIdForUnderwriting)
+    setDealProFormaVersions(versions)
+  }
+
+  const refreshProjectVersions = async () => {
+    if (isDealUnderwriting || !isOnlineMode()) return
+    const versions = await listProjectProFormaVersions(project.id)
+    setProjectProFormaVersions(versions)
+  }
+
   // Save pro forma inputs to database or localStorage
   const saveProFormaInputs = async () => {
     try {
-      const savedInputs: SavedProFormaInputsSerialized = {
-        contractValue,
-        paymentMilestones: paymentMilestones.map(m => ({
-          ...m,
-          date: m.date instanceof Date ? m.date.toISOString() : (m.date as any).toISOString(),
-        })),
-        monthlyOverhead,
-        overheadMethod,
-        projectionMonths,
-        startDate,
-        totalProjectSquareFootage,
-        includeRentalIncome,
-        rentalUnits: rentalUnits.map(u => ({
-          ...u,
-          occupancyStartDate: u.occupancyStartDate instanceof Date 
-            ? u.occupancyStartDate.toISOString() 
-            : u.occupancyStartDate,
-        })),
-        includeOperatingExpenses,
-        operatingExpenses,
-        includeDebtService,
-        debtService: {
-          ...debtService,
-          startDate: debtService.startDate instanceof Date
-            ? debtService.startDate.toISOString()
-            : (debtService.startDate as any).toISOString(),
-        },
-        constructionCompletionDate,
-        useDevelopmentProforma,
-        landCost,
-        softCostPercent,
-        contingencyPercent,
-        constructionMonths: constructionMonthsInput || undefined,
-        loanToCostPercent,
-        exitCapRate,
-        refinanceLTVPercent,
-        lpEquityPercent,
-        lpPreferredReturnPercent,
-        lpAbovePrefProfitSharePercent,
-        taxRatePercent,
-        annualDepreciation,
-        annualAppreciationPercent,
-        valueMethod,
-        underwritingEstimatedConstructionCost: isDealUnderwriting ? underwritingEstimatedConstructionCost : undefined,
-        dealSummaryInputs: isDealUnderwriting ? dealSummaryInputs : undefined,
-      }
+      const savedInputs = buildSavedInputs()
 
       // Try database first if online, fallback to localStorage
       if (isOnlineMode()) {
-        const success = await saveProFormaInputsDB(project.id, savedInputs as any)
+        const success =
+          isDealUnderwriting && dealIdForUnderwriting
+            ? await saveDealProFormaDraft(dealIdForUnderwriting, savedInputs as any)
+            : await saveProFormaInputsDB(project.id, savedInputs as any)
         if (!success) {
           // Fallback to localStorage if database save fails
           localStorage.setItem(storageKey, JSON.stringify(savedInputs))
+        } else if (isDealUnderwriting) {
+          await refreshDealVersions()
         }
       } else {
         localStorage.setItem(storageKey, JSON.stringify(savedInputs))
@@ -263,52 +325,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       console.error('Error saving pro forma inputs:', error)
       // Fallback to localStorage on error
       try {
-        const savedInputs: SavedProFormaInputsSerialized = {
-          contractValue,
-          paymentMilestones: paymentMilestones.map(m => ({
-            ...m,
-            date: m.date instanceof Date ? m.date.toISOString() : (m.date as any).toISOString(),
-          })),
-          monthlyOverhead,
-          overheadMethod,
-          projectionMonths,
-          startDate,
-          totalProjectSquareFootage,
-          includeRentalIncome,
-          rentalUnits: rentalUnits.map(u => ({
-            ...u,
-            occupancyStartDate: u.occupancyStartDate instanceof Date 
-              ? u.occupancyStartDate.toISOString() 
-              : u.occupancyStartDate,
-          })),
-          includeOperatingExpenses,
-          operatingExpenses,
-          includeDebtService,
-          debtService: {
-            ...debtService,
-            startDate: debtService.startDate instanceof Date
-              ? debtService.startDate.toISOString()
-              : (debtService.startDate as any).toISOString(),
-          },
-          constructionCompletionDate,
-          useDevelopmentProforma,
-          landCost,
-          softCostPercent,
-          contingencyPercent,
-          constructionMonths: constructionMonthsInput || undefined,
-          loanToCostPercent,
-          exitCapRate,
-          refinanceLTVPercent,
-          lpEquityPercent,
-          lpPreferredReturnPercent,
-          lpAbovePrefProfitSharePercent,
-          taxRatePercent,
-          annualDepreciation,
-          annualAppreciationPercent,
-          valueMethod,
-          underwritingEstimatedConstructionCost: isDealUnderwriting ? underwritingEstimatedConstructionCost : undefined,
-          dealSummaryInputs: isDealUnderwriting ? dealSummaryInputs : undefined,
-        }
+        const savedInputs = buildSavedInputs()
         localStorage.setItem(storageKey, JSON.stringify(savedInputs))
       } catch (localError) {
         console.error('Error saving to localStorage fallback:', localError)
@@ -321,7 +338,15 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     try {
       // Try database first if online
       if (isOnlineMode()) {
-            const dbData = await loadProFormaInputsDB(project.id)
+        const dbData =
+          isDealUnderwriting && dealIdForUnderwriting
+            ? await loadDealProFormaInputs(
+                dealIdForUnderwriting,
+                selectedDealVersionId !== 'latest' ? selectedDealVersionId : undefined,
+              )
+            : !isDealUnderwriting && selectedProjectVersionId !== 'latest'
+            ? await loadProjectProFormaVersionInputs(project.id, selectedProjectVersionId)
+            : await loadProFormaInputsDB(project.id)
         if (dbData) {
           // Convert date strings back to Date objects
           const loaded: SavedProFormaInputs = {
@@ -340,6 +365,16 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
               ...u,
               occupancyStartDate: u.occupancyStartDate 
                 ? new Date(u.occupancyStartDate)
+                : undefined,
+              occupancyEndDate: u.occupancyEndDate
+                ? new Date(u.occupancyEndDate)
+                : undefined,
+              leaseTerms: Array.isArray(u.leaseTerms)
+                ? u.leaseTerms.map((term: any) => ({
+                    ...term,
+                    startDate: term.startDate ? new Date(term.startDate) : undefined,
+                    endDate: term.endDate ? new Date(term.endDate) : undefined,
+                  }))
                 : undefined,
             })),
             includeOperatingExpenses: dbData.includeOperatingExpenses,
@@ -388,6 +423,16 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
             occupancyStartDate: u.occupancyStartDate 
               ? new Date(u.occupancyStartDate)
               : undefined,
+            occupancyEndDate: u.occupancyEndDate
+              ? new Date(u.occupancyEndDate)
+              : undefined,
+            leaseTerms: Array.isArray((u as any).leaseTerms)
+              ? (u as any).leaseTerms.map((term: any) => ({
+                  ...term,
+                  startDate: term.startDate ? new Date(term.startDate) : undefined,
+                  endDate: term.endDate ? new Date(term.endDate) : undefined,
+                }))
+              : undefined,
           })),
           debtService: {
             ...parsed.debtService,
@@ -427,9 +472,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       if (isDealUnderwriting) {
         // Underwriting mode: no backing estimate trades expected; keep trades empty and rely on direct inputs.
         setTrades([])
+        await refreshDealVersions()
       } else {
         loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
         setTrades(loadedTrades)
+        await refreshProjectVersions()
       }
 
       // Try to load saved pro forma inputs (DB or localStorage)
@@ -553,7 +600,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       setLoading(false)
       initialLoadCompleteRef.current = true
     })
-  }, [project, isDealUnderwriting])
+  }, [project, isDealUnderwriting, selectedDealVersionId, selectedProjectVersionId])
 
   // Auto-update contract value when estimate changes (after initial load)
   // Only updates if contract value is 0, or if it matches the last synced total (meaning estimate changed)
@@ -789,16 +836,200 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     setRentalUnits(rentalUnits.filter(u => u.id !== id))
   }
 
+  const getLeaseEndDateFromDuration = (startDate: Date, durationYears: number): Date => {
+    const endDate = new Date(startDate)
+    endDate.setFullYear(endDate.getFullYear() + durationYears)
+    endDate.setDate(endDate.getDate() - 1)
+    return endDate
+  }
+
   const handleRentalUnitChange = (id: string, field: keyof RentalUnit, value: any) => {
     setRentalUnits(
-      rentalUnits.map(u =>
-        u.id === id ? { ...u, [field]: value } : u
-      )
+      rentalUnits.map(u => {
+        if (u.id !== id) return u
+
+        const next: RentalUnit = { ...u, [field]: value }
+
+        // If start date changes and a duration exists, keep end date synced.
+        if (field === 'occupancyStartDate' && value && next.leaseDurationYears) {
+          next.occupancyEndDate = getLeaseEndDateFromDuration(new Date(value), next.leaseDurationYears)
+        }
+
+        // If duration changes and start date exists, auto-calculate end date.
+        if (field === 'leaseDurationYears') {
+          const years = Number(value) || 0
+          if (years > 0 && next.occupancyStartDate) {
+            next.occupancyEndDate = getLeaseEndDateFromDuration(new Date(next.occupancyStartDate), years)
+          } else if (years <= 0) {
+            next.leaseDurationYears = undefined
+          }
+        }
+
+        // If user manually edits end date, clear duration helper to avoid ambiguity.
+        if (field === 'occupancyEndDate') {
+          next.leaseDurationYears = undefined
+        }
+
+        return next
+      }),
     )
     setValidationErrors([])
   }
 
+  const handleEnableLeaseTerms = (unitId: string) => {
+    setRentalUnits(
+      rentalUnits.map((unit) => {
+        if (unit.id !== unitId) return unit
+        if (Array.isArray(unit.leaseTerms) && unit.leaseTerms.length > 0) return unit
+        const seedTerm: RentalLeaseTerm = {
+          id: uuidv4(),
+          name: 'Term 1',
+          startDate: unit.occupancyStartDate,
+          endDate: unit.occupancyEndDate,
+          rentType: unit.rentType,
+          monthlyRent: unit.monthlyRent,
+          squareFootage: unit.squareFootage,
+          rentPerSqft: unit.rentPerSqft,
+          occupancyRate: unit.occupancyRate,
+        }
+        return { ...unit, leaseTerms: [seedTerm] }
+      }),
+    )
+    setValidationErrors([])
+  }
+
+  const handleAddLeaseTerm = (unitId: string) => {
+    setRentalUnits(
+      rentalUnits.map((unit) => {
+        if (unit.id !== unitId) return unit
+        const existingTerms = Array.isArray(unit.leaseTerms) ? unit.leaseTerms : []
+        const defaultStart = unit.occupancyStartDate
+        const newTerm: RentalLeaseTerm = {
+          id: uuidv4(),
+          name: `Term ${existingTerms.length + 1}`,
+          startDate: defaultStart,
+          rentType: unit.rentType,
+          monthlyRent: unit.monthlyRent,
+          squareFootage: unit.squareFootage,
+          rentPerSqft: unit.rentPerSqft,
+          occupancyRate: unit.occupancyRate,
+        }
+        return { ...unit, leaseTerms: [...existingTerms, newTerm] }
+      }),
+    )
+    setValidationErrors([])
+  }
+
+  const handleRemoveLeaseTerm = (unitId: string, termId: string) => {
+    setRentalUnits(
+      rentalUnits.map((unit) => {
+        if (unit.id !== unitId) return unit
+        const nextTerms = (unit.leaseTerms || []).filter((term) => term.id !== termId)
+        return { ...unit, leaseTerms: nextTerms.length > 0 ? nextTerms : undefined }
+      }),
+    )
+    setValidationErrors([])
+  }
+
+  const handleLeaseTermChange = (
+    unitId: string,
+    termId: string,
+    field: keyof RentalLeaseTerm,
+    value: any,
+  ) => {
+    setRentalUnits(
+      rentalUnits.map((unit) => {
+        if (unit.id !== unitId) return unit
+        const nextTerms = (unit.leaseTerms || []).map((term) =>
+          term.id === termId ? { ...term, [field]: value } : term,
+        )
+        return { ...unit, leaseTerms: nextTerms }
+      }),
+    )
+    setValidationErrors([])
+  }
+
+  const getSortedLeaseTerms = (unit: RentalUnit): RentalLeaseTerm[] =>
+    [...(unit.leaseTerms || [])].sort((a, b) => {
+      const aTime = a.startDate ? new Date(a.startDate).getTime() : 0
+      const bTime = b.startDate ? new Date(b.startDate).getTime() : 0
+      return aTime - bTime
+    })
+
+  const getLeaseTermWarnings = (unit: RentalUnit): string[] => {
+    const warnings: string[] = []
+    const terms = getSortedLeaseTerms(unit)
+    if (terms.length <= 1) return warnings
+
+    for (let i = 1; i < terms.length; i++) {
+      const prev = terms[i - 1]
+      const curr = terms[i]
+      if (!prev.endDate || !curr.startDate) continue
+      const prevEnd = new Date(prev.endDate)
+      const currStart = new Date(curr.startDate)
+      prevEnd.setHours(0, 0, 0, 0)
+      currStart.setHours(0, 0, 0, 0)
+
+      if (currStart <= prevEnd) {
+        warnings.push(
+          `${curr.name || `Term ${i + 1}`} overlaps with ${prev.name || `Term ${i}`}.`,
+        )
+      } else {
+        const expectedNext = new Date(prevEnd)
+        expectedNext.setDate(expectedNext.getDate() + 1)
+        if (currStart.getTime() > expectedNext.getTime()) {
+          warnings.push(
+            `Gap detected between ${prev.name || `Term ${i}`} and ${curr.name || `Term ${i + 1}`}.`,
+          )
+        }
+      }
+    }
+
+    return warnings
+  }
+
   const [validationErrors, setValidationErrors] = useState<string[]>([])
+
+  const handleSaveDealVersion = async () => {
+    if (!isDealUnderwriting || !dealIdForUnderwriting) return
+    const payload = buildSavedInputs()
+    const success = await saveDealProFormaVersion(
+      dealIdForUnderwriting,
+      payload as any,
+      newVersionLabel || undefined,
+    )
+    if (success) {
+      setNewVersionLabel('')
+      await refreshDealVersions()
+      setSelectedDealVersionId('latest')
+    } else {
+      setValidationErrors((prev) => [
+        ...prev,
+        'Unable to save deal pro forma version to Supabase. Saved locally as fallback.',
+      ])
+      localStorage.setItem(storageKey, JSON.stringify(payload))
+    }
+  }
+
+  const handleSaveProjectVersion = async () => {
+    if (isDealUnderwriting) return
+    const payload = buildSavedInputs()
+    const success = await saveProjectProFormaVersion(
+      project.id,
+      payload as any,
+      newVersionLabel || undefined,
+    )
+    if (success) {
+      setNewVersionLabel('')
+      await refreshProjectVersions()
+      setSelectedProjectVersionId('latest')
+    } else {
+      setValidationErrors((prev) => [
+        ...prev,
+        'Unable to save project pro forma version to Supabase.',
+      ])
+    }
+  }
 
   const handleGenerate = () => {
     const errors: string[] = []
@@ -844,6 +1075,51 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
 
     if (includeRentalIncome && rentalUnits.length === 0) {
       errors.push('Add at least one rental unit if rental income is enabled.')
+    }
+    if (includeRentalIncome) {
+      rentalUnits.forEach((unit, idx) => {
+        if (unit.occupancyStartDate && unit.occupancyEndDate) {
+          const start = new Date(unit.occupancyStartDate)
+          const end = new Date(unit.occupancyEndDate)
+          start.setHours(0, 0, 0, 0)
+          end.setHours(0, 0, 0, 0)
+          if (end < start) {
+            errors.push(
+              `Rental unit ${idx + 1}${unit.name ? ` (${unit.name})` : ''}: End Date cannot be earlier than Start Date.`,
+            )
+          }
+        }
+        if (Array.isArray(unit.leaseTerms)) {
+          const sortedTerms = getSortedLeaseTerms(unit)
+          sortedTerms.forEach((term, termIdx) => {
+            if (term.startDate && term.endDate) {
+              const start = new Date(term.startDate)
+              const end = new Date(term.endDate)
+              start.setHours(0, 0, 0, 0)
+              end.setHours(0, 0, 0, 0)
+              if (end < start) {
+                errors.push(
+                  `Rental unit ${idx + 1}${unit.name ? ` (${unit.name})` : ''}, term ${termIdx + 1}: End Date cannot be earlier than Start Date.`,
+                )
+              }
+            }
+          })
+          for (let i = 1; i < sortedTerms.length; i++) {
+            const prev = sortedTerms[i - 1]
+            const curr = sortedTerms[i]
+            if (!prev.endDate || !curr.startDate) continue
+            const prevEnd = new Date(prev.endDate)
+            const currStart = new Date(curr.startDate)
+            prevEnd.setHours(0, 0, 0, 0)
+            currStart.setHours(0, 0, 0, 0)
+            if (currStart <= prevEnd) {
+              errors.push(
+                `Rental unit ${idx + 1}${unit.name ? ` (${unit.name})` : ''}: lease terms cannot overlap (${prev.name || `Term ${i}`} and ${curr.name || `Term ${i + 1}`}).`,
+              )
+            }
+          }
+        }
+      })
     }
 
     if (errors.length > 0) {
@@ -1001,11 +1277,59 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                   </span>
                 )}
               </div>
-              {isDealUnderwriting && (
-                <p className="text-xs text-gray-500">
-                  Underwriting Assumptions: deal-level inputs for early analysis. No detailed estimate is required in this mode.
-                </p>
-              )}
+              <div className="space-y-2">
+                {isDealUnderwriting && (
+                  <p className="text-xs text-gray-500">
+                    Underwriting Assumptions: deal-level inputs for early analysis. No detailed estimate is required in this mode.
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="min-w-[220px]">
+                    <Select
+                      value={isDealUnderwriting ? selectedDealVersionId : selectedProjectVersionId}
+                      onValueChange={(v) =>
+                        isDealUnderwriting ? setSelectedDealVersionId(v) : setSelectedProjectVersionId(v)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Load version" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="latest">
+                          {isDealUnderwriting ? 'Latest (draft or newest)' : 'Latest saved inputs'}
+                        </SelectItem>
+                        {isDealUnderwriting
+                          ? dealProFormaVersions.map((v) => (
+                              <SelectItem key={v.id} value={v.id}>
+                                {v.isDraft
+                                  ? `Draft${v.versionLabel ? ` - ${v.versionLabel}` : ''}`
+                                  : `V${v.versionNumber}${v.versionLabel ? ` - ${v.versionLabel}` : ''}`}
+                              </SelectItem>
+                            ))
+                          : projectProFormaVersions.map((v) => (
+                              <SelectItem key={v.id} value={v.id}>
+                                {`V${v.versionNumber}${v.versionLabel ? ` - ${v.versionLabel}` : ''}`}
+                              </SelectItem>
+                            ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Input
+                    className="w-[220px]"
+                    placeholder="Version label (optional)"
+                    value={newVersionLabel}
+                    onChange={(e) => setNewVersionLabel(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={isDealUnderwriting ? handleSaveDealVersion : handleSaveProjectVersion}
+                  >
+                    Save Version
+                  </Button>
+                </div>
+              </div>
             </div>
             <Button variant="ghost" size="sm" onClick={onClose}>
               <X className="w-4 h-4" />
@@ -1764,73 +2088,258 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                               </SelectContent>
                             </Select>
                           </div>
-                          
-                          {unit.rentType === 'fixed' ? (
+                          <div className="col-span-6 md:col-span-2 flex items-end">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => handleEnableLeaseTerms(unit.id)}
+                              disabled={Array.isArray(unit.leaseTerms) && unit.leaseTerms.length > 0}
+                            >
+                              {Array.isArray(unit.leaseTerms) && unit.leaseTerms.length > 0
+                                ? 'Lease Terms Enabled'
+                                : 'Enable Lease Terms'}
+                            </Button>
+                          </div>
+
+                          {Array.isArray(unit.leaseTerms) && unit.leaseTerms.length > 0 ? (
                             <>
-                              <div className="col-span-6 md:col-span-2">
-                                <Label className="text-xs">Monthly Rent *</Label>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="750.00"
-                                  value={unit.monthlyRent || ''}
-                                  onChange={(e) => handleRentalUnitChange(unit.id, 'monthlyRent', parseFloat(e.target.value) || 0)}
-                                />
-                              </div>
-                              <div className="col-span-6 md:col-span-2">
-                                <Label className="text-xs">Square Feet (Optional)</Label>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="1000"
-                                  value={unit.squareFootage || ''}
-                                  onChange={(e) => handleRentalUnitChange(unit.id, 'squareFootage', parseFloat(e.target.value) || 0)}
-                                />
-                              </div>
-                              <div className="col-span-6 md:col-span-2">
-                                <Label className="text-xs">Occupancy Rate (%)</Label>
-                                <Input
-                                  type="number"
-                                  step="0.1"
-                                  placeholder="100"
-                                  value={unit.occupancyRate}
-                                  onChange={(e) => handleRentalUnitChange(unit.id, 'occupancyRate', parseFloat(e.target.value) || 0)}
-                                />
+                              <div className="col-span-12 border rounded-md p-3 bg-white">
+                                <div className="flex items-center justify-between mb-2">
+                                  <Label className="text-xs font-semibold">Lease Terms</Label>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleAddLeaseTerm(unit.id)}
+                                  >
+                                    <Plus className="w-3 h-3 mr-1" />
+                                    Add Term
+                                  </Button>
+                                </div>
+                                <div className="space-y-2">
+                                  {(unit.leaseTerms || []).map((term) => (
+                                    <div key={term.id} className="grid grid-cols-12 gap-2 p-2 border rounded">
+                                      <div className="col-span-12 md:col-span-2">
+                                        <Label className="text-xs">Term Name</Label>
+                                        <Input
+                                          value={term.name || ''}
+                                          placeholder="e.g., Years 1-5"
+                                          onChange={(e) =>
+                                            handleLeaseTermChange(unit.id, term.id, 'name', e.target.value)
+                                          }
+                                        />
+                                      </div>
+                                      <div className="col-span-6 md:col-span-2">
+                                        <Label className="text-xs">Start</Label>
+                                        <Input
+                                          type="date"
+                                          value={term.startDate ? new Date(term.startDate).toISOString().split('T')[0] : ''}
+                                          onChange={(e) =>
+                                            handleLeaseTermChange(
+                                              unit.id,
+                                              term.id,
+                                              'startDate',
+                                              e.target.value ? new Date(e.target.value) : undefined,
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                      <div className="col-span-6 md:col-span-2">
+                                        <Label className="text-xs">End</Label>
+                                        <Input
+                                          type="date"
+                                          value={term.endDate ? new Date(term.endDate).toISOString().split('T')[0] : ''}
+                                          onChange={(e) =>
+                                            handleLeaseTermChange(
+                                              unit.id,
+                                              term.id,
+                                              'endDate',
+                                              e.target.value ? new Date(e.target.value) : undefined,
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                      <div className="col-span-6 md:col-span-2">
+                                        <Label className="text-xs">Rent Type</Label>
+                                        <Select
+                                          value={term.rentType}
+                                          onValueChange={(v: 'fixed' | 'perSqft') =>
+                                            handleLeaseTermChange(unit.id, term.id, 'rentType', v)
+                                          }
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="fixed">Fixed Monthly</SelectItem>
+                                            <SelectItem value="perSqft">Per Sqft</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      {term.rentType === 'fixed' ? (
+                                        <div className="col-span-6 md:col-span-2">
+                                          <Label className="text-xs">Monthly Rent</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={term.monthlyRent || ''}
+                                            onChange={(e) =>
+                                              handleLeaseTermChange(
+                                                unit.id,
+                                                term.id,
+                                                'monthlyRent',
+                                                parseFloat(e.target.value) || 0,
+                                              )
+                                            }
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="col-span-6 md:col-span-2">
+                                          <Label className="text-xs">Rent / Sqft / Month</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={term.rentPerSqft || ''}
+                                            onChange={(e) =>
+                                              handleLeaseTermChange(
+                                                unit.id,
+                                                term.id,
+                                                'rentPerSqft',
+                                                parseFloat(e.target.value) || 0,
+                                              )
+                                            }
+                                          />
+                                        </div>
+                                      )}
+                                      <div className="col-span-6 md:col-span-1">
+                                        <Label className="text-xs">Sqft</Label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={term.squareFootage ?? unit.squareFootage ?? ''}
+                                          onChange={(e) =>
+                                            handleLeaseTermChange(
+                                              unit.id,
+                                              term.id,
+                                              'squareFootage',
+                                              parseFloat(e.target.value) || 0,
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                      <div className="col-span-6 md:col-span-1">
+                                        <Label className="text-xs">Occ %</Label>
+                                        <Input
+                                          type="number"
+                                          step="0.1"
+                                          value={term.occupancyRate ?? unit.occupancyRate}
+                                          onChange={(e) =>
+                                            handleLeaseTermChange(
+                                              unit.id,
+                                              term.id,
+                                              'occupancyRate',
+                                              parseFloat(e.target.value) || 0,
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                      <div className="col-span-12 md:col-span-2 flex items-end">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleRemoveLeaseTerm(unit.id, term.id)}
+                                        >
+                                          <Trash2 className="w-4 h-4 text-red-500" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">
+                                  Lease terms model time-based rent changes for the same physical unit.
+                                </p>
+                                {getLeaseTermWarnings(unit).length > 0 && (
+                                  <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1">
+                                    {getLeaseTermWarnings(unit).map((warning, wIdx) => (
+                                      <p key={wIdx} className="text-[11px] text-amber-700">
+                                        {warning}
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </>
                           ) : (
-                            <>
-                              <div className="col-span-6 md:col-span-2">
-                                <Label className="text-xs">Square Feet *</Label>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="1000"
-                                  value={unit.squareFootage || ''}
-                                  onChange={(e) => handleRentalUnitChange(unit.id, 'squareFootage', parseFloat(e.target.value) || 0)}
-                                />
-                              </div>
-                              <div className="col-span-6 md:col-span-2">
-                                <Label className="text-xs">Rent Per Sqft/Month *</Label>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="10.00"
-                                  value={unit.rentPerSqft || ''}
-                                  onChange={(e) => handleRentalUnitChange(unit.id, 'rentPerSqft', parseFloat(e.target.value) || 0)}
-                                />
-                              </div>
-                              <div className="col-span-6 md:col-span-2">
-                                <Label className="text-xs">Occupancy Rate (%)</Label>
-                                <Input
-                                  type="number"
-                                  step="0.1"
-                                  placeholder="100"
-                                  value={unit.occupancyRate}
-                                  onChange={(e) => handleRentalUnitChange(unit.id, 'occupancyRate', parseFloat(e.target.value) || 0)}
-                                />
-                              </div>
-                            </>
+                            unit.rentType === 'fixed' ? (
+                              <>
+                                <div className="col-span-6 md:col-span-2">
+                                  <Label className="text-xs">Monthly Rent *</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="750.00"
+                                    value={unit.monthlyRent || ''}
+                                    onChange={(e) => handleRentalUnitChange(unit.id, 'monthlyRent', parseFloat(e.target.value) || 0)}
+                                  />
+                                </div>
+                                <div className="col-span-6 md:col-span-2">
+                                  <Label className="text-xs">Square Feet (Optional)</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="1000"
+                                    value={unit.squareFootage || ''}
+                                    onChange={(e) => handleRentalUnitChange(unit.id, 'squareFootage', parseFloat(e.target.value) || 0)}
+                                  />
+                                </div>
+                                <div className="col-span-6 md:col-span-2">
+                                  <Label className="text-xs">Occupancy Rate (%)</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.1"
+                                    placeholder="100"
+                                    value={unit.occupancyRate}
+                                    onChange={(e) => handleRentalUnitChange(unit.id, 'occupancyRate', parseFloat(e.target.value) || 0)}
+                                  />
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="col-span-6 md:col-span-2">
+                                  <Label className="text-xs">Square Feet *</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="1000"
+                                    value={unit.squareFootage || ''}
+                                    onChange={(e) => handleRentalUnitChange(unit.id, 'squareFootage', parseFloat(e.target.value) || 0)}
+                                  />
+                                </div>
+                                <div className="col-span-6 md:col-span-2">
+                                  <Label className="text-xs">Rent Per Sqft/Month *</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="10.00"
+                                    value={unit.rentPerSqft || ''}
+                                    onChange={(e) => handleRentalUnitChange(unit.id, 'rentPerSqft', parseFloat(e.target.value) || 0)}
+                                  />
+                                </div>
+                                <div className="col-span-6 md:col-span-2">
+                                  <Label className="text-xs">Occupancy Rate (%)</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.1"
+                                    placeholder="100"
+                                    value={unit.occupancyRate}
+                                    onChange={(e) => handleRentalUnitChange(unit.id, 'occupancyRate', parseFloat(e.target.value) || 0)}
+                                  />
+                                </div>
+                              </>
+                            )
                           )}
                           
                           <div className="col-span-6 md:col-span-2 flex items-end">
@@ -1840,6 +2349,45 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                                 type="date"
                                 value={unit.occupancyStartDate ? new Date(unit.occupancyStartDate).toISOString().split('T')[0] : ''}
                                 onChange={(e) => handleRentalUnitChange(unit.id, 'occupancyStartDate', e.target.value ? new Date(e.target.value) : undefined)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="col-span-6 md:col-span-2 flex items-end">
+                            <div className="w-full">
+                              <Label className="text-xs">Duration (Years)</Label>
+                              <Select
+                                value={unit.leaseDurationYears ? String(unit.leaseDurationYears) : 'none'}
+                                onValueChange={(v) =>
+                                  handleRentalUnitChange(
+                                    unit.id,
+                                    'leaseDurationYears',
+                                    v === 'none' ? undefined : parseInt(v, 10),
+                                  )
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Optional" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Manual end date</SelectItem>
+                                  {Array.from({ length: 15 }, (_, i) => i + 1).map((years) => (
+                                    <SelectItem key={years} value={String(years)}>
+                                      {years} year{years > 1 ? 's' : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="col-span-6 md:col-span-2 flex items-end">
+                            <div className="w-full">
+                              <Label className="text-xs">End Date (Optional)</Label>
+                              <Input
+                                type="date"
+                                value={unit.occupancyEndDate ? new Date(unit.occupancyEndDate).toISOString().split('T')[0] : ''}
+                                onChange={(e) => handleRentalUnitChange(unit.id, 'occupancyEndDate', e.target.value ? new Date(e.target.value) : undefined)}
                               />
                             </div>
                           </div>
@@ -1855,13 +2403,24 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                             </Button>
                           </div>
                           
-                          {unit.rentType === 'fixed' && unit.monthlyRent ? (
+                          {!Array.isArray(unit.leaseTerms) || unit.leaseTerms.length === 0 ? (
+                            unit.rentType === 'fixed' && unit.monthlyRent ? (
+                              <div className="col-span-12 text-sm text-gray-600">
+                                Monthly income: {formatCurrency((unit.monthlyRent || 0) * (unit.occupancyRate / 100))}
+                              </div>
+                            ) : unit.rentType === 'perSqft' && unit.squareFootage && unit.rentPerSqft ? (
+                              <div className="col-span-12 text-sm text-gray-600">
+                                Monthly income: {formatCurrency((unit.squareFootage || 0) * (unit.rentPerSqft || 0) * (unit.occupancyRate / 100))}
+                              </div>
+                            ) : null
+                          ) : (
                             <div className="col-span-12 text-sm text-gray-600">
-                              Monthly income: {formatCurrency((unit.monthlyRent || 0) * (unit.occupancyRate / 100))}
+                              Lease terms active: {unit.leaseTerms.length}
                             </div>
-                          ) : unit.rentType === 'perSqft' && unit.squareFootage && unit.rentPerSqft ? (
-                            <div className="col-span-12 text-sm text-gray-600">
-                              Monthly income: {formatCurrency((unit.squareFootage || 0) * (unit.rentPerSqft || 0) * (unit.occupancyRate / 100))}
+                          )}
+                          {unit.occupancyStartDate && unit.occupancyEndDate && new Date(unit.occupancyEndDate) < new Date(unit.occupancyStartDate) ? (
+                            <div className="col-span-12 text-xs text-red-600">
+                              End Date cannot be earlier than Start Date.
                             </div>
                           ) : null}
                         </div>
@@ -2888,6 +3447,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                       {projection.summary.monthlyRentalIncome > 0 && (
                         <div className="border-t pt-4">
                           <h4 className="text-sm font-semibold text-gray-700 mb-2">Rental Income Summary</h4>
+                          {rentalUnits.some((u) => Array.isArray(u.leaseTerms) && u.leaseTerms.length > 0) && (
+                            <p className="text-xs text-gray-500 mb-2">
+                              Lease-term mode active: summary reflects physical units while rent changes are applied by term dates.
+                            </p>
+                          )}
                           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                             <div>
                               <p className="text-sm text-gray-600">Total Units</p>

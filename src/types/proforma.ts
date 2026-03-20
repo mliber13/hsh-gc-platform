@@ -16,6 +16,18 @@ export interface PaymentMilestone {
   description?: string
 }
 
+export interface RentalLeaseTerm {
+  id: string
+  name?: string
+  startDate?: Date
+  endDate?: Date
+  rentType: 'fixed' | 'perSqft'
+  monthlyRent?: number
+  squareFootage?: number
+  rentPerSqft?: number
+  occupancyRate?: number // Optional override; falls back to unit occupancy if omitted
+}
+
 export interface RentalUnit {
   id: string
   name: string // e.g., "First Floor Store", "Unit 2A", etc.
@@ -34,6 +46,9 @@ export interface RentalUnit {
   // Occupancy
   occupancyRate: number // 0-100, percentage occupied
   occupancyStartDate?: Date // When unit becomes available for rent
+  occupancyEndDate?: Date // Optional lease/rent end date (unit no longer contributes after this)
+  leaseDurationYears?: number // Optional helper to auto-calculate end date from start date
+  leaseTerms?: RentalLeaseTerm[] // Optional phased lease terms for this same physical unit
   
   // Notes
   notes?: string

@@ -3130,6 +3130,16 @@ export async function saveProFormaInputs(
       occupancyStartDate: u.occupancyStartDate instanceof Date 
         ? u.occupancyStartDate.toISOString() 
         : u.occupancyStartDate,
+      occupancyEndDate: u.occupancyEndDate instanceof Date
+        ? u.occupancyEndDate.toISOString()
+        : u.occupancyEndDate,
+      leaseTerms: Array.isArray(u.leaseTerms)
+        ? u.leaseTerms.map((term: any) => ({
+            ...term,
+            startDate: term.startDate instanceof Date ? term.startDate.toISOString() : term.startDate,
+            endDate: term.endDate instanceof Date ? term.endDate.toISOString() : term.endDate,
+          }))
+        : undefined,
     }))
 
     // Serialize debt service start date
@@ -3265,6 +3275,14 @@ export async function loadProFormaInputs(projectId: string): Promise<any | null>
     const rentalUnits = (data.rental_units || []).map((u: any) => ({
       ...u,
       occupancyStartDate: u.occupancyStartDate ? new Date(u.occupancyStartDate) : undefined,
+      occupancyEndDate: u.occupancyEndDate ? new Date(u.occupancyEndDate) : undefined,
+      leaseTerms: Array.isArray(u.leaseTerms)
+        ? u.leaseTerms.map((term: any) => ({
+            ...term,
+            startDate: term.startDate ? new Date(term.startDate) : undefined,
+            endDate: term.endDate ? new Date(term.endDate) : undefined,
+          }))
+        : undefined,
     }))
 
     const debtService = {
@@ -3301,6 +3319,360 @@ export async function loadProFormaInputs(projectId: string): Promise<any | null>
   } catch (error) {
     console.error('Error in loadProFormaInputs:', error)
     return null
+  }
+}
+
+export interface DealProFormaVersionMeta {
+  id: string
+  dealId: string
+  versionNumber: number
+  versionLabel?: string
+  isDraft: boolean
+  updatedAt: string
+  createdAt: string
+  userId?: string
+}
+
+export interface ProjectProFormaVersionMeta {
+  id: string
+  projectId: string
+  versionNumber: number
+  versionLabel?: string
+  updatedAt: string
+  createdAt: string
+  userId?: string
+}
+
+function extractOrgAndDealIdFromDeal(dealData: any): { organizationId: string; dealId: string } | null {
+  if (!dealData?.id || !dealData?.organization_id) return null
+  return {
+    dealId: dealData.id as string,
+    organizationId: dealData.organization_id as string,
+  }
+}
+
+export async function listDealProFormaVersions(dealId: string): Promise<DealProFormaVersionMeta[]> {
+  if (!isOnlineMode()) return []
+
+  try {
+    const { data: rows, error } = await supabase
+      .from('deal_proforma_versions')
+      .select('id, deal_id, version_number, version_label, is_draft, updated_at, created_at, user_id')
+      .eq('deal_id', dealId)
+      .order('is_draft', { ascending: false })
+      .order('version_number', { ascending: false })
+
+    if (error) {
+      console.error('Error listing deal pro forma versions:', error)
+      return []
+    }
+
+    return (rows || []).map((row: any) => ({
+      id: row.id,
+      dealId: row.deal_id,
+      versionNumber: row.version_number,
+      versionLabel: row.version_label || undefined,
+      isDraft: row.is_draft,
+      updatedAt: row.updated_at,
+      createdAt: row.created_at,
+      userId: row.user_id || undefined,
+    }))
+  } catch (error) {
+    console.error('Error in listDealProFormaVersions:', error)
+    return []
+  }
+}
+
+export async function loadDealProFormaInputs(
+  dealId: string,
+  versionId?: string,
+): Promise<any | null> {
+  if (!isOnlineMode()) return null
+
+  try {
+    let query = supabase
+      .from('deal_proforma_versions')
+      .select('id, inputs_json')
+      .eq('deal_id', dealId)
+
+    if (versionId) {
+      query = query.eq('id', versionId)
+    } else {
+      // Prefer latest draft; otherwise latest saved version
+      query = query.order('is_draft', { ascending: false }).order('version_number', { ascending: false })
+    }
+
+    const { data, error } = await query.limit(1).maybeSingle()
+
+    if (error) {
+      if (error.code === 'PGRST116') return null
+      console.error('Error loading deal pro forma inputs:', error)
+      return null
+    }
+
+    if (!data?.inputs_json) return null
+    return data.inputs_json
+  } catch (error) {
+    console.error('Error in loadDealProFormaInputs:', error)
+    return null
+  }
+}
+
+export async function saveDealProFormaDraft(
+  dealId: string,
+  inputs: any,
+): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data: dealData, error: dealError } = await supabase
+      .from('deals')
+      .select('id, organization_id')
+      .eq('id', dealId)
+      .single()
+
+    if (dealError) {
+      console.error('Error loading deal for pro forma draft:', dealError)
+      return false
+    }
+
+    const context = extractOrgAndDealIdFromDeal(dealData)
+    if (!context) return false
+
+    const rowData = {
+      deal_id: context.dealId,
+      organization_id: context.organizationId,
+      user_id: user.id,
+      version_number: 0,
+      version_label: 'Draft',
+      is_draft: true,
+      inputs_json: inputs,
+    }
+
+    const { data: existingDraft, error: draftFetchError } = await supabase
+      .from('deal_proforma_versions')
+      .select('id')
+      .eq('deal_id', dealId)
+      .eq('is_draft', true)
+      .maybeSingle()
+
+    if (draftFetchError && draftFetchError.code !== 'PGRST116') {
+      console.error('Error checking existing deal draft:', draftFetchError)
+      return false
+    }
+
+    if (existingDraft?.id) {
+      const { error: updateError } = await supabase
+        .from('deal_proforma_versions')
+        .update({
+          ...rowData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingDraft.id)
+      if (updateError) {
+        console.error('Error updating deal pro forma draft:', updateError)
+        return false
+      }
+      return true
+    }
+
+    const { error: insertError } = await supabase
+      .from('deal_proforma_versions')
+      .insert(rowData)
+
+    if (insertError) {
+      console.error('Error creating deal pro forma draft:', insertError)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in saveDealProFormaDraft:', error)
+    return false
+  }
+}
+
+export async function saveDealProFormaVersion(
+  dealId: string,
+  inputs: any,
+  versionLabel?: string,
+): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data: dealData, error: dealError } = await supabase
+      .from('deals')
+      .select('id, organization_id')
+      .eq('id', dealId)
+      .single()
+
+    if (dealError) {
+      console.error('Error loading deal for pro forma version save:', dealError)
+      return false
+    }
+
+    const context = extractOrgAndDealIdFromDeal(dealData)
+    if (!context) return false
+
+    const { data: versionRows, error: versionError } = await supabase
+      .from('deal_proforma_versions')
+      .select('version_number')
+      .eq('deal_id', dealId)
+      .eq('is_draft', false)
+      .order('version_number', { ascending: false })
+      .limit(1)
+
+    if (versionError) {
+      console.error('Error reading latest deal version number:', versionError)
+      return false
+    }
+
+    const nextVersionNumber = ((versionRows && versionRows[0]?.version_number) || 0) + 1
+
+    const { error: insertError } = await supabase
+      .from('deal_proforma_versions')
+      .insert({
+        deal_id: context.dealId,
+        organization_id: context.organizationId,
+        user_id: user.id,
+        version_number: nextVersionNumber,
+        version_label: versionLabel?.trim() || `Version ${nextVersionNumber}`,
+        is_draft: false,
+        inputs_json: inputs,
+      })
+
+    if (insertError) {
+      console.error('Error saving deal pro forma version:', insertError)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in saveDealProFormaVersion:', error)
+    return false
+  }
+}
+
+export async function listProjectProFormaVersions(projectId: string): Promise<ProjectProFormaVersionMeta[]> {
+  if (!isOnlineMode()) return []
+
+  try {
+    const { data: rows, error } = await supabase
+      .from('project_proforma_versions')
+      .select('id, project_id, version_number, version_label, updated_at, created_at, user_id')
+      .eq('project_id', projectId)
+      .order('version_number', { ascending: false })
+
+    if (error) {
+      console.error('Error listing project pro forma versions:', error)
+      return []
+    }
+
+    return (rows || []).map((row: any) => ({
+      id: row.id,
+      projectId: row.project_id,
+      versionNumber: row.version_number,
+      versionLabel: row.version_label || undefined,
+      updatedAt: row.updated_at,
+      createdAt: row.created_at,
+      userId: row.user_id || undefined,
+    }))
+  } catch (error) {
+    console.error('Error in listProjectProFormaVersions:', error)
+    return []
+  }
+}
+
+export async function loadProjectProFormaVersionInputs(
+  projectId: string,
+  versionId: string,
+): Promise<any | null> {
+  if (!isOnlineMode()) return null
+
+  try {
+    const { data, error } = await supabase
+      .from('project_proforma_versions')
+      .select('inputs_json')
+      .eq('project_id', projectId)
+      .eq('id', versionId)
+      .maybeSingle()
+
+    if (error) {
+      if (error.code === 'PGRST116') return null
+      console.error('Error loading project pro forma version inputs:', error)
+      return null
+    }
+
+    return data?.inputs_json ?? null
+  } catch (error) {
+    console.error('Error in loadProjectProFormaVersionInputs:', error)
+    return null
+  }
+}
+
+export async function saveProjectProFormaVersion(
+  projectId: string,
+  inputs: any,
+  versionLabel?: string,
+): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data: projectData, error: projectError } = await supabase
+      .from('projects')
+      .select('id, organization_id')
+      .eq('id', projectId)
+      .single()
+
+    if (projectError || !projectData) {
+      console.error('Error loading project for pro forma version save:', projectError)
+      return false
+    }
+
+    const { data: versionRows, error: versionError } = await supabase
+      .from('project_proforma_versions')
+      .select('version_number')
+      .eq('project_id', projectId)
+      .order('version_number', { ascending: false })
+      .limit(1)
+
+    if (versionError) {
+      console.error('Error reading latest project version number:', versionError)
+      return false
+    }
+
+    const nextVersionNumber = ((versionRows && versionRows[0]?.version_number) || 0) + 1
+    const organizationId = (projectData as any).organization_id || 'default-org'
+
+    const { error: insertError } = await supabase
+      .from('project_proforma_versions')
+      .insert({
+        project_id: projectId,
+        organization_id: organizationId,
+        user_id: user.id,
+        version_number: nextVersionNumber,
+        version_label: versionLabel?.trim() || `Version ${nextVersionNumber}`,
+        inputs_json: inputs,
+      })
+
+    if (insertError) {
+      console.error('Error saving project pro forma version:', insertError)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in saveProjectProFormaVersion:', error)
+    return false
   }
 }
 

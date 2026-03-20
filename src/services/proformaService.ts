@@ -648,17 +648,36 @@ function calculateRentalSummary(
   }
 
   const totalUnits = rentalUnits.length
-  const totalSquareFootage = rentalUnits.reduce((sum, unit) => sum + (unit.squareFootage || 0), 0)
+
+  // For lease-term modeled units, keep summary based on one physical unit
+  // and use the latest configured term as a stabilized representative.
+  const pickRepresentativeTerm = (unit: RentalUnit) => {
+    if (!Array.isArray(unit.leaseTerms) || unit.leaseTerms.length === 0) return undefined
+    return [...unit.leaseTerms].sort((a, b) => {
+      const aTime = a.startDate ? new Date(a.startDate).getTime() : 0
+      const bTime = b.startDate ? new Date(b.startDate).getTime() : 0
+      return bTime - aTime
+    })[0]
+  }
+
+  const totalSquareFootage = rentalUnits.reduce((sum, unit) => {
+    const term = pickRepresentativeTerm(unit)
+    return sum + (unit.squareFootage || term?.squareFootage || 0)
+  }, 0)
   
   // Calculate monthly rent for each unit
   const monthlyRents = rentalUnits.map(unit => {
-    if (unit.rentType === 'fixed') {
-      return (unit.monthlyRent || 0) * (unit.occupancyRate / 100)
+    const term = pickRepresentativeTerm(unit)
+    const rentType = term?.rentType || unit.rentType
+    const occupancyRate = (term?.occupancyRate ?? unit.occupancyRate) / 100
+    if (rentType === 'fixed') {
+      const monthlyRent = term?.monthlyRent ?? unit.monthlyRent ?? 0
+      return monthlyRent * occupancyRate
     } else {
       // Per sqft
-      const sqft = unit.squareFootage || 0
-      const rentPerSqft = unit.rentPerSqft || 0
-      return sqft * rentPerSqft * (unit.occupancyRate / 100)
+      const sqft = unit.squareFootage || term?.squareFootage || 0
+      const rentPerSqft = term?.rentPerSqft ?? unit.rentPerSqft ?? 0
+      return sqft * rentPerSqft * occupancyRate
     }
   })
   
@@ -669,7 +688,10 @@ function calculateRentalSummary(
     : 0
   
   const averageOccupancy = rentalUnits.length > 0
-    ? rentalUnits.reduce((sum, unit) => sum + unit.occupancyRate, 0) / rentalUnits.length
+    ? rentalUnits.reduce((sum, unit) => {
+      const term = pickRepresentativeTerm(unit)
+      return sum + (term?.occupancyRate ?? unit.occupancyRate)
+    }, 0) / rentalUnits.length
     : 0
 
   return {
@@ -861,26 +883,66 @@ function generateMonthlyCashFlows(
 function calculateMonthlyRentalIncome(rentalUnits: RentalUnit[], currentDate: Date): number {
   let totalIncome = 0
 
+  const isWithinDateWindow = (date: Date, startDate?: Date, endDate?: Date): boolean => {
+    if (startDate) {
+      const start = new Date(startDate)
+      start.setDate(1)
+      if (date < start) return false
+    }
+    if (endDate) {
+      const end = new Date(endDate)
+      end.setDate(1)
+      if (date > end) return false
+    }
+    return true
+  }
+
+  const getMonthlyRent = (
+    rentType: 'fixed' | 'perSqft',
+    monthlyRent?: number,
+    squareFootage?: number,
+    rentPerSqft?: number,
+  ): number => {
+    if (rentType === 'fixed') {
+      return monthlyRent || 0
+    }
+    return (squareFootage || 0) * (rentPerSqft || 0)
+  }
+
   for (const unit of rentalUnits) {
-    // Check if unit is available for rent (occupancy start date)
-    if (unit.occupancyStartDate) {
-      const occupancyStart = new Date(unit.occupancyStartDate)
-      occupancyStart.setDate(1) // Start of month
-      if (currentDate < occupancyStart) {
-        continue // Unit not yet available
+    // Phase A support: if lease terms are provided, evaluate rent by active term(s)
+    // while treating this as one physical unit.
+    if (Array.isArray(unit.leaseTerms) && unit.leaseTerms.length > 0) {
+      for (const term of unit.leaseTerms) {
+        const termIsActive = isWithinDateWindow(
+          currentDate,
+          term.startDate || unit.occupancyStartDate,
+          term.endDate || unit.occupancyEndDate,
+        )
+        if (!termIsActive) continue
+
+        const monthlyRent = getMonthlyRent(
+          term.rentType,
+          term.monthlyRent ?? unit.monthlyRent,
+          term.squareFootage ?? unit.squareFootage,
+          term.rentPerSqft ?? unit.rentPerSqft,
+        )
+        const occupancyRate = (term.occupancyRate ?? unit.occupancyRate) / 100
+        totalIncome += monthlyRent * occupancyRate
       }
+      continue
     }
 
-    let monthlyRent = 0
-    
-    if (unit.rentType === 'fixed') {
-      monthlyRent = unit.monthlyRent || 0
-    } else {
-      // Per sqft
-      const sqft = unit.squareFootage || 0
-      const rentPerSqft = unit.rentPerSqft || 0
-      monthlyRent = sqft * rentPerSqft
-    }
+    // Check if unit is available for rent (occupancy start date)
+    const unitIsActive = isWithinDateWindow(currentDate, unit.occupancyStartDate, unit.occupancyEndDate)
+    if (!unitIsActive) continue
+
+    const monthlyRent = getMonthlyRent(
+      unit.rentType,
+      unit.monthlyRent,
+      unit.squareFootage,
+      unit.rentPerSqft,
+    )
 
     // Apply occupancy rate
     const effectiveRent = monthlyRent * (unit.occupancyRate / 100)
