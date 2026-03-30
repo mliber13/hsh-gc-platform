@@ -5,7 +5,7 @@
 // Component for generating construction loan pro forma financial projections
 //
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { Project, Trade } from '@/types'
 import {
@@ -17,6 +17,9 @@ import {
   OperatingExpenses,
   DebtService,
   DealSummaryInputs,
+  ProFormaMode,
+  ForSalePhaseInput,
+  SalesAllocationBuckets,
 } from '@/types/proforma'
 import { calculateProForma, generateDefaultMilestones } from '@/services/proformaService'
 import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
@@ -42,10 +45,204 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { X, Plus, Trash2, Download, FileText, Calendar, DollarSign } from 'lucide-react'
 import { buildDealSummary } from '@/services/proformaSummaryService'
+import { cn } from '@/lib/utils'
 
 interface ProFormaGeneratorProps {
   project: Project
   onClose: () => void
+}
+
+type ForSaleIncentiveApplyTo =
+  | 'infrastructure-reduction'
+  | 'cost-reduction'
+  | 'equity-source'
+  | 'equity_source'
+interface ForSaleIncentiveItem {
+  id: string
+  name: string
+  amount: number
+  applyTo: ForSaleIncentiveApplyTo
+}
+type ForSaleDepositUsageMode = 'full' | 'percent' | 'at-closing'
+type ForSaleSpendCurve = 'linear' | 'front-loaded' | 'back-loaded'
+
+/** Dense worksheet controls — slightly above browser-default xs for readability */
+const DENSE_INPUT = 'h-8 w-full min-w-0 py-0 text-[13px] leading-8 box-border'
+
+const DATE_INPUT = `${DENSE_INPUT} [color-scheme:light]`
+
+/** Fixed-height label rail: inputs align; long labels clip (use title= for full string) */
+const WORKSHEET_LABEL =
+  'flex h-[2.625rem] w-full max-w-full items-end overflow-hidden text-[13px] font-medium leading-snug text-slate-600'
+
+/** Helper under inputs — compact; line-clamp avoids runaway height */
+const FieldHelperSlot = ({ children }: { children?: React.ReactNode }) => (
+  <div className="line-clamp-2 min-h-[0.875rem] max-w-full text-[11px] leading-tight text-slate-500">{children ?? null}</div>
+)
+
+/** Phase table: bottom-align controls across columns; nowrap labels so inputs stay on one baseline */
+const PHASE_CELL = 'flex min-h-0 min-w-0 flex-col justify-end gap-0.5'
+const PHASE_LABEL = 'block shrink-0 text-[13px] font-medium leading-none text-slate-600 whitespace-nowrap'
+
+const FIELD_WIDTH = {
+  compact: 'w-[104px] shrink-0',
+  medium: 'w-[168px] shrink-0',
+  large: 'w-[200px] shrink-0',
+  /** Primary currency: limited growth so rows don’t turn into slabs */
+  growLarge: 'min-w-[140px] max-w-[200px] grow shrink-0 basis-auto',
+  growMedium: 'min-w-[120px] max-w-[168px] grow shrink-0 basis-auto',
+  growWide: 'min-w-[160px] max-w-[260px] grow shrink-0 basis-auto',
+  date: 'w-[138px] shrink-0',
+  selectMonths: 'w-[176px] shrink-0',
+  selectWide: 'w-[240px] shrink-0',
+  percent: 'min-w-[72px] max-w-[120px] grow shrink-0 basis-auto',
+} as const
+
+function FormSurface({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <div className={`border-b border-slate-200 py-2 last:border-b-0 ${className}`.trim()}>{children}</div>
+}
+
+function FormSection({
+  title,
+  subtitle,
+  children,
+  className = '',
+}: {
+  title?: string
+  subtitle?: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={className}>
+      {title ? <h3 className="text-sm font-semibold leading-tight text-slate-900">{title}</h3> : null}
+      {subtitle ? <p className="mt-0.5 text-[13px] leading-snug text-slate-500">{subtitle}</p> : null}
+      <div className="mt-1 space-y-1">{children}</div>
+    </div>
+  )
+}
+
+function FormRow({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn(
+        'flex w-full min-w-0 flex-nowrap items-stretch gap-x-1.5 overflow-x-auto',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+function FormField({
+  width,
+  className = '',
+  children,
+}: {
+  width: keyof typeof FIELD_WIDTH | (string & {})
+  className?: string
+  children: React.ReactNode
+}) {
+  const w: string =
+    width === 'compact'
+      ? FIELD_WIDTH.compact
+      : width === 'medium'
+        ? FIELD_WIDTH.medium
+        : width === 'large'
+          ? FIELD_WIDTH.large
+          : width === 'growLarge'
+            ? FIELD_WIDTH.growLarge
+            : width === 'growMedium'
+              ? FIELD_WIDTH.growMedium
+              : width === 'growWide'
+                ? FIELD_WIDTH.growWide
+                : width === 'date'
+                  ? FIELD_WIDTH.date
+                  : width === 'selectMonths'
+                    ? FIELD_WIDTH.selectMonths
+                    : width === 'selectWide'
+                      ? FIELD_WIDTH.selectWide
+                      : width === 'percent'
+                        ? FIELD_WIDTH.percent
+                        : width
+  return (
+    <div className={cn('flex min-h-0 min-w-0 flex-col gap-0.5 self-stretch', w, className)}>{children}</div>
+  )
+}
+
+/** Section separator inside the worksheet (replaces legacy card stacks). */
+function WorkspacePanel({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <div className={`border-t border-slate-200 px-3 py-2 md:px-3 ${className}`.trim()}>{children}</div>
+}
+
+const GRID_FIELD_WIDTH = {
+  xs: FIELD_WIDTH.compact,
+  sm: 'w-[136px] shrink-0',
+  md: FIELD_WIDTH.medium,
+  lg: FIELD_WIDTH.large,
+} as const
+
+/** Single flex row of fixed-width fields (legacy name; prefer FormRow + FormField). */
+function FormGrid({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn(
+        'flex w-full min-w-0 flex-nowrap items-stretch gap-x-1.5 overflow-x-auto',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+function GridField({
+  size,
+  className = '',
+  children,
+}: {
+  size: keyof typeof GRID_FIELD_WIDTH
+  className?: string
+  children: React.ReactNode
+}) {
+  const w = GRID_FIELD_WIDTH[size]
+  return (
+    <div className={cn('flex min-h-0 min-w-0 flex-col gap-0.5 self-stretch', w, className)}>{children}</div>
+  )
+}
+
+function SectionHeading({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="space-y-0.5">
+      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+      {description ? <p className="text-xs text-slate-500">{description}</p> : null}
+    </div>
+  )
+}
+
+function ModeTabButton({
+  active,
+  label,
+  onClick,
+  block,
+}: {
+  active: boolean
+  label: string
+  onClick: () => void
+  block?: boolean
+}) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={active ? 'default' : 'ghost'}
+      className={`h-8 px-2.5 text-[13px] font-semibold tracking-wide ${active ? '' : 'text-slate-600'} ${block ? 'w-full justify-start' : ''}`.trim()}
+      onClick={onClick}
+    >
+      {label}
+    </Button>
+  )
 }
 
 export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) {
@@ -115,6 +312,48 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   const [annualAppreciationPercent, setAnnualAppreciationPercent] = useState<number>(0)
   type ValueMethod = 'stabilized' | 'noi-based'
   const [valueMethod, setValueMethod] = useState<ValueMethod>('stabilized')
+  const [proFormaMode, setProFormaMode] = useState<ProFormaMode>('general-development')
+  const [forSaleTotalUnits, setForSaleTotalUnits] = useState<number>(39)
+  const [forSaleAverageSalePrice, setForSaleAverageSalePrice] = useState<number>(250000)
+  const [forSalePresaleDepositPercent, setForSalePresaleDepositPercent] = useState<number>(5)
+  const [forSaleTriggerUsesPresales, setForSaleTriggerUsesPresales] = useState<boolean>(true)
+  const [forSaleSalesPaceUnitsPerMonth, setForSaleSalesPaceUnitsPerMonth] = useState<number>(0)
+  const [forSaleDepositUsageMode, setForSaleDepositUsageMode] = useState<ForSaleDepositUsageMode>('full')
+  const [forSaleDepositUsablePercent, setForSaleDepositUsablePercent] = useState<number>(100)
+  const [forSaleConstructionSpendCurve, setForSaleConstructionSpendCurve] = useState<ForSaleSpendCurve>('linear')
+  const [forSaleInfrastructureCost, setForSaleInfrastructureCost] = useState<number>(0)
+  const [forSaleTotalHardBudget, setForSaleTotalHardBudget] = useState<number>(0)
+  const [forSaleTotalSoftBudget, setForSaleTotalSoftBudget] = useState<number>(0)
+  const [forSaleTifReduction, setForSaleTifReduction] = useState<number>(0)
+  const [forSaleIncentives, setForSaleIncentives] = useState<ForSaleIncentiveItem[]>([])
+  const [forSaleFixedLocLimit, setForSaleFixedLocLimit] = useState<number>(0)
+  const [forSaleLtcPercent, setForSaleLtcPercent] = useState<number>(85)
+  const [forSaleBondFinancingEnabled, setForSaleBondFinancingEnabled] = useState<boolean>(false)
+  const [forSaleBondLtcOverridePercent, setForSaleBondLtcOverridePercent] = useState<number>(0)
+  const [forSaleBondRatePercent, setForSaleBondRatePercent] = useState<number>(0)
+  const [forSaleBondCapacity, setForSaleBondCapacity] = useState<number>(0)
+  const [forSaleSalesBuckets, setForSaleSalesBuckets] = useState<SalesAllocationBuckets>({
+    locPaydownPercent: 70,
+    reinvestPercent: 20,
+    reservePercent: 10,
+    distributionPercent: 0,
+  })
+  const [forSalePhases, setForSalePhases] = useState<ForSalePhaseInput[]>([
+    {
+      id: uuidv4(),
+      name: 'Phase 1',
+      unitCount: 10,
+      buildMonths: 12,
+      presaleStartMonthOffset: 2,
+      closeStartMonthOffset: 8,
+      presaleTriggerPercent: 50,
+      infrastructureAllocationPercent: undefined,
+      avgSalePrice: 250000,
+      hardCostBudget: undefined,
+      softCostBudget: undefined,
+      costEntryMode: 'auto',
+    },
+  ])
 
   const isDealUnderwriting =
     project.id.startsWith('deal-') || project.metadata?.source === 'deal-pipeline'
@@ -153,6 +392,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
 
   // Interface for saved pro forma inputs (serialized to JSON)
   interface SavedProFormaInputsSerialized {
+    proFormaMode?: ProFormaMode
     contractValue: number
     paymentMilestones: Array<Omit<PaymentMilestone, 'date'> & { date: string }>
     monthlyOverhead: number
@@ -195,10 +435,32 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     valueMethod?: ValueMethod
     underwritingEstimatedConstructionCost?: number
     dealSummaryInputs?: DealSummaryInputs
+    forSaleTotalUnits?: number
+    forSaleAverageSalePrice?: number
+    forSalePresaleDepositPercent?: number
+    forSaleTriggerUsesPresales?: boolean
+    forSaleSalesPaceUnitsPerMonth?: number
+    forSaleDepositUsageMode?: ForSaleDepositUsageMode
+    forSaleDepositUsablePercent?: number
+    forSaleConstructionSpendCurve?: ForSaleSpendCurve
+    forSaleInfrastructureCost?: number
+    forSaleTotalHardBudget?: number
+    forSaleTotalSoftBudget?: number
+    forSaleTifReduction?: number
+    forSaleFixedLocLimit?: number
+    forSaleLtcPercent?: number
+    forSaleBondFinancingEnabled?: boolean
+    forSaleBondLtcOverridePercent?: number
+    forSaleBondRatePercent?: number
+    forSaleBondCapacity?: number
+    forSaleSalesBuckets?: SalesAllocationBuckets
+    forSalePhases?: ForSalePhaseInput[]
+    forSaleIncentives?: ForSaleIncentiveItem[]
   }
 
   // Interface for loaded pro forma inputs (deserialized with Date objects)
   interface SavedProFormaInputs {
+    proFormaMode?: ProFormaMode
     contractValue: number
     paymentMilestones: PaymentMilestone[]
     monthlyOverhead: number
@@ -230,9 +492,31 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     valueMethod?: ValueMethod
     underwritingEstimatedConstructionCost?: number
     dealSummaryInputs?: DealSummaryInputs
+    forSaleTotalUnits?: number
+    forSaleAverageSalePrice?: number
+    forSalePresaleDepositPercent?: number
+    forSaleTriggerUsesPresales?: boolean
+    forSaleSalesPaceUnitsPerMonth?: number
+    forSaleDepositUsageMode?: ForSaleDepositUsageMode
+    forSaleDepositUsablePercent?: number
+    forSaleConstructionSpendCurve?: ForSaleSpendCurve
+    forSaleInfrastructureCost?: number
+    forSaleTotalHardBudget?: number
+    forSaleTotalSoftBudget?: number
+    forSaleTifReduction?: number
+    forSaleFixedLocLimit?: number
+    forSaleLtcPercent?: number
+    forSaleBondFinancingEnabled?: boolean
+    forSaleBondLtcOverridePercent?: number
+    forSaleBondRatePercent?: number
+    forSaleBondCapacity?: number
+    forSaleSalesBuckets?: SalesAllocationBuckets
+    forSalePhases?: ForSalePhaseInput[]
+    forSaleIncentives?: ForSaleIncentiveItem[]
   }
 
   const buildSavedInputs = (): SavedProFormaInputsSerialized => ({
+    proFormaMode,
     contractValue,
     paymentMilestones: paymentMilestones.map(m => ({
       ...m,
@@ -287,6 +571,27 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     valueMethod,
     underwritingEstimatedConstructionCost: isDealUnderwriting ? underwritingEstimatedConstructionCost : undefined,
     dealSummaryInputs: isDealUnderwriting ? dealSummaryInputs : undefined,
+    forSaleTotalUnits,
+    forSaleAverageSalePrice,
+    forSalePresaleDepositPercent,
+    forSaleTriggerUsesPresales,
+    forSaleSalesPaceUnitsPerMonth: forSaleSalesPaceUnitsPerMonth || undefined,
+    forSaleDepositUsageMode,
+    forSaleDepositUsablePercent,
+    forSaleConstructionSpendCurve,
+    forSaleInfrastructureCost,
+    forSaleTotalHardBudget,
+    forSaleTotalSoftBudget,
+    forSaleTifReduction,
+    forSaleFixedLocLimit,
+    forSaleLtcPercent,
+    forSaleBondFinancingEnabled,
+    forSaleBondLtcOverridePercent: forSaleBondLtcOverridePercent || undefined,
+    forSaleBondRatePercent: forSaleBondRatePercent || undefined,
+    forSaleBondCapacity: forSaleBondCapacity || undefined,
+    forSaleSalesBuckets,
+    forSalePhases,
+    forSaleIncentives,
   })
 
   const refreshDealVersions = async () => {
@@ -350,6 +655,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         if (dbData) {
           // Convert date strings back to Date objects
           const loaded: SavedProFormaInputs = {
+            proFormaMode: dbData.proFormaMode as ProFormaMode | undefined,
             contractValue: dbData.contractValue,
             paymentMilestones: dbData.paymentMilestones.map((m: any) => ({
               ...m,
@@ -402,6 +708,27 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
             valueMethod: dbData.valueMethod as ValueMethod | undefined,
             underwritingEstimatedConstructionCost: dbData.underwritingEstimatedConstructionCost,
             dealSummaryInputs: dbData.dealSummaryInputs,
+            forSaleTotalUnits: dbData.forSaleTotalUnits,
+            forSaleAverageSalePrice: dbData.forSaleAverageSalePrice,
+            forSalePresaleDepositPercent: dbData.forSalePresaleDepositPercent,
+            forSaleTriggerUsesPresales: dbData.forSaleTriggerUsesPresales,
+            forSaleSalesPaceUnitsPerMonth: dbData.forSaleSalesPaceUnitsPerMonth,
+            forSaleDepositUsageMode: dbData.forSaleDepositUsageMode,
+            forSaleDepositUsablePercent: dbData.forSaleDepositUsablePercent,
+            forSaleConstructionSpendCurve: dbData.forSaleConstructionSpendCurve,
+            forSaleInfrastructureCost: dbData.forSaleInfrastructureCost,
+            forSaleTotalHardBudget: dbData.forSaleTotalHardBudget,
+            forSaleTotalSoftBudget: dbData.forSaleTotalSoftBudget,
+            forSaleTifReduction: dbData.forSaleTifReduction,
+            forSaleFixedLocLimit: dbData.forSaleFixedLocLimit,
+            forSaleLtcPercent: dbData.forSaleLtcPercent,
+            forSaleBondFinancingEnabled: dbData.forSaleBondFinancingEnabled,
+            forSaleBondLtcOverridePercent: dbData.forSaleBondLtcOverridePercent,
+            forSaleBondRatePercent: dbData.forSaleBondRatePercent,
+            forSaleBondCapacity: dbData.forSaleBondCapacity,
+            forSaleSalesBuckets: dbData.forSaleSalesBuckets,
+            forSalePhases: dbData.forSalePhases,
+            forSaleIncentives: dbData.forSaleIncentives,
           }
           return loaded
         }
@@ -414,6 +741,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         // Convert date strings back to Date objects
         const loaded: SavedProFormaInputs = {
           ...parsed,
+          proFormaMode: parsed.proFormaMode,
           paymentMilestones: parsed.paymentMilestones.map(m => ({
             ...m,
             date: new Date(m.date),
@@ -455,6 +783,27 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           valueMethod: parsed.valueMethod,
           underwritingEstimatedConstructionCost: parsed.underwritingEstimatedConstructionCost,
           dealSummaryInputs: parsed.dealSummaryInputs,
+          forSaleTotalUnits: parsed.forSaleTotalUnits,
+          forSaleAverageSalePrice: parsed.forSaleAverageSalePrice,
+          forSalePresaleDepositPercent: parsed.forSalePresaleDepositPercent,
+          forSaleTriggerUsesPresales: parsed.forSaleTriggerUsesPresales,
+          forSaleSalesPaceUnitsPerMonth: parsed.forSaleSalesPaceUnitsPerMonth,
+          forSaleDepositUsageMode: parsed.forSaleDepositUsageMode,
+          forSaleDepositUsablePercent: parsed.forSaleDepositUsablePercent,
+          forSaleConstructionSpendCurve: parsed.forSaleConstructionSpendCurve,
+          forSaleInfrastructureCost: parsed.forSaleInfrastructureCost,
+          forSaleTotalHardBudget: parsed.forSaleTotalHardBudget,
+          forSaleTotalSoftBudget: parsed.forSaleTotalSoftBudget,
+          forSaleTifReduction: parsed.forSaleTifReduction,
+          forSaleFixedLocLimit: parsed.forSaleFixedLocLimit,
+          forSaleLtcPercent: parsed.forSaleLtcPercent,
+          forSaleBondFinancingEnabled: parsed.forSaleBondFinancingEnabled,
+          forSaleBondLtcOverridePercent: parsed.forSaleBondLtcOverridePercent,
+          forSaleBondRatePercent: parsed.forSaleBondRatePercent,
+          forSaleBondCapacity: parsed.forSaleBondCapacity,
+          forSaleSalesBuckets: parsed.forSaleSalesBuckets,
+          forSalePhases: parsed.forSalePhases,
+          forSaleIncentives: parsed.forSaleIncentives,
         }
         return loaded
       }
@@ -548,6 +897,46 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         setAnnualDepreciation(savedInputs.annualDepreciation ?? 0)
         setAnnualAppreciationPercent(savedInputs.annualAppreciationPercent ?? 0)
         setValueMethod(savedInputs.valueMethod ?? 'stabilized')
+        setProFormaMode(savedInputs.proFormaMode ?? 'general-development')
+        setForSaleTotalUnits(savedInputs.forSaleTotalUnits ?? 39)
+        setForSaleAverageSalePrice(savedInputs.forSaleAverageSalePrice ?? 250000)
+        setForSalePresaleDepositPercent(savedInputs.forSalePresaleDepositPercent ?? 5)
+        setForSaleTriggerUsesPresales(savedInputs.forSaleTriggerUsesPresales ?? true)
+        setForSaleSalesPaceUnitsPerMonth(savedInputs.forSaleSalesPaceUnitsPerMonth ?? 0)
+        setForSaleDepositUsageMode(savedInputs.forSaleDepositUsageMode ?? 'full')
+        setForSaleDepositUsablePercent(savedInputs.forSaleDepositUsablePercent ?? 100)
+        setForSaleConstructionSpendCurve(savedInputs.forSaleConstructionSpendCurve ?? 'linear')
+        setForSaleInfrastructureCost(savedInputs.forSaleInfrastructureCost ?? 0)
+        setForSaleTotalHardBudget(savedInputs.forSaleTotalHardBudget ?? 0)
+        setForSaleTotalSoftBudget(savedInputs.forSaleTotalSoftBudget ?? 0)
+        setForSaleTifReduction(savedInputs.forSaleTifReduction ?? 0)
+        setForSaleFixedLocLimit(savedInputs.forSaleFixedLocLimit ?? 0)
+        setForSaleLtcPercent(savedInputs.forSaleLtcPercent ?? 85)
+        setForSaleBondFinancingEnabled(savedInputs.forSaleBondFinancingEnabled ?? false)
+        setForSaleBondLtcOverridePercent(savedInputs.forSaleBondLtcOverridePercent ?? 0)
+        setForSaleBondRatePercent(savedInputs.forSaleBondRatePercent ?? 0)
+        setForSaleBondCapacity(savedInputs.forSaleBondCapacity ?? 0)
+        setForSaleIncentives(savedInputs.forSaleIncentives ?? [])
+        setForSaleSalesBuckets(savedInputs.forSaleSalesBuckets ?? {
+          locPaydownPercent: 70,
+          reinvestPercent: 20,
+          reservePercent: 10,
+          distributionPercent: 0,
+        })
+        setForSalePhases(savedInputs.forSalePhases?.length ? savedInputs.forSalePhases : [{
+          id: uuidv4(),
+          name: 'Phase 1',
+          unitCount: 10,
+          buildMonths: 12,
+          presaleStartMonthOffset: 2,
+          closeStartMonthOffset: 8,
+          presaleTriggerPercent: 50,
+          infrastructureAllocationPercent: undefined,
+          avgSalePrice: 250000,
+          hardCostBudget: undefined,
+          softCostBudget: undefined,
+          costEntryMode: 'auto',
+        }])
         if (savedInputs.underwritingEstimatedConstructionCost != null) {
           setUnderwritingEstimatedConstructionCost(
             savedInputs.underwritingEstimatedConstructionCost,
@@ -792,6 +1181,32 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     lpAbovePrefProfitSharePercent,
     taxRatePercent,
     annualDepreciation,
+    annualAppreciationPercent,
+    valueMethod,
+    underwritingEstimatedConstructionCost,
+    dealSummaryInputs,
+    proFormaMode,
+    forSaleTotalUnits,
+    forSaleAverageSalePrice,
+    forSalePresaleDepositPercent,
+    forSaleTriggerUsesPresales,
+    forSaleSalesPaceUnitsPerMonth,
+    forSaleDepositUsageMode,
+    forSaleDepositUsablePercent,
+    forSaleConstructionSpendCurve,
+    forSaleInfrastructureCost,
+    forSaleTotalHardBudget,
+    forSaleTotalSoftBudget,
+    forSaleTifReduction,
+    forSaleFixedLocLimit,
+    forSaleLtcPercent,
+    forSaleBondFinancingEnabled,
+    forSaleBondLtcOverridePercent,
+    forSaleBondRatePercent,
+    forSaleBondCapacity,
+    forSaleSalesBuckets,
+    forSalePhases,
+    forSaleIncentives,
   ])
 
   const handleAddMilestone = () => {
@@ -989,6 +1404,60 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   }
 
   const [validationErrors, setValidationErrors] = useState<string[]>([])
+  const forSaleDerivedContractValue = useMemo(
+    () =>
+      forSalePhases.reduce(
+        (sum, phase) => sum + (phase.unitCount || 0) * (phase.avgSalePrice || forSaleAverageSalePrice || 0),
+        0,
+      ),
+    [forSalePhases, forSaleAverageSalePrice],
+  )
+  const forSalePhaseRowErrors = useMemo(() => {
+    const map: Record<string, string[]> = {}
+    forSalePhases.forEach((phase) => {
+      const errs: string[] = []
+      if ((phase.buildMonths || 0) < 1) errs.push('Build months must be at least 1.')
+      if ((phase.presaleTriggerPercent || 0) < 0 || (phase.presaleTriggerPercent || 0) > 100) {
+        errs.push('Trigger % must be between 0 and 100.')
+      }
+      if ((phase.presaleStartMonthOffset || 0) < 0 || (phase.closeStartMonthOffset || 0) < 0) {
+        errs.push('Start offsets cannot be negative.')
+      }
+      if ((phase.closeStartMonthOffset || 0) < (phase.presaleStartMonthOffset || 0)) {
+        errs.push('Close start month should be at or after presale start month.')
+      }
+      if ((phase.infrastructureAllocationPercent || 0) < 0) errs.push('Infrastructure % cannot be negative.')
+      if ((phase.hardCostBudget || 0) < 0 || (phase.softCostBudget || 0) < 0) errs.push('Budgets cannot be negative.')
+      if ((phase.avgSalePrice || 0) < 0) errs.push('Avg sale price cannot be negative.')
+      map[phase.id] = errs
+    })
+    return map
+  }, [forSalePhases])
+  useEffect(() => {
+    const units = dealSummaryInputs.totalUnits ?? 0
+    const mapped = forSaleIncentives
+      .filter((i) => i.name.trim().length > 0 || (i.amount || 0) > 0)
+      .map((i) => ({
+        id: i.id,
+        label: i.name,
+        totalAmount: i.amount || undefined,
+        perUnitAmount: units > 0 && (i.amount || 0) > 0 ? i.amount / units : undefined,
+        applyTo: i.applyTo,
+      }))
+    setDealSummaryInputs((prev) => ({ ...prev, incentives: mapped }))
+  }, [forSaleIncentives, dealSummaryInputs.totalUnits])
+  const effectiveForSalePhases = useMemo(() => {
+    const totalUnits = Math.max(1, forSalePhases.reduce((sum, p) => sum + (p.unitCount || 0), 0))
+    return forSalePhases.map((phase) => {
+      if (phase.costEntryMode === 'manual') return phase
+      const weight = Math.max(0, phase.unitCount || 0) / totalUnits
+      return {
+        ...phase,
+        hardCostBudget: (forSaleTotalHardBudget || 0) * weight,
+        softCostBudget: (forSaleTotalSoftBudget || 0) * weight,
+      }
+    })
+  }, [forSalePhases, forSaleTotalHardBudget, forSaleTotalSoftBudget])
 
   const handleSaveDealVersion = async () => {
     if (!isDealUnderwriting || !dealIdForUnderwriting) return
@@ -1034,7 +1503,9 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   const handleGenerate = () => {
     const errors: string[] = []
 
-    if (!contractValue) {
+    const effectiveContractValue = proFormaMode === 'for-sale-phased-loc' ? forSaleDerivedContractValue : contractValue
+
+    if (!effectiveContractValue) {
       errors.push(isDealUnderwriting ? 'Enter a Deal Value / Contract Value.' : 'Enter a Contract Value.')
     }
 
@@ -1043,7 +1514,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       errors.push('Enter an Estimated Construction Cost for underwriting when no detailed estimate exists.')
     }
 
-    if (paymentMilestones.length === 0) {
+    if (proFormaMode !== 'for-sale-phased-loc' && paymentMilestones.length === 0) {
       errors.push('Add at least one funding milestone to model construction inflows.')
     }
 
@@ -1051,7 +1522,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     // - must start at 0
     // - must end at 100
     // - must be strictly increasing
-    if (paymentMilestones.length > 0) {
+    if (proFormaMode !== 'for-sale-phased-loc' && paymentMilestones.length > 0) {
       const sorted = [...paymentMilestones].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
       )
@@ -1073,10 +1544,28 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       }
     }
 
-    if (includeRentalIncome && rentalUnits.length === 0) {
+    if (proFormaMode === 'for-sale-phased-loc') {
+      const bucketTotal =
+        (forSaleSalesBuckets.locPaydownPercent || 0) +
+        (forSaleSalesBuckets.reinvestPercent || 0) +
+        (forSaleSalesBuckets.reservePercent || 0) +
+        (forSaleSalesBuckets.distributionPercent || 0)
+      if (Math.abs(bucketTotal - 100) > 0.01) {
+        errors.push('For-sale sales allocation buckets must total 100%.')
+      }
+      if (!forSalePhases.length) {
+        errors.push('Add at least one phase in For-Sale Phased (LOC) mode.')
+      }
+      effectiveForSalePhases.forEach((phase) => {
+        const rowErrors = forSalePhaseRowErrors[phase.id] || []
+        rowErrors.forEach((msg: string) => errors.push(`${phase.name || 'Phase'}: ${msg}`))
+      })
+    }
+
+    if (proFormaMode === 'rental-hold' && includeRentalIncome && rentalUnits.length === 0) {
       errors.push('Add at least one rental unit if rental income is enabled.')
     }
-    if (includeRentalIncome) {
+    if (proFormaMode === 'rental-hold' && includeRentalIncome) {
       rentalUnits.forEach((unit, idx) => {
         if (unit.occupancyStartDate && unit.occupancyEndDate) {
           const start = new Date(unit.occupancyStartDate)
@@ -1150,7 +1639,8 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
 
     const input: ProFormaInput = {
       projectId: project.id,
-      contractValue,
+      proFormaMode,
+      contractValue: effectiveContractValue,
       // Derive milestone dollar amounts from funding base and incremental percentage
       paymentMilestones: milestonesWithIncremental,
       monthlyOverhead,
@@ -1161,15 +1651,15 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       underwritingEstimatedConstructionCost: isDealUnderwriting && underwritingEstimatedConstructionCost > 0
         ? underwritingEstimatedConstructionCost
         : undefined,
-      rentalUnits,
-      includeRentalIncome,
+      rentalUnits: proFormaMode === 'rental-hold' ? rentalUnits : [],
+      includeRentalIncome: proFormaMode === 'rental-hold' ? includeRentalIncome : false,
       operatingExpenses,
-      includeOperatingExpenses,
+      includeOperatingExpenses: proFormaMode === 'rental-hold' ? includeOperatingExpenses : false,
       debtService: {
         ...debtService,
         startDate: debtService.startDate || new Date(startDate),
       },
-      includeDebtService,
+      includeDebtService: proFormaMode === 'rental-hold' ? includeDebtService : false,
       constructionCompletionDate: constructionCompletionDate 
         ? new Date(constructionCompletionDate)
         : undefined,
@@ -1188,6 +1678,34 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       annualDepreciation,
       annualAppreciationPercent,
       valueMethod,
+      forSalePhasedLoc: proFormaMode === 'for-sale-phased-loc'
+        ? {
+            enabled: true,
+            totalUnits: forSaleTotalUnits,
+            averageSalePrice: forSaleAverageSalePrice,
+            presaleDepositPercent: forSalePresaleDepositPercent,
+            depositUsageMode: forSaleDepositUsageMode,
+            depositUsablePercent: forSaleDepositUsageMode === 'percent' ? forSaleDepositUsablePercent : undefined,
+            salesPaceUnitsPerMonth: forSaleSalesPaceUnitsPerMonth > 0 ? forSaleSalesPaceUnitsPerMonth : undefined,
+            constructionSpendCurve: forSaleConstructionSpendCurve,
+            infrastructureCost: forSaleInfrastructureCost,
+            tifInfrastructureReduction: effectiveInfrastructureReduction,
+            incentiveCostReduction,
+            incentiveEquitySource,
+            fixedLocLimit: forSaleFixedLocLimit,
+            ltcPercent: forSaleLtcPercent,
+            triggerUsesPresales: forSaleTriggerUsesPresales,
+            bondFinancingEnabled: forSaleBondFinancingEnabled,
+            bondLtcOverridePercent: forSaleBondFinancingEnabled ? forSaleBondLtcOverridePercent : undefined,
+            bondRatePercent: forSaleBondFinancingEnabled ? forSaleBondRatePercent : undefined,
+            bondCapacity: forSaleBondFinancingEnabled ? forSaleBondCapacity : undefined,
+            salesAllocationBuckets: forSaleSalesBuckets,
+            phases: effectiveForSalePhases,
+          }
+        : undefined,
+    }
+    if ((globalThis as any).__HSH_DEBUG_FOR_SALE_LOC__ === true && input.forSalePhasedLoc) {
+      console.log('[FOR-SALE LOC] mapped input payload', input.forSalePhasedLoc)
     }
 
     const result = calculateProForma(project, trades, input)
@@ -1219,6 +1737,49 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
   const formatPercent = (value: number) => `${value.toFixed(1)}%`
+  const parseCommaNumber = (raw: string): number => {
+    const cleaned = raw.replace(/,/g, '').trim()
+    if (!cleaned) return 0
+    const parsed = parseFloat(cleaned)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  const formatCommaNumber = (value: number, fractionDigits = 0): string =>
+    value
+      ? value.toLocaleString('en-US', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: fractionDigits,
+        })
+      : ''
+  const normalizeIncentiveApplyTo = (applyTo: string | undefined): string => {
+    const normalized = (applyTo || '').trim().toLowerCase().replace(/_/g, '-')
+    if (normalized === 'project-cost-reduction') return 'cost-reduction'
+    if (normalized === 'infrastructure-reduction') return 'infrastructure-reduction'
+    if (normalized === 'equity-source') return 'equity-source'
+    return normalized
+  }
+
+  const incentiveInfrastructureReduction = useMemo(
+    () =>
+      forSaleIncentives
+        .filter((i) => normalizeIncentiveApplyTo(i.applyTo) === 'infrastructure-reduction')
+        .reduce((sum, i) => sum + (i.amount || 0), 0),
+    [forSaleIncentives],
+  )
+  const incentiveCostReduction = useMemo(
+    () =>
+      forSaleIncentives
+        .filter((i) => normalizeIncentiveApplyTo(i.applyTo) === 'cost-reduction')
+        .reduce((sum, i) => sum + (i.amount || 0), 0),
+    [forSaleIncentives],
+  )
+  const incentiveEquitySource = useMemo(
+    () =>
+      forSaleIncentives
+        .filter((i) => normalizeIncentiveApplyTo(i.applyTo) === 'equity-source')
+        .reduce((sum, i) => sum + (i.amount || 0), 0),
+    [forSaleIncentives],
+  )
+  const effectiveInfrastructureReduction = (forSaleTifReduction || 0) + incentiveInfrastructureReduction
 
   // Helper: roll monthly cash flows up to yearly summary (for 10-year style view)
   const getYearlySummary = (projection: ProFormaProjection) => {
@@ -1253,8 +1814,8 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <Card className="w-full max-w-2xl">
+      <div className="fixed inset-0 z-50 bg-slate-100 flex items-center justify-center">
+        <Card className="w-full max-w-2xl shadow-sm">
           <CardContent className="p-8 text-center">
             <p>Loading project data...</p>
           </CardContent>
@@ -1264,461 +1825,754 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <Card className="w-full max-w-6xl max-h-[90vh] overflow-y-auto">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-2xl">Pro Forma Generator - {project.name}</CardTitle>
-                {isDealUnderwriting && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800 border border-amber-200">
-                    Deal Pipeline / Underwriting Mode
-                  </span>
-                )}
-              </div>
-              <div className="space-y-2">
-                {isDealUnderwriting && (
-                  <p className="text-xs text-gray-500">
-                    Underwriting Assumptions: deal-level inputs for early analysis. No detailed estimate is required in this mode.
-                  </p>
-                )}
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="min-w-[220px]">
-                    <Select
-                      value={isDealUnderwriting ? selectedDealVersionId : selectedProjectVersionId}
-                      onValueChange={(v) =>
-                        isDealUnderwriting ? setSelectedDealVersionId(v) : setSelectedProjectVersionId(v)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Load version" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="latest">
-                          {isDealUnderwriting ? 'Latest (draft or newest)' : 'Latest saved inputs'}
-                        </SelectItem>
-                        {isDealUnderwriting
-                          ? dealProFormaVersions.map((v) => (
-                              <SelectItem key={v.id} value={v.id}>
-                                {v.isDraft
-                                  ? `Draft${v.versionLabel ? ` - ${v.versionLabel}` : ''}`
-                                  : `V${v.versionNumber}${v.versionLabel ? ` - ${v.versionLabel}` : ''}`}
-                              </SelectItem>
-                            ))
-                          : projectProFormaVersions.map((v) => (
-                              <SelectItem key={v.id} value={v.id}>
-                                {`V${v.versionNumber}${v.versionLabel ? ` - ${v.versionLabel}` : ''}`}
-                              </SelectItem>
-                            ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Input
-                    className="w-[220px]"
-                    placeholder="Version label (optional)"
-                    value={newVersionLabel}
-                    onChange={(e) => setNewVersionLabel(e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={isDealUnderwriting ? handleSaveDealVersion : handleSaveProjectVersion}
-                  >
-                    Save Version
-                  </Button>
-                </div>
-              </div>
+    <div className="fixed inset-0 z-50 bg-slate-100">
+      <div className="flex h-full flex-col">
+        <div className="sticky top-0 z-20 border-b border-slate-200 bg-white">
+          <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-3 px-3 py-2.5 md:px-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <CardTitle className="truncate text-base font-semibold md:text-lg">
+                Pro Forma Generator — {project.name}
+              </CardTitle>
+              {isDealUnderwriting && (
+                <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                  Underwriting
+                </span>
+              )}
             </div>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="w-4 h-4" />
+            <Button variant="ghost" size="sm" className="shrink-0" onClick={onClose} aria-label="Close">
+              <X className="h-4 w-4" />
             </Button>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1800px] px-3 py-2 pb-28 md:px-4 md:py-2.5">
           {!projection ? (
             <>
-              {/* Input Form */}
-              <div className={isDealUnderwriting ? 'space-y-4 p-4 bg-amber-50 border border-amber-100 rounded-lg' : ''}>
-                {isDealUnderwriting && (
-                  <div className="mb-2">
-                    <p className="text-xs text-amber-900 font-medium">
-                      Underwriting Assumptions
-                    </p>
-                    <p className="text-xs text-amber-800">
-                      Enter high-level deal assumptions for early go/no-go analysis. Detailed estimate trades are not required in this mode.
-                    </p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <Label htmlFor="contractValue">
-                      {isDealUnderwriting ? 'Deal Value / Contract Value *' : 'Contract Value *'}
-                    </Label>
-                    <Input
-                      id="contractValue"
-                      type="text"
-                      inputMode="decimal"
-                      value={contractValue ? contractValue.toLocaleString('en-US') : ''}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/,/g, '')
-                        const next = raw === '' ? 0 : parseFloat(raw)
-                        setContractValue(isNaN(next) ? 0 : next)
-                        setValidationErrors([])
-                      }}
-                      placeholder="0.00"
-                    />
-                    {isDealUnderwriting ? (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Deal Value / Contract Value is an underwriting assumption in deal mode.
-                      </p>
-                    ) : (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Estimate total: {formatCurrency(
-                          project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 
-                          trades.reduce((sum, t) => sum + t.totalCost, 0)
-                        )} | 
-                        Estimated cost: {formatCurrency(
-                          trades.reduce((sum, t) => sum + t.totalCost, 0)
-                        )}
-                      </p>
-                    )}
-                  </div>
-
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
+                {/* Main modeling workspace */}
+                <div className="min-w-0 flex-1 lg:basis-[73%]">
+              <div className="rounded-sm border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 px-3 py-2 md:px-3 md:py-2.5">
+                <FormSection title="Global Assumptions" className="[&_h3]:text-base [&_h3]:font-semibold [&_h3]:tracking-tight">
                   {isDealUnderwriting && (
-                    <div>
-                      <Label htmlFor="underwritingEstimatedConstructionCost">Estimated Construction Cost</Label>
+                    <p className="text-[13px] leading-snug text-slate-500">Core inputs for this underwriting model.</p>
+                  )}
+                  <FormRow>
+                    <FormField width="growLarge">
+                      <Label htmlFor="contractValue" className={WORKSHEET_LABEL}>
+                        {isDealUnderwriting ? 'Deal Value / Contract Value *' : 'Contract Value *'}
+                      </Label>
                       <Input
-                        id="underwritingEstimatedConstructionCost"
+                        className={DENSE_INPUT}
+                        id="contractValue"
                         type="text"
                         inputMode="decimal"
-                        value={underwritingEstimatedConstructionCost ? underwritingEstimatedConstructionCost.toLocaleString('en-US') : ''}
+                        value={(proFormaMode === 'for-sale-phased-loc' ? forSaleDerivedContractValue : contractValue)
+                          ? (proFormaMode === 'for-sale-phased-loc' ? forSaleDerivedContractValue : contractValue).toLocaleString('en-US')
+                          : ''}
+                        readOnly={proFormaMode === 'for-sale-phased-loc'}
                         onChange={(e) => {
+                          if (proFormaMode === 'for-sale-phased-loc') return
                           const raw = e.target.value.replace(/,/g, '')
                           const next = raw === '' ? 0 : parseFloat(raw)
-                          setUnderwritingEstimatedConstructionCost(isNaN(next) ? 0 : next)
+                          setContractValue(isNaN(next) ? 0 : next)
                           setValidationErrors([])
                         }}
                         placeholder="0.00"
                       />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Underwriting assumption used as the construction cost basis when no detailed estimate exists.
-                      </p>
-                    </div>
-                  )}
-
-                  <div>
-                    <Label htmlFor="startDate">Project Start Date *</Label>
-                    <Input
-                      id="startDate"
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="projectionMonths">Projection Period *</Label>
-                    <Select
-                      value={projectionMonths.toString()}
-                      onValueChange={(v) => setProjectionMonths(parseInt(v) as 6 | 12 | 24 | 36 | 60 | 120)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="6">6 Months</SelectItem>
-                        <SelectItem value="12">12 Months</SelectItem>
-                        <SelectItem value="24">24 Months (2 Years)</SelectItem>
-                        <SelectItem value="36">36 Months (3 Years)</SelectItem>
-                        <SelectItem value="60">60 Months (5 Years)</SelectItem>
-                        <SelectItem value="120">120 Months (10 Years)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="constructionCompletionDate">Construction Completion Date</Label>
-                    <Input
-                      id="constructionCompletionDate"
-                      type="date"
-                      value={constructionCompletionDate}
-                      onChange={(e) => setConstructionCompletionDate(e.target.value)}
-                      placeholder="Optional - defaults to 80% of projection period"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      When construction ends and rental income begins (if applicable)
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="totalProjectSquareFootage">Total Project Square Footage</Label>
-                    <Input
-                      id="totalProjectSquareFootage"
-                      type="number"
-                      step="0.01"
-                      value={totalProjectSquareFootage}
-                      onChange={(e) => setTotalProjectSquareFootage(parseFloat(e.target.value) || 0)}
-                      placeholder="0"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Total square footage of the project (auto-filled from project specs if available)
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="monthlyOverhead">Monthly Overhead</Label>
-                    <Input
-                      id="monthlyOverhead"
-                      type="text"
-                      inputMode="decimal"
-                      value={monthlyOverhead ? monthlyOverhead.toLocaleString('en-US') : ''}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/,/g, '')
-                        const next = raw === '' ? 0 : parseFloat(raw)
-                        setMonthlyOverhead(isNaN(next) ? 0 : next)
-                      }}
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <Label htmlFor="overheadMethod">Overhead Allocation Method</Label>
-                    <Select
-                      value={overheadMethod}
-                      onValueChange={(v: 'proportional' | 'flat' | 'none') => setOverheadMethod(v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="proportional">Proportional (based on monthly costs)</SelectItem>
-                        <SelectItem value="flat">Flat Rate (same amount each month)</SelectItem>
-                        <SelectItem value="none">None</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {isDealUnderwriting && (
-                  <div className="mt-4 space-y-4">
-                    <h3 className="text-sm font-semibold text-amber-900">
-                      Attainable Housing Deal Summary Inputs (optional)
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="dealSummaryUnits">Total Units</Label>
+                      <FieldHelperSlot>
+                        {isDealUnderwriting ? (
+                          'Deal underwriting basis.'
+                        ) : proFormaMode === 'for-sale-phased-loc' ? (
+                          'Derived from phases.'
+                        ) : (
+                          <>
+                            Est.{' '}
+                            {formatCurrency(
+                              project.estimate.totalEstimate ||
+                                project.estimate.totals?.totalEstimated ||
+                                trades.reduce((s, t) => s + t.totalCost, 0),
+                            )}
+                          </>
+                        )}
+                      </FieldHelperSlot>
+                    </FormField>
+                    {isDealUnderwriting && (
+                      <FormField width="growLarge">
+                        <Label htmlFor="underwritingEstimatedConstructionCost" className={WORKSHEET_LABEL}>
+                          Estimated Construction Cost
+                        </Label>
                         <Input
-                          id="dealSummaryUnits"
-                          type="number"
-                          value={dealSummaryInputs.totalUnits ?? ''}
-                          onChange={(e) =>
-                            setDealSummaryInputs({
-                              ...dealSummaryInputs,
-                              totalUnits: parseInt(e.target.value || '0', 10) || undefined,
-                            })
-                          }
+                          className={DENSE_INPUT}
+                          id="underwritingEstimatedConstructionCost"
+                          type="text"
+                          inputMode="decimal"
+                          value={underwritingEstimatedConstructionCost ? underwritingEstimatedConstructionCost.toLocaleString('en-US') : ''}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/,/g, '')
+                            const next = raw === '' ? 0 : parseFloat(raw)
+                            setUnderwritingEstimatedConstructionCost(isNaN(next) ? 0 : next)
+                            setValidationErrors([])
+                          }}
+                          placeholder="0.00"
                         />
-                      </div>
-                      <div>
-                        <Label htmlFor="dealSummaryAvgSize">Average Unit Size (SF)</Label>
-                        <Input
-                          id="dealSummaryAvgSize"
-                          type="number"
-                          step="0.01"
-                          value={dealSummaryInputs.averageUnitSize ?? ''}
-                          onChange={(e) =>
-                            setDealSummaryInputs({
-                              ...dealSummaryInputs,
-                              averageUnitSize: parseFloat(e.target.value || '0') || undefined,
-                            })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="dealSummaryTargetPricePerUnit">Target Sale Price per Unit ($)</Label>
+                        <FieldHelperSlot>When no detailed estimate.</FieldHelperSlot>
+                      </FormField>
+                    )}
+                    <FormField width="date">
+                      <Label htmlFor="startDate" className={WORKSHEET_LABEL}>
+                        Project Start Date *
+                      </Label>
+                      <Input className={DATE_INPUT} id="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                      <FieldHelperSlot />
+                    </FormField>
+                    <FormField width="selectMonths">
+                      <Label htmlFor="projectionMonths" className={WORKSHEET_LABEL}>
+                        Projection Period *
+                      </Label>
+                      <Select
+                        value={projectionMonths.toString()}
+                        onValueChange={(v) => setProjectionMonths(parseInt(v) as 6 | 12 | 24 | 36 | 60 | 120)}
+                      >
+                        <SelectTrigger className={cn(DENSE_INPUT, 'tabular-nums')}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="6">6 Months</SelectItem>
+                          <SelectItem value="12">12 Months</SelectItem>
+                          <SelectItem value="24">24 Months (2 Years)</SelectItem>
+                          <SelectItem value="36">36 Months (3 Years)</SelectItem>
+                          <SelectItem value="60">60 Months (5 Years)</SelectItem>
+                          <SelectItem value="120">120 Months (10 Years)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FieldHelperSlot />
+                    </FormField>
+                    <FormField width="date">
+                      <Label htmlFor="constructionCompletionDate" className={WORKSHEET_LABEL}>
+                        Construction Completion Date
+                      </Label>
                       <Input
-                        id="dealSummaryTargetPricePerUnit"
+                        className={DATE_INPUT}
+                        id="constructionCompletionDate"
+                        type="date"
+                        value={constructionCompletionDate}
+                        onChange={(e) => setConstructionCompletionDate(e.target.value)}
+                      />
+                      <FieldHelperSlot>Optional.</FieldHelperSlot>
+                    </FormField>
+                  </FormRow>
+
+                  <FormRow>
+                    <FormField width="compact">
+                      <Label htmlFor="totalProjectSquareFootage" className={WORKSHEET_LABEL}>
+                        Total Project Square Footage
+                      </Label>
+                      <Input
+                        className={DENSE_INPUT}
+                        id="totalProjectSquareFootage"
+                        type="number"
+                        step="0.01"
+                        value={totalProjectSquareFootage}
+                        onChange={(e) => setTotalProjectSquareFootage(parseFloat(e.target.value) || 0)}
+                        placeholder="0"
+                      />
+                      <FieldHelperSlot />
+                    </FormField>
+                    <FormField width="growMedium">
+                      <Label htmlFor="monthlyOverhead" className={WORKSHEET_LABEL}>
+                        Monthly Overhead
+                      </Label>
+                      <Input
+                        className={DENSE_INPUT}
+                        id="monthlyOverhead"
                         type="text"
                         inputMode="decimal"
-                        value={
-                          dealSummaryInputs.targetSalePricePerUnit != null
-                            ? dealSummaryInputs.targetSalePricePerUnit.toLocaleString('en-US')
-                            : ''
-                        }
+                        value={monthlyOverhead ? monthlyOverhead.toLocaleString('en-US') : ''}
                         onChange={(e) => {
                           const raw = e.target.value.replace(/,/g, '')
-                          const next = raw === '' ? NaN : parseFloat(raw)
-                          setDealSummaryInputs({
-                            ...dealSummaryInputs,
-                            targetSalePricePerUnit: isNaN(next) ? undefined : next,
-                          })
+                          const next = raw === '' ? 0 : parseFloat(raw)
+                          setMonthlyOverhead(isNaN(next) ? 0 : next)
                         }}
+                        placeholder="0.00"
                       />
-                      </div>
-                      <div>
-                        <Label htmlFor="dealSummaryMarketPricePerSF">Market Price per SF (optional)</Label>
-                        <Input
-                          id="dealSummaryMarketPricePerSF"
-                          type="number"
-                          step="0.01"
-                          value={dealSummaryInputs.marketPricePerSF ?? ''}
-                          onChange={(e) =>
-                            setDealSummaryInputs({
-                              ...dealSummaryInputs,
-                              marketPricePerSF: parseFloat(e.target.value || '0') || undefined,
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
+                      <FieldHelperSlot />
+                    </FormField>
+                    <FormField width={isDealUnderwriting ? 'medium' : 'growWide'}>
+                      <Label htmlFor="overheadMethod" className={WORKSHEET_LABEL}>
+                        Overhead Allocation Method
+                      </Label>
+                      <Select value={overheadMethod} onValueChange={(v: 'proportional' | 'flat' | 'none') => setOverheadMethod(v)}>
+                        <SelectTrigger className={cn(DENSE_INPUT, 'text-left')}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="proportional">Proportional (based on monthly costs)</SelectItem>
+                          <SelectItem value="flat">Flat Rate (same amount each month)</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FieldHelperSlot />
+                    </FormField>
+                    {isDealUnderwriting && (
+                      <>
+                        <FormField width="compact">
+                          <Label htmlFor="dealSummaryUnits" className={WORKSHEET_LABEL}>
+                            Total Units (optional)
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="dealSummaryUnits"
+                            type="number"
+                            value={dealSummaryInputs.totalUnits ?? ''}
+                            onChange={(e) =>
+                              setDealSummaryInputs({
+                                ...dealSummaryInputs,
+                                totalUnits: parseInt(e.target.value || '0', 10) || undefined,
+                              })
+                            }
+                          />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="compact">
+                          <Label htmlFor="dealSummaryAvgSize" className={WORKSHEET_LABEL}>
+                            Avg Unit Size (SF)
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="dealSummaryAvgSize"
+                            type="number"
+                            step="0.01"
+                            value={dealSummaryInputs.averageUnitSize ?? ''}
+                            onChange={(e) =>
+                              setDealSummaryInputs({
+                                ...dealSummaryInputs,
+                                averageUnitSize: parseFloat(e.target.value || '0') || undefined,
+                              })
+                            }
+                          />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="growLarge">
+                          <Label htmlFor="dealSummaryTargetPricePerUnit" className={WORKSHEET_LABEL}>
+                            Target Sale Price / Unit ($)
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="dealSummaryTargetPricePerUnit"
+                            type="text"
+                            inputMode="decimal"
+                            value={
+                              dealSummaryInputs.targetSalePricePerUnit != null
+                                ? dealSummaryInputs.targetSalePricePerUnit.toLocaleString('en-US')
+                                : ''
+                            }
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/,/g, '')
+                              const next = raw === '' ? NaN : parseFloat(raw)
+                              setDealSummaryInputs({
+                                ...dealSummaryInputs,
+                                targetSalePricePerUnit: isNaN(next) ? undefined : next,
+                              })
+                            }}
+                          />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="compact">
+                          <Label htmlFor="dealSummaryMarketPricePerSF" className={WORKSHEET_LABEL}>
+                            Mkt Price / SF (opt.)
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="dealSummaryMarketPricePerSF"
+                            type="number"
+                            step="0.01"
+                            value={dealSummaryInputs.marketPricePerSF ?? ''}
+                            onChange={(e) =>
+                              setDealSummaryInputs({
+                                ...dealSummaryInputs,
+                                marketPricePerSF: parseFloat(e.target.value || '0') || undefined,
+                              })
+                            }
+                          />
+                          <FieldHelperSlot />
+                        </FormField>
+                      </>
+                    )}
+                  </FormRow>
 
-                    <div>
-                      <Label>Incentive Stack (optional)</Label>
-                      <p className="text-xs text-gray-500 mb-1">
-                        Add incentives/programs such as TIF, capital lease savings, grants, or other public support.
-                      </p>
-                      <div className="space-y-2">
-                        {(dealSummaryInputs.incentives ?? []).map((row, idx) => (
-                          <div key={row.id ?? idx} className="grid grid-cols-12 gap-2 items-center">
-                            <div className="col-span-4">
-                              <Input
-                                placeholder="Incentive label"
-                                value={row.label}
-                                onChange={(e) => {
-                                  const next = [...(dealSummaryInputs.incentives ?? [])]
-                                  next[idx] = { ...row, label: e.target.value }
-                                  setDealSummaryInputs({ ...dealSummaryInputs, incentives: next })
-                                }}
-                              />
-                            </div>
-                            <div className="col-span-3">
-                              <Input
-                                type="number"
-                                step="0.01"
-                                placeholder="Per unit ($)"
-                                value={row.perUnitAmount ?? ''}
-                                onChange={(e) => {
-                                  const next = [...(dealSummaryInputs.incentives ?? [])]
-                                  const units = dealSummaryInputs.totalUnits ?? 0
-                                  const per = parseFloat(e.target.value || '0')
-                                  const perUnitAmount = isNaN(per) ? undefined : per
-                                  const totalAmount =
-                                    !isNaN(per) && units > 0
-                                      ? per * units
-                                      : row.totalAmount
-                                  next[idx] = {
-                                    ...row,
-                                    perUnitAmount,
-                                    totalAmount,
-                                  }
-                                  setDealSummaryInputs({ ...dealSummaryInputs, incentives: next })
-                                }}
-                              />
-                            </div>
-                            <div className="col-span-3">
-                              <Input
-                                type="number"
-                                step="0.01"
-                                placeholder="Total ($)"
-                                value={row.totalAmount ?? ''}
-                                onChange={(e) => {
-                                  const next = [...(dealSummaryInputs.incentives ?? [])]
-                                  const units = dealSummaryInputs.totalUnits ?? 0
-                                  const total = parseFloat(e.target.value || '0')
-                                  const totalAmount = isNaN(total) ? undefined : total
-                                  const perUnitAmount =
-                                    !isNaN(total) && units > 0
-                                      ? total / units
-                                      : row.perUnitAmount
-                                  next[idx] = {
-                                    ...row,
-                                    totalAmount,
-                                    perUnitAmount,
-                                  }
-                                  setDealSummaryInputs({ ...dealSummaryInputs, incentives: next })
-                                }}
-                              />
-                            </div>
-                            <div className="col-span-2 flex justify-end">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  const next = (dealSummaryInputs.incentives ?? []).filter((_, i) => i !== idx)
-                                  setDealSummaryInputs({ ...dealSummaryInputs, incentives: next })
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4 text-red-500" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
+                  {isDealUnderwriting && (
+                    <div className="mt-2 space-y-1.5 border-t border-slate-200 pt-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[13px] font-semibold text-slate-800">Incentive stack</p>
                         <Button
                           type="button"
-                          size="sm"
                           variant="outline"
-                          onClick={() => {
-                            const next = [...(dealSummaryInputs.incentives ?? [])]
-                            next.push({
-                              id: uuidv4(),
-                              label: '',
-                            })
-                            setDealSummaryInputs({ ...dealSummaryInputs, incentives: next })
-                          }}
+                          size="sm"
+                          className="h-8 shrink-0 px-2 text-[13px]"
+                          onClick={() =>
+                            setForSaleIncentives((prev) => [
+                              ...prev,
+                              {
+                                id: uuidv4(),
+                                name: '',
+                                amount: 0,
+                                applyTo: 'infrastructure-reduction',
+                              },
+                            ])
+                          }
                         >
-                          <Plus className="w-4 h-4 mr-1" />
-                          Add Incentive
+                          <Plus className="mr-0.5 h-3 w-3" />
+                          Add
                         </Button>
                       </div>
+                      <p className="text-[13px] text-slate-500">Applies across modes.</p>
+                      {forSaleIncentives.length === 0 ? (
+                        <p className="text-[13px] text-slate-500">No incentives yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {forSaleIncentives.map((inc) => (
+                            <div
+                              key={inc.id}
+                              className="space-y-2 rounded-md border border-slate-200 bg-slate-50/80 p-2 md:flex md:flex-wrap md:items-end md:gap-x-3 md:gap-y-2 md:space-y-0"
+                            >
+                              <FormField width="growMedium" className="min-w-[140px] md:max-w-[220px]">
+                                <Label className={WORKSHEET_LABEL}>Name</Label>
+                                <Input
+                                  className={DENSE_INPUT}
+                                  value={inc.name}
+                                  onChange={(e) =>
+                                    setForSaleIncentives((prev) =>
+                                      prev.map((x) => (x.id === inc.id ? { ...x, name: e.target.value } : x)),
+                                    )
+                                  }
+                                  placeholder="TIF, grant…"
+                                />
+                                <FieldHelperSlot />
+                              </FormField>
+                              <FormField width="medium">
+                                <Label className={WORKSHEET_LABEL}>Amount ($)</Label>
+                                <Input
+                                  className={DENSE_INPUT}
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={formatCommaNumber(inc.amount)}
+                                  onChange={(e) =>
+                                    setForSaleIncentives((prev) =>
+                                      prev.map((x) =>
+                                        x.id === inc.id ? { ...x, amount: parseCommaNumber(e.target.value) } : x,
+                                      ),
+                                    )
+                                  }
+                                />
+                                <FieldHelperSlot />
+                              </FormField>
+                              <FormField width="growWide" className="min-w-[200px] md:max-w-[280px]">
+                                <Label className={WORKSHEET_LABEL}>Apply to</Label>
+                                <Select
+                                  value={inc.applyTo}
+                                  onValueChange={(v) =>
+                                    setForSaleIncentives((prev) =>
+                                      prev.map((x) =>
+                                        x.id === inc.id ? { ...x, applyTo: v as ForSaleIncentiveApplyTo } : x,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger className={DENSE_INPUT}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="infrastructure-reduction">Infrastructure reduction</SelectItem>
+                                    <SelectItem value="cost-reduction">Project cost reduction</SelectItem>
+                                    <SelectItem value="equity-source">Equity source</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FieldHelperSlot />
+                              </FormField>
+                              <div className="flex min-w-0 flex-col justify-end gap-0.5 md:shrink-0">
+                                <span className="h-[2.625rem] min-h-[2.625rem] shrink-0" aria-hidden />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 w-full text-red-600 hover:text-red-700 md:w-auto"
+                                  onClick={() => setForSaleIncentives((prev) => prev.filter((x) => x.id !== inc.id))}
+                                >
+                                  <Trash2 className="mr-1 h-4 w-4" />
+                                  Remove
+                                </Button>
+                                <FieldHelperSlot />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="publicBenefits">Public Benefit (bullets, optional)</Label>
-                        <textarea
-                          id="publicBenefits"
-                          className="w-full border rounded-md p-2 text-sm min-h-[80px]"
-                          placeholder="One benefit per line, e.g.&#10;- New attainable homes delivered&#10;- Below-market workforce housing"
-                          value={publicBenefitsText}
-                          onChange={(e) => {
-                            const text = e.target.value
-                            setPublicBenefitsText(text)
-                            setDealSummaryInputs({
-                              ...dealSummaryInputs,
-                              publicBenefits: text
-                                .split('\n')
-                                .filter((s) => s.trim().length > 0),
-                            })
-                          }}
+                  )}
+                  {proFormaMode === 'for-sale-phased-loc' && (
+                    <div className="mt-2 space-y-1.5 border-t border-slate-200 pt-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="forSaleBondFinancingEnabled"
+                          type="checkbox"
+                          checked={forSaleBondFinancingEnabled}
+                          onChange={(e) => setForSaleBondFinancingEnabled(e.target.checked)}
+                          className="h-4 w-4"
                         />
+                        <Label htmlFor="forSaleBondFinancingEnabled" className="text-[13px] font-semibold text-slate-800">
+                          Bond Financing (optional)
+                        </Label>
                       </div>
-                      <div>
-                        <Label htmlFor="conclusionText">Summary / Conclusion (optional)</Label>
-                        <textarea
-                          id="conclusionText"
-                          className="w-full border rounded-md p-2 text-sm min-h-[80px]"
-                          placeholder="Short narrative suitable for banks, investors, or municipalities."
-                          value={dealSummaryInputs.conclusionText ?? ''}
-                          onChange={(e) =>
-                            setDealSummaryInputs({
-                              ...dealSummaryInputs,
-                              conclusionText: e.target.value,
+                      <p className="text-[11px] text-slate-500">
+                        Captured for financing scenario planning; not yet applied to LOC math.
+                      </p>
+                      {forSaleBondFinancingEnabled && (
+                        <FormRow>
+                          <FormField width="percent">
+                            <Label className={WORKSHEET_LABEL}>Bond LTC override (%)</Label>
+                            <Input
+                              className={DENSE_INPUT}
+                              type="number"
+                              step="0.1"
+                              value={forSaleBondLtcOverridePercent || ''}
+                              onChange={(e) => setForSaleBondLtcOverridePercent(parseFloat(e.target.value) || 0)}
+                            />
+                            <FieldHelperSlot />
+                          </FormField>
+                          <FormField width="percent">
+                            <Label className={WORKSHEET_LABEL}>Bond rate (%)</Label>
+                            <Input
+                              className={DENSE_INPUT}
+                              type="number"
+                              step="0.01"
+                              value={forSaleBondRatePercent || ''}
+                              onChange={(e) => setForSaleBondRatePercent(parseFloat(e.target.value) || 0)}
+                            />
+                            <FieldHelperSlot />
+                          </FormField>
+                          <FormField width="growMedium">
+                            <Label className={WORKSHEET_LABEL}>Bond capacity ($)</Label>
+                            <Input
+                              className={DENSE_INPUT}
+                              type="text"
+                              inputMode="decimal"
+                              value={formatCommaNumber(forSaleBondCapacity)}
+                              onChange={(e) => setForSaleBondCapacity(parseCommaNumber(e.target.value))}
+                            />
+                            <FieldHelperSlot />
+                          </FormField>
+                        </FormRow>
+                      )}
+                    </div>
+                  )}
+                </FormSection>
+                </div>
+
+                {proFormaMode === 'for-sale-phased-loc' && (
+                  <>
+                    <div className="border-b border-slate-200 px-3 py-2 md:px-3 md:py-2.5">
+                    <FormSection className="[&_h3]:text-base [&_h3]:font-semibold [&_h3]:tracking-tight">
+                      <h3 className="text-base font-semibold leading-tight tracking-tight text-slate-900">For-Sale Phased (LOC)</h3>
+                      <p className="text-[13px] leading-snug text-slate-500">Mode-specific assumptions and phase-level modeling.</p>
+                      <FormRow>
+                        <FormField width="compact">
+                          <Label className={WORKSHEET_LABEL}>Total units</Label>
+                          <Input className={DENSE_INPUT} type="number" value={forSaleTotalUnits} onChange={(e) => setForSaleTotalUnits(parseInt(e.target.value, 10) || 0)} />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="growLarge">
+                          <Label className={WORKSHEET_LABEL}>Avg sale price / unit ($)</Label>
+                          <Input className={DENSE_INPUT} type="text" inputMode="decimal" value={formatCommaNumber(forSaleAverageSalePrice)} onChange={(e) => setForSaleAverageSalePrice(parseCommaNumber(e.target.value))} />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="compact">
+                          <Label className={WORKSHEET_LABEL}>Presale dep. (%)</Label>
+                          <Input className={DENSE_INPUT} type="number" step="0.1" value={forSalePresaleDepositPercent} onChange={(e) => setForSalePresaleDepositPercent(parseFloat(e.target.value) || 0)} />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="compact">
+                          <Label className={WORKSHEET_LABEL}>LOC LTC cap (%)</Label>
+                          <Input className={DENSE_INPUT} type="number" step="0.1" value={forSaleLtcPercent} onChange={(e) => setForSaleLtcPercent(parseFloat(e.target.value) || 0)} />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="growMedium">
+                          <Label className={WORKSHEET_LABEL}>Infrastructure ($)</Label>
+                          <Input className={DENSE_INPUT} type="text" inputMode="decimal" value={formatCommaNumber(forSaleInfrastructureCost)} onChange={(e) => setForSaleInfrastructureCost(parseCommaNumber(e.target.value))} />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="growMedium">
+                          <Label className={WORKSHEET_LABEL}>Hard budget ($)</Label>
+                          <Input className={DENSE_INPUT} type="text" inputMode="decimal" value={formatCommaNumber(forSaleTotalHardBudget)} onChange={(e) => setForSaleTotalHardBudget(parseCommaNumber(e.target.value))} />
+                          <FieldHelperSlot>Optional total. Auto-allocates to phases in Cost mode = Auto.</FieldHelperSlot>
+                        </FormField>
+                        <FormField width="growMedium">
+                          <Label className={WORKSHEET_LABEL}>Soft budget ($)</Label>
+                          <Input className={DENSE_INPUT} type="text" inputMode="decimal" value={formatCommaNumber(forSaleTotalSoftBudget)} onChange={(e) => setForSaleTotalSoftBudget(parseCommaNumber(e.target.value))} />
+                          <FieldHelperSlot>Optional total. Auto-allocates to phases in Cost mode = Auto.</FieldHelperSlot>
+                        </FormField>
+                      </FormRow>
+                      <div className="rounded border border-slate-200 bg-slate-50/70 px-2 py-1.5">
+                        <p className="text-[13px] font-semibold leading-tight text-slate-800">Advanced controls</p>
+                        <FormRow className="mt-1">
+                            <FormField width="selectWide">
+                              <Label className={WORKSHEET_LABEL}>Trigger based on</Label>
+                              <Select value={forSaleTriggerUsesPresales ? 'presales' : 'closings'} onValueChange={(v) => setForSaleTriggerUsesPresales(v === 'presales')}>
+                                <SelectTrigger className={DENSE_INPUT}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="presales">Presales (default)</SelectItem>
+                                  <SelectItem value="closings">Closings</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FieldHelperSlot />
+                            </FormField>
+                            <FormField width="medium">
+                              <Label className={WORKSHEET_LABEL}>Sales pace (units / mo)</Label>
+                              <Input
+                                className={DENSE_INPUT}
+                                type="number"
+                                step="0.1"
+                                value={forSaleSalesPaceUnitsPerMonth || ''}
+                                onChange={(e) => setForSaleSalesPaceUnitsPerMonth(parseFloat(e.target.value) || 0)}
+                                placeholder="auto"
+                              />
+                              <FieldHelperSlot>Blank/0 keeps current behavior.</FieldHelperSlot>
+                            </FormField>
+                            <FormField width="selectWide">
+                              <Label className={WORKSHEET_LABEL}>Presale deposit usage</Label>
+                              <Select value={forSaleDepositUsageMode} onValueChange={(v) => setForSaleDepositUsageMode(v as ForSaleDepositUsageMode)}>
+                                <SelectTrigger className={DENSE_INPUT}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="full">Fully usable (default)</SelectItem>
+                                  <SelectItem value="percent">% usable</SelectItem>
+                                  <SelectItem value="at-closing">Not usable until closing</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FieldHelperSlot />
+                            </FormField>
+                            {forSaleDepositUsageMode === 'percent' && (
+                              <FormField width="percent">
+                                <Label className={WORKSHEET_LABEL}>Usable %</Label>
+                                <Input
+                                  className={DENSE_INPUT}
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="1"
+                                  value={forSaleDepositUsablePercent}
+                                  onChange={(e) => setForSaleDepositUsablePercent(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                                />
+                                <FieldHelperSlot />
+                              </FormField>
+                            )}
+                            <FormField width="selectWide">
+                              <Label className={WORKSHEET_LABEL}>Construction spend curve</Label>
+                              <Select value={forSaleConstructionSpendCurve} onValueChange={(v) => setForSaleConstructionSpendCurve(v as ForSaleSpendCurve)}>
+                                <SelectTrigger className={DENSE_INPUT}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="linear">Linear (default)</SelectItem>
+                                  <SelectItem value="front-loaded">Front-loaded</SelectItem>
+                                  <SelectItem value="back-loaded">Back-loaded</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FieldHelperSlot />
+                            </FormField>
+                        </FormRow>
+                      </div>
+                      <p className="text-[13px] font-semibold leading-tight text-slate-800">
+                        Manual adjustments & sales allocation (%)
+                      </p>
+                      <FormRow className="rounded border border-slate-200 bg-slate-50/80 px-2 py-1.5">
+                        <FormField width="growMedium">
+                          <Label className={WORKSHEET_LABEL}>Manual infra reduction ($)</Label>
+                          <Input className={DENSE_INPUT} type="text" inputMode="decimal" value={formatCommaNumber(forSaleTifReduction)} onChange={(e) => setForSaleTifReduction(parseCommaNumber(e.target.value))} />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="growMedium">
+                          <Label className={WORKSHEET_LABEL}>Fixed LOC cap ($)</Label>
+                          <Input className={DENSE_INPUT} type="text" inputMode="decimal" value={formatCommaNumber(forSaleFixedLocLimit)} onChange={(e) => setForSaleFixedLocLimit(parseCommaNumber(e.target.value))} />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="percent">
+                          <Label className={WORKSHEET_LABEL}>LOC paydown</Label>
+                          <Input className={DENSE_INPUT} type="number" value={forSaleSalesBuckets.locPaydownPercent} onChange={(e) => setForSaleSalesBuckets((b) => ({ ...b, locPaydownPercent: parseFloat(e.target.value) || 0 }))} />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="percent">
+                          <Label className={WORKSHEET_LABEL}>Reinvest</Label>
+                          <Input className={DENSE_INPUT} type="number" value={forSaleSalesBuckets.reinvestPercent} onChange={(e) => setForSaleSalesBuckets((b) => ({ ...b, reinvestPercent: parseFloat(e.target.value) || 0 }))} />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="percent">
+                          <Label className={WORKSHEET_LABEL}>Reserve</Label>
+                          <Input className={DENSE_INPUT} type="number" value={forSaleSalesBuckets.reservePercent} onChange={(e) => setForSaleSalesBuckets((b) => ({ ...b, reservePercent: parseFloat(e.target.value) || 0 }))} />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="percent">
+                          <Label className={WORKSHEET_LABEL}>Distribution</Label>
+                          <Input className={DENSE_INPUT} type="number" value={forSaleSalesBuckets.distributionPercent} onChange={(e) => setForSaleSalesBuckets((b) => ({ ...b, distributionPercent: parseFloat(e.target.value) || 0 }))} />
+                          <FieldHelperSlot />
+                        </FormField>
+                      </FormRow>
+                      <FormRow className="items-center justify-between">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-[13px]"
+                          onClick={() =>
+                            setForSalePhases((prev) => {
+                              const totalUnits = Math.max(1, prev.reduce((sum, p) => sum + (p.unitCount || 0), 0))
+                              return prev.map((phase) => {
+                                if (phase.costEntryMode === 'manual') return phase
+                                const weight = Math.max(0, phase.unitCount || 0) / totalUnits
+                                return {
+                                  ...phase,
+                                  hardCostBudget: (forSaleTotalHardBudget || 0) * weight,
+                                  softCostBudget: (forSaleTotalSoftBudget || 0) * weight,
+                                }
+                              })
                             })
                           }
-                        />
+                        >
+                          Recalculate auto costs
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-[13px]"
+                          onClick={() =>
+                            setForSalePhases((prev) => [
+                              ...prev,
+                              {
+                                id: uuidv4(),
+                                name: `Phase ${prev.length + 1}`,
+                                unitCount: 10,
+                                buildMonths: 12,
+                                presaleStartMonthOffset: 2,
+                                closeStartMonthOffset: 8,
+                                presaleTriggerPercent: 50,
+                                avgSalePrice: forSaleAverageSalePrice,
+                                hardCostBudget: undefined,
+                                softCostBudget: undefined,
+                                costEntryMode: 'auto',
+                              },
+                            ])
+                          }
+                        >
+                          <Plus className="mr-1 h-4 w-4" />
+                          Add phase
+                        </Button>
+                      </FormRow>
+                    </FormSection>
+                    <div className="border-t border-slate-200 bg-slate-50/50 px-3 py-2.5 md:px-3">
+                      <div className="mb-2">
+                        <h4 className="text-sm font-semibold leading-tight text-slate-900">Phase modeling</h4>
+                        <p className="text-[13px] leading-snug text-slate-500">Per-phase timing, budgets, and sale price overrides.</p>
                       </div>
+                      <div className="space-y-1 overflow-x-auto">
+                      {forSalePhases.map((phase) => (
+                        <div
+                          key={phase.id}
+                          className="grid min-w-[1080px] grid-cols-[minmax(112px,148px)_54px_96px_78px_78px_60px_60px_100px_100px_124px_90px_40px] items-stretch gap-x-1.5 gap-y-0 rounded border border-slate-200 bg-white p-1.5"
+                        >
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL}>Phase</Label>
+                            <Input className={DENSE_INPUT} value={phase.name} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, name: e.target.value } : p))} placeholder="Name" />
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL}>Units</Label>
+                            <Input className={DENSE_INPUT} type="number" value={phase.unitCount} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, unitCount: parseInt(e.target.value, 10) || 0 } : p))} placeholder="0" />
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL} title="Build months">
+                              Build months
+                            </Label>
+                            <Input className={DENSE_INPUT} type="number" value={phase.buildMonths} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, buildMonths: parseInt(e.target.value, 10) || 1 } : p))} placeholder="0" />
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL} title="Presale start (phase month)">
+                              Presale start
+                            </Label>
+                            <Input className={DENSE_INPUT} type="number" value={phase.presaleStartMonthOffset} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, presaleStartMonthOffset: parseInt(e.target.value, 10) || 0 } : p))} placeholder="1" />
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL} title="Closing start (phase month)">
+                              Closing start
+                            </Label>
+                            <Input className={DENSE_INPUT} type="number" value={phase.closeStartMonthOffset} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, closeStartMonthOffset: parseInt(e.target.value, 10) || 0 } : p))} placeholder="4" />
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL}>Trigger %</Label>
+                            <Input className={DENSE_INPUT} type="number" step="0.1" value={phase.presaleTriggerPercent} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, presaleTriggerPercent: parseFloat(e.target.value) || 0 } : p))} placeholder="50" />
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL}>Infra %</Label>
+                            <Input className={DENSE_INPUT} type="number" step="0.1" value={phase.infrastructureAllocationPercent ?? ''} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, infrastructureAllocationPercent: e.target.value === '' ? undefined : (parseFloat(e.target.value) || 0) } : p))} placeholder="auto" />
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL}>Hard cost</Label>
+                            <Input className={cn(DENSE_INPUT, phase.costEntryMode !== 'manual' && 'bg-slate-50 text-slate-600')} type="text" inputMode="decimal" value={formatCommaNumber((phase.costEntryMode === 'manual' ? phase.hardCostBudget : effectiveForSalePhases.find((p) => p.id === phase.id)?.hardCostBudget) ?? 0)} readOnly={phase.costEntryMode !== 'manual'} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, hardCostBudget: e.target.value === '' ? undefined : parseCommaNumber(e.target.value) } : p))} placeholder={phase.costEntryMode !== 'manual' ? 'auto-calculated' : '0'} title={phase.costEntryMode !== 'manual' ? 'Auto-calculated from total hard budget and phase unit share. Switch Cost mode to Manual to edit.' : undefined} />
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL}>Soft cost</Label>
+                            <Input className={cn(DENSE_INPUT, phase.costEntryMode !== 'manual' && 'bg-slate-50 text-slate-600')} type="text" inputMode="decimal" value={formatCommaNumber((phase.costEntryMode === 'manual' ? phase.softCostBudget : effectiveForSalePhases.find((p) => p.id === phase.id)?.softCostBudget) ?? 0)} readOnly={phase.costEntryMode !== 'manual'} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, softCostBudget: e.target.value === '' ? undefined : parseCommaNumber(e.target.value) } : p))} placeholder={phase.costEntryMode !== 'manual' ? 'auto-calculated' : '0'} title={phase.costEntryMode !== 'manual' ? 'Auto-calculated from total soft budget and phase unit share. Switch Cost mode to Manual to edit.' : undefined} />
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL} title="Average sale $/unit">
+                              Avg sale $/unit
+                            </Label>
+                            <Input className={DENSE_INPUT} type="text" inputMode="decimal" value={formatCommaNumber(phase.avgSalePrice || 0)} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, avgSalePrice: parseCommaNumber(e.target.value) || 0 } : p))} placeholder="250,000" />
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL}>Cost mode</Label>
+                            <Select
+                              value={phase.costEntryMode || 'auto'}
+                              onValueChange={(v) =>
+                                setForSalePhases((prev) =>
+                                  prev.map((p) => (p.id === phase.id ? { ...p, costEntryMode: v as 'auto' | 'manual' } : p)),
+                                )
+                              }
+                            >
+                              <SelectTrigger className={DENSE_INPUT}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="auto">Auto</SelectItem>
+                                <SelectItem value="manual">Manual</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Button type="button" size="sm" variant="ghost" className="h-8 w-8 shrink-0 p-0 self-center" onClick={() => setForSalePhases((prev) => prev.filter((p) => p.id !== phase.id))}>
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                          {(forSalePhaseRowErrors[phase.id] || []).length > 0 && (
+                            <div className="col-span-full text-[13px] text-red-600 pt-1">
+                              {(forSalePhaseRowErrors[phase.id] || []).join(' ')}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                    </div>
+                    </div>
+                  </>
                 )}
-              </div>
 
               {/* Full Development Proforma (Sources & Uses, Draw Schedule, IDC) */}
-              <div className="border-t pt-6">
-                <div className="flex items-center gap-2 mb-4">
+              {proFormaMode !== 'for-sale-phased-loc' && (
+              <WorkspacePanel>
+                <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     id="useDevelopmentProforma"
@@ -1754,187 +2608,258 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     }}
                     className="w-4 h-4"
                   />
-                  <Label htmlFor="useDevelopmentProforma" className="text-lg font-semibold cursor-pointer">
+                  <Label htmlFor="useDevelopmentProforma" className="text-sm font-semibold cursor-pointer text-slate-800">
                     Full development proforma (Sources & Uses, construction draw schedule, interest during construction)
                   </Label>
                 </div>
                 {useDevelopmentProforma && (
-                  <div className="space-y-4 p-4 bg-slate-50 rounded-lg">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="landCost">Land cost ($)</Label>
-                      <Input
-                        id="landCost"
-                        type="text"
-                        inputMode="decimal"
-                        value={landCost ? landCost.toLocaleString('en-US') : ''}
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(/,/g, '')
-                          const next = raw === '' ? 0 : parseFloat(raw)
-                          setLandCost(isNaN(next) ? 0 : next)
-                        }}
-                        placeholder="0"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="softCostPercent">Soft cost % (of construction)</Label>
-                      <Input
-                        id="softCostPercent"
-                        type="number"
-                        step="0.1"
-                        value={softCostPercent || ''}
-                        onChange={(e) => setSoftCostPercent(parseFloat(e.target.value) || 0)}
-                        placeholder="e.g. 10"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="contingencyPercent">Contingency % (of construction)</Label>
-                      <Input
-                        id="contingencyPercent"
-                        type="number"
-                        step="0.1"
-                        value={contingencyPercent || ''}
-                        onChange={(e) => setContingencyPercent(parseFloat(e.target.value) || 0)}
-                        placeholder="e.g. 5"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="constructionMonthsInput">Construction months</Label>
-                      <Input
-                        id="constructionMonthsInput"
-                        type="number"
-                        min="1"
-                        value={constructionMonthsInput || ''}
-                        onChange={(e) => setConstructionMonthsInput(parseInt(e.target.value, 10) || 0)}
-                        placeholder="Leave 0 to use completion date"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">0 = derive from completion date</p>
-                    </div>
-                    <div>
-                      <Label htmlFor="loanToCostPercent">Loan-to-cost %</Label>
-                      <Input
-                        id="loanToCostPercent"
-                        type="number"
-                        step="0.1"
-                        value={loanToCostPercent || ''}
-                        onChange={(e) => setLoanToCostPercent(parseFloat(e.target.value) || 0)}
-                        placeholder="e.g. 75"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Loan = total dev cost × this %</p>
-                    </div>
-                    <div>
-                      <Label htmlFor="exitCapRate">Exit cap rate (%)</Label>
-                      <Input
-                        id="exitCapRate"
-                        type="number"
-                        step="0.1"
-                        value={exitCapRate || ''}
-                        onChange={(e) => setExitCapRate(parseFloat(e.target.value) || 0)}
-                        placeholder="e.g. 5.5"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Stabilized value = annual NOI ÷ cap rate</p>
-                    </div>
-                    <div>
-                      <Label htmlFor="refinanceLTVPercent">Refinance LTV (%)</Label>
-                      <Input
-                        id="refinanceLTVPercent"
-                        type="number"
-                        step="0.1"
-                        value={refinanceLTVPercent || ''}
-                        onChange={(e) => setRefinanceLTVPercent(parseFloat(e.target.value) || 0)}
-                        placeholder="e.g. 75"
-                      />
-                        <p className="text-xs text-gray-500 mt-1">Refinance loan = property value × this %</p>
-                      </div>
-                    </div>
-
-                    {/* LP–GP structure */}
-                  <div className="border-t pt-4 mt-2">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">LP–GP capital structure</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <Label htmlFor="lpEquityPercent">LP equity %</Label>
-                        <Input
-                          id="lpEquityPercent"
-                          type="number"
-                          step="0.1"
-                          value={lpEquityPercent}
-                          onChange={(e) => setLpEquityPercent(parseFloat(e.target.value) || 0)}
-                        />
-                        <p className="text-xs text-gray-500 mt-1">GP equity % = 100 − LP equity %</p>
-                      </div>
-                      <div>
-                        <Label htmlFor="lpPreferredReturnPercent">LP preferred return % (simple, annual)</Label>
-                        <Input
-                          id="lpPreferredReturnPercent"
-                          type="number"
-                          step="0.1"
-                          value={lpPreferredReturnPercent}
-                          onChange={(e) => setLpPreferredReturnPercent(parseFloat(e.target.value) || 0)}
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Simple pref on original LP equity (non-compounding)</p>
-                      </div>
-                      <div>
-                        <Label htmlFor="lpAbovePrefProfitSharePercent">LP share of profit above pref %</Label>
-                        <Input
-                          id="lpAbovePrefProfitSharePercent"
-                          type="number"
-                          step="0.1"
-                          value={lpAbovePrefProfitSharePercent}
-                          onChange={(e) => setLpAbovePrefProfitSharePercent(parseFloat(e.target.value) || 0)}
-                        />
-                        <p className="text-xs text-gray-500 mt-1">GP share = 100 − LP share (e.g. 70/30)</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Value method & annual appreciation (display-only) */}
-                  <div className="border-t pt-4 mt-2 space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <Label htmlFor="valueMethod">Value Method</Label>
-                        <Select
-                          value={valueMethod}
-                          onValueChange={(v: ValueMethod) => setValueMethod(v)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="stabilized">Stabilized (flat / appreciation-based)</SelectItem>
-                            <SelectItem value="noi-based">NOI-based (NOI ÷ exit cap)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {valueMethod === 'stabilized' && (
-                        <div>
-                          <Label htmlFor="annualAppreciationPercent">Annual appreciation % (display-only)</Label>
+                  <div className="space-y-1">
+                      <h4 className="m-0 text-base font-semibold leading-tight tracking-tight text-slate-900">
+                        Development cost and loan assumptions
+                      </h4>
+                      <FormRow>
+                        <FormField width="growLarge">
+                          <Label htmlFor="landCost" className={WORKSHEET_LABEL} title="Land cost ($)">
+                            Land cost ($)
+                          </Label>
                           <Input
-                            id="annualAppreciationPercent"
+                            className={DENSE_INPUT}
+                            id="landCost"
+                            type="text"
+                            inputMode="decimal"
+                            value={landCost ? landCost.toLocaleString('en-US') : ''}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/,/g, '')
+                              const next = raw === '' ? 0 : parseFloat(raw)
+                              setLandCost(isNaN(next) ? 0 : next)
+                            }}
+                            placeholder="0"
+                          />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="percent">
+                          <Label
+                            htmlFor="softCostPercent"
+                            className={WORKSHEET_LABEL}
+                            title="Soft cost % of construction"
+                          >
+                            Soft cost % (of construction)
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="softCostPercent"
                             type="number"
                             step="0.1"
-                            value={annualAppreciationPercent}
-                            onChange={(e) => setAnnualAppreciationPercent(parseFloat(e.target.value) || 0)}
-                            placeholder="e.g. 2.0"
+                            value={softCostPercent || ''}
+                            onChange={(e) => setSoftCostPercent(parseFloat(e.target.value) || 0)}
+                            placeholder="e.g. 10"
                           />
-                          <p className="text-xs text-gray-500 mt-1">
-                            Applies only to the Annual Proforma value column; refinance/exit math still uses the modeled stabilized value.
-                          </p>
-                        </div>
-                      )}
-                      {valueMethod === 'noi-based' && (
-                        <div className="flex items-center text-xs text-gray-500">
-                          Annual appreciation is not used with NOI-based value; annual values are derived from NOI ÷ exit cap rate.
-                        </div>
-                      )}
+                          <FieldHelperSlot>% of hard construction</FieldHelperSlot>
+                        </FormField>
+                        <FormField width="percent">
+                          <Label
+                            htmlFor="contingencyPercent"
+                            className={WORKSHEET_LABEL}
+                            title="Contingency % of construction"
+                          >
+                            Contingency % (of construction)
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="contingencyPercent"
+                            type="number"
+                            step="0.1"
+                            value={contingencyPercent || ''}
+                            onChange={(e) => setContingencyPercent(parseFloat(e.target.value) || 0)}
+                            placeholder="e.g. 5"
+                          />
+                          <FieldHelperSlot />
+                        </FormField>
+                        <FormField width="medium">
+                          <Label htmlFor="constructionMonthsInput" className={WORKSHEET_LABEL} title="Construction months">
+                            Construction months
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="constructionMonthsInput"
+                            type="number"
+                            min="0"
+                            value={constructionMonthsInput || ''}
+                            onChange={(e) => setConstructionMonthsInput(parseInt(e.target.value, 10) || 0)}
+                            placeholder="0 = auto"
+                          />
+                          <FieldHelperSlot>0 uses completion date vs start.</FieldHelperSlot>
+                        </FormField>
+                      </FormRow>
+                      <FormRow>
+                        <FormField width="percent">
+                          <Label htmlFor="loanToCostPercent" className={WORKSHEET_LABEL} title="Loan-to-cost %">
+                            Loan-to-cost %
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="loanToCostPercent"
+                            type="number"
+                            step="0.1"
+                            value={loanToCostPercent || ''}
+                            onChange={(e) => setLoanToCostPercent(parseFloat(e.target.value) || 0)}
+                            placeholder="e.g. 75"
+                          />
+                          <FieldHelperSlot>Loan = total dev cost × %</FieldHelperSlot>
+                        </FormField>
+                        <FormField width="percent">
+                          <Label htmlFor="exitCapRate" className={WORKSHEET_LABEL} title="Exit cap rate (%)">
+                            Exit cap rate (%)
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="exitCapRate"
+                            type="number"
+                            step="0.1"
+                            value={exitCapRate || ''}
+                            onChange={(e) => setExitCapRate(parseFloat(e.target.value) || 0)}
+                            placeholder="e.g. 5.5"
+                          />
+                          <FieldHelperSlot>Value = NOI ÷ cap</FieldHelperSlot>
+                        </FormField>
+                        <FormField width="percent">
+                          <Label htmlFor="refinanceLTVPercent" className={WORKSHEET_LABEL} title="Refinance LTV (%)">
+                            Refinance LTV (%)
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="refinanceLTVPercent"
+                            type="number"
+                            step="0.1"
+                            value={refinanceLTVPercent || ''}
+                            onChange={(e) => setRefinanceLTVPercent(parseFloat(e.target.value) || 0)}
+                            placeholder="e.g. 75"
+                          />
+                          <FieldHelperSlot>Refinance loan = value × %</FieldHelperSlot>
+                        </FormField>
+                        <div className="hidden min-w-0 flex-1 sm:block" aria-hidden />
+                      </FormRow>
+
+                    <div className="space-y-1 border-t border-slate-200 pt-1">
+                      <h4 className="m-0 text-base font-semibold leading-tight tracking-tight text-slate-900">LP–GP capital structure</h4>
+                      <FormRow>
+                        <FormField width="growMedium">
+                          <Label htmlFor="lpEquityPercent" className={WORKSHEET_LABEL} title="LP equity %">
+                            LP equity %
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="lpEquityPercent"
+                            type="number"
+                            step="0.1"
+                            value={lpEquityPercent}
+                            onChange={(e) => setLpEquityPercent(parseFloat(e.target.value) || 0)}
+                          />
+                          <FieldHelperSlot>GP equity % = 100 − LP %</FieldHelperSlot>
+                        </FormField>
+                        <FormField width="growMedium">
+                          <Label
+                            htmlFor="lpPreferredReturnPercent"
+                            className={WORKSHEET_LABEL}
+                            title="LP preferred return % (annual, simple)"
+                          >
+                            LP preferred return % (annual, simple)
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="lpPreferredReturnPercent"
+                            type="number"
+                            step="0.1"
+                            value={lpPreferredReturnPercent}
+                            onChange={(e) => setLpPreferredReturnPercent(parseFloat(e.target.value) || 0)}
+                          />
+                          <FieldHelperSlot>On LP equity balance.</FieldHelperSlot>
+                        </FormField>
+                        <FormField width="growMedium">
+                          <Label
+                            htmlFor="lpAbovePrefProfitSharePercent"
+                            className={WORKSHEET_LABEL}
+                            title="LP share of profit above pref %"
+                          >
+                            LP share of profit above pref %
+                          </Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            id="lpAbovePrefProfitSharePercent"
+                            type="number"
+                            step="0.1"
+                            value={lpAbovePrefProfitSharePercent}
+                            onChange={(e) => setLpAbovePrefProfitSharePercent(parseFloat(e.target.value) || 0)}
+                          />
+                          <FieldHelperSlot>GP share = 100 − LP share.</FieldHelperSlot>
+                        </FormField>
+                      </FormRow>
+                    </div>
+
+                    <div className="space-y-1 border-t border-slate-200 pt-1">
+                      <h4 className="m-0 text-base font-semibold leading-tight tracking-tight text-slate-900">
+                        Stabilized value and annual display
+                      </h4>
+                      <FormRow>
+                        <FormField width="selectWide">
+                          <Label htmlFor="valueMethod" className={WORKSHEET_LABEL} title="Value method">
+                            Value method
+                          </Label>
+                          <Select value={valueMethod} onValueChange={(v: ValueMethod) => setValueMethod(v)}>
+                            <SelectTrigger id="valueMethod" className={cn(DENSE_INPUT, 'text-left')}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="stabilized">Stabilized (flat / appreciation-based)</SelectItem>
+                              <SelectItem value="noi-based">NOI-based (NOI ÷ exit cap)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FieldHelperSlot />
+                        </FormField>
+                        {valueMethod === 'stabilized' ? (
+                          <FormField width="growMedium">
+                            <Label
+                              htmlFor="annualAppreciationPercent"
+                              className={WORKSHEET_LABEL}
+                              title="Annual appreciation % (display only)"
+                            >
+                              Annual appreciation % (display only)
+                            </Label>
+                            <Input
+                              className={DENSE_INPUT}
+                              id="annualAppreciationPercent"
+                              type="number"
+                              step="0.1"
+                              value={annualAppreciationPercent}
+                              onChange={(e) => setAnnualAppreciationPercent(parseFloat(e.target.value) || 0)}
+                              placeholder="e.g. 2.0"
+                            />
+                            <FieldHelperSlot>
+                              Annual Proforma column only; refi / exit uses modeled stabilized value.
+                            </FieldHelperSlot>
+                          </FormField>
+                        ) : (
+                          <FormField width="growWide">
+                            <Label className={WORKSHEET_LABEL} title="Annual column when NOI-based">
+                              Annual column (NOI-based)
+                            </Label>
+                            <div className="flex min-h-8 items-center text-[13px] leading-snug text-slate-600">
+                              Appreciation is not used. Annual display follows NOI ÷ exit cap rate.
+                            </div>
+                            <FieldHelperSlot />
+                          </FormField>
+                        )}
+                      </FormRow>
                     </div>
                   </div>
-                  </div>
                 )}
-              </div>
+                </div>
+              </WorkspacePanel>
+              )}
 
               {/* Funding Milestones (Draw Schedule) */}
-              <div>
+              {proFormaMode !== 'for-sale-phased-loc' && (
+              <WorkspacePanel>
                 <div className="flex items-center justify-between mb-1">
                   <Label>Funding Milestones (Draw Schedule) *</Label>
                   <Button
@@ -1955,7 +2880,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     Milestones are optional underwriting assumptions for modeling inflows during construction.
                   </p>
                 )}
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {(() => {
                     const fundingBase = contractValue || 0
                     const sorted = [...paymentMilestones].sort(
@@ -1969,22 +2894,22 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                       const computedAmount = fundingBase * (incrementalPct / 100)
 
                       return (
-                      <div key={milestone.id} className="grid grid-cols-12 gap-2 p-3 border rounded-lg">
-                        <div className="col-span-4">
+                      <div key={milestone.id} className="grid grid-cols-12 gap-1.5 p-2 border rounded-md">
+                        <div className="col-span-12 md:col-span-4">
                           <Input
                             placeholder="Milestone name"
                             value={milestone.name}
                             onChange={(e) => handleMilestoneChange(milestone.id, 'name', e.target.value)}
                           />
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-6 md:col-span-2">
                           <Input
                             type="date"
                             value={new Date(milestone.date).toISOString().split('T')[0]}
                             onChange={(e) => handleMilestoneChange(milestone.id, 'date', new Date(e.target.value))}
                           />
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-6 md:col-span-2">
                           <div className="text-xs text-gray-500 mb-0.5">Funding Amount ($)</div>
                           <div className="text-sm font-semibold">
                             {fundingBase > 0 && incrementalPct > 0 ? formatCurrency(computedAmount) : '—'}
@@ -1995,7 +2920,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                             )}
                           </div>
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-6 md:col-span-2">
                           <Input
                             type="number"
                             step="0.1"
@@ -2011,7 +2936,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                             }}
                           />
                         </div>
-                        <div className="col-span-2 flex items-center">
+                        <div className="col-span-6 md:col-span-2 flex items-center">
                           <Button
                             type="button"
                             variant="ghost"
@@ -2026,11 +2951,13 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     })
                   })()}
                 </div>
-              </div>
+              </WorkspacePanel>
+              )}
 
-              {/* Rental Income Section */}
-              <div className="border-t pt-6">
-                <div className="flex items-center justify-between mb-4">
+              {/* Rental Income Section (Rental Hold only — operations / hold period) */}
+              {proFormaMode === 'rental-hold' && (
+              <WorkspacePanel>
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -2039,7 +2966,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                       onChange={(e) => setIncludeRentalIncome(e.target.checked)}
                       className="w-4 h-4"
                     />
-                    <Label htmlFor="includeRentalIncome" className="text-lg font-semibold cursor-pointer">
+                    <Label htmlFor="includeRentalIncome" className="text-sm font-semibold cursor-pointer text-slate-800">
                       Rental Income
                     </Label>
                   </div>
@@ -2057,14 +2984,14 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                 </div>
                 
                 {includeRentalIncome && (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {rentalUnits.length === 0 ? (
                       <p className="text-sm text-gray-500 text-center py-4">
                         No rental units added. Click "Add Unit" to start.
                       </p>
                     ) : (
                       rentalUnits.map((unit) => (
-                        <div key={unit.id} className="grid grid-cols-12 gap-2 p-4 border rounded-lg bg-gray-50">
+                        <div key={unit.id} className="grid grid-cols-12 gap-1.5 p-2 border rounded-md bg-gray-50">
                           <div className="col-span-12 md:col-span-3">
                             <Label className="text-xs">Unit Name *</Label>
                             <Input
@@ -2105,7 +3032,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
 
                           {Array.isArray(unit.leaseTerms) && unit.leaseTerms.length > 0 ? (
                             <>
-                              <div className="col-span-12 border rounded-md p-3 bg-white">
+                              <div className="col-span-12 border rounded-md p-2 bg-white">
                                 <div className="flex items-center justify-between mb-2">
                                   <Label className="text-xs font-semibold">Lease Terms</Label>
                                   <Button
@@ -2120,7 +3047,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                                 </div>
                                 <div className="space-y-2">
                                   {(unit.leaseTerms || []).map((term) => (
-                                    <div key={term.id} className="grid grid-cols-12 gap-2 p-2 border rounded">
+                                    <div key={term.id} className="grid grid-cols-12 gap-1.5 p-1.5 border rounded">
                                       <div className="col-span-12 md:col-span-2">
                                         <Label className="text-xs">Term Name</Label>
                                         <Input
@@ -2428,11 +3355,13 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     )}
                   </div>
                 )}
-              </div>
+              </WorkspacePanel>
+              )}
 
-              {/* Operating Expenses Section */}
-              <div className="border-t pt-6">
-                <div className="flex items-center gap-2 mb-4">
+              {/* Operating Expenses Section (Rental Hold only) */}
+              {proFormaMode === 'rental-hold' && (
+              <WorkspacePanel>
+                <div className="flex items-center gap-2 mb-2">
                   <input
                     type="checkbox"
                     id="includeOperatingExpenses"
@@ -2440,16 +3369,17 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     onChange={(e) => setIncludeOperatingExpenses(e.target.checked)}
                     className="w-4 h-4"
                   />
-                  <Label htmlFor="includeOperatingExpenses" className="text-lg font-semibold cursor-pointer">
+                  <Label htmlFor="includeOperatingExpenses" className="text-sm font-semibold cursor-pointer text-slate-800">
                     Operating Expenses
                   </Label>
                 </div>
                 
                 {includeOperatingExpenses && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
+                  <FormGrid>
+                    <GridField size="xs">
                       <Label htmlFor="propertyManagementPercent">Property Management (%)</Label>
                       <Input
+                        className="w-full max-w-[120px]"
                         id="propertyManagementPercent"
                         type="number"
                         step="0.1"
@@ -2460,11 +3390,12 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         })}
                         placeholder="0.0"
                       />
-                      <p className="text-xs text-gray-500 mt-1">% of rental income</p>
-                    </div>
-                    <div>
+                      <p className="text-[10px] text-gray-500 leading-tight">% of rental income</p>
+                    </GridField>
+                    <GridField size="xs">
                       <Label htmlFor="capExPercent">Cap EX %</Label>
                       <Input
+                        className="w-full max-w-[120px]"
                         id="capExPercent"
                         type="number"
                         step="0.1"
@@ -2475,11 +3406,12 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         })}
                         placeholder="0.0"
                       />
-                      <p className="text-xs text-gray-500 mt-1">% of rental income</p>
-                    </div>
-                    <div>
+                      <p className="text-[10px] text-gray-500 leading-tight">% of rental income</p>
+                    </GridField>
+                    <GridField size="xs">
                       <Label htmlFor="maintenanceReservePercent">Monthly Maintenance Reserve (%)</Label>
                       <Input
+                        className="w-full max-w-[120px]"
                         id="maintenanceReservePercent"
                         type="number"
                         step="0.1"
@@ -2490,11 +3422,12 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         })}
                         placeholder="0.0"
                       />
-                      <p className="text-xs text-gray-500 mt-1">% of rental income</p>
-                    </div>
-                    <div>
+                      <p className="text-[10px] text-gray-500 leading-tight">% of rental income</p>
+                    </GridField>
+                    <GridField size="sm">
                       <Label htmlFor="monthlyPropertyInsurance">Monthly Property Insurance</Label>
                       <Input
+                        className="w-full max-w-[180px]"
                         id="monthlyPropertyInsurance"
                         type="number"
                         step="0.01"
@@ -2505,10 +3438,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         })}
                         placeholder="0.00"
                       />
-                    </div>
-                    <div>
+                    </GridField>
+                    <GridField size="sm">
                       <Label htmlFor="annualPropertyTax">Annual Property Tax</Label>
                       <Input
+                        className="w-full max-w-[180px]"
                         id="annualPropertyTax"
                         type="number"
                         step="0.01"
@@ -2519,11 +3453,12 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         })}
                         placeholder="0.00"
                       />
-                      <p className="text-xs text-gray-500 mt-1">Annual amount (will be prorated monthly)</p>
-                    </div>
-                    <div>
+                      <p className="text-[10px] text-gray-500 leading-tight">Annual amount, prorated monthly.</p>
+                    </GridField>
+                    <GridField size="sm">
                       <Label htmlFor="monthlyUtilities">Monthly Utilities (Common Areas)</Label>
                       <Input
+                        className="w-full max-w-[180px]"
                         id="monthlyUtilities"
                         type="number"
                         step="0.01"
@@ -2534,10 +3469,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         })}
                         placeholder="0.00"
                       />
-                    </div>
-                    <div className="md:col-span-2">
+                    </GridField>
+                    <GridField size="md">
                       <Label htmlFor="monthlyOther">Other Monthly Expenses</Label>
                       <Input
+                        className="w-full max-w-[220px]"
                         id="monthlyOther"
                         type="number"
                         step="0.01"
@@ -2548,14 +3484,16 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         })}
                         placeholder="0.00"
                       />
-                    </div>
-                  </div>
+                    </GridField>
+                  </FormGrid>
                 )}
-              </div>
+              </WorkspacePanel>
+              )}
 
-              {/* Debt Service Section */}
-              <div className="border-t pt-6">
-                <div className="flex items-center gap-2 mb-4">
+              {/* Debt Service Section — permanent loan after stabilization (Rental Hold only; gen dev uses full development proforma loan / refi) */}
+              {proFormaMode === 'rental-hold' && (
+              <WorkspacePanel>
+                <div className="flex items-center gap-2 mb-2">
                   <input
                     type="checkbox"
                     id="includeDebtService"
@@ -2563,16 +3501,17 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     onChange={(e) => setIncludeDebtService(e.target.checked)}
                     className="w-4 h-4"
                   />
-                  <Label htmlFor="includeDebtService" className="text-lg font-semibold cursor-pointer">
+                  <Label htmlFor="includeDebtService" className="text-sm font-semibold cursor-pointer text-slate-800">
                     Debt Service
                   </Label>
                 </div>
                 
                 {includeDebtService && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
+                  <FormGrid>
+                    <GridField size="md">
                       <Label htmlFor="loanAmount">Loan Amount</Label>
                       <Input
+                        className="w-full max-w-[220px]"
                         id="loanAmount"
                         type="number"
                         step="0.01"
@@ -2583,10 +3522,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         })}
                         placeholder="0.00"
                       />
-                    </div>
-                    <div>
+                    </GridField>
+                    <GridField size="xs">
                       <Label htmlFor="interestRate">Interest Rate (%)</Label>
                       <Input
+                        className="w-full max-w-[120px]"
                         id="interestRate"
                         type="number"
                         step="0.01"
@@ -2597,11 +3537,12 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         })}
                         placeholder="5.5"
                       />
-                      <p className="text-xs text-gray-500 mt-1">Annual percentage rate</p>
-                    </div>
-                    <div>
+                      <p className="text-[10px] text-gray-500 leading-tight">Annual % rate</p>
+                    </GridField>
+                    <GridField size="xs">
                       <Label htmlFor="loanTermMonths">Loan Term (Months)</Label>
                       <Input
+                        className="w-full max-w-[120px]"
                         id="loanTermMonths"
                         type="number"
                         value={debtService.loanTermMonths}
@@ -2611,9 +3552,9 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         })}
                         placeholder="360"
                       />
-                      <p className="text-xs text-gray-500 mt-1">Amortization period (e.g., 360 = 30 years)</p>
-                    </div>
-                    <div>
+                      <p className="text-[10px] text-gray-500 leading-tight">Amortization months (e.g., 360)</p>
+                    </GridField>
+                    <GridField size="sm">
                       <Label htmlFor="paymentType">Payment Type</Label>
                       <Select
                         value={debtService.paymentType}
@@ -2622,7 +3563,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                           paymentType: v,
                         })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full max-w-[240px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -2630,9 +3571,9 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                           <SelectItem value="principal-interest">Principal + Interest (Permanent)</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
+                    </GridField>
                     {debtService.loanAmount > 0 && debtService.interestRate > 0 && (
-                      <div className="md:col-span-2">
+                      <GridField size="lg">
                         <p className="text-sm text-gray-600">
                           Estimated monthly payment: <span className="font-semibold">
                             {formatCurrency(
@@ -2644,10 +3585,215 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                             )}
                           </span>
                         </p>
-                      </div>
+                      </GridField>
                     )}
+                  </FormGrid>
+                )}
+              </WorkspacePanel>
+              )}
+
+              </div>
+              </div>
+
+              <aside className="w-full shrink-0 space-y-2.5 rounded-sm border border-slate-200 bg-slate-50/95 p-2.5 md:p-3 lg:sticky lg:top-[3.25rem] lg:max-h-[calc(100dvh-4.75rem)] lg:w-[min(30%,22rem)] lg:overflow-y-auto xl:w-[min(28%,380px)]">
+                <div className="space-y-2">
+                  <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">Mode</p>
+                  <div className="flex flex-col gap-1">
+                    <ModeTabButton
+                      block
+                      active={proFormaMode === 'rental-hold'}
+                      label="Rental Hold"
+                      onClick={() => setProFormaMode('rental-hold')}
+                    />
+                    <ModeTabButton
+                      block
+                      active={proFormaMode === 'general-development'}
+                      label="General Development"
+                      onClick={() => setProFormaMode('general-development')}
+                    />
+                    <ModeTabButton
+                      block
+                      active={proFormaMode === 'for-sale-phased-loc'}
+                      label="For-Sale Phased (LOC)"
+                      onClick={() => setProFormaMode('for-sale-phased-loc')}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 border-t border-slate-200 pt-2">
+                  <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">Version</p>
+                  <Select
+                    value={isDealUnderwriting ? selectedDealVersionId : selectedProjectVersionId}
+                    onValueChange={(v) =>
+                      isDealUnderwriting ? setSelectedDealVersionId(v) : setSelectedProjectVersionId(v)
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-full text-sm">
+                      <SelectValue placeholder="Load version" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="latest">
+                        {isDealUnderwriting ? 'Latest (draft or newest)' : 'Latest saved inputs'}
+                      </SelectItem>
+                      {isDealUnderwriting
+                        ? dealProFormaVersions.map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.isDraft
+                                ? `Draft${v.versionLabel ? ` - ${v.versionLabel}` : ''}`
+                                : `V${v.versionNumber}${v.versionLabel ? ` - ${v.versionLabel}` : ''}`}
+                            </SelectItem>
+                          ))
+                        : projectProFormaVersions.map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {`V${v.versionNumber}${v.versionLabel ? ` - ${v.versionLabel}` : ''}`}
+                            </SelectItem>
+                          ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    className="h-8 w-full text-sm"
+                    placeholder="Version label (optional)"
+                    value={newVersionLabel}
+                    onChange={(e) => setNewVersionLabel(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-full text-sm"
+                    onClick={isDealUnderwriting ? handleSaveDealVersion : handleSaveProjectVersion}
+                  >
+                    Save Version
+                  </Button>
+                </div>
+
+                {isDealUnderwriting && (
+                  <div className="space-y-1.5 border-t border-slate-200 pt-2">
+                    <SectionHeading
+                      title="Narrative"
+                      description="Used in underwriting exports and presentations."
+                    />
+                    <div>
+                      <Label htmlFor="publicBenefits" className="text-xs text-slate-600">
+                        Public benefit (bullets, optional)
+                      </Label>
+                      <textarea
+                        id="publicBenefits"
+                        className="mt-1 min-h-[88px] w-full rounded-md border border-slate-300 bg-white p-2 text-sm"
+                        placeholder="One benefit per line"
+                        value={publicBenefitsText}
+                        onChange={(e) => {
+                          const text = e.target.value
+                          setPublicBenefitsText(text)
+                          setDealSummaryInputs({
+                            ...dealSummaryInputs,
+                            publicBenefits: text
+                              .split('\n')
+                              .filter((s) => s.trim().length > 0),
+                          })
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="conclusionText" className="text-xs text-slate-600">
+                        Summary / conclusion (optional)
+                      </Label>
+                      <textarea
+                        id="conclusionText"
+                        className="mt-1 min-h-[88px] w-full rounded-md border border-slate-300 bg-white p-2 text-sm"
+                        placeholder="Short narrative for banks, investors, or municipalities."
+                        value={dealSummaryInputs.conclusionText ?? ''}
+                        onChange={(e) =>
+                          setDealSummaryInputs({
+                            ...dealSummaryInputs,
+                            conclusionText: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
                   </div>
                 )}
+
+                {proFormaMode === 'for-sale-phased-loc' && (
+                  <div className="space-y-1.5 border-t border-slate-200 pt-2">
+                    <p className="text-xs font-semibold text-slate-800">LOC mode checks</p>
+                    <div className="rounded-md border border-slate-200 bg-white p-2.5 text-xs text-slate-700">
+                      {(() => {
+                        const totalPhaseUnits = forSalePhases.reduce((sum, p) => sum + (p.unitCount || 0), 0)
+                        const totalHardSoft = effectiveForSalePhases.reduce(
+                          (sum, p) => sum + (p.hardCostBudget || 0) + (p.softCostBudget || 0),
+                          0,
+                        )
+                        const infraAllocPct = forSalePhases.reduce(
+                          (sum, p) => sum + (p.infrastructureAllocationPercent || 0),
+                          0,
+                        )
+                        const bucketTotal =
+                          (forSaleSalesBuckets.locPaydownPercent || 0) +
+                          (forSaleSalesBuckets.reinvestPercent || 0) +
+                          (forSaleSalesBuckets.reservePercent || 0) +
+                          (forSaleSalesBuckets.distributionPercent || 0)
+
+                        return (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <span className="text-slate-500">Phase units</span>
+                                <p className="font-semibold text-slate-900">{totalPhaseUnits.toLocaleString()}</p>
+                              </div>
+                              <div>
+                                <span className="text-slate-500">Hard + soft</span>
+                                <p className="font-semibold text-slate-900">{formatCurrency(totalHardSoft)}</p>
+                              </div>
+                              <div>
+                                <span className="text-slate-500">Infra alloc.</span>
+                                <p className={`font-semibold ${infraAllocPct > 100 ? 'text-red-600' : 'text-slate-900'}`}>
+                                  {infraAllocPct.toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-slate-500">Bucket total</span>
+                                <p
+                                  className={`font-semibold ${Math.abs(bucketTotal - 100) > 0.01 ? 'text-red-600' : 'text-slate-900'}`}
+                                >
+                                  {bucketTotal.toFixed(1)}%
+                                </p>
+                              </div>
+                            </div>
+                            {infraAllocPct > 100 && (
+                              <p className="text-red-600">
+                                Infrastructure allocation exceeds 100%. Reduce per-phase infra allocation percentages.
+                              </p>
+                            )}
+                            {infraAllocPct > 0 && infraAllocPct < 100 && (
+                              <p className="text-amber-700">
+                                Infrastructure allocation is below 100%. Remaining infrastructure uses phased auto
+                                allocation (front-loaded to Phase 1 when no explicit shares are provided).
+                              </p>
+                            )}
+                            {Math.abs(bucketTotal - 100) > 0.01 && (
+                              <p className="text-red-600">Sales allocation buckets must total 100% for generation.</p>
+                            )}
+                            {(forSaleTotalHardBudget > 0 || forSaleTotalSoftBudget > 0) && (
+                              <p className="text-slate-600">
+                                Auto-cost basis: Hard {formatCurrency(forSaleTotalHardBudget)} + Soft{' '}
+                                {formatCurrency(forSaleTotalSoftBudget)} by phase unit share.
+                              </p>
+                            )}
+                            <p className="text-slate-600">
+                              Avg sale $/unit overrides drive for-sale revenue and contract value in this mode.
+                            </p>
+                            <p className="text-slate-600">
+                              Presale/closing start = phase-relative month (1 = first month of that phase).
+                            </p>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </aside>
+
               </div>
 
               {validationErrors.length > 0 && (
@@ -2663,14 +3809,6 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                 </div>
               )}
 
-              <div className="flex gap-4 pt-4">
-                <Button variant="outline" onClick={onClose} className="flex-1">
-                  Cancel
-                </Button>
-                <Button onClick={handleGenerate} className="flex-1">
-                  Generate Pro Forma
-                </Button>
-              </div>
             </>
           ) : (
             <>
@@ -3443,6 +4581,181 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         )}
                       </div>
 
+                      {proFormaMode === 'for-sale-phased-loc' && (
+                        <div className="border-t pt-4">
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">For-Sale Phased LOC Summary</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                              <p className="text-sm text-gray-600">Base cost (before incentives)</p>
+                              <p className="text-lg font-semibold">{formatCurrency(projection.summary.forSaleBaseCostBeforeIncentives || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Applied infra reduction</p>
+                              <p className="text-lg font-semibold text-green-700">{formatCurrency(projection.summary.forSaleAppliedInfrastructureReduction || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Applied project cost reduction</p>
+                              <p className="text-lg font-semibold text-green-700">{formatCurrency(projection.summary.forSaleAppliedProjectCostReduction || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Total sales revenue</p>
+                              <p className="text-lg font-semibold text-green-600">
+                                {formatCurrency(projection.summary.forSaleTotalRevenue || 0)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">LOC limit</p>
+                              <p className="text-lg font-semibold">{formatCurrency(projection.summary.forSaleLocLimit || 0)}</p>
+                              <p className="text-xs text-gray-500">Sized off gross pre-incentive cost</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Peak LOC balance</p>
+                              <p className="text-lg font-semibold">{formatCurrency(projection.summary.forSalePeakLocBalance || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Ending LOC balance</p>
+                              <p className="text-lg font-semibold">{formatCurrency(projection.summary.forSaleEndingLocBalance || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Peak bond balance</p>
+                              <p className="text-lg font-semibold">{formatCurrency(projection.summary.forSalePeakBondBalance || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Ending bond balance</p>
+                              <p className="text-lg font-semibold">{formatCurrency(projection.summary.forSaleEndingBondBalance || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Bond drawn total (lifetime)</p>
+                              <p className="text-lg font-semibold">{formatCurrency(projection.summary.forSaleBondDrawnTotal || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Reserve ending</p>
+                              <p className="text-lg font-semibold">{formatCurrency(projection.summary.forSaleReserveEnding || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Total distributed</p>
+                              <p className="text-lg font-semibold">{formatCurrency(projection.summary.forSaleDistributionTotal || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Developer equity deployed</p>
+                              <p className="text-lg font-semibold">{formatCurrency(projection.summary.forSaleEquityDeployed || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Incentive equity used</p>
+                              <p className="text-lg font-semibold">{formatCurrency(projection.summary.forSaleIncentiveEquityUsed || 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Equity multiple</p>
+                              <p className="text-lg font-semibold">
+                                {projection.summary.forSaleEquityMultiple != null ? `${projection.summary.forSaleEquityMultiple.toFixed(2)}x` : '—'}
+                              </p>
+                            </div>
+                          </div>
+                          {projection.summary.forSalePhaseActivations && projection.summary.forSalePhaseActivations.length > 0 && (
+                            <div className="mt-4 border-t pt-3">
+                              <h5 className="text-xs font-semibold uppercase tracking-wide text-gray-600">Phase Activation Timing</h5>
+                              <div className="mt-2 grid grid-cols-1 gap-1 text-sm md:grid-cols-2">
+                                {projection.summary.forSalePhaseActivations.map((row, idx) => (
+                                  <div key={`phase-activation-${idx}`} className="flex items-center justify-between rounded border bg-slate-50 px-2 py-1">
+                                    <span className="text-gray-600">{row.phaseName}</span>
+                                    <span className="font-semibold text-slate-900">{row.activationMonth}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {projection.summary.forSaleFundingAudit && (
+                            <div className="mt-4 border-t pt-3">
+                              <h5 className="text-xs font-semibold uppercase tracking-wide text-gray-600">Capital Sources (Project Total)</h5>
+                              <div className="mt-2 grid grid-cols-1 gap-1 text-sm md:grid-cols-2">
+                                <div className="flex items-center justify-between rounded border bg-slate-50 px-2 py-1">
+                                  <span className="text-gray-600">Incentive equity used</span>
+                                  <span className="font-semibold text-slate-900">{formatCurrency(projection.summary.forSaleFundingAudit.incentiveEquitySourceUsed || 0)}</span>
+                                </div>
+                                <div className="flex items-center justify-between rounded border bg-slate-50 px-2 py-1">
+                                  <span className="text-gray-600">Reinvested cash used</span>
+                                  <span className="font-semibold text-slate-900">{formatCurrency(projection.summary.forSaleFundingAudit.reinvestUsed || 0)}</span>
+                                </div>
+                                <div className="flex items-center justify-between rounded border bg-slate-50 px-2 py-1">
+                                  <span className="text-gray-600">Reserve used</span>
+                                  <span className="font-semibold text-slate-900">{formatCurrency(projection.summary.forSaleFundingAudit.reserveUsed || 0)}</span>
+                                </div>
+                                <div className="flex items-center justify-between rounded border bg-slate-50 px-2 py-1">
+                                  <span className="text-gray-600">LOC drawn total (lifetime)</span>
+                                  <span className="font-semibold text-slate-900">{formatCurrency(projection.summary.forSaleLocDrawnTotal || projection.summary.forSaleFundingAudit.locDrawn || 0)}</span>
+                                </div>
+                                <div className="flex items-center justify-between rounded border bg-slate-50 px-2 py-1 md:col-span-2">
+                                  <span className="text-gray-600">Developer equity used</span>
+                                  <span className="font-semibold text-slate-900">{formatCurrency(projection.summary.forSaleFundingAudit.developerEquityUsed || 0)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {projection.summary.forSaleEngineVersion && (
+                            <div className="mt-3 rounded border bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
+                              <p>
+                                Engine: <span className="font-semibold text-slate-800">{projection.summary.forSaleEngineVersion}</span>
+                              </p>
+                              <p>
+                                Sweep executed: <span className="font-semibold text-slate-800">{projection.summary.forSaleSweepExecuted ? 'Yes' : 'No'}</span>
+                                {' '}| Closed units:{' '}
+                                <span className="font-semibold text-slate-800">
+                                  {(projection.summary.forSaleClosedUnits || 0).toFixed(2)} / {(projection.summary.forSaleTotalUnits || 0).toFixed(2)}
+                                </span>
+                              </p>
+                              <p>
+                                Final LOC before/after sweep:{' '}
+                                <span className="font-semibold text-slate-800">
+                                  {formatCurrency(projection.summary.forSaleFinalLocBeforeSweep || 0)} / {formatCurrency(projection.summary.forSaleFinalLocAfterSweep || 0)}
+                                </span>
+                              </p>
+                            </div>
+                          )}
+                          {projection.summary.forSaleDebtRepaymentWarning && (
+                            <div className="mt-3 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-[12px] text-amber-900">
+                              <p className="font-semibold">LOC repayment warning</p>
+                              <p>{projection.summary.forSaleDebtRepaymentWarning}</p>
+                            </div>
+                          )}
+                          <p className="text-xs text-gray-500 mt-3">
+                            Assumptions: trigger basis, deposit usability, sales pace, and spend curve use the LOC mode
+                            controls. Infrastructure auto behavior is phase-aware.
+                          </p>
+                        </div>
+                      )}
+
+                      {proFormaMode === 'for-sale-phased-loc' && projection.forSaleLocTimeline && projection.forSaleLocTimeline.length > 0 && (
+                        <div className="border-t pt-4">
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">LOC Timeline</h4>
+                          <div className="overflow-x-auto border rounded">
+                            <table className="w-full text-xs">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="text-left px-2 py-1.5">Month</th>
+                                  <th className="text-right px-2 py-1.5">Revenue</th>
+                                  <th className="text-right px-2 py-1.5">Draw</th>
+                                  <th className="text-right px-2 py-1.5">Paydown</th>
+                                  <th className="text-right px-2 py-1.5">LOC Balance</th>
+                                  <th className="text-right px-2 py-1.5">Avail Capacity</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {projection.forSaleLocTimeline.map((row) => (
+                                  <tr key={`loc-${row.month}`} className="border-t">
+                                    <td className="px-2 py-1.5">{row.monthLabel}</td>
+                                    <td className="px-2 py-1.5 text-right">{formatCurrency(row.salesRevenue)}</td>
+                                    <td className="px-2 py-1.5 text-right">{formatCurrency(row.locDraw)}</td>
+                                    <td className="px-2 py-1.5 text-right">{formatCurrency(row.locPaydown)}</td>
+                                    <td className="px-2 py-1.5 text-right">{formatCurrency(row.locBalance)}</td>
+                                    <td className="px-2 py-1.5 text-right">{formatCurrency(row.availableLocCapacity)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Rental Income Summary */}
                       {projection.summary.monthlyRentalIncome > 0 && (
                         <div className="border-t pt-4">
@@ -3678,6 +4991,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                 </Card>
 
                 {/* Action Buttons */}
+                {(projection.summary.forSaleLocLimit ?? 0) > 0 && (
+                  <p className="text-xs text-slate-500">
+                    For-Sale Phased (LOC) exports include the LOC timeline and mode-specific assumptions in both PDF and Excel.
+                  </p>
+                )}
                 <div className="flex gap-4">
                   <Button variant="outline" onClick={() => setProjection(null)} className="flex-1">
                     Edit Inputs
@@ -3686,6 +5004,15 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     variant="outline" 
                     onClick={() => {
                       if (projection) {
+                        console.log('[FOR-SALE LOC] exporting PDF from projection state', {
+                          engineVersion: projection.summary.forSaleEngineVersion,
+                          peakLoc: projection.summary.forSalePeakLocBalance,
+                          endingLoc: projection.summary.forSaleEndingLocBalance,
+                          sweepExecuted: projection.summary.forSaleSweepExecuted,
+                          finalLocBeforeSweep: projection.summary.forSaleFinalLocBeforeSweep,
+                          finalLocAfterSweep: projection.summary.forSaleFinalLocAfterSweep,
+                          activations: projection.summary.forSalePhaseActivations,
+                        })
                         exportProFormaToPDF(projection)
                       }
                     }} 
@@ -3713,8 +5040,21 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
               </div>
             </>
           )}
-        </CardContent>
-      </Card>
+            </div>
+          </div>
+        {!projection && (
+          <div className="sticky bottom-0 z-20 border-t border-slate-200 bg-white/95 backdrop-blur">
+            <div className="mx-auto flex w-full max-w-[1800px] gap-3 px-4 py-3 md:px-6">
+              <Button variant="outline" onClick={onClose} className="h-9 min-w-[140px]">
+                Cancel
+              </Button>
+              <Button onClick={handleGenerate} className="h-9 min-w-[200px]">
+                Generate Pro Forma
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

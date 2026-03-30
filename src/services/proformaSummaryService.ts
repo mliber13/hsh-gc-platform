@@ -21,7 +21,11 @@ export function buildDealSummary(
   const targetSalePricePerUnit = inputs.targetSalePricePerUnit ?? 0
   const marketPricePerSF = inputs.marketPricePerSF
 
+  // Single-source cost basis:
+  // - For for-sale LOC, use engine-reported base before incentives when available.
+  // - Otherwise fall back to legacy sources.
   const baseProjectCost =
+    projection.summary.forSaleBaseCostBeforeIncentives ??
     projection.sourcesAndUses?.uses.totalDevelopmentCost ??
     projection.totalEstimatedCost
 
@@ -41,8 +45,21 @@ export function buildDealSummary(
   let totalIncentivesPerUnit = 0
   let totalIncentives = 0
 
+  const normalizeApplyTo = (applyTo?: string) =>
+    (applyTo || '').trim().toLowerCase().replace(/_/g, '-')
+
   for (const row of inputs.incentives ?? []) {
     if (!row.label) continue
+    const applyTo = normalizeApplyTo(row.applyTo)
+    const isFinancingSupport =
+      applyTo === 'financing-term' || /\bbond financing\b/i.test(row.label)
+    const isCostReducingSupport =
+      applyTo === 'infrastructure-reduction' ||
+      applyTo === 'cost-reduction' ||
+      applyTo === 'project-cost-reduction'
+    // Only cost-reducing incentives should reduce adjusted cost/profit math.
+    // Equity-source and financing-term are funding support, not cost reductions.
+    if (isFinancingSupport || !isCostReducingSupport) continue
     let perUnit = row.perUnitAmount ?? 0
     let total = row.totalAmount ?? 0
 

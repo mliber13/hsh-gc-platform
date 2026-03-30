@@ -17,6 +17,16 @@ import { format } from 'date-fns'
 export function exportProFormaToPDF(
   projection: ProFormaProjection,
 ): void {
+  console.log('[FOR-SALE LOC] exportProFormaToPDF input summary', {
+    engineVersion: projection.summary.forSaleEngineVersion,
+    peakLoc: projection.summary.forSalePeakLocBalance,
+    endingLoc: projection.summary.forSaleEndingLocBalance,
+    sweepExecuted: projection.summary.forSaleSweepExecuted,
+    finalLocBeforeSweep: projection.summary.forSaleFinalLocBeforeSweep,
+    finalLocAfterSweep: projection.summary.forSaleFinalLocAfterSweep,
+    closedUnits: projection.summary.forSaleClosedUnits,
+    totalUnits: projection.summary.forSaleTotalUnits,
+  })
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
@@ -40,6 +50,21 @@ export function exportProFormaToPDF(
     isDealUnderwriting &&
     !!underwritingMeta &&
     ((underwritingMeta.underwritingEstimatedConstructionCost ?? 0) > 0)
+  const isForSalePhasedLoc =
+    (projection.summary.forSaleLocLimit ?? 0) > 0 || (projection.forSaleLocTimeline?.length ?? 0) > 0
+  if (isForSalePhasedLoc && projection.summary.proFormaModeUsed !== 'for-sale-phased-loc') {
+    console.error('[FOR-SALE LOC] export guard failed (PDF)', {
+      modeUsed: projection.summary.proFormaModeUsed,
+      hasLocLimit: (projection.summary.forSaleLocLimit ?? 0) > 0,
+      timelineRows: projection.forSaleLocTimeline?.length ?? 0,
+    })
+    throw new Error(
+      `For-Sale LOC export guard failed: expected mode "for-sale-phased-loc", got "${projection.summary.proFormaModeUsed ?? 'undefined'}".`,
+    )
+  }
+  if (projection.summary.proFormaModeUsed === 'for-sale-phased-loc') {
+    console.log('FINAL LOC AFTER SWEEP USED IN EXPORT', projection.summary.forSaleFinalLocAfterSweep ?? projection.summary.forSaleEndingLocBalance ?? 0)
+  }
 
   // Title
   doc.setFontSize(18)
@@ -360,6 +385,53 @@ export function exportProFormaToPDF(
       ['Cash Flow After Debt', formatCurrency(projection.summary.cashFlowAfterDebt)]
     )
   }
+  if (isForSalePhasedLoc) {
+    summaryData.push(
+      ['For-Sale Revenue', formatCurrency(projection.summary.forSaleTotalRevenue || 0)],
+      ['Base Cost (Before Incentives)', formatCurrency(projection.summary.forSaleBaseCostBeforeIncentives || 0)],
+      ['Applied Infrastructure Reduction', formatCurrency(projection.summary.forSaleAppliedInfrastructureReduction || 0)],
+      ['Applied Project Cost Reduction', formatCurrency(projection.summary.forSaleAppliedProjectCostReduction || 0)],
+      ['LTC Sizing Base (Gross Pre-Incentive Cost)', formatCurrency(projection.summary.forSaleLtcSizingBase || 0)],
+      ['LOC Limit', formatCurrency(projection.summary.forSaleLocLimit || 0)],
+      ['LOC Drawn Total (Lifetime)', formatCurrency(projection.summary.forSaleLocDrawnTotal || 0)],
+      ['Peak LOC Balance', formatCurrency(projection.summary.forSalePeakLocBalance || 0)],
+      ['Ending LOC Balance', formatCurrency(projection.summary.forSaleEndingLocBalance || 0)],
+      ['Peak Bond Balance', formatCurrency(projection.summary.forSalePeakBondBalance || 0)],
+      ['Ending Bond Balance', formatCurrency(projection.summary.forSaleEndingBondBalance || 0)],
+      ['Bond Drawn Total (Lifetime)', formatCurrency(projection.summary.forSaleBondDrawnTotal || 0)],
+      ['Reserve Ending Balance', formatCurrency(projection.summary.forSaleReserveEnding || 0)],
+      ['Distributed Cash', formatCurrency(projection.summary.forSaleDistributionTotal || 0)],
+      ['Reinvested Cash', formatCurrency(projection.summary.forSaleReinvestedTotal || 0)],
+      ['Developer Equity Deployed', formatCurrency(projection.summary.forSaleEquityDeployed || 0)],
+      ['Incentive Equity Used', formatCurrency(projection.summary.forSaleIncentiveEquityUsed || 0)],
+      [
+        'For-Sale Equity Multiple',
+        projection.summary.forSaleEquityMultiple != null
+          ? `${projection.summary.forSaleEquityMultiple.toFixed(2)}x`
+          : '—',
+      ],
+      [
+        'For-Sale Project IRR',
+        projection.summary.forSaleProjectIrr != null
+          ? formatPercent(projection.summary.forSaleProjectIrr)
+          : '—',
+      ],
+      ['Engine Version', projection.summary.forSaleEngineVersion || '—'],
+      ['Lifecycle Sweep Executed', projection.summary.forSaleSweepExecuted ? 'Yes' : 'No'],
+      [
+        'Final LOC Before Sweep',
+        formatCurrency(projection.summary.forSaleFinalLocBeforeSweep || 0),
+      ],
+      [
+        'Final LOC After Sweep',
+        formatCurrency(projection.summary.forSaleFinalLocAfterSweep || 0),
+      ],
+      [
+        'LOC Repayment Warning',
+        projection.summary.forSaleDebtRepaymentWarning || 'None',
+      ],
+    )
+  }
 
   autoTable(doc, {
     startY: yPos,
@@ -422,6 +494,68 @@ export function exportProFormaToPDF(
     })
 
     yPos = (doc as any).lastAutoTable.finalY + 10
+  }
+
+  if (isForSalePhasedLoc && projection.forSaleLocTimeline && projection.forSaleLocTimeline.length > 0) {
+    if (yPos > pageHeight - 90) {
+      doc.addPage()
+      yPos = 20
+    }
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.text('For-Sale LOC Timeline', 14, yPos)
+    yPos += 8
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [[
+        'Month',
+        'Revenue',
+        'Bond Draw',
+        'Bond Paydown',
+        'Bond Balance',
+        'LOC Draw',
+        'LOC Paydown',
+        'LOC Balance',
+        'Available Capacity',
+      ]],
+      body: projection.forSaleLocTimeline.map((row) => [
+        row.monthLabel,
+        formatCurrency(row.salesRevenue),
+        formatCurrency(row.bondDraw || 0),
+        formatCurrency(row.bondPaydown || 0),
+        formatCurrency(row.bondBalance || 0),
+        formatCurrency(row.locDraw),
+        formatCurrency(row.locPaydown),
+        formatCurrency(row.locBalance),
+        formatCurrency(row.availableLocCapacity),
+      ]),
+      theme: 'striped',
+      headStyles: { fillColor: [14, 116, 144], fontSize: 8 },
+      styles: { fontSize: 7 },
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 22, halign: 'right' },
+        2: { cellWidth: 20, halign: 'right' },
+        3: { cellWidth: 22, halign: 'right' },
+        4: { cellWidth: 22, halign: 'right' },
+        5: { cellWidth: 20, halign: 'right' },
+        6: { cellWidth: 22, halign: 'right' },
+        7: { cellWidth: 22, halign: 'right' },
+        8: { cellWidth: 24, halign: 'right' },
+      },
+      margin: { left: 14, right: 14 },
+    })
+
+    yPos = (doc as any).lastAutoTable.finalY + 8
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.text(
+      'Assumptions: presale deposits are modeled as immediately available; phases activate from demand triggers; infra auto front-loads to Phase 1 when phase infra % is not explicitly set.',
+      14,
+      yPos,
+    )
+    yPos += 6
   }
 
   // Monthly Cash Flow Table
@@ -541,6 +675,21 @@ export function exportProFormaToExcel(
     isDealUnderwriting &&
     !!underwritingMeta &&
     ((underwritingMeta.underwritingEstimatedConstructionCost ?? 0) > 0)
+  const isForSalePhasedLoc =
+    (projection.summary.forSaleLocLimit ?? 0) > 0 || (projection.forSaleLocTimeline?.length ?? 0) > 0
+  if (isForSalePhasedLoc && projection.summary.proFormaModeUsed !== 'for-sale-phased-loc') {
+    console.error('[FOR-SALE LOC] export guard failed (Excel)', {
+      modeUsed: projection.summary.proFormaModeUsed,
+      hasLocLimit: (projection.summary.forSaleLocLimit ?? 0) > 0,
+      timelineRows: projection.forSaleLocTimeline?.length ?? 0,
+    })
+    throw new Error(
+      `For-Sale LOC export guard failed: expected mode "for-sale-phased-loc", got "${projection.summary.proFormaModeUsed ?? 'undefined'}".`,
+    )
+  }
+  if (projection.summary.proFormaModeUsed === 'for-sale-phased-loc') {
+    console.log('FINAL LOC AFTER SWEEP USED IN EXPORT', projection.summary.forSaleFinalLocAfterSweep ?? projection.summary.forSaleEndingLocBalance ?? 0)
+  }
 
   // Summary Sheet
   const summaryData: any[][] = [
@@ -679,6 +828,32 @@ export function exportProFormaToExcel(
       ['Occupancy Rate', projection.rentalSummary.stabilizedOccupancy],
     )
   }
+  if (isForSalePhasedLoc) {
+    summaryData.push(
+      ['', ''],
+      ['For-Sale Phased LOC Summary', ''],
+      ['For-Sale Revenue', projection.summary.forSaleTotalRevenue || 0],
+      ['Base Cost (Before Incentives)', projection.summary.forSaleBaseCostBeforeIncentives || 0],
+      ['Applied Infrastructure Reduction', projection.summary.forSaleAppliedInfrastructureReduction || 0],
+      ['Applied Project Cost Reduction', projection.summary.forSaleAppliedProjectCostReduction || 0],
+      ['LTC Sizing Base (Gross Pre-Incentive Cost)', projection.summary.forSaleLtcSizingBase || 0],
+      ['LOC Limit', projection.summary.forSaleLocLimit || 0],
+      ['LOC Drawn Total (Lifetime)', projection.summary.forSaleLocDrawnTotal || 0],
+      ['Peak LOC Balance', projection.summary.forSalePeakLocBalance || 0],
+      ['Ending LOC Balance', projection.summary.forSaleEndingLocBalance || 0],
+      ['Peak Bond Balance', projection.summary.forSalePeakBondBalance || 0],
+      ['Ending Bond Balance', projection.summary.forSaleEndingBondBalance || 0],
+      ['Bond Drawn Total (Lifetime)', projection.summary.forSaleBondDrawnTotal || 0],
+      ['Reserve Ending Balance', projection.summary.forSaleReserveEnding || 0],
+      ['Distributed Cash', projection.summary.forSaleDistributionTotal || 0],
+      ['Reinvested Cash', projection.summary.forSaleReinvestedTotal || 0],
+      ['Developer Equity Deployed', projection.summary.forSaleEquityDeployed || 0],
+      ['Incentive Equity Used', projection.summary.forSaleIncentiveEquityUsed || 0],
+      ['For-Sale Equity Multiple', projection.summary.forSaleEquityMultiple ?? ''],
+      ['For-Sale Project IRR', projection.summary.forSaleProjectIrr ?? ''],
+      ['Assumptions', 'Presale deposits available immediately; unassigned infrastructure allocation falls back to proportional-by-units.'],
+    )
+  }
 
   summaryData.push(
     ['', ''],
@@ -736,6 +911,7 @@ export function exportProFormaToExcel(
   const headerLabels = new Set([
     'Underwriting Assumptions Summary',
     'Financial Summary',
+    'For-Sale Phased LOC Summary',
     'Rental Income Summary',
     'Rental Details',
     'Financial Metrics',
@@ -829,6 +1005,74 @@ export function exportProFormaToExcel(
   cashFlowSheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft' }
 
   XLSX.utils.book_append_sheet(workbook, cashFlowSheet, 'Cash Flow')
+
+  if (isForSalePhasedLoc && projection.forSaleLocTimeline && projection.forSaleLocTimeline.length > 0) {
+    const locHeaders = [
+      'Month',
+      'Phase',
+      'Active Units',
+      'Presales',
+      'Closings',
+      'Sales Revenue',
+      'Bond Draw',
+      'Bond Paydown',
+      'Bond Balance',
+      'LOC Draw',
+      'LOC Paydown',
+      'LOC Balance',
+      'Available Capacity',
+      'Reserve Balance',
+      'Reinvest Balance',
+      'Distributed Cash',
+    ]
+    const locData = projection.forSaleLocTimeline.map((row) => [
+      row.monthLabel,
+      row.phaseName,
+      row.activeUnits,
+      row.presalesThisMonth,
+      row.closingsThisMonth,
+      row.salesRevenue,
+      row.bondDraw || 0,
+      row.bondPaydown || 0,
+      row.bondBalance || 0,
+      row.locDraw,
+      row.locPaydown,
+      row.locBalance,
+      row.availableLocCapacity,
+      row.reserveBalance,
+      row.reinvestBalance,
+      row.distributedCash,
+    ])
+    const locSheet = XLSX.utils.aoa_to_sheet([locHeaders, ...locData])
+    locSheet['!cols'] = [
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+    ]
+    for (let row = 1; row <= locData.length; row++) {
+      for (let col = 5; col <= 15; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
+        if (locSheet[cellAddress] && typeof locSheet[cellAddress].v === 'number') {
+          locSheet[cellAddress].z = '$#,##0'
+        }
+      }
+    }
+    locSheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft' }
+    XLSX.utils.book_append_sheet(workbook, locSheet, 'LOC Timeline')
+  }
 
   // Save Excel file
   const fileName = `ProForma_${projection.projectName.replace(/[^a-z0-9]/gi, '_')}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`

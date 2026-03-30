@@ -82,6 +82,8 @@ export interface DealSummaryIncentiveInput {
   label: string
   perUnitAmount?: number
   totalAmount?: number
+  /** Optional source classification from UI stack (infra/cost/equity/financing-term, etc.) */
+  applyTo?: string
 }
 
 export interface DealSummaryInputs {
@@ -181,8 +183,69 @@ export interface ConstructionDrawRow {
   interestAccrued: number
 }
 
+export type ProFormaMode = 'rental-hold' | 'general-development' | 'for-sale-phased-loc'
+
+export interface ForSalePhaseInput {
+  id: string
+  name: string
+  unitCount: number
+  buildMonths: number
+  presaleStartMonthOffset: number
+  closeStartMonthOffset: number
+  presaleTriggerPercent: number
+  infrastructureAllocationPercent?: number
+  avgSalePrice?: number
+  /** Optional total hard cost budget for this phase (used before proportional fallback) */
+  hardCostBudget?: number
+  /** Optional total soft cost budget for this phase (used before proportional fallback) */
+  softCostBudget?: number
+  /** Auto derives costs from total budgets unless set to manual */
+  costEntryMode?: 'auto' | 'manual'
+}
+
+export interface SalesAllocationBuckets {
+  locPaydownPercent: number
+  reinvestPercent: number
+  reservePercent: number
+  distributionPercent: number
+}
+
+export interface ForSalePhasedLocInput {
+  enabled: boolean
+  totalUnits: number
+  averageSalePrice: number
+  presaleDepositPercent: number
+  /** How much of presale deposits can be used as active project cash before closing */
+  depositUsageMode?: 'full' | 'percent' | 'at-closing'
+  depositUsablePercent?: number
+  /** Optional global pace cap used to limit combined phase presales/closings per month */
+  salesPaceUnitsPerMonth?: number
+  /** Optional pacing behavior: cap combined activity, presales only, or closings only */
+  salesPaceMode?: 'combined' | 'presales' | 'closings'
+  /** Optional phase draw profile (defaults to linear if omitted) */
+  constructionSpendCurve?: 'linear' | 'front-loaded' | 'back-loaded'
+  infrastructureCost: number
+  tifInfrastructureReduction: number
+  /** Additional incentives that reduce total project cost but are not infra-specific */
+  incentiveCostReduction?: number
+  /** Incentive/partner capital available before LOC/equity draws */
+  incentiveEquitySource?: number
+  /** Optional bond scaffolding for financing scenario capture (not yet applied to debt math) */
+  bondFinancingEnabled?: boolean
+  bondLtcOverridePercent?: number
+  bondRatePercent?: number
+  bondCapacity?: number
+  fixedLocLimit: number
+  ltcPercent: number
+  /** If true (default), presales count toward phase trigger; if false, use executed closings only */
+  triggerUsesPresales?: boolean
+  salesAllocationBuckets: SalesAllocationBuckets
+  phases: ForSalePhaseInput[]
+}
+
 export interface ProFormaInput {
   projectId: string
+  proFormaMode?: ProFormaMode
   contractValue: number
   paymentMilestones: PaymentMilestone[]
   monthlyOverhead: number
@@ -241,6 +304,9 @@ export interface ProFormaInput {
   annualAppreciationPercent?: number
   /** Display-only value method for annual proforma (stabilized vs NOI-based) */
   valueMethod?: 'stabilized' | 'noi-based'
+
+  // --- For-sale phased development (revolving LOC) ---
+  forSalePhasedLoc?: ForSalePhasedLocInput
 }
 
 export interface ProFormaProjection {
@@ -296,6 +362,45 @@ export interface ProFormaProjection {
     gpIrr?: number
     gpEquityMultiple?: number
     gpCashOnCashReturn?: number
+
+    // For-sale phased LOC metrics
+    forSaleTotalRevenue?: number
+    forSaleBaseCostBeforeIncentives?: number
+    forSaleAppliedInfrastructureReduction?: number
+    forSaleAppliedProjectCostReduction?: number
+    forSaleLtcSizingBase?: number
+    forSaleLocLimit?: number
+    forSaleLocDrawnTotal?: number
+    forSaleEndingLocBalance?: number
+    forSalePeakLocBalance?: number
+    forSaleEndingBondBalance?: number
+    forSalePeakBondBalance?: number
+    forSaleBondDrawnTotal?: number
+    forSaleReserveEnding?: number
+    forSaleDistributionTotal?: number
+    forSaleReinvestedTotal?: number
+    forSaleEquityDeployed?: number
+    forSaleIncentiveEquityUsed?: number
+    forSaleEquityMultiple?: number
+    forSaleProjectIrr?: number
+    forSaleReserveUsedTotal?: number
+    forSalePhaseActivations?: Array<{ phaseName: string; activationMonth: string }>
+    forSaleFundingAudit?: {
+      incentiveEquitySourceUsed: number
+      remainingEquityIncentive?: number
+      reinvestUsed: number
+      reserveUsed: number
+      locDrawn: number
+      developerEquityUsed: number
+    }
+    forSaleSweepExecuted?: boolean
+    forSaleFinalLocBeforeSweep?: number
+    forSaleFinalLocAfterSweep?: number
+    forSaleClosedUnits?: number
+    forSaleTotalUnits?: number
+    forSaleEngineVersion?: string
+    forSaleDebtRepaymentWarning?: string
+    proFormaModeUsed?: ProFormaMode
   }
   /** Full development proforma: sources & uses */
   sourcesAndUses?: SourcesAndUses
@@ -377,6 +482,27 @@ export interface ProFormaProjection {
   }
   /** Optional deal-level attainable housing summary (display/reporting only) */
   dealSummary?: DealSummary
+
+  /** Optional phased for-sale LOC timeline for mode-specific reporting */
+  forSaleLocTimeline?: Array<{
+    month: string
+    monthLabel: string
+    phaseName: string
+    activeUnits: number
+    presalesThisMonth: number
+    closingsThisMonth: number
+    salesRevenue: number
+      bondDraw: number
+      bondPaydown: number
+      bondBalance: number
+    locDraw: number
+    locPaydown: number
+    locBalance: number
+    availableLocCapacity: number
+    reserveBalance: number
+    reinvestBalance: number
+    distributedCash: number
+  }>
 }
 
 export interface ProFormaExportOptions {

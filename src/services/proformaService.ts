@@ -60,6 +60,10 @@ export function calculateProForma(
     overheadPercent: 0, // Will be calculated after overhead allocation
   }
 
+  if (input.proFormaMode === 'for-sale-phased-loc' && input.forSalePhasedLoc?.enabled) {
+    return calculateForSalePhasedLocProForma(project, input, costBreakdown, totalEstimatedCost)
+  }
+
   // Full development proforma: Sources & Uses and Construction Draw Schedule
   let sourcesAndUses: SourcesAndUses | undefined
   let constructionDrawSchedule: ConstructionDrawRow[] | undefined
@@ -486,6 +490,7 @@ export function calculateProForma(
   }
 
   const summary: any = {
+    proFormaModeUsed: input.proFormaMode,
     totalInflow,
     totalOutflow,
     netCashFlow,
@@ -522,7 +527,7 @@ export function calculateProForma(
     summary.loanTermMonths = input.debtService.loanTermMonths
   }
 
-  return {
+  const result: ProFormaProjection = {
     projectId: project.id,
     projectName: project.name,
     contractValue: input.contractValue,
@@ -540,6 +545,564 @@ export function calculateProForma(
     annualDebtSchedule,
     annualValueSchedule,
   }
+  return result
+}
+
+function calculateForSalePhasedLocProForma(
+  project: Project,
+  input: ProFormaInput,
+  costBreakdown: ProFormaProjection['costBreakdown'],
+  tradeEstimatedCost: number,
+): ProFormaProjection {
+  const engineVersion = 'for-sale-loc-v2.3-bond'
+  const debugEnabled = typeof globalThis !== 'undefined' && (globalThis as any).__HSH_DEBUG_FOR_SALE_LOC__ === true
+  if (debugEnabled) {
+    console.log('[FOR-SALE LOC] entering engine', {
+      engineVersion,
+      mode: input.proFormaMode,
+      projectId: input.projectId,
+      projectionMonths: input.projectionMonths,
+    })
+  }
+  const config = input.forSalePhasedLoc!
+  const phases = (config.phases || []).filter((p) => p.unitCount > 0 && p.buildMonths > 0)
+  const fallbackUnits = Math.max(1, config.totalUnits || 1)
+  const totalPhaseUnits = phases.reduce((sum, p) => sum + p.unitCount, 0) || fallbackUnits
+  const weightedAvgSale =
+    phases.reduce((sum, p) => sum + p.unitCount * (p.avgSalePrice || config.averageSalePrice || 0), 0) /
+    totalPhaseUnits
+  const contractValue = totalPhaseUnits * (weightedAvgSale || config.averageSalePrice || 0)
+
+  const rawInfrastructureCost = Math.max(0, config.infrastructureCost || 0)
+  const infrastructureReductionRequested = Math.max(0, config.tifInfrastructureReduction || 0)
+  const appliedInfrastructureReduction = Math.min(rawInfrastructureCost, infrastructureReductionRequested)
+  const infrastructureReductionOverflow = Math.max(0, infrastructureReductionRequested - appliedInfrastructureReduction)
+  const netInfrastructureCost = Math.max(0, rawInfrastructureCost - appliedInfrastructureReduction)
+  const explicitPhaseCostTotal = phases.reduce(
+    (sum, p) => sum + Math.max(0, p.hardCostBudget || 0) + Math.max(0, p.softCostBudget || 0),
+    0,
+  )
+  const estimatedBuildCostBaseRaw =
+    explicitPhaseCostTotal > 0
+      ? explicitPhaseCostTotal
+      : (input.underwritingEstimatedConstructionCost || 0) > 0
+        ? (input.underwritingEstimatedConstructionCost as number)
+        : tradeEstimatedCost > 0
+          ? tradeEstimatedCost
+          : contractValue * 0.72
+  // For-sale LOC should follow underwriting/phase all-in basis first.
+  // Split infra out so it is modeled once (and can be reduced by infra incentives).
+  const estimatedBuildCostBase =
+    rawInfrastructureCost > 0
+      ? Math.max(0, estimatedBuildCostBaseRaw - rawInfrastructureCost)
+      : estimatedBuildCostBaseRaw
+  const incentiveCostReduction = Math.max(0, config.incentiveCostReduction || 0)
+  const incentiveEquitySource = Math.max(0, config.incentiveEquitySource || 0)
+  // In underwriting/all-in input workflows, explicit phase budgets may also be entered as all-in.
+  // Prevent infra from being counted twice by normalizing explicit phase total to build-only.
+  const explicitPhaseBuildOnlyTotal =
+    rawInfrastructureCost > 0
+      ? Math.max(0, explicitPhaseCostTotal - rawInfrastructureCost)
+      : explicitPhaseCostTotal
+  const buildCostTarget = explicitPhaseCostTotal > 0
+    ? Math.max(estimatedBuildCostBase, explicitPhaseBuildOnlyTotal)
+    : estimatedBuildCostBase
+  // Apply all cost-reducing incentives before phase/monthly modeling:
+  // 1) infra reductions reduce infra bucket first;
+  // 2) overflow infra reduction + project cost reduction reduce build bucket.
+  const effectiveProjectCostReduction = Math.max(0, incentiveCostReduction + infrastructureReductionOverflow)
+  const effectiveBuildCostTarget = Math.max(0, buildCostTarget - effectiveProjectCostReduction)
+  const buildReductionRatio =
+    buildCostTarget > 0 ? Math.max(0, Math.min(1, effectiveBuildCostTarget / buildCostTarget)) : 1
+  const baseTotalCostBeforeIncentives = Math.max(0, buildCostTarget + rawInfrastructureCost)
+  const totalEstimatedCost = Math.max(0, effectiveBuildCostTarget + netInfrastructureCost)
+
+  // Debt sizing uses gross cost before incentives; incentives affect net funding need, not lender LTC basis.
+  const grossProjectCostForLtc = baseTotalCostBeforeIncentives
+  const ltcCap = grossProjectCostForLtc * ((config.ltcPercent || 0) / 100)
+  const fixedLimit = config.fixedLocLimit || 0
+  const locLimit = fixedLimit > 0 ? Math.max(0, Math.min(fixedLimit, ltcCap || 0)) : Math.max(0, ltcCap || 0)
+  const bondCapacity = config.bondFinancingEnabled ? Math.max(0, config.bondCapacity || 0) : 0
+
+  const totalMonths = input.projectionMonths
+  const countPresalesTowardTrigger = config.triggerUsesPresales !== false
+  const phaseUnlockMonth: number[] = phases.map((_, idx) => (idx === 0 ? 0 : Number.MAX_SAFE_INTEGER))
+  const phaseCumulativePresales = phases.map(() => 0)
+  const phaseCumulativeClosings = phases.map(() => 0)
+  const phaseCumulativeBuild = phases.map(() => 0)
+  const phasesWithNoExplicitCostUnits = phases
+    .filter((p) => (p.hardCostBudget || 0) + (p.softCostBudget || 0) <= 0)
+    .reduce((sum, p) => sum + p.unitCount, 0)
+  const remainingBuildCostForFallback = Math.max(0, buildCostTarget - explicitPhaseBuildOnlyTotal)
+  const infraShares: number[] = (() => {
+    if (!phases.length || netInfrastructureCost <= 0) return phases.map(() => 0)
+    const explicit = phases.map((p) => Math.max(0, (p.infrastructureAllocationPercent ?? 0) / 100))
+    const explicitSum = explicit.reduce((sum, s) => sum + s, 0)
+    if (explicitSum > 0) {
+      const normalizedExplicit = explicitSum > 1
+        ? explicit.map((s) => s / explicitSum)
+        : explicit
+      const used = normalizedExplicit.reduce((sum, s) => sum + s, 0)
+      const remaining = Math.max(0, 1 - used)
+      const unspecifiedIdx = normalizedExplicit.map((s, idx) => (s <= 0 ? idx : -1)).filter((idx) => idx >= 0)
+      if (!unspecifiedIdx.length || remaining <= 0) return normalizedExplicit
+      const unspecifiedUnits = unspecifiedIdx.reduce((sum, idx) => sum + phases[idx].unitCount, 0)
+      const shares = [...normalizedExplicit]
+      unspecifiedIdx.forEach((idx) => {
+        const unitWeight = unspecifiedUnits > 0 ? phases[idx].unitCount / unspecifiedUnits : 1 / unspecifiedIdx.length
+        shares[idx] = remaining * unitWeight
+      })
+      return shares
+    }
+
+    // Auto mode (no explicit infra %): front-load 50% to Phase 1, spread remainder by later-phase units.
+    const shares = phases.map(() => 0)
+    if (phases.length === 1) {
+      shares[0] = 1
+      return shares
+    }
+    shares[0] = 0.5
+    const remaining = 0.5
+    const laterUnits = phases.slice(1).reduce((sum, p) => sum + p.unitCount, 0)
+    for (let i = 1; i < phases.length; i++) {
+      shares[i] = laterUnits > 0 ? (remaining * phases[i].unitCount) / laterUnits : remaining / (phases.length - 1)
+    }
+    return shares
+  })()
+
+  let locBalance = 0
+  let bondBalance = 0
+  let incentiveEquityPool = incentiveEquitySource
+  let reserveBalance = 0
+  let reinvestBalance = 0
+  let reinvestUsedTotal = 0
+  let reserveUsedTotal = 0
+  let incentiveEquityUsedTotal = 0
+  let locDrawnTotal = 0
+  let bondDrawnTotal = 0
+  let distributedTotal = 0
+  let equityDeployedTotal = 0
+  let peakLocBalance = 0
+  let peakBondBalance = 0
+  let totalRevenue = 0
+  let cumulativeBalance = 0
+  const phaseActivationLabels: Array<{ phaseName: string; activationMonth: string }> = []
+  let sweepExecuted = false
+  let finalLocBeforeSweep = 0
+  let debtRepaymentWarning: string | undefined
+
+  const monthlyCashFlows: MonthlyCashFlow[] = []
+  const forSaleLocTimeline: NonNullable<ProFormaProjection['forSaleLocTimeline']> = []
+
+  const bucket = config.salesAllocationBuckets
+  const locPaydownPct = (bucket.locPaydownPercent || 0) / 100
+  const reinvestPct = (bucket.reinvestPercent || 0) / 100
+  const reservePct = (bucket.reservePercent || 0) / 100
+  const distributionPct = (bucket.distributionPercent || 0) / 100
+  const depositPct = (config.presaleDepositPercent || 0) / 100
+  const salesPaceCap = Math.max(0, config.salesPaceUnitsPerMonth || 0)
+  const salesPaceMode = config.salesPaceMode || 'combined'
+  const depositUsageMode = config.depositUsageMode || 'full'
+  const depositUsableShare =
+    depositUsageMode === 'at-closing'
+      ? 0
+      : depositUsageMode === 'percent'
+        ? Math.max(0, Math.min(100, config.depositUsablePercent ?? 100)) / 100
+        : 1
+  const spendCurve = config.constructionSpendCurve || 'linear'
+
+  const startDate = new Date(input.startDate)
+  startDate.setDate(1)
+
+  for (let i = 0; i < totalMonths; i++) {
+    const currentDate = new Date(startDate)
+    currentDate.setMonth(startDate.getMonth() + i)
+    const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
+    const monthLabel = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    for (let pIdx = 0; pIdx < phases.length; pIdx++) {
+      if (phaseUnlockMonth[pIdx] === i) {
+        phaseActivationLabels.push({ phaseName: phases[pIdx].name, activationMonth: monthKey })
+      }
+    }
+
+    let activeUnits = 0
+    let presalesThisMonth = 0
+    let closingsThisMonth = 0
+    let depositRevenue = 0
+    let closeRevenue = 0
+    let monthlyBuildCost = 0
+    let activePhaseName = 'No active phase'
+
+    for (let pIdx = 0; pIdx < phases.length; pIdx++) {
+      const phase = phases[pIdx]
+      const unlockMonth = phaseUnlockMonth[pIdx]
+      if (unlockMonth === Number.MAX_SAFE_INTEGER || i < unlockMonth) continue
+      const localMonth = i - unlockMonth
+      if (localMonth < 0 || phaseCumulativeClosings[pIdx] >= phase.unitCount) continue
+
+      activePhaseName = phase.name
+      activeUnits += Math.max(0, phase.unitCount - phaseCumulativeClosings[pIdx])
+
+      const explicitPhaseCost = Math.max(0, phase.hardCostBudget || 0) + Math.max(0, phase.softCostBudget || 0)
+      const fallbackShareDenominator = Math.max(1, phasesWithNoExplicitCostUnits)
+      const fallbackPhaseBuildCost =
+        explicitPhaseCost <= 0 ? remainingBuildCostForFallback * (phase.unitCount / fallbackShareDenominator) : 0
+      const rawBuildCostForPhase = explicitPhaseCost > 0 ? explicitPhaseCost : fallbackPhaseBuildCost
+      // Project-cost reductions must reduce true modeled phase/monthly funding need.
+      const buildCostForPhase = rawBuildCostForPhase * buildReductionRatio
+      const infraCostForPhase = netInfrastructureCost * (infraShares[pIdx] || 0)
+      const phaseTotalCost = buildCostForPhase + infraCostForPhase
+      const n = Math.max(1, phase.buildMonths)
+      const denom = spendCurve === 'linear' ? n : (n * (n + 1)) / 2
+      const curveWeight =
+        spendCurve === 'front-loaded'
+          ? Math.max(1, n - localMonth)
+          : spendCurve === 'back-loaded'
+            ? Math.max(1, localMonth + 1)
+            : 1
+      const plannedMonthlyDraw = phaseTotalCost * (curveWeight / Math.max(1, denom))
+      if (localMonth < phase.buildMonths) {
+        monthlyBuildCost += plannedMonthlyDraw
+        phaseCumulativeBuild[pIdx] = Math.min(
+          phase.unitCount,
+          phaseCumulativeBuild[pIdx] + phase.unitCount / Math.max(1, phase.buildMonths),
+        )
+      }
+
+      const presaleStart = Math.max(0, phase.presaleStartMonthOffset || 0)
+      const closeStart = Math.max(presaleStart, phase.closeStartMonthOffset || 0)
+      const presaleMonths = Math.max(1, phase.buildMonths - presaleStart + 1)
+      const closeMonths = Math.max(1, phase.buildMonths - closeStart + 1)
+      const presalesRemaining = Math.max(0, phase.unitCount - phaseCumulativePresales[pIdx])
+      const phasePresales =
+        localMonth >= presaleStart
+          ? Math.min(presalesRemaining, phase.unitCount / presaleMonths)
+          : 0
+      const closableInventory = Math.max(
+        0,
+        Math.min(phaseCumulativeBuild[pIdx], phaseCumulativePresales[pIdx]) - phaseCumulativeClosings[pIdx],
+      )
+      const plannedClosings = localMonth >= closeStart ? phase.unitCount / closeMonths : 0
+      const phaseClosings = Math.min(closableInventory, plannedClosings)
+
+      let cappedPresales = phasePresales
+      let cappedClosings = phaseClosings
+      if (salesPaceCap > 0) {
+        if (salesPaceMode === 'presales') {
+          const presaleRemaining = Math.max(0, salesPaceCap - presalesThisMonth)
+          cappedPresales = Math.min(phasePresales, presaleRemaining)
+          cappedClosings = phaseClosings
+        } else if (salesPaceMode === 'closings') {
+          const closingsRemaining = Math.max(0, salesPaceCap - closingsThisMonth)
+          cappedPresales = phasePresales
+          cappedClosings = Math.min(phaseClosings, closingsRemaining)
+        } else {
+          const paceRemaining = Math.max(0, salesPaceCap - (presalesThisMonth + closingsThisMonth))
+          cappedPresales = Math.min(phasePresales, paceRemaining)
+          const paceAfterPresales = Math.max(0, salesPaceCap - (presalesThisMonth + cappedPresales + closingsThisMonth))
+          cappedClosings = Math.min(phaseClosings, paceAfterPresales)
+        }
+      }
+
+      presalesThisMonth += cappedPresales
+      closingsThisMonth += cappedClosings
+      phaseCumulativePresales[pIdx] += cappedPresales
+      phaseCumulativeClosings[pIdx] += cappedClosings
+
+      const phaseSalePrice = phase.avgSalePrice || config.averageSalePrice || 0
+      depositRevenue += cappedPresales * phaseSalePrice * depositPct
+      closeRevenue += cappedClosings * phaseSalePrice * (1 - depositPct)
+    }
+
+    for (let pIdx = 0; pIdx < phases.length - 1; pIdx++) {
+      if (phaseUnlockMonth[pIdx + 1] !== Number.MAX_SAFE_INTEGER) continue
+      const phase = phases[pIdx]
+      const triggerUnits = phase.unitCount * ((phase.presaleTriggerPercent || 0) / 100)
+      const demandUnits = countPresalesTowardTrigger
+        ? phaseCumulativePresales[pIdx]
+        : phaseCumulativeClosings[pIdx]
+      if (demandUnits >= triggerUnits) {
+        phaseUnlockMonth[pIdx + 1] = i + 1
+      }
+    }
+
+    const salesRevenue = depositRevenue + closeRevenue
+    const usableSalesCash = closeRevenue + depositRevenue * depositUsableShare
+    totalRevenue += salesRevenue
+
+    const reinvestUsed = Math.min(reinvestBalance, monthlyBuildCost)
+    reinvestBalance -= reinvestUsed
+    reinvestUsedTotal += reinvestUsed
+
+    const reserveUsed = Math.min(reserveBalance, Math.max(0, monthlyBuildCost - reinvestUsed))
+    reserveBalance -= reserveUsed
+    reserveUsedTotal += reserveUsed
+
+    const remainingCostAfterInternalCash = Math.max(0, monthlyBuildCost - reinvestUsed - reserveUsed)
+    const incentiveEquityUsed = Math.min(incentiveEquityPool, remainingCostAfterInternalCash)
+    incentiveEquityPool -= incentiveEquityUsed
+    incentiveEquityUsedTotal += incentiveEquityUsed
+    const remainingCostAfterIncentiveEquity = Math.max(0, remainingCostAfterInternalCash - incentiveEquityUsed)
+    const availableBondCapacity = Math.max(0, bondCapacity - bondBalance)
+    const bondDraw = Math.min(remainingCostAfterIncentiveEquity, availableBondCapacity)
+    bondBalance += bondDraw
+    bondDrawnTotal += bondDraw
+    const remainingCostAfterBond = Math.max(0, remainingCostAfterIncentiveEquity - bondDraw)
+    const availableLocCapacity = Math.max(0, locLimit - locBalance)
+    const locDraw = Math.min(remainingCostAfterBond, availableLocCapacity)
+    locDrawnTotal += locDraw
+    const equityNeeded = Math.max(0, remainingCostAfterBond - locDraw)
+    equityDeployedTotal += equityNeeded
+    locBalance += locDraw
+
+    const allUnitsClosed = phases.every((_, idx) => phaseCumulativeClosings[idx] >= phases[idx].unitCount - 1e-6)
+    const isFinalMonth = i === totalMonths - 1
+    const isCompletionEvent = allUnitsClosed || isFinalMonth
+
+    const targetLocPaydown = usableSalesCash * locPaydownPct
+    let locPaydown = Math.min(locBalance, targetLocPaydown)
+    locBalance -= locPaydown
+    let remainingPaydownCapacity = Math.max(0, targetLocPaydown - locPaydown)
+    let bondPaydown = Math.min(bondBalance, remainingPaydownCapacity)
+    bondBalance -= bondPaydown
+    remainingPaydownCapacity = Math.max(0, remainingPaydownCapacity - bondPaydown)
+    const totalDebtPaydown = locPaydown + bondPaydown
+    let remainingSalesCash = Math.max(0, usableSalesCash - totalDebtPaydown)
+
+    let reserveAdd = 0
+    let reinvestAdd = 0
+    let distributionAdd = 0
+
+    if (isCompletionEvent) {
+      // Final debt-clearance rule: at project completion, force debt payoff
+      // with all available internal cash before any terminal distributions.
+      const locBeforeFinalClearance = locBalance
+      const bondBeforeFinalClearance = bondBalance
+      const availableFinalCash = remainingSalesCash + reinvestBalance + reserveBalance
+      const totalDebtBeforeFinalClearance = locBalance + bondBalance
+      const totalPayoff = Math.min(totalDebtBeforeFinalClearance, availableFinalCash)
+      const locPayoff = Math.min(locBalance, totalPayoff)
+      locBalance -= locPayoff
+      locPaydown += locPayoff
+      const bondPayoff = Math.min(bondBalance, Math.max(0, totalPayoff - locPayoff))
+      bondBalance -= bondPayoff
+      bondPaydown += bondPayoff
+      sweepExecuted = totalPayoff > 0
+      if (locBeforeFinalClearance > 0 || bondBeforeFinalClearance > 0) {
+        finalLocBeforeSweep = locBeforeFinalClearance
+      }
+
+      // Consume this month's unallocated sales cash first, then reinvest/reserve.
+      const usedFromSales = Math.min(remainingSalesCash, totalPayoff)
+      remainingSalesCash -= usedFromSales
+      let remainingPayoffNeed = totalPayoff - usedFromSales
+      if (remainingPayoffNeed > 0) {
+        const usedFromReinvest = Math.min(reinvestBalance, remainingPayoffNeed)
+        reinvestBalance -= usedFromReinvest
+        reinvestUsedTotal += usedFromReinvest
+        remainingPayoffNeed -= usedFromReinvest
+      }
+      if (remainingPayoffNeed > 0) {
+        const usedFromReserve = Math.min(reserveBalance, remainingPayoffNeed)
+        reserveBalance -= usedFromReserve
+        reserveUsedTotal += usedFromReserve
+        remainingPayoffNeed -= usedFromReserve
+      }
+
+      // Only after debt is cleared do we allocate any leftover terminal cash.
+      const remainingCashAfterPayoff = remainingSalesCash
+      if (remainingCashAfterPayoff > 0) {
+        const reserveDistPct = Math.max(0, reservePct)
+        const distributionDistPct = Math.max(0, distributionPct)
+        const terminalDenominator = reserveDistPct + distributionDistPct
+        if (terminalDenominator > 0) {
+          reserveAdd = remainingCashAfterPayoff * (reserveDistPct / terminalDenominator)
+          distributionAdd = remainingCashAfterPayoff * (distributionDistPct / terminalDenominator)
+        } else {
+          distributionAdd = remainingCashAfterPayoff
+        }
+        reserveBalance += reserveAdd
+        distributedTotal += distributionAdd
+      }
+
+      if (locBalance > 0 || bondBalance > 0) {
+        debtRepaymentWarning =
+          'Project does not generate sufficient proceeds to fully repay LOC/Bond debt'
+      }
+
+      if (debugEnabled) {
+        console.log('[FOR-SALE LOC] final debt clearance event', {
+          month: monthKey,
+          phase: activePhaseName,
+          allUnitsClosed,
+          isFinalMonth,
+          locBeforeFinalClearance,
+          bondBeforeFinalClearance,
+          locPayoff,
+          bondPayoff,
+          totalPayoff,
+          finalLocAfterClearance: locBalance,
+          finalBondAfterClearance: bondBalance,
+          warning: debtRepaymentWarning,
+        })
+      }
+    } else {
+      reserveAdd = usableSalesCash * reservePct
+      reinvestAdd = usableSalesCash * reinvestPct + Math.max(0, targetLocPaydown - totalDebtPaydown)
+      distributionAdd = usableSalesCash * distributionPct
+      reserveBalance += reserveAdd
+      reinvestBalance += reinvestAdd
+      distributedTotal += distributionAdd
+    }
+
+    peakLocBalance = Math.max(peakLocBalance, locBalance)
+    peakBondBalance = Math.max(peakBondBalance, bondBalance)
+    const totalInflow = salesRevenue
+    const totalOutflow = monthlyBuildCost
+    const netCashFlow = totalInflow - totalOutflow
+    cumulativeBalance += netCashFlow
+
+    monthlyCashFlows.push({
+      month: monthKey,
+      monthLabel,
+      phase: monthlyBuildCost > 0 ? 'construction' : 'post-construction',
+      milestonePayments: salesRevenue,
+      rentalIncome: 0,
+      totalInflow,
+      laborCost: 0,
+      materialCost: 0,
+      subcontractorCost: 0,
+      overheadAllocation: 0,
+      operatingExpenses: 0,
+      debtService: 0,
+      totalOutflow,
+      netCashFlow,
+      cumulativeBalance,
+    })
+
+    forSaleLocTimeline.push({
+      month: monthKey,
+      monthLabel,
+      phaseName: activePhaseName,
+      activeUnits,
+      presalesThisMonth,
+      closingsThisMonth,
+      salesRevenue,
+      bondDraw,
+      bondPaydown,
+      bondBalance,
+      locDraw,
+      locPaydown,
+      locBalance,
+      availableLocCapacity: Math.max(0, locLimit - locBalance),
+      reserveBalance,
+      reinvestBalance,
+      distributedCash: distributedTotal,
+    })
+  }
+
+  const netCashFlow = monthlyCashFlows.reduce((sum, m) => sum + m.netCashFlow, 0)
+  const cumulativeBalances = monthlyCashFlows.map((m) => m.cumulativeBalance)
+  const peakCashNeeded = Math.max(0, ...cumulativeBalances.map((b) => -b))
+  const monthsNegative = monthlyCashFlows.filter((m) => m.cumulativeBalance < 0).length
+  const projectedProfit = totalRevenue - totalEstimatedCost
+  const projectedMargin = totalRevenue > 0 ? (projectedProfit / totalRevenue) * 100 : 0
+  const totalClosedUnits = phaseCumulativeClosings.reduce((sum, u) => sum + u, 0)
+
+  const projectCashFlows = [-equityDeployedTotal, ...monthlyCashFlows.map((m) => m.netCashFlow)]
+  const forSaleProjectIrr = calculateIRR(projectCashFlows)
+  const forSaleEquityMultiple = equityDeployedTotal > 0 ? Math.max(0, totalRevenue) / equityDeployedTotal : undefined
+
+  const result: ProFormaProjection = {
+    projectId: project.id,
+    projectName: project.name,
+    contractValue: contractValue || input.contractValue,
+    totalEstimatedCost,
+    projectedProfit,
+    projectedMargin,
+    monthlyCashFlows,
+    summary: {
+      proFormaModeUsed: 'for-sale-phased-loc',
+      totalInflow: totalRevenue,
+      totalOutflow: totalEstimatedCost,
+      netCashFlow,
+      peakCashNeeded,
+      monthsNegative,
+      totalRentalIncome: 0,
+      annualRentalIncome: 0,
+      monthlyRentalIncome: 0,
+      totalOperatingExpenses: 0,
+      annualOperatingExpenses: 0,
+      totalDebtService: 0,
+      monthlyDebtService: 0,
+      netOperatingIncome: 0,
+      cashFlowAfterDebt: 0,
+      forSaleTotalRevenue: totalRevenue,
+      forSaleBaseCostBeforeIncentives: baseTotalCostBeforeIncentives,
+      forSaleAppliedInfrastructureReduction: appliedInfrastructureReduction,
+      forSaleAppliedProjectCostReduction: effectiveProjectCostReduction,
+      forSaleLtcSizingBase: grossProjectCostForLtc,
+      forSaleLocLimit: locLimit,
+      forSaleLocDrawnTotal: locDrawnTotal,
+      forSaleEndingLocBalance: locBalance,
+      forSalePeakLocBalance: peakLocBalance,
+      forSaleEndingBondBalance: bondBalance,
+      forSalePeakBondBalance: peakBondBalance,
+      forSaleBondDrawnTotal: bondDrawnTotal,
+      forSaleReserveEnding: reserveBalance,
+      forSaleDistributionTotal: distributedTotal,
+      forSaleReinvestedTotal: reinvestUsedTotal,
+      forSaleEquityDeployed: equityDeployedTotal,
+      forSaleIncentiveEquityUsed: incentiveEquityUsedTotal,
+      forSaleEquityMultiple,
+      forSaleProjectIrr,
+      forSaleReserveUsedTotal: reserveUsedTotal,
+      forSalePhaseActivations: phaseActivationLabels,
+      forSaleFundingAudit: {
+        incentiveEquitySourceUsed: incentiveEquityUsedTotal,
+        remainingEquityIncentive: incentiveEquityPool,
+        reinvestUsed: reinvestUsedTotal,
+        reserveUsed: reserveUsedTotal,
+        locDrawn: locDrawnTotal,
+        developerEquityUsed: equityDeployedTotal,
+      },
+      forSaleSweepExecuted: sweepExecuted,
+      forSaleFinalLocBeforeSweep: finalLocBeforeSweep,
+      forSaleFinalLocAfterSweep: locBalance,
+      forSaleClosedUnits: totalClosedUnits,
+      forSaleTotalUnits: totalPhaseUnits,
+      forSaleEngineVersion: engineVersion,
+      forSaleDebtRepaymentWarning: debtRepaymentWarning,
+    },
+    costBreakdown,
+    rentalSummary: {
+      totalUnits: 0,
+      totalSquareFootage: 0,
+      totalProjectSquareFootage: input.totalProjectSquareFootage || 0,
+      averageRentPerUnit: 0,
+      averageRentPerSqft: 0,
+      stabilizedOccupancy: 0,
+    },
+    forSaleLocTimeline,
+  }
+  if (debugEnabled) {
+    console.log('[FOR-SALE LOC] engine completed', {
+      engineVersion,
+      peakLoc: result.summary.forSalePeakLocBalance,
+      endingLoc: result.summary.forSaleEndingLocBalance,
+      sweepExecuted: result.summary.forSaleSweepExecuted,
+      finalLocBeforeSweep: result.summary.forSaleFinalLocBeforeSweep,
+      finalLocAfterSweep: result.summary.forSaleFinalLocAfterSweep,
+      closedUnits: result.summary.forSaleClosedUnits,
+      totalUnits: result.summary.forSaleTotalUnits,
+      activations: result.summary.forSalePhaseActivations,
+      fundingAudit: result.summary.forSaleFundingAudit,
+      peakBond: result.summary.forSalePeakBondBalance,
+      endingBond: result.summary.forSaleEndingBondBalance,
+      drawnBond: result.summary.forSaleBondDrawnTotal,
+    })
+  }
+  return result
 }
 
 function buildAnnualDebtSchedule(
