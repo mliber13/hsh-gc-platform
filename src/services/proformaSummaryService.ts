@@ -110,6 +110,35 @@ export function buildDealSummary(
     })
   }
 
+  // Option 1 capital source treatment:
+  // - Debt and Equity are modeled as the two source types.
+  // - "Debt service" tagged rows are surfaced in the cap stack for visibility.
+  const fundingRows = (inputs.incentives ?? []).filter((row) => {
+    const amount = row.totalAmount ?? 0
+    if (amount <= 0) return false
+    const applyTo = normalizeApplyTo(row.applyTo)
+    const sourceType = (row.sourceType || 'equity').toLowerCase()
+    return (
+      applyTo === 'equity-source' ||
+      applyTo === 'debt-service' ||
+      sourceType === 'debt' ||
+      sourceType === 'equity'
+    )
+  })
+
+  for (const row of fundingRows) {
+    const applyTo = normalizeApplyTo(row.applyTo)
+    const sourceType = (row.sourceType || 'equity').toLowerCase()
+    const isDebt = sourceType === 'debt'
+    const prefix = isDebt ? 'Debt Source' : 'Equity Source'
+    const descriptor = row.label?.trim() ? row.label.trim() : 'Unnamed source'
+    const suffix = applyTo === 'debt-service' ? ' (Debt Service)' : ''
+    capitalStack.push({
+      label: `${prefix}: ${descriptor}${suffix}`,
+      amount: row.totalAmount ?? 0,
+    })
+  }
+
   const conclusionText =
     inputs.conclusionText &&
     inputs.conclusionText.trim().length > 0

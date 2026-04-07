@@ -9,6 +9,7 @@ import { ChangeOrders } from './components/ChangeOrders'
 import { ProjectForms } from './components/ProjectForms'
 import { ProjectDocuments } from './components/ProjectDocuments'
 import { SelectionBook } from './components/SelectionBook'
+import { SelectionSchedules } from './components/SelectionSchedules'
 import { ScheduleBuilder } from './components/ScheduleBuilder'
 import { CreateProjectForm, ProjectFormData } from './components/CreateProjectForm'
 import { PlanLibrary } from './components/PlanLibrary'
@@ -41,6 +42,7 @@ import { backupAllData } from './services/backupService'
 import { ContactDirectory } from './components/ContactDirectory'
 import { SOWManagement } from './components/SOWManagement'
 import { DealPipeline } from './components/DealPipeline'
+import { DealWorkspace } from './components/DealWorkspace'
 import { FeedbackForm } from './components/FeedbackForm'
 import { MyFeedback } from './components/MyFeedback'
 import { PrivacyPolicy } from './components/PrivacyPolicy'
@@ -57,6 +59,7 @@ type View =
   | 'documents'
   | 'purchase-orders'
   | 'selection-book'
+  | 'selection-schedules'
   | 'schedule'
   | 'plan-library'
   | 'plan-editor'
@@ -67,6 +70,7 @@ type View =
   | 'contact-directory'
   | 'sow-management'
   | 'deal-pipeline'
+  | 'deal-workspace'
   | 'my-feedback'
   | 'privacy'
   | 'terms'
@@ -80,6 +84,7 @@ function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [isBackingUp, setIsBackingUp] = useState(false)
   const [showFeedbackForm, setShowFeedbackForm] = useState(false)
+  const [workspaceDealId, setWorkspaceDealId] = useState<string | undefined>(undefined)
 
   // Load user profile when authenticated
   useEffect(() => {
@@ -122,13 +127,19 @@ function App() {
       console.log('Detected QB callback, switching to qb-callback view')
       setCurrentView('qb-callback')
     }
+    if (pathname.startsWith('/deals/workspace/')) {
+      const pathParts = pathname.split('/')
+      const dealIdFromPath = pathParts[pathParts.length - 1]
+      setWorkspaceDealId(dealIdFromPath || undefined)
+      setCurrentView('deal-workspace')
+    }
     if (pathname === '/privacy') setCurrentView('privacy')
     if (pathname === '/terms') setCurrentView('terms')
   }, [])
 
   // Refresh project data when viewing project-related screens
   useEffect(() => {
-    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms' || currentView === 'documents' || currentView === 'purchase-orders' || currentView === 'selection-book' || currentView === 'schedule')) {
+    if (selectedProject && (currentView === 'project-detail' || currentView === 'actuals' || currentView === 'estimate' || currentView === 'change-orders' || currentView === 'forms' || currentView === 'documents' || currentView === 'purchase-orders' || currentView === 'selection-book' || currentView === 'selection-schedules' || currentView === 'schedule')) {
       getProject_Hybrid(selectedProject.id).then(refreshedProject => {
         if (refreshedProject) {
           setSelectedProject(refreshedProject)
@@ -244,7 +255,7 @@ function App() {
   }
 
   /** Open a project directly into a section (Estimate Book, Actuals, etc.) for faster navigation from dashboard. */
-  const handleOpenProjectSection = (project: Project, section: 'estimate' | 'actuals' | 'change-orders' | 'documents' | 'selection-book' | 'schedule' | 'forms') => {
+  const handleOpenProjectSection = (project: Project, section: 'estimate' | 'actuals' | 'change-orders' | 'documents' | 'selection-book' | 'selection-schedules' | 'schedule' | 'forms') => {
     setSelectedProject(project)
     setCurrentView(section)
   }
@@ -288,6 +299,12 @@ function App() {
     }
   }
 
+  const handleViewSelectionSchedules = () => {
+    if (selectedProject) {
+      setCurrentView('selection-schedules')
+    }
+  }
+
   const handleViewSchedule = () => {
     if (selectedProject) {
       setCurrentView('schedule')
@@ -296,6 +313,12 @@ function App() {
 
   const handleViewDealPipeline = () => {
     setCurrentView('deal-pipeline')
+  }
+
+  const handleOpenDealWorkspace = (dealId: string) => {
+    setWorkspaceDealId(dealId)
+    window.history.replaceState({}, '', `/deals/workspace/${dealId}`)
+    setCurrentView('deal-workspace')
   }
 
   const handleViewPOs = () => {
@@ -561,6 +584,7 @@ function App() {
           onViewDocuments={handleViewDocuments}
           onViewPOs={handleViewPOs}
           onViewSelectionBook={handleViewSelectionBook}
+          onViewSelectionSchedules={handleViewSelectionSchedules}
           onViewSchedule={handleViewSchedule}
           onProjectDuplicated={(newProject) => {
             setSelectedProject(newProject)
@@ -603,6 +627,13 @@ function App() {
       {currentView === 'selection-book' && selectedProject && (
         <SelectionBook
           projectId={selectedProject.id}
+          project={selectedProject}
+          onBack={handleBackToProjectDetail}
+        />
+      )}
+
+      {currentView === 'selection-schedules' && selectedProject && (
+        <SelectionSchedules
           project={selectedProject}
           onBack={handleBackToProjectDetail}
         />
@@ -668,8 +699,19 @@ function App() {
           <DealPipeline 
             onBack={handleBackToDashboard}
             onViewProjects={handleBackToDashboard}
+            onOpenDealWorkspace={handleOpenDealWorkspace}
           />
         </div>
+      )}
+
+      {currentView === 'deal-workspace' && (
+        <DealWorkspace
+          dealId={workspaceDealId}
+          onBack={() => {
+            window.history.replaceState({}, '', '/')
+            setCurrentView('deal-pipeline')
+          }}
+        />
       )}
 
       {currentView === 'my-feedback' && (

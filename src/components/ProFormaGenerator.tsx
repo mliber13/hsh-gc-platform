@@ -56,12 +56,15 @@ type ForSaleIncentiveApplyTo =
   | 'infrastructure-reduction'
   | 'cost-reduction'
   | 'equity-source'
+  | 'debt-service'
   | 'equity_source'
+type ForSaleIncentiveSourceType = 'debt' | 'equity'
 interface ForSaleIncentiveItem {
   id: string
   name: string
   amount: number
   applyTo: ForSaleIncentiveApplyTo
+  sourceType: ForSaleIncentiveSourceType
 }
 type ForSaleDepositUsageMode = 'full' | 'percent' | 'at-closing'
 type ForSaleSpendCurve = 'linear' | 'front-loaded' | 'back-loaded'
@@ -354,6 +357,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       costEntryMode: 'auto',
     },
   ])
+  const isForSaleLocMode = proFormaMode === 'for-sale-phased-loc'
 
   const isDealUnderwriting =
     project.id.startsWith('deal-') || project.metadata?.source === 'deal-pipeline'
@@ -916,7 +920,12 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         setForSaleBondLtcOverridePercent(savedInputs.forSaleBondLtcOverridePercent ?? 0)
         setForSaleBondRatePercent(savedInputs.forSaleBondRatePercent ?? 0)
         setForSaleBondCapacity(savedInputs.forSaleBondCapacity ?? 0)
-        setForSaleIncentives(savedInputs.forSaleIncentives ?? [])
+        setForSaleIncentives(
+          (savedInputs.forSaleIncentives ?? []).map((item) => ({
+            ...item,
+            sourceType: item.sourceType ?? 'equity',
+          })),
+        )
         setForSaleSalesBuckets(savedInputs.forSaleSalesBuckets ?? {
           locPaydownPercent: 70,
           reinvestPercent: 20,
@@ -1443,6 +1452,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         totalAmount: i.amount || undefined,
         perUnitAmount: units > 0 && (i.amount || 0) > 0 ? i.amount / units : undefined,
         applyTo: i.applyTo,
+        sourceType: i.sourceType,
       }))
     setDealSummaryInputs((prev) => ({ ...prev, incentives: mapped }))
   }, [forSaleIncentives, dealSummaryInputs.totalUnits])
@@ -1503,7 +1513,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   const handleGenerate = () => {
     const errors: string[] = []
 
-    const effectiveContractValue = proFormaMode === 'for-sale-phased-loc' ? forSaleDerivedContractValue : contractValue
+    const effectiveContractValue = isForSaleLocMode ? forSaleDerivedContractValue : contractValue
 
     if (!effectiveContractValue) {
       errors.push(isDealUnderwriting ? 'Enter a Deal Value / Contract Value.' : 'Enter a Contract Value.')
@@ -1514,7 +1524,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       errors.push('Enter an Estimated Construction Cost for underwriting when no detailed estimate exists.')
     }
 
-    if (proFormaMode !== 'for-sale-phased-loc' && paymentMilestones.length === 0) {
+    if (!isForSaleLocMode && paymentMilestones.length === 0) {
       errors.push('Add at least one funding milestone to model construction inflows.')
     }
 
@@ -1522,7 +1532,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     // - must start at 0
     // - must end at 100
     // - must be strictly increasing
-    if (proFormaMode !== 'for-sale-phased-loc' && paymentMilestones.length > 0) {
+    if (!isForSaleLocMode && paymentMilestones.length > 0) {
       const sorted = [...paymentMilestones].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
       )
@@ -1544,7 +1554,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       }
     }
 
-    if (proFormaMode === 'for-sale-phased-loc') {
+    if (isForSaleLocMode) {
       const bucketTotal =
         (forSaleSalesBuckets.locPaydownPercent || 0) +
         (forSaleSalesBuckets.reinvestPercent || 0) +
@@ -1678,7 +1688,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       annualDepreciation,
       annualAppreciationPercent,
       valueMethod,
-      forSalePhasedLoc: proFormaMode === 'for-sale-phased-loc'
+      forSalePhasedLoc: isForSaleLocMode
         ? {
             enabled: true,
             totalUnits: forSaleTotalUnits,
@@ -1755,6 +1765,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     if (normalized === 'project-cost-reduction') return 'cost-reduction'
     if (normalized === 'infrastructure-reduction') return 'infrastructure-reduction'
     if (normalized === 'equity-source') return 'equity-source'
+    if (normalized === 'debt-service') return 'debt-service'
     return normalized
   }
 
@@ -1867,12 +1878,12 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         id="contractValue"
                         type="text"
                         inputMode="decimal"
-                        value={(proFormaMode === 'for-sale-phased-loc' ? forSaleDerivedContractValue : contractValue)
-                          ? (proFormaMode === 'for-sale-phased-loc' ? forSaleDerivedContractValue : contractValue).toLocaleString('en-US')
+                        value={(isForSaleLocMode ? forSaleDerivedContractValue : contractValue)
+                          ? (isForSaleLocMode ? forSaleDerivedContractValue : contractValue).toLocaleString('en-US')
                           : ''}
-                        readOnly={proFormaMode === 'for-sale-phased-loc'}
+                        readOnly={isForSaleLocMode}
                         onChange={(e) => {
-                          if (proFormaMode === 'for-sale-phased-loc') return
+                          if (isForSaleLocMode) return
                           const raw = e.target.value.replace(/,/g, '')
                           const next = raw === '' ? 0 : parseFloat(raw)
                           setContractValue(isNaN(next) ? 0 : next)
@@ -1883,7 +1894,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                       <FieldHelperSlot>
                         {isDealUnderwriting ? (
                           'Deal underwriting basis.'
-                        ) : proFormaMode === 'for-sale-phased-loc' ? (
+                        ) : isForSaleLocMode ? (
                           'Derived from phases.'
                         ) : (
                           <>
@@ -2104,7 +2115,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                   {isDealUnderwriting && (
                     <div className="mt-2 space-y-1.5 border-t border-slate-200 pt-2">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-[13px] font-semibold text-slate-800">Incentive stack</p>
+                        <p className="text-[13px] font-semibold text-slate-800">Cap stack</p>
                         <Button
                           type="button"
                           variant="outline"
@@ -2118,6 +2129,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                                 name: '',
                                 amount: 0,
                                 applyTo: 'infrastructure-reduction',
+                                sourceType: 'equity',
                               },
                             ])
                           }
@@ -2126,9 +2138,9 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                           Add
                         </Button>
                       </div>
-                      <p className="text-[13px] text-slate-500">Applies across modes.</p>
+                      <p className="text-[13px] text-slate-500">Applies across modes. Source type supports Option 1: Debt or Equity.</p>
                       {forSaleIncentives.length === 0 ? (
-                        <p className="text-[13px] text-slate-500">No incentives yet.</p>
+                        <p className="text-[13px] text-slate-500">No cap stack sources yet.</p>
                       ) : (
                         <div className="space-y-2">
                           {forSaleIncentives.map((inc) => (
@@ -2167,10 +2179,46 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                                 />
                                 <FieldHelperSlot />
                               </FormField>
+                              <FormField width="medium">
+                                <Label className={WORKSHEET_LABEL}>Source Type</Label>
+                                <Select
+                                  value={inc.sourceType}
+                                  onValueChange={(v) =>
+                                    setForSaleIncentives((prev) =>
+                                      prev.map((x) =>
+                                        x.id === inc.id
+                                          ? {
+                                              ...x,
+                                              sourceType: v as ForSaleIncentiveSourceType,
+                                              applyTo:
+                                                v === 'debt' && normalizeIncentiveApplyTo(x.applyTo) === 'equity-source'
+                                                  ? 'debt-service'
+                                                  : x.applyTo,
+                                            }
+                                          : x,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger className={DENSE_INPUT}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="equity">Equity</SelectItem>
+                                    <SelectItem value="debt">Debt</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FieldHelperSlot />
+                              </FormField>
                               <FormField width="growWide" className="min-w-[200px] md:max-w-[280px]">
                                 <Label className={WORKSHEET_LABEL}>Apply to</Label>
                                 <Select
-                                  value={inc.applyTo}
+                                  value={
+                                    inc.sourceType === 'debt' &&
+                                    normalizeIncentiveApplyTo(inc.applyTo) === 'equity-source'
+                                      ? 'debt-service'
+                                      : inc.applyTo
+                                  }
                                   onValueChange={(v) =>
                                     setForSaleIncentives((prev) =>
                                       prev.map((x) =>
@@ -2185,7 +2233,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                                   <SelectContent>
                                     <SelectItem value="infrastructure-reduction">Infrastructure reduction</SelectItem>
                                     <SelectItem value="cost-reduction">Project cost reduction</SelectItem>
-                                    <SelectItem value="equity-source">Equity source</SelectItem>
+                                    {inc.sourceType === 'debt' ? (
+                                      <SelectItem value="debt-service">Debt service</SelectItem>
+                                    ) : (
+                                      <SelectItem value="equity-source">Equity source</SelectItem>
+                                    )}
                                   </SelectContent>
                                 </Select>
                                 <FieldHelperSlot />
@@ -2210,7 +2262,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                       )}
                     </div>
                   )}
-                  {proFormaMode === 'for-sale-phased-loc' && (
+                  {isForSaleLocMode && (
                     <div className="mt-2 space-y-1.5 border-t border-slate-200 pt-2">
                       <div className="flex items-center gap-2">
                         <input
@@ -2269,7 +2321,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                 </FormSection>
                 </div>
 
-                {proFormaMode === 'for-sale-phased-loc' && (
+                {isForSaleLocMode && (
                   <>
                     <div className="border-b border-slate-200 px-3 py-2 md:px-3 md:py-2.5">
                     <FormSection className="[&_h3]:text-base [&_h3]:font-semibold [&_h3]:tracking-tight">
@@ -2569,7 +2621,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                 )}
 
               {/* Full Development Proforma (Sources & Uses, Draw Schedule, IDC) */}
-              {proFormaMode !== 'for-sale-phased-loc' && (
+              {!isForSaleLocMode && (
               <WorkspacePanel>
                 <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
@@ -2858,7 +2910,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
               )}
 
               {/* Funding Milestones (Draw Schedule) */}
-              {proFormaMode !== 'for-sale-phased-loc' && (
+              {!isForSaleLocMode && (
               <WorkspacePanel>
                 <div className="flex items-center justify-between mb-1">
                   <Label>Funding Milestones (Draw Schedule) *</Label>
@@ -3607,18 +3659,33 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     />
                     <ModeTabButton
                       block
-                      active={proFormaMode === 'general-development'}
-                      label="General Development"
+                      active={proFormaMode !== 'rental-hold'}
+                      label="Development"
                       onClick={() => setProFormaMode('general-development')}
-                    />
-                    <ModeTabButton
-                      block
-                      active={proFormaMode === 'for-sale-phased-loc'}
-                      label="For-Sale Phased (LOC)"
-                      onClick={() => setProFormaMode('for-sale-phased-loc')}
                     />
                   </div>
                 </div>
+                {proFormaMode !== 'rental-hold' && (
+                  <div className="space-y-1.5 border-t border-slate-200 pt-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Development scenario
+                    </Label>
+                    <div className="flex items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1.5">
+                      <input
+                        id="enableForSaleLocMode"
+                        type="checkbox"
+                        checked={isForSaleLocMode}
+                        onChange={(e) =>
+                          setProFormaMode(e.target.checked ? 'for-sale-phased-loc' : 'general-development')
+                        }
+                        className="h-4 w-4"
+                      />
+                      <Label htmlFor="enableForSaleLocMode" className="text-[13px] text-slate-700">
+                        Enable for-sale phased LOC assumptions
+                      </Label>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-1.5 border-t border-slate-200 pt-2">
                   <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">Version</p>
@@ -3714,7 +3781,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                   </div>
                 )}
 
-                {proFormaMode === 'for-sale-phased-loc' && (
+                {isForSaleLocMode && (
                   <div className="space-y-1.5 border-t border-slate-200 pt-2">
                     <p className="text-xs font-semibold text-slate-800">LOC mode checks</p>
                     <div className="rounded-md border border-slate-200 bg-white p-2.5 text-xs text-slate-700">
@@ -4410,7 +4477,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                       {/* 4) Incentive Stack */}
                       {projection.dealSummary.incentives.length > 0 && (
                         <div>
-                          <h4 className="text-sm font-semibold text-gray-700 mb-1">Incentive stack</h4>
+                          <h4 className="text-sm font-semibold text-gray-700 mb-1">Cap stack incentives</h4>
                           <div className="overflow-x-auto">
                             <table className="w-full text-sm border-collapse">
                               <thead>
@@ -4581,7 +4648,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         )}
                       </div>
 
-                      {proFormaMode === 'for-sale-phased-loc' && (
+                      {isForSaleLocMode && (
                         <div className="border-t pt-4">
                           <h4 className="text-sm font-semibold text-gray-700 mb-2">For-Sale Phased LOC Summary</h4>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -4724,7 +4791,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         </div>
                       )}
 
-                      {proFormaMode === 'for-sale-phased-loc' && projection.forSaleLocTimeline && projection.forSaleLocTimeline.length > 0 && (
+                      {isForSaleLocMode && projection.forSaleLocTimeline && projection.forSaleLocTimeline.length > 0 && (
                         <div className="border-t pt-4">
                           <h4 className="text-sm font-semibold text-gray-700 mb-2">LOC Timeline</h4>
                           <div className="overflow-x-auto border rounded">

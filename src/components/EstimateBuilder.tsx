@@ -1975,6 +1975,11 @@ function TradeTable({
                                             Selection only
                                           </span>
                                         )}
+                                        {Boolean((subItem.selection as any)?.includeInSchedule) && (
+                                          <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700" title="Included in Selection Schedules export.">
+                                            In schedules
+                                          </span>
+                                        )}
                                       </div>
                                     </td>
                                     <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.quantity}</td>
@@ -2463,6 +2468,30 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
             </p>
 
             {/* Item-level Selection (e.g. siding, gutters, soffit) */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="tradeIncludeInSchedule"
+                checked={Boolean((formData.selection as any)?.includeInSchedule)}
+                onChange={(e) => {
+                  const checked = e.target.checked
+                  setFormData(prev => {
+                    const previousSelection = (prev.selection as Record<string, unknown> | undefined) || {}
+                    const summaryValue = previousSelection.summary
+                    const nextSelection = checked
+                      ? { ...previousSelection, includeInSchedule: true }
+                      : summaryValue
+                        ? { ...previousSelection, summary: summaryValue }
+                        : undefined
+                    return { ...prev, selection: nextSelection }
+                  })
+                }}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <Label htmlFor="tradeIncludeInSchedule" className="font-normal cursor-pointer">
+                Include this cost item in Selection Schedules
+              </Label>
+            </div>
             <div>
               <Label htmlFor="tradeSelection">Selection (optional)</Label>
               <Input
@@ -2474,7 +2503,9 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                     ...prev,
                     selection: summary
                       ? { ...(prev.selection as any), summary }
-                      : undefined,
+                      : ((prev.selection as any)?.includeInSchedule
+                          ? { includeInSchedule: true }
+                          : undefined),
                   }))
                 }}
                 placeholder="e.g., James Hardie lap siding, Color: Arctic White"
@@ -2575,6 +2606,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
     selection: subItem?.selection,
   })
   const selectionOnly = formData.selectionOnly ?? false
+  const includeInSelectionSchedules = Boolean((formData.selection as any)?.includeInSchedule)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -2631,6 +2663,31 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
               />
               <Label htmlFor="subItemSelectionOnly" className="font-normal cursor-pointer">
                 Selection only (no cost — e.g. paint color per room, fixture choice)
+              </Label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="subItemIncludeInSchedule"
+                checked={includeInSelectionSchedules}
+                onChange={(e) => {
+                  const checked = e.target.checked
+                  setFormData((prev: Partial<SubItem>) => {
+                    const previousSelection = (prev.selection as Record<string, unknown> | undefined) || {}
+                    const summaryValue = previousSelection.summary
+                    const nextSelection = checked
+                      ? { ...previousSelection, includeInSchedule: true }
+                      : summaryValue
+                        ? { ...previousSelection, summary: summaryValue }
+                        : undefined
+                    return { ...prev, selection: nextSelection }
+                  })
+                }}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <Label htmlFor="subItemIncludeInSchedule" className="font-normal cursor-pointer">
+                Include in Selection Schedules (keeps cost fields active)
               </Label>
             </div>
 
@@ -2807,7 +2864,9 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
                     ...prev,
                     selection: summary
                       ? { ...(prev.selection as any), summary }
-                      : undefined,
+                      : ((prev.selection as any)?.includeInSchedule
+                          ? { includeInSchedule: true }
+                          : undefined),
                   }))
                 }}
                 placeholder="e.g., Sherwin-Williams Agreeable Gray – walls; Extra White – trim"

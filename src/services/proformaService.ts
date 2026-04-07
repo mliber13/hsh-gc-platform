@@ -912,15 +912,11 @@ function calculateForSalePhasedLocProForma(
       // Only after debt is cleared do we allocate any leftover terminal cash.
       const remainingCashAfterPayoff = remainingSalesCash
       if (remainingCashAfterPayoff > 0) {
-        const reserveDistPct = Math.max(0, reservePct)
-        const distributionDistPct = Math.max(0, distributionPct)
-        const terminalDenominator = reserveDistPct + distributionDistPct
-        if (terminalDenominator > 0) {
-          reserveAdd = remainingCashAfterPayoff * (reserveDistPct / terminalDenominator)
-          distributionAdd = remainingCashAfterPayoff * (distributionDistPct / terminalDenominator)
-        } else {
-          distributionAdd = remainingCashAfterPayoff
-        }
+        // Distribution must come only from closing proceeds (never presale deposits).
+        const closingEligibleCash = Math.max(0, closeRevenue)
+        const distributionBase = Math.min(remainingCashAfterPayoff, closingEligibleCash)
+        distributionAdd = distributionBase * Math.max(0, distributionPct)
+        reserveAdd = Math.max(0, remainingCashAfterPayoff - distributionAdd)
         reserveBalance += reserveAdd
         distributedTotal += distributionAdd
       }
@@ -947,9 +943,22 @@ function calculateForSalePhasedLocProForma(
         })
       }
     } else {
-      reserveAdd = usableSalesCash * reservePct
-      reinvestAdd = usableSalesCash * reinvestPct + Math.max(0, targetLocPaydown - totalDebtPaydown)
-      distributionAdd = usableSalesCash * distributionPct
+      // Distribution should occur only at closings, not from deposit cash.
+      const closeOnlyDistribution = Math.max(0, closeRevenue) * Math.max(0, distributionPct)
+      const distributionCapped = Math.min(usableSalesCash, closeOnlyDistribution)
+      const nonDistributedCash = Math.max(0, usableSalesCash - distributionCapped)
+      const reserveReinvestWeight = Math.max(0, reservePct) + Math.max(0, reinvestPct)
+
+      if (reserveReinvestWeight > 0) {
+        reserveAdd = nonDistributedCash * (Math.max(0, reservePct) / reserveReinvestWeight)
+        reinvestAdd =
+          nonDistributedCash * (Math.max(0, reinvestPct) / reserveReinvestWeight) +
+          Math.max(0, targetLocPaydown - totalDebtPaydown)
+      } else {
+        reserveAdd = 0
+        reinvestAdd = nonDistributedCash + Math.max(0, targetLocPaydown - totalDebtPaydown)
+      }
+      distributionAdd = distributionCapped
       reserveBalance += reserveAdd
       reinvestBalance += reinvestAdd
       distributedTotal += distributionAdd

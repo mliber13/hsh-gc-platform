@@ -84,6 +84,8 @@ export interface DealSummaryIncentiveInput {
   totalAmount?: number
   /** Optional source classification from UI stack (infra/cost/equity/financing-term, etc.) */
   applyTo?: string
+  /** Capital source type used for cap stack classification */
+  sourceType?: 'debt' | 'equity'
 }
 
 export interface DealSummaryInputs {
