@@ -772,6 +772,10 @@ function calculateForSalePhasedLocProForma(
       const presaleStart = Math.max(0, phase.presaleStartMonthOffset || 0)
       const closeStart = Math.max(presaleStart, phase.closeStartMonthOffset || 0)
       const presaleMonths = Math.max(1, phase.buildMonths - presaleStart + 1)
+      // When closeStart >= buildMonths (closings begin after construction finishes),
+      // closeMonths resolves to 1 — all units would close in a single burst month.
+      // The sales pace cap is what distributes closings realistically in this case.
+      // If no pace cap is set, consider adding one to avoid single-month closing spikes.
       const closeMonths = Math.max(1, phase.buildMonths - closeStart + 1)
       const presalesRemaining = Math.max(0, phase.unitCount - phaseCumulativePresales[pIdx])
       const phasePresales =
@@ -1018,6 +1022,10 @@ function calculateForSalePhasedLocProForma(
   const projectedMargin = totalRevenue > 0 ? (projectedProfit / totalRevenue) * 100 : 0
   const totalClosedUnits = phaseCumulativeClosings.reduce((sum, u) => sum + u, 0)
 
+  // IRR approximation: equity is modeled as a single period-0 outflow equal to total
+  // equity deployed across the project. In practice equity is drawn gradually over months,
+  // so this will slightly overstate IRR (early deployment = longer hold = lower true IRR).
+  // For a more precise IRR, track per-month equity deployment in the timeline.
   const projectCashFlows = [-equityDeployedTotal, ...monthlyCashFlows.map((m) => m.netCashFlow)]
   const forSaleProjectIrr = calculateIRR(projectCashFlows)
   const forSaleEquityMultiple = equityDeployedTotal > 0 ? Math.max(0, totalRevenue) / equityDeployedTotal : undefined

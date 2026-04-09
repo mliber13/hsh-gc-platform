@@ -360,7 +360,9 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   const isForSaleLocMode = proFormaMode === 'for-sale-phased-loc'
 
   const isDealUnderwriting =
-    project.id.startsWith('deal-') || project.metadata?.source === 'deal-pipeline'
+    project.id.startsWith('deal-') ||
+    project.metadata?.source === 'deal-pipeline' ||
+    project.metadata?.source === 'deal-workspace'
 
   // Total project square footage
   const [totalProjectSquareFootage, setTotalProjectSquareFootage] = useState<number>(

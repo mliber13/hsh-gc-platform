@@ -27,7 +27,11 @@
 //
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { corsHeaders } from '../_shared/cors.ts'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 const DEFAULT_MODEL = 'claude-sonnet-4-5'
@@ -47,6 +51,8 @@ interface CoachRequestBody {
 interface CoachResponseBody {
   reply: string
   fieldUpdates: Record<string, unknown>
+  notesAppend?: string
+  taskSuggestions?: string[]
   confidence: number
   stageSuggestion?: Stage
 }
@@ -81,6 +87,10 @@ function coerceCoachJson(rawText: string): CoachResponseBody {
         parsed.fieldUpdates && typeof parsed.fieldUpdates === 'object' && !Array.isArray(parsed.fieldUpdates)
           ? (parsed.fieldUpdates as Record<string, unknown>)
           : {},
+      notesAppend: typeof parsed.notesAppend === 'string' ? parsed.notesAppend : undefined,
+      taskSuggestions: Array.isArray(parsed.taskSuggestions)
+        ? parsed.taskSuggestions.filter((t): t is string => typeof t === 'string' && !!t.trim())
+        : undefined,
       confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
       stageSuggestion:
         parsed.stageSuggestion === 'coaching' ||
@@ -138,7 +148,7 @@ serve(async (req) => {
   const model = body.model || DEFAULT_MODEL
   const systemPrompt =
     body.systemPrompt ||
-    'Return strict JSON with keys: reply (string), fieldUpdates (object), confidence (0..1), optional stageSuggestion.'
+    'Return strict JSON with keys: reply (string), fieldUpdates (object), optional notesAppend (string), optional taskSuggestions (string[]), confidence (0..1), optional stageSuggestion.'
 
   const historyText = (body.history || [])
     .slice(-20)
@@ -169,7 +179,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 900,
+        max_tokens: 2500,
         temperature: 0.2,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPayload }],

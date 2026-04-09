@@ -30,7 +30,7 @@ interface ProjectsDashboardProps {
   onOpenProjectSection?: (project: Project, section: ProjectSection) => void
   onOpenPlanLibrary: () => void
   onOpenItemLibrary: () => void
-  onOpenDealPipeline?: () => void
+  onOpenDealWorkspace?: () => void
   /** Open QuickBooks settings / import flow (e.g. for "X pending from QB" link) */
   onOpenQBSettings?: () => void
 }
@@ -51,7 +51,7 @@ const SECTION_BUTTONS: { section: ProjectSection; label: string; icon: React.Rea
   { section: 'change-orders', label: 'COs', icon: <ClipboardList className="w-3.5 h-3.5" /> },
 ]
 
-export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProjectSection, onOpenPlanLibrary, onOpenItemLibrary, onOpenDealPipeline, onOpenQBSettings }: ProjectsDashboardProps) {
+export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProjectSection, onOpenPlanLibrary, onOpenItemLibrary, onOpenDealWorkspace, onOpenQBSettings }: ProjectsDashboardProps) {
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -295,14 +295,14 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
               >
                 Estimate Library
               </Button>
-              {onOpenDealPipeline && (
+              {onOpenDealWorkspace && (
                 <Button
-                  onClick={onOpenDealPipeline}
+                  onClick={onOpenDealWorkspace}
                   variant="ghost"
                   size="sm"
                   className="bg-[#6D28D9] text-white hover:bg-[#5B21B6]"
                 >
-                  Deal Pipeline
+                  Deal Workspace
                 </Button>
               )}
             </nav>
@@ -539,10 +539,10 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
                 <DollarSign className="w-5 h-5 text-gray-400" />
                 <span className="font-medium">Estimate Library</span>
               </button>
-              {onOpenDealPipeline && (
-                <button onClick={() => { onOpenDealPipeline(); setShowMobileActions(false) }} className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700">
+              {onOpenDealWorkspace && (
+                <button onClick={() => { onOpenDealWorkspace(); setShowMobileActions(false) }} className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700">
                   <TrendingUp className="w-5 h-5 text-gray-400" />
-                  <span className="font-medium">Deal Pipeline</span>
+                  <span className="font-medium">Deal Workspace</span>
                 </button>
               )}
             </div>

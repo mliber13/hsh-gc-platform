@@ -3333,6 +3333,22 @@ export interface DealProFormaVersionMeta {
   userId?: string
 }
 
+export interface DealWorkspaceContext {
+  notesText: string
+  tasksText: string
+  updatedAt?: string
+}
+
+export interface DealActivityEvent {
+  id: string
+  dealId: string
+  eventType: string
+  eventText: string
+  eventData?: any
+  createdAt: string
+  userId?: string
+}
+
 export interface ProjectProFormaVersionMeta {
   id: string
   projectId: string
@@ -3555,6 +3571,185 @@ export async function saveDealProFormaVersion(
     return true
   } catch (error) {
     console.error('Error in saveDealProFormaVersion:', error)
+    return false
+  }
+}
+
+export async function loadDealWorkspaceContext(dealId: string): Promise<DealWorkspaceContext | null> {
+  if (!isOnlineMode()) return null
+
+  try {
+    const { data, error } = await supabase
+      .from('deal_workspace_context')
+      .select('notes_text, tasks_text, updated_at')
+      .eq('deal_id', dealId)
+      .maybeSingle()
+
+    if (error) {
+      if (error.code === 'PGRST116') return null
+      console.error('Error loading deal workspace context:', error)
+      return null
+    }
+
+    if (!data) return null
+    return {
+      notesText: data.notes_text || '',
+      tasksText: data.tasks_text || '',
+      updatedAt: data.updated_at || undefined,
+    }
+  } catch (error) {
+    console.error('Error in loadDealWorkspaceContext:', error)
+    return null
+  }
+}
+
+export async function saveDealWorkspaceContext(
+  dealId: string,
+  context: { notesText: string; tasksText: string },
+): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data: dealData, error: dealError } = await supabase
+      .from('deals')
+      .select('id, organization_id')
+      .eq('id', dealId)
+      .single()
+
+    if (dealError) {
+      console.error('Error loading deal for workspace context save:', dealError)
+      return false
+    }
+
+    const orgId = dealData?.organization_id as string | undefined
+    if (!orgId) return false
+
+    const rowData = {
+      deal_id: dealId,
+      organization_id: orgId,
+      user_id: user.id,
+      notes_text: context.notesText || '',
+      tasks_text: context.tasksText || '',
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from('deal_workspace_context')
+      .select('id')
+      .eq('deal_id', dealId)
+      .maybeSingle()
+
+    if (existingError && existingError.code !== 'PGRST116') {
+      console.error('Error checking existing deal workspace context:', existingError)
+      return false
+    }
+
+    if (existing?.id) {
+      const { error: updateError } = await supabase
+        .from('deal_workspace_context')
+        .update(rowData)
+        .eq('id', existing.id)
+
+      if (updateError) {
+        console.error('Error updating deal workspace context:', updateError)
+        return false
+      }
+      return true
+    }
+
+    const { error: insertError } = await supabase
+      .from('deal_workspace_context')
+      .insert(rowData)
+
+    if (insertError) {
+      console.error('Error creating deal workspace context:', insertError)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in saveDealWorkspaceContext:', error)
+    return false
+  }
+}
+
+export async function listDealActivityEvents(dealId: string, limit = 100): Promise<DealActivityEvent[]> {
+  if (!isOnlineMode()) return []
+
+  try {
+    const { data, error } = await supabase
+      .from('deal_activity_events')
+      .select('id, deal_id, event_type, event_text, event_data, created_at, user_id')
+      .eq('deal_id', dealId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      console.error('Error listing deal activity events:', error)
+      return []
+    }
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      dealId: row.deal_id,
+      eventType: row.event_type,
+      eventText: row.event_text,
+      eventData: row.event_data || undefined,
+      createdAt: row.created_at,
+      userId: row.user_id || undefined,
+    }))
+  } catch (error) {
+    console.error('Error in listDealActivityEvents:', error)
+    return []
+  }
+}
+
+export async function logDealActivityEvent(
+  dealId: string,
+  input: { eventType: string; eventText: string; eventData?: any },
+): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data: dealData, error: dealError } = await supabase
+      .from('deals')
+      .select('id, organization_id')
+      .eq('id', dealId)
+      .single()
+
+    if (dealError) {
+      console.error('Error loading deal for activity event:', dealError)
+      return false
+    }
+
+    const orgId = dealData?.organization_id as string | undefined
+    if (!orgId) return false
+
+    const { error: insertError } = await supabase
+      .from('deal_activity_events')
+      .insert({
+        deal_id: dealId,
+        organization_id: orgId,
+        user_id: user.id,
+        event_type: input.eventType,
+        event_text: input.eventText,
+        event_data: input.eventData || null,
+      })
+
+    if (insertError) {
+      console.error('Error creating deal activity event:', insertError)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in logDealActivityEvent:', error)
     return false
   }
 }

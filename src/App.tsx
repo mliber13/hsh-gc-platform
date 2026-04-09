@@ -41,7 +41,6 @@ import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2,
 import { backupAllData } from './services/backupService'
 import { ContactDirectory } from './components/ContactDirectory'
 import { SOWManagement } from './components/SOWManagement'
-import { DealPipeline } from './components/DealPipeline'
 import { DealWorkspace } from './components/DealWorkspace'
 import { FeedbackForm } from './components/FeedbackForm'
 import { MyFeedback } from './components/MyFeedback'
@@ -69,7 +68,6 @@ type View =
   | 'qb-callback'
   | 'contact-directory'
   | 'sow-management'
-  | 'deal-pipeline'
   | 'deal-workspace'
   | 'my-feedback'
   | 'privacy'
@@ -131,6 +129,9 @@ function App() {
       const pathParts = pathname.split('/')
       const dealIdFromPath = pathParts[pathParts.length - 1]
       setWorkspaceDealId(dealIdFromPath || undefined)
+      setCurrentView('deal-workspace')
+    }
+    if (pathname === '/deals' || pathname === '/deal-pipeline') {
       setCurrentView('deal-workspace')
     }
     if (pathname === '/privacy') setCurrentView('privacy')
@@ -311,8 +312,10 @@ function App() {
     }
   }
 
-  const handleViewDealPipeline = () => {
-    setCurrentView('deal-pipeline')
+  const handleOpenDealWorkspaceHome = () => {
+    setWorkspaceDealId(undefined)
+    window.history.replaceState({}, '', '/deals')
+    setCurrentView('deal-workspace')
   }
 
   const handleOpenDealWorkspace = (dealId: string) => {
@@ -561,7 +564,7 @@ function App() {
             onOpenProjectSection={handleOpenProjectSection}
             onOpenPlanLibrary={handleOpenPlanLibrary}
             onOpenItemLibrary={handleOpenEstimateLibrary}
-            onOpenDealPipeline={handleViewDealPipeline}
+            onOpenDealWorkspace={handleOpenDealWorkspaceHome}
             onOpenQBSettings={() => setCurrentView('qb-settings')}
           />
         )}
@@ -694,22 +697,12 @@ function App() {
         />
       )}
 
-      {currentView === 'deal-pipeline' && (
-        <div className="container mx-auto py-6 px-4">
-          <DealPipeline 
-            onBack={handleBackToDashboard}
-            onViewProjects={handleBackToDashboard}
-            onOpenDealWorkspace={handleOpenDealWorkspace}
-          />
-        </div>
-      )}
-
       {currentView === 'deal-workspace' && (
         <DealWorkspace
           dealId={workspaceDealId}
           onBack={() => {
             window.history.replaceState({}, '', '/')
-            setCurrentView('deal-pipeline')
+            setCurrentView('dashboard')
           }}
         />
       )}
