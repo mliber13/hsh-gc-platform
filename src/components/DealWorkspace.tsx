@@ -3,16 +3,21 @@ import { Button } from './ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Textarea } from './ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
-import { ArrowLeft, Download, Mic, MicOff, Play, Save, Send } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Download, Mic, MicOff, Pencil, Play, Save, Send, X } from 'lucide-react'
 import type { Deal } from '@/types/deal'
 import type { Project } from '@/types'
 import type { ForSalePhaseInput, ProFormaInput, ProFormaMode, ProFormaProjection } from '@/types/proforma'
 import { computeDealReadiness, materialForSaleContext, type DealReadiness } from '@/lib/dealReadiness'
-import { fetchDeals } from '@/services/dealService'
+import { computePhaseAllocationShares } from '@/lib/forSalePhaseAllocation'
+import { deleteDeal, fetchDeals } from '@/services/dealService'
 import {
+  clearDealActivityEvents,
+  clearDealActivityEventsByTypes,
   listDealActivityEvents,
+  listDealProFormaVersions,
   logDealActivityEvent,
   loadDealProFormaInputs,
   loadDealWorkspaceContext,
@@ -70,14 +75,25 @@ interface DealWorkspaceProps {
   onBack: () => void
 }
 
-type WorkspaceCenterTab = 'overview' | 'proforma' | 'notes' | 'tasks' | 'activity'
+type WorkspaceCenterTab =
+  | 'assumptions'
+  | 'phase-pro-forma'
+  | 'cash-flow'
+  | 'investor-returns'
+  | 'public-sector'
+  | 'dashboard'
+  | 'analysis'
 type DebtLocApplyTo = 'loc-limit' | 'debt-amount' | 'bond-capacity'
+type DebtInstrumentType = 'revolving-interest-only' | 'term-interest-only' | 'amortizing'
 type IncentiveApplyTo = 'infrastructure-reduction' | 'cost-reduction' | 'equity-source'
+type IncentiveTimingMode = 'upfront' | 'construction-percent' | 'by-phase' | 'at-closings'
 
 interface DebtLocStackRow {
   id: string
   label: string
   amount: number
+  interestRate: number
+  debtType: DebtInstrumentType
   applyTo: DebtLocApplyTo
 }
 
@@ -86,9 +102,85 @@ interface IncentiveStackRow {
   label: string
   amount: number
   applyTo: IncentiveApplyTo
+  timingMode: IncentiveTimingMode
+  constructionPercent: number
+  phaseNames: string
+}
+
+/** Tokens from "Phase 1, Phase 4" style CSV (trimmed, lowercased). */
+function parseIncentivePhaseNameTokens(phaseNamesCsv: string): string[] {
+  const out: string[] = []
+  for (const part of (phaseNamesCsv || '').split(',')) {
+    const t = part.trim().toLowerCase()
+    if (t) out.push(t)
+  }
+  return out
+}
+
+/**
+ * When at least one infrastructure (TIF) incentive uses timing "by-phase" with Applied Phases set,
+ * allocate the full canonical TIF equally across matched phase names only.
+ * Otherwise keep legacy behavior: TIF ∝ phase unit count.
+ */
+function allocateTifAcrossPhases(params: {
+  phases: Array<{ name?: string; unitCount?: number }>
+  tifTotal: number
+  incentiveRows: IncentiveStackRow[]
+}): number[] {
+  const { phases, tifTotal, incentiveRows } = params
+  const totalUnits = Math.max(
+    1,
+    phases.reduce((sum, p) => sum + (Number(p.unitCount) || 0), 0),
+  )
+  const unitShareTif = (idx: number) => {
+    const u = Number(phases[idx]?.unitCount || 0)
+    return tifTotal * (u / totalUnits)
+  }
+
+  if (tifTotal <= 0 || !phases.length) {
+    return phases.map(() => 0)
+  }
+
+  const byPhaseInfra = incentiveRows.filter(
+    (r) =>
+      r.applyTo === 'infrastructure-reduction' &&
+      r.timingMode === 'by-phase' &&
+      String(r.phaseNames || '').trim() &&
+      Number(r.amount || 0) > 0,
+  )
+
+  if (!byPhaseInfra.length) {
+    return phases.map((_, idx) => unitShareTif(idx))
+  }
+
+  const tokenSet = new Set<string>()
+  for (const r of byPhaseInfra) {
+    for (const t of parseIncentivePhaseNameTokens(r.phaseNames)) {
+      tokenSet.add(t)
+    }
+  }
+
+  const matchedIdx: number[] = []
+  phases.forEach((p, idx) => {
+    const key = String(p.name || '').trim().toLowerCase()
+    if (key && tokenSet.has(key)) matchedIdx.push(idx)
+  })
+
+  if (!matchedIdx.length) {
+    return phases.map((_, idx) => unitShareTif(idx))
+  }
+
+  const per = tifTotal / matchedIdx.length
+  return phases.map((_, idx) => (matchedIdx.includes(idx) ? per : 0))
 }
 
 const uid = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`
+const buildInitialCoachMessage = (dealName: string): WorkspaceMessage => ({
+  id: uid(),
+  role: 'assistant',
+  text: `Let's work this deal. Start by telling me what you know about "${dealName}" and I will populate the model as we go.`,
+  createdAt: new Date().toISOString(),
+})
 
 const STAGE_COLOR: Record<WorkspaceStage, string> = {
   coaching: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -170,16 +262,24 @@ function defaultInputForDeal(deal: Deal): ProFormaInput {
     paymentMilestones: [],
     monthlyOverhead: 0,
     overheadAllocationMethod: 'proportional',
-    projectionMonths: 24,
+    projectionMonths: 12,
     startDate,
     totalProjectSquareFootage: 0,
-    underwritingEstimatedConstructionCost: deal.projected_cost || 0,
+    underwritingEstimatedConstructionCost: 0,
     useDevelopmentProforma: true,
     landCost: 0,
+    siteWorkCost: 0,
     softCostPercent: 0,
     contingencyPercent: 0,
     constructionMonths: undefined,
     loanToCostPercent: 0,
+    investorEquity: 0,
+    preferredReturnRateAnnual: 0,
+    preferredReturnPaidFrequency: 'monthly',
+    investorProfitShareOnCompletion: 0,
+    developerProfitShareOnCompletion: 0,
+    monthlyCarryPerUnit: 0,
+    avgConstructionPeriodMonths: 0,
     rentalUnits: [],
     includeRentalIncome: false,
     operatingExpenses: {
@@ -204,6 +304,7 @@ function defaultInputForDeal(deal: Deal): ProFormaInput {
       totalUnits: 0,
       averageSalePrice: 0,
       presaleDepositPercent: 0,
+      phaseTimingMode: 'trigger-based',
       salesPaceUnitsPerMonth: 0,
       infrastructureCost: 0,
       tifInfrastructureReduction: 0,
@@ -219,6 +320,22 @@ function defaultInputForDeal(deal: Deal): ProFormaInput {
       },
       phases: [],
     },
+  }
+}
+
+/**
+ * Model Mode "Development" was wired to `general-development`, but phased LOC, presales/closings,
+ * and TIF reimbursement only run when `proFormaMode === 'for-sale-phased-loc'`. Align the engine
+ * input whenever for-sale assumptions are present (deal workspace).
+ */
+function proFormaInputForEngine(inp: ProFormaInput): ProFormaInput {
+  if (inp.proFormaMode === 'rental-hold') return inp
+  if (!materialForSaleContext(inp)) return inp
+  const fs = inp.forSalePhasedLoc
+  return {
+    ...inp,
+    proFormaMode: 'for-sale-phased-loc',
+    forSalePhasedLoc: fs ? { ...fs, enabled: true } : fs,
   }
 }
 
@@ -241,17 +358,162 @@ function deepMerge<T extends Record<string, any>>(base: T, patch: Partial<T>): T
 function totalDevUsesForConfidence(inp: ProFormaInput): number {
   const hard = inp.underwritingEstimatedConstructionCost || 0
   const land = inp.landCost || 0
+  const site = inp.siteWorkCost || 0
   const soft = hard * ((inp.softCostPercent || 0) / 100)
   const contingency = hard * ((inp.contingencyPercent || 0) / 100)
-  return hard + land + soft + contingency
+  return hard + land + site + soft + contingency
+}
+
+/** Σ (unitCount × buildMonths) per for-sale phase — general carry basis (unit-months). */
+function sumPhaseUnitMonthsCarryBasis(inp: ProFormaInput | null): number {
+  const phases = inp?.forSalePhasedLoc?.phases
+  if (!phases?.length) return 0
+  return phases.reduce((sum, p) => {
+    const u = Math.max(0, Number(p.unitCount || 0))
+    const m = Math.max(0, Number(p.buildMonths || 0))
+    return sum + u * m
+  }, 0)
+}
+
+function getCalculatedCarryCost(inp: ProFormaInput | null): number {
+  if (!inp) return 0
+  const perUnit = Number(inp.monthlyCarryPerUnit || 0)
+  const phaseUnitMonths = sumPhaseUnitMonthsCarryBasis(inp)
+  if (perUnit > 0 && phaseUnitMonths > 0) {
+    return roundMoney(perUnit * phaseUnitMonths)
+  }
+  const units = Number(inp.forSalePhasedLoc?.totalUnits || 0)
+  const avgMonths = Number(inp.avgConstructionPeriodMonths || 0)
+  if (units > 0 && perUnit > 0 && avgMonths > 0) {
+    return roundMoney(perUnit * units * avgMonths)
+  }
+  return roundMoney(Number(inp.monthlyOverhead || 0) * Number(inp.projectionMonths || 0))
+}
+
+function getCarryCostFieldTitle(inp: ProFormaInput | null): string {
+  if (!inp) return ''
+  const perUnit = Number(inp.monthlyCarryPerUnit || 0)
+  if (perUnit > 0 && sumPhaseUnitMonthsCarryBasis(inp) > 0) {
+    return 'Carry = monthly carry per unit × sum over phases (units × build months). Phase table splits this total by each phase’s unit-months share.'
+  }
+  const units = Number(inp.forSalePhasedLoc?.totalUnits || 0)
+  const avgMonths = Number(inp.avgConstructionPeriodMonths || 0)
+  if (units > 0 && perUnit > 0 && avgMonths > 0) {
+    return 'Carry = monthly carry per unit × total units × construction period (months). Used when phase build months are all zero or phases are empty.'
+  }
+  return 'Carry = monthly overhead × project duration (months). Used when unit-based carry inputs are not set.'
+}
+
+function getProjectTotalCost(inp: ProFormaInput | null): number {
+  if (!inp) return 0
+  const hard = Number(inp.underwritingEstimatedConstructionCost || 0)
+  const soft = hard * (Number(inp.softCostPercent || 0) / 100)
+  const contingency = hard * (Number(inp.contingencyPercent || 0) / 100)
+  return (
+    Number(inp.landCost || 0) +
+    Number(inp.siteWorkCost || 0) +
+    Number(inp.forSalePhasedLoc?.infrastructureCost || 0) +
+    hard +
+    soft +
+    contingency +
+    getCalculatedCarryCost(inp)
+  )
+}
+
+function getMonthsPerPrefPeriod(freq: ProFormaInput['preferredReturnPaidFrequency']): number {
+  switch (freq) {
+    case 'quarterly':
+      return 3
+    case 'semi-annual':
+      return 6
+    case 'annual':
+      return 12
+    case 'monthly':
+    default:
+      return 1
+  }
+}
+
+function getPrefFrequencyLabel(freq: ProFormaInput['preferredReturnPaidFrequency']): string {
+  switch (freq) {
+    case 'quarterly':
+      return 'Quarterly'
+    case 'semi-annual':
+      return 'Semi-Annual'
+    case 'annual':
+      return 'Annual'
+    case 'monthly':
+    default:
+      return 'Monthly'
+  }
+}
+
+function parseNumberInput(raw: string): number {
+  const cleaned = String(raw || '').replace(/[$,%]/g, '').replace(/,/g, '').trim()
+  if (!cleaned) return 0
+  const parsed = Number(cleaned)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function parseWholeNumberInput(raw: string): number {
+  const cleaned = String(raw || '').replace(/[$,%]/g, '').replace(/,/g, '').trim()
+  if (!cleaned) return 0
+  const parsed = parseInt(cleaned, 10)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatWithCommas(value: number | null | undefined, fixedDigits?: number): string {
+  if (value == null || Number.isNaN(value)) return ''
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return ''
+  if (fixedDigits != null) {
+    return numeric.toLocaleString('en-US', {
+      minimumFractionDigits: fixedDigits,
+      maximumFractionDigits: fixedDigits,
+    })
+  }
+  return numeric.toLocaleString('en-US', { maximumFractionDigits: 2 })
+}
+
+function formatCurrency(value: number | null | undefined, fixedDigits = 2): string {
+  const formatted = formatWithCommas(value, fixedDigits)
+  return formatted ? `$${formatted}` : ''
+}
+
+function formatPercent(value: number | null | undefined, fixedDigits = 2): string {
+  const formatted = formatWithCommas(value, fixedDigits)
+  return formatted ? `${formatted}%` : ''
+}
+
+function formatWorkbookMonthHeader(label: string): string {
+  const parsed = new Date(label)
+  if (!Number.isNaN(parsed.getTime())) {
+    const mon = parsed.toLocaleString('en-US', { month: 'short' })
+    const yy = String(parsed.getFullYear()).slice(-2)
+    return `${mon}/${yy}`
+  }
+  const compact = String(label || '').replace(' 20', '/')
+  return compact.length > 7 ? compact.slice(0, 7) : compact
 }
 
 const USES_PATHS_FOR_LTC_DEBT_SYNC = new Set([
   'underwritingEstimatedConstructionCost',
   'landCost',
+  'siteWorkCost',
   'softCostPercent',
   'contingencyPercent',
 ])
+
+/** Annual % on revolving LOC: custom stack `loc-limit` row wins, else debtService. */
+function effectiveLocAnnualPercent(inp: ProFormaInput | null): number {
+  if (!inp) return 0
+  const rows =
+    ((inp as any)?.customStacks?.debtLocRows as Array<{ applyTo?: string; interestRate?: number }>) || []
+  const locRow = rows.find((r) => r.applyTo === 'loc-limit')
+  const fromStack = locRow != null ? Number(locRow.interestRate) : NaN
+  if (Number.isFinite(fromStack) && fromStack >= 0) return fromStack
+  return Number(inp.debtService?.interestRate || 0)
+}
 
 function roundMoney(n: number): number {
   return Math.round(n * 100) / 100
@@ -376,14 +638,19 @@ function normalizeCoachUpdates(updates: Partial<ProFormaInput>): Partial<ProForm
   return normalized as Partial<ProFormaInput>
 }
 
-function parseForSalePhasesFromText(text: string): ForSalePhaseInput[] {
-  if (!text || !/phase\s+\d+/i.test(text)) return []
+function parseForSalePhasesFromText(text: string): {
+  phases: ForSalePhaseInput[]
+  /** First non-zero ASP found in phase blocks (applied to global average when body has no sale price line). */
+  inferredAverageSalePrice?: number
+} {
+  if (!text || !/phase\s+\d+/i.test(text)) return { phases: [] }
   const blocks = text
     .split(/\r?\n(?=Phase\s+\d+\b)/i)
     .map((b) => b.trim())
     .filter((b) => /^Phase\s+\d+\b/i.test(b))
 
   const phases: ForSalePhaseInput[] = []
+  let inferredAverageSalePrice: number | undefined
   blocks.forEach((block) => {
     const phaseNum = Number((block.match(/^Phase\s+(\d+)/i) || [])[1] || phases.length + 1)
     const totalUnits = Number((block.match(/(\d+(?:\.\d+)?)\s*units?/i) || [])[1] || 0)
@@ -391,12 +658,13 @@ function parseForSalePhasesFromText(text: string): ForSalePhaseInput[] {
     const presaleStartMonth = Number((block.match(/Presale Start Month Offset:\s*(\d+(?:\.\d+)?)/i) || [])[1] || 0)
     const closeStartMonth = Number((block.match(/Close Start Month Offset:\s*(\d+(?:\.\d+)?)/i) || [])[1] || 0)
     const presaleTriggerPercent = Number((block.match(/Presale Trigger Percent:\s*(\d+(?:\.\d+)?)/i) || [])[1] || 0)
-    const averageSalePrice = Number((block.match(/Avg Sale Price:\s*\$?([\d,]+(?:\.\d+)?)/i) || [])[1]?.replace(/,/g, '') || 0)
+    const blockAsp = Number((block.match(/Avg Sale Price:\s*\$?([\d,]+(?:\.\d+)?)/i) || [])[1]?.replace(/,/g, '') || 0)
+    if (blockAsp > 0 && inferredAverageSalePrice === undefined) inferredAverageSalePrice = blockAsp
     phases.push({
       id: uid(),
       name: `Phase ${phaseNum}`,
+      startMonthOffset: 0,
       unitCount: totalUnits,
-      avgSalePrice: averageSalePrice,
       buildMonths,
       closeStartMonthOffset: closeStartMonth,
       presaleStartMonthOffset: presaleStartMonth,
@@ -404,7 +672,10 @@ function parseForSalePhasesFromText(text: string): ForSalePhaseInput[] {
     })
   })
 
-  return phases.filter((p) => p.unitCount > 0)
+  return {
+    phases: phases.filter((p) => p.unitCount > 0),
+    inferredAverageSalePrice,
+  }
 }
 
 function parseForSaleImportFromText(text: string): Partial<ProFormaInput> {
@@ -432,7 +703,7 @@ function parseForSaleImportFromText(text: string): Partial<ProFormaInput> {
   }
 
   const parsed: Partial<ProFormaInput> = {}
-  if (/for-sale-phased-loc/i.test(t)) parsed.proFormaMode = 'for-sale-phased-loc'
+  if (/for-sale-phased-loc|for-sale|phased loc/i.test(t)) parsed.proFormaMode = 'general-development'
   const startMatch = t.match(/start(?:ing)?\s+([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?\,?\s+(\d{4})/i)
   if (startMatch) {
     const month = monthWordToNumber(startMatch[1])
@@ -461,7 +732,7 @@ function parseForSaleImportFromText(text: string): Partial<ProFormaInput> {
   const reserve = num(/(\d+(?:\.\d+)?)\s*%\s*(?:to)\s*reserve/i)
   const distribution = num(/(\d+(?:\.\d+)?)\s*%\s*(?:to)\s*distribution/i)
 
-  const phasesFromBlocks = parseForSalePhasesFromText(t)
+  const { phases: phasesFromBlocks, inferredAverageSalePrice } = parseForSalePhasesFromText(t)
   let phases = phasesFromBlocks
   if (phases.length === 0) {
     const unitsList = t.match(/four phases\s*[—-]\s*(\d+)\s*units?\s*,\s*(\d+)\s*units?\s*,\s*(\d+)\s*units?\s*,\s*(?:then.*?of\s*)?(\d+)\b/i)
@@ -478,12 +749,12 @@ function parseForSaleImportFromText(text: string): Partial<ProFormaInput> {
       phases = units.map((u, i) => ({
         id: uid(),
         name: `Phase ${i + 1}`,
+        startMonthOffset: starts[i],
         unitCount: u,
         buildMonths,
         presaleStartMonthOffset: starts[i],
         closeStartMonthOffset: starts[i] + closeOffset,
         presaleTriggerPercent: trigger,
-        avgSalePrice: avgSalePrice || 0,
       }))
     }
   }
@@ -491,6 +762,9 @@ function parseForSaleImportFromText(text: string): Partial<ProFormaInput> {
   const forSalePatch: any = {}
   if (totalUnits != null) forSalePatch.totalUnits = totalUnits
   if (avgSalePrice != null) forSalePatch.averageSalePrice = avgSalePrice
+  else if (inferredAverageSalePrice != null && inferredAverageSalePrice > 0) {
+    forSalePatch.averageSalePrice = inferredAverageSalePrice
+  }
   if (ltc != null) forSalePatch.ltcPercent = ltc
   if (locLimit != null) forSalePatch.fixedLocLimit = locLimit
   if (presaleDeposit != null) forSalePatch.presaleDepositPercent = presaleDeposit
@@ -514,7 +788,7 @@ function parseForSaleImportFromText(text: string): Partial<ProFormaInput> {
 }
 
 const FIELD_LABELS: Record<string, string> = {
-  proFormaMode: 'Mode',
+  proFormaMode: 'Model Mode',
   projectId: 'Project ID',
   contractValue: 'Contract Value',
   paymentMilestones: 'Payment Milestones',
@@ -525,9 +799,17 @@ const FIELD_LABELS: Record<string, string> = {
   useDevelopmentProforma: 'Development ProForma',
   underwritingEstimatedConstructionCost: 'Estimated Construction Cost',
   landCost: 'Land Cost',
+  siteWorkCost: 'Site Work Cost',
   softCostPercent: 'Soft Cost %',
   contingencyPercent: 'Contingency %',
   loanToCostPercent: 'Loan To Cost %',
+  investorEquity: 'Investor Equity',
+  preferredReturnRateAnnual: 'Preferred Return Rate (annual)',
+  preferredReturnPaidFrequency: 'Preferred Return Paid Frequency',
+  investorProfitShareOnCompletion: 'Investor Profit Share %',
+  developerProfitShareOnCompletion: 'Developer Profit Share %',
+  monthlyCarryPerUnit: 'Monthly Carry per Unit',
+  avgConstructionPeriodMonths: 'Construction period (months)',
   constructionMonths: 'Construction Duration (months)',
   includeRentalIncome: 'Include Rental Income',
   rentalUnits: 'Rental Units',
@@ -601,6 +883,84 @@ function formatValue(value: any, path?: string): string {
   return String(value ?? '')
 }
 
+function parseCaptureNotesSections(text: string): {
+  hasStructuredSections: boolean
+  sections: Array<{ heading: 'Ready' | 'Needs input' | 'Notes'; items: string[] }>
+  remainingLines: string[]
+} {
+  const normalized = String(text || '').replace(/\r\n/g, '\n')
+  const lines = normalized.split('\n')
+  const order: Array<'Ready' | 'Needs input' | 'Notes'> = ['Ready', 'Needs input', 'Notes']
+  const sectionsMap: Record<'Ready' | 'Needs input' | 'Notes', string[]> = {
+    Ready: [],
+    'Needs input': [],
+    Notes: [],
+  }
+  let current: 'Ready' | 'Needs input' | 'Notes' | null = null
+  const remainingLines: string[] = []
+
+  lines.forEach((lineRaw) => {
+    const line = lineRaw.trim()
+    if (!line) return
+    const headerMatch = line.match(/^(Ready|Needs input|Notes)\s*:\s*$/i)
+    if (headerMatch) {
+      const h = headerMatch[1].toLowerCase()
+      current = h === 'ready' ? 'Ready' : h === 'needs input' ? 'Needs input' : 'Notes'
+      return
+    }
+    const cleaned = line.replace(/^[-*]\s+/, '').trim()
+    if (current) {
+      sectionsMap[current].push(cleaned)
+    } else {
+      remainingLines.push(cleaned)
+    }
+  })
+
+  const sections = order
+    .map((heading) => ({ heading, items: sectionsMap[heading] }))
+    .filter((s) => s.items.length > 0)
+  return {
+    hasStructuredSections: sections.length > 0,
+    sections,
+    remainingLines,
+  }
+}
+
+const NON_VISIBLE_CAPTURE_PATTERNS: RegExp[] = [
+  /\bsoft\s*cost\s*%?\b/i,
+  /\bcontingency\s*%?\b/i,
+  /\bloc\s*ltc\s*cap\b/i,
+  /\bloan\s*to\s*cost\b/i,
+  /\bsales\s*pace\b/i,
+  /\bavg(\.|erage)?\s*sale\s*price\b/i,
+]
+
+function isVisibleCaptureLine(line: string): boolean {
+  const normalized = String(line || '').trim()
+  if (!normalized) return false
+  return !NON_VISIBLE_CAPTURE_PATTERNS.some((re) => re.test(normalized))
+}
+
+function sanitizeCaptureNotesAppend(text?: string): string | null {
+  if (!text) return null
+  const lines = text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+  const kept = lines.filter((line) => {
+    if (!line) return false
+    if (/^(Ready|Needs input|Notes)\s*:\s*$/i.test(line)) return true
+    return isVisibleCaptureLine(line.replace(/^[-*]\s+/, ''))
+  })
+  const out = kept.join('\n').trim()
+  return out || null
+}
+
+function sanitizeTaskSuggestions(tasks?: string[]): string[] {
+  if (!tasks?.length) return []
+  return tasks.map((t) => t.trim()).filter((t) => t && isVisibleCaptureLine(t))
+}
+
 async function invokeDealCoach(params: {
   deal: Deal
   stage: WorkspaceStage
@@ -619,7 +979,7 @@ Return strict JSON object only:
   "stageSuggestion": "coaching|scenario|proforma"
 }
 Rules:
-- Respect modes: rental-hold, general-development, for-sale-phased-loc.
+- Respect modes: rental-hold and general-development (development).
 - Ask clarifying questions before writing uncertain mode-specific fields.
 - Use high confidence only for explicit user-provided values.
 - Keep numeric fields numeric and nested objects valid.
@@ -627,6 +987,16 @@ Rules:
 - Keep "reply" very short (max 1 sentence) when many fields are being updated.
 - Prefer canonical keys only (forSalePhasedLoc.*, debtService.*, etc.) and avoid alias keys like forSaleTotalUnits / forSaleLtcPercent.
 - For large for-sale imports, prioritize complete fieldUpdates (especially forSalePhasedLoc.phases) over verbose reply text.
+- For notes/task audits, use UI-facing labels (e.g., "LOC LTC Cap %", "Sales Pace (units/mo)", "Soft Cost %", "Contingency %"), never raw internal key names.
+- Do not suggest fields that are not visible/editable in the current workspace view; if uncertain, suggest the nearest visible control label instead.
+- Keep notesAppend highly readable with this structure:
+  Ready:
+  - <item>
+  Needs input:
+  - <item>
+  Notes:
+  - <item>
+- Keep taskSuggestions short, action-first, and specific to visible controls.
 `
   const payload = {
     model: 'claude-sonnet-4-6',
@@ -698,7 +1068,7 @@ Rules:
 function fieldClass(status: FieldStatus): string {
   if (status === 'confirmed') return 'border-green-300 bg-green-50'
   if (status === 'approx') return 'border-amber-300 bg-amber-50'
-  return 'border-gray-200 bg-white italic text-gray-500'
+  return 'border-gray-200 bg-white text-gray-900 font-medium placeholder:text-gray-400'
 }
 
 function fmtMoney(n: number | undefined | null): string {
@@ -727,6 +1097,32 @@ function MemoRow({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
+function AssumptionInputRow({
+  label,
+  children,
+  unboundedControls,
+}: {
+  label: string
+  children: React.ReactNode
+  /** Wide controls (e.g. multi-segment % strip) — do not cap inputs at 210px. */
+  unboundedControls?: boolean
+}) {
+  return (
+    <div className="grid grid-cols-[160px_1fr] items-center gap-2 py-0.5 border-b border-slate-700/40 last:border-b-0">
+      <Label className="text-xs text-slate-300">{label}</Label>
+      <div
+        className={
+          unboundedControls
+            ? "min-w-0 [&_input]:h-7 [&_input]:w-full [&_input]:min-w-0 [&_input]:max-w-none [&_input]:text-xs [&_button[role='combobox']]:h-7 [&_button[role='combobox']]:max-w-[210px] [&_button[role='combobox']]:text-xs"
+            : "[&_input]:h-7 [&_input]:max-w-[210px] [&_input]:text-xs [&_button[role='combobox']]:h-7 [&_button[role='combobox']]:max-w-[210px] [&_button[role='combobox']]:text-xs"
+        }
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 interface ProformaMemoViewProps {
   dealName: string
   input: ProFormaInput
@@ -739,14 +1135,13 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
   const modeLabel =
     input.proFormaMode === 'rental-hold'
       ? 'Rental hold'
-      : input.proFormaMode === 'for-sale-phased-loc'
-        ? 'For-sale phased LOC'
-        : 'General development'
+      : 'Development'
   const hard = input.underwritingEstimatedConstructionCost || 0
   const land = input.landCost || 0
+  const site = input.siteWorkCost || 0
   const soft = hard * ((input.softCostPercent || 0) / 100)
   const contingency = hard * ((input.contingencyPercent || 0) / 100)
-  const totalUses = hard + land + soft + contingency
+  const totalUses = hard + land + site + soft + contingency
   const fs = input.forSalePhasedLoc
   const s = projection?.summary
   const phases = fs?.phases || []
@@ -754,12 +1149,6 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-4">
-      {input.proFormaMode === 'general-development' && materialForSaleContext(input) && (
-        <div className="rounded-lg border border-amber-700/45 bg-amber-950/20 px-4 py-3 text-xs text-amber-100/90 leading-snug">
-          Underwriting data looks like a <span className="font-medium text-amber-50">for-sale phased LOC</span> deal, but Mode is still general-development.
-          Readiness checks below include LOC, phases, and incentives. Switch Mode in All assumptions for the matching form layout.
-        </div>
-      )}
       <div className="rounded-lg border border-slate-700 bg-slate-800/90 p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-100 tracking-tight">Pro forma memo</h2>
         <p className="text-sm text-slate-400 mt-1">{dealName}</p>
@@ -814,16 +1203,16 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
         <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide mb-2">Uses (underwriting basis)</h3>
         <MemoRow label="Est. construction / hard" value={fmtMoney(hard)} />
         <MemoRow label="Land" value={fmtMoney(land)} />
+        <MemoRow label="Site work" value={fmtMoney(site)} />
         <MemoRow label={`Soft (${fmtPct(input.softCostPercent || 0, 0)} of hard)`} value={fmtMoney(soft)} />
         <MemoRow label={`Contingency (${fmtPct(input.contingencyPercent || 0, 0)} of hard)`} value={fmtMoney(contingency)} />
-        <MemoRow label="Indicative total (hard + land + soft + contingency)" value={<span className="font-semibold">{fmtMoney(totalUses)}</span>} />
+        <MemoRow label="Indicative total (hard + land + site + soft + contingency)" value={<span className="font-semibold">{fmtMoney(totalUses)}</span>} />
       </div>
 
-      {(input.proFormaMode === 'for-sale-phased-loc' ||
-        (fs &&
-          ((fs.totalUnits ?? 0) > 0 || (fs.averageSalePrice ?? 0) > 0 || phases.length > 0))) && (
+      {(fs &&
+        ((fs.totalUnits ?? 0) > 0 || (fs.averageSalePrice ?? 0) > 0 || phases.length > 0)) && (
         <div className="rounded-lg border border-slate-700 bg-slate-800/90 p-5">
-          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide mb-2">For-sale phased LOC</h3>
+          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide mb-2">Development For-Sale / LOC</h3>
           <MemoRow label="Total units" value={fs?.totalUnits ?? '—'} />
           <MemoRow label="Average sale price" value={fmtMoney(fs?.averageSalePrice)} />
           <MemoRow label="Presale deposit" value={fs?.presaleDepositPercent != null ? fmtPct(fs.presaleDepositPercent, 0) : '—'} />
@@ -837,7 +1226,7 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
           {buckets && (
             <MemoRow
               label="Sales proceeds split"
-              value={`LOC paydown ${buckets.locPaydownPercent ?? 0}% · Reinvest ${buckets.reinvestPercent ?? 0}% · Reserve ${buckets.reservePercent ?? 0}% · Distribution ${buckets.distributionPercent ?? 0}%`}
+              value={`LOC paydown ${buckets.locPaydownPercent ?? 0}% · Reinvest ${buckets.reinvestPercent ?? 0}% · Reserve ${buckets.reservePercent ?? 0}% · Cash-out ${buckets.distributionPercent ?? 0}%`}
             />
           )}
           {phases.length > 0 && (
@@ -852,7 +1241,6 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
                     <th className="p-2 font-medium">Presale M</th>
                     <th className="p-2 font-medium">Close M</th>
                     <th className="p-2 font-medium">Trigger %</th>
-                    <th className="p-2 font-medium">ASP</th>
                   </tr>
                 </thead>
                 <tbody className="text-slate-200">
@@ -864,7 +1252,6 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
                       <td className="p-2">{p.presaleStartMonthOffset ?? '—'}</td>
                       <td className="p-2">{p.closeStartMonthOffset ?? '—'}</td>
                       <td className="p-2">{p.presaleTriggerPercent != null ? fmtPct(p.presaleTriggerPercent, 0) : '—'}</td>
-                      <td className="p-2">{fmtMoney(p.avgSalePrice)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -937,18 +1324,81 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   const [chatValue, setChatValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState(false)
+  const [deletingDeal, setDeletingDeal] = useState(false)
   const [loadingDealState, setLoadingDealState] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [runPromptReason, setRunPromptReason] = useState<string | null>(null)
-  const [centerTab, setCenterTab] = useState<WorkspaceCenterTab>('overview')
-  const [proformaView, setProformaView] = useState<'memo' | 'assumptions'>('memo')
+  const [centerTab, setCenterTab] = useState<WorkspaceCenterTab>('assumptions')
   const [notesDraft, setNotesDraft] = useState('')
   const [tasksDraft, setTasksDraft] = useState('')
   const [activityEvents, setActivityEvents] = useState<ActivityItem[]>([])
+  const [versionOptions, setVersionOptions] = useState<Array<{ id: string; label: string }>>([])
+  const [clearMenuValue, setClearMenuValue] = useState('')
+  const [versionMenuValue, setVersionMenuValue] = useState('')
+  const [actionsMenuValue, setActionsMenuValue] = useState('')
+  const [editingDebtAmount, setEditingDebtAmount] = useState<Record<string, string>>({})
+  const [editingIncentiveAmount, setEditingIncentiveAmount] = useState<Record<string, string>>({})
+  /** Local string while Cost per SF is focused so typing is not overwritten by formatted derived value. */
+  const [costPerSfDraft, setCostPerSfDraft] = useState<string | null>(null)
+  /** Local string while Sale Price per SF is focused (derived from average sale price ÷ unit SF). */
+  const [salePricePerSfDraft, setSalePricePerSfDraft] = useState<string | null>(null)
+  /** Local string while Presale Deposit % is focused (stored value is a number, not a formatted string). */
+  const [presaleDepositPctDraft, setPresaleDepositPctDraft] = useState<string | null>(null)
+  /** Plain numeric strings while Land / Site / Infrastructure $ fields are focused (avoid formatCurrency fighting input). */
+  const [costSummaryMoneyDraft, setCostSummaryMoneyDraft] = useState<{
+    landCost: string | null
+    siteWorkCost: string | null
+    infrastructureCost: string | null
+  }>({ landCost: null, siteWorkCost: null, infrastructureCost: null })
+  /** Draft strings while Monthly Carry / Avg Construction Period are focused (avoid formatted value fighting input). */
+  const [carryConstructionDraft, setCarryConstructionDraft] = useState<{
+    monthlyCarryPerUnit: string | null
+    avgConstructionPeriodMonths: string | null
+  }>({ monthlyCarryPerUnit: null, avgConstructionPeriodMonths: null })
+  const [investorEquityDraft, setInvestorEquityDraft] = useState<string | null>(null)
+  const [investorTermsPercentDraft, setInvestorTermsPercentDraft] = useState<{
+    preferredReturnRateAnnual: string | null
+    investorProfitShareOnCompletion: string | null
+    developerProfitShareOnCompletion: string | null
+  }>({
+    preferredReturnRateAnnual: null,
+    investorProfitShareOnCompletion: null,
+    developerProfitShareOnCompletion: null,
+  })
+  const [expandedPhaseRowId, setExpandedPhaseRowId] = useState<string | null>(null)
   const recognitionRef = useRef<any>(null)
   const autosaveTimerRef = useRef<number | null>(null)
   const contextAutosaveTimerRef = useRef<number | null>(null)
   const hasLoadedDealRef = useRef(false)
+
+  const normalizeRestoredInput = (saved: any, deal: Deal): ProFormaInput => {
+    let restoredInput: ProFormaInput = {
+      ...(defaultInputForDeal(deal) as any),
+      ...(saved?.currentInput || saved?.input || saved || {}),
+      startDate:
+        saved?.currentInput?.startDate || saved?.input?.startDate || saved?.startDate
+          ? new Date(saved?.currentInput?.startDate || saved?.input?.startDate || saved?.startDate)
+          : defaultInputForDeal(deal).startDate,
+      debtService: {
+        ...(defaultInputForDeal(deal).debtService as any),
+        ...((saved?.currentInput?.debtService || saved?.input?.debtService || saved?.debtService || {}) as any),
+        startDate:
+          saved?.currentInput?.debtService?.startDate ||
+          saved?.input?.debtService?.startDate ||
+          saved?.debtService?.startDate
+            ? new Date(
+                saved?.currentInput?.debtService?.startDate ||
+                  saved?.input?.debtService?.startDate ||
+                  saved?.debtService?.startDate,
+              )
+            : defaultInputForDeal(deal).startDate,
+      },
+    }
+    if ((restoredInput.proFormaMode || 'general-development') === 'general-development') {
+      restoredInput = syncDebtAmountFromLtc(restoredInput)
+    }
+    return restoredInput
+  }
 
   const selectedDeal = useMemo(
     () => deals.find((d) => d.id === selectedDealId) || null,
@@ -970,36 +1420,23 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   useEffect(() => {
     const loadState = async () => {
       if (!selectedDeal) return
+      setCostPerSfDraft(null)
+      setSalePricePerSfDraft(null)
+      setPresaleDepositPctDraft(null)
+      setCostSummaryMoneyDraft({ landCost: null, siteWorkCost: null, infrastructureCost: null })
+      setCarryConstructionDraft({ monthlyCarryPerUnit: null, avgConstructionPeriodMonths: null })
+      setInvestorEquityDraft(null)
+      setInvestorTermsPercentDraft({
+        preferredReturnRateAnnual: null,
+        investorProfitShareOnCompletion: null,
+        developerProfitShareOnCompletion: null,
+      })
       hasLoadedDealRef.current = false
       setLoadingDealState(true)
       const saved = await loadDealProFormaInputs(selectedDeal.id)
       if (saved) {
         const restored = saved as any
-        let restoredInput: ProFormaInput = {
-          ...(defaultInputForDeal(selectedDeal) as any),
-          ...(restored.currentInput || restored.input || restored),
-          startDate:
-            restored?.currentInput?.startDate || restored?.input?.startDate || restored?.startDate
-              ? new Date(restored?.currentInput?.startDate || restored?.input?.startDate || restored?.startDate)
-              : defaultInputForDeal(selectedDeal).startDate,
-          debtService: {
-            ...(defaultInputForDeal(selectedDeal).debtService as any),
-            ...((restored?.currentInput?.debtService || restored?.input?.debtService || restored?.debtService || {}) as any),
-            startDate:
-              restored?.currentInput?.debtService?.startDate ||
-              restored?.input?.debtService?.startDate ||
-              restored?.debtService?.startDate
-                ? new Date(
-                    restored?.currentInput?.debtService?.startDate ||
-                      restored?.input?.debtService?.startDate ||
-                      restored?.debtService?.startDate,
-                  )
-                : defaultInputForDeal(selectedDeal).startDate,
-          },
-        }
-        if ((restoredInput.proFormaMode || 'general-development') === 'general-development') {
-          restoredInput = syncDebtAmountFromLtc(restoredInput)
-        }
+        const restoredInput = normalizeRestoredInput(restored, selectedDeal)
         setInput(restoredInput)
         setStage((restored.stage as WorkspaceStage) || 'coaching')
         setMessages(Array.isArray(restored.messages) ? restored.messages : [])
@@ -1007,14 +1444,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
       } else {
         setInput(defaultInputForDeal(selectedDeal))
         setStage('coaching')
-        setMessages([
-          {
-            id: uid(),
-            role: 'assistant',
-            text: `Let's work this deal. Start by telling me what you know about "${selectedDeal.deal_name}" and I will populate the model as we go.`,
-            createdAt: new Date().toISOString(),
-          },
-        ])
+        setMessages([buildInitialCoachMessage(selectedDeal.deal_name)])
         setFieldMeta({})
       }
       const workspaceContext = await loadDealWorkspaceContext(selectedDeal.id)
@@ -1033,12 +1463,26 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
       setPendingSuggestions(null)
       setMarkers([])
       setRunPromptReason(null)
-      setCenterTab('overview')
+      setCenterTab('assumptions')
       hasLoadedDealRef.current = true
       setLoadingDealState(false)
     }
     loadState()
   }, [selectedDeal?.id])
+
+  useEffect(() => {
+    const loadVersions = async () => {
+      if (!selectedDeal?.id) return
+      const rows = await listDealProFormaVersions(selectedDeal.id)
+      setVersionOptions(
+        rows.map((v) => ({
+          id: v.id,
+          label: v.isDraft ? 'Draft (latest autosave)' : (v.versionLabel || `Version ${v.versionNumber}`),
+        })),
+      )
+    }
+    loadVersions()
+  }, [selectedDeal?.id, saving])
 
   useEffect(() => {
     if (!selectedDeal || !input || !hasLoadedDealRef.current) return
@@ -1084,7 +1528,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   const roughMetrics = useMemo(() => {
     if (!input) return { equityRequired: 0, roughIrr: 0 }
 
-    if (input.proFormaMode === 'for-sale-phased-loc' && input.forSalePhasedLoc) {
+    if (materialForSaleContext(input) && input.forSalePhasedLoc) {
       const loc = input.forSalePhasedLoc
       const totalDev = input.underwritingEstimatedConstructionCost || 0
       const locLimit = loc.fixedLocLimit || 0
@@ -1109,6 +1553,487 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     const roughIrr = equityRequired > 0 ? ((value - totalDev) / equityRequired) * 100 : 0
     return { equityRequired, roughIrr }
   }, [input])
+
+  const carbonMetrics = useMemo(() => {
+    if (!input) return null
+    const fs = input.forSalePhasedLoc
+    const units = fs?.totalUnits || 0
+    const salePrice = fs?.averageSalePrice || 0
+    const equity = Number(input?.investorEquity || input?.forSalePhasedLoc?.incentiveEquitySource || 0)
+    const prefRate = Number(input?.preferredReturnRateAnnual || 10)
+    const prefFreq = (input?.preferredReturnPaidFrequency || 'monthly') as ProFormaInput['preferredReturnPaidFrequency']
+    const investorSplit = Number(input?.investorProfitShareOnCompletion || 20)
+    const developerSplit = Number(input?.developerProfitShareOnCompletion || 80)
+    const durationMonths = Number(input.projectionMonths || 0)
+    const monthsPerPrefPeriod = getMonthsPerPrefPeriod(prefFreq)
+    const prefPeriods = durationMonths > 0 ? Math.ceil(durationMonths / monthsPerPrefPeriod) : 0
+    const periodsPerYear = 12 / monthsPerPrefPeriod
+    const monthlyPref = equity > 0 ? (equity * (prefRate / 100)) / 12 : 0
+    const prefPerPeriod = periodsPerYear > 0 ? (equity * (prefRate / 100)) / periodsPerYear : 0
+    const totalPref = prefPerPeriod * prefPeriods
+    const grossRevenue = units * salePrice + Number(fs?.tifInfrastructureReduction || 0)
+    const hard = Number(input.underwritingEstimatedConstructionCost || 0)
+    const land = Number(input.landCost || 0)
+    const site = Number(input.siteWorkCost || 0)
+    const soft = hard * (Number(input.softCostPercent || 0) / 100)
+    const contingency = hard * (Number(input.contingencyPercent || 0) / 100)
+    const infra = Number(fs?.infrastructureCost || 0)
+    const carry = getCalculatedCarryCost(input)
+    const baselineCost = hard + land + site + soft + contingency + infra + carry
+    const interest = Number(projection?.summary?.totalInterestDuringConstruction || 0)
+    const netProfit = grossRevenue - baselineCost - interest
+    const profitAfterPref = netProfit - totalPref
+    const investorProfitShare = Math.max(0, profitAfterPref * (investorSplit / 100))
+    const developerProfitShare = Math.max(0, profitAfterPref * (developerSplit / 100))
+    const investorPayout = equity + totalPref + investorProfitShare
+    const investorMoic = equity > 0 ? investorPayout / equity : null
+    const annualPropertyTaxRevenue = grossRevenue * 0.025
+    const tifPaybackYears = Number(fs?.tifInfrastructureReduction || 0) > 0 && annualPropertyTaxRevenue > 0
+      ? Number(fs?.tifInfrastructureReduction || 0) / annualPropertyTaxRevenue
+      : null
+    const public10YrNetReturn = (annualPropertyTaxRevenue * 10) - Number(fs?.tifInfrastructureReduction || 0)
+    return {
+      units,
+      salePrice,
+      investorEquity: equity,
+      grossRevenue,
+      baselineCost,
+      interest,
+      netProfit,
+      monthlyPref,
+      prefPerPeriod,
+      prefPeriods,
+      prefFrequencyLabel: getPrefFrequencyLabel(prefFreq),
+      totalPref,
+      investorSplit,
+      developerSplit,
+      investorProfitShare,
+      developerProfitShare,
+      investorPayout,
+      investorMoic,
+      tifAmount: Number(fs?.tifInfrastructureReduction || 0),
+      annualPropertyTaxRevenue,
+      tifPaybackYears,
+      public10YrNetReturn,
+    }
+  }, [input, projection])
+
+  const dashboardMetrics = useMemo(() => {
+    const summary = projection?.summary
+    const projectedProfit = projection?.projectedProfit ?? carbonMetrics?.netProfit ?? null
+    const investorMoic = summary?.forSaleEquityMultiple ?? carbonMetrics?.investorMoic ?? null
+    const distributedTotal = summary?.forSaleDistributionTotal ?? null
+    const developerSplitPct = Number(input?.developerProfitShareOnCompletion || 80)
+    const developerShare =
+      distributedTotal != null
+        ? distributedTotal * (developerSplitPct / 100)
+        : (carbonMetrics?.developerProfitShare ?? null)
+
+    return {
+      projectedProfit,
+      investorMoic,
+      developerShare,
+      peakLocBalance: summary?.forSalePeakLocBalance ?? null,
+      tifPaybackYears: carbonMetrics?.tifPaybackYears ?? null,
+      usesProjectionValues: Boolean(projection),
+    }
+  }, [input?.developerProfitShareOnCompletion, projection, carbonMetrics])
+
+  const analysisMetrics = useMemo(() => {
+    const summary = projection?.summary
+    const totalInterest = Number(summary?.totalInterestDuringConstruction || carbonMetrics?.interest || 0)
+    const totalExpensesExInterest =
+      projection?.totalEstimatedCost != null
+        ? Math.max(0, Number(projection.totalEstimatedCost) - totalInterest)
+        : Number(carbonMetrics?.baselineCost || 0)
+    const totalRevenue =
+      summary?.forSaleTotalRevenue ??
+      (projection?.contractValue ?? carbonMetrics?.grossRevenue ?? null)
+    const netProjectProfit = projection?.projectedProfit ?? carbonMetrics?.netProfit ?? null
+    const distributedCash = summary?.forSaleDistributionTotal ?? null
+    const developerSplitPct = Number(input?.developerProfitShareOnCompletion || 80)
+    const investorSplitPct = Number(input?.investorProfitShareOnCompletion || 20)
+    const developerTakeHome =
+      distributedCash != null
+        ? distributedCash * (developerSplitPct / 100)
+        : (carbonMetrics?.developerProfitShare ?? null)
+    const investorPayout =
+      distributedCash != null
+        ? distributedCash * (investorSplitPct / 100)
+        : (carbonMetrics?.investorPayout ?? null)
+
+    return {
+      totalExpensesExInterest,
+      totalRevenue,
+      totalInterest,
+      totalPreferredReturn: carbonMetrics?.totalPref ?? null,
+      netProjectProfit,
+      developerTakeHome,
+      investorPayout,
+      peakLocBalance: summary?.forSalePeakLocBalance ?? null,
+      finalLocBalance: summary?.forSaleEndingLocBalance ?? null,
+    }
+  }, [
+    projection,
+    input?.developerProfitShareOnCompletion,
+    input?.investorProfitShareOnCompletion,
+    carbonMetrics,
+  ])
+
+  const investorReturnsMetrics = useMemo(() => {
+    const summary = projection?.summary
+    const investorEquity =
+      summary?.forSaleEquityDeployed ??
+      Number(input?.investorEquity || input?.forSalePhasedLoc?.incentiveEquitySource || carbonMetrics?.investorEquity || 0)
+    const totalPreferredReturn = carbonMetrics?.totalPref ?? null
+    const investorSplitPct = Number(input?.investorProfitShareOnCompletion || carbonMetrics?.investorSplit || 20)
+    const developerSplitPct = Number(input?.developerProfitShareOnCompletion || carbonMetrics?.developerSplit || 80)
+    const distributedCash = summary?.forSaleDistributionTotal ?? null
+    const investorProfitShare =
+      distributedCash != null
+        ? distributedCash * (investorSplitPct / 100)
+        : (carbonMetrics?.investorProfitShare ?? null)
+    const totalInvestorPayout =
+      distributedCash != null
+        ? distributedCash * (investorSplitPct / 100)
+        : (carbonMetrics?.investorPayout ?? null)
+    const investorMoic =
+      summary?.forSaleEquityMultiple ??
+      (investorEquity > 0 && totalInvestorPayout != null ? totalInvestorPayout / investorEquity : carbonMetrics?.investorMoic ?? null)
+
+    return {
+      investorEquity,
+      monthlyPreferredReturn: carbonMetrics?.monthlyPref ?? null,
+      totalPreferredReturn,
+      investorProfitShare,
+      investorSplitPct,
+      developerSplitPct,
+      totalInvestorPayout,
+      investorMoic,
+    }
+  }, [projection, input, carbonMetrics])
+
+  const publicSectorMetrics = useMemo(() => {
+    const summary = projection?.summary
+    const totalRevenue =
+      summary?.forSaleTotalRevenue ??
+      (carbonMetrics?.grossRevenue ?? ((input?.forSalePhasedLoc?.totalUnits || 0) * (input?.forSalePhasedLoc?.averageSalePrice || 0)))
+    const annualPropertyTaxRevenue = totalRevenue * 0.025
+    const tifAmount = Number(input?.forSalePhasedLoc?.tifInfrastructureReduction || 0)
+    const tifPaybackYears = tifAmount > 0 && annualPropertyTaxRevenue > 0 ? tifAmount / annualPropertyTaxRevenue : null
+    const public10YrNetReturn = (annualPropertyTaxRevenue * 10) - tifAmount
+    return {
+      annualPropertyTaxRevenue,
+      tifPaybackYears,
+      public10YrNetReturn,
+    }
+  }, [projection, input, carbonMetrics?.grossRevenue])
+
+  const validationChecks = useMemo(() => {
+    if (!input) return []
+    const fs = input.forSalePhasedLoc
+    const phaseUnits = (fs?.phases || []).reduce((sum, p) => sum + (Number(p.unitCount) || 0), 0)
+    const checks = [
+      { label: 'Total units > 0', pass: Number(fs?.totalUnits || 0) > 0 },
+      { label: 'Phase units = total units', pass: Math.abs(phaseUnits - Number(fs?.totalUnits || 0)) <= 1 },
+      { label: 'Average sale price > 0', pass: Number(fs?.averageSalePrice || 0) > 0 },
+      { label: 'LOC limit set', pass: Number(fs?.fixedLocLimit || 0) > 0 },
+      { label: 'Peak LOC within limit', pass: Number(projection?.summary?.forSalePeakLocBalance || 0) <= Number(fs?.fixedLocLimit || 0) || Number(fs?.fixedLocLimit || 0) === 0 },
+      { label: 'No critical readiness blockers', pass: readiness.failedCriticalCount === 0 },
+    ]
+    return checks
+  }, [input, projection, readiness.failedCriticalCount])
+
+  const phaseProFormaRows = useMemo(() => {
+    const fs = input?.forSalePhasedLoc
+    const phases = fs?.phases || []
+    const avg = Number(fs?.averageSalePrice || 0)
+    const depPct = Number(fs?.presaleDepositPercent || 0)
+    const depShare = depPct / 100
+    const tifTotal = Number(fs?.tifInfrastructureReduction || 0)
+    const incentiveRowsForTif =
+      ((input as any)?.customStacks?.incentiveRows as IncentiveStackRow[]) || []
+    const tifByPhase = allocateTifAcrossPhases({ phases, tifTotal, incentiveRows: incentiveRowsForTif })
+    const infraTotal = Number(fs?.infrastructureCost || 0)
+    const landTotal = Number(input?.landCost || 0)
+    const siteTotal = Number(input?.siteWorkCost || 0)
+    const totalUnits = Math.max(1, phases.reduce((sum, p) => sum + (Number(p.unitCount) || 0), 0))
+    const totalConstruction = Number(input?.underwritingEstimatedConstructionCost || 0)
+    const totalCarry = getCalculatedCarryCost(input || null)
+    const perUnitCarry = Number(input?.monthlyCarryPerUnit || 0)
+    const phaseUnitMonthsArr = phases.map((p) => {
+      const u = Math.max(0, Number(p.unitCount || 0))
+      const m = Math.max(0, Number(p.buildMonths || 0))
+      return u * m
+    })
+    const sumPhaseUnitMonths = phaseUnitMonthsArr.reduce((a, b) => a + b, 0)
+    const infraShares =
+      phases.length && infraTotal > 0
+        ? computePhaseAllocationShares(phases, (p) => p.infrastructureAllocationPercent ?? 0, 'infra')
+        : phases.map(() => 0)
+    const landShares =
+      phases.length && landTotal > 0
+        ? computePhaseAllocationShares(phases, (p) => p.landAllocationPercent ?? 0, 'landSite')
+        : phases.map(() => 0)
+    const siteShares =
+      phases.length && siteTotal > 0
+        ? computePhaseAllocationShares(phases, (p) => p.siteWorkAllocationPercent ?? 0, 'landSite')
+        : phases.map(() => 0)
+
+    return phases.map((p, idx) => {
+      const units = Number(p.unitCount || 0)
+      const unitShare = units / totalUnits
+      const phaseRevenue = units * avg
+      const presale = phaseRevenue * depShare
+      const close = phaseRevenue * Math.max(0, 1 - depShare)
+      const constructionCost = totalConstruction * unitShare
+      const landCost = landTotal * (landShares[idx] || 0)
+      const siteCost = siteTotal * (siteShares[idx] || 0)
+      const infra = infraTotal * (infraShares[idx] || 0)
+      const carry =
+        perUnitCarry > 0 && sumPhaseUnitMonths > 0
+          ? roundMoney(perUnitCarry * (phaseUnitMonthsArr[idx] || 0))
+          : roundMoney(totalCarry * unitShare)
+      const tif = tifByPhase[idx] ?? 0
+      const totalCosts = constructionCost + landCost + siteCost + infra + carry
+      const totalRevenue = phaseRevenue + tif
+      return {
+        id: p.id,
+        phase: p.name,
+        units,
+        presale,
+        close,
+        tif,
+        totalRevenue,
+        hardCost: constructionCost,
+        infra,
+        carry,
+        totalCosts,
+        profit: totalRevenue - totalCosts,
+      }
+    })
+  }, [input])
+
+  const cashFlowWorkbookRows = useMemo(() => {
+    const timeline = projection?.forSaleLocTimeline || []
+    const fallback = projection?.monthlyCashFlows || []
+    const displayMonths = 26
+    const months = (timeline.length ? timeline.map((m) => m.monthLabel) : fallback.map((m) => m.monthLabel))
+    if (months.length === 0) return null
+    const avg = Number(input?.forSalePhasedLoc?.averageSalePrice || 0)
+    const depPct = Number(input?.forSalePhasedLoc?.presaleDepositPercent || 0)
+    const depShare = depPct / 100
+
+    const calcFromTimeline = (cb: (m: any) => number) => timeline.map((m) => cb(m) || 0)
+    const calcFromFallback = (cb: (m: any) => number) => fallback.map((m) => cb(m) || 0)
+    const fromTimeline = timeline.length > 0
+
+    const presaleDeposits = fromTimeline
+      ? calcFromTimeline((m) => Number(m.presalesThisMonth || 0) * avg * depShare)
+      : calcFromFallback((m) => Number(m.milestonePayments || 0))
+    const closingProceeds = fromTimeline
+      ? calcFromTimeline((m) => Number(m.closingsThisMonth || 0) * avg * (1 - depShare))
+      : calcFromFallback((m) => Math.max(0, Number(m.totalInflow || 0) - Number(m.milestonePayments || 0)))
+    const totalSalesRevenue = presaleDeposits.map((v, i) => v + closingProceeds[i])
+    const totalInflow = calcFromFallback((m) => Number(m.totalInflow || 0))
+    const locDraw = fromTimeline ? calcFromTimeline((m) => Number(m.locDraw || 0)) : calcFromFallback((m) => Number(m.netCashFlow || 0) < 0 ? Math.abs(Number(m.netCashFlow || 0)) : 0)
+    const locRepayment = fromTimeline ? calcFromTimeline((m) => Number(m.locPaydown || 0)) : calcFromFallback((m) => Number(m.netCashFlow || 0) > 0 ? Number(m.netCashFlow || 0) : 0)
+    const locBalance = fromTimeline
+      ? calcFromTimeline((m) => Number(m.locBalance || 0))
+      : (() => {
+          let bal = 0
+          return locDraw.map((d, i) => {
+            bal = bal + d - locRepayment[i]
+            return bal
+          })
+        })()
+    const locOpeningBalance = locBalance.map((_, i) => (i === 0 ? 0 : locBalance[i - 1]))
+    const unfundedShortfall = new Array(months.length).fill(0)
+    const totalOutflow = calcFromFallback((m) => Number(m.totalOutflow || 0))
+    const prefPaidSeries = fromTimeline
+      ? calcFromTimeline((m) => Number((m as { preferredReturnPaid?: number }).preferredReturnPaid || 0))
+      : (() => {
+          const prefFrequency = (input?.preferredReturnPaidFrequency ||
+            'monthly') as ProFormaInput['preferredReturnPaidFrequency']
+          const monthsPerPrefPeriod = Math.max(1, getMonthsPerPrefPeriod(prefFrequency))
+          const prefPerMonth = Number(carbonMetrics?.monthlyPref || 0)
+          const modeledMonths = Math.max(0, Number(input?.projectionMonths || 0))
+          return months.map((_, i) => {
+            const monthNumber = i + 1
+            if (monthNumber > modeledMonths) return 0
+            if (monthNumber % monthsPerPrefPeriod === 0) {
+              return prefPerMonth * monthsPerPrefPeriod
+            }
+            if (monthNumber === modeledMonths) {
+              const monthsIntoCurrentPeriod = ((monthNumber - 1) % monthsPerPrefPeriod) + 1
+              return prefPerMonth * monthsIntoCurrentPeriod
+            }
+            return 0
+          })
+        })()
+    const constructionUses = totalOutflow.map((t, i) =>
+      fromTimeline ? Math.max(0, t - (prefPaidSeries[i] || 0)) : t,
+    )
+    const investorEquityRow = new Array(months.length).fill(0)
+    investorEquityRow[0] = Number(input?.investorEquity || input?.forSalePhasedLoc?.incentiveEquitySource || 0)
+    const tifReimbursement = fromTimeline
+      ? timeline.map((m) => Number((m as { tifReimbursement?: number }).tifReimbursement || 0))
+      : totalInflow.map((inflow, i) => Math.max(0, inflow - totalSalesRevenue[i]))
+    const totalInfusion = investorEquityRow.map((v, i) => v + tifReimbursement[i])
+    const investorEquityReturn = new Array(months.length).fill(0)
+    const investorProfitShareDistribution = new Array(months.length).fill(0)
+    const visibleTimeline = timeline
+    const defaultPayoutMonthIndex = Math.max(
+      0,
+      Math.min(
+        months.length - 1,
+        Math.max(0, Number(input?.projectionMonths || months.length) - 1),
+      ),
+    )
+    let payoutMonthIndex = defaultPayoutMonthIndex
+    if (fromTimeline && visibleTimeline.length > 0) {
+      let lastClosingMonthIndex = -1
+      for (let i = visibleTimeline.length - 1; i >= 0; i--) {
+        if (Number(visibleTimeline[i]?.closingsThisMonth || 0) > 0) {
+          lastClosingMonthIndex = i
+          break
+        }
+      }
+      if (lastClosingMonthIndex >= 0) {
+        const payoffOffset = visibleTimeline
+          .slice(lastClosingMonthIndex)
+          .findIndex((m) => Number(m.locBalance || 0) <= 0 && Number(m.bondBalance || 0) <= 0)
+        payoutMonthIndex =
+          payoffOffset >= 0
+            ? lastClosingMonthIndex + payoffOffset
+            : lastClosingMonthIndex
+      }
+    }
+    investorEquityReturn[payoutMonthIndex] = Number(carbonMetrics?.investorEquity || 0)
+    investorProfitShareDistribution[payoutMonthIndex] = Number(carbonMetrics?.investorProfitShare || 0)
+    const totalInvestorPayoutsRow = prefPaidSeries.map(
+      (p, i) => p + investorEquityReturn[i] + investorProfitShareDistribution[i],
+    )
+    const operatingCashFlow = totalSalesRevenue.map((v, i) =>
+      fromTimeline
+        ? v + totalInfusion[i] - totalOutflow[i]
+        : v + totalInfusion[i] - totalOutflow[i] - prefPaidSeries[i],
+    )
+    const cumulativeOperating = (() => {
+      let c = 0
+      return operatingCashFlow.map((n) => {
+        c += n
+        return c
+      })
+    })()
+    const locInterest = calcFromFallback((m) => Number(m.interestDuringConstruction || 0))
+    const netBeforeLoc = operatingCashFlow.map((v, i) => v - locInterest[i])
+    const netCashFlow = netBeforeLoc.map(
+      (v, i) => v + locDraw[i] - locRepayment[i] - investorEquityReturn[i] - investorProfitShareDistribution[i],
+    )
+    const cumulativeNet = (() => {
+      let c = 0
+      return netCashFlow.map((n) => {
+        c += n
+        return c
+      })
+    })()
+
+    const rows = [
+        { label: 'EXPENSES', values: [], kind: 'header' },
+        { label: 'Construction & project uses', values: constructionUses, kind: 'data' },
+        {
+          label: fromTimeline ? 'Total cash uses (construction + pref)' : 'Total Expenses',
+          values: totalOutflow,
+          kind: 'total',
+        },
+        { label: 'REVENUE', values: [], kind: 'header' },
+        { label: `Presale Deposits (${depPct.toFixed(0)}%)`, values: presaleDeposits, kind: 'data' },
+        { label: `Closing Proceeds (${Math.max(0, 100 - depPct).toFixed(0)}%)`, values: closingProceeds, kind: 'data' },
+        { label: 'Total Sales Revenue', values: totalSalesRevenue, kind: 'total' },
+        { label: 'EQUITY & CASH INFUSIONS', values: [], kind: 'header' },
+        { label: '  Investor Equity', values: investorEquityRow, kind: 'data' },
+        { label: '  TIF Reimbursement', values: tifReimbursement, kind: 'data' },
+        { label: 'Total Cash Infusions', values: totalInfusion, kind: 'total' },
+        { label: 'INVESTOR PAYOUTS', values: [], kind: 'header' },
+        {
+          label: `  Preferred return (${carbonMetrics?.prefFrequencyLabel || 'Monthly'})`,
+          values: prefPaidSeries,
+          kind: 'data',
+        },
+        { label: '  Equity returned to investor (at completion)', values: investorEquityReturn, kind: 'data' },
+        { label: '  Investor profit share (at completion)', values: investorProfitShareDistribution, kind: 'data' },
+        { label: 'Total investor payouts', values: totalInvestorPayoutsRow, kind: 'total' },
+        { label: 'PRE-FINANCING CASH FLOW', values: [], kind: 'header' },
+        { label: 'Operating Cash Flow', values: operatingCashFlow, kind: 'data' },
+        { label: 'Cumulative Operating CF', values: cumulativeOperating, kind: 'total' },
+        {
+          label: `LINE OF CREDIT (${Number(effectiveLocAnnualPercent(input)).toFixed(2)}% Revolving)`,
+          values: [],
+          kind: 'header',
+        },
+        { label: '  Opening Balance', values: locOpeningBalance, kind: 'data' },
+        { label: '  Interest Due', values: locInterest, kind: 'data' },
+        { label: 'Net Before LOC', values: netBeforeLoc, kind: 'data' },
+        { label: '  LOC Draw', values: locDraw, kind: 'data' },
+        { label: '  LOC Repayment', values: locRepayment, kind: 'data' },
+        { label: '  Closing Balance', values: locBalance, kind: 'total' },
+        { label: '  Unfunded Shortfall', values: unfundedShortfall, kind: 'data' },
+        { label: 'NET CASH FLOW (After Financing)', values: [], kind: 'header' },
+        { label: 'Monthly Free Cash', values: netCashFlow, kind: 'total' },
+        { label: 'Cumulative Free Cash', values: cumulativeNet, kind: 'total' },
+      ]
+    const fullTotalsByLabel = Object.fromEntries(
+      rows
+        .filter((row) => row.kind !== 'header')
+        .map((row) => [
+          row.label,
+          (row.values as number[]).reduce((sum, n) => sum + (Number(n) || 0), 0),
+        ]),
+    ) as Record<string, number>
+    const clipValues = (vals: number[]) => vals.slice(0, displayMonths)
+    return {
+      months: months.slice(0, displayMonths),
+      rows: rows.map((row) =>
+        row.kind === 'header'
+          ? row
+          : { ...row, values: clipValues(row.values as number[]) },
+      ),
+      fullTotalsByLabel,
+    }
+  }, [
+    projection,
+    input,
+    carbonMetrics?.monthlyPref,
+    carbonMetrics?.prefFrequencyLabel,
+    carbonMetrics?.investorEquity,
+    carbonMetrics?.investorProfitShare,
+  ])
+
+  const cashFlowAudit = useMemo(() => {
+    const configuredTif = Number(input?.forSalePhasedLoc?.tifInfrastructureReduction || 0)
+    const workbookTif = Number(cashFlowWorkbookRows?.fullTotalsByLabel?.['  TIF Reimbursement'] || 0)
+    const tifDelta = workbookTif - configuredTif
+    const payoutTarget = Number(carbonMetrics?.investorPayout || 0)
+    const workbookPayout = Number(cashFlowWorkbookRows?.fullTotalsByLabel?.['Total investor payouts'] || 0)
+    const payoutDelta = workbookPayout - payoutTarget
+    const locLimit = Number(input?.forSalePhasedLoc?.fixedLocLimit || 0)
+    const peakLoc = Number(projection?.summary?.forSalePeakLocBalance || 0)
+    const endingLoc = Number(projection?.summary?.forSaleEndingLocBalance || 0)
+    const locInterest = Number(projection?.summary?.totalInterestDuringConstruction || 0)
+    return {
+      configuredTif,
+      workbookTif,
+      tifDelta,
+      payoutTarget,
+      workbookPayout,
+      payoutDelta,
+      locLimit,
+      peakLoc,
+      endingLoc,
+      locInterest,
+    }
+  }, [input, projection, carbonMetrics?.investorPayout, cashFlowWorkbookRows])
 
   const selectedDealStage = (deal: Deal): WorkspaceStage => {
     if (deal.converted_to_projects) return 'proforma'
@@ -1146,39 +2071,110 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   }
 
   const setModeSelection = (value: string) => {
+    if (!input) return
     if (value === 'rental-hold') {
       setField('proFormaMode', 'rental-hold')
       return
     }
-    if (value === 'for-sale-phased-loc') {
-      setField('proFormaMode', 'for-sale-phased-loc')
-      return
-    }
-    setField('proFormaMode', 'general-development')
+    const nextMode = materialForSaleContext(input) ? 'for-sale-phased-loc' : 'general-development'
+    setField('proFormaMode', nextMode)
   }
 
   const defaultDebtLocRows = (): DebtLocStackRow[] => ([
-    { id: 'loc-primary', label: 'Primary LOC', amount: input?.forSalePhasedLoc?.fixedLocLimit || 0, applyTo: 'loc-limit' },
-    { id: 'debt-primary', label: 'Primary Debt', amount: input?.debtService?.loanAmount || 0, applyTo: 'debt-amount' },
+    {
+      id: 'loc-primary',
+      label: 'Primary LOC',
+      amount: input?.forSalePhasedLoc?.fixedLocLimit || 0,
+      interestRate: Number(input?.debtService?.interestRate || 0),
+      debtType: 'revolving-interest-only',
+      applyTo: 'loc-limit',
+    },
+    {
+      id: 'debt-primary',
+      label: 'Primary Debt',
+      amount: input?.debtService?.loanAmount || 0,
+      interestRate: Number(input?.debtService?.interestRate || 0),
+      debtType: 'term-interest-only',
+      applyTo: 'debt-amount',
+    },
   ])
 
   const defaultIncentiveRows = (): IncentiveStackRow[] => ([
-    { id: 'incentive-tif', label: 'TIF', amount: input?.forSalePhasedLoc?.tifInfrastructureReduction || 0, applyTo: 'infrastructure-reduction' },
-    { id: 'incentive-grant', label: 'Grant / Incentive', amount: input?.forSalePhasedLoc?.incentiveCostReduction || 0, applyTo: 'cost-reduction' },
-    { id: 'incentive-equity', label: 'Incentive Equity Source', amount: input?.forSalePhasedLoc?.incentiveEquitySource || 0, applyTo: 'equity-source' },
+    {
+      id: 'incentive-tif',
+      label: 'TIF',
+      amount: input?.forSalePhasedLoc?.tifInfrastructureReduction || 0,
+      applyTo: 'infrastructure-reduction',
+      timingMode: 'by-phase',
+      constructionPercent: 0,
+      phaseNames: '',
+    },
+    {
+      id: 'incentive-grant',
+      label: 'Grant / Incentive',
+      amount: input?.forSalePhasedLoc?.incentiveCostReduction || 0,
+      applyTo: 'cost-reduction',
+      timingMode: 'upfront',
+      constructionPercent: 0,
+      phaseNames: '',
+    },
+    {
+      id: 'incentive-equity',
+      label: 'Incentive Equity Source',
+      amount: input?.forSalePhasedLoc?.incentiveEquitySource || 0,
+      applyTo: 'equity-source',
+      timingMode: 'upfront',
+      constructionPercent: 0,
+      phaseNames: '',
+    },
   ])
 
-  const debtLocRows: DebtLocStackRow[] = ((input as any)?.customStacks?.debtLocRows as DebtLocStackRow[]) || defaultDebtLocRows()
-  const incentiveRows: IncentiveStackRow[] = ((input as any)?.customStacks?.incentiveRows as IncentiveStackRow[]) || defaultIncentiveRows()
+  const rawDebtLocRows: DebtLocStackRow[] = ((input as any)?.customStacks?.debtLocRows as DebtLocStackRow[]) || defaultDebtLocRows()
+  const firstBondRowIdx = rawDebtLocRows.findIndex((r) => r.applyTo === 'bond-capacity')
+  const legacyBondRate = input?.forSalePhasedLoc?.bondRatePercent
+  const debtLocRows: DebtLocStackRow[] = rawDebtLocRows.map((row, i) => {
+    const isBond = row.applyTo === 'bond-capacity'
+    let interestRate = Number((row as any).interestRate || 0)
+    if (isBond && i === firstBondRowIdx && !interestRate && legacyBondRate) {
+      interestRate = Number(legacyBondRate)
+    }
+    return {
+      ...row,
+      interestRate,
+      debtType: ((row as any).debtType as DebtInstrumentType) || 'revolving-interest-only',
+    }
+  })
+  const rawIncentiveRows: IncentiveStackRow[] = ((input as any)?.customStacks?.incentiveRows as IncentiveStackRow[]) || defaultIncentiveRows()
+  const incentiveRows: IncentiveStackRow[] = rawIncentiveRows.map((row) => ({
+    ...row,
+    timingMode: ((row as any).timingMode as IncentiveTimingMode) || 'upfront',
+    constructionPercent: Number((row as any).constructionPercent || 0),
+    phaseNames: String((row as any).phaseNames || ''),
+  }))
 
   const applyStackRows = (nextDebtRows: DebtLocStackRow[], nextIncentiveRows: IncentiveStackRow[]) => {
     if (!input) return
     const locLimit = nextDebtRows.filter((r) => r.applyTo === 'loc-limit').reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
     const debtAmount = nextDebtRows.filter((r) => r.applyTo === 'debt-amount').reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
-    const bondCapacity = nextDebtRows.filter((r) => r.applyTo === 'bond-capacity').reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+    const bondRows = nextDebtRows.filter((r) => r.applyTo === 'bond-capacity')
+    const bondCapacity = bondRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+    const primaryBond = bondRows[0]
+    const bondRateSync = primaryBond ? Number(primaryBond.interestRate || 0) : undefined
     const tifInfra = nextIncentiveRows.filter((r) => r.applyTo === 'infrastructure-reduction').reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
     const costReduction = nextIncentiveRows.filter((r) => r.applyTo === 'cost-reduction').reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
     const equitySource = nextIncentiveRows.filter((r) => r.applyTo === 'equity-source').reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+
+    const forSalePhasedLocPatch: Record<string, unknown> = {
+      fixedLocLimit: locLimit,
+      bondCapacity,
+      bondFinancingEnabled: bondCapacity > 0,
+      tifInfrastructureReduction: tifInfra,
+      incentiveCostReduction: costReduction,
+      incentiveEquitySource: equitySource,
+    }
+    if (primaryBond) {
+      forSalePhasedLocPatch.bondRatePercent = bondRateSync ?? 0
+    }
 
     let next = deepMerge(input as any, {
       customStacks: {
@@ -1188,54 +2184,78 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
       debtService: {
         loanAmount: debtAmount,
       },
-      forSalePhasedLoc: {
-        fixedLocLimit: locLimit,
-        bondCapacity,
-        tifInfrastructureReduction: tifInfra,
-        incentiveCostReduction: costReduction,
-        incentiveEquitySource: equitySource,
-      },
+      forSalePhasedLoc: forSalePhasedLocPatch,
     } as any)
+    const fspl = next.forSalePhasedLoc as Record<string, unknown> | undefined
+    if (fspl && !primaryBond) {
+      delete fspl.bondRatePercent
+      delete fspl.bondLtcOverridePercent
+    }
     if ((next.proFormaMode || 'general-development') === 'general-development') {
       next = syncLtcFromDebtAmount(next)
     }
     setInput(next)
   }
 
-  const isDevelopmentMode =
-    input?.proFormaMode === 'general-development' || input?.proFormaMode === 'for-sale-phased-loc'
+  const isDevelopmentMode = input?.proFormaMode !== 'rental-hold'
   const phaseRows = input?.forSalePhasedLoc?.phases || []
+  const phaseTimingMode = input?.forSalePhasedLoc?.phaseTimingMode || 'trigger-based'
 
   const addPhaseRow = () => {
-    const next: ForSalePhaseInput = {
-      id: uid(),
-      name: `Phase ${phaseRows.length + 1}`,
-      unitCount: 0,
-      buildMonths: 0,
-      presaleStartMonthOffset: 0,
-      closeStartMonthOffset: 0,
-      presaleTriggerPercent: 0,
-      infrastructureAllocationPercent: 0,
-      avgSalePrice: 0,
-      hardCostBudget: 0,
-      softCostBudget: 0,
-      costEntryMode: 'auto',
-    }
-    setField('forSalePhasedLoc.phases', [...phaseRows, next])
+    setInput((prev) => {
+      if (!prev?.forSalePhasedLoc) return prev
+      const fs = prev.forSalePhasedLoc
+      const phases = fs.phases || []
+      const defaultStartMonth = phases.reduce((max, p) => {
+        const start = Number(p.startMonthOffset ?? 0)
+        const duration = Number(p.buildMonths || 0)
+        return Math.max(max, Math.max(0, start) + Math.max(0, duration))
+      }, 0)
+      const next: ForSalePhaseInput = {
+        id: uid(),
+        name: `Phase ${phases.length + 1}`,
+        startMonthOffset: defaultStartMonth,
+        unitCount: 0,
+        buildMonths: 0,
+        presaleStartMonthOffset: 0,
+        closeStartMonthOffset: 0,
+        presaleTriggerPercent: 0,
+        infrastructureAllocationPercent: 0,
+        landAllocationPercent: 0,
+        siteWorkAllocationPercent: 0,
+      }
+      return { ...prev, forSalePhasedLoc: { ...fs, phases: [...phases, next] } }
+    })
+    setFieldMeta((m) => ({
+      ...m,
+      'forSalePhasedLoc.phases': { status: 'confirmed', source: 'user', updatedAt: new Date().toISOString() },
+    }))
   }
 
   const updatePhaseRow = (id: string, key: keyof ForSalePhaseInput, value: any) => {
-    setField(
-      'forSalePhasedLoc.phases',
-      phaseRows.map((p) => (p.id === id ? { ...p, [key]: value } : p)),
-    )
+    setInput((prev) => {
+      if (!prev?.forSalePhasedLoc?.phases) return prev
+      const fs = prev.forSalePhasedLoc
+      const phases = fs.phases.map((p) => (p.id === id ? { ...p, [key]: value } : p))
+      return { ...prev, forSalePhasedLoc: { ...fs, phases } }
+    })
+    setFieldMeta((m) => ({
+      ...m,
+      'forSalePhasedLoc.phases': { status: 'confirmed', source: 'user', updatedAt: new Date().toISOString() },
+    }))
   }
 
   const removePhaseRow = (id: string) => {
-    setField(
-      'forSalePhasedLoc.phases',
-      phaseRows.filter((p) => p.id !== id),
-    )
+    setInput((prev) => {
+      if (!prev?.forSalePhasedLoc?.phases) return prev
+      const fs = prev.forSalePhasedLoc
+      const phases = fs.phases.filter((p) => p.id !== id)
+      return { ...prev, forSalePhasedLoc: { ...fs, phases } }
+    })
+    setFieldMeta((m) => ({
+      ...m,
+      'forSalePhasedLoc.phases': { status: 'confirmed', source: 'user', updatedAt: new Date().toISOString() },
+    }))
   }
 
   const applyUpdates = (updates: Partial<ProFormaInput>, source: 'ai' | 'user', status: FieldStatus) => {
@@ -1327,15 +2347,16 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
           })
         }
       }
-      if (response.notesAppend && response.notesAppend.trim()) {
-        setPendingNotesAppend(response.notesAppend.trim())
+      const sanitizedNotesAppend = sanitizeCaptureNotesAppend(response.notesAppend)
+      const sanitizedTaskSuggestions = sanitizeTaskSuggestions(response.taskSuggestions)
+      if (sanitizedNotesAppend) {
+        setPendingNotesAppend(sanitizedNotesAppend)
       }
-      if (response.taskSuggestions && response.taskSuggestions.length > 0) {
-        setPendingTaskSuggestions(response.taskSuggestions.map((t) => t.trim()).filter(Boolean))
+      if (sanitizedTaskSuggestions.length > 0) {
+        setPendingTaskSuggestions(sanitizedTaskSuggestions)
       }
       const hasWorkspaceCaptureSuggestions =
-        !!(response.notesAppend && response.notesAppend.trim()) ||
-        !!(response.taskSuggestions && response.taskSuggestions.length > 0)
+        !!sanitizedNotesAppend || sanitizedTaskSuggestions.length > 0
 
       const nextStage = (response.stageSuggestion || readiness.suggestedStage) as WorkspaceStage
       if (nextStage !== 'proforma') {
@@ -1377,7 +2398,11 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     if (!selectedDeal || !input) return
     setRunning(true)
     try {
-      const proj = calculateProForma(buildDealUnderwritingProject(selectedDeal), [], input)
+      const proj = calculateProForma(
+        buildDealUnderwritingProject(selectedDeal),
+        [],
+        proFormaInputForEngine(input),
+      )
       setProjection(proj)
       setStage('proforma')
       setRunPromptReason(null)
@@ -1406,6 +2431,227 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     })
     appendActivity('version_save', 'Saved ProForma version snapshot.')
     setSaving(false)
+  }
+
+  const handleLoadVersionInputsOnly = async (versionId: string) => {
+    if (!selectedDeal || !versionId) return
+    const savedVersion = await loadDealProFormaInputs(selectedDeal.id, versionId)
+    if (!savedVersion) return
+    const versionInput = normalizeRestoredInput(savedVersion, selectedDeal)
+    setInput(versionInput)
+    setProjection(null)
+    setPendingSuggestions(null)
+    setPendingNotesAppend(null)
+    setPendingTaskSuggestions(null)
+    setRunPromptReason('Loaded version inputs. Chat context was kept.')
+    setCenterTab('assumptions')
+    appendActivity('version_load', 'Loaded a saved version (inputs only).')
+  }
+
+  const handleClearWorkspace = async () => {
+    if (!selectedDeal) return
+    const confirmed = window.confirm(
+      `Clear this workspace for "${selectedDeal.deal_name}"?\n\nThis will reset inputs, notes, tasks, AI chat, and activity history for this deal.`,
+    )
+    if (!confirmed) return
+
+    if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current)
+    if (contextAutosaveTimerRef.current) window.clearTimeout(contextAutosaveTimerRef.current)
+
+    const freshInput = defaultInputForDeal(selectedDeal)
+    const starterMessages = [buildInitialCoachMessage(selectedDeal.deal_name)]
+    const clearedStage: WorkspaceStage = 'coaching'
+
+    setSaving(true)
+    setInput(freshInput)
+    setStage(clearedStage)
+    setMessages(starterMessages)
+    setFieldMeta({})
+    setProjection(null)
+    setPendingSuggestions(null)
+    setPendingNotesAppend(null)
+    setPendingTaskSuggestions(null)
+    setMarkers([])
+    setRunPromptReason('Workspace reset complete. You can start this deal fresh.')
+    setChatValue('')
+    setNotesDraft('')
+    setTasksDraft('')
+    setActivityEvents([])
+    setCenterTab('assumptions')
+
+    await Promise.all([
+      saveDealProFormaDraft(selectedDeal.id, {
+        currentInput: {
+          ...freshInput,
+          startDate: freshInput.startDate?.toISOString?.() || freshInput.startDate,
+          debtService: {
+            ...freshInput.debtService,
+            startDate: freshInput.debtService.startDate?.toISOString?.() || freshInput.debtService.startDate,
+          },
+        },
+        stage: clearedStage,
+        messages: starterMessages,
+        fieldMeta: {},
+      }),
+      saveDealWorkspaceContext(selectedDeal.id, {
+        notesText: '',
+        tasksText: '',
+      }),
+      clearDealActivityEvents(selectedDeal.id),
+    ])
+    setSaving(false)
+  }
+
+  const handleClearInputsOnly = async () => {
+    if (!selectedDeal || !input) return
+    const confirmed = window.confirm(
+      `Clear all inputs for "${selectedDeal.deal_name}"?\n\nThis resets pro forma fields but keeps notes, tasks, and current chat history.`,
+    )
+    if (!confirmed) return
+
+    if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current)
+
+    const freshInput = defaultInputForDeal(selectedDeal)
+    const clearedStage: WorkspaceStage = 'coaching'
+    setSaving(true)
+    setInput(freshInput)
+    setStage(clearedStage)
+    setFieldMeta({})
+    setProjection(null)
+    setPendingSuggestions(null)
+    setPendingNotesAppend(null)
+    setPendingTaskSuggestions(null)
+    setMarkers([])
+    setRunPromptReason('Inputs reset. Chat/notes/tasks were kept.')
+    setCenterTab('assumptions')
+
+    await saveDealProFormaDraft(selectedDeal.id, {
+      currentInput: {
+        ...freshInput,
+        startDate: freshInput.startDate?.toISOString?.() || freshInput.startDate,
+        debtService: {
+          ...freshInput.debtService,
+          startDate: freshInput.debtService.startDate?.toISOString?.() || freshInput.debtService.startDate,
+        },
+      },
+      stage: clearedStage,
+      messages,
+      fieldMeta: {},
+    })
+    setSaving(false)
+  }
+
+  const handleClearChatOnly = async () => {
+    if (!selectedDeal || !input) return
+    const confirmed = window.confirm(
+      `Clear AI chat history for "${selectedDeal.deal_name}"?\n\nThis keeps your inputs, notes, and tasks.`,
+    )
+    if (!confirmed) return
+
+    if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current)
+
+    const starterMessages = [buildInitialCoachMessage(selectedDeal.deal_name)]
+    setSaving(true)
+    setMessages(starterMessages)
+    setChatValue('')
+    setPendingSuggestions(null)
+    setPendingNotesAppend(null)
+    setPendingTaskSuggestions(null)
+    setRunPromptReason('Chat history cleared. Inputs/notes/tasks were kept.')
+    setActivityEvents((prev) =>
+      prev.filter((e) => !['chat_user', 'chat_assistant', 'chat_error'].includes(e.eventType)),
+    )
+
+    await Promise.all([
+      saveDealProFormaDraft(selectedDeal.id, {
+        currentInput: {
+          ...input,
+          startDate: input.startDate?.toISOString?.() || input.startDate,
+          debtService: {
+            ...input.debtService,
+            startDate: input.debtService.startDate?.toISOString?.() || input.debtService.startDate,
+          },
+        },
+        stage,
+        messages: starterMessages,
+        fieldMeta,
+      }),
+      clearDealActivityEventsByTypes(selectedDeal.id, ['chat_user', 'chat_assistant', 'chat_error']),
+    ])
+    setSaving(false)
+  }
+
+  const handleClearMenuChange = (value: string) => {
+    setClearMenuValue('')
+    if (value === 'clear-inputs') void handleClearInputsOnly()
+    if (value === 'clear-chat') void handleClearChatOnly()
+    if (value === 'clear-workspace') void handleClearWorkspace()
+  }
+
+  const handleVersionMenuChange = (value: string) => {
+    setVersionMenuValue('')
+    if (value === 'save-version') {
+      void handleSaveVersion()
+      return
+    }
+    if (value.startsWith('load:')) {
+      const versionId = value.replace('load:', '')
+      void handleLoadVersionInputsOnly(versionId)
+    }
+  }
+
+  const handleActionsMenuChange = (value: string) => {
+    setActionsMenuValue('')
+    if (value === 'run-proforma') {
+      handleRunProForma()
+      return
+    }
+    if (value === 'delete-deal') {
+      void handleDeleteSelectedDeal()
+      return
+    }
+    if (value === 'export-pdf' && projection) {
+      exportProFormaToPDF(projection)
+    }
+    if (value === 'export-excel' && projection) {
+      exportProFormaToExcel(projection)
+    }
+  }
+
+  const handleDeleteSelectedDeal = async () => {
+    if (!selectedDeal) return
+    const confirmed = window.confirm(
+      `Delete "${selectedDeal.deal_name}"?\n\nThis permanently removes this deal and its workspace data. This action cannot be undone.`,
+    )
+    if (!confirmed) return
+
+    setDeletingDeal(true)
+    try {
+      const targetDealId = selectedDeal.id
+      const success = await deleteDeal(targetDealId)
+      if (!success) {
+        window.alert('Failed to delete deal. Please try again.')
+        return
+      }
+
+      setDeals((prevDeals) => {
+        const remainingDeals = prevDeals.filter((deal) => deal.id !== targetDealId)
+        if (remainingDeals.length === 0) {
+          setSelectedDealId(undefined)
+          onBack()
+          return remainingDeals
+        }
+
+        if (selectedDealId === targetDealId) {
+          const nextDealId = remainingDeals[0].id
+          setSelectedDealId(nextDealId)
+          window.history.replaceState({}, '', `/deals/workspace/${nextDealId}`)
+        }
+        return remainingDeals
+      })
+    } finally {
+      setDeletingDeal(false)
+    }
   }
 
   const startVoice = () => {
@@ -1442,7 +2688,19 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     </div>
   )
 
-  if (loading || loadingDealState || !selectedDeal || !input) {
+  if (loading || loadingDealState) {
+    return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading deal workspace...</div>
+  }
+
+  if (!selectedDeal) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-500">
+        No deals found for workspace.
+      </div>
+    )
+  }
+
+  if (!input) {
     return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading deal workspace...</div>
   }
 
@@ -1467,29 +2725,47 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
           </div>
         </div>
         <div className="flex flex-1 items-center justify-end gap-2">
-          <Button variant="outline" size="sm" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={handleSaveVersion} disabled={saving}>
-            <Save className="h-4 w-4 mr-1" />
-            Save Version
-          </Button>
-          <Button variant="outline" size="sm" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={() => projection && exportProFormaToPDF(projection)} disabled={!projection}>
-            <Download className="h-4 w-4 mr-1" />
-            Export PDF
-          </Button>
-          <Button variant="outline" size="sm" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={() => projection && exportProFormaToExcel(projection)} disabled={!projection}>
-            <Download className="h-4 w-4 mr-1" />
-            Export Excel
-          </Button>
-          <Button size="sm" onClick={handleRunProForma} disabled={running}>
-            <Play className="h-4 w-4 mr-1" />
-            Run ProForma
-          </Button>
+          <Select value={clearMenuValue} onValueChange={handleClearMenuChange} disabled={saving}>
+            <SelectTrigger className="h-8 w-[180px] border-slate-700 bg-slate-900 text-slate-100">
+              <SelectValue placeholder="Clear Actions" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="clear-inputs">Clear Inputs</SelectItem>
+              <SelectItem value="clear-chat">Clear Chat</SelectItem>
+              <SelectItem value="clear-workspace">Clear Workspace</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={versionMenuValue} onValueChange={handleVersionMenuChange} disabled={saving}>
+            <SelectTrigger className="h-8 w-[240px] border-slate-700 bg-slate-900 text-slate-100">
+              <SelectValue placeholder="Versions" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="save-version">Save New Version</SelectItem>
+              {versionOptions.map((v) => (
+                <SelectItem key={v.id} value={`load:${v.id}`}>{`Load: ${v.label}`}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={actionsMenuValue} onValueChange={handleActionsMenuChange} disabled={running || deletingDeal}>
+            <SelectTrigger className="h-8 w-[200px] border-slate-700 bg-slate-900 text-slate-100">
+              <SelectValue placeholder="Actions" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="run-proforma">Run ProForma</SelectItem>
+              <SelectItem value="export-pdf" disabled={!projection}>Export PDF</SelectItem>
+              <SelectItem value="export-excel" disabled={!projection}>Export Excel</SelectItem>
+              <SelectItem value="delete-deal">Delete Deal</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       <div className="flex-1 flex min-h-0">
         <aside className="w-[220px] bg-slate-950 border-r border-slate-800 p-3 overflow-y-auto">
           <div className="text-xs uppercase text-slate-400 mb-2">Deals</div>
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 gap-2">
             {deals.map((d) => {
               const dStage = selectedDealStage(d)
               return (
@@ -1515,15 +2791,17 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
         </aside>
 
         <main className="flex-1 min-w-0 p-3 overflow-y-auto bg-slate-900 [&_label]:text-[11px] [&_label]:text-slate-200 [&_input]:h-8 [&_input]:text-xs [&_input]:bg-slate-200 [&_input]:border-slate-300 [&_input]:text-slate-900 [&_input]:placeholder:text-slate-500 [&_button[role='combobox']]:h-8 [&_button[role='combobox']]:text-xs [&_button[role='combobox']]:bg-slate-200 [&_button[role='combobox']]:border-slate-300 [&_button[role='combobox']]:text-slate-900 [&_.rounded-md]:rounded-sm">
-          <div className="mb-3 flex gap-2 border-b border-slate-800 pb-2">
-            <Button size="sm" className={centerTab === 'overview' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'overview' ? 'default' : 'outline'} onClick={() => setCenterTab('overview')}>Overview</Button>
-            <Button size="sm" className={centerTab === 'proforma' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'proforma' ? 'default' : 'outline'} onClick={() => setCenterTab('proforma')}>ProForma</Button>
-            <Button size="sm" className={centerTab === 'notes' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'notes' ? 'default' : 'outline'} onClick={() => setCenterTab('notes')}>Notes</Button>
-            <Button size="sm" className={centerTab === 'tasks' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'tasks' ? 'default' : 'outline'} onClick={() => setCenterTab('tasks')}>Tasks</Button>
-            <Button size="sm" className={centerTab === 'activity' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'activity' ? 'default' : 'outline'} onClick={() => setCenterTab('activity')}>Activity</Button>
+          <div className="mb-3 flex flex-wrap gap-2 border-b border-slate-800 pb-2">
+            <Button size="sm" className={centerTab === 'assumptions' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'assumptions' ? 'default' : 'outline'} onClick={() => setCenterTab('assumptions')}>Assumptions</Button>
+            <Button size="sm" className={centerTab === 'phase-pro-forma' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'phase-pro-forma' ? 'default' : 'outline'} onClick={() => setCenterTab('phase-pro-forma')}>Phase Pro Forma</Button>
+            <Button size="sm" className={centerTab === 'cash-flow' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'cash-flow' ? 'default' : 'outline'} onClick={() => setCenterTab('cash-flow')}>Cash Flow</Button>
+            <Button size="sm" className={centerTab === 'investor-returns' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'investor-returns' ? 'default' : 'outline'} onClick={() => setCenterTab('investor-returns')}>Investor Returns</Button>
+            <Button size="sm" className={centerTab === 'public-sector' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'public-sector' ? 'default' : 'outline'} onClick={() => setCenterTab('public-sector')}>Public Sector</Button>
+            <Button size="sm" className={centerTab === 'dashboard' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'dashboard' ? 'default' : 'outline'} onClick={() => setCenterTab('dashboard')}>Dashboard</Button>
+            <Button size="sm" className={centerTab === 'analysis' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'analysis' ? 'default' : 'outline'} onClick={() => setCenterTab('analysis')}>Analysis & Insights</Button>
           </div>
 
-          {centerTab === 'overview' && (
+          {centerTab === 'dashboard' && (
             <div className="space-y-3">
               <div className="mb-3">
                 <div className="flex items-center justify-between text-sm text-slate-200">
@@ -1545,209 +2823,803 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Card className="bg-slate-800 border-slate-700">
-                  <CardHeader className="py-3"><CardTitle className="text-base text-slate-200">Approx Equity Required</CardTitle></CardHeader>
-                  <CardContent className="pt-0 text-xl font-semibold text-slate-100">${roughMetrics.equityRequired.toLocaleString('en-US', { maximumFractionDigits: 0 })}</CardContent>
+                  <CardHeader className="py-3"><CardTitle className="text-base text-slate-200">Projected Profit</CardTitle></CardHeader>
+                  <CardContent className="pt-0 text-xl font-semibold text-slate-100">{fmtMoney(dashboardMetrics.projectedProfit)}</CardContent>
                 </Card>
                 <Card className="bg-slate-800 border-slate-700">
-                  <CardHeader className="py-3"><CardTitle className="text-base text-slate-200">Approx ROE</CardTitle></CardHeader>
-                  <CardContent className="pt-0 text-xl font-semibold text-slate-100">{roughMetrics.roughIrr.toFixed(1)}%</CardContent>
+                  <CardHeader className="py-3"><CardTitle className="text-base text-slate-200">Investor MOIC</CardTitle></CardHeader>
+                  <CardContent className="pt-0 text-xl font-semibold text-slate-100">{dashboardMetrics.investorMoic != null ? `${dashboardMetrics.investorMoic.toFixed(2)}x` : '—'}</CardContent>
                 </Card>
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Card className="bg-slate-800 border-slate-700"><CardHeader className="py-2"><CardTitle className="text-sm text-slate-200">Developer Share ({Number(input?.developerProfitShareOnCompletion || 80).toFixed(0)}%)</CardTitle></CardHeader><CardContent className="pt-0 text-slate-100">{fmtMoney(dashboardMetrics.developerShare)}</CardContent></Card>
+                <Card className="bg-slate-800 border-slate-700"><CardHeader className="py-2"><CardTitle className="text-sm text-slate-200">Peak LOC Balance</CardTitle></CardHeader><CardContent className="pt-0 text-slate-100">{fmtMoney(dashboardMetrics.peakLocBalance)}</CardContent></Card>
+                <Card className="bg-slate-800 border-slate-700"><CardHeader className="py-2"><CardTitle className="text-sm text-slate-200">TIF Payback (yrs)</CardTitle></CardHeader><CardContent className="pt-0 text-slate-100">{dashboardMetrics.tifPaybackYears != null ? dashboardMetrics.tifPaybackYears.toFixed(2) : '—'}</CardContent></Card>
+              </div>
+              {dashboardMetrics.usesProjectionValues && (
+                <div className="text-[11px] text-slate-400">
+                  Dashboard KPIs are synced to the latest ProForma engine output.
+                </div>
+              )}
               <Card className="bg-slate-800 border-slate-700">
                 <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Deal Snapshot</CardTitle></CardHeader>
                 <CardContent className="text-sm text-slate-200 space-y-1">
                   <div><strong>Deal:</strong> {selectedDeal.deal_name}</div>
-                  <div><strong>Mode:</strong> {input.proFormaMode === 'rental-hold' ? 'rental-hold' : 'development'}</div>
+                  <div><strong>Mode:</strong> {input.proFormaMode === 'rental-hold' ? 'Rental Hold' : 'Development'}</div>
                   <div><strong>Current Stage:</strong> {stage}</div>
                   <div><strong>Messages:</strong> {messages.length}</div>
                 </CardContent>
               </Card>
+              <ProformaMemoView
+                dealName={selectedDeal.deal_name}
+                input={input}
+                projection={projection}
+                readiness={readiness}
+                onEditAssumptions={() => setCenterTab('assumptions')}
+              />
             </div>
           )}
 
-          {centerTab === 'proforma' && (
-          <div className="space-y-3">
-            {proformaView === 'memo' ? (
-              <div className="flex w-full flex-col items-center gap-3">
-                <div className="flex w-full flex-wrap justify-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="default"
-                    onClick={() => setProformaView('memo')}
+          {centerTab === 'assumptions' && (
+          <div className="space-y-2 [&_input]:h-7 [&_input]:text-xs [&_button[role='combobox']]:h-7 [&_button[role='combobox']]:text-xs">
+          <Card className="bg-slate-800 border-slate-700">
+            <CardContent className="py-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                <div className="md:col-span-1">
+                  <Label className="text-xs">Model Mode</Label>
+                  <Select
+                    value={input.proFormaMode === 'rental-hold' ? 'rental-hold' : 'development'}
+                    onValueChange={setModeSelection}
                   >
-                    Pro forma memo
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700"
-                    onClick={() => setProformaView('assumptions')}
-                  >
-                    All assumptions
-                  </Button>
-                </div>
-                <ProformaMemoView
-                  dealName={selectedDeal.deal_name}
-                  input={input}
-                  projection={projection}
-                  readiness={readiness}
-                  onEditAssumptions={() => setProformaView('assumptions')}
-                />
-              </div>
-            ) : (
-              <>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700"
-                onClick={() => setProformaView('memo')}
-              >
-                Pro forma memo
-              </Button>
-              <Button
-                size="sm"
-                variant="default"
-                onClick={() => setProformaView('assumptions')}
-              >
-                All assumptions
-              </Button>
-            </div>
-            {input.proFormaMode === 'general-development' && materialForSaleContext(input) && (
-              <div className="rounded border border-amber-700/50 bg-amber-950/25 px-3 py-2 text-xs text-amber-100/90 leading-snug">
-                For-sale LOC fields are filled while Mode is still general-development. Readiness includes those requirements. Switch Mode to{' '}
-                <span className="font-medium text-amber-50">for-sale phased LOC</span> if this is primarily a sell-out / LOC draw model.
-              </div>
-            )}
-          <div className="space-y-2">
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Deal Structure</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Mode</Label>
-                  <Select value={input.proFormaMode === 'rental-hold' ? 'rental-hold' : input.proFormaMode === 'for-sale-phased-loc' ? 'for-sale-phased-loc' : 'general-development'} onValueChange={setModeSelection}>
                     <SelectTrigger className={fieldClass(fieldMeta['proFormaMode']?.status || 'empty')}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="rental-hold">rental-hold</SelectItem>
-                      <SelectItem value="general-development">general-development</SelectItem>
-                      <SelectItem value="for-sale-phased-loc">for-sale-phased-loc</SelectItem>
+                      <SelectItem value="development">Development</SelectItem>
+                      <SelectItem value="rental-hold">Rental Hold</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label className="text-xs">Contract Value</Label>
-                  <Input className={fieldClass(fieldMeta['contractValue']?.status || 'empty')} value={input.contractValue || ''} onChange={(e) => setField('contractValue', parseFloat(e.target.value) || 0)} />
+                <div className="md:col-span-2 text-xs text-slate-300">
+                  Select the model path before entering assumptions so readiness, sections, and calculations align with the deal type.
                 </div>
-                <div>
-                  <Label className="text-xs">Projection Months</Label>
-                  <Input className={fieldClass(fieldMeta['projectionMonths']?.status || 'empty')} value={input.projectionMonths || ''} onChange={(e) => setField('projectionMonths', parseInt(e.target.value || '24', 10))} />
-                </div>
-                <div>
-                  <Label className="text-xs">Construction Months</Label>
-                  <Input className={fieldClass(fieldMeta['constructionMonths']?.status || 'empty')} value={input.constructionMonths || ''} onChange={(e) => setField('constructionMonths', parseInt(e.target.value || '0', 10))} />
-                </div>
-                <div>
-                  <Label className="text-xs">Start Date</Label>
-                  <Input type="date" className={fieldClass(fieldMeta['startDate']?.status || 'empty')} value={input.startDate ? new Date(input.startDate).toISOString().split('T')[0] : ''} onChange={(e) => setField('startDate', new Date(e.target.value))} />
-                </div>
-                <div>
-                  <Label className="text-xs">Total Square Footage</Label>
-                  <Input className={fieldClass(fieldMeta['totalProjectSquareFootage']?.status || 'empty')} value={input.totalProjectSquareFootage || ''} onChange={(e) => setField('totalProjectSquareFootage', parseFloat(e.target.value) || 0)} />
-                </div>
-                <div>
-                  <Label className="text-xs">Monthly Overhead</Label>
-                  <Input className={fieldClass(fieldMeta['monthlyOverhead']?.status || 'empty')} value={input.monthlyOverhead || ''} onChange={(e) => setField('monthlyOverhead', parseFloat(e.target.value) || 0)} />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Sources & Uses</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <div><Label className="text-xs">Est. Construction Cost</Label><Input className={fieldClass(fieldMeta['underwritingEstimatedConstructionCost']?.status || 'empty')} value={input.underwritingEstimatedConstructionCost || ''} onChange={(e) => setField('underwritingEstimatedConstructionCost', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Land Cost</Label><Input className={fieldClass(fieldMeta['landCost']?.status || 'empty')} value={input.landCost || ''} onChange={(e) => setField('landCost', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Soft Cost %</Label><Input className={fieldClass(fieldMeta['softCostPercent']?.status || 'empty')} value={input.softCostPercent || ''} onChange={(e) => setField('softCostPercent', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Contingency %</Label><Input className={fieldClass(fieldMeta['contingencyPercent']?.status || 'empty')} value={input.contingencyPercent || ''} onChange={(e) => setField('contingencyPercent', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Loan To Cost %</Label><Input className={fieldClass(fieldMeta['loanToCostPercent']?.status || 'empty')} value={input.loanToCostPercent || ''} onChange={(e) => setField('loanToCostPercent', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Debt Amount</Label><Input className={fieldClass(fieldMeta['debtService.loanAmount']?.status || 'empty')} value={input.debtService.loanAmount || ''} onChange={(e) => setField('debtService.loanAmount', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Debt Interest Rate %</Label><Input className={fieldClass(fieldMeta['debtService.interestRate']?.status || 'empty')} value={input.debtService.interestRate || ''} onChange={(e) => setField('debtService.interestRate', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Debt Term (months)</Label><Input className={fieldClass(fieldMeta['debtService.loanTermMonths']?.status || 'empty')} value={input.debtService.loanTermMonths || ''} onChange={(e) => setField('debtService.loanTermMonths', parseInt(e.target.value || '0', 10))} /></div>
-                {input.proFormaMode === 'general-development' && (
-                  <p className="text-xs text-slate-400 md:col-span-2 pt-1 leading-snug">
-                    Loan to cost and debt amount stay in sync: changing either updates the other from total uses (hard + land + soft + contingency), same as the pro forma engine.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {isDevelopmentMode && (
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Development + Phases</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <div><Label className="text-xs">For-Sale Units</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.totalUnits']?.status || 'empty')} value={input.forSalePhasedLoc?.totalUnits || ''} onChange={(e) => setField('forSalePhasedLoc.totalUnits', parseInt(e.target.value || '0', 10))} /></div>
-                  <div><Label className="text-xs">Avg Sale Price</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.averageSalePrice']?.status || 'empty')} value={input.forSalePhasedLoc?.averageSalePrice || ''} onChange={(e) => setField('forSalePhasedLoc.averageSalePrice', parseFloat(e.target.value) || 0)} /></div>
-                  <div><Label className="text-xs">Presale Deposit %</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.presaleDepositPercent']?.status || 'empty')} value={input.forSalePhasedLoc?.presaleDepositPercent || ''} onChange={(e) => setField('forSalePhasedLoc.presaleDepositPercent', parseFloat(e.target.value) || 0)} /></div>
-                  <div><Label className="text-xs">Sales Pace (units/mo)</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.salesPaceUnitsPerMonth']?.status || 'empty')} value={input.forSalePhasedLoc?.salesPaceUnitsPerMonth || ''} onChange={(e) => setField('forSalePhasedLoc.salesPaceUnitsPerMonth', parseFloat(e.target.value) || 0)} /></div>
-                  <div><Label className="text-xs">LOC LTC Cap %</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.ltcPercent']?.status || 'empty')} value={input.forSalePhasedLoc?.ltcPercent || ''} onChange={(e) => setField('forSalePhasedLoc.ltcPercent', parseFloat(e.target.value) || 0)} /></div>
-                  <div><Label className="text-xs">Fixed LOC Limit</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.fixedLocLimit']?.status || 'empty')} value={input.forSalePhasedLoc?.fixedLocLimit || ''} onChange={(e) => setField('forSalePhasedLoc.fixedLocLimit', parseFloat(e.target.value) || 0)} /></div>
-                  <div><Label className="text-xs">Infrastructure Cost</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.infrastructureCost']?.status || 'empty')} value={input.forSalePhasedLoc?.infrastructureCost || ''} onChange={(e) => setField('forSalePhasedLoc.infrastructureCost', parseFloat(e.target.value) || 0)} /></div>
-                </CardContent>
-                <CardContent className="pt-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-xs">Phase Rows</Label>
-                    <Button size="sm" variant="outline" onClick={addPhaseRow}>Add Phase</Button>
-                  </div>
-                  <div className="space-y-2">
-                    {phaseRows.length === 0 && <div className="text-xs text-gray-500">No phases added yet.</div>}
-                    {phaseRows.map((phase) => (
-                      <div key={phase.id} className="grid grid-cols-1 md:grid-cols-6 gap-1.5 border border-slate-700 rounded p-1.5 bg-slate-900/60">
-                        <div><Label className="text-xs">Name</Label><Input value={phase.name || ''} onChange={(e) => updatePhaseRow(phase.id, 'name', e.target.value)} /></div>
-                        <div><Label className="text-xs">Units</Label><Input value={phase.unitCount || ''} onChange={(e) => updatePhaseRow(phase.id, 'unitCount', parseInt(e.target.value || '0', 10))} /></div>
-                        <div><Label className="text-xs">Build Months</Label><Input value={phase.buildMonths || ''} onChange={(e) => updatePhaseRow(phase.id, 'buildMonths', parseInt(e.target.value || '0', 10))} /></div>
-                        <div><Label className="text-xs">Presale Start</Label><Input value={phase.presaleStartMonthOffset || ''} onChange={(e) => updatePhaseRow(phase.id, 'presaleStartMonthOffset', parseInt(e.target.value || '0', 10))} /></div>
-                        <div><Label className="text-xs">Close Start</Label><Input value={phase.closeStartMonthOffset || ''} onChange={(e) => updatePhaseRow(phase.id, 'closeStartMonthOffset', parseInt(e.target.value || '0', 10))} /></div>
-                        <div><Label className="text-xs">Trigger %</Label><Input value={phase.presaleTriggerPercent || ''} onChange={(e) => updatePhaseRow(phase.id, 'presaleTriggerPercent', parseFloat(e.target.value) || 0)} /></div>
-                        <div><Label className="text-xs">Infra %</Label><Input value={phase.infrastructureAllocationPercent || ''} onChange={(e) => updatePhaseRow(phase.id, 'infrastructureAllocationPercent', parseFloat(e.target.value) || 0)} /></div>
-                        <div><Label className="text-xs">Hard Cost Budget</Label><Input value={phase.hardCostBudget || ''} onChange={(e) => updatePhaseRow(phase.id, 'hardCostBudget', parseFloat(e.target.value) || 0)} /></div>
-                        <div><Label className="text-xs">Soft Cost Budget</Label><Input value={phase.softCostBudget || ''} onChange={(e) => updatePhaseRow(phase.id, 'softCostBudget', parseFloat(e.target.value) || 0)} /></div>
-                        <div><Label className="text-xs">Avg Sale Price</Label><Input value={phase.avgSalePrice || ''} onChange={(e) => updatePhaseRow(phase.id, 'avgSalePrice', parseFloat(e.target.value) || 0)} /></div>
-                        <div>
-                          <Label className="text-xs">Cost Mode</Label>
-                          <Select value={phase.costEntryMode || 'auto'} onValueChange={(v) => updatePhaseRow(phase.id, 'costEntryMode', v as 'auto' | 'manual')}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="auto">auto</SelectItem>
-                              <SelectItem value="manual">manual</SelectItem>
-                            </SelectContent>
-                          </Select>
+              </div>
+            </CardContent>
+          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+            <Card className="bg-slate-800 border-slate-700 md:col-span-3">
+              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Project Overview</CardTitle></CardHeader>
+              <CardContent className="space-y-0.5">
+                <AssumptionInputRow label="Total Units">
+                  <Input className={fieldClass(fieldMeta['forSalePhasedLoc.totalUnits']?.status || 'empty')} value={input.forSalePhasedLoc?.totalUnits ? formatWithCommas(input.forSalePhasedLoc.totalUnits) : ''} onChange={(e) => setField('forSalePhasedLoc.totalUnits', parseWholeNumberInput(e.target.value))} />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Unit Size (SF)">
+                  <Input className={fieldClass(fieldMeta['totalProjectSquareFootage']?.status || 'empty')} value={input.totalProjectSquareFootage ? formatWithCommas(input.totalProjectSquareFootage) : ''} onChange={(e) => setField('totalProjectSquareFootage', parseNumberInput(e.target.value))} />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Cost per SF">
+                  <Input
+                    value={(() => {
+                      const units = input.forSalePhasedLoc?.totalUnits || 0
+                      const unitSize = input.totalProjectSquareFootage || 0
+                      const denom = units * unitSize
+                      if (costPerSfDraft !== null) return costPerSfDraft
+                      if (denom <= 0) return ''
+                      const implied = (input.underwritingEstimatedConstructionCost || 0) / denom
+                      if (!Number.isFinite(implied)) return ''
+                      return formatCurrency(implied, 2)
+                    })()}
+                    onFocus={() => {
+                      const units = input.forSalePhasedLoc?.totalUnits || 0
+                      const unitSize = input.totalProjectSquareFootage || 0
+                      const denom = units * unitSize
+                      if (denom <= 0) {
+                        setCostPerSfDraft('')
+                        return
+                      }
+                      const implied = (input.underwritingEstimatedConstructionCost || 0) / denom
+                      setCostPerSfDraft(Number.isFinite(implied) ? String(roundMoney(implied)) : '')
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setCostPerSfDraft(raw)
+                      const units = input.forSalePhasedLoc?.totalUnits || 0
+                      const unitSize = input.totalProjectSquareFootage || 0
+                      const denom = units * unitSize
+                      if (denom <= 0) return
+                      const costPerSf = parseNumberInput(raw)
+                      setField('underwritingEstimatedConstructionCost', costPerSf * denom)
+                    }}
+                    onBlur={() => {
+                      setCostPerSfDraft(null)
+                    }}
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Construction Cost per Unit">
+                  <Input
+                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    value={
+                      (input.forSalePhasedLoc?.totalUnits || 0) > 0
+                        ? formatCurrency((input.underwritingEstimatedConstructionCost || 0) / (input.forSalePhasedLoc?.totalUnits || 1), 2)
+                        : ''
+                    }
+                    readOnly
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Sale Price per SF">
+                  <Input
+                    value={(() => {
+                      const unitSize = input.totalProjectSquareFootage || 0
+                      if (salePricePerSfDraft !== null) return salePricePerSfDraft
+                      if (unitSize <= 0) return ''
+                      const implied = (input.forSalePhasedLoc?.averageSalePrice || 0) / unitSize
+                      if (!Number.isFinite(implied)) return ''
+                      return formatCurrency(implied, 2)
+                    })()}
+                    onFocus={() => {
+                      const unitSize = input.totalProjectSquareFootage || 0
+                      if (unitSize <= 0) {
+                        setSalePricePerSfDraft('')
+                        return
+                      }
+                      const implied = (input.forSalePhasedLoc?.averageSalePrice || 0) / unitSize
+                      setSalePricePerSfDraft(Number.isFinite(implied) ? String(roundMoney(implied)) : '')
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setSalePricePerSfDraft(raw)
+                      const unitSize = input.totalProjectSquareFootage || 0
+                      if (unitSize <= 0) return
+                      const salePerSf = parseNumberInput(raw)
+                      setField('forSalePhasedLoc.averageSalePrice', salePerSf * unitSize)
+                    }}
+                    onBlur={() => {
+                      setSalePricePerSfDraft(null)
+                    }}
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Sale Price per Unit">
+                  <Input
+                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    value={input.forSalePhasedLoc?.averageSalePrice ? formatCurrency(input.forSalePhasedLoc.averageSalePrice, 2) : ''}
+                    readOnly
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Presale Deposit (%)">
+                  <Input
+                    className={fieldClass(fieldMeta['forSalePhasedLoc.presaleDepositPercent']?.status || 'empty')}
+                    value={
+                      presaleDepositPctDraft !== null
+                        ? presaleDepositPctDraft
+                        : formatPercent(input.forSalePhasedLoc?.presaleDepositPercent ?? 0, 2)
+                    }
+                    onFocus={() => {
+                      const p = Number(input.forSalePhasedLoc?.presaleDepositPercent ?? 0)
+                      setPresaleDepositPctDraft(Number.isFinite(p) ? String(roundMoney(p)) : '')
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setPresaleDepositPctDraft(raw)
+                      setField('forSalePhasedLoc.presaleDepositPercent', parseNumberInput(raw))
+                    }}
+                    onBlur={() => {
+                      setPresaleDepositPctDraft(null)
+                    }}
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Presale Deposit ($)">
+                  <div className="flex min-w-0 w-full flex-nowrap items-center gap-1.5">
+                    <Input
+                      className="!h-7 shrink-0 !max-w-[210px] !bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                      value={formatCurrency(
+                        (input.forSalePhasedLoc?.averageSalePrice || 0) *
+                          ((input.forSalePhasedLoc?.presaleDepositPercent || 0) / 100),
+                        2,
+                      )}
+                      readOnly
+                    />
+                    <div className="flex min-w-0 min-h-0 flex-1 justify-end overflow-hidden">
+                      <span className="sr-only">Deposit availability</span>
+                      <div className="ml-auto flex max-w-full min-w-0 flex-nowrap items-center gap-1">
+                        <div
+                          className="inline-flex shrink-0 rounded border border-slate-600 overflow-hidden"
+                          title="Deposit availability: when presale cash offsets construction draws during the build vs. held toward closing."
+                        >
+                          {(
+                            [
+                              {
+                                mode: 'full' as const,
+                                label: 'Instant',
+                                title:
+                                  'Collected presale deposits are modeled as fully available to offset construction draws as soon as they are received.',
+                              },
+                              {
+                                mode: 'percent' as const,
+                                label: 'Partial',
+                                title:
+                                  'Open the share control on the right to set what portion of each deposit offsets draws during the build.',
+                              },
+                              {
+                                mode: 'at-closing' as const,
+                                label: 'Closing',
+                                title: 'Presale deposits do not offset construction draws until unit closings (at closing).',
+                              },
+                            ] as const
+                          ).map(({ mode, label, title }) => {
+                            const active = (input.forSalePhasedLoc?.depositUsageMode || 'full') === mode
+                            return (
+                              <Button
+                                key={mode}
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                title={title}
+                                className={`h-7 min-w-0 shrink-0 rounded-none px-1.5 text-[10px] leading-none ${
+                                  active
+                                    ? 'bg-cyan-700/40 text-cyan-100 hover:bg-cyan-700/50'
+                                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                                }`}
+                                onClick={() => {
+                                  setField('forSalePhasedLoc.depositUsageMode', mode)
+                                  if (mode === 'percent' && input.forSalePhasedLoc?.depositUsablePercent == null) {
+                                    setField('forSalePhasedLoc.depositUsablePercent', 100)
+                                  }
+                                }}
+                              >
+                                {label}
+                              </Button>
+                            )
+                          })}
                         </div>
-                        <div className="flex items-end"><Button size="sm" variant="outline" onClick={() => removePhaseRow(phase.id)}>Remove</Button></div>
+                        <div className="flex h-7 w-[3.125rem] shrink-0 items-stretch justify-stretch">
+                        {(input.forSalePhasedLoc?.depositUsageMode || 'full') === 'percent' ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-full min-w-0 gap-px rounded border border-slate-600 bg-slate-900 px-0.5 text-[9px] text-cyan-100 hover:bg-slate-800"
+                                title="Edit share of deposit that offsets draws during the build"
+                              >
+                                <span className="min-w-0 truncate tabular-nums leading-none">
+                                  {formatPercent(Number(input.forSalePhasedLoc?.depositUsablePercent ?? 100), 0)}
+                                </span>
+                                <ChevronDown className="h-2.5 w-2.5 shrink-0 opacity-70" aria-hidden />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-64 space-y-2 border-slate-600 bg-slate-800 p-3">
+                              <p className="text-[11px] leading-snug text-slate-400">
+                                Portion of each presale deposit that reduces modeled construction draws during the build. The remainder is treated as held toward closing.
+                              </p>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-slate-300">Usable during build</Label>
+                                <Input
+                                  className="h-8 !border-slate-600 !bg-slate-900 text-xs text-slate-100"
+                                  inputMode="decimal"
+                                  value={formatPercent(
+                                    Math.min(100, Math.max(0, Number(input.forSalePhasedLoc?.depositUsablePercent ?? 100))),
+                                    2,
+                                  )}
+                                  onChange={(e) =>
+                                    setField(
+                                      'forSalePhasedLoc.depositUsablePercent',
+                                      Math.min(100, Math.max(0, parseNumberInput(e.target.value))),
+                                    )
+                                  }
+                                />
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {[25, 50, 75, 100].map((n) => (
+                                  <Button
+                                    key={n}
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-[10px] text-slate-300 hover:bg-slate-700 hover:text-white"
+                                    onClick={() => setField('forSalePhasedLoc.depositUsablePercent', n)}
+                                  >
+                                    {n}%
+                                  </Button>
+                                ))}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <div
+                            className="h-7 w-full rounded-md border border-transparent bg-transparent"
+                            aria-hidden
+                          />
+                        )}
                       </div>
-                    ))}
+                    </div>
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Project Duration (months)">
+                  <Input className={fieldClass(fieldMeta['projectionMonths']?.status || 'empty')} value={input.projectionMonths ? formatWithCommas(input.projectionMonths) : ''} onChange={(e) => setField('projectionMonths', parseWholeNumberInput(e.target.value))} />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Start Date">
+                  <Input type="date" className={fieldClass(fieldMeta['startDate']?.status || 'empty')} value={input.startDate ? new Date(input.startDate).toISOString().split('T')[0] : ''} onChange={(e) => setField('startDate', new Date(e.target.value))} />
+                </AssumptionInputRow>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-800 border-slate-700 md:col-span-3">
+              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Cost Summary</CardTitle></CardHeader>
+              <CardContent className="space-y-0.5">
+                <AssumptionInputRow label="Land Purchase">
+                  <Input
+                    className={fieldClass(fieldMeta['landCost']?.status || 'empty')}
+                    value={
+                      costSummaryMoneyDraft.landCost !== null
+                        ? costSummaryMoneyDraft.landCost
+                        : formatCurrency(Number(input.landCost || 0), 2)
+                    }
+                    onFocus={() => {
+                      const v = Number(input.landCost || 0)
+                      setCostSummaryMoneyDraft((d) => ({
+                        ...d,
+                        landCost: Number.isFinite(v) ? String(roundMoney(v)) : '',
+                      }))
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setCostSummaryMoneyDraft((d) => ({ ...d, landCost: raw }))
+                      setField('landCost', parseNumberInput(raw))
+                    }}
+                    onBlur={() => {
+                      setCostSummaryMoneyDraft((d) => ({ ...d, landCost: null }))
+                    }}
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Site Work">
+                  <Input
+                    className={fieldClass(fieldMeta['siteWorkCost']?.status || 'empty')}
+                    value={
+                      costSummaryMoneyDraft.siteWorkCost !== null
+                        ? costSummaryMoneyDraft.siteWorkCost
+                        : formatCurrency(Number(input.siteWorkCost || 0), 2)
+                    }
+                    onFocus={() => {
+                      const v = Number(input.siteWorkCost || 0)
+                      setCostSummaryMoneyDraft((d) => ({
+                        ...d,
+                        siteWorkCost: Number.isFinite(v) ? String(roundMoney(v)) : '',
+                      }))
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setCostSummaryMoneyDraft((d) => ({ ...d, siteWorkCost: raw }))
+                      setField('siteWorkCost', parseNumberInput(raw))
+                    }}
+                    onBlur={() => {
+                      setCostSummaryMoneyDraft((d) => ({ ...d, siteWorkCost: null }))
+                    }}
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Infrastructure Cost">
+                  <Input
+                    className={fieldClass(fieldMeta['forSalePhasedLoc.infrastructureCost']?.status || 'empty')}
+                    value={
+                      costSummaryMoneyDraft.infrastructureCost !== null
+                        ? costSummaryMoneyDraft.infrastructureCost
+                        : formatCurrency(Number(input.forSalePhasedLoc?.infrastructureCost || 0), 2)
+                    }
+                    onFocus={() => {
+                      const v = Number(input.forSalePhasedLoc?.infrastructureCost || 0)
+                      setCostSummaryMoneyDraft((d) => ({
+                        ...d,
+                        infrastructureCost: Number.isFinite(v) ? String(roundMoney(v)) : '',
+                      }))
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setCostSummaryMoneyDraft((d) => ({ ...d, infrastructureCost: raw }))
+                      setField('forSalePhasedLoc.infrastructureCost', parseNumberInput(raw))
+                    }}
+                    onBlur={() => {
+                      setCostSummaryMoneyDraft((d) => ({ ...d, infrastructureCost: null }))
+                    }}
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Construction Cost">
+                  <div className="flex min-w-0 w-full flex-nowrap items-center gap-1.5">
+                    <Input
+                      className="!h-7 shrink-0 !max-w-[210px] !bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                      value={input.underwritingEstimatedConstructionCost ? formatCurrency(input.underwritingEstimatedConstructionCost, 2) : ''}
+                      readOnly
+                    />
+                    {isDevelopmentMode ? (
+                      <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
+                        <span className="sr-only">Construction spend curve</span>
+                        <div
+                          className="inline-flex shrink-0 rounded-md border border-cyan-600/50 overflow-hidden"
+                          title="Spend curve — how hard costs are spread across construction months."
+                        >
+                          {(
+                            [
+                              {
+                                curve: 'linear' as const,
+                                label: 'Linear',
+                                title: 'Linear: costs spread evenly across each phase’s construction months.',
+                              },
+                              {
+                                curve: 'front-loaded' as const,
+                                label: 'Front',
+                                title: 'Front-loaded: more cost early in each phase’s construction period.',
+                              },
+                              {
+                                curve: 'back-loaded' as const,
+                                label: 'Back',
+                                title: 'Back-loaded: more cost late in each phase’s construction period.',
+                              },
+                            ] as const
+                          ).map(({ curve, label, title }) => {
+                            const active = (input.forSalePhasedLoc?.constructionSpendCurve || 'linear') === curve
+                            return (
+                              <Button
+                                key={curve}
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                title={title}
+                                className={`h-7 shrink-0 rounded-none px-1.5 text-[10px] leading-none ${
+                                  active
+                                    ? 'bg-cyan-700/40 text-cyan-100 hover:bg-cyan-700/50'
+                                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                                }`}
+                                onClick={() => setField('forSalePhasedLoc.constructionSpendCurve', curve)}
+                              >
+                                {label}
+                              </Button>
+                            )
+                          })}
+                        </div>
+                        {phaseTimingMode === 'trigger-based' ? (
+                          <>
+                            <span className="sr-only">Presale trigger for construction draws</span>
+                            <div
+                              className="inline-flex shrink-0 rounded-md border border-slate-600 overflow-hidden"
+                              title="Presale trigger — whether phase presold % thresholds gate modeled construction draws."
+                            >
+                              {(
+                                [
+                                  {
+                                    on: true,
+                                    label: 'On',
+                                    title: 'On: construction draws respect each phase’s presold % trigger (uses presales).',
+                                  },
+                                  {
+                                    on: false,
+                                    label: 'Off',
+                                    title: 'Off: draw timing does not use that presale trigger linkage.',
+                                  },
+                                ] as const
+                              ).map(({ on, label, title }) => {
+                                const active = (input.forSalePhasedLoc?.triggerUsesPresales !== false) === on
+                                return (
+                                  <Button
+                                    key={String(on)}
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    title={title}
+                                    className={`h-7 shrink-0 rounded-none px-1.5 text-[10px] leading-none ${
+                                      active
+                                        ? 'bg-cyan-700/40 text-cyan-100 hover:bg-cyan-700/50'
+                                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                                    }`}
+                                    onClick={() => setField('forSalePhasedLoc.triggerUsesPresales', on)}
+                                  >
+                                    {label}
+                                  </Button>
+                                )
+                              })}
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Monthly Carry per Unit">
+                  <Input
+                    className={fieldClass(fieldMeta['monthlyCarryPerUnit']?.status || 'empty')}
+                    value={
+                      carryConstructionDraft.monthlyCarryPerUnit !== null
+                        ? carryConstructionDraft.monthlyCarryPerUnit
+                        : formatCurrency(Number(input.monthlyCarryPerUnit || 0), 2)
+                    }
+                    onFocus={() => {
+                      const v = Number(input.monthlyCarryPerUnit || 0)
+                      setCarryConstructionDraft((d) => ({
+                        ...d,
+                        monthlyCarryPerUnit: Number.isFinite(v) ? String(roundMoney(v)) : '',
+                      }))
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setCarryConstructionDraft((d) => ({ ...d, monthlyCarryPerUnit: raw }))
+                      setField('monthlyCarryPerUnit', parseNumberInput(raw))
+                    }}
+                    onBlur={() => {
+                      setCarryConstructionDraft((d) => ({ ...d, monthlyCarryPerUnit: null }))
+                    }}
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Construction period (months)">
+                  <Input
+                    title="When each phase has build months filled in, carry uses phase unit-months instead and this field is ignored. Otherwise: one number of months assumed for all units together — monthly carry per unit × total units × this value."
+                    className={fieldClass(fieldMeta['avgConstructionPeriodMonths']?.status || 'empty')}
+                    value={
+                      carryConstructionDraft.avgConstructionPeriodMonths !== null
+                        ? carryConstructionDraft.avgConstructionPeriodMonths
+                        : formatWithCommas(Number(input.avgConstructionPeriodMonths || 0), 2)
+                    }
+                    onFocus={() => {
+                      const v = Number(input.avgConstructionPeriodMonths || 0)
+                      setCarryConstructionDraft((d) => ({
+                        ...d,
+                        avgConstructionPeriodMonths: Number.isFinite(v) ? String(roundMoney(v)) : '',
+                      }))
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setCarryConstructionDraft((d) => ({ ...d, avgConstructionPeriodMonths: raw }))
+                      setField('avgConstructionPeriodMonths', parseNumberInput(raw))
+                    }}
+                    onBlur={() => {
+                      setCarryConstructionDraft((d) => ({ ...d, avgConstructionPeriodMonths: null }))
+                    }}
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Carry Cost">
+                  <Input
+                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    title={getCarryCostFieldTitle(input)}
+                    value={formatCurrency(getCalculatedCarryCost(input), 2)}
+                    readOnly
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Project Total Cost">
+                  <Input
+                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    value={formatCurrency(getProjectTotalCost(input), 2)}
+                    readOnly
+                  />
+                </AssumptionInputRow>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-800 border-slate-700 md:col-span-2">
+              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Investor Terms</CardTitle></CardHeader>
+              <CardContent className="space-y-0.5">
+                <AssumptionInputRow label="Investor Equity">
+                  <Input
+                    className={fieldClass(fieldMeta['investorEquity']?.status || 'empty')}
+                    value={investorEquityDraft !== null ? investorEquityDraft : input.investorEquity ? formatCurrency(input.investorEquity, 2) : ''}
+                    onFocus={() => {
+                      const v = Number(input.investorEquity || 0)
+                      setInvestorEquityDraft(Number.isFinite(v) ? String(roundMoney(v)) : '')
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setInvestorEquityDraft(raw)
+                      setField('investorEquity', parseNumberInput(raw))
+                    }}
+                    onBlur={() => setInvestorEquityDraft(null)}
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Preferred Return Rate (Annual)">
+                  <Input
+                    className={fieldClass(fieldMeta['preferredReturnRateAnnual']?.status || 'empty')}
+                    value={
+                      investorTermsPercentDraft.preferredReturnRateAnnual !== null
+                        ? investorTermsPercentDraft.preferredReturnRateAnnual
+                        : input.preferredReturnRateAnnual
+                          ? formatPercent(input.preferredReturnRateAnnual, 2)
+                          : ''
+                    }
+                    onFocus={() => {
+                      const v = Number(input.preferredReturnRateAnnual || 0)
+                      setInvestorTermsPercentDraft((d) => ({
+                        ...d,
+                        preferredReturnRateAnnual: Number.isFinite(v) ? String(roundMoney(v)) : '',
+                      }))
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setInvestorTermsPercentDraft((d) => ({ ...d, preferredReturnRateAnnual: raw }))
+                      setField('preferredReturnRateAnnual', parseNumberInput(raw))
+                    }}
+                    onBlur={() =>
+                      setInvestorTermsPercentDraft((d) => ({ ...d, preferredReturnRateAnnual: null }))
+                    }
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Preferred Return Paid">
+                  <Select value={input.preferredReturnPaidFrequency || 'monthly'} onValueChange={(v) => setField('preferredReturnPaidFrequency', v)}>
+                    <SelectTrigger className={fieldClass(fieldMeta['preferredReturnPaidFrequency']?.status || 'empty')}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="semi-annual">Semi-Annual</SelectItem>
+                      <SelectItem value="annual">Annual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Preferred Return Payment (Selected Period)">
+                  <Input
+                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    value={formatCurrency((carbonMetrics?.prefPerPeriod as number) || 0, 2)}
+                    readOnly
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Total Pref Returned">
+                  <Input
+                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    value={formatCurrency((carbonMetrics?.totalPref as number) || 0, 2)}
+                    readOnly
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Investor Profit Share on Completion (%)">
+                  <Input
+                    className={fieldClass(fieldMeta['investorProfitShareOnCompletion']?.status || 'empty')}
+                    value={
+                      investorTermsPercentDraft.investorProfitShareOnCompletion !== null
+                        ? investorTermsPercentDraft.investorProfitShareOnCompletion
+                        : input.investorProfitShareOnCompletion
+                          ? formatPercent(input.investorProfitShareOnCompletion, 2)
+                          : ''
+                    }
+                    onFocus={() => {
+                      const v = Number(input.investorProfitShareOnCompletion || 0)
+                      setInvestorTermsPercentDraft((d) => ({
+                        ...d,
+                        investorProfitShareOnCompletion: Number.isFinite(v) ? String(roundMoney(v)) : '',
+                      }))
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setInvestorTermsPercentDraft((d) => ({ ...d, investorProfitShareOnCompletion: raw }))
+                      setField('investorProfitShareOnCompletion', parseNumberInput(raw))
+                    }}
+                    onBlur={() =>
+                      setInvestorTermsPercentDraft((d) => ({ ...d, investorProfitShareOnCompletion: null }))
+                    }
+                  />
+                </AssumptionInputRow>
+                <AssumptionInputRow label="Developer Profit Share on Completion (%)">
+                  <Input
+                    className={fieldClass(fieldMeta['developerProfitShareOnCompletion']?.status || 'empty')}
+                    value={
+                      investorTermsPercentDraft.developerProfitShareOnCompletion !== null
+                        ? investorTermsPercentDraft.developerProfitShareOnCompletion
+                        : input.developerProfitShareOnCompletion
+                          ? formatPercent(input.developerProfitShareOnCompletion, 2)
+                          : ''
+                    }
+                    onFocus={() => {
+                      const v = Number(input.developerProfitShareOnCompletion || 0)
+                      setInvestorTermsPercentDraft((d) => ({
+                        ...d,
+                        developerProfitShareOnCompletion: Number.isFinite(v) ? String(roundMoney(v)) : '',
+                      }))
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setInvestorTermsPercentDraft((d) => ({ ...d, developerProfitShareOnCompletion: raw }))
+                      setField('developerProfitShareOnCompletion', parseNumberInput(raw))
+                    }}
+                    onBlur={() =>
+                      setInvestorTermsPercentDraft((d) => ({ ...d, developerProfitShareOnCompletion: null }))
+                    }
+                  />
+                </AssumptionInputRow>
+              </CardContent>
+            </Card>
 
             {isDevelopmentMode && (
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Capital Stack & Incentive Stack</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <Label className="text-xs text-slate-300">Debt / LOC Stack</Label>
-                  <div className="mt-1 grid grid-cols-1 md:grid-cols-4 gap-2">
-                    <div><Label className="text-xs">Project LTC %</Label><Input className={fieldClass(fieldMeta['loanToCostPercent']?.status || 'empty')} value={input.loanToCostPercent || ''} onChange={(e) => setField('loanToCostPercent', parseFloat(e.target.value) || 0)} /></div>
-                    <div><Label className="text-xs">LOC LTC Cap %</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.ltcPercent']?.status || 'empty')} value={input.forSalePhasedLoc?.ltcPercent || ''} onChange={(e) => setField('forSalePhasedLoc.ltcPercent', parseFloat(e.target.value) || 0)} /></div>
-                    <div><Label className="text-xs">LOC Limit (from stack)</Label><Input value={input.forSalePhasedLoc?.fixedLocLimit || 0} readOnly /></div>
-                    <div><Label className="text-xs">Debt Amount (from stack)</Label><Input value={input.debtService?.loanAmount || 0} readOnly /></div>
+            <Card className="bg-slate-800 border-slate-700 md:col-span-4">
+              <CardContent className="space-y-3 !p-3">
+                <CardTitle className="text-base font-semibold text-slate-200">Capital Stack & Incentive Stack</CardTitle>
+                <div className="grid gap-2 sm:gap-3 lg:grid-cols-2 lg:items-start">
+                  <div className="min-w-0 space-y-1">
+                    <Label className="text-xs text-slate-300">Debt / LOC Stack</Label>
+                    <div className="inline-flex w-full min-w-0 max-w-full flex-nowrap rounded border border-cyan-600/50 overflow-hidden divide-x divide-slate-600/90">
+                      {(
+                        [
+                          {
+                            short: 'LOC limit',
+                            title: 'LOC Limit (from stack)',
+                            value: formatCurrency(Number(input.forSalePhasedLoc?.fixedLocLimit || 0), 2),
+                          },
+                          {
+                            short: 'Debt amt',
+                            title: 'Debt Amount (from stack)',
+                            value: formatCurrency(Number(input.debtService?.loanAmount || 0), 2),
+                          },
+                          {
+                            short: 'Bond cap',
+                            title: 'Bond Capacity (from stack)',
+                            value: formatCurrency(Number(input.forSalePhasedLoc?.bondCapacity || 0), 2),
+                          },
+                        ] as const
+                      ).map(({ short, title, value }) => (
+                        <div key={short} className="flex min-w-0 flex-1 flex-col gap-0.5 bg-slate-900/90 px-1 py-1">
+                          <span className="truncate text-[9px] font-medium uppercase tracking-wide text-slate-400" title={title}>
+                            {short}
+                          </span>
+                          <Input
+                            className="!h-7 cursor-not-allowed border-0 bg-transparent px-0.5 text-center text-[11px] tabular-nums text-cyan-100 shadow-none focus-visible:ring-0"
+                            readOnly
+                            title={title}
+                            value={value}
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="mt-2 space-y-2">
+                  <div className="min-w-0 space-y-1">
+                    <Label className="text-xs text-slate-300">Closing sale proceeds split</Label>
+                    <div className="inline-flex w-full min-w-0 max-w-full flex-nowrap rounded border border-cyan-600/50 overflow-hidden divide-x divide-slate-600/90">
+                      {(
+                        [
+                          {
+                            key: 'locPaydownPercent' as const,
+                            short: 'LOC paydown',
+                            meta: 'forSalePhasedLoc.salesAllocationBuckets.locPaydownPercent',
+                          },
+                          {
+                            key: 'reinvestPercent' as const,
+                            short: 'Reinvest',
+                            meta: 'forSalePhasedLoc.salesAllocationBuckets.reinvestPercent',
+                          },
+                          {
+                            key: 'reservePercent' as const,
+                            short: 'Reserve',
+                            meta: 'forSalePhasedLoc.salesAllocationBuckets.reservePercent',
+                          },
+                          {
+                            key: 'distributionPercent' as const,
+                            short: 'Cash-out',
+                            meta: 'forSalePhasedLoc.salesAllocationBuckets.distributionPercent',
+                            longTitle:
+                              'Closing proceeds taken as cash-out in the LOC waterfall (not investor vs developer profit %).',
+                          },
+                        ] as const
+                      ).map(({ key, short, meta, ...rest }) => (
+                        <div key={key} className="flex min-w-0 flex-1 flex-col gap-0.5 bg-slate-900/90 px-1 py-1">
+                          <span
+                            className="truncate text-[9px] font-medium uppercase tracking-wide text-slate-400"
+                            title={'longTitle' in rest ? rest.longTitle : undefined}
+                          >
+                            {short}
+                          </span>
+                          <Input
+                            className={`!h-7 text-center tabular-nums ${fieldClass(fieldMeta[meta]?.status || 'empty')}`}
+                            inputMode="decimal"
+                            title={'longTitle' in rest ? rest.longTitle : undefined}
+                            value={
+                              input.forSalePhasedLoc?.salesAllocationBuckets?.[key] === undefined ||
+                              input.forSalePhasedLoc?.salesAllocationBuckets?.[key] === null
+                                ? ''
+                                : String(input.forSalePhasedLoc.salesAllocationBuckets[key])
+                            }
+                            onChange={(e) =>
+                              setField(`forSalePhasedLoc.salesAllocationBuckets.${key}`, parseNumberInput(e.target.value))
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2 border-t border-slate-700/50 pt-2">
                     {debtLocRows.map((row) => (
                       <div key={row.id} className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                        <div className="md:col-span-5">
-                          <Label className="text-xs">Stack Name</Label>
+                        <div className="md:col-span-3">
+                          <Label className="text-xs">Source name</Label>
                           <Input
                             value={row.label}
                             onChange={(e) => {
@@ -1756,22 +3628,66 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                             }}
                           />
                         </div>
-                        <div className="md:col-span-3">
+                        <div className="md:col-span-2">
                           <Label className="text-xs">Amount</Label>
                           <Input
-                            value={row.amount || ''}
+                            value={editingDebtAmount[row.id] ?? (row.amount ? formatCurrency(row.amount, 2) : '')}
+                            onFocus={() => {
+                              setEditingDebtAmount((prev) => ({
+                                ...prev,
+                                [row.id]: row.amount ? String(row.amount) : '',
+                              }))
+                            }}
                             onChange={(e) => {
-                              const next = debtLocRows.map((r) => (r.id === row.id ? { ...r, amount: parseFloat(e.target.value) || 0 } : r))
+                              const raw = e.target.value
+                              setEditingDebtAmount((prev) => ({ ...prev, [row.id]: raw }))
+                            }}
+                            onBlur={() => {
+                              const raw = editingDebtAmount[row.id] ?? ''
+                              const parsed = parseNumberInput(raw)
+                              const next = debtLocRows.map((r) => (r.id === row.id ? { ...r, amount: parsed } : r))
+                              applyStackRows(next, incentiveRows)
+                              setEditingDebtAmount((prev) => {
+                                const { [row.id]: _drop, ...rest } = prev
+                                return rest
+                              })
+                            }}
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <Label className="text-xs">Rate %</Label>
+                          <Input
+                            value={row.interestRate || ''}
+                            onChange={(e) => {
+                              const next = debtLocRows.map((r) => (r.id === row.id ? { ...r, interestRate: parseNumberInput(e.target.value) } : r))
                               applyStackRows(next, incentiveRows)
                             }}
                           />
                         </div>
                         <div className="md:col-span-3">
+                          <Label className="text-xs">Type</Label>
+                          <Select
+                            value={row.debtType}
+                            onValueChange={(v) => {
+                              const next = debtLocRows.map((r) => (r.id === row.id ? { ...r, debtType: v as DebtInstrumentType } : r))
+                              applyStackRows(next, incentiveRows)
+                            }}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="revolving-interest-only">Revolving - Interest Only</SelectItem>
+                              <SelectItem value="term-interest-only">Term - Interest Only</SelectItem>
+                              <SelectItem value="amortizing">Amortizing</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="md:col-span-2">
                           <Label className="text-xs">Applies To</Label>
                           <Select
                             value={row.applyTo}
                             onValueChange={(v) => {
-                              const next = debtLocRows.map((r) => (r.id === row.id ? { ...r, applyTo: v as DebtLocApplyTo } : r))
+                              const applyTo = v as DebtLocApplyTo
+                              const next = debtLocRows.map((r) => (r.id === row.id ? { ...r, applyTo } : r))
                               applyStackRows(next, incentiveRows)
                             }}
                           >
@@ -1798,13 +3714,19 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                       </div>
                     ))}
                     <Button
+                      type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => applyStackRows([...debtLocRows, { id: uid(), label: '', amount: 0, applyTo: 'loc-limit' }], incentiveRows)}
+                      title="Add a row to the capital structure. Use Applies to for LOC limit, debt amount, or bond capacity."
+                      onClick={() =>
+                        applyStackRows(
+                          [...debtLocRows, { id: uid(), label: '', amount: 0, interestRate: 0, debtType: 'revolving-interest-only', applyTo: 'loc-limit' }],
+                          incentiveRows,
+                        )
+                      }
                     >
-                      Add Debt/LOC Stack
+                      Add Capital
                     </Button>
-                  </div>
                 </div>
 
                 <div>
@@ -1812,7 +3734,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                   <div className="mt-1 space-y-2">
                     {incentiveRows.map((row) => (
                       <div key={row.id} className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                        <div className="md:col-span-5">
+                        <div className="md:col-span-4">
                           <Label className="text-xs">Incentive Name</Label>
                           <Input
                             value={row.label}
@@ -1822,17 +3744,34 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                             }}
                           />
                         </div>
-                        <div className="md:col-span-3">
+                        <div className="md:col-span-2">
                           <Label className="text-xs">Amount</Label>
                           <Input
-                            value={row.amount || ''}
+                            value={editingIncentiveAmount[row.id] ?? (row.amount ? formatCurrency(row.amount, 2) : '')}
+                            onFocus={() => {
+                              setEditingIncentiveAmount((prev) => ({
+                                ...prev,
+                                [row.id]: Number.isFinite(Number(row.amount || 0)) ? String(roundMoney(Number(row.amount || 0))) : '',
+                              }))
+                            }}
                             onChange={(e) => {
-                              const next = incentiveRows.map((r) => (r.id === row.id ? { ...r, amount: parseFloat(e.target.value) || 0 } : r))
+                              const raw = e.target.value
+                              setEditingIncentiveAmount((prev) => ({ ...prev, [row.id]: raw }))
+                              const next = incentiveRows.map((r) =>
+                                r.id === row.id ? { ...r, amount: parseNumberInput(raw) } : r,
+                              )
                               applyStackRows(debtLocRows, next)
+                            }}
+                            onBlur={() => {
+                              setEditingIncentiveAmount((prev) => {
+                                const next = { ...prev }
+                                delete next[row.id]
+                                return next
+                              })
                             }}
                           />
                         </div>
-                        <div className="md:col-span-3">
+                        <div className="md:col-span-2">
                           <Label className="text-xs">Applies To</Label>
                           <Select
                             value={row.applyTo}
@@ -1849,6 +3788,24 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="md:col-span-3">
+                          <Label className="text-xs">Applied When</Label>
+                          <Select
+                            value={row.timingMode}
+                            onValueChange={(v) => {
+                              const next = incentiveRows.map((r) => (r.id === row.id ? { ...r, timingMode: v as IncentiveTimingMode } : r))
+                              applyStackRows(debtLocRows, next)
+                            }}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="upfront">Upfront (Month 1)</SelectItem>
+                              <SelectItem value="construction-percent">By Construction %</SelectItem>
+                              <SelectItem value="by-phase">By Phase</SelectItem>
+                              <SelectItem value="at-closings">At Closings</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <div className="md:col-span-1 flex items-end">
                           <Button
                             size="sm"
@@ -1861,12 +3818,55 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                             Remove
                           </Button>
                         </div>
+                        {row.timingMode === 'construction-percent' && (
+                          <div className="md:col-span-12">
+                            <Label className="text-xs">Construction % Trigger</Label>
+                            <Input
+                              value={row.constructionPercent || ''}
+                              onChange={(e) => {
+                                const next = incentiveRows.map((r) =>
+                                  r.id === row.id ? { ...r, constructionPercent: parseNumberInput(e.target.value) } : r,
+                                )
+                                applyStackRows(debtLocRows, next)
+                              }}
+                            />
+                          </div>
+                        )}
+                        {row.timingMode === 'by-phase' && (
+                          <div className="md:col-span-12">
+                            <Label className="text-xs">Applied Phases (comma-separated names)</Label>
+                            <Input
+                              placeholder="Phase 1, Phase 4"
+                              value={row.phaseNames || ''}
+                              onChange={(e) => {
+                                const next = incentiveRows.map((r) => (r.id === row.id ? { ...r, phaseNames: e.target.value } : r))
+                                applyStackRows(debtLocRows, next)
+                              }}
+                            />
+                            <p className="text-[10px] text-slate-500 mt-1">
+                              Names must match the Phases table (spacing/case ignored). Phase Pro Forma splits the TIF amount evenly across listed phases; the for-sale LOC engine books reimbursement cash evenly across construction months for each listed phase (then flows through sales cash and LOC paydown like other inflows).
+                            </p>
+                          </div>
+                        )}
                       </div>
                     ))}
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => applyStackRows(debtLocRows, [...incentiveRows, { id: uid(), label: '', amount: 0, applyTo: 'cost-reduction' }])}
+                      onClick={() =>
+                        applyStackRows(debtLocRows, [
+                          ...incentiveRows,
+                          {
+                            id: uid(),
+                            label: '',
+                            amount: 0,
+                            applyTo: 'cost-reduction',
+                            timingMode: 'upfront',
+                            constructionPercent: 0,
+                            phaseNames: '',
+                          },
+                        ])
+                      }
                     >
                       Add Incentive
                     </Button>
@@ -1875,15 +3875,237 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               </CardContent>
             </Card>
             )}
+          </div>
 
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Readiness</CardTitle></CardHeader>
-              <CardContent className="text-sm text-slate-200">
-                {readiness.proformaReady
-                  ? 'All critical underwriting checks pass — you can run ProForma when the AI confirms stage.'
-                  : 'Fill the gaps listed on Overview / memo until coverage is complete, then run ProForma.'}
-              </CardContent>
-            </Card>
+            <div className="space-y-2">
+            {isDevelopmentMode && (
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader className="py-2">
+                  <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto_1fr] items-center gap-2">
+                    <div className="flex items-center gap-2 justify-self-start">
+                      <CardTitle className="text-base text-slate-200">Phases</CardTitle>
+                    </div>
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs text-slate-300">Sale Mode</Label>
+                        <div className="inline-flex rounded-md border border-slate-600/70 overflow-hidden">
+                          {(['combined', 'presales', 'closings'] as const).map((mode) => {
+                            const active = (input.forSalePhasedLoc?.salesPaceMode || 'combined') === mode
+                            return (
+                              <Button
+                                key={mode}
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className={`h-7 rounded-none px-2 text-[11px] ${
+                                  active
+                                    ? 'bg-cyan-700/35 text-cyan-100 hover:bg-cyan-700/45'
+                                    : 'bg-slate-900/60 text-slate-300 hover:bg-slate-800'
+                                }`}
+                                onClick={() => setField('forSalePhasedLoc.salesPaceMode', mode)}
+                              >
+                                {mode}
+                              </Button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs text-slate-300">Timing</Label>
+                        <div className="inline-flex rounded-md border border-slate-600/70 overflow-hidden">
+                          {(
+                            [
+                              { mode: 'trigger-based' as const, label: 'Trigger' },
+                              { mode: 'fixed-schedule' as const, label: 'Fixed' },
+                            ] as const
+                          ).map(({ mode, label }) => {
+                            const active = phaseTimingMode === mode
+                            return (
+                              <Button
+                                key={mode}
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                title={mode === 'fixed-schedule' ? 'Start phases by explicit start month' : 'Unlock phases by sales trigger'}
+                                className={`h-7 rounded-none px-2 text-[11px] ${
+                                  active
+                                    ? 'bg-cyan-700/35 text-cyan-100 hover:bg-cyan-700/45'
+                                    : 'bg-slate-900/60 text-slate-300 hover:bg-slate-800'
+                                }`}
+                                onClick={() => setField('forSalePhasedLoc.phaseTimingMode', mode)}
+                              >
+                                {label}
+                              </Button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="justify-self-start xl:justify-self-end">
+                      <Button size="sm" variant="outline" onClick={addPhaseRow}>Add Phase</Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-2">
+                    {phaseRows.length === 0 && <div className="text-xs text-gray-500">No phases added yet.</div>}
+                    {phaseRows.length > 0 && (
+                      <div className="overflow-x-auto rounded-lg border border-slate-700/30">
+                        <div className="min-w-[860px]">
+                          <div className="grid grid-cols-[minmax(8rem,0.9fr)_4.25rem_4.25rem_4.25rem_4.25rem_4.25rem_minmax(10rem,1fr)_3.6rem_4.2rem] gap-x-1 border-b border-slate-700/40 bg-slate-800/30 px-2 py-1">
+                            <Label className="text-[11px] text-slate-300">Phase</Label>
+                            <Label className="text-[11px] text-slate-300">Units</Label>
+                            <Label className="text-[11px] text-slate-300">Build</Label>
+                            <Label className="ml-1 text-[11px] text-slate-300">Start</Label>
+                            <Label className="text-[11px] text-slate-300">Presale</Label>
+                            <Label className="text-[11px] text-slate-300">Close</Label>
+                            <Label className="ml-1 text-[11px] text-slate-300">Allocation</Label>
+                            <Label className="text-[11px] text-slate-300">End</Label>
+                            <Label className="text-[11px] text-slate-300">Actions</Label>
+                          </div>
+                          {phaseRows.map((phase, idx) => {
+                            const pctStr = (v: number | undefined) =>
+                              v === undefined || v === null || Number.isNaN(v) ? '' : String(v)
+                            const startMo = Math.max(0, Number(phase.startMonthOffset || 0))
+                            const buildMonths = Math.max(0, Number(phase.buildMonths || 0))
+                            const endMo = startMo + buildMonths
+                            const exceedsDuration = phaseTimingMode === 'fixed-schedule' && endMo > Number(input.projectionMonths || 0)
+                            const isExpanded = expandedPhaseRowId === phase.id
+                            const allocationSummary = `Infra ${Number(phase.infrastructureAllocationPercent || 0)} / Land ${Number(phase.landAllocationPercent || 0)} / Site ${Number(phase.siteWorkAllocationPercent || 0)}`
+                            return (
+                              <div key={phase.id} className={idx % 2 === 0 ? 'bg-slate-900/22' : 'bg-slate-900/12'}>
+                                <div className="grid grid-cols-[minmax(8rem,0.9fr)_4.25rem_4.25rem_4.25rem_4.25rem_4.25rem_minmax(10rem,1fr)_3.6rem_4.2rem] gap-x-1 items-center px-2 py-1.5 border-b border-slate-800/55">
+                                  <div className="text-xs font-medium text-slate-100 truncate">{phase.name || `Phase ${idx + 1}`}</div>
+                                  <div className="text-xs text-slate-200 text-center">{phase.unitCount || 0}</div>
+                                  <div className="text-xs text-slate-200 text-center">{phase.buildMonths || 0}</div>
+                                  <div className="text-xs text-slate-200 text-center">{phase.startMonthOffset ?? 0}</div>
+                                  <div className="text-xs text-slate-200 text-center">{phase.presaleStartMonthOffset ?? 0}</div>
+                                  <div className="text-xs text-slate-200 text-center">{phase.closeStartMonthOffset ?? 0}</div>
+                                  <div className="text-xs text-slate-300 truncate">{allocationSummary}</div>
+                                  <div className="text-center">
+                                    <span
+                                      className={`inline-flex text-[10px] rounded-full border px-1.5 py-0.5 font-medium ${
+                                        exceedsDuration
+                                          ? 'border-amber-500/60 text-amber-200 bg-amber-900/20'
+                                          : 'border-cyan-700/45 text-cyan-200 bg-cyan-900/20'
+                                      }`}
+                                    >
+                                      {endMo}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 justify-end">
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 p-0 text-slate-400/80 hover:text-slate-100"
+                                      title={isExpanded ? 'Collapse editor' : 'Edit phase'}
+                                      onClick={() => setExpandedPhaseRowId((curr) => (curr === phase.id ? null : phase.id))}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      className="h-7 w-7 p-0 border-slate-600/35 bg-slate-900/10"
+                                      title={`Remove ${phase.name || 'phase'}`}
+                                      aria-label={`Remove ${phase.name || 'phase'}`}
+                                      onClick={() => removePhaseRow(phase.id)}
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                {isExpanded ? (
+                                  <div className="px-3 py-2 bg-slate-900/18 border-b border-slate-800/55">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                      <div className="space-y-1.5">
+                                        <div className="text-[11px] font-medium text-slate-300">Core & Timeline</div>
+                                        <div className="grid grid-cols-5 gap-1.5">
+                                          <div>
+                                            <Label className="text-[10px] text-slate-400">Units</Label>
+                                            <Input
+                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              value={phase.unitCount === 0 ? '' : String(phase.unitCount)}
+                                              onChange={(e) => updatePhaseRow(phase.id, 'unitCount', parseInt(e.target.value || '0', 10))}
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label className="text-[10px] text-slate-400">Build</Label>
+                                            <Input
+                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              value={phase.buildMonths === 0 ? '' : String(phase.buildMonths)}
+                                              onChange={(e) => updatePhaseRow(phase.id, 'buildMonths', parseInt(e.target.value || '0', 10))}
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label className="text-[10px] text-slate-400">Start</Label>
+                                            <Input
+                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              value={phase.startMonthOffset === undefined || phase.startMonthOffset === null ? '' : String(phase.startMonthOffset)}
+                                              onChange={(e) => updatePhaseRow(phase.id, 'startMonthOffset', parseInt(e.target.value || '0', 10))}
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label className="text-[10px] text-slate-400">Presale</Label>
+                                            <Input
+                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              value={phase.presaleStartMonthOffset === undefined || phase.presaleStartMonthOffset === null ? '' : String(phase.presaleStartMonthOffset)}
+                                              onChange={(e) => updatePhaseRow(phase.id, 'presaleStartMonthOffset', parseInt(e.target.value || '0', 10))}
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label className="text-[10px] text-slate-400">Close</Label>
+                                            <Input
+                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              value={phase.closeStartMonthOffset === undefined || phase.closeStartMonthOffset === null ? '' : String(phase.closeStartMonthOffset)}
+                                              onChange={(e) => updatePhaseRow(phase.id, 'closeStartMonthOffset', parseInt(e.target.value || '0', 10))}
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <div className="text-[11px] font-medium text-slate-300">Cost Allocation</div>
+                                        <div className="grid grid-cols-3 gap-1.5">
+                                          <div>
+                                            <Label className="text-[10px] text-slate-400">Infra %</Label>
+                                            <Input
+                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              value={pctStr(phase.infrastructureAllocationPercent)}
+                                              onChange={(e) => updatePhaseRow(phase.id, 'infrastructureAllocationPercent', parseFloat(e.target.value) || 0)}
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label className="text-[10px] text-slate-400">Land %</Label>
+                                            <Input
+                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              value={pctStr(phase.landAllocationPercent)}
+                                              onChange={(e) => updatePhaseRow(phase.id, 'landAllocationPercent', parseFloat(e.target.value) || 0)}
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label className="text-[10px] text-slate-400">Site %</Label>
+                                            <Input
+                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              value={pctStr(phase.siteWorkAllocationPercent)}
+                                              onChange={(e) => updatePhaseRow(phase.id, 'siteWorkAllocationPercent', parseFloat(e.target.value) || 0)}
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
 
             {input.proFormaMode === 'rental-hold' && (
             <Card className="bg-slate-800 border-slate-700">
@@ -1930,14 +4152,12 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
             </Card>
             )}
 
+            {input.proFormaMode === 'rental-hold' && (
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Exit, Waterfall & Tax (Expanded)</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div><Label className="text-xs">Exit Cap Rate %</Label><Input className={fieldClass(fieldMeta['exitCapRate']?.status || 'empty')} value={input.exitCapRate || ''} onChange={(e) => setField('exitCapRate', parseFloat(e.target.value) || 0)} /></div>
                 <div><Label className="text-xs">Refinance LTV %</Label><Input className={fieldClass(fieldMeta['refinanceLTVPercent']?.status || 'empty')} value={input.refinanceLTVPercent || ''} onChange={(e) => setField('refinanceLTVPercent', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">LP Equity %</Label><Input className={fieldClass(fieldMeta['lpEquityPercent']?.status || 'empty')} value={input.lpEquityPercent || ''} onChange={(e) => setField('lpEquityPercent', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">LP Preferred Return %</Label><Input className={fieldClass(fieldMeta['lpPreferredReturnPercent']?.status || 'empty')} value={input.lpPreferredReturnPercent || ''} onChange={(e) => setField('lpPreferredReturnPercent', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">LP Above-Pref Share %</Label><Input className={fieldClass(fieldMeta['lpAbovePrefProfitSharePercent']?.status || 'empty')} value={input.lpAbovePrefProfitSharePercent || ''} onChange={(e) => setField('lpAbovePrefProfitSharePercent', parseFloat(e.target.value) || 0)} /></div>
                 <div><Label className="text-xs">Tax Rate %</Label><Input className={fieldClass(fieldMeta['taxRatePercent']?.status || 'empty')} value={input.taxRatePercent || ''} onChange={(e) => setField('taxRatePercent', parseFloat(e.target.value) || 0)} /></div>
                 <div><Label className="text-xs">Annual Depreciation</Label><Input className={fieldClass(fieldMeta['annualDepreciation']?.status || 'empty')} value={input.annualDepreciation || ''} onChange={(e) => setField('annualDepreciation', parseFloat(e.target.value) || 0)} /></div>
                 <div><Label className="text-xs">Annual Appreciation %</Label><Input className={fieldClass(fieldMeta['annualAppreciationPercent']?.status || 'empty')} value={input.annualAppreciationPercent || ''} onChange={(e) => setField('annualAppreciationPercent', parseFloat(e.target.value) || 0)} /></div>
@@ -1950,100 +4170,308 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </div>
               </CardContent>
             </Card>
+            )}
 
-            {isDevelopmentMode && (
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">For-Sale LOC Advanced</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Sales Pace Mode</Label>
-                  <Select value={input.forSalePhasedLoc?.salesPaceMode || 'combined'} onValueChange={(v) => setField('forSalePhasedLoc.salesPaceMode', v)}>
-                    <SelectTrigger className={fieldClass(fieldMeta['forSalePhasedLoc.salesPaceMode']?.status || 'empty')}><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="combined">combined</SelectItem><SelectItem value="presales">presales</SelectItem><SelectItem value="closings">closings</SelectItem></SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Deposit Usage Mode</Label>
-                  <Select value={input.forSalePhasedLoc?.depositUsageMode || 'full'} onValueChange={(v) => setField('forSalePhasedLoc.depositUsageMode', v)}>
-                    <SelectTrigger className={fieldClass(fieldMeta['forSalePhasedLoc.depositUsageMode']?.status || 'empty')}><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="full">full</SelectItem><SelectItem value="percent">percent</SelectItem><SelectItem value="at-closing">at-closing</SelectItem></SelectContent>
-                  </Select>
-                </div>
-                <div><Label className="text-xs">Deposit Usable %</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.depositUsablePercent']?.status || 'empty')} value={input.forSalePhasedLoc?.depositUsablePercent || ''} onChange={(e) => setField('forSalePhasedLoc.depositUsablePercent', parseFloat(e.target.value) || 0)} /></div>
-                <div>
-                  <Label className="text-xs">Construction Spend Curve</Label>
-                  <Select value={input.forSalePhasedLoc?.constructionSpendCurve || 'linear'} onValueChange={(v) => setField('forSalePhasedLoc.constructionSpendCurve', v)}>
-                    <SelectTrigger className={fieldClass(fieldMeta['forSalePhasedLoc.constructionSpendCurve']?.status || 'empty')}><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="linear">linear</SelectItem><SelectItem value="front-loaded">front-loaded</SelectItem><SelectItem value="back-loaded">back-loaded</SelectItem></SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Trigger Uses Presales</Label>
-                  <Select value={input.forSalePhasedLoc?.triggerUsesPresales === false ? 'no' : 'yes'} onValueChange={(v) => setField('forSalePhasedLoc.triggerUsesPresales', v === 'yes')}>
-                    <SelectTrigger className={fieldClass(fieldMeta['forSalePhasedLoc.triggerUsesPresales']?.status || 'empty')}><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent>
-                  </Select>
-                </div>
-                <div><Label className="text-xs">Bond LTC Override %</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.bondLtcOverridePercent']?.status || 'empty')} value={input.forSalePhasedLoc?.bondLtcOverridePercent || ''} onChange={(e) => setField('forSalePhasedLoc.bondLtcOverridePercent', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Bond Rate %</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.bondRatePercent']?.status || 'empty')} value={input.forSalePhasedLoc?.bondRatePercent || ''} onChange={(e) => setField('forSalePhasedLoc.bondRatePercent', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Bond Capacity</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.bondCapacity']?.status || 'empty')} value={input.forSalePhasedLoc?.bondCapacity || ''} onChange={(e) => setField('forSalePhasedLoc.bondCapacity', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">LOC Paydown %</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.salesAllocationBuckets.locPaydownPercent']?.status || 'empty')} value={input.forSalePhasedLoc?.salesAllocationBuckets?.locPaydownPercent || ''} onChange={(e) => setField('forSalePhasedLoc.salesAllocationBuckets.locPaydownPercent', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Reinvest %</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.salesAllocationBuckets.reinvestPercent']?.status || 'empty')} value={input.forSalePhasedLoc?.salesAllocationBuckets?.reinvestPercent || ''} onChange={(e) => setField('forSalePhasedLoc.salesAllocationBuckets.reinvestPercent', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Reserve %</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.salesAllocationBuckets.reservePercent']?.status || 'empty')} value={input.forSalePhasedLoc?.salesAllocationBuckets?.reservePercent || ''} onChange={(e) => setField('forSalePhasedLoc.salesAllocationBuckets.reservePercent', parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Distribution %</Label><Input className={fieldClass(fieldMeta['forSalePhasedLoc.salesAllocationBuckets.distributionPercent']?.status || 'empty')} value={input.forSalePhasedLoc?.salesAllocationBuckets?.distributionPercent || ''} onChange={(e) => setField('forSalePhasedLoc.salesAllocationBuckets.distributionPercent', parseFloat(e.target.value) || 0)} /></div>
-              </CardContent>
-            </Card>
-            )}
           </div>
-              </>
-            )}
           </div>
           )}
 
-          {centerTab === 'notes' && (
+          {centerTab === 'phase-pro-forma' && (
             <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Deal Notes</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                <Textarea
-                  value={notesDraft}
-                  onChange={(e) => setNotesDraft(e.target.value)}
-                  placeholder="Capture owner notes, calls, commitments, and follow-ups..."
-                  className="min-h-[260px]"
-                />
-                <div className="text-xs text-slate-300">Autosaves to workspace notes for this deal.</div>
-              </CardContent>
-            </Card>
-          )}
-
-          {centerTab === 'tasks' && (
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Deal Tasks</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                <Textarea
-                  value={tasksDraft}
-                  onChange={(e) => setTasksDraft(e.target.value)}
-                  placeholder={"Track next actions (one per line), owners, and due dates...\nExample: Verify TIF disbursement timing - Mike - 2026-05-01"}
-                  className="min-h-[260px]"
-                />
-                <div className="text-xs text-slate-300">Autosaves to workspace tasks for this deal.</div>
-              </CardContent>
-            </Card>
-          )}
-
-          {centerTab === 'activity' && (
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Activity Timeline</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {activityEvents.slice(0, 60).map((a) => (
-                  <div key={a.id} className="border border-slate-700 rounded p-2 text-xs bg-slate-900">
-                    <div className="font-semibold uppercase text-[10px] text-slate-400">{a.eventType}</div>
-                    <div className="text-slate-200 mt-0.5 whitespace-pre-wrap">{a.eventText}</div>
-                    <div className="text-[10px] text-slate-500 mt-1">{new Date(a.createdAt).toLocaleString()}</div>
+              <CardHeader className="py-2">
+                <CardTitle className="text-base text-slate-200">Phase Pro Forma</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-slate-200">
+                {phaseProFormaRows.length > 0 ? (
+                  <div className="overflow-auto border border-slate-700 rounded p-2 bg-slate-900">
+                    <div className="min-w-[1080px] space-y-1 text-[11px]">
+                      <div className="grid grid-cols-[140px_repeat(9,minmax(88px,1fr))] gap-1 text-slate-300 font-semibold">
+                        <div>Phase</div>
+                        <div>Units</div>
+                        <div>Presale</div>
+                        <div>Closing</div>
+                        <div>TIF</div>
+                        <div>Total Revenue</div>
+                        <div>Carrying cost</div>
+                        <div>Total Costs</div>
+                        <div>Profit</div>
+                        <div>Margin</div>
+                      </div>
+                      {phaseProFormaRows.map((r) => (
+                        <div key={r.id} className="grid grid-cols-[140px_repeat(9,minmax(88px,1fr))] gap-1 border-t border-slate-800 pt-1">
+                          <div>{r.phase}</div>
+                          <div>{r.units}</div>
+                          <div>{Math.round(r.presale).toLocaleString('en-US')}</div>
+                          <div>{Math.round(r.close).toLocaleString('en-US')}</div>
+                          <div>{Math.round(r.tif).toLocaleString('en-US')}</div>
+                          <div>{Math.round(r.totalRevenue).toLocaleString('en-US')}</div>
+                          <div>{Math.round(r.carry).toLocaleString('en-US')}</div>
+                          <div>{Math.round(r.totalCosts).toLocaleString('en-US')}</div>
+                          <div>{Math.round(r.profit).toLocaleString('en-US')}</div>
+                          <div>{r.totalRevenue > 0 ? `${((r.profit / r.totalRevenue) * 100).toFixed(1)}%` : '—'}</div>
+                        </div>
+                      ))}
+                      <div className="grid grid-cols-[140px_repeat(9,minmax(88px,1fr))] gap-1 border-t-2 border-slate-700 pt-1 font-semibold">
+                        <div>TOTAL</div>
+                        <div>{phaseProFormaRows.reduce((s, r) => s + r.units, 0)}</div>
+                        <div>{Math.round(phaseProFormaRows.reduce((s, r) => s + r.presale, 0)).toLocaleString('en-US')}</div>
+                        <div>{Math.round(phaseProFormaRows.reduce((s, r) => s + r.close, 0)).toLocaleString('en-US')}</div>
+                        <div>{Math.round(phaseProFormaRows.reduce((s, r) => s + r.tif, 0)).toLocaleString('en-US')}</div>
+                        <div>{Math.round(phaseProFormaRows.reduce((s, r) => s + r.totalRevenue, 0)).toLocaleString('en-US')}</div>
+                        <div>{Math.round(phaseProFormaRows.reduce((s, r) => s + r.carry, 0)).toLocaleString('en-US')}</div>
+                        <div>{Math.round(phaseProFormaRows.reduce((s, r) => s + r.totalCosts, 0)).toLocaleString('en-US')}</div>
+                        <div>{Math.round(phaseProFormaRows.reduce((s, r) => s + r.profit, 0)).toLocaleString('en-US')}</div>
+                        <div>
+                          {phaseProFormaRows.reduce((s, r) => s + r.totalRevenue, 0) > 0
+                            ? `${((phaseProFormaRows.reduce((s, r) => s + r.profit, 0) / phaseProFormaRows.reduce((s, r) => s + r.totalRevenue, 0)) * 100).toFixed(1)}%`
+                            : '—'}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-2">
+                      Carrying cost matches Assumptions (Carry Cost): when monthly carry per unit and phase build months are set, each phase gets carry proportional to (units × build months); otherwise it is split by unit count. Included in Total Costs (hard + land + site + infra + carry).
+                    </p>
                   </div>
-                ))}
-                {activityEvents.length === 0 && <div className="text-xs text-slate-300">No activity yet. Chat, stage changes, runs, and saves will appear here.</div>}
+                ) : (
+                  <div className="text-slate-300">No phases yet. Add phases under `Assumptions` in for-sale mode.</div>
+                )}
               </CardContent>
             </Card>
+          )}
+
+          {centerTab === 'cash-flow' && (
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader className="py-2">
+                <CardTitle className="text-base text-slate-200">Cash Flow</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-slate-200">
+                {projection?.monthlyCashFlows?.length ? (
+                  <>
+                    <div className="grid grid-cols-4 gap-2">
+                      <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Peak Cash Needed</div><div>{fmtMoney(projection.summary?.peakCashNeeded)}</div></div>
+                      <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Months Negative</div><div>{projection.summary?.monthsNegative ?? '—'}</div></div>
+                      <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Peak LOC</div><div>{fmtMoney(projection.summary?.forSalePeakLocBalance)}</div></div>
+                      <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">LOC Interest</div><div>{fmtMoney(projection.summary?.totalInterestDuringConstruction)}</div></div>
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      Monthly summary (first 36 months): engine rollup of all modeled cash sources (draws, sales, equity, etc.) vs uses; net is in minus out for that month.
+                    </p>
+                    <div className="max-h-[360px] overflow-auto border border-slate-700 rounded">
+                      <div className="flex items-baseline gap-2 px-2 py-1.5 border-b border-slate-600 bg-slate-950/80 text-[10px] font-semibold uppercase tracking-wide text-slate-400 sticky top-0 z-[1]">
+                        <div className="w-[6.25rem] shrink-0">Month</div>
+                        <div className="grid min-w-0 flex-1 grid-cols-3 gap-x-1.5">
+                          <div className="text-right">Cash in</div>
+                          <div className="text-right">Cash out</div>
+                          <div className="text-right">Net</div>
+                        </div>
+                      </div>
+                      {projection.monthlyCashFlows.slice(0, 36).map((m) => (
+                        <div key={m.month} className="flex items-baseline gap-2 px-2 py-1 border-b border-slate-800 text-xs">
+                          <div
+                            className="w-[6.25rem] shrink-0 truncate pr-0.5 text-slate-300"
+                            title={m.monthLabel}
+                          >
+                            {m.monthLabel}
+                          </div>
+                          <div className="grid min-w-0 flex-1 grid-cols-3 gap-x-1.5">
+                            <div className="text-right tabular-nums">{fmtMoney(m.totalInflow)}</div>
+                            <div className="text-right tabular-nums">{fmtMoney(m.totalOutflow)}</div>
+                            <div className="text-right tabular-nums">{fmtMoney(m.netCashFlow)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {cashFlowWorkbookRows && (
+                      <div className="overflow-auto border border-slate-700 rounded p-2 bg-slate-900">
+                        <div className="text-xs text-slate-300 mb-2">Workbook-style monthly matrix (first 26 months)</div>
+                        <div className="min-w-[1300px] space-y-1 text-[11px]">
+                        <div className="grid grid-cols-[220px_repeat(26,minmax(56px,1fr))_100px] gap-1">
+                            <div className="text-slate-400">Row</div>
+                            {cashFlowWorkbookRows.months.map((m, idx) => (
+                              <div
+                                key={`mh-${idx}`}
+                                className="text-slate-300 whitespace-nowrap px-0.5"
+                                title={m}
+                              >
+                                {formatWorkbookMonthHeader(m)}
+                              </div>
+                            ))}
+                          <div className="text-slate-300 font-semibold">TOTAL</div>
+                          </div>
+                          {cashFlowWorkbookRows.rows.map((row) => (
+                            row.kind === 'header' ? (
+                              <div key={row.label} className="grid grid-cols-[220px_repeat(26,minmax(56px,1fr))_100px] gap-1 border-t-2 border-slate-700 pt-2">
+                                <div className="text-slate-200 font-semibold">{row.label}</div>
+                              </div>
+                            ) : (
+                              <div
+                                key={row.label}
+                                className={`grid grid-cols-[220px_repeat(26,minmax(56px,1fr))_100px] gap-1 border-t border-slate-800 pt-1 ${
+                                  row.kind === 'total' ? 'font-semibold bg-slate-950/40' : ''
+                                }`}
+                              >
+                                <div className={row.kind === 'total' ? 'text-slate-200' : 'text-slate-400'}>{row.label}</div>
+                                {row.values.map((v, idx) => (
+                                  <div key={`${row.label}-${idx}`}>{Math.round(v).toLocaleString('en-US')}</div>
+                                ))}
+                                <div className="font-semibold">{Math.round(row.values.reduce((sum, n) => sum + (Number(n) || 0), 0)).toLocaleString('en-US')}</div>
+                              </div>
+                            )
+                          ))}
+                        </div>
+                        <div className="mt-3 text-[11px] text-slate-400 border-t border-slate-700 pt-2">
+                          TIF reimbursement follows the phased engine (same basis as Phase Pro Forma totals, spread over construction).
+                          {' '}Configured TIF: <span className="text-slate-300 font-semibold">{fmtMoney(input?.forSalePhasedLoc?.tifInfrastructureReduction || 0)}</span>.
+                          {' '}Workbook TIF total: <span className="text-slate-300 font-semibold">{fmtMoney(cashFlowWorkbookRows.fullTotalsByLabel?.['  TIF Reimbursement'] || 0)}</span>.
+                          Preferred return is the first line under INVESTOR PAYOUTS; the total row is pref + completion amounts.
+                          LOC draws in the engine now cover construction shortfalls plus preferred return, up to the LOC limit.
+                          Equity return and profit share are concentrated at completion (Mo{' '}
+                          {Math.max(1, Number(input?.projectionMonths || 26))} when applicable).
+                          Engine distributed cash: <span className="text-slate-300 font-semibold">{fmtMoney(projection?.summary?.forSaleDistributionTotal)}</span>.
+                          {' '}Workbook vs engine:{' '}
+                          <span className="text-slate-300 font-semibold">
+                            {fmtMoney(
+                              Number(cashFlowWorkbookRows.fullTotalsByLabel?.['Total investor payouts'] || 0) -
+                                Number(projection?.summary?.forSaleDistributionTotal || 0),
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    <Card className="bg-slate-900 border-slate-700">
+                      <CardHeader className="py-2">
+                        <CardTitle className="text-sm text-slate-200">PROJECT TOTALS</CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                        <div className="rounded border border-slate-700 p-2">
+                          <div className="text-slate-400">Total Expenses (excl. interest)</div>
+                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.totalExpensesExInterest)}</div>
+                        </div>
+                        <div className="rounded border border-slate-700 p-2">
+                          <div className="text-slate-400">Total Revenue (Sales + TIF)</div>
+                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.totalRevenue)}</div>
+                        </div>
+                        <div className="rounded border border-slate-700 p-2">
+                          <div className="text-slate-400">Total LOC Interest Paid</div>
+                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.totalInterest)}</div>
+                        </div>
+                        <div className="rounded border border-slate-700 p-2">
+                          <div className="text-slate-400">Total Preferred Return Paid</div>
+                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.totalPreferredReturn)}</div>
+                        </div>
+                        <div className="rounded border border-slate-700 p-2">
+                          <div className="text-slate-400">Net Project Profit</div>
+                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.netProjectProfit)}</div>
+                        </div>
+                        <div className="rounded border border-slate-700 p-2">
+                          <div className="text-slate-400">Developer Take-Home</div>
+                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.developerTakeHome)}</div>
+                        </div>
+                        <div className="rounded border border-slate-700 p-2">
+                          <div className="text-slate-400">
+                            Total Investor Payout (Mo {Math.max(1, Number(input?.projectionMonths || 26))})
+                          </div>
+                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.investorPayout)}</div>
+                        </div>
+                        <div className="rounded border border-slate-700 p-2">
+                          <div className="text-slate-400">Peak LOC Balance</div>
+                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.peakLocBalance)}</div>
+                        </div>
+                        <div className="rounded border border-slate-700 p-2">
+                          <div className="text-slate-400">Final LOC Balance</div>
+                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.finalLocBalance)}</div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </>
+                ) : (
+                  <div className="text-slate-300">Run ProForma to view monthly cash flow.</div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {centerTab === 'investor-returns' && (
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader className="py-2">
+                <CardTitle className="text-base text-slate-200">Investor Returns</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-200">
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Investor Equity</div><div>{fmtMoney(investorReturnsMetrics.investorEquity)}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Monthly Preferred Return</div><div>{fmtMoney(investorReturnsMetrics.monthlyPreferredReturn)}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Total Preferred Return</div><div>{fmtMoney(investorReturnsMetrics.totalPreferredReturn)}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Investor Profit Share</div><div>{fmtMoney(investorReturnsMetrics.investorProfitShare)}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Investor / Developer Split</div><div>{`${investorReturnsMetrics.investorSplitPct}% / ${investorReturnsMetrics.developerSplitPct}%`}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Total Investor Payout</div><div>{fmtMoney(investorReturnsMetrics.totalInvestorPayout)}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Investor MOIC</div><div>{investorReturnsMetrics.investorMoic != null ? `${investorReturnsMetrics.investorMoic.toFixed(2)}x` : '—'}</div></div>
+              </CardContent>
+            </Card>
+          )}
+
+          {centerTab === 'public-sector' && (
+            <Card className="bg-slate-800 border-slate-700">
+              <CardHeader className="py-2">
+                <CardTitle className="text-base text-slate-200">Public Sector</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-200">
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Infrastructure Cost</div><div>{fmtMoney(input.forSalePhasedLoc?.infrastructureCost)}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">TIF / Infra Reduction</div><div>{fmtMoney(input.forSalePhasedLoc?.tifInfrastructureReduction)}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Incentive Cost Reduction</div><div>{fmtMoney(input.forSalePhasedLoc?.incentiveCostReduction)}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Total Units</div><div>{input.forSalePhasedLoc?.totalUnits || 0}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Annual Property Tax Revenue (2.5% of revenue)</div><div>{fmtMoney(publicSectorMetrics.annualPropertyTaxRevenue)}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">TIF Payback Period</div><div>{publicSectorMetrics.tifPaybackYears != null ? `${publicSectorMetrics.tifPaybackYears.toFixed(2)} years` : '—'}</div></div>
+                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Public 10yr Net Return</div><div>{fmtMoney(publicSectorMetrics.public10YrNetReturn)}</div></div>
+              </CardContent>
+            </Card>
+          )}
+
+          {centerTab === 'analysis' && (
+            <div className="space-y-3">
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Validation Checks</CardTitle></CardHeader>
+                <CardContent className="space-y-1 text-xs text-slate-200">
+                  {validationChecks.map((c) => (
+                    <div key={c.label} className="flex items-center justify-between rounded border border-slate-700 bg-slate-900 px-2 py-1">
+                      <span>{c.label}</span>
+                      <span className={c.pass ? 'text-emerald-400' : 'text-rose-400'}>{c.pass ? 'PASS' : 'CHECK'}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Deal Notes</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <Textarea
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    placeholder="Capture owner notes, calls, commitments, and follow-ups..."
+                    className="min-h-[180px]"
+                  />
+                </CardContent>
+              </Card>
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Deal Tasks</CardTitle></CardHeader>
+                <CardContent>
+                  <Textarea
+                    value={tasksDraft}
+                    onChange={(e) => setTasksDraft(e.target.value)}
+                    placeholder={"Track next actions (one per line), owners, and due dates...\nExample: Verify TIF disbursement timing - Mike - 2026-05-01"}
+                    className="min-h-[160px]"
+                  />
+                </CardContent>
+              </Card>
+              <Card className="bg-slate-800 border-slate-700">
+                <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Activity Timeline</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  {activityEvents.slice(0, 30).map((a) => (
+                    <div key={a.id} className="border border-slate-700 rounded p-2 text-xs bg-slate-900">
+                      <div className="font-semibold uppercase text-[10px] text-slate-400">{a.eventType}</div>
+                      <div className="text-slate-200 mt-0.5 whitespace-pre-wrap">{a.eventText}</div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
           )}
         </main>
 
@@ -2081,7 +4509,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 className="bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700"
                 onClick={() =>
                   handleSend(
-                    'Summarize the current conversation into concise deal notes and a short actionable task list. Return notesAppend and taskSuggestions.',
+                    'Summarize this deal in a clean audit format using visible UI labels only. In notesAppend, use sections: Ready, Needs input, Notes. Then return short action-oriented taskSuggestions tied to visible controls. Return notesAppend and taskSuggestions.',
                   )
                 }
               >
@@ -2128,7 +4556,31 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 {!!pendingNotesAppend && (
                   <div className="mt-1">
                     <div className="text-[11px] font-semibold text-blue-300">Notes summary</div>
-                    <div className="text-xs text-blue-200 whitespace-pre-wrap">{pendingNotesAppend}</div>
+                    {(() => {
+                      const parsed = parseCaptureNotesSections(pendingNotesAppend)
+                      if (!parsed.hasStructuredSections) {
+                        return <div className="text-xs text-blue-200 whitespace-pre-wrap">{pendingNotesAppend}</div>
+                      }
+                      return (
+                        <div className="mt-1 space-y-1.5">
+                          {parsed.sections.map((section) => (
+                            <div key={section.heading}>
+                              <div className="text-[11px] font-semibold text-blue-200">{section.heading}</div>
+                              <div className="mt-0.5 space-y-0.5">
+                                {section.items.map((item, idx) => (
+                                  <div key={`${section.heading}-${idx}`} className="text-xs text-blue-200">
+                                    - {item}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          {parsed.remainingLines.length > 0 && (
+                            <div className="text-xs text-blue-200 whitespace-pre-wrap">{parsed.remainingLines.join('\n')}</div>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 )}
                 {!!pendingTaskSuggestions?.length && (

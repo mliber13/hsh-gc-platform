@@ -295,6 +295,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   // Full development proforma (Sources & Uses, Draw Schedule, IDC)
   const [useDevelopmentProforma, setUseDevelopmentProforma] = useState<boolean>(false)
   const [landCost, setLandCost] = useState<number>(0)
+  const [siteWorkCost, setSiteWorkCost] = useState<number>(0)
   const [softCostPercent, setSoftCostPercent] = useState<number>(0)
   const [contingencyPercent, setContingencyPercent] = useState<number>(0)
   const [constructionMonthsInput, setConstructionMonthsInput] = useState<number>(0) // 0 = use date-based
@@ -351,10 +352,8 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       closeStartMonthOffset: 8,
       presaleTriggerPercent: 50,
       infrastructureAllocationPercent: undefined,
-      avgSalePrice: 250000,
-      hardCostBudget: undefined,
-      softCostBudget: undefined,
-      costEntryMode: 'auto',
+      landAllocationPercent: 0,
+      siteWorkAllocationPercent: 0,
     },
   ])
   const isForSaleLocMode = proFormaMode === 'for-sale-phased-loc'
@@ -426,6 +425,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     constructionCompletionDate: string
     useDevelopmentProforma?: boolean
     landCost?: number
+    siteWorkCost?: number
     softCostPercent?: number
     contingencyPercent?: number
     constructionMonths?: number
@@ -483,6 +483,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     constructionCompletionDate: string
     useDevelopmentProforma?: boolean
     landCost?: number
+    siteWorkCost?: number
     softCostPercent?: number
     contingencyPercent?: number
     constructionMonths?: number
@@ -562,6 +563,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     constructionCompletionDate,
     useDevelopmentProforma,
     landCost,
+    siteWorkCost,
     softCostPercent,
     contingencyPercent,
     constructionMonths: constructionMonthsInput || undefined,
@@ -699,6 +701,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
             constructionCompletionDate: dbData.constructionCompletionDate,
             useDevelopmentProforma: dbData.useDevelopmentProforma,
             landCost: dbData.landCost,
+            siteWorkCost: dbData.siteWorkCost,
             softCostPercent: dbData.softCostPercent,
             contingencyPercent: dbData.contingencyPercent,
             constructionMonths: dbData.constructionMonths,
@@ -774,6 +777,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           },
           useDevelopmentProforma: parsed.useDevelopmentProforma,
           landCost: parsed.landCost,
+          siteWorkCost: parsed.siteWorkCost,
           softCostPercent: parsed.softCostPercent,
           contingencyPercent: parsed.contingencyPercent,
           constructionMonths: parsed.constructionMonths,
@@ -819,6 +823,52 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     return null
   }
 
+  const computeUnderwritingFallbackContractValue = (params: {
+    underwritingEstimatedConstructionCost?: number
+    landCost?: number
+    softCostPercent?: number
+    contingencyPercent?: number
+  }): number => {
+    const hardCost = Math.max(0, params.underwritingEstimatedConstructionCost || 0)
+    if (hardCost <= 0) return 0
+
+    const land = Math.max(0, params.landCost || 0)
+    const softPct = Math.max(0, params.softCostPercent || 0)
+    const contingencyPct = Math.max(0, params.contingencyPercent || 0)
+    const soft = hardCost * (softPct / 100)
+    const contingency = hardCost * (contingencyPct / 100)
+
+    // Underwriting fallback should represent full project total cost when available.
+    return hardCost + land + soft + contingency
+  }
+
+  const deriveContractValueFromEstimate = (estimateTrades: Trade[]): number => {
+    let estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
+
+    if (estimateTotal === 0 && estimateTrades.length > 0) {
+      const basePriceTotal = estimateTrades.reduce((sum, t) => sum + t.totalCost, 0)
+      const storedContingency = project.estimate.contingency || 0
+      const storedProfit = project.estimate.profit || 0
+
+      if (storedContingency > 0 || storedProfit > 0) {
+        estimateTotal = basePriceTotal + storedContingency + storedProfit
+      } else {
+        const contingencyPercent = 10
+        const contingency = basePriceTotal * (contingencyPercent / 100)
+        const grossProfitTotal = estimateTrades.reduce((sum, trade) => {
+          const itemMarkup = trade.markupPercent || 20
+          const markup = trade.totalCost * (itemMarkup / 100)
+          return sum + markup
+        }, 0)
+        estimateTotal = basePriceTotal + contingency + grossProfitTotal
+      }
+    }
+
+    return estimateTotal > 0
+      ? estimateTotal
+      : estimateTrades.reduce((sum, t) => sum + t.totalCost, 0)
+  }
+
   // Load trades and saved inputs
   useEffect(() => {
     const loadTradesAndInputs = async () => {
@@ -840,35 +890,26 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       if (savedInputs) {
         // Restore saved inputs
         if (isDealUnderwriting) {
-          // Deal / underwriting mode: trust saved contract value as-is
+          // Deal / underwriting mode: prefer saved contract value, otherwise
+          // derive from full project total cost (hard + land + soft + contingency),
+          // then fall back to hard cost if needed.
+          const fallbackContractValue = computeUnderwritingFallbackContractValue({
+            underwritingEstimatedConstructionCost: savedInputs.underwritingEstimatedConstructionCost,
+            landCost: savedInputs.landCost,
+            softCostPercent: savedInputs.softCostPercent,
+            contingencyPercent: savedInputs.contingencyPercent,
+          })
           const contractValueToUse =
-            savedInputs.contractValue > 0 ? savedInputs.contractValue : 0
+            savedInputs.contractValue > 0
+              ? savedInputs.contractValue
+              : fallbackContractValue > 0
+                ? fallbackContractValue
+                : Math.max(0, savedInputs.underwritingEstimatedConstructionCost || 0)
           setContractValue(contractValueToUse)
           lastSyncedTotalRef.current = contractValueToUse
         } else {
           // Project mode: if saved contract is 0, fall back to estimate total
-          let estimateTotal =
-            project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
-
-          if (estimateTotal === 0 && loadedTrades.length > 0) {
-            const basePriceTotal = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
-            const storedContingency = project.estimate.contingency || 0
-            const storedProfit = project.estimate.profit || 0
-
-            if (storedContingency > 0 || storedProfit > 0) {
-              estimateTotal = basePriceTotal + storedContingency + storedProfit
-            } else {
-              const contingencyPercent = 10 // Default contingency
-              const contingency = basePriceTotal * (contingencyPercent / 100)
-              const grossProfitTotal = loadedTrades.reduce((sum, trade) => {
-                const itemMarkup = trade.markupPercent || 20 // Default markup
-                const markup = trade.totalCost * (itemMarkup / 100)
-                return sum + markup
-              }, 0)
-              estimateTotal = basePriceTotal + contingency + grossProfitTotal
-            }
-          }
-
+          const estimateTotal = deriveContractValueFromEstimate(loadedTrades)
           const contractValueToUse =
             savedInputs.contractValue > 0 ? savedInputs.contractValue : estimateTotal
           setContractValue(contractValueToUse)
@@ -890,6 +931,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         setTotalProjectSquareFootage(savedInputs.totalProjectSquareFootage || 0)
         setUseDevelopmentProforma(savedInputs.useDevelopmentProforma ?? false)
         setLandCost(savedInputs.landCost ?? 0)
+        setSiteWorkCost(savedInputs.siteWorkCost ?? 0)
         setSoftCostPercent(savedInputs.softCostPercent ?? 0)
         setContingencyPercent(savedInputs.contingencyPercent ?? 0)
         setConstructionMonthsInput(savedInputs.constructionMonths ?? 0)
@@ -943,10 +985,8 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
           closeStartMonthOffset: 8,
           presaleTriggerPercent: 50,
           infrastructureAllocationPercent: undefined,
-          avgSalePrice: 250000,
-          hardCostBudget: undefined,
-          softCostBudget: undefined,
-          costEntryMode: 'auto',
+          landAllocationPercent: 0,
+          siteWorkAllocationPercent: 0,
         }])
         if (savedInputs.underwritingEstimatedConstructionCost != null) {
           setUnderwritingEstimatedConstructionCost(
@@ -959,32 +999,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         setHasLoadedSavedData(true)
       } else if (!isDealUnderwriting) {
         // No saved inputs in project mode, use estimate-based defaults
-        let estimateTotal =
-          project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
-
-        if (estimateTotal === 0 && loadedTrades.length > 0) {
-          const basePriceTotal = loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
-          const storedContingency = project.estimate.contingency || 0
-          const storedProfit = project.estimate.profit || 0
-
-          if (storedContingency > 0 || storedProfit > 0) {
-            estimateTotal = basePriceTotal + storedContingency + storedProfit
-          } else {
-            const contingencyPercent = 10 // Default contingency
-            const contingency = basePriceTotal * (contingencyPercent / 100)
-            const grossProfitTotal = loadedTrades.reduce((sum, trade) => {
-              const itemMarkup = trade.markupPercent || 20 // Default markup
-              const markup = trade.totalCost * (itemMarkup / 100)
-              return sum + markup
-            }, 0)
-            estimateTotal = basePriceTotal + contingency + grossProfitTotal
-          }
-        }
-
-        const contractValue =
-          estimateTotal > 0
-            ? estimateTotal
-            : loadedTrades.reduce((sum, t) => sum + t.totalCost, 0)
+        const contractValue = deriveContractValueFromEstimate(loadedTrades)
         setContractValue(contractValue)
         lastSyncedTotalRef.current = contractValue
       }
@@ -1007,36 +1022,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   useEffect(() => {
     // Only run after initial load is complete to avoid interfering with initialization
     if (!isDealUnderwriting && initialLoadCompleteRef.current && !loading) {
-      // Use estimate total (includes profit, overhead, contingency) as the contract value
-      let estimateTotal = project.estimate.totalEstimate || project.estimate.totals?.totalEstimated || 0
-      
-      // If estimate total is 0 or not set, try using stored profit/contingency amounts
-      if (estimateTotal === 0 && trades.length > 0) {
-        const basePriceTotal = trades.reduce((sum, t) => sum + t.totalCost, 0)
-        const storedContingency = project.estimate.contingency || 0
-        const storedProfit = project.estimate.profit || 0
-        
-        // If we have stored amounts, use them
-        if (storedContingency > 0 || storedProfit > 0) {
-          estimateTotal = basePriceTotal + storedContingency + storedProfit
-        } else {
-          // Otherwise calculate it the same way EstimateBuilder does
-          const contingencyPercent = 10 // Default contingency
-          const contingency = basePriceTotal * (contingencyPercent / 100)
-          // Calculate gross profit from markup on each trade (same as EstimateBuilder)
-          const grossProfitTotal = trades.reduce((sum, trade) => {
-            const itemMarkup = trade.markupPercent || 20 // Default markup
-            const markup = trade.totalCost * (itemMarkup / 100)
-            return sum + markup
-          }, 0)
-          estimateTotal = basePriceTotal + contingency + grossProfitTotal
-        }
-      }
-      
-      // Fallback to sum of trades if estimate total is still not available
-      const currentTotal = estimateTotal > 0 
-        ? estimateTotal 
-        : trades.reduce((sum, t) => sum + t.totalCost, 0)
+      const currentTotal = deriveContractValueFromEstimate(trades)
       
       // Only auto-update if:
       // 1. Contract value is 0, OR
@@ -1181,6 +1167,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     totalProjectSquareFootage,
     useDevelopmentProforma,
     landCost,
+    siteWorkCost,
     softCostPercent,
     contingencyPercent,
     constructionMonthsInput,
@@ -1417,10 +1404,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const forSaleDerivedContractValue = useMemo(
     () =>
-      forSalePhases.reduce(
-        (sum, phase) => sum + (phase.unitCount || 0) * (phase.avgSalePrice || forSaleAverageSalePrice || 0),
-        0,
-      ),
+      forSalePhases.reduce((sum, phase) => sum + (phase.unitCount || 0), 0) * (forSaleAverageSalePrice || 0),
     [forSalePhases, forSaleAverageSalePrice],
   )
   const forSalePhaseRowErrors = useMemo(() => {
@@ -1438,8 +1422,8 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         errs.push('Close start month should be at or after presale start month.')
       }
       if ((phase.infrastructureAllocationPercent || 0) < 0) errs.push('Infrastructure % cannot be negative.')
-      if ((phase.hardCostBudget || 0) < 0 || (phase.softCostBudget || 0) < 0) errs.push('Budgets cannot be negative.')
-      if ((phase.avgSalePrice || 0) < 0) errs.push('Avg sale price cannot be negative.')
+      if ((phase.landAllocationPercent || 0) < 0) errs.push('Land % cannot be negative.')
+      if ((phase.siteWorkAllocationPercent || 0) < 0) errs.push('Site % cannot be negative.')
       map[phase.id] = errs
     })
     return map
@@ -1458,18 +1442,6 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       }))
     setDealSummaryInputs((prev) => ({ ...prev, incentives: mapped }))
   }, [forSaleIncentives, dealSummaryInputs.totalUnits])
-  const effectiveForSalePhases = useMemo(() => {
-    const totalUnits = Math.max(1, forSalePhases.reduce((sum, p) => sum + (p.unitCount || 0), 0))
-    return forSalePhases.map((phase) => {
-      if (phase.costEntryMode === 'manual') return phase
-      const weight = Math.max(0, phase.unitCount || 0) / totalUnits
-      return {
-        ...phase,
-        hardCostBudget: (forSaleTotalHardBudget || 0) * weight,
-        softCostBudget: (forSaleTotalSoftBudget || 0) * weight,
-      }
-    })
-  }, [forSalePhases, forSaleTotalHardBudget, forSaleTotalSoftBudget])
 
   const handleSaveDealVersion = async () => {
     if (!isDealUnderwriting || !dealIdForUnderwriting) return
@@ -1568,7 +1540,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       if (!forSalePhases.length) {
         errors.push('Add at least one phase in For-Sale Phased (LOC) mode.')
       }
-      effectiveForSalePhases.forEach((phase) => {
+      forSalePhases.forEach((phase) => {
         const rowErrors = forSalePhaseRowErrors[phase.id] || []
         rowErrors.forEach((msg: string) => errors.push(`${phase.name || 'Phase'}: ${msg}`))
       })
@@ -1630,7 +1602,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
 
     setValidationErrors([])
 
-    const fundingBase = contractValue || 0
+    const fundingBase = effectiveContractValue || 0
 
     // Build milestones with derived incremental percent and amounts
     const sortedMilestones = [...paymentMilestones].sort(
@@ -1660,9 +1632,11 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
       projectionMonths,
       startDate: new Date(startDate),
       totalProjectSquareFootage: totalProjectSquareFootage > 0 ? totalProjectSquareFootage : undefined,
-      underwritingEstimatedConstructionCost: isDealUnderwriting && underwritingEstimatedConstructionCost > 0
-        ? underwritingEstimatedConstructionCost
-        : undefined,
+      underwritingEstimatedConstructionCost: isForSaleLocMode
+        ? (forSaleTotalHardBudget + forSaleTotalSoftBudget) || undefined
+        : isDealUnderwriting && underwritingEstimatedConstructionCost > 0
+          ? underwritingEstimatedConstructionCost
+          : undefined,
       rentalUnits: proFormaMode === 'rental-hold' ? rentalUnits : [],
       includeRentalIncome: proFormaMode === 'rental-hold' ? includeRentalIncome : false,
       operatingExpenses,
@@ -1676,7 +1650,8 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         ? new Date(constructionCompletionDate)
         : undefined,
       useDevelopmentProforma: useDevelopmentProforma || undefined,
-      landCost: useDevelopmentProforma ? landCost : undefined,
+      landCost: useDevelopmentProforma || isForSaleLocMode ? landCost : undefined,
+      siteWorkCost: useDevelopmentProforma || isForSaleLocMode ? siteWorkCost : undefined,
       softCostPercent: useDevelopmentProforma ? softCostPercent : undefined,
       contingencyPercent: useDevelopmentProforma ? contingencyPercent : undefined,
       constructionMonths: useDevelopmentProforma && constructionMonthsInput > 0 ? constructionMonthsInput : undefined,
@@ -1712,7 +1687,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
             bondRatePercent: forSaleBondFinancingEnabled ? forSaleBondRatePercent : undefined,
             bondCapacity: forSaleBondFinancingEnabled ? forSaleBondCapacity : undefined,
             salesAllocationBuckets: forSaleSalesBuckets,
-            phases: effectiveForSalePhases,
+            phases: forSalePhases,
           }
         : undefined,
     }
@@ -2356,14 +2331,38 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                           <FieldHelperSlot />
                         </FormField>
                         <FormField width="growMedium">
+                          <Label className={WORKSHEET_LABEL}>Land ($)</Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            type="text"
+                            inputMode="decimal"
+                            value={formatCommaNumber(landCost)}
+                            onChange={(e) => setLandCost(parseCommaNumber(e.target.value))}
+                          />
+                          <FieldHelperSlot>Split across phases with Land % (0 = all in phase 1).</FieldHelperSlot>
+                        </FormField>
+                        <FormField width="growMedium">
+                          <Label className={WORKSHEET_LABEL}>Site work ($)</Label>
+                          <Input
+                            className={DENSE_INPUT}
+                            type="text"
+                            inputMode="decimal"
+                            value={formatCommaNumber(siteWorkCost)}
+                            onChange={(e) => setSiteWorkCost(parseCommaNumber(e.target.value))}
+                          />
+                          <FieldHelperSlot>Split with Site % (0 = all in phase 1).</FieldHelperSlot>
+                        </FormField>
+                      </FormRow>
+                      <FormRow>
+                        <FormField width="growMedium">
                           <Label className={WORKSHEET_LABEL}>Hard budget ($)</Label>
                           <Input className={DENSE_INPUT} type="text" inputMode="decimal" value={formatCommaNumber(forSaleTotalHardBudget)} onChange={(e) => setForSaleTotalHardBudget(parseCommaNumber(e.target.value))} />
-                          <FieldHelperSlot>Optional total. Auto-allocates to phases in Cost mode = Auto.</FieldHelperSlot>
+                          <FieldHelperSlot>Vertical construction; split by phase unit count.</FieldHelperSlot>
                         </FormField>
                         <FormField width="growMedium">
                           <Label className={WORKSHEET_LABEL}>Soft budget ($)</Label>
                           <Input className={DENSE_INPUT} type="text" inputMode="decimal" value={formatCommaNumber(forSaleTotalSoftBudget)} onChange={(e) => setForSaleTotalSoftBudget(parseCommaNumber(e.target.value))} />
-                          <FieldHelperSlot>Optional total. Auto-allocates to phases in Cost mode = Auto.</FieldHelperSlot>
+                          <FieldHelperSlot>Added to hard for total construction in this mode.</FieldHelperSlot>
                         </FormField>
                       </FormRow>
                       <div className="rounded border border-slate-200 bg-slate-50/70 px-2 py-1.5">
@@ -2474,29 +2473,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                           <FieldHelperSlot />
                         </FormField>
                       </FormRow>
-                      <FormRow className="items-center justify-between">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8 text-[13px]"
-                          onClick={() =>
-                            setForSalePhases((prev) => {
-                              const totalUnits = Math.max(1, prev.reduce((sum, p) => sum + (p.unitCount || 0), 0))
-                              return prev.map((phase) => {
-                                if (phase.costEntryMode === 'manual') return phase
-                                const weight = Math.max(0, phase.unitCount || 0) / totalUnits
-                                return {
-                                  ...phase,
-                                  hardCostBudget: (forSaleTotalHardBudget || 0) * weight,
-                                  softCostBudget: (forSaleTotalSoftBudget || 0) * weight,
-                                }
-                              })
-                            })
-                          }
-                        >
-                          Recalculate auto costs
-                        </Button>
+                      <FormRow className="items-center justify-end">
                         <Button
                           type="button"
                           variant="outline"
@@ -2513,10 +2490,9 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                                 presaleStartMonthOffset: 2,
                                 closeStartMonthOffset: 8,
                                 presaleTriggerPercent: 50,
-                                avgSalePrice: forSaleAverageSalePrice,
-                                hardCostBudget: undefined,
-                                softCostBudget: undefined,
-                                costEntryMode: 'auto',
+                                infrastructureAllocationPercent: undefined,
+                                landAllocationPercent: 0,
+                                siteWorkAllocationPercent: 0,
                               },
                             ])
                           }
@@ -2529,13 +2505,16 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     <div className="border-t border-slate-200 bg-slate-50/50 px-3 py-2.5 md:px-3">
                       <div className="mb-2">
                         <h4 className="text-sm font-semibold leading-tight text-slate-900">Phase modeling</h4>
-                        <p className="text-[13px] leading-snug text-slate-500">Per-phase timing, budgets, and sale price overrides.</p>
+                        <p className="text-[13px] leading-snug text-slate-500">
+                          Per-phase timing. Construction splits by units from hard + soft budgets above; land/site/infra
+                          use optional % (0 = auto: land & site on phase 1; infra front-loaded then by units).
+                        </p>
                       </div>
                       <div className="space-y-1 overflow-x-auto">
                       {forSalePhases.map((phase) => (
                         <div
                           key={phase.id}
-                          className="grid min-w-[1080px] grid-cols-[minmax(112px,148px)_54px_96px_78px_78px_60px_60px_100px_100px_124px_90px_40px] items-stretch gap-x-1.5 gap-y-0 rounded border border-slate-200 bg-white p-1.5"
+                          className="grid min-w-[900px] grid-cols-[minmax(112px,148px)_54px_96px_78px_78px_60px_52px_52px_52px_40px] items-stretch gap-x-1.5 gap-y-0 rounded border border-slate-200 bg-white p-1.5"
                         >
                           <div className={PHASE_CELL}>
                             <Label className={PHASE_LABEL}>Phase</Label>
@@ -2572,37 +2551,45 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                             <Input className={DENSE_INPUT} type="number" step="0.1" value={phase.infrastructureAllocationPercent ?? ''} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, infrastructureAllocationPercent: e.target.value === '' ? undefined : (parseFloat(e.target.value) || 0) } : p))} placeholder="auto" />
                           </div>
                           <div className={PHASE_CELL}>
-                            <Label className={PHASE_LABEL}>Hard cost</Label>
-                            <Input className={cn(DENSE_INPUT, phase.costEntryMode !== 'manual' && 'bg-slate-50 text-slate-600')} type="text" inputMode="decimal" value={formatCommaNumber((phase.costEntryMode === 'manual' ? phase.hardCostBudget : effectiveForSalePhases.find((p) => p.id === phase.id)?.hardCostBudget) ?? 0)} readOnly={phase.costEntryMode !== 'manual'} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, hardCostBudget: e.target.value === '' ? undefined : parseCommaNumber(e.target.value) } : p))} placeholder={phase.costEntryMode !== 'manual' ? 'auto-calculated' : '0'} title={phase.costEntryMode !== 'manual' ? 'Auto-calculated from total hard budget and phase unit share. Switch Cost mode to Manual to edit.' : undefined} />
-                          </div>
-                          <div className={PHASE_CELL}>
-                            <Label className={PHASE_LABEL}>Soft cost</Label>
-                            <Input className={cn(DENSE_INPUT, phase.costEntryMode !== 'manual' && 'bg-slate-50 text-slate-600')} type="text" inputMode="decimal" value={formatCommaNumber((phase.costEntryMode === 'manual' ? phase.softCostBudget : effectiveForSalePhases.find((p) => p.id === phase.id)?.softCostBudget) ?? 0)} readOnly={phase.costEntryMode !== 'manual'} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, softCostBudget: e.target.value === '' ? undefined : parseCommaNumber(e.target.value) } : p))} placeholder={phase.costEntryMode !== 'manual' ? 'auto-calculated' : '0'} title={phase.costEntryMode !== 'manual' ? 'Auto-calculated from total soft budget and phase unit share. Switch Cost mode to Manual to edit.' : undefined} />
-                          </div>
-                          <div className={PHASE_CELL}>
-                            <Label className={PHASE_LABEL} title="Average sale $/unit">
-                              Avg sale $/unit
-                            </Label>
-                            <Input className={DENSE_INPUT} type="text" inputMode="decimal" value={formatCommaNumber(phase.avgSalePrice || 0)} onChange={(e) => setForSalePhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, avgSalePrice: parseCommaNumber(e.target.value) || 0 } : p))} placeholder="250,000" />
-                          </div>
-                          <div className={PHASE_CELL}>
-                            <Label className={PHASE_LABEL}>Cost mode</Label>
-                            <Select
-                              value={phase.costEntryMode || 'auto'}
-                              onValueChange={(v) =>
+                            <Label className={PHASE_LABEL}>Land %</Label>
+                            <Input
+                              className={DENSE_INPUT}
+                              type="number"
+                              step="0.1"
+                              value={phase.landAllocationPercent ?? ''}
+                              onChange={(e) =>
                                 setForSalePhases((prev) =>
-                                  prev.map((p) => (p.id === phase.id ? { ...p, costEntryMode: v as 'auto' | 'manual' } : p)),
+                                  prev.map((p) =>
+                                    p.id === phase.id
+                                      ? { ...p, landAllocationPercent: e.target.value === '' ? undefined : parseFloat(e.target.value) || 0 }
+                                      : p,
+                                  ),
                                 )
                               }
-                            >
-                              <SelectTrigger className={DENSE_INPUT}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="auto">Auto</SelectItem>
-                                <SelectItem value="manual">Manual</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className={PHASE_CELL}>
+                            <Label className={PHASE_LABEL}>Site %</Label>
+                            <Input
+                              className={DENSE_INPUT}
+                              type="number"
+                              step="0.1"
+                              value={phase.siteWorkAllocationPercent ?? ''}
+                              onChange={(e) =>
+                                setForSalePhases((prev) =>
+                                  prev.map((p) =>
+                                    p.id === phase.id
+                                      ? {
+                                          ...p,
+                                          siteWorkAllocationPercent: e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
+                                        }
+                                      : p,
+                                  ),
+                                )
+                              }
+                              placeholder="0"
+                            />
                           </div>
                           <div className={PHASE_CELL}>
                             <Button type="button" size="sm" variant="ghost" className="h-8 w-8 shrink-0 p-0 self-center" onClick={() => setForSalePhases((prev) => prev.filter((p) => p.id !== phase.id))}>
@@ -3789,10 +3776,8 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     <div className="rounded-md border border-slate-200 bg-white p-2.5 text-xs text-slate-700">
                       {(() => {
                         const totalPhaseUnits = forSalePhases.reduce((sum, p) => sum + (p.unitCount || 0), 0)
-                        const totalHardSoft = effectiveForSalePhases.reduce(
-                          (sum, p) => sum + (p.hardCostBudget || 0) + (p.softCostBudget || 0),
-                          0,
-                        )
+                        const totalConstructionBudget =
+                          (forSaleTotalHardBudget || 0) + (forSaleTotalSoftBudget || 0)
                         const infraAllocPct = forSalePhases.reduce(
                           (sum, p) => sum + (p.infrastructureAllocationPercent || 0),
                           0,
@@ -3811,8 +3796,8 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                                 <p className="font-semibold text-slate-900">{totalPhaseUnits.toLocaleString()}</p>
                               </div>
                               <div>
-                                <span className="text-slate-500">Hard + soft</span>
-                                <p className="font-semibold text-slate-900">{formatCurrency(totalHardSoft)}</p>
+                                <span className="text-slate-500">Construction (H+S)</span>
+                                <p className="font-semibold text-slate-900">{formatCurrency(totalConstructionBudget)}</p>
                               </div>
                               <div>
                                 <span className="text-slate-500">Infra alloc.</span>
@@ -3845,13 +3830,12 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                             )}
                             {(forSaleTotalHardBudget > 0 || forSaleTotalSoftBudget > 0) && (
                               <p className="text-slate-600">
-                                Auto-cost basis: Hard {formatCurrency(forSaleTotalHardBudget)} + Soft{' '}
-                                {formatCurrency(forSaleTotalSoftBudget)} by phase unit share.
+                                Construction basis: hard {formatCurrency(forSaleTotalHardBudget)} + soft{' '}
+                                {formatCurrency(forSaleTotalSoftBudget)}, allocated by phase units.
                               </p>
                             )}
-                            <p className="text-slate-600">
-                              Avg sale $/unit overrides drive for-sale revenue and contract value in this mode.
-                            </p>
+                            <p className="text-slate-600">Land and site work use phase Land % / Site % (or default to phase 1).</p>
+                            <p className="text-slate-600">Avg sale price / unit drives revenue and contract value.</p>
                             <p className="text-slate-600">
                               Presale/closing start = phase-relative month (1 = first month of that phase).
                             </p>

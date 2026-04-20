@@ -17,7 +17,9 @@ import {
   DebtService,
   SourcesAndUses,
   ConstructionDrawRow,
+  ForSalePhaseInput,
 } from '@/types/proforma'
+import { computePhaseAllocationShares } from '@/lib/forSalePhaseAllocation'
 
 /**
  * Calculate monthly cash flow projection for a construction project
@@ -35,10 +37,7 @@ export function calculateProForma(
   if (totalEstimatedCost === 0 && trades.length === 0 && (input as any).underwritingEstimatedConstructionCost > 0) {
     totalEstimatedCost = (input as any).underwritingEstimatedConstructionCost
   }
-  const projectedProfit = input.contractValue - totalEstimatedCost
-  const projectedMargin = input.contractValue > 0 
-    ? (projectedProfit / input.contractValue) * 100 
-    : 0
+  let profitCostBasis = totalEstimatedCost
 
   // Calculate cost breakdown percentages
   const laborTotal = trades.reduce((sum, t) => sum + (t.laborCost || 0), 0)
@@ -68,6 +67,7 @@ export function calculateProForma(
   let sourcesAndUses: SourcesAndUses | undefined
   let constructionDrawSchedule: ConstructionDrawRow[] | undefined
   let totalInterestDuringConstruction = 0
+  let monthlyHardCostBasis = totalEstimatedCost
 
   if (input.useDevelopmentProforma) {
     const landCost = input.landCost ?? 0
@@ -113,6 +113,7 @@ export function calculateProForma(
       contingency = constructionCost * (contingencyPercent / 100)
       totalDevelopmentCost = landCost + constructionCost + softCost + contingency
     }
+    monthlyHardCostBasis = constructionCost
 
     const loanToCost = input.loanToCostPercent ?? 0
     const loanAmount = totalDevelopmentCost * (loanToCost / 100)
@@ -122,6 +123,7 @@ export function calculateProForma(
       uses: { landCost, constructionCost, softCost, contingency, totalDevelopmentCost },
       sources: { loanAmount, equityRequired },
     }
+    profitCostBasis = totalDevelopmentCost
 
     const start = new Date(input.startDate)
     start.setDate(1)
@@ -150,11 +152,16 @@ export function calculateProForma(
     }
   }
 
+  const projectedProfit = input.contractValue - profitCostBasis
+  const projectedMargin = input.contractValue > 0
+    ? (projectedProfit / input.contractValue) * 100
+    : 0
+
   // Generate monthly cash flows
   const monthlyCashFlows = generateMonthlyCashFlows(
     input,
     trades,
-    totalEstimatedCost,
+    monthlyHardCostBasis,
     costBreakdown,
     sourcesAndUses,
     constructionDrawSchedule
@@ -358,8 +365,9 @@ export function calculateProForma(
           const lpPrefAccrued = lpCapitalStart * (lpPreferredReturnPercent / 100)
           const prefDue = lpPrefBalance + lpPrefAccrued
 
-          const lpPrefPaid = Math.min(yearCF, prefDue)
-          const remainingAfterPref = Math.max(0, yearCF - lpPrefPaid)
+          const distributableCF = Math.max(0, yearCF)
+          const lpPrefPaid = Math.min(distributableCF, prefDue)
+          const remainingAfterPref = distributableCF - lpPrefPaid
           lpPrefBalance = prefDue - lpPrefPaid
 
           const lpCapitalReturned = Math.min(remainingAfterPref, lpCapital)
@@ -548,13 +556,162 @@ export function calculateProForma(
   return result
 }
 
+function getMonthsPerPrefPeriodForEngine(
+  freq: ProFormaInput['preferredReturnPaidFrequency'] | undefined,
+): number {
+  switch (freq) {
+    case 'quarterly':
+      return 3
+    case 'semi-annual':
+      return 6
+    case 'annual':
+      return 12
+    case 'monthly':
+    default:
+      return 1
+  }
+}
+
+/** Matches Deal Workspace preferred return cadence (stub on final month). */
+function preferredReturnCashForMonth(
+  monthIndexZeroBased: number,
+  input: ProFormaInput,
+  totalMonths: number,
+): number {
+  const equity = Math.max(
+    0,
+    Number(input.investorEquity || input.forSalePhasedLoc?.incentiveEquitySource || 0),
+  )
+  const rate = Math.max(0, Number(input.preferredReturnRateAnnual || 0))
+  if (equity <= 0 || rate <= 0) return 0
+  const freq = (input.preferredReturnPaidFrequency ||
+    'monthly') as ProFormaInput['preferredReturnPaidFrequency']
+  const monthsPerPrefPeriod = Math.max(1, getMonthsPerPrefPeriodForEngine(freq))
+  const prefPerMonth = (equity * (rate / 100)) / 12
+  const monthNumber = monthIndexZeroBased + 1
+  if (monthNumber > totalMonths) return 0
+  if (monthNumber % monthsPerPrefPeriod === 0) {
+    return prefPerMonth * monthsPerPrefPeriod
+  }
+  if (monthNumber === totalMonths) {
+    const monthsIntoCurrentPeriod = ((monthNumber - 1) % monthsPerPrefPeriod) + 1
+    return prefPerMonth * monthsIntoCurrentPeriod
+  }
+  return 0
+}
+
+/** Annual % on revolving LOC: custom stack `loc-limit` row wins, else debtService (matches Deal Workspace). */
+function effectiveLocAnnualPercentForEngine(input: ProFormaInput): number {
+  const rows =
+    ((input as any)?.customStacks?.debtLocRows as Array<{ applyTo?: string; interestRate?: number }>) || []
+  const locRow = rows.find((r) => r.applyTo === 'loc-limit')
+  const fromStack = locRow != null ? Number(locRow.interestRate) : NaN
+  if (Number.isFinite(fromStack) && fromStack >= 0) return fromStack
+  return Number(input.debtService?.interestRate || 0)
+}
+
+/** Incentive stack row shape (DealWorkspace customStacks); kept loose for backward compatibility. */
+type CustomIncentiveRow = {
+  applyTo?: string
+  timingMode?: string
+  phaseNames?: string
+  amount?: number
+}
+
+/**
+ * TIF marked "by phase" is modeled as reimbursement cash during those phases' construction months,
+ * not as an immediate reduction to net infrastructure draws. `deferrable` is capped by requested TIF.
+ */
+function getForSaleDeferredTifFromIncentives(
+  input: ProFormaInput,
+  phases: ForSalePhaseInput[],
+  infrastructureReductionRequested: number,
+): {
+  deferrable: number
+  matchedPhaseIndices: Set<number>
+  /** Equal $ among matched phases (DealWorkspace phase table w/ by-phase incentives); else unit-weighted. */
+  splitDeferralBy: 'equal' | 'unit'
+} {
+  const rowsAll = (((input as any).customStacks?.incentiveRows || []) as CustomIncentiveRow[]).filter(
+    (r) =>
+      (r.applyTo || '') === 'infrastructure-reduction' &&
+      (r.timingMode || '') === 'by-phase' &&
+      String(r.phaseNames || '').trim(),
+  )
+  const tokenSet = new Set<string>()
+  for (const r of rowsAll) {
+    for (const part of String(r.phaseNames || '').split(',')) {
+      const t = part.trim().toLowerCase()
+      if (t) tokenSet.add(t)
+    }
+  }
+  const matchedPhaseIndices = new Set<number>()
+  if (tokenSet.size > 0) {
+    phases.forEach((p, idx) => {
+      const key = String(p.name || '').trim().toLowerCase()
+      if (key && tokenSet.has(key)) matchedPhaseIndices.add(idx)
+    })
+  }
+  const requestedTif = Math.max(0, infrastructureReductionRequested)
+  let deferrable = 0
+  let splitDeferralBy: 'equal' | 'unit' = 'unit'
+
+  // Phase Pro Forma parity:
+  // - If by-phase infra rows exist, reimburse the full configured TIF in cash.
+  // - Matched phase names => equal split across matched phases; unmatched => unit-weighted fallback.
+  if (rowsAll.length > 0 && requestedTif > 0) {
+    deferrable = requestedTif
+    splitDeferralBy = matchedPhaseIndices.size > 0 ? 'equal' : 'unit'
+  }
+
+  // No by-phase stack rows: still reimburse full configured TIF as phase-timed revenue.
+  if (rowsAll.length === 0 && requestedTif > 0 && phases.length > 0) {
+    deferrable = requestedTif
+    splitDeferralBy = 'unit'
+  }
+
+  return { deferrable, matchedPhaseIndices, splitDeferralBy }
+}
+
+/** Reimburse deferred TIF as a lump sum at each phase start month. */
+function computeTifReimbursementForMonth(
+  i: number,
+  phases: ForSalePhaseInput[],
+  phaseUnlockMonth: number[],
+  deferrable: number,
+  matchedPhaseIndices: Set<number>,
+  splitDeferralBy: 'equal' | 'unit',
+): number {
+  if (deferrable <= 0 || !phases.length) return 0
+  const indices =
+    matchedPhaseIndices.size > 0 ? [...matchedPhaseIndices] : phases.map((_, idx) => idx)
+  if (!indices.length) return 0
+  const unitWeightSum =
+    indices.reduce((s, pIdx) => s + Math.max(0, Number(phases[pIdx]?.unitCount || 0)), 0) || 1
+  let total = 0
+  for (const pIdx of indices) {
+    const phase = phases[pIdx]
+    if (!phase) continue
+    const unlock = phaseUnlockMonth[pIdx] ?? 0
+    if (unlock === Number.MAX_SAFE_INTEGER) continue
+    if (i === unlock) {
+      const perPhaseTotal =
+        splitDeferralBy === 'equal'
+          ? deferrable / indices.length
+          : deferrable * (Math.max(0, Number(phase.unitCount || 0)) / unitWeightSum)
+      total += perPhaseTotal
+    }
+  }
+  return total
+}
+
 function calculateForSalePhasedLocProForma(
   project: Project,
   input: ProFormaInput,
   costBreakdown: ProFormaProjection['costBreakdown'],
   tradeEstimatedCost: number,
 ): ProFormaProjection {
-  const engineVersion = 'for-sale-loc-v2.3-bond'
+  const engineVersion = 'for-sale-loc-v2.4-loc-interest'
   const debugEnabled = typeof globalThis !== 'undefined' && (globalThis as any).__HSH_DEBUG_FOR_SALE_LOC__ === true
   if (debugEnabled) {
     console.log('[FOR-SALE LOC] entering engine', {
@@ -568,45 +725,38 @@ function calculateForSalePhasedLocProForma(
   const phases = (config.phases || []).filter((p) => p.unitCount > 0 && p.buildMonths > 0)
   const fallbackUnits = Math.max(1, config.totalUnits || 1)
   const totalPhaseUnits = phases.reduce((sum, p) => sum + p.unitCount, 0) || fallbackUnits
-  const weightedAvgSale =
-    phases.reduce((sum, p) => sum + p.unitCount * (p.avgSalePrice || config.averageSalePrice || 0), 0) /
-    totalPhaseUnits
-  const contractValue = totalPhaseUnits * (weightedAvgSale || config.averageSalePrice || 0)
+  const salePricePerUnit = config.averageSalePrice || 0
+  const contractValue = totalPhaseUnits * salePricePerUnit
 
   const rawInfrastructureCost = Math.max(0, config.infrastructureCost || 0)
   const infrastructureReductionRequested = Math.max(0, config.tifInfrastructureReduction || 0)
-  const appliedInfrastructureReduction = Math.min(rawInfrastructureCost, infrastructureReductionRequested)
-  const infrastructureReductionOverflow = Math.max(0, infrastructureReductionRequested - appliedInfrastructureReduction)
+  const {
+    deferrable: deferredTifReimbursement,
+    matchedPhaseIndices: tifReimbursementPhaseIndices,
+    splitDeferralBy: tifReimbursementSplit,
+  } = getForSaleDeferredTifFromIncentives(input, phases, infrastructureReductionRequested)
+  // Phase Pro Forma parity: deferred TIF is modeled as reimbursement cash (revenue),
+  // and only non-deferred TIF applies as immediate infra/project cost reduction.
+  const nonDeferredTif = Math.max(0, infrastructureReductionRequested - deferredTifReimbursement)
+  const appliedInfrastructureReduction = Math.min(rawInfrastructureCost, nonDeferredTif)
+  const infrastructureReductionOverflow = Math.max(0, nonDeferredTif - rawInfrastructureCost)
   const netInfrastructureCost = Math.max(0, rawInfrastructureCost - appliedInfrastructureReduction)
-  const explicitPhaseCostTotal = phases.reduce(
-    (sum, p) => sum + Math.max(0, p.hardCostBudget || 0) + Math.max(0, p.softCostBudget || 0),
-    0,
-  )
+  const landCostTotal = Math.max(0, input.landCost || 0)
+  const siteCostTotal = Math.max(0, input.siteWorkCost || 0)
   const estimatedBuildCostBaseRaw =
-    explicitPhaseCostTotal > 0
-      ? explicitPhaseCostTotal
-      : (input.underwritingEstimatedConstructionCost || 0) > 0
-        ? (input.underwritingEstimatedConstructionCost as number)
-        : tradeEstimatedCost > 0
-          ? tradeEstimatedCost
-          : contractValue * 0.72
-  // For-sale LOC should follow underwriting/phase all-in basis first.
-  // Split infra out so it is modeled once (and can be reduced by infra incentives).
+    (input.underwritingEstimatedConstructionCost || 0) > 0
+      ? (input.underwritingEstimatedConstructionCost as number)
+      : tradeEstimatedCost > 0
+        ? tradeEstimatedCost
+        : contractValue * 0.72
+  // Vertical construction basis: underwriting / trades; strip infra if it was embedded in the input total.
   const estimatedBuildCostBase =
     rawInfrastructureCost > 0
       ? Math.max(0, estimatedBuildCostBaseRaw - rawInfrastructureCost)
       : estimatedBuildCostBaseRaw
   const incentiveCostReduction = Math.max(0, config.incentiveCostReduction || 0)
   const incentiveEquitySource = Math.max(0, config.incentiveEquitySource || 0)
-  // In underwriting/all-in input workflows, explicit phase budgets may also be entered as all-in.
-  // Prevent infra from being counted twice by normalizing explicit phase total to build-only.
-  const explicitPhaseBuildOnlyTotal =
-    rawInfrastructureCost > 0
-      ? Math.max(0, explicitPhaseCostTotal - rawInfrastructureCost)
-      : explicitPhaseCostTotal
-  const buildCostTarget = explicitPhaseCostTotal > 0
-    ? Math.max(estimatedBuildCostBase, explicitPhaseBuildOnlyTotal)
-    : estimatedBuildCostBase
+  const buildCostTarget = estimatedBuildCostBase
   // Apply all cost-reducing incentives before phase/monthly modeling:
   // 1) infra reductions reduce infra bucket first;
   // 2) overflow infra reduction + project cost reduction reduce build bucket.
@@ -614,61 +764,62 @@ function calculateForSalePhasedLocProForma(
   const effectiveBuildCostTarget = Math.max(0, buildCostTarget - effectiveProjectCostReduction)
   const buildReductionRatio =
     buildCostTarget > 0 ? Math.max(0, Math.min(1, effectiveBuildCostTarget / buildCostTarget)) : 1
-  const baseTotalCostBeforeIncentives = Math.max(0, buildCostTarget + rawInfrastructureCost)
-  const totalEstimatedCost = Math.max(0, effectiveBuildCostTarget + netInfrastructureCost)
+  const baseTotalCostBeforeIncentives = Math.max(
+    0,
+    buildCostTarget + rawInfrastructureCost + landCostTotal + siteCostTotal,
+  )
+  const totalEstimatedCost = Math.max(
+    0,
+    effectiveBuildCostTarget + netInfrastructureCost + landCostTotal + siteCostTotal,
+  )
 
   // Debt sizing uses gross cost before incentives; incentives affect net funding need, not lender LTC basis.
   const grossProjectCostForLtc = baseTotalCostBeforeIncentives
-  const ltcCap = grossProjectCostForLtc * ((config.ltcPercent || 0) / 100)
-  const fixedLimit = config.fixedLocLimit || 0
-  const locLimit = fixedLimit > 0 ? Math.max(0, Math.min(fixedLimit, ltcCap || 0)) : Math.max(0, ltcCap || 0)
-  const bondCapacity = config.bondFinancingEnabled ? Math.max(0, config.bondCapacity || 0) : 0
+  const ltcPercent = Math.max(0, Number(config.ltcPercent || 0))
+  const ltcCap = grossProjectCostForLtc * (ltcPercent / 100)
+  const fixedLimit = Math.max(0, Number(config.fixedLocLimit || 0))
+  // If a fixed LOC limit is provided, honor it directly.
+  // Only apply LTC sizing when no fixed limit is set.
+  const locLimit = fixedLimit > 0 ? fixedLimit : Math.max(0, ltcCap || 0)
+  const bondCapacityConfigured = Math.max(0, config.bondCapacity || 0)
+  const bondCapacity = config.bondFinancingEnabled === false ? 0 : bondCapacityConfigured
 
   const totalMonths = input.projectionMonths
+  const phaseTimingMode = config.phaseTimingMode || 'trigger-based'
+  const useFixedScheduleTiming = phaseTimingMode === 'fixed-schedule'
   const countPresalesTowardTrigger = config.triggerUsesPresales !== false
-  const phaseUnlockMonth: number[] = phases.map((_, idx) => (idx === 0 ? 0 : Number.MAX_SAFE_INTEGER))
+  const sequentialStarts: number[] = []
+  for (let idx = 0; idx < phases.length; idx++) {
+    if (idx === 0) {
+      sequentialStarts.push(0)
+      continue
+    }
+    const prior = phases[idx - 1]
+    sequentialStarts.push(sequentialStarts[idx - 1] + Math.max(0, Number(prior?.buildMonths || 0)))
+  }
+  const phaseUnlockMonth: number[] = phases.map((phase, idx) => {
+    if (!useFixedScheduleTiming) return idx === 0 ? 0 : Number.MAX_SAFE_INTEGER
+    const configuredStart = phase.startMonthOffset
+    if (configuredStart === undefined || configuredStart === null || Number.isNaN(Number(configuredStart))) {
+      return sequentialStarts[idx]
+    }
+    return Math.max(0, Math.floor(Number(configuredStart)))
+  })
   const phaseCumulativePresales = phases.map(() => 0)
   const phaseCumulativeClosings = phases.map(() => 0)
   const phaseCumulativeBuild = phases.map(() => 0)
-  const phasesWithNoExplicitCostUnits = phases
-    .filter((p) => (p.hardCostBudget || 0) + (p.softCostBudget || 0) <= 0)
-    .reduce((sum, p) => sum + p.unitCount, 0)
-  const remainingBuildCostForFallback = Math.max(0, buildCostTarget - explicitPhaseBuildOnlyTotal)
-  const infraShares: number[] = (() => {
-    if (!phases.length || netInfrastructureCost <= 0) return phases.map(() => 0)
-    const explicit = phases.map((p) => Math.max(0, (p.infrastructureAllocationPercent ?? 0) / 100))
-    const explicitSum = explicit.reduce((sum, s) => sum + s, 0)
-    if (explicitSum > 0) {
-      const normalizedExplicit = explicitSum > 1
-        ? explicit.map((s) => s / explicitSum)
-        : explicit
-      const used = normalizedExplicit.reduce((sum, s) => sum + s, 0)
-      const remaining = Math.max(0, 1 - used)
-      const unspecifiedIdx = normalizedExplicit.map((s, idx) => (s <= 0 ? idx : -1)).filter((idx) => idx >= 0)
-      if (!unspecifiedIdx.length || remaining <= 0) return normalizedExplicit
-      const unspecifiedUnits = unspecifiedIdx.reduce((sum, idx) => sum + phases[idx].unitCount, 0)
-      const shares = [...normalizedExplicit]
-      unspecifiedIdx.forEach((idx) => {
-        const unitWeight = unspecifiedUnits > 0 ? phases[idx].unitCount / unspecifiedUnits : 1 / unspecifiedIdx.length
-        shares[idx] = remaining * unitWeight
-      })
-      return shares
-    }
-
-    // Auto mode (no explicit infra %): front-load 50% to Phase 1, spread remainder by later-phase units.
-    const shares = phases.map(() => 0)
-    if (phases.length === 1) {
-      shares[0] = 1
-      return shares
-    }
-    shares[0] = 0.5
-    const remaining = 0.5
-    const laterUnits = phases.slice(1).reduce((sum, p) => sum + p.unitCount, 0)
-    for (let i = 1; i < phases.length; i++) {
-      shares[i] = laterUnits > 0 ? (remaining * phases[i].unitCount) / laterUnits : remaining / (phases.length - 1)
-    }
-    return shares
-  })()
+  const infraShares =
+    !phases.length || netInfrastructureCost <= 0
+      ? phases.map(() => 0)
+      : computePhaseAllocationShares(phases, (p) => p.infrastructureAllocationPercent ?? 0, 'infra')
+  const landShares =
+    !phases.length || landCostTotal <= 0
+      ? phases.map(() => 0)
+      : computePhaseAllocationShares(phases, (p) => p.landAllocationPercent ?? 0, 'landSite')
+  const siteShares =
+    !phases.length || siteCostTotal <= 0
+      ? phases.map(() => 0)
+      : computePhaseAllocationShares(phases, (p) => p.siteWorkAllocationPercent ?? 0, 'landSite')
 
   let locBalance = 0
   let bondBalance = 0
@@ -684,6 +835,7 @@ function calculateForSalePhasedLocProForma(
   let equityDeployedTotal = 0
   let peakLocBalance = 0
   let peakBondBalance = 0
+  let totalLocInterestAccrued = 0
   let totalRevenue = 0
   let cumulativeBalance = 0
   const phaseActivationLabels: Array<{ phaseName: string; activationMonth: string }> = []
@@ -743,15 +895,14 @@ function calculateForSalePhasedLocProForma(
       activePhaseName = phase.name
       activeUnits += Math.max(0, phase.unitCount - phaseCumulativeClosings[pIdx])
 
-      const explicitPhaseCost = Math.max(0, phase.hardCostBudget || 0) + Math.max(0, phase.softCostBudget || 0)
-      const fallbackShareDenominator = Math.max(1, phasesWithNoExplicitCostUnits)
-      const fallbackPhaseBuildCost =
-        explicitPhaseCost <= 0 ? remainingBuildCostForFallback * (phase.unitCount / fallbackShareDenominator) : 0
-      const rawBuildCostForPhase = explicitPhaseCost > 0 ? explicitPhaseCost : fallbackPhaseBuildCost
-      // Project-cost reductions must reduce true modeled phase/monthly funding need.
-      const buildCostForPhase = rawBuildCostForPhase * buildReductionRatio
+      const constructionForPhase =
+        buildCostTarget * (Math.max(0, phase.unitCount) / Math.max(1, totalPhaseUnits))
+      const landForPhase = landCostTotal * (landShares[pIdx] || 0)
+      const siteForPhase = siteCostTotal * (siteShares[pIdx] || 0)
       const infraCostForPhase = netInfrastructureCost * (infraShares[pIdx] || 0)
-      const phaseTotalCost = buildCostForPhase + infraCostForPhase
+      // Incentives / cost reductions apply to the vertical construction bucket only (same as legacy path).
+      const constructionAfterReduction = constructionForPhase * buildReductionRatio
+      const phaseTotalCost = constructionAfterReduction + landForPhase + siteForPhase + infraCostForPhase
       const n = Math.max(1, phase.buildMonths)
       const denom = spendCurve === 'linear' ? n : (n * (n + 1)) / 2
       const curveWeight =
@@ -813,25 +964,35 @@ function calculateForSalePhasedLocProForma(
       phaseCumulativePresales[pIdx] += cappedPresales
       phaseCumulativeClosings[pIdx] += cappedClosings
 
-      const phaseSalePrice = phase.avgSalePrice || config.averageSalePrice || 0
+      const phaseSalePrice = config.averageSalePrice || 0
       depositRevenue += cappedPresales * phaseSalePrice * depositPct
       closeRevenue += cappedClosings * phaseSalePrice * (1 - depositPct)
     }
 
-    for (let pIdx = 0; pIdx < phases.length - 1; pIdx++) {
-      if (phaseUnlockMonth[pIdx + 1] !== Number.MAX_SAFE_INTEGER) continue
-      const phase = phases[pIdx]
-      const triggerUnits = phase.unitCount * ((phase.presaleTriggerPercent || 0) / 100)
-      const demandUnits = countPresalesTowardTrigger
-        ? phaseCumulativePresales[pIdx]
-        : phaseCumulativeClosings[pIdx]
-      if (demandUnits >= triggerUnits) {
-        phaseUnlockMonth[pIdx + 1] = i + 1
+    if (!useFixedScheduleTiming) {
+      for (let pIdx = 0; pIdx < phases.length - 1; pIdx++) {
+        if (phaseUnlockMonth[pIdx + 1] !== Number.MAX_SAFE_INTEGER) continue
+        const phase = phases[pIdx]
+        const triggerUnits = phase.unitCount * ((phase.presaleTriggerPercent || 0) / 100)
+        const demandUnits = countPresalesTowardTrigger
+          ? phaseCumulativePresales[pIdx]
+          : phaseCumulativeClosings[pIdx]
+        if (demandUnits >= triggerUnits) {
+          phaseUnlockMonth[pIdx + 1] = i + 1
+        }
       }
     }
 
-    const salesRevenue = depositRevenue + closeRevenue
-    const usableSalesCash = closeRevenue + depositRevenue * depositUsableShare
+    const tifReimbursementThisMonth = computeTifReimbursementForMonth(
+      i,
+      phases,
+      phaseUnlockMonth,
+      deferredTifReimbursement,
+      tifReimbursementPhaseIndices,
+      tifReimbursementSplit,
+    )
+    const salesRevenue = depositRevenue + closeRevenue + tifReimbursementThisMonth
+    const usableSalesCash = closeRevenue + depositRevenue * depositUsableShare + tifReimbursementThisMonth
     totalRevenue += salesRevenue
 
     const reinvestUsed = Math.min(reinvestBalance, monthlyBuildCost)
@@ -852,10 +1013,26 @@ function calculateForSalePhasedLocProForma(
     bondBalance += bondDraw
     bondDrawnTotal += bondDraw
     const remainingCostAfterBond = Math.max(0, remainingCostAfterIncentiveEquity - bondDraw)
+
+    // Revolving LOC: accrue simple monthly interest on opening balance, capitalize into principal (capped at LOC limit).
+    const locOpeningForInterest = locBalance
+    const locAnnualPct = Math.max(0, effectiveLocAnnualPercentForEngine(input))
+    const locMonthlyRate = (locAnnualPct / 100) / 12
+    let locInterestAccrued = locOpeningForInterest * locMonthlyRate
+    if (locLimit > 0 && locOpeningForInterest + locInterestAccrued > locLimit + 1e-9) {
+      locInterestAccrued = Math.max(0, locLimit - locOpeningForInterest)
+    } else if (locLimit <= 0) {
+      locInterestAccrued = 0
+    }
+    locBalance = locOpeningForInterest + locInterestAccrued
+    totalLocInterestAccrued += locInterestAccrued
+
+    const preferredReturnCash = preferredReturnCashForMonth(i, input, totalMonths)
+    const fundingNeedBeforeLoc = remainingCostAfterBond + preferredReturnCash
     const availableLocCapacity = Math.max(0, locLimit - locBalance)
-    const locDraw = Math.min(remainingCostAfterBond, availableLocCapacity)
+    const locDraw = Math.min(fundingNeedBeforeLoc, availableLocCapacity)
     locDrawnTotal += locDraw
-    const equityNeeded = Math.max(0, remainingCostAfterBond - locDraw)
+    const equityNeeded = Math.max(0, fundingNeedBeforeLoc - locDraw)
     equityDeployedTotal += equityNeeded
     locBalance += locDraw
 
@@ -971,7 +1148,7 @@ function calculateForSalePhasedLocProForma(
     peakLocBalance = Math.max(peakLocBalance, locBalance)
     peakBondBalance = Math.max(peakBondBalance, bondBalance)
     const totalInflow = salesRevenue
-    const totalOutflow = monthlyBuildCost
+    const totalOutflow = monthlyBuildCost + preferredReturnCash
     const netCashFlow = totalInflow - totalOutflow
     cumulativeBalance += netCashFlow
 
@@ -988,7 +1165,9 @@ function calculateForSalePhasedLocProForma(
       overheadAllocation: 0,
       operatingExpenses: 0,
       debtService: 0,
+      interestDuringConstruction: locInterestAccrued,
       totalOutflow,
+      preferredReturnPaid: preferredReturnCash,
       netCashFlow,
       cumulativeBalance,
     })
@@ -1001,6 +1180,9 @@ function calculateForSalePhasedLocProForma(
       presalesThisMonth,
       closingsThisMonth,
       salesRevenue,
+      tifReimbursement: tifReimbursementThisMonth,
+      preferredReturnPaid: preferredReturnCash,
+      locInterestAccrued,
       bondDraw,
       bondPaydown,
       bondBalance,
@@ -1028,7 +1210,11 @@ function calculateForSalePhasedLocProForma(
   // For a more precise IRR, track per-month equity deployment in the timeline.
   const projectCashFlows = [-equityDeployedTotal, ...monthlyCashFlows.map((m) => m.netCashFlow)]
   const forSaleProjectIrr = calculateIRR(projectCashFlows)
-  const forSaleEquityMultiple = equityDeployedTotal > 0 ? Math.max(0, totalRevenue) / equityDeployedTotal : undefined
+  const totalPositiveDistributions = projectCashFlows
+    .slice(1)
+    .reduce((sum, cf) => sum + Math.max(0, cf), 0)
+  const forSaleEquityMultiple =
+    equityDeployedTotal > 0 ? totalPositiveDistributions / equityDeployedTotal : undefined
 
   const result: ProFormaProjection = {
     projectId: project.id,
@@ -1090,6 +1276,7 @@ function calculateForSalePhasedLocProForma(
       forSaleTotalUnits: totalPhaseUnits,
       forSaleEngineVersion: engineVersion,
       forSaleDebtRepaymentWarning: debtRepaymentWarning,
+      totalInterestDuringConstruction: totalLocInterestAccrued,
     },
     costBreakdown,
     rentalSummary: {
@@ -1326,6 +1513,9 @@ function generateMonthlyCashFlows(
     constructionMonths,
     costBreakdown
   )
+  const developmentUses = sourcesAndUses?.uses
+  const monthlySoftCost = constructionMonths > 0 ? (developmentUses?.softCost || 0) / constructionMonths : 0
+  const monthlyContingency = constructionMonths > 0 ? (developmentUses?.contingency || 0) / constructionMonths : 0
 
   // Build lookup: monthKey -> draw row (for full development proforma)
   const drawByMonth = new Map<string, ConstructionDrawRow>()
@@ -1335,6 +1525,13 @@ function generateMonthlyCashFlows(
 
   // Calculate debt service payment
   const monthlyDebtPayment = calculateDebtService(input.debtService, input.includeDebtService)
+  const debtStart = input.debtService?.startDate ? new Date(input.debtService.startDate) : null
+  if (debtStart) debtStart.setDate(1)
+  const debtStartMonthIndex =
+    debtStart != null
+      ? (debtStart.getFullYear() - startDate.getFullYear()) * 12 + (debtStart.getMonth() - startDate.getMonth())
+      : 0
+  const debtTermMonths = Math.max(0, input.debtService?.loanTermMonths || 0)
 
   let cumulativeBalance = 0
 
@@ -1349,7 +1546,7 @@ function generateMonthlyCashFlows(
     const monthLabel = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
     // Determine if we're in construction or post-construction phase
-    const isConstructionPhase = currentDate < actualConstructionEndDate
+    const isConstructionPhase = i < constructionMonths
     const phase = isConstructionPhase ? 'construction' : 'post-construction'
 
     const drawRow = drawByMonth.get(monthKey)
@@ -1403,18 +1600,37 @@ function generateMonthlyCashFlows(
       ? calculateMonthlyOperatingExpenses(input.operatingExpenses, rentalIncome)
       : 0
 
-    const debtService = input.includeDebtService &&
+    const debtMonthIndex = i - debtStartMonthIndex
+    const debtIsWithinTerm = debtMonthIndex >= 0 && debtMonthIndex < debtTermMonths
+    let debtService = 0
+    if (
+      input.includeDebtService &&
+      debtIsWithinTerm &&
       (!isConstructionPhase || input.debtService.paymentType === 'interest-only')
-      ? monthlyDebtPayment
-      : 0
+    ) {
+      if (isConstructionPhase && input.debtService.paymentType === 'interest-only') {
+        const monthlyRate = (Math.max(0, input.debtService.interestRate || 0) / 100) / 12
+        const drawnBalance = drawRow?.loanBalance ?? 0
+        debtService = drawnBalance * monthlyRate
+      } else {
+        debtService = monthlyDebtPayment
+      }
+    }
 
     // Development-stage cash (construction phase): milestone inflows vs project costs + construction interest
     const developmentInflow = milestonePayments
+    const landCostOutflow = isConstructionPhase && i === 0 ? (developmentUses?.landCost || 0) : 0
+    const softCostOutflow = isConstructionPhase ? monthlySoftCost : 0
+    const contingencyOutflow = isConstructionPhase ? monthlyContingency : 0
+
     const developmentOutflow =
       laborCost +
       materialCost +
       subcontractorCost +
       overheadAllocation +
+      landCostOutflow +
+      softCostOutflow +
+      contingencyOutflow +
       interestDuringConstruction
     const developmentCashFlow = developmentInflow - developmentOutflow
 
@@ -1575,26 +1791,29 @@ function calculateMonthlyOperatingExpenses(expenses: OperatingExpenses, rentalIn
  * Calculate monthly debt service payment
  */
 function calculateDebtService(debt: DebtService, include: boolean): number {
-  if (!include || debt.loanAmount === 0) {
+  const loanAmount = Math.max(0, debt.loanAmount || 0)
+  const loanTermMonths = Math.max(0, debt.loanTermMonths || 0)
+  const annualRate = Math.max(0, debt.interestRate || 0)
+  if (!include || loanAmount === 0 || loanTermMonths <= 0) {
     return 0
   }
 
   if (debt.paymentType === 'interest-only') {
     // Interest-only payment
-    const monthlyRate = debt.interestRate / 100 / 12
-    return debt.loanAmount * monthlyRate
+    const monthlyRate = annualRate / 100 / 12
+    return loanAmount * monthlyRate
   } else {
     // Principal + Interest (amortizing loan)
-    const monthlyRate = debt.interestRate / 100 / 12
-    const numberOfPayments = debt.loanTermMonths
+    const monthlyRate = annualRate / 100 / 12
+    const numberOfPayments = loanTermMonths
     
     if (monthlyRate === 0) {
       // No interest, just principal
-      return debt.loanAmount / numberOfPayments
+      return loanAmount / numberOfPayments
     }
 
     // Standard amortization formula
-    const payment = debt.loanAmount * 
+    const payment = loanAmount *
       (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
       (Math.pow(1 + monthlyRate, numberOfPayments) - 1)
     

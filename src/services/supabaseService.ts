@@ -3754,6 +3754,89 @@ export async function logDealActivityEvent(
   }
 }
 
+export async function clearDealActivityEvents(dealId: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data: dealData, error: dealError } = await supabase
+      .from('deals')
+      .select('id, organization_id')
+      .eq('id', dealId)
+      .single()
+
+    if (dealError) {
+      console.error('Error loading deal for activity clear:', dealError)
+      return false
+    }
+
+    const orgId = dealData?.organization_id as string | undefined
+    if (!orgId) return false
+
+    const { error } = await supabase
+      .from('deal_activity_events')
+      .delete()
+      .eq('deal_id', dealId)
+      .eq('organization_id', orgId)
+
+    if (error) {
+      console.error('Error clearing deal activity events:', error)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in clearDealActivityEvents:', error)
+    return false
+  }
+}
+
+export async function clearDealActivityEventsByTypes(
+  dealId: string,
+  eventTypes: string[],
+): Promise<boolean> {
+  if (!isOnlineMode()) return false
+  if (!Array.isArray(eventTypes) || eventTypes.length === 0) return true
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data: dealData, error: dealError } = await supabase
+      .from('deals')
+      .select('id, organization_id')
+      .eq('id', dealId)
+      .single()
+
+    if (dealError) {
+      console.error('Error loading deal for typed activity clear:', dealError)
+      return false
+    }
+
+    const orgId = dealData?.organization_id as string | undefined
+    if (!orgId) return false
+
+    const { error } = await supabase
+      .from('deal_activity_events')
+      .delete()
+      .eq('deal_id', dealId)
+      .eq('organization_id', orgId)
+      .in('event_type', eventTypes)
+
+    if (error) {
+      console.error('Error clearing typed deal activity events:', error)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error in clearDealActivityEventsByTypes:', error)
+    return false
+  }
+}
+
 export async function listProjectProFormaVersions(projectId: string): Promise<ProjectProFormaVersionMeta[]> {
   if (!isOnlineMode()) return []
 

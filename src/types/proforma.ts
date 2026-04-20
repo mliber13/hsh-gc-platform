@@ -154,7 +154,9 @@ export interface MonthlyCashFlow {
   debtService: number
   
   totalOutflow: number
-  
+  /** For-sale phased LOC: preferred return cash paid this month (included in totalOutflow when set). */
+  preferredReturnPaid?: number
+
   // Net
   netCashFlow: number
   cumulativeBalance: number
@@ -190,18 +192,25 @@ export type ProFormaMode = 'rental-hold' | 'general-development' | 'for-sale-pha
 export interface ForSalePhaseInput {
   id: string
   name: string
+  /** Used in fixed-schedule timing mode; month offset from project start (0-based). */
+  startMonthOffset?: number
   unitCount: number
   buildMonths: number
   presaleStartMonthOffset: number
   closeStartMonthOffset: number
   presaleTriggerPercent: number
   infrastructureAllocationPercent?: number
+  /** Optional share of project land cost (0–100). If all phases are 0, all land is modeled in phase 1. */
+  landAllocationPercent?: number
+  /** Optional share of project site work cost (0–100). If all phases are 0, all site work is modeled in phase 1. */
+  siteWorkAllocationPercent?: number
+  /** @deprecated Ignored by engine; use `forSalePhasedLoc.averageSalePrice`. Kept for older saved inputs. */
   avgSalePrice?: number
-  /** Optional total hard cost budget for this phase (used before proportional fallback) */
+  /** @deprecated Ignored; construction is split by unit count from underwriting construction cost. */
   hardCostBudget?: number
-  /** Optional total soft cost budget for this phase (used before proportional fallback) */
+  /** @deprecated Ignored; use project soft % on construction, not per-phase soft budgets. */
   softCostBudget?: number
-  /** Auto derives costs from total budgets unless set to manual */
+  /** @deprecated Ignored. */
   costEntryMode?: 'auto' | 'manual'
 }
 
@@ -241,6 +250,8 @@ export interface ForSalePhasedLocInput {
   ltcPercent: number
   /** If true (default), presales count toward phase trigger; if false, use executed closings only */
   triggerUsesPresales?: boolean
+  /** Controls how phases are activated in the monthly model. */
+  phaseTimingMode?: 'trigger-based' | 'fixed-schedule'
   salesAllocationBuckets: SalesAllocationBuckets
   phases: ForSalePhaseInput[]
 }
@@ -263,10 +274,18 @@ export interface ProFormaInput {
   // --- Full development proforma (Sources & Uses, Draw Schedule, IDC) ---
   useDevelopmentProforma?: boolean // When true, compute total dev cost, LTC, draw schedule, interest during construction
   landCost?: number
+  siteWorkCost?: number
   softCostPercent?: number // % of construction cost
   contingencyPercent?: number // % of construction cost
   constructionMonths?: number // Number of months to spread construction draws (default from dates)
   loanToCostPercent?: number // Loan-to-cost %; loan = totalDevCost * this / 100
+  investorEquity?: number
+  preferredReturnRateAnnual?: number
+  preferredReturnPaidFrequency?: 'monthly' | 'quarterly' | 'semi-annual' | 'annual'
+  investorProfitShareOnCompletion?: number
+  developerProfitShareOnCompletion?: number
+  monthlyCarryPerUnit?: number
+  avgConstructionPeriodMonths?: number
 
   // --- Capital structure & LP-GP waterfall (Phase 3) ---
   /** LP equity share as a percentage of total equity (e.g. 50 for 50/50 LP/GP) */
@@ -494,7 +513,13 @@ export interface ProFormaProjection {
     presalesThisMonth: number
     closingsThisMonth: number
     salesRevenue: number
-      bondDraw: number
+    /** TIF / infra reimbursement modeled as cash inflow during Applied Phases construction (when configured). */
+    tifReimbursement?: number
+    /** Preferred return cash out in this month (same cadence as Deal Workspace assumptions). */
+    preferredReturnPaid?: number
+    /** LOC interest capitalized this month (opening balance × annual rate / 12, capped at limit). */
+    locInterestAccrued?: number
+    bondDraw: number
       bondPaydown: number
       bondBalance: number
     locDraw: number

@@ -78,11 +78,15 @@ function permanentDebtOkIfIncluded(inp: ProFormaInput): boolean {
   )
 }
 
-function phaseWellFormed(p: ForSalePhaseInput): boolean {
+function phaseWellFormed(
+  p: ForSalePhaseInput,
+  phaseTimingMode: 'trigger-based' | 'fixed-schedule' = 'trigger-based',
+): boolean {
+  const triggerOk = phaseTimingMode === 'fixed-schedule' || (p.presaleTriggerPercent || 0) > 0
   return (
     (p.unitCount || 0) > 0 &&
     (p.buildMonths || 0) > 0 &&
-    (p.presaleTriggerPercent || 0) > 0 &&
+    triggerOk &&
     (p.closeStartMonthOffset || 0) >= (p.presaleStartMonthOffset || 0)
   )
 }
@@ -230,41 +234,28 @@ function underwritingUsesAndProjectFinancingChecks(inp: ProFormaInput): CheckDef
 
 /** Exit / refinance / tax — required for full underwriting (engine uses these in extended paths). */
 function exitWaterfallTaxChecks(inp: ProFormaInput): CheckDef[] {
+  const rentalMode = (inp.proFormaMode || 'general-development') === 'rental-hold'
   return [
     {
       id: 'exitCap',
       label: 'Exit cap rate %',
       weight: 10,
-      critical: true,
-      pass: (inp.exitCapRate || 0) > 0,
+      critical: rentalMode,
+      pass: !rentalMode || (inp.exitCapRate || 0) > 0,
     },
     {
       id: 'refiLtv',
       label: 'Refinance LTV %',
       weight: 10,
-      critical: true,
-      pass: (inp.refinanceLTVPercent || 0) > 0,
+      critical: rentalMode,
+      pass: !rentalMode || (inp.refinanceLTVPercent || 0) > 0,
     },
     {
       id: 'tax',
       label: 'Tax rate %',
       weight: 8,
-      critical: true,
-      pass: (inp.taxRatePercent || 0) > 0,
-    },
-    {
-      id: 'lpEquity',
-      label: 'LP equity % (waterfall)',
-      weight: 6,
-      critical: false,
-      pass: (inp.lpEquityPercent || 0) > 0,
-    },
-    {
-      id: 'lpPref',
-      label: 'LP preferred return %',
-      weight: 6,
-      critical: false,
-      pass: (inp.lpPreferredReturnPercent || 0) > 0,
+      critical: rentalMode,
+      pass: !rentalMode || (inp.taxRatePercent || 0) > 0,
     },
   ]
 }
@@ -292,6 +283,7 @@ function generalDevelopmentSecondaryChecks(inp: ProFormaInput): CheckDef[] {
 function forSaleLocModelChecks(inp: ProFormaInput): CheckDef[] {
   const fs = inp.forSalePhasedLoc
   const phases = fs?.phases || []
+  const phaseTimingMode = fs?.phaseTimingMode || 'trigger-based'
   const buckets = fs?.salesAllocationBuckets
   const allocSum =
     (buckets?.locPaydownPercent || 0) +
@@ -361,10 +353,13 @@ function forSaleLocModelChecks(inp: ProFormaInput): CheckDef[] {
     },
     {
       id: 'phaseDetail',
-      label: 'Each phase: units, build months, presale trigger, closing timing',
+      label:
+        phaseTimingMode === 'fixed-schedule'
+          ? 'Each phase: units, start/build timing, and closing timing'
+          : 'Each phase: units, build months, presale trigger, closing timing',
       weight: 16,
       critical: true,
-      pass: phases.length > 0 && phases.every(phaseWellFormed),
+      pass: phases.length > 0 && phases.every((p) => phaseWellFormed(p, phaseTimingMode)),
     },
     {
       id: 'alloc',
@@ -482,16 +477,7 @@ export function computeDealReadiness(input: ProFormaInput | null | undefined): D
     return finalize(rentalChecks(input))
   }
 
-  if (mode === 'for-sale-phased-loc') {
-    return finalize([
-      ...dealTimelineAndValueChecks(input),
-      ...underwritingUsesAndProjectFinancingChecks(input),
-      ...forSaleLocModelChecks(input),
-      ...exitWaterfallTaxChecks(input),
-    ])
-  }
-
-  // general-development
+  // Unified development mode (legacy values: general-development / for-sale-phased-loc)
   const checks: CheckDef[] = [
     ...dealTimelineAndValueChecks(input),
     ...underwritingUsesAndProjectFinancingChecks(input),
