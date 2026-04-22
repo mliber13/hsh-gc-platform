@@ -852,8 +852,8 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl rounded-xl border border-gray-200 bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
+          <div className="my-4 w-full max-w-2xl rounded-xl border border-gray-200 bg-white shadow-2xl sm:max-h-[90vh] sm:overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
               <h2 className="text-lg font-semibold text-gray-900">
                 {isEditing ? 'Edit Prospect' : 'Add Prospect'}
