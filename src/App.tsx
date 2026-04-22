@@ -42,6 +42,7 @@ import { backupAllData } from './services/backupService'
 import { ContactDirectory } from './components/ContactDirectory'
 import { SOWManagement } from './components/SOWManagement'
 import { DealWorkspace } from './components/DealWorkspace'
+import { TenantPipeline } from './components/TenantPipeline'
 import { FeedbackForm } from './components/FeedbackForm'
 import { MyFeedback } from './components/MyFeedback'
 import { PrivacyPolicy } from './components/PrivacyPolicy'
@@ -69,6 +70,7 @@ type View =
   | 'contact-directory'
   | 'sow-management'
   | 'deal-workspace'
+  | 'tenant-pipeline'
   | 'my-feedback'
   | 'privacy'
   | 'terms'
@@ -133,6 +135,9 @@ function App() {
     }
     if (pathname === '/deals' || pathname === '/deal-pipeline') {
       setCurrentView('deal-workspace')
+    }
+    if (pathname === '/tenant-pipeline') {
+      setCurrentView('tenant-pipeline')
     }
     if (pathname === '/privacy') setCurrentView('privacy')
     if (pathname === '/terms') setCurrentView('terms')
@@ -332,6 +337,11 @@ function App() {
     setShowFeedbackForm(true)
   }
 
+  const handleOpenTenantPipeline = () => {
+    window.history.replaceState({}, '', '/tenant-pipeline')
+    setCurrentView('tenant-pipeline')
+  }
+
   const handleOpenPlanLibrary = () => {
     setCurrentView('plan-library')
   }
@@ -463,6 +473,26 @@ function App() {
                     </div>
                     <button
                       onClick={() => {
+                        setCurrentView('plan-library')
+                        setShowUserMenu(false)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Plan Library
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCurrentView('estimate-library')
+                        setShowUserMenu(false)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                    >
+                      <Building2 className="w-4 h-4" />
+                      Estimate Library
+                    </button>
+                    <button
+                      onClick={() => {
                         setCurrentView('qb-settings');
                         setShowUserMenu(false);
                       }}
@@ -562,9 +592,8 @@ function App() {
             onCreateProject={handleCreateProject}
             onSelectProject={handleSelectProject}
             onOpenProjectSection={handleOpenProjectSection}
-            onOpenPlanLibrary={handleOpenPlanLibrary}
-            onOpenItemLibrary={handleOpenEstimateLibrary}
             onOpenDealWorkspace={handleOpenDealWorkspaceHome}
+            onOpenTenantPipeline={handleOpenTenantPipeline}
             onOpenQBSettings={() => setCurrentView('qb-settings')}
           />
         )}
@@ -703,6 +732,18 @@ function App() {
           onBack={() => {
             window.history.replaceState({}, '', '/')
             setCurrentView('dashboard')
+          }}
+        />
+      )}
+
+      {currentView === 'tenant-pipeline' && (
+        <TenantPipeline
+          onBack={() => {
+            window.history.replaceState({}, '', '/')
+            setCurrentView('dashboard')
+          }}
+          onOpenDealWorkspace={(dealId) => {
+            handleOpenDealWorkspace(dealId)
           }}
         />
       )}

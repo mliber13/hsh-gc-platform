@@ -28,9 +28,8 @@ interface ProjectsDashboardProps {
   onSelectProject: (project: Project) => void
   /** Open project directly into a section (faster than project detail → section) */
   onOpenProjectSection?: (project: Project, section: ProjectSection) => void
-  onOpenPlanLibrary: () => void
-  onOpenItemLibrary: () => void
   onOpenDealWorkspace?: () => void
+  onOpenTenantPipeline?: () => void
   /** Open QuickBooks settings / import flow (e.g. for "X pending from QB" link) */
   onOpenQBSettings?: () => void
 }
@@ -51,7 +50,7 @@ const SECTION_BUTTONS: { section: ProjectSection; label: string; icon: React.Rea
   { section: 'change-orders', label: 'COs', icon: <ClipboardList className="w-3.5 h-3.5" /> },
 ]
 
-export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProjectSection, onOpenPlanLibrary, onOpenItemLibrary, onOpenDealWorkspace, onOpenQBSettings }: ProjectsDashboardProps) {
+export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProjectSection, onOpenDealWorkspace, onOpenTenantPipeline, onOpenQBSettings }: ProjectsDashboardProps) {
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -279,22 +278,6 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
                   New Project
                 </Button>
               )}
-              <Button
-                onClick={onOpenPlanLibrary}
-                variant="ghost"
-                size="sm"
-                className="bg-[#D95C00] text-white hover:bg-[#C04F00]"
-              >
-                Plan Library
-              </Button>
-              <Button
-                onClick={onOpenItemLibrary}
-                variant="ghost"
-                size="sm"
-                className="bg-[#15803D] text-white hover:bg-[#166534]"
-              >
-                Estimate Library
-              </Button>
               {onOpenDealWorkspace && (
                 <Button
                   onClick={onOpenDealWorkspace}
@@ -303,6 +286,16 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
                   className="bg-[#6D28D9] text-white hover:bg-[#5B21B6]"
                 >
                   Deal Workspace
+                </Button>
+              )}
+              {onOpenTenantPipeline && (
+                <Button
+                  onClick={onOpenTenantPipeline}
+                  variant="ghost"
+                  size="sm"
+                  className="bg-[#D95C00] text-white hover:bg-[#C04F00]"
+                >
+                  Tenant Pipeline
                 </Button>
               )}
             </nav>
@@ -531,18 +524,16 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
                   </div>
                 </button>
               )}
-              <button onClick={() => { onOpenPlanLibrary(); setShowMobileActions(false) }} className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700">
-                <FileText className="w-5 h-5 text-gray-400" />
-                <span className="font-medium">Plan Library</span>
-              </button>
-              <button onClick={() => { onOpenItemLibrary(); setShowMobileActions(false) }} className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700">
-                <DollarSign className="w-5 h-5 text-gray-400" />
-                <span className="font-medium">Estimate Library</span>
-              </button>
               {onOpenDealWorkspace && (
                 <button onClick={() => { onOpenDealWorkspace(); setShowMobileActions(false) }} className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700">
                   <TrendingUp className="w-5 h-5 text-gray-400" />
                   <span className="font-medium">Deal Workspace</span>
+                </button>
+              )}
+              {onOpenTenantPipeline && (
+                <button onClick={() => { onOpenTenantPipeline(); setShowMobileActions(false) }} className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700">
+                  <Building2 className="w-5 h-5 text-gray-400" />
+                  <span className="font-medium">Tenant Pipeline</span>
                 </button>
               )}
             </div>
