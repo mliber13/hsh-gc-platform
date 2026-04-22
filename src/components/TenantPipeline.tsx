@@ -241,6 +241,22 @@ interface ProspectFormState {
   notes: string
 }
 
+function getSupabaseFriendlyError(error: unknown, fallback: string): string {
+  if (!error || typeof error !== 'object') return fallback
+  const maybe = error as { code?: string; message?: string; details?: string }
+
+  if (maybe.code === '42501') {
+    return 'You do not have permission to edit tenant prospects. Ask an admin to update your role.'
+  }
+  if (maybe.code === 'PGRST116') {
+    return 'This prospect could not be found. Please refresh and try again.'
+  }
+  if (maybe.message) {
+    return `${fallback} (${maybe.message})`
+  }
+  return fallback
+}
+
 function toFormState(prospect: TenantProspect): ProspectFormState {
   return {
     id: prospect.id,
@@ -435,7 +451,7 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
       setIsModalOpen(false)
     } catch (error) {
       console.error('Failed to save tenant prospect:', error)
-      setSyncError('Unable to save changes to Supabase.')
+      setSyncError(getSupabaseFriendlyError(error, 'Unable to save changes to Supabase.'))
     }
   }
 
@@ -469,7 +485,7 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
       onOpenDealWorkspace?.(created.id)
     } catch (error) {
       console.error('Failed to push prospect to deal workspace:', error)
-      setSyncError('Failed to push this prospect to Deal Workspace.')
+      setSyncError(getSupabaseFriendlyError(error, 'Failed to push this prospect to Deal Workspace.'))
     }
   }
 
@@ -486,7 +502,7 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
       setSyncSuccess('Prospect deleted.')
     } catch (error) {
       console.error('Failed to delete tenant prospect:', error)
-      setSyncError('Unable to delete this prospect from Supabase.')
+      setSyncError(getSupabaseFriendlyError(error, 'Unable to delete this prospect from Supabase.'))
     }
   }
 
@@ -530,7 +546,7 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
           prospect.id === original.id ? { ...prospect, stage: original.stage } : prospect,
         ),
       )
-      setSyncError('Unable to update stage in Supabase. Reverted move.')
+      setSyncError(getSupabaseFriendlyError(error, 'Unable to update stage in Supabase. Reverted move.'))
     }
   }
 
