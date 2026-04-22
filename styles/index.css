@@ -1,0 +1,33 @@
+@import './fonts.css';
+@import './theme.css';
+@import 'tailwindcss';
+
+/* Print-specific styles for A4 Landscape */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+  
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
+/* Custom utility classes for the selections schedule */
+@layer utilities {
+  .a4-landscape {
+    width: 297mm;
+    min-height: 210mm;
+  }
+  
+  .editable-field {
+    min-height: 1.5rem;
+    min-width: 2rem;
+  }
+}
