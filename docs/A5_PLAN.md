@@ -328,7 +328,50 @@ Migration file: `supabase/migrations/20260424_a5c_uuid_rls_switch.sql`.
 
 Post-apply assertions all passed. Both GC and Drywall apps smoke-tested green. **Policy rewrite to UUID is now deferred to A5-c.2** (§10).
 
-### 9.4 Step 12 closure (invite-first signup verification)
+### 9.5 A5-c.2 chunk C2-1 (pilot) — projects, profiles, trade_categories
+
+**Status:** landed on both envs. Branch `clqgnnydrwpgxvipyotd` 2026-04-24 (7/7 Node smoke tests green); prod `rvtdavpsvrhbktbxquzm` 2026-04-27 (SQL gate green + manual app smoke on GC and Drywall apps green).
+
+**Migration:** `supabase/migrations/20260425_a5c2_pilot.sql`. Single transaction, idempotent, convergent (same final state on both envs despite different starting states — branch was on the original-plan UUID-policy track, prod was on Path H text-policy track).
+
+**Final policy set (13 total across 3 tables):**
+
+| Table | SELECT | INSERT | UPDATE | DELETE |
+|-------|--------|--------|--------|--------|
+| `profiles` | "Users can view own profile" (`auth.uid()=id`) + "Users can view profiles in their organization" (uuid match + active) | "Admins can insert profiles for their organization" (uuid match + admin) | "Users can update own profile" (`auth.uid()=id` + active) + "Admins can update any profile in their organization" (uuid match + admin) | — |
+| `projects` | uuid match + active | uuid match + can-edit | uuid match + can-edit | uuid match + admin |
+| `trade_categories` | uuid IS NULL OR uuid match (NULL-is-shared) | uuid match (non-null required) | uuid match (non-null required) | uuid match (non-null required) |
+
+All filters use `organization_id_uuid = public.get_user_organization_uuid()` (uuid helper) instead of the old text helper.
+
+**Convergence side-effects shipped in this chunk (beyond minimal "rewrite policies"):**
+
+1. Plugged a pre-existing prod hole: `"Users can view own profile"` SELECT policy was missing on prod, which would have blocked future invite-first users from reading their own profile. Branch already had it; migration added it to prod.
+2. Replaced prod's legacy `is_system` / `'system'` text trade_categories policy model with the NULL-is-shared model (proven on branch during A5-b). The 21 prod system rows had `organization_id_uuid = NULL` already from A5-a backfill, so they remain shared by virtue of the new SELECT policy. The 7 HSH-owned rows continue to be visible to HSH users.
+3. Created `get_user_organization_uuid()` on branch (didn't exist there). Prod's existing function was unchanged (CREATE OR REPLACE was byte-identical to the existing definition).
+4. Dropped NOT NULL on `profiles.organization_id` on branch (prod was already nullable from A5-c Path H).
+
+**Net row-visibility impact on prod:** zero. Existing HSH users still see all 99 projects, 5 profiles, 28 trade_categories (21 shared + 7 own).
+
+**Next:** C2-2 (deals subsystem — 6 tables) per §10.1.
+
+### 9.6 A5-c.2 chunk C2-2 — deals subsystem
+
+**Status:** landed on both envs. Branch `clqgnnydrwpgxvipyotd` 2026-04-27 (4/4 Node smoke tests green, with caveat below); prod `rvtdavpsvrhbktbxquzm` 2026-04-27 (SQL gate green + manual app smoke on GC and Drywall apps green).
+
+**Tables:** `deals`, `deal_activity_events`, `deal_documents`, `deal_notes`, `deal_proforma_versions`, `deal_workspace_context`.
+
+**Migration:** `supabase/migrations/20260427_a5c2_c2_deals.sql`. Single transaction, idempotent. 24 policies (6 tables × 4 ops) rewritten in one shot.
+
+**Pattern decision:** moved from inline subquery (`organization_id IN (SELECT organization_id FROM profiles WHERE id = auth.uid())`) to helper-call (`organization_id_uuid = public.get_user_organization_uuid()`). Helper is `STABLE SECURITY DEFINER` so it caches within a query plan. Consistent with C2-1.
+
+**Branch ↔ prod convergence:** much simpler than C2-1. Both envs had identical policy *names* and *shape*, differing only in the column referenced (uuid on branch from earlier A5-b experiments vs text on prod). Migration converged both to identical helper-call pattern on `organization_id_uuid`. No new policies, no NOT NULL changes, no `is_system` quirks.
+
+**Net row-visibility impact on prod:** zero. All 5 prod profiles have HSH uuid; all 69 rows across the 6 tables (5 deals + 27 + 18 + 1 + 16 + 2) have HSH uuid; existing users still see exactly what they saw before.
+
+**Smoke caveat (D3):** the `deals` invite-first INSERT block test passed but for the wrong reason — the test payload included a `name` column that doesn't exist on `deals`, so the INSERT was rejected by PostgREST schema validation rather than by RLS. The security claim still holds (no row was inserted), but D3 didn't directly exercise the RLS INSERT policy at runtime. D1/D2/D4 (SELECT isolation, cross-org UPDATE blocked, positive UPDATE control) all directly hit the RLS path. Tracked as a smoke-pattern improvement for C2-3+: pre-flight a column-list query so smoke tests use schema-valid payloads.
+
+**Next:** C2-3 (estimate/trade subsystem — 5 tables: `estimates`, `estimate_templates`, `trades`, `sub_items`, `item_templates`) per §10.1.
 
 Step 12 of `docs/A5C_BRANCH_VERIFICATION.md` was closed via equivalence rather than live end-to-end, because (a) Supabase Auth `over_email_send_rate_limit` and (b) admin-SQL harness drift both blocked a clean live run on branch. The behavioral contract ("new invite-first user has UUID=NULL → sees own profile only → sees zero org data") was proven by byte-identity with `noorg-user@hsh-test.example`, whose state was already verified live in Step 10. See the closure note in `A5C_BRANCH_VERIFICATION.md` for full rationale.
 
