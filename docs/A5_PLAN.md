@@ -429,6 +429,107 @@ Routine patterns from prior chunks: `change_orders` 1 SELECT + 1 FOR ALL (like C
 
 **Next:** C2-5 (labor / payroll — 11 tables) per §10.1. Heavy Drywall-app surface area; smoke that app carefully.
 
+### 9.9 A5-c.2 chunk C2-5 — labor / payroll subsystem
+
+**Status:** landed on both envs on 2026-04-27. Branch SQL gate green. Prod SQL gate + manual app smoke on both apps green. Validated against **9118 rows of real prod data** — the largest data volume of any chunk to date. Heavy Drywall-app exercise on pay periods and labor import flows.
+
+**Tables (11):** `labor_entries`, `material_entries`, `subcontractor_entries`, `time_entries`, `employee_classes`, `labor_burden_rates`, `labor_burden_recalibrations`, `labor_import_batches`, `labor_import_errors`, `qbo_wage_allocation_config`, `pay_periods`.
+
+**Migration:** `supabase/migrations/20260427_a5c2_c5_labor_payroll.sql`. 32 policies in one transaction. No novel patterns — all recombinations of what was proven in C2-1 through C2-4b.
+
+**Pattern recombinations:**
+- 8 tables: standard helper-call swap with role gates (familiar from C2-1/C2-2/C2-3).
+- `labor_import_errors`: EXISTS-join through `labor_import_batches` (familiar from C2-4b po_lines). No own org column; inherits via batch.
+- `pay_periods`: inline-subquery → helper-call swap (familiar from C2-2 deals).
+- `time_entries`: previously used `current_user_organization_id()` helper; switched to `get_user_organization_uuid()` for consistency with the rest of A5-c.2.
+
+**Pre-existing semantics preserved verbatim:**
+- `labor_import_batches` and `labor_import_errors` have only SELECT + INSERT (no UPDATE / DELETE). Likely intentional immutable batch records. Migration adds nothing.
+- `pay_periods` and `time_entries` have no role gating (any active user in org can do anything). Preserved.
+
+**Prod row counts:** labor_entries 4, material_entries 264, subcontractor_entries 93, time_entries 1, employee_classes 0, labor_burden_rates 3, labor_burden_recalibrations 0, labor_import_batches 13, **labor_import_errors 8730**, qbo_wage_allocation_config 1, pay_periods 13.
+
+**Net row-visibility impact on prod:** zero. All 9118 rows have HSH uuid; all 5 prod profiles HSH.
+
+**Next:** C2-6 (forms — 3 tables: `form_templates`, `form_responses`, `project_forms`) per §10.1. **Note:** `project_forms` has RLS disabled (H26); needs RLS-enable + initial policies as part of C2-6 prep.
+
+### 9.10 A5-c.2 chunk C2-6 — forms subsystem
+
+**Status:** landed on both envs on 2026-04-27. SQL gate green; manual app smoke green.
+
+**Tables:** `form_templates`, `form_responses`, `project_forms`. **Migration:** `supabase/migrations/20260427_a5c2_c6_forms.sql`. 8 policies + 1 H26 drive-by fix.
+
+**H26 (partial closure):** `project_forms` had policies defined but RLS was disabled — making the policies inert. Migration ran `ALTER TABLE public.project_forms ENABLE ROW LEVEL SECURITY` so the (now-rewritten) policies actually enforce. This was a sleeper security hole for an unknown duration.
+
+Standard helper-call pattern; same role-gating preserved (admin-only DELETE on project_forms; FOR ALL editor on templates/responses).
+
+### 9.11 A5-c.2 chunks C2-7 + C2-8 — selections + directory (combined)
+
+**Status:** landed on both envs on 2026-04-27. SQL gate green; manual app smoke green.
+
+**Tables (12):** `selection_books`, `selection_rooms`, `selection_room_images`, `selection_room_spec_sheets`, `selection_schedule_versions`, `contacts`, `subcontractors`, `suppliers`, `developers`, `municipalities`, `lenders`, `tenant_pipeline_prospects`. **Migration:** `supabase/migrations/20260427_a5c2_c7_c8_selections_directory.sql`. 48 policies, all standard helper-call swap. Combined into one transaction for efficiency since all 12 tables share uniform shape.
+
+`tenant_pipeline_prospects` uses `is_user_active()` (not `user_can_edit()`) for INSERT/UPDATE/DELETE — preserved verbatim. selection_room_images previously had a self-comparison-via-EXISTS pattern; converged to standard `organization_id_uuid = helper()` for consistency.
+
+### 9.12 A5-c.2 chunks C2-9 + C2-10 — project meta + infra/misc (combined)
+
+**Status:** landed on both envs on 2026-04-27. SQL gate green; manual app smoke green.
+
+**Tables (11):** `project_documents`, `project_events`, `project_milestones`, `schedules`, `plans`, `work_packages`, `org_team`, `user_invitations`, `feedback`, `gameplan_playbook`, `gameplan_plays`. **Migration:** `supabase/migrations/20260427_a5c2_c9_c10_meta_infra.sql`. 38 total policies (18 existing + new policies for 3 H26-disabled tables).
+
+**H26 (final closure for these 3 tables):** `project_events`, `work_packages`, `org_team` had RLS disabled with NO policies defined — meaning any authenticated user could read/write them regardless of org. Migration enabled RLS on all three and seeded initial policies modeled after peer tables:
+- `project_events` modeled after `schedules` (1 SELECT active + 1 FOR ALL editor).
+- `work_packages` modeled after `plans` (same shape).
+- `org_team` modeled after `user_invitations`-style admin gating but with broader SELECT (any active org member can see team listing; admins manage).
+
+**Pre-existing semantics preserved:** `feedback` SELECT/INSERT for any active org user, UPDATE/DELETE admin-only. `user_invitations` admin-only across all ops. `project_milestones` custom names (`milestones_*`) preserved verbatim.
+
+### 9.13 A5-c.2 chunk C2-11 — UUID-native fixes (sow_templates)
+
+**Status:** landed on both envs on 2026-04-27. SQL gate green; manual app smoke green.
+
+**Migration:** `supabase/migrations/20260427_a5c2_c11_sow_templates.sql`. 2 policies on `sow_templates` updated to converge branch and prod:
+
+1. **SELECT "Users can view organization SOW templates"** — branch had a tautology bug (`profiles.organization_id_uuid = profiles.organization_id_uuid`, always true) from earlier divergence; prod was already correct from the A5-c side-fix. Migration converged branch.
+2. **DELETE "Users can manage SOW templates they can access"** — prod had a dead branch (uuid `(organization_id)::text` compared to text `profiles.organization_id`, never matches); branch was already correct. Migration converged prod.
+
+**Closes H25** (sow_templates DELETE dead branch).
+
+**`quote_requests` intentionally NOT touched.** Its 5 policies are owner-based (`auth.uid() = user_id`) plus one public-token-read with `qual: true` — none reference org_id directly. The H24 vulnerability (unconditional public SELECT via token) is a separate product/security concern and remains open as logged.
+
+### 9.14 A5-c.2 — overall closure
+
+A5-c.2 is **complete** as of 2026-04-27. All 11 chunks landed across two execution sessions:
+
+| Chunk | Date | Tables | Policies | Notes |
+|---|---|---|---|---|
+| C2-1 | 2026-04-27 (Fri) | 3 | 13 | Pilot; converged branch / prod state |
+| C2-2 | 2026-04-27 | 6 | 24 | Deals subsystem |
+| C2-3 | 2026-04-27 | 5 | 16 | Estimates / trades; mixed role gating |
+| C2-4a | 2026-04-27 | 3 | 10 | Routine financial |
+| C2-4b | 2026-04-27 | 3 | 10 | po_headers/po_lines EXISTS-join + proforma_inputs 4-condition INSERT |
+| C2-5 | 2026-04-27 | 11 | 32 | Labor / payroll; 9118 prod rows incl. labor_import_errors EXISTS-join |
+| C2-6 | 2026-04-27 | 3 | 8 | Forms; H26 fix on project_forms |
+| C2-7+8 | 2026-04-27 | 12 | 48 | Selections + directory (combined) |
+| C2-9+10 | 2026-04-27 | 11 | 38 | Project meta + infra/misc; H26 fixes on project_events / work_packages / org_team |
+| C2-11 | 2026-04-27 | 1 | 2 of 6 | sow_templates SELECT tautology + DELETE dead-branch fixes |
+| **Total** | | **58** | **~201** | |
+
+Every text `organization_id` reference in production RLS policies has been replaced with `organization_id_uuid = public.get_user_organization_uuid()`, except:
+- `quote_requests` (already uuid-typed, owner-based policies don't reference org)
+- `sow_templates` policies that reference its uuid `organization_id` column directly
+
+The text `organization_id` column is now dead weight on every tenant-scoped table. Bridge triggers continue to populate `organization_id_uuid` for ongoing app writes that still write text. **Runway for A5-d (app code cleanup) and A5-e (in-place type conversion) is now clear.**
+
+**H-item status update (was in §11):**
+- H25 ✅ closed (sow_templates DELETE dead-branch fixed in C2-11)
+- H26 ✅ closed (project_events, work_packages, org_team, project_forms RLS enabled with policies in C2-6 and C2-9-10)
+- H24 still open (quote_requests `qual: true` public-token-read — separate security review needed)
+- H27 still open (mystery storage folder `7507f8ea-…`)
+- H28 still open (`profiles.organization_id` DEFAULT 'default-org' — A5-e cleanup)
+
+**Next phase:** A5-d (app code cleanup — eliminate `'default-org'` text writes; storage path migration). A5-e (in-place type conversion of `organization_id` text → uuid; drop scratch column; add NOT NULL + FK).
+
 Step 12 of `docs/A5C_BRANCH_VERIFICATION.md` was closed via equivalence rather than live end-to-end, because (a) Supabase Auth `over_email_send_rate_limit` and (b) admin-SQL harness drift both blocked a clean live run on branch. The behavioral contract ("new invite-first user has UUID=NULL → sees own profile only → sees zero org data") was proven by byte-identity with `noorg-user@hsh-test.example`, whose state was already verified live in Step 10. See the closure note in `A5C_BRANCH_VERIFICATION.md` for full rationale.
 
 ## 10) A5-c.2 Plan (UUID Policy Rewrites)
@@ -469,9 +570,9 @@ C2-1 first on branch, then on prod (proves the pattern). After that, chunks are 
 
 Discovered during A5-c pre-flight / scope work. Not fixed in A5 because they're orthogonal to the `default-org → UUID` migration. Logged here to graduate to a standalone tracker once A5 closes.
 
-- **H24** — `quote_requests` has a policy with `qual: true` granting unconditional read (bypasses org scoping). Pre-existing; needs independent review.
-- **H25** — `sow_templates` DELETE policy compares uuid-to-text and the matching branch is dead; current net effect is that the policy never matches anyone. Harmless (no accidental delete), but misleading. SELECT side of this was fixed as a drive-by in A5-c.
-- **H26** — RLS disabled entirely on four tables: `org_team`, `project_events`, `project_forms`, `work_packages`. Must be enabled with appropriate policies before A5-c.2 covers those chunks (C2-6, C2-9, C2-10).
-- **H27** — Mystery storage folder `7507f8ea-f694-453b-960e-3f0ea6337864/` (9 objects) in quote-documents bucket. Not a current org UUID. Investigate provenance before A5-d storage path migration so we don't move or orphan live data.
-- **H28** — `profiles.organization_id` still has `DEFAULT 'default-org'`. Belt-and-suspenders only now that `handle_new_user` writes NULL explicitly, but should be dropped during A5-e cleanup for consistency.
+- **H24** — `quote_requests` has a policy with `qual: true` granting unconditional read (bypasses org scoping). Pre-existing; needs independent review. **Still open.**
+- **H25** — `sow_templates` DELETE policy compares uuid-to-text and the matching branch was dead. **✅ Closed in C2-11** (2026-04-27): DELETE policy rewritten to use `organization_id = public.get_user_organization_uuid()` directly, removing the cast-to-text dead branch.
+- **H26** — RLS disabled entirely on four tables: `org_team`, `project_events`, `project_forms`, `work_packages`. **✅ Closed:** `project_forms` enabled in C2-6; `project_events`, `work_packages`, `org_team` enabled in C2-9+10 with peer-modeled initial policies.
+- **H27** — Mystery storage folder `7507f8ea-f694-453b-960e-3f0ea6337864/` (9 objects) in quote-documents bucket. Not a current org UUID. Investigate provenance before A5-d storage path migration so we don't move or orphan live data. **Still open.**
+- **H28** — `profiles.organization_id` still has `DEFAULT 'default-org'`. Belt-and-suspenders only now that `handle_new_user` writes NULL explicitly, but should be dropped during A5-e cleanup for consistency. **Still open.**
 
