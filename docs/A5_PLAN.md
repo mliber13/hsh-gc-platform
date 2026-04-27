@@ -399,6 +399,36 @@ All filters use `organization_id_uuid = public.get_user_organization_uuid()` (uu
 
 **Next:** C2-4 (PO / financial — 6 tables: `po_headers`, `po_lines`, `change_orders`, `project_actuals`, `proforma_inputs`, `project_proforma_versions`) per §10.1.
 
+### 9.8 A5-c.2 chunk C2-4 — PO / financial (split into 4a + 4b)
+
+**Status:** both halves landed on both envs on 2026-04-27.
+
+Pre-flight surfaced that C2-4's six tables fall into two distinct pattern families. Splitting into 4a (routine) + 4b (complex JOIN/owner-based) preserved careful review on the money paths.
+
+#### 9.8.1 C2-4a — `change_orders`, `project_actuals`, `project_proforma_versions`
+
+**Migration:** `supabase/migrations/20260427_a5c2_c4a_change_orders_actuals_versions.sql`. 10 policies in one transaction.
+
+Routine patterns from prior chunks: `change_orders` 1 SELECT + 1 FOR ALL (like C2-3 templates); `project_actuals` SELECT/INSERT/UPDATE/DELETE with admin-only DELETE (like C2-3 estimates); `project_proforma_versions` 4 separate policies with no role gating (like C2-2 deals).
+
+**Notable wrinkle:** `project_proforma_versions` policy names hit the Postgres NAMEDATALEN 63-char limit. INSERT/UPDATE/DELETE names end in `"...in their organizatio"` (truncated). SELECT name fits at 62 chars. Migration preserves verbatim.
+
+#### 9.8.2 C2-4b — `po_headers`, `po_lines`, `proforma_inputs`
+
+**Migration:** `supabase/migrations/20260427_a5c2_c4b_po_proforma.sql`. 10 policies rewritten in one transaction; 2 policies (proforma_inputs UPDATE/DELETE) intentionally untouched.
+
+**Three non-standard patterns preserved verbatim:**
+
+1. **`po_headers` and `po_lines` have NO `organization_id` column.** They inherit org scope from `projects` via FK join. All 4 po_headers policies wrap `EXISTS (SELECT 1 FROM projects p WHERE p.id = po_headers.project_id AND p.organization_id_uuid = helper() AND <role gate>)`. po_lines uses a deeper `EXISTS (FROM po_headers ph JOIN projects p ON p.id = ph.project_id WHERE ph.id = po_lines.po_id AND ...)`. No bridge trigger on either table (no column to bridge); the org-scope guarantee comes from `projects.organization_id_uuid` non-null + backfilled, already verified in C2-1.
+2. **`proforma_inputs` has a 4-condition INSERT WITH CHECK** combining owner + org + role + project-belongs-to-org. Migration preserves all four conditions verbatim, just swapping text → uuid in the org checks and adding IS NOT NULL guard.
+3. **`proforma_inputs` UPDATE/DELETE are pure `auth.uid() = user_id`** (owner-based, no org reference). Migration **does not touch them** — they remain correct as-is.
+
+**Smoke note:** prod has 0 PO rows (no PO has ever been created), so the EXISTS-join policies on po_headers/po_lines were SQL-shape-validated but not runtime-validated for PO flows. They will activate correctly when a PO is created (against the same `projects.organization_id_uuid` data already validated in C2-1). Proforma flows + change_orders + actuals all got real exercise on prod data.
+
+**Pre-existing semantic logged but not harmonized:** proforma_inputs UPDATE/DELETE allow owner edits without org check, so a deactivated user retains control of their own proforma_inputs row. Out of A5 scope.
+
+**Next:** C2-5 (labor / payroll — 11 tables) per §10.1. Heavy Drywall-app surface area; smoke that app carefully.
+
 Step 12 of `docs/A5C_BRANCH_VERIFICATION.md` was closed via equivalence rather than live end-to-end, because (a) Supabase Auth `over_email_send_rate_limit` and (b) admin-SQL harness drift both blocked a clean live run on branch. The behavioral contract ("new invite-first user has UUID=NULL → sees own profile only → sees zero org data") was proven by byte-identity with `noorg-user@hsh-test.example`, whose state was already verified live in Step 10. See the closure note in `A5C_BRANCH_VERIFICATION.md` for full rationale.
 
 ## 10) A5-c.2 Plan (UUID Policy Rewrites)
