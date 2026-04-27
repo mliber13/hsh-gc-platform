@@ -373,6 +373,32 @@ All filters use `organization_id_uuid = public.get_user_organization_uuid()` (uu
 
 **Next:** C2-3 (estimate/trade subsystem — 5 tables: `estimates`, `estimate_templates`, `trades`, `sub_items`, `item_templates`) per §10.1.
 
+### 9.7 A5-c.2 chunk C2-3 — estimate/trade subsystem
+
+**Status:** landed on both envs on 2026-04-27. Branch SQL gate green; prod SQL gate + manual app smoke green on both apps. Validated against 1633 rows of real prod data (1244 trades + 187 estimates + 180 item_templates + 21 sub_items + 1 estimate_template).
+
+**Tables:** `estimates`, `estimate_templates`, `trades`, `sub_items`, `item_templates`.
+
+**Migration:** `supabase/migrations/20260427_a5c2_c3_estimates_trades.sql`. 16 policies in a single transaction.
+
+**Distinguishing features vs C2-1 / C2-2:**
+
+1. **Mixed role-gating preserved verbatim:**
+   - `estimates` DELETE → `user_is_admin` (admin-only)
+   - `trades` DELETE → `user_can_edit` (editor OK — different from estimates, intentionally preserved)
+   - `sub_items` → no role gating (any user in org)
+   - `estimate_templates` / `item_templates` → use `FOR ALL` policies + separate SELECT
+2. **No Node smoke for branch.** Branch had 0 rows in all 5 C2-3 tables; runtime RLS smoke would have been degenerate. Migration's internal post-check DO + SQL gate + prod app smoke on real data was sufficient validation.
+3. **Branch was using legacy uuid-named-text helper.** Branch's `get_user_organization()` returns `uuid` (from earlier divergence) and was referenced by these policies. Migration explicitly switched to `get_user_organization_uuid()` so branch policies no longer rely on the misnamed text helper.
+
+**Net row-visibility impact on prod:** zero. All 1633 rows have HSH uuid; all 5 prod profiles have HSH uuid.
+
+**Pre-existing inconsistencies logged but not fixed (out of A5 scope):**
+- `estimates` DELETE is admin-only but `trades` DELETE is editor-OK. Probably an oversight; should be harmonized in a separate cleanup pass.
+- `sub_items` has no role gating while peer tables do. Possibly intentional (line-item edits within an estimate); verify before harmonizing.
+
+**Next:** C2-4 (PO / financial — 6 tables: `po_headers`, `po_lines`, `change_orders`, `project_actuals`, `proforma_inputs`, `project_proforma_versions`) per §10.1.
+
 Step 12 of `docs/A5C_BRANCH_VERIFICATION.md` was closed via equivalence rather than live end-to-end, because (a) Supabase Auth `over_email_send_rate_limit` and (b) admin-SQL harness drift both blocked a clean live run on branch. The behavioral contract ("new invite-first user has UUID=NULL → sees own profile only → sees zero org data") was proven by byte-identity with `noorg-user@hsh-test.example`, whose state was already verified live in Step 10. See the closure note in `A5C_BRANCH_VERIFICATION.md` for full rationale.
 
 ## 10) A5-c.2 Plan (UUID Policy Rewrites)
