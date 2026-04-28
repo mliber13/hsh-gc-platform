@@ -86,8 +86,37 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
     console.error('Error fetching user profile:', error);
     return null;
   }
-  
+
   return data;
+}
+
+/**
+ * Resolve the current authenticated user's organization_id, or throw.
+ *
+ * Use this when WRITING org-scoped data. It guarantees a non-null org id and
+ * eliminates the need for `'default-org'` fallbacks scattered across services.
+ * If a write path is reached without an org id, that's a bug worth surfacing
+ * rather than a fallback that papers over auth/RLS state.
+ *
+ * Returns whatever value `profiles.organization_id` currently holds — text
+ * (`'default-org'` or a UUID-as-text) until A5-e completes the in-place type
+ * conversion to uuid; pure uuid afterwards. Callers should not assume UUID
+ * format yet.
+ *
+ * Use `getCurrentUserProfile()` directly when reading org id is allowed to
+ * fail silently (e.g., offline or read-only paths).
+ *
+ * @throws Error if no authenticated user / no profile row / profile has no organization_id
+ */
+export async function requireUserOrgId(): Promise<string> {
+  const profile = await getCurrentUserProfile();
+  if (!profile) {
+    throw new Error('requireUserOrgId: no authenticated user profile');
+  }
+  if (!profile.organization_id) {
+    throw new Error('requireUserOrgId: profile has no organization_id (invite-first user without an org cannot write org-scoped data)');
+  }
+  return profile.organization_id;
 }
 
 /**

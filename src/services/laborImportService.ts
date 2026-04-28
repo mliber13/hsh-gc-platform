@@ -3,6 +3,7 @@
  */
 
 import { supabase, isOnlineMode } from '@/lib/supabase'
+import { requireUserOrgId } from './userService'
 
 export interface QboWageConfig {
   organizationId: string
@@ -32,12 +33,13 @@ export interface LaborImportBatch {
   createdAt: Date
 }
 
-/** Get current user's organization id (for RLS-scoped tables we often don't need to pass it). */
+/**
+ * Get current user's organization id (for RLS-scoped tables we often don't need to pass it).
+ * Throws if no authenticated user / no profile / no organization_id — see requireUserOrgId.
+ * All callers gate on `isOnlineMode()` first, so this is only invoked in online write paths.
+ */
 async function getCurrentOrgId(): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return 'default-org'
-  const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
-  return profile?.organization_id ?? 'default-org'
+  return requireUserOrgId()
 }
 
 /** Fetch QBO wage allocation config for the current org. Returns null if not set. */

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ArrowLeft, FileCheck, Plus, CheckCircle, Clock, Edit, X, Trash2, ChevronRight } from 'lucide-react';
 import hshLogo from '/HSH Contractor Logo - Color.png';
 import { supabase } from '../lib/supabase';
+import { requireUserOrgId } from '../services/userService';
 import { SignaturePad } from './ui/signature-pad';
 
 interface FormField {
@@ -97,10 +98,11 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
   const createNewForm = async (formType: string) => {
     console.log('Creating new form:', formType);
     try {
+      const organizationId = await requireUserOrgId();
       const { data, error } = await supabase
         .from('project_forms')
         .insert({
-          organization_id: 'default-org', // TODO: Get from user context
+          organization_id: organizationId,
           project_id: projectId,
           form_type: formType,
           form_name: getFormDisplayName(formType),

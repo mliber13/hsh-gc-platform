@@ -378,7 +378,9 @@ export async function activateProjectInDB(
     return await fetchProjectById(projectId)
   }
 
-  const orgId = projectRow.organization_id || profileOrgId || 'default-org'
+  // projectRow null-checked above (line 372); projects.organization_id is NOT NULL in schema.
+  // profileOrgId fallback (was: profile?.organization_id) and 'default-org' fallback retired.
+  const orgId = projectRow.organization_id
 
   const { error: eventError } = await supabase
     .from('project_events')
@@ -479,7 +481,13 @@ export async function createWorkPackage(
     .eq('id', projectId)
     .single()
 
-  const orgId = projectRow?.organization_id || profileOrgId || 'default-org'
+  if (!projectRow?.organization_id) {
+    console.warn('createWorkPackage: project not found or missing organization_id', projectId)
+    return null
+  }
+  // profileOrgId / 'default-org' fallbacks retired (A5-d). projects.organization_id is NOT NULL.
+  // profile fetch above is now dead — to be cleaned up in a follow-up pass.
+  const orgId = projectRow.organization_id
 
   const { data, error } = await supabase
     .from('work_packages')
@@ -621,7 +629,12 @@ export async function upsertMilestone(
     .eq('id', projectId)
     .single()
 
-  const orgId = projectRow?.organization_id || profileOrgId || 'default-org'
+  if (!projectRow?.organization_id) {
+    console.warn('upsertMilestone: project not found or missing organization_id', projectId)
+    return null
+  }
+  // profileOrgId / 'default-org' fallbacks retired (A5-d). profile fetch dead; cleanup pending.
+  const orgId = projectRow.organization_id
 
   const row = {
     project_id: projectId,
@@ -764,7 +777,12 @@ export async function createGameplanPlay(
     .select('organization_id')
     .eq('id', projectId)
     .single()
-  const orgId = projectRow?.organization_id || profileOrgId || 'default-org'
+  if (!projectRow?.organization_id) {
+    console.warn('createGameplanPlay: project not found or missing organization_id', projectId)
+    return null
+  }
+  // profileOrgId / 'default-org' fallbacks retired (A5-d). profile fetch dead; cleanup pending.
+  const orgId = projectRow.organization_id
 
   const row = {
     project_id: projectId,
@@ -3157,7 +3175,12 @@ export async function saveProFormaInputs(
       .eq('id', projectId)
       .single()
 
-    const organizationId = projectData?.organization_id || 'default-org'
+    if (!projectData?.organization_id) {
+      console.error('Pro forma save: project not found or missing organization_id', projectId)
+      return false
+    }
+    // 'default-org' fallback retired (A5-d). projects.organization_id is NOT NULL in schema.
+    const organizationId = projectData.organization_id
 
     const rowData = {
       project_id: projectId,
@@ -3929,7 +3952,9 @@ export async function saveProjectProFormaVersion(
     }
 
     const nextVersionNumber = ((versionRows && versionRows[0]?.version_number) || 0) + 1
-    const organizationId = (projectData as any).organization_id || 'default-org'
+    // projectData null-checked at line ~3914; projects.organization_id is NOT NULL.
+    // 'default-org' fallback and `as any` cast retired (A5-d).
+    const organizationId = projectData.organization_id
 
     const { error: insertError } = await supabase
       .from('project_proforma_versions')

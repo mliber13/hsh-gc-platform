@@ -148,6 +148,9 @@ export async function createPlan_Hybrid(input: CreatePlanInput): Promise<Plan> {
       if (!userProfile) {
         throw new Error('No user profile found. Please make sure you are logged in.');
       }
+      if (!userProfile.organization_id) {
+        throw new Error('No organization on profile. Please make sure you are part of an organization.');
+      }
 
       // Create plan in localStorage first
       const plan = createPlan(input);
@@ -155,7 +158,7 @@ export async function createPlan_Hybrid(input: CreatePlanInput): Promise<Plan> {
       // Transform and save to Supabase
       const planData = transformPlanToSupabase(plan);
       planData.user_id = userProfile.id; // Add user_id
-      planData.organization_id = userProfile.organization_id || 'default-org'; // Add organization_id
+      planData.organization_id = userProfile.organization_id; // Add organization_id
 
       const { data, error } = await supabase
         .from('plans')

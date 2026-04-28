@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { requireUserOrgId } from './userService';
 
 export interface FormTemplate {
   id: string;
@@ -199,8 +200,9 @@ export class FormService {
     }
 
     // Create new form instance
+    const organizationId = await requireUserOrgId();
     const formData: Omit<ProjectForm, 'id' | 'created_at' | 'updated_at'> = {
-      organization_id: 'default-org', // This would come from user context
+      organization_id: organizationId,
       project_id: projectId,
       template_id: template.id,
       form_type: formType,

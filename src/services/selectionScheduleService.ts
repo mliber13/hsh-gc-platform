@@ -133,14 +133,15 @@ export async function saveSelectionScheduleDraft(
       .eq('id', projectId)
       .single()
 
-    if (projectError) {
-      console.error('Error loading project organization for schedule draft:', projectError)
+    if (projectError || !projectData?.organization_id) {
+      console.error('Error loading project organization for schedule draft:', projectError, 'projectData:', projectData)
       return false
     }
+    // 'default-org' fallback retired (A5-d). projects.organization_id is NOT NULL.
 
     const rowData = {
       project_id: projectId,
-      organization_id: projectData?.organization_id || 'default-org',
+      organization_id: projectData.organization_id,
       created_by: user.id,
       version_number: 0,
       version_label: versionLabel,
@@ -256,10 +257,11 @@ export async function saveSelectionScheduleVersion(
       .eq('id', projectId)
       .single()
 
-    if (projectError) {
-      console.error('Error loading project organization for schedule version save:', projectError)
+    if (projectError || !projectData?.organization_id) {
+      console.error('Error loading project organization for schedule version save:', projectError, 'projectData:', projectData)
       return false
     }
+    // 'default-org' fallback retired (A5-d). projects.organization_id is NOT NULL.
 
     const { data: latestRows, error: latestError } = await supabase
       .from('selection_schedule_versions')
@@ -280,7 +282,7 @@ export async function saveSelectionScheduleVersion(
       .from('selection_schedule_versions')
       .insert({
         project_id: projectId,
-        organization_id: projectData?.organization_id || 'default-org',
+        organization_id: projectData.organization_id,
         created_by: user.id,
         version_number: nextVersion,
         version_label: versionLabel?.trim() || `Version ${nextVersion}`,

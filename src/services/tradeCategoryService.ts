@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { isOnlineMode } from '@/lib/supabase'
-import { getCurrentUserProfile } from './userService'
+import { getCurrentUserProfile, requireUserOrgId } from './userService'
 import {
   fetchTradeCategoriesInDB,
   createTradeCategoryInDB,
@@ -49,9 +49,8 @@ export async function getTradeCategories(): Promise<TradeCategoryRecord[]> {
 }
 
 export async function createTradeCategory(input: TradeCategoryInput): Promise<TradeCategoryRecord | null> {
-  const profile = await getCurrentUserProfile()
-  const organizationId = profile?.organization_id ?? 'default-org'
   if (!isOnlineMode()) return null
+  const organizationId = await requireUserOrgId()
   const created = await createTradeCategoryInDB(organizationId, {
     key: input.key,
     label: input.label,
