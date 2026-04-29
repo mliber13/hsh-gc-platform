@@ -573,6 +573,67 @@ Discovered during A5-c pre-flight / scope work. Not fixed in A5 because they're 
 - **H24** — `quote_requests` has a policy with `qual: true` granting unconditional read (bypasses org scoping). Pre-existing; needs independent review. **Still open.**
 - **H25** — `sow_templates` DELETE policy compares uuid-to-text and the matching branch was dead. **✅ Closed in C2-11** (2026-04-27): DELETE policy rewritten to use `organization_id = public.get_user_organization_uuid()` directly, removing the cast-to-text dead branch.
 - **H26** — RLS disabled entirely on four tables: `org_team`, `project_events`, `project_forms`, `work_packages`. **✅ Closed:** `project_forms` enabled in C2-6; `project_events`, `work_packages`, `org_team` enabled in C2-9+10 with peer-modeled initial policies.
-- **H27** — Mystery storage folder `7507f8ea-f694-453b-960e-3f0ea6337864/` (9 objects) in quote-documents bucket. Not a current org UUID. Investigate provenance before A5-d storage path migration so we don't move or orphan live data. **Still open.**
-- **H28** — `profiles.organization_id` still has `DEFAULT 'default-org'`. Belt-and-suspenders only now that `handle_new_user` writes NULL explicitly, but should be dropped during A5-e cleanup for consistency. **Still open.**
+- **H27** — Mystery storage folder `7507f8ea-f694-453b-960e-3f0ea6337864/` (9 objects) in quote-documents bucket. **✅ Closed (2026-04-29):** identified as Mark Liber's auth.users.id, from the `orgPath = organizationId || user.id` fallback in `quoteService.ts:129`. All 23 objects (9 quote-documents + 14 quote-attachments) plus Jennifer Arnett's 1 quote-attachment migrated to `<HSH_UUID>/` prefix in A5-d.3 storage cutover.
+- **H28** — `profiles.organization_id` still has `DEFAULT 'default-org'`. **✅ Closed in A5-e step 3** (2026-04-29): default cleared on profiles + ~30 other tables before the column type conversion.
+
+## 12) A5-d.3 + A5-e closure (2026-04-29)
+
+The final two phases of A5 landed on prod in a single execution window today.
+
+### 12.1 A5-d.3 — storage migration
+
+**Migration:** `scripts/a5e-storage-migration.mjs` + `supabase/migrations/20260429_a5e_storage_paths.sql`.
+
+**Storage objects moved (207 total, plus 2 ghosts):**
+- `default-org/...` → `<HSH_UUID>/...`: 183 objects across deal-documents, project-documents, selection-images, quote-documents
+- `7507f8ea-...` (Mark Liber's user.id) → `<HSH_UUID>/...`: 23 objects across quote-attachments + quote-documents
+- `abdcfc61-...` (Jennifer Arnett's user.id) → `<HSH_UUID>/...`: 1 object in quote-attachments
+- 2 ghost entries (`smoke-test-pd.pdf`, `smoke-test-qd.pdf`) — metadata-only artifacts with no actual files; left in place as cosmetic cruft.
+
+**DB columns updated:**
+- Bucket-relative paths and public URLs: bulk SQL REPLACE on `deal_documents.file_path`, `selection_room_spec_sheets.file_path`, `project_documents.file_url`, `trades.quote_file_url`, `sub_items.quote_file_url`, `submitted_quotes.quote_document_url`.
+- Signed URL columns (95 rows total): re-signed via `createSignedUrl()` against new paths — `deal_documents.file_url` (18 rows), `selection_room_images.image_url` (63 rows), `selection_room_spec_sheets.file_url` (14 rows). Token TTL 5 years.
+- Array column: `quote_requests.attachment_urls` rewritten per-row (4 of 5 rows updated; one already aligned).
+
+**Idempotent execution:** the Node script's `move()` call gracefully handles "destination already exists" and `NoSuchKey` (ghost), so re-runs are safe.
+
+### 12.2 A5-e — type conversion + cleanup
+
+**Migration:** `supabase/migrations/20260429_a5e_typeconvert.sql`.
+
+**Strategy: DROP+RENAME, not ALTER TYPE.** The intuitive `ALTER COLUMN ... TYPE uuid USING organization_id_uuid` failed in branch test because all 200+ A5-c.2 RLS policies reference `organization_id_uuid` by name and Postgres blocks the column drop. Workaround: drop the text column (no policy dependents post-A5-c.2) and rename the uuid column to take its place. Postgres tracks RLS policy column references by attnum, so RENAME preserves all 200+ policies without explicit rewrite.
+
+**What landed:**
+- 53 bridge triggers × 2 events = 106 triggers dropped
+- `bridge_set_org_uuid()` function dropped
+- Text helpers `get_user_organization()` and `current_user_organization_id()` dropped
+- `DEFAULT 'default-org'::text` cleared on ~30 tables (closes H28)
+- `organization_id` (text) column dropped on 54 dual-column tables
+- `organization_id_uuid` (uuid) column renamed to `organization_id` on those 54 tables
+- `organization_id_uuid` scratch column dropped on 2 already-uuid tables (`quote_requests`, `sow_templates`)
+- NOT NULL added on 52 tenant-scoped tables (skipped: profiles, trade_categories, quote_requests, sow_templates — all nullable by design)
+- `organization_text_map` table dropped
+- `handle_new_user` rewritten without scratch column reference
+- FK to `organizations(id)` added on all 56 tenant-scoped tables
+- 18 storage RLS policies on `storage.objects` (`dd_*`, `pd_*`, `qa_*`, `qd_*`, `si_*`) recreated with `(profiles.organization_id)::text` cast to remain compatible with the now-uuid `profiles.organization_id`
+
+### 12.3 In-flight regressions caught and fixed
+
+Two issues surfaced during prod execution; both fixed within the same window:
+
+1. **Storage RLS dependency block.** First `ALTER TABLE profiles DROP COLUMN organization_id` failed because 18 storage policies on `storage.objects` reference `profiles.organization_id` (text). Fix: drop those 18 policies before the column drop, recreate after the rename with `(profiles.organization_id)::text` cast. Branch test had not surfaced this because branch's storage RLS was not configured identically to prod.
+
+2. **Helper function bodies stale after RENAME.** Postgres does not auto-rewrite function bodies on `RENAME COLUMN`. The two helpers `get_user_organization_uuid()` and `current_user_organization_uuid()` still queried `SELECT organization_id_uuid FROM profiles` after the rename, returning NULL silently. Symptom: every authenticated user saw 0 projects + "View-only access" because every RLS policy depending on the helper returned no rows. Fix: `CREATE OR REPLACE FUNCTION` for both helpers to query `organization_id` instead. Migration file patched (step 9b) so future re-runs catch this in the post-check.
+
+### 12.4 Final state
+
+Production is now in target A5 end-state:
+- `organization_id` is `uuid` type on every tenant-scoped table (56 tables)
+- FK constraints enforce referential integrity to `organizations(id)`
+- No bridge trigger, no text helpers, no `organization_text_map`, no scratch columns
+- Storage paths are uniformly `<HSH_UUID>/<...>` (plus 2 ghost metadata entries)
+- 200+ RLS policies continue functioning under the renamed-column attnum binding
+- 18 storage RLS policies use `(profiles.organization_id)::text` cast to bridge uuid org ↔ text path prefix
+
+**A5 migration is complete.**
 

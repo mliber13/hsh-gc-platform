@@ -302,3 +302,23 @@ Before the maintenance-window session:
 5. Schedule the window. ~30–60 min realistic.
 
 This document is the runbook for that session.
+
+---
+
+## 10. A5-d closure (2026-04-29)
+
+**A5-d is complete** as of the prod cutover today. See `A5_PLAN.md` §12 for the full closure log.
+
+- A5-d.0 + A5-d.1 + A5-d.2: app code cleanup committed in `c28a888` (2026-04-28).
+- A5-d.3 storage migration: executed today (2026-04-29) via `scripts/a5e-storage-migration.mjs`. 207 objects moved, 11 DB columns updated, 95 signed URLs re-signed, quote_requests array rewritten. Bundled with A5-e in a single maintenance window per the recommended Path A.
+- Jennifer Arnett (per §9.2 open question) confirmed as HSH staff; her 1 quote-attachment object moved alongside the rest.
+- Two ghost metadata entries (`smoke-test-pd.pdf`, `smoke-test-qd.pdf`) remain in `storage.objects` index without backing files. Cosmetic; safe to leave or clean up later.
+
+**Remaining housekeeping items not yet executed (deferred to later sessions, not blocking A5):**
+
+- `sowService.ts` 5 Type C validation guards (audit-tracked deferred). Now that `sow_templates.organization_id` is uuid-typed, the guards work as intended; can be simplified to a single `requireUserOrgId()` call in a follow-up cleanup pass.
+- `tradeCategoryService.ts:38` read-path fallback. Harmless under RLS.
+- `backupService.ts:98` comment-only reference.
+- `usePermissions.ts:32` 'offline' literal — separate offline-mode concern, out of A5 scope.
+- 2 ghost storage entries (cosmetic).
+- Drywall `getOrganizationId()` fallback to `'default-org'`. Safe today (all HSH staff profiles have HSH_UUID; fallback is dormant). Should be replaced with throw-if-missing pattern in a follow-up to harden against future invite-first users.
