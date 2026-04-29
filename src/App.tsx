@@ -30,14 +30,13 @@ import { applyTemplateToEstimate } from './services/estimateTemplateService'
 import { createSubItemInDB } from './services/supabaseService'
 import { isOnlineMode } from './lib/supabase'
 import { getCurrentUserProfile, UserProfile } from './services/userService'
-import { DataMigration } from './components/DataMigration'
 import { QuickBooksConnect } from './components/QuickBooksConnect'
 import { QuickBooksImport } from './components/QuickBooksImport'
 import { QuickBooksCallback } from './components/QuickBooksCallback'
 import { VendorQuotePortal } from './components/VendorQuotePortal'
 import { PurchaseOrdersView } from './components/PurchaseOrdersView'
 import { Button } from './components/ui/button'
-import { LogOut, User, Crown, Pencil, Eye, Database, Download, Link2, Building2, FileText, MessageSquare } from 'lucide-react'
+import { LogOut, User, Crown, Pencil, Eye, Download, Link2, Building2, FileText, MessageSquare } from 'lucide-react'
 import { backupAllData } from './services/backupService'
 import { ContactDirectory } from './components/ContactDirectory'
 import { SOWManagement } from './components/SOWManagement'
@@ -64,7 +63,6 @@ type View =
   | 'plan-library'
   | 'plan-editor'
   | 'estimate-library'
-  | 'data-migration'
   | 'qb-settings'
   | 'qb-callback'
   | 'contact-directory'
@@ -525,18 +523,6 @@ function App() {
                         </button>
                       </>
                     )}
-                    {userProfile?.role === 'admin' && (
-                      <button
-                        onClick={() => {
-                          setCurrentView('data-migration');
-                          setShowUserMenu(false);
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
-                      >
-                        <Database className="w-4 h-4" />
-                        Migrate Data
-                      </button>
-                    )}
                     <button
                       onClick={() => {
                         setCurrentView('my-feedback')
@@ -774,10 +760,6 @@ function App() {
             }
           }}
         />
-      )}
-
-      {currentView === 'data-migration' && (
-        <DataMigration />
       )}
 
       {currentView === 'qb-settings' && (
