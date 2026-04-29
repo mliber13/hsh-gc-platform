@@ -1,0 +1,375 @@
+{
+  "data": [
+    {
+      "id": "711f8c4a-3ddc-4caa-b446-767c8936d432",
+      "chapter_key": "pre_con",
+      "title": "Finalize Construction Plans",
+      "description": "Confirm plans permit-ready; resolve design/structural/code issues; issue plans for construction (IFC).",
+      "owner": "GC",
+      "sort_order": 1,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "5d323b93-30a6-43b6-a75d-eaae5da5f23e",
+      "chapter_key": "pre_con",
+      "title": "Permits",
+      "description": "Submit for all required permits; track permit approvals and numbers.",
+      "owner": "GC",
+      "sort_order": 2,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "511862b9-ba49-4da1-ad81-9eccfe881565",
+      "chapter_key": "pre_con",
+      "title": "Material Procurement",
+      "description": "Identify major materials; place orders and confirm lead times; secure materials onsite or offsite per schedule.",
+      "owner": "GC",
+      "sort_order": 3,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "cbea8771-5145-448e-af47-f91edbf6dfcd",
+      "chapter_key": "pre_con",
+      "title": "Subcontractor Buy-Out & Scheduling",
+      "description": "Secure all required subcontractors; confirm scope, pricing, and sequencing; establish tentative start windows.",
+      "owner": "GC",
+      "sort_order": 4,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "55a5ed64-c43b-416f-a6da-4453f31a263c",
+      "chapter_key": "pre_con",
+      "title": "Power Coordination",
+      "description": "Obtain work order numbers for temporary and permanent power; coordinate meter and service locations.",
+      "owner": "GC",
+      "sort_order": 5,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "d6b4ea18-e674-44ef-9b01-d327a4589e0b",
+      "chapter_key": "pre_con",
+      "title": "Gas Utility Coordination",
+      "description": "Contact gas company; schedule site visit after framing for gas line installation.",
+      "owner": "GC",
+      "sort_order": 6,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "3679bb62-46da-4141-af6f-d6016db924d2",
+      "chapter_key": "foundation",
+      "title": "Utility Verification & Tie-Ins",
+      "description": "Call 811 for locates; confirm utilities marked; identify water and sewer tie-in locations.",
+      "owner": "GC",
+      "sort_order": 1,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "89093465-0d03-4259-a318-cca41c0c8079",
+      "chapter_key": "foundation",
+      "title": "Foundation Excavation",
+      "description": "Excavate per plans; verify depth, layout, and bearing conditions.",
+      "owner": "SUB",
+      "sort_order": 2,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "1569733c-489c-4de3-a02f-015b21e0706f",
+      "chapter_key": "foundation",
+      "title": "Footer Layout & Drainage",
+      "description": "Frame footers; install footer drains; confirm sump pump location and drain routing.",
+      "owner": "SUB",
+      "sort_order": 3,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "9ba1dd1e-25de-4f08-8eb7-de75ce8faadb",
+      "chapter_key": "foundation",
+      "title": "Footer Pours",
+      "description": "Pour perimeter and interior footers; schedule and pass inspections.",
+      "owner": "SUB",
+      "sort_order": 4,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "4cb322e1-e7c3-4bc2-8549-ddbabccf7485",
+      "chapter_key": "foundation",
+      "title": "Basement Gravel Base",
+      "description": "Cover drainage system; bring floor elevation level with footers.",
+      "owner": "SUB",
+      "sort_order": 5,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "6b88dd6e-3aa9-494a-9f10-9e7ae7b65e01",
+      "chapter_key": "foundation",
+      "title": "Foundation Walls",
+      "description": "Install foundation walls; confirm all wall openings prior to install.",
+      "owner": "SUB",
+      "sort_order": 6,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "5d6a79b7-77aa-41a1-b588-b3b87b1d3158",
+      "chapter_key": "foundation",
+      "title": "Waterproofing & Below-Grade Insulation",
+      "description": "Waterproof all below-grade walls; install insulation.",
+      "owner": "SUB",
+      "sort_order": 7,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "36a8b8a5-22ae-4c3c-aa55-b142e7ac500f",
+      "chapter_key": "foundation",
+      "title": "Backfill",
+      "description": "Backfill with #57 gravel.",
+      "owner": "SUB",
+      "sort_order": 8,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "ebd9a8b9-54a4-4b66-8fc8-3c2dcd7e5e72",
+      "chapter_key": "foundation",
+      "title": "Basement Floor Slab",
+      "description": "Confirm drains and bathroom rough-ins; pour slab.",
+      "owner": "SUB",
+      "sort_order": 9,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "f6d6fe48-7890-4a52-ac8d-d63d1f3a82ce",
+      "chapter_key": "framing_dry_in",
+      "title": "Framing Readiness",
+      "description": "Framing materials onsite; IFC plans onsite; window and door rough opening info finalized; foundation inspections passed.",
+      "owner": "GC",
+      "sort_order": 1,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "454ff723-cf78-4be7-a85d-67e1cab89b64",
+      "chapter_key": "framing_dry_in",
+      "title": "Wood Framing",
+      "description": "Complete all structural framing per plans.",
+      "owner": "SUB",
+      "sort_order": 2,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "263ca57f-ee0b-4185-b53a-8645510217f8",
+      "chapter_key": "framing_dry_in",
+      "title": "Windows & Exterior Doors",
+      "description": "Install immediately after framing to seal structure.",
+      "owner": "SUB",
+      "sort_order": 3,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "6a1ae501-2202-41e9-b7ee-93f5f206892d",
+      "chapter_key": "framing_dry_in",
+      "title": "Blocking for Cabinets & Accessories",
+      "description": "Install blocking for cabinets, handrails, grab bars, towel bars, and accessories.",
+      "owner": "SUB",
+      "sort_order": 4,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "4f05862e-74a5-4ad8-8318-76609d0593dc",
+      "chapter_key": "framing_dry_in",
+      "title": "Garage Opening Temporary Access",
+      "description": "Frame garage opening with plywood; install hinged temporary access door.",
+      "owner": "GC",
+      "sort_order": 5,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "3c95c714-0be7-4625-aea2-626dbfba52e9",
+      "chapter_key": "framing_dry_in",
+      "title": "Roofing & Exterior Envelope",
+      "description": "Roofing, siding, fascia, soffits, gutters installed.",
+      "owner": "SUB",
+      "sort_order": 6,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "fc3012bb-5d31-40cc-91d8-3386e68c6646",
+      "chapter_key": "mep_rough",
+      "title": "Plumbing Rough-In",
+      "description": "Tubs and shower valves onsite prior to start.",
+      "owner": "SUB",
+      "sort_order": 1,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "88f6f737-78a6-4ca1-8aa3-b6d84805e077",
+      "chapter_key": "mep_rough",
+      "title": "HVAC Rough-In",
+      "description": null,
+      "owner": "SUB",
+      "sort_order": 2,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "8c668ca6-2758-44cd-86d9-d57a11c16317",
+      "chapter_key": "mep_rough",
+      "title": "Electrical Rough-In",
+      "description": null,
+      "owner": "SUB",
+      "sort_order": 3,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "87a475d9-db3a-47f3-946c-f30deb2de78a",
+      "chapter_key": "mep_rough",
+      "title": "Exterior Coordination for MEP",
+      "description": "Siding and exterior components required for penetrations onsite.",
+      "owner": "GC",
+      "sort_order": 4,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "2222b479-3de4-4bc9-a7d0-68527d6e03f1",
+      "chapter_key": "insulation",
+      "title": "Insulation",
+      "description": "Install insulation and pass inspection.",
+      "owner": "SUB",
+      "sort_order": 1,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "20ff12c9-b2fd-45a9-9559-e45b1d8c7ddc",
+      "chapter_key": "drywall",
+      "title": "Drywall",
+      "description": "Floors papered before finishing; in cold months, heat must be operational before drywall begins.",
+      "owner": "SUB",
+      "sort_order": 1,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "4356570e-8819-46b4-beb4-df1c437c9cd6",
+      "chapter_key": "drywall",
+      "title": "Garage Door Installation",
+      "description": "Install garage door after drywall finishing.",
+      "owner": "SUB",
+      "sort_order": 2,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "55840aba-a422-4a88-b165-42fa5755034e",
+      "chapter_key": "finishes",
+      "title": "Prime & Ceiling Finish",
+      "description": "Prime all walls and ceilings; final coat on ceilings.",
+      "owner": "SUB",
+      "sort_order": 1,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "5efd9d5f-573c-4fe2-8cc1-a7a1ba475542",
+      "chapter_key": "finishes",
+      "title": "Carpentry & Cabinet Installation",
+      "description": "Cabinets, trim, interior doors, finish panels; exterior doors covered and protected; thresholds protected.",
+      "owner": "SUB",
+      "sort_order": 2,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "1bd36804-dac3-4052-9305-0d6d0e756ea0",
+      "chapter_key": "finishes",
+      "title": "Countertop Measurement",
+      "description": "Measure after cabinets installed; typical lead time approximately 2 weeks.",
+      "owner": "GC",
+      "sort_order": 3,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "c9bac606-4070-4b96-9b0c-1d231ebfe85b",
+      "chapter_key": "finishes",
+      "title": "Final Paint",
+      "description": "Two coats on trim; two coats on walls.",
+      "owner": "SUB",
+      "sort_order": 4,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "b77a0dfd-c352-417f-a088-6d84dde172b0",
+      "chapter_key": "finishes",
+      "title": "Final Trade Sequencing",
+      "description": "1) Final electrical 2) Flooring 3) Final HVAC 4) Countertops 5) Final plumbing.",
+      "owner": "GC",
+      "sort_order": 5,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "bd87e524-5d66-4ac2-b26e-49918e10edcf",
+      "chapter_key": "finishes",
+      "title": "Countertop Protection",
+      "description": "Countertops covered immediately after install.",
+      "owner": "GC",
+      "sort_order": 6,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "2d35294e-fae9-4bfa-8b8f-b5343f1f64f5",
+      "chapter_key": "finishes",
+      "title": "Appliances",
+      "description": "Deliver and install appliances.",
+      "owner": "SUB",
+      "sort_order": 7,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "603c3cf6-d267-429b-9aac-ef4b5488b330",
+      "chapter_key": "finishes",
+      "title": "Exterior Close-Out",
+      "description": "Final grading and landscaping; pour driveways, porches, sidewalks.",
+      "owner": "SUB",
+      "sort_order": 8,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    },
+    {
+      "id": "24174ad7-5af2-44a6-abd9-bdc6a9c1e063",
+      "chapter_key": "turnover",
+      "title": "Turnover & Close-Out",
+      "description": "All finishes complete; utilities active; exterior work complete; project ready for turnover.",
+      "owner": "GC",
+      "sort_order": 1,
+      "created_at": "2026-02-09T19:36:44.61014+00:00",
+      "updated_at": "2026-02-09T19:36:44.61014+00:00"
+    }
+  ],
+  "row_count": 37
+}
