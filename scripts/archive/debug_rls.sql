@@ -27,3 +27,4 @@ INSERT INTO project_forms (
   '{}',
   'draft'
 ) RETURNING *;
+

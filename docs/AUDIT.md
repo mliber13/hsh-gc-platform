@@ -272,6 +272,7 @@
 | H23 | `VarianceReport.tsx:344` | `const tradeActual = 0 // TODO` — variance math skipped. |
 | H24 | `usePermissions.ts:28-36` | Offline grants all roles admin → inconsistent with online. |
 | H25 | 7 empty catch blocks | `catch (_) {}` in `selectionBookService.ts` (:560,568,604,810,818,855), `selectionScheduleService.ts:63`, QB function (:364) — silent swallowing. |
+| H26 | `org_team`, `project_events`, `work_packages` | **Tables without RLS policies — org isolation not enforced at DB level.** Impact: any authenticated user can read/write all rows regardless of org. Track for dedicated post-A5 follow-up fix (do not bundle into current A5 cutover). |
 
 ### MEDIUM (polish / partial features)
 

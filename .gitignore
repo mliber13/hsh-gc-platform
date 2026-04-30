@@ -84,3 +84,11 @@ jspm_packages/
 
 # Local AI assistant/worktree metadata
 .claude/worktrees/
+
+# Cursor / MCP tool-call scratch files (project root only)
+/_*.json
+/_*.txt
+/_*.b64
+/mcp_invoke_*.json
+/p?.json
+/p??.json

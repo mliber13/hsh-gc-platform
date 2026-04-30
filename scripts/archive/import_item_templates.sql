@@ -82,3 +82,4 @@ INSERT INTO item_templates (
 
 -- Drywall
 ('Full Scope', 'drywall', 'lot', 0, 0, 0, true, 'Complete drywall scope - get quote', 'default-org', NOW(), NOW());
+
