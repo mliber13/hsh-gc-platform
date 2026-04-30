@@ -7,8 +7,8 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import hshLogo from '/HSH Contractor Logo - Color.png'
 import { PrintableReport, ReportDepth } from './PrintableReport'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 import {
   Project,
   Estimate,
@@ -62,6 +62,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { fetchSubcontractors } from '@/services/partnerDirectoryService'
 import { CreatePOModal } from './CreatePOModal'
 import { getCategoryAccentColor } from '@/lib/categoryAccent'
@@ -88,8 +94,9 @@ import {
   AlertTriangle, 
   CheckCircle, 
   XCircle, 
-  ChevronDown, 
+  ChevronDown,
   ChevronUp,
+  ChevronRight,
   ArrowLeft,
   Printer,
   Save,
@@ -144,7 +151,9 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   const [showBulkMarkupDialog, setShowBulkMarkupDialog] = useState(false)
   const [bulkMarkupPercent, setBulkMarkupPercent] = useState(markupPercent.toString())
   const [showCreatePO, setShowCreatePO] = useState(false)
-  const [showMobileActions, setShowMobileActions] = useState(false)
+
+  // Centered title in the AppHeader
+  usePageTitle('Estimate Book')
 
   // Initialize project if none provided
   useEffect(() => {
@@ -870,15 +879,20 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20 sm:pb-0">
-      <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
-        <div className="w-full space-y-4 sm:space-y-6">
-          {/* Header Section with integrated back button */}
-          <ProjectHeader
-            project={projectData}
-            onUpdate={handleProjectUpdate}
-            onBack={onBack}
-          />
+    <div className="flex flex-col gap-6 p-6">
+      {/* Top action strip — back link only; primary actions live inside SummarySection */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back to Project Overview
+        </button>
+      </div>
+
+      {/* Project Info card — 8-cell grid (Name / Plan / Type / Location / Start / End / Status / Created) */}
+      {projectData && <ProjectInfoCard project={projectData} />}
 
         {/* Summary Section */}
         <SummarySection 
@@ -985,20 +999,17 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
                     placeholder="Optional description"
                   />
                 </div>
-                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
-                  <p className="font-semibold text-blue-900 mb-1">Template Info:</p>
-                  <ul className="text-blue-800 space-y-1">
+                <div className="rounded border border-border bg-muted/40 p-3 text-sm">
+                  <p className="mb-1 font-semibold">Template Info:</p>
+                  <ul className="space-y-1 text-muted-foreground">
                     <li>• {trades.length} line items will be saved</li>
                     <li>• Default markup: {markupPercent.toFixed(1)}%</li>
                     <li>• Default contingency: {contingencyPercent.toFixed(1)}%</li>
                   </ul>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    onClick={handleSaveAsTemplate}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
+                  <Button onClick={handleSaveAsTemplate} className="flex-1">
+                    <Save className="size-4" />
                     Save Template
                   </Button>
                   <Button
@@ -1035,16 +1046,13 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
                     onChange={(e) => setBulkMarkupPercent(e.target.value)}
                     placeholder="20"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     This will update the markup percentage for all {trades.length} cost item(s) in this estimate.
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    onClick={handleBulkUpdateMarkup}
-                    className="flex-1 bg-gradient-to-r from-[#D95C00] to-[#C04F00] hover:from-[#C04F00] hover:to-[#A93226]"
-                  >
-                    <Percent className="w-4 h-4 mr-2" />
+                  <Button onClick={handleBulkUpdateMarkup} className="flex-1">
+                    <Percent className="size-4" />
                     Update All Items
                   </Button>
                   <Button
@@ -1070,7 +1078,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
                 <div>
                   <Label htmlFor="template-select">Select Template *</Label>
                   {availableTemplates.length === 0 ? (
-                    <p className="text-sm text-gray-500 mt-2">
+                    <p className="mt-2 text-sm text-muted-foreground">
                       No estimate templates available. Create one by clicking "Save as Template" on an existing estimate.
                     </p>
                   ) : (
@@ -1088,7 +1096,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-gray-600 mt-2">
+                      <p className="mt-2 text-xs text-muted-foreground">
                         The template's trades will be added to your current estimate.
                         {trades.length > 0 && ` You currently have ${trades.length} trade(s).`}
                       </p>
@@ -1096,18 +1104,17 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <Button 
+                  <Button
                     type="button"
                     onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
-                      console.log('🖱️ Button physically clicked')
                       handleApplyTemplate()
                     }}
                     disabled={!selectedTemplateToApply || availableTemplates.length === 0}
-                    className="flex-1 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600"
+                    className="flex-1"
                   >
-                    <FileText className="w-4 h-4 mr-2" />
+                    <FileText className="size-4" />
                     Apply Template
                   </Button>
                   <Button
@@ -1125,257 +1132,128 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
             </Card>
           </div>
         )}
-        </div>
-      </div>
-      
-      {/* Mobile: bottom Actions menu - match Projects Dashboard / Deal Pipeline */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
-        {showMobileActions && (
-          <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
-            {onBack && (
-              <button
-                onClick={() => { onBack(); setShowMobileActions(false) }}
-                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
-              >
-                <ArrowLeft className="w-5 h-5 text-gray-400" />
-                <span className="font-medium">{projectData ? 'Back to Project' : 'Back to Projects'}</span>
-              </button>
-            )}
-            <button
-              onClick={() => { setShowCreatePO(true); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-amber-500/30 bg-amber-50/50"
-            >
-              <ClipboardList className="w-5 h-5 text-amber-600" />
-              <div>
-                <p className="font-medium text-gray-900">Create PO</p>
-                <p className="text-xs text-gray-500">Create purchase order from estimate</p>
-              </div>
-            </button>
-            <button
-              onClick={() => { handleOpenApplyTemplate(); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
-            >
-              <FileText className="w-5 h-5 text-purple-500" />
-              <div>
-                <p className="font-medium text-gray-900">Apply Template</p>
-                <p className="text-xs text-gray-500">Apply an estimate template</p>
-              </div>
-            </button>
-            <button
-              onClick={() => { setShowSaveTemplateDialog(true); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
-            >
-              <Save className="w-5 h-5 text-blue-500" />
-              <div>
-                <p className="font-medium text-gray-900">Save as Template</p>
-                <p className="text-xs text-gray-500">Save this estimate as a template</p>
-              </div>
-            </button>
-            <p className="text-xs font-semibold text-gray-500 px-3 pt-2 pb-1">Export PDF</p>
-            <button
-              onClick={() => { handlePrintReport('summary'); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
-            >
-              <Printer className="w-5 h-5 text-[#34AB8A]" />
-              <span className="text-sm">Summary only</span>
-            </button>
-            <button
-              onClick={() => { handlePrintReport('category'); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
-            >
-              <Printer className="w-5 h-5 text-[#34AB8A]" />
-              <span className="text-sm">Category detail</span>
-            </button>
-            <button
-              onClick={() => { handlePrintReport('full'); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
-            >
-              <Printer className="w-5 h-5 text-[#34AB8A]" />
-              <span className="text-sm">Full detail</span>
-            </button>
-          </div>
-        )}
-        <div className="p-2">
-          <Button
-            onClick={() => setShowMobileActions(!showMobileActions)}
-            variant="outline"
-            className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
-          >
-            <span className="flex items-center justify-center gap-2 text-gray-700">
-              Actions
-              <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
-            </span>
-          </Button>
-        </div>
-      </div>
     </div>
   )
 }
 
 // ----------------------------------------------------------------------------
-// Project Header Component
+// Project Info Card — v0-style 8-cell grid for the Estimate Book header
 // ----------------------------------------------------------------------------
 
-interface ProjectHeaderProps {
+interface ProjectInfoCardProps {
   project: Project
-  onUpdate: (updates: Partial<Project>) => void
-  onBack?: () => void
 }
 
-function ProjectHeader({ project, onUpdate, onBack }: ProjectHeaderProps) {
-  const getStatusColor = (status: string) => {
-    const colors = {
-      estimating: 'bg-blue-100 text-blue-800',
-      'in-progress': 'bg-orange-100 text-orange-800',
-      complete: 'bg-green-100 text-green-800',
+function ProjectInfoCard({ project }: ProjectInfoCardProps) {
+  const planLabel =
+    project.metadata?.isCustomPlan || !project.metadata?.planId
+      ? 'Custom Plan'
+      : project.metadata.planId
+  const location = [
+    project.address?.street,
+    [project.city, project.state].filter(Boolean).join(', '),
+    project.zipCode,
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const status = project.status.replace('-', ' ')
+
+  return (
+    <Card className="border-border/60 bg-card/50">
+      <CardContent className="p-6">
+        <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+          <InfoCell label="Project Name" value={project.name} />
+          <InfoCell
+            label="Plan ID"
+            value={planLabel}
+            badges={project.metadata?.planOptions}
+          />
+          <InfoCell label="Type" value={project.type.replace(/-/g, ' ')} capitalize />
+          <InfoCell label="Location" value={location || 'Not set'} />
+          <InfoCell
+            label="Start Date"
+            value={
+              project.startDate
+                ? project.startDate.toLocaleDateString()
+                : 'Not set'
+            }
+          />
+          <InfoCell
+            label="End Date"
+            value={
+              project.endDate ? project.endDate.toLocaleDateString() : 'Not set'
+            }
+          />
+          <InfoCell label="Status" value={status} capitalize statusPill />
+          <InfoCell
+            label="Created"
+            value={project.createdAt.toLocaleDateString()}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function InfoCell({
+  label,
+  value,
+  capitalize,
+  statusPill,
+  badges,
+}: {
+  label: string
+  value: string
+  capitalize?: boolean
+  statusPill?: boolean
+  badges?: string[]
+}) {
+  const statusVisual = (s: string) => {
+    switch (s.toLowerCase().trim()) {
+      case 'estimating':
+        return 'bg-violet-500/15 text-violet-500 border-violet-500/30'
+      case 'bidding':
+        return 'bg-amber-500/15 text-amber-500 border-amber-500/30'
+      case 'awarded':
+      case 'complete':
+        return 'bg-sky-500/15 text-sky-500 border-sky-500/30'
+      case 'in progress':
+        return 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
+      default:
+        return 'bg-muted text-muted-foreground border-border'
     }
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
 
   return (
-    <>
-      {/* Mobile Header - Matches Project Detail Style */}
-      <header className="sm:hidden bg-white shadow-md border-b border-gray-200">
-        <div className="px-4 py-4">
-          <div className="flex items-center space-x-3">
-            <img src={hshLogo} alt="HSH Contractor" className="h-16 w-auto" />
-            <div className="flex-1">
-              <div className="flex flex-col gap-2 mb-1">
-                <h1 className="text-lg font-bold text-gray-900">{project.name}</h1>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)} w-fit`}>
-                  {project.status.replace('-', ' ').toUpperCase()}
-                </span>
-              </div>
-              <p className="text-xs text-gray-600">
-                Plan: {project.metadata?.isCustomPlan || !project.metadata?.planId ? (
-                  <>
-                    Custom
-                    <span className="ml-1 text-xs bg-[#0E79C9] text-white px-1.5 py-0.5 rounded">Custom</span>
-                  </>
-                ) : (
-                  project.metadata.planId
-                )}
-              </p>
-            </div>
-          </div>
+    <div className="space-y-1">
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      {statusPill ? (
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${statusVisual(value)}`}
+        >
+          <span className="size-1.5 rounded-full bg-current" />
+          <span className={capitalize ? 'capitalize' : ''}>{value}</span>
+        </span>
+      ) : (
+        <p className={`text-sm font-medium ${capitalize ? 'capitalize' : ''}`}>
+          {value}
+        </p>
+      )}
+      {badges && badges.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-0.5">
+          {badges.map((b) => (
+            <span
+              key={b}
+              className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+            >
+              {b}
+            </span>
+          ))}
         </div>
-      </header>
-
-      {/* Desktop Header - Card Style with Full Details */}
-      <Card className="hidden sm:block bg-gradient-to-br from-gray-50 to-white text-gray-900 border border-gray-200 shadow-lg">
-        <CardHeader className="pb-3 sm:pb-6">
-          <div className="space-y-2 sm:space-y-4">
-            <div className="flex items-center justify-center gap-2 sm:gap-4 lg:gap-6">
-            {/* HSH Logo */}
-            <div className="flex-shrink-0">
-              <img 
-                src={hshLogo} 
-                alt="HSH Contractor Logo" 
-                className="h-20 sm:h-32 lg:h-40 w-auto"
-              />
-            </div>
-            
-            {/* Estimate Book Title */}
-            <div className="flex-shrink-0">
-                <h2 className="text-xl sm:text-4xl lg:text-5xl font-bold text-gray-900">Estimate Book</h2>
-            </div>
-          </div>
-          
-            {/* Back Button - Desktop Only */}
-          {onBack && (
-              <div className="hidden sm:flex justify-center">
-              <Button
-                onClick={onBack}
-                variant="outline"
-                  size="sm"
-                  className="border-gray-300 hover:bg-gray-50 w-full max-w-md text-xs sm:text-sm"
-              >
-                  <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                {project ? 'Back to Project Detail' : 'Back to Projects'}
-              </Button>
-            </div>
-          )}
-        </div>
-      </CardHeader>
-      
-      <CardContent>
-          <div className="space-y-2 sm:space-y-3">
-            {/* Row 1: Project Name | Plan ID | Project Type | Project Location */}
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-x-2 sm:gap-x-4 gap-y-2 sm:gap-y-3">
-            <div>
-                <Label className="text-[#E65133] text-xs sm:text-sm">Project Name</Label>
-                <p className="text-gray-900 font-semibold text-xs sm:text-sm">{project.name}</p>
-            </div>
-            <div>
-                <Label className="text-[#E65133] text-xs sm:text-sm">Plan ID</Label>
-                <div className="flex items-center gap-1 sm:gap-2">
-                  {project.metadata?.isCustomPlan || !project.metadata?.planId ? (
-                    <>
-                      <p className="text-gray-900 font-semibold text-xs sm:text-sm">Custom</p>
-                      <span className="text-xs bg-[#0E79C9] text-white px-1 sm:px-2 py-0.5 rounded">
-                        Custom
-                      </span>
-                    </>
-                  ) : (
-                    <p className="text-gray-900 font-semibold text-xs sm:text-sm">{project.metadata.planId}</p>
-                  )}
-                </div>
-              {project.metadata?.planOptions && project.metadata.planOptions.length > 0 && (
-                <div className="mt-1">
-                  {project.metadata.planOptions.map((option: string) => (
-                    <span 
-                      key={option}
-                        className="inline-block text-xs bg-purple-50 text-purple-700 px-1 sm:px-2 py-0.5 sm:py-1 rounded mr-1"
-                    >
-                      {option}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div>
-                <Label className="text-[#E65133] text-xs sm:text-sm">Type</Label>
-                <p className="text-gray-900 font-semibold text-xs sm:text-sm capitalize">{project.type.replace('-', ' ')}</p>
-            </div>
-            <div>
-                <Label className="text-[#E65133] text-xs sm:text-sm">Location</Label>
-                <p className="text-gray-900 font-semibold text-xs sm:text-sm">
-                {project.address?.street || 'Not set'}
-                {project.city && `, ${project.city}`}
-                {project.state && `, ${project.state}`}
-                {project.zipCode && ` ${project.zipCode}`}
-              </p>
-            </div>
-            </div>
-            
-            {/* Row 2: Start Date | End Date | Status | Created */}
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-x-2 sm:gap-x-4 gap-y-2 sm:gap-y-3">
-            <div>
-                <Label className="text-[#E65133] text-xs sm:text-sm">Start Date</Label>
-                <p className="text-gray-900 font-semibold text-xs sm:text-sm">
-                {project.startDate ? project.startDate.toLocaleDateString() : 'Not set'}
-              </p>
-            </div>
-            <div>
-                <Label className="text-[#E65133] text-xs sm:text-sm">End Date</Label>
-                <p className="text-gray-900 font-semibold text-xs sm:text-sm">
-                {project.endDate ? project.endDate.toLocaleDateString() : 'Not set'}
-              </p>
-            </div>
-            <div>
-                <Label className="text-[#E65133] text-xs sm:text-sm">Status</Label>
-                <p className="text-gray-900 font-semibold text-xs sm:text-sm capitalize">{project.status.replace('-', ' ')}</p>
-            </div>
-            <div>
-                <Label className="text-[#E65133] text-xs sm:text-sm">Created</Label>
-                <p className="text-gray-900 font-semibold text-xs sm:text-sm">{project.createdAt.toLocaleDateString()}</p>
-            </div>
-            </div>
-
-          </div>
-      </CardContent>
-    </Card>
-    </>
+      )}
+    </div>
   )
 }
 
@@ -1403,179 +1281,176 @@ interface SummarySectionProps {
 function SummarySection({ totals, onContingencyChange, onPrintReport, onSaveAsTemplate, onApplyTemplate, onCreatePO }: SummarySectionProps) {
   const [isEditingContingency, setIsEditingContingency] = useState(false)
   const [tempContingency, setTempContingency] = useState(totals.contingencyPercent)
-  const [showPrintMenu, setShowPrintMenu] = useState(false)
-  
-  const formatCurrency = (amount: number) => 
+
+  const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
   const formatPercent = (percent: number) => `${percent.toFixed(1)}%`
-  
+
   const handleContingencySave = () => {
     onContingencyChange(tempContingency)
     setIsEditingContingency(false)
   }
 
+  // 5-card stat row matching v0's estimate-summary.tsx
+  const stats = [
+    {
+      label: 'Base Price Total',
+      value: formatCurrency(totals.basePriceTotal),
+      rail: 'bg-sky-500',
+      valueClass: '',
+      onClick: undefined as (() => void) | undefined,
+    },
+    {
+      label: `Contingency (${formatPercent(totals.contingencyPercent)})`,
+      value: formatCurrency(totals.contingency),
+      rail: 'bg-amber-500',
+      valueClass: '',
+      onClick: () => {
+        setTempContingency(totals.contingencyPercent)
+        setIsEditingContingency(true)
+      },
+    },
+    {
+      label: 'Gross Profit Total',
+      value: formatCurrency(totals.grossProfitTotal),
+      rail: 'bg-emerald-500',
+      valueClass: '',
+      onClick: undefined,
+    },
+    {
+      label: 'Margin of Profit',
+      value: formatPercent(totals.marginOfProfit),
+      rail: 'bg-violet-500',
+      valueClass: '',
+      onClick: undefined,
+    },
+    {
+      label: 'Total Estimated',
+      value: formatCurrency(totals.totalEstimated),
+      rail: 'bg-rose-500',
+      valueClass: 'text-rose-600 dark:text-rose-400',
+      highlight: true,
+      onClick: undefined,
+    },
+  ]
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-lg sm:text-xl shrink-0">Estimate Summary</CardTitle>
-          {/* Desktop: action buttons in header. Mobile: moved to bottom Actions menu */}
-          <div className="hidden sm:flex flex-wrap gap-2 w-auto">
-            {onCreatePO && (
-              <Button
-                onClick={onCreatePO}
-                variant="outline"
-                size="sm"
-                className="border-amber-600 text-amber-600 hover:bg-amber-600 hover:text-white"
-              >
-                <ClipboardList className="w-4 h-4 mr-2" />
-                Create PO
-              </Button>
-            )}
-            <Button
-              onClick={onApplyTemplate}
-              variant="outline"
-              size="sm"
-              className="border-purple-500 text-purple-500 hover:bg-purple-500 hover:text-white"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Apply Template
+    <section className="space-y-4">
+      {/* Section header — title + action buttons (Create PO / Apply Template / Save as Template / Export PDF) */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-semibold">Estimate Summary</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          {onCreatePO && (
+            <Button onClick={onCreatePO} variant="outline" size="sm">
+              <ClipboardList className="size-4" />
+              Create PO
             </Button>
-            <Button
-              onClick={onSaveAsTemplate}
-              variant="outline"
-              size="sm"
-              className="border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              Save as Template
-            </Button>
-            <div className="relative">
-              <Button
-                onClick={() => setShowPrintMenu(!showPrintMenu)}
-                variant="outline"
-                size="sm"
-                className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
-              >
-                <Printer className="w-4 h-4 mr-2" />
+          )}
+          <Button onClick={onApplyTemplate} variant="outline" size="sm">
+            <FileText className="size-4" />
+            Apply Template
+          </Button>
+          <Button onClick={onSaveAsTemplate} variant="outline" size="sm">
+            <Save className="size-4" />
+            Save as Template
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Printer className="size-4" />
                 Export PDF
               </Button>
-              {showPrintMenu && (
-                <div className="absolute right-0 top-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[200px]">
-                  <div className="p-2">
-                    <p className="text-xs font-semibold text-gray-700 mb-2 px-2">Select Detail Level:</p>
-                    <button
-                      onClick={() => {
-                        onPrintReport('summary')
-                        setShowPrintMenu(false)
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
-                    >
-                      📊 Summary Only
-                      <p className="text-xs text-gray-500">Category totals</p>
-                    </button>
-                    <button
-                      onClick={() => {
-                        onPrintReport('category')
-                        setShowPrintMenu(false)
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
-                    >
-                      📋 Category Detail
-                      <p className="text-xs text-gray-500">Subtotals by category</p>
-                    </button>
-                    <button
-                      onClick={() => {
-                        onPrintReport('full')
-                        setShowPrintMenu(false)
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
-                    >
-                      📄 Full Detail
-                      <p className="text-xs text-gray-500">Every line item</p>
-                    </button>
-                  </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => onPrintReport('summary')}>
+                <div className="flex flex-col">
+                  <span>Summary Only</span>
+                  <span className="text-xs text-muted-foreground">Category totals</span>
                 </div>
-              )}
-            </div>
-          </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onPrintReport('category')}>
+                <div className="flex flex-col">
+                  <span>Category Detail</span>
+                  <span className="text-xs text-muted-foreground">Subtotals by category</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onPrintReport('full')}>
+                <div className="flex flex-col">
+                  <span>Full Detail</span>
+                  <span className="text-xs text-muted-foreground">Every line item</span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="bg-[#213069] text-white p-4 rounded-lg text-center shadow-lg">
-            <p className="text-xs sm:text-sm opacity-90">Base Price Total</p>
-            <p className="text-xl sm:text-2xl font-bold">{formatCurrency(totals.basePriceTotal)}</p>
-          </div>
-          <div 
-            className="bg-[#D95C00] text-white p-4 rounded-lg text-center shadow-lg cursor-pointer hover:bg-[#C04F00] transition-colors"
-            onClick={() => {
-              setIsEditingContingency(true)
-              setTempContingency(totals.contingencyPercent)
-            }}
+      </div>
+
+      {/* 5-card stat grid */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        {stats.map((stat) => (
+          <Card
+            key={stat.label}
+            className={cn(
+              'relative overflow-hidden border-border/60',
+              stat.highlight ? 'bg-card border-border' : 'bg-card/50',
+              stat.onClick && 'cursor-pointer transition-colors hover:bg-card',
+            )}
+            onClick={stat.onClick}
           >
-            <p className="text-xs sm:text-sm opacity-90">
-              Contingency ({formatPercent(totals.contingencyPercent)})
-              <span className="ml-1">✏️</span>
-            </p>
-            <p className="text-xl sm:text-2xl font-bold">{formatCurrency(totals.contingency)}</p>
-          </div>
-          
-          {/* Contingency Edit Dialog */}
-          {isEditingContingency && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <Card className="w-full max-w-sm">
-                <CardHeader>
-                  <CardTitle>Edit Contingency %</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="mobile-contingency">Contingency Percentage</Label>
-                    <Input
-                      id="mobile-contingency"
-                      type="number"
-                      step="0.1"
-                      value={tempContingency}
-                      onChange={(e) => setTempContingency(parseFloat(e.target.value) || 0)}
-                      className="text-lg"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      onClick={handleContingencySave}
-                      className="flex-1 bg-[#D95C00] hover:bg-[#C04F00]"
-                    >
-                      Save
-                    </Button>
-                    <Button 
-                      onClick={() => setIsEditingContingency(false)}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-          <div className="bg-[#D95C00] text-white p-4 rounded-lg text-center shadow-lg">
-            <p className="text-xs sm:text-sm opacity-90">Gross Profit Total</p>
-            <p className="text-xl sm:text-2xl font-bold">{formatCurrency(totals.grossProfitTotal)}</p>
-          </div>
-          <div className="bg-[#D95C00] text-white p-4 rounded-lg text-center shadow-lg">
-            <p className="text-xs sm:text-sm opacity-90">Margin of Profit</p>
-            <p className="text-xl sm:text-2xl font-bold">{formatPercent(totals.marginOfProfit)}</p>
-          </div>
-          <div className="bg-[#34AB8A] text-white p-4 rounded-lg text-center shadow-lg sm:col-span-2 lg:col-span-1">
-            <p className="text-xs sm:text-sm opacity-90">Total Estimated</p>
-            <p className="text-xl sm:text-2xl font-bold">{formatCurrency(totals.totalEstimated)}</p>
-          </div>
+            <div className={cn('absolute inset-y-0 left-0 w-1', stat.rail)} aria-hidden />
+            <CardContent className="p-4 pl-5">
+              <p className="mb-1 text-xs text-muted-foreground">{stat.label}</p>
+              <p
+                className={cn(
+                  'text-xl font-semibold tabular-nums',
+                  stat.valueClass || 'text-foreground',
+                )}
+              >
+                {stat.value}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Contingency edit dialog */}
+      {isEditingContingency && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card className="w-full max-w-sm border-border bg-card">
+            <CardHeader>
+              <CardTitle>Edit Contingency %</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="contingency-pct">Contingency Percentage</Label>
+                <Input
+                  id="contingency-pct"
+                  type="number"
+                  step="0.1"
+                  value={tempContingency}
+                  onChange={(e) => setTempContingency(parseFloat(e.target.value) || 0)}
+                  className="text-lg"
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleContingencySave} className="flex-1">
+                  Save
+                </Button>
+                <Button
+                  onClick={() => setIsEditingContingency(false)}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </section>
   )
 }
 
@@ -1651,60 +1526,46 @@ function TradeTable({
   }, {} as Record<string, Trade[]>)
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <CardTitle>Estimate Breakdown</CardTitle>
-          <div className="flex flex-col sm:flex-row gap-2">
-            {trades.length > 0 && (
-              <>
-                <Button 
-                  onClick={onClearAll}
-                  variant="outline"
-                  size="sm"
-                  className="border-red-500 text-red-600 hover:bg-red-50 hover:border-red-600 w-full sm:w-auto"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Clear All
+    <section className="space-y-4">
+      {/* Section header — title + actions (Clear All / Bulk Markup / Add Default Categories / Add Cost Item) */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-semibold">Estimate Breakdown</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          {trades.length > 0 && (
+            <>
+              <Button
+                onClick={onClearAll}
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="size-4" />
+                Clear All
+              </Button>
+              {onBulkUpdateMarkup && (
+                <Button onClick={onBulkUpdateMarkup} variant="outline" size="sm">
+                  <Percent className="size-4" />
+                  Bulk Markup
                 </Button>
-                {onBulkUpdateMarkup && (
-                  <Button 
-                    onClick={onBulkUpdateMarkup}
-                    variant="outline"
-                    size="sm"
-                    className="border-[#D95C00] text-[#D95C00] hover:bg-[#D95C00] hover:text-white w-full sm:w-auto"
-                  >
-                    <Percent className="w-4 h-4 mr-2" />
-                    Bulk Markup
-                  </Button>
-                )}
-              </>
-            )}
-            <Button 
-              onClick={onAddDefaultCategories}
-              variant="outline"
-              size="sm"
-              className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white w-full sm:w-auto"
-            >
-              <Package className="w-4 h-4 mr-2" />
-              Add Default Categories
-            </Button>
-            <Button 
-              onClick={onAddTrade}
-              size="sm"
-              className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226] text-white border-none shadow-lg w-full sm:w-auto"
-            >
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Add Cost Item
-            </Button>
-          </div>
+              )}
+            </>
+          )}
+          <Button onClick={onAddDefaultCategories} variant="outline" size="sm">
+            <Package className="size-4" />
+            Add Default Categories
+          </Button>
+          <Button onClick={onAddTrade} size="sm">
+            <PlusCircle className="size-4" />
+            Add Cost Item
+          </Button>
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+
+      <div className="rounded-lg border border-border/60 bg-card/50">
         {/* Mobile View - Accordion Style */}
-        <div className="md:hidden space-y-2">
+        <div className="md:hidden space-y-2 p-2">
           {categoryOrder.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="py-12 text-center text-muted-foreground">
               No cost items added yet. Click "Add Cost Item" to get started.
             </div>
           ) : (
@@ -1716,94 +1577,118 @@ function TradeTable({
               const categoryEstimated = categoryTotal + categoryMarkup
 
               return (
-                <div key={category} className="flex rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm">
+                <div key={category} className="flex overflow-hidden rounded-lg border border-border/60 bg-card">
                   <div
-                    className="shrink-0 w-1.5 rounded-l-md"
+                    className="w-1 shrink-0"
                     style={{ backgroundColor: getCategoryAccentColor(category) }}
                     aria-hidden
                   />
-                  <Card className="flex-1 rounded-none border-0 shadow-none min-w-0">
-                  <button
-                    onClick={() => toggleCategory(category)}
-                    className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="text-left">
-                        <p className="font-bold text-gray-900">
-                          {byKey[category]?.label || category}
-                        </p>
-                        <p className="text-xs text-gray-500">{categoryTrades.length} items</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <p className="text-sm text-gray-600">Total</p>
-                        <p className="font-bold text-[#34AB8A]">{formatCurrency(categoryEstimated)}</p>
-                      </div>
-                      {isCategoryExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                    </div>
-                  </button>
-
-                  {isCategoryExpanded && (
-                    <div className="border-t border-gray-200 bg-gray-50 p-3 space-y-3">
-                      {categoryTrades.map((trade) => (
-                        <div key={trade.id} className="bg-white rounded-lg p-3 border border-gray-200">
-                          <div className="flex items-start justify-between mb-2">
-                            <h4 className="font-semibold text-gray-900">{trade.name}</h4>
-                            <p className="font-bold text-[#34AB8A] text-lg">{formatCurrency(trade.totalCost * 1.111)}</p>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                            <div>
-                              <span className="text-gray-500">Qty:</span>
-                              <span className="ml-1 font-medium">{trade.quantity} {UNIT_TYPES[trade.unit]?.abbreviation}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Base:</span>
-                              <span className="ml-1 font-medium">{formatCurrency(trade.totalCost)}</span>
-                              {trade.budgetTotalCost != null && trade.budgetTotalCost !== trade.totalCost && (
-                                <span className="block text-xs text-gray-500 mt-0.5">Budget: {formatCurrency(trade.budgetTotalCost)}</span>
-                              )}
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Material:</span>
-                              <span className="ml-1 font-medium">{formatCurrency(trade.materialCost)}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Labor:</span>
-                              <span className="ml-1 font-medium">{formatCurrency(trade.laborCost)}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Subcontractor:</span>
-                              <span className="ml-1 font-medium">{formatCurrency(trade.subcontractorCost)}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-2">
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => onEditTrade(trade)}
-                              className="flex-1"
-                            >
-                              <Edit className="w-3 h-3 mr-1" />
-                              Edit
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="destructive" 
-                              onClick={() => onDeleteTrade(trade.id)}
-                              className="flex-1"
-                            >
-                              <Trash2 className="w-3 h-3 mr-1" />
-                              Delete
-                            </Button>
-                          </div>
+                  <div className="min-w-0 flex-1">
+                    <button
+                      onClick={() => toggleCategory(category)}
+                      className="flex w-full items-center justify-between p-4 text-left transition-colors hover:bg-accent"
+                    >
+                      <div className="flex items-center gap-3">
+                        <ChevronRight
+                          className={cn(
+                            'size-4 text-muted-foreground transition-transform',
+                            isCategoryExpanded && 'rotate-90',
+                          )}
+                        />
+                        <div className="text-left">
+                          <p className="font-semibold">
+                            {byKey[category]?.label || category}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {categoryTrades.length} items
+                          </p>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  </Card>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Total</p>
+                        <p className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                          {formatCurrency(categoryEstimated)}
+                        </p>
+                      </div>
+                    </button>
+
+                    {isCategoryExpanded && (
+                      <div className="space-y-3 border-t border-border/60 bg-muted/20 p-3">
+                        {categoryTrades.map((trade) => (
+                          <div
+                            key={trade.id}
+                            className="rounded-lg border border-border/60 bg-card p-3"
+                          >
+                            <div className="mb-2 flex items-start justify-between gap-2">
+                              <h4 className="font-semibold">{trade.name}</h4>
+                              <p className="text-lg font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                                {formatCurrency(trade.totalCost * 1.111)}
+                              </p>
+                            </div>
+
+                            <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">Qty:</span>
+                                <span className="ml-1 font-medium">
+                                  {trade.quantity} {UNIT_TYPES[trade.unit]?.abbreviation}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Base:</span>
+                                <span className="ml-1 font-medium">
+                                  {formatCurrency(trade.totalCost)}
+                                </span>
+                                {trade.budgetTotalCost != null && trade.budgetTotalCost !== trade.totalCost && (
+                                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                                    Budget: {formatCurrency(trade.budgetTotalCost)}
+                                  </span>
+                                )}
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Material:</span>
+                                <span className="ml-1 font-medium">
+                                  {formatCurrency(trade.materialCost)}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Labor:</span>
+                                <span className="ml-1 font-medium">
+                                  {formatCurrency(trade.laborCost)}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Subcontractor:</span>
+                                <span className="ml-1 font-medium">
+                                  {formatCurrency(trade.subcontractorCost)}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onEditTrade(trade)}
+                                className="flex-1"
+                              >
+                                <Edit className="size-3" />
+                                Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => onDeleteTrade(trade.id)}
+                                className="flex-1"
+                              >
+                                <Trash2 className="size-3" />
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             })
@@ -1813,39 +1698,54 @@ function TradeTable({
         {/* Desktop View - Table */}
         <div className="hidden md:block">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse min-w-[1400px]">
+            <table className="w-full border-collapse min-w-[1400px] text-sm">
             <thead>
-              <tr className="border-b">
-                <th className="p-3"></th>
-                <th className="p-3"></th>
-                <th className="p-3 border-r-2 border-gray-300"></th>
-                <th className="text-center p-3 bg-emerald-600 text-white text-2xl font-bold border-r-2 border-emerald-700" colSpan={2}>Material</th>
-                <th className="text-center p-3 bg-blue-600 text-white text-2xl font-bold border-r-2 border-blue-700" colSpan={2}>Labor</th>
-                <th className="text-center p-3 bg-amber-600 text-white text-2xl font-bold border-r-2 border-amber-700" colSpan={2}>Subcontractor</th>
-                <th className="p-3 border-r-2 border-gray-300"></th>
-                <th className="p-3"></th>
-                <th className="p-3"></th>
-                <th className="p-3"></th>
-                <th className="p-3"></th>
-                <th className="p-3"></th>
-                <th className="p-3"></th>
+              <tr className="border-b border-border/60">
+                <th className="p-2"></th>
+                <th className="p-2"></th>
+                <th className="p-2 border-r border-border/60"></th>
+                <th className="p-2 text-center text-xs font-semibold text-muted-foreground bg-muted/30 border-r border-border/60" colSpan={2}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-sky-500" />
+                    Material
+                  </span>
+                </th>
+                <th className="p-2 text-center text-xs font-semibold text-muted-foreground bg-muted/30 border-r border-border/60" colSpan={2}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-amber-500" />
+                    Labor
+                  </span>
+                </th>
+                <th className="p-2 text-center text-xs font-semibold text-muted-foreground bg-muted/30 border-r border-border/60" colSpan={2}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-teal-500" />
+                    Subcontractor
+                  </span>
+                </th>
+                <th className="p-2 border-r border-border/60"></th>
+                <th className="p-2"></th>
+                <th className="p-2"></th>
+                <th className="p-2"></th>
+                <th className="p-2"></th>
+                <th className="p-2"></th>
+                <th className="p-2"></th>
               </tr>
-              <tr className="border-b">
-                <th className="text-left p-3 bg-[#213069] text-white border-r-2 border-gray-300">Category & Items</th>
-                <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Qty</th>
-                <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Unit</th>
-                <th className="text-center p-3 bg-emerald-700 text-white">Unit Cost</th>
-                <th className="text-center p-3 bg-emerald-700 text-white border-r-2 border-emerald-800">Cost</th>
-                <th className="text-center p-3 bg-blue-700 text-white">Unit Cost</th>
-                <th className="text-center p-3 bg-blue-700 text-white border-r-2 border-blue-800">Cost</th>
-                <th className="text-center p-3 bg-amber-700 text-white">Unit Cost</th>
-                <th className="text-center p-3 bg-amber-700 text-white border-r-2 border-amber-800">Cost</th>
-                <th className="text-center p-3 bg-[#0E79C9] text-white border-r-2 border-gray-300">Base Price</th>
-                <th className="text-center p-3 bg-[#D95C00] text-white border-r-2 border-gray-300">Markup</th>
-                <th className="text-center p-3 bg-[#D95C00] text-white border-r-2 border-gray-300">Gross Profit</th>
-                <th className="text-center p-3 bg-[#D95C00] text-white border-r-2 border-gray-300">Margin</th>
-                <th className="text-center p-3 bg-[#34AB8A] text-white border-r-2 border-gray-300">Total Estimated</th>
-                <th className="text-center p-3 bg-[#34AB8A] text-white">Actions</th>
+              <tr className="border-b border-border/60 bg-muted/30 text-xs font-medium text-muted-foreground">
+                <th className="p-2 text-left border-r border-border/60">Category &amp; Items</th>
+                <th className="p-2 text-center border-r border-border/60">Qty</th>
+                <th className="p-2 text-center border-r border-border/60">Unit</th>
+                <th className="p-2 text-center">Unit Cost</th>
+                <th className="p-2 text-center border-r border-border/60">Cost</th>
+                <th className="p-2 text-center">Unit Cost</th>
+                <th className="p-2 text-center border-r border-border/60">Cost</th>
+                <th className="p-2 text-center">Unit Cost</th>
+                <th className="p-2 text-center border-r border-border/60">Cost</th>
+                <th className="p-2 text-center border-r border-border/60">Base Price</th>
+                <th className="p-2 text-center border-r border-border/60">Markup</th>
+                <th className="p-2 text-center border-r border-border/60">Gross Profit</th>
+                <th className="p-2 text-center border-r border-border/60">Margin</th>
+                <th className="p-2 text-center border-r border-border/60">Total Estimated</th>
+                <th className="p-2 text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1862,33 +1762,54 @@ function TradeTable({
                 return (
                   <React.Fragment key={category}>
                     {/* Category Header Row */}
-                    <tr 
-                      className="bg-gray-50 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                    <tr
+                      className="cursor-pointer bg-muted/30 font-medium transition-colors hover:bg-muted/50"
                       onClick={() => toggleCategory(category)}
                     >
-                      <td 
-                        className="p-3 border-b border-r-2 border-gray-300 pl-8 bg-gray-50"
-                        style={{ borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: getCategoryAccentColor(category) }}
+                      <td
+                        className="p-2 pl-4 border-b border-r border-border/60"
+                        style={{
+                          borderLeftWidth: 3,
+                          borderLeftStyle: 'solid',
+                          borderLeftColor: getCategoryAccentColor(category),
+                        }}
                       >
                         <div className="flex items-center gap-2">
-                          {isCategoryExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
+                          <ChevronRight
+                            className={cn(
+                              'size-4 text-muted-foreground transition-transform',
+                              isCategoryExpanded && 'rotate-90',
+                            )}
+                          />
                           {byKey[category]?.label || category}
                         </div>
                       </td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
-                      <td className="p-3 text-center border-b bg-emerald-50"></td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-emerald-50">{formatCurrency(categoryMaterialTotal)}</td>
-                      <td className="p-3 text-center border-b bg-blue-50"></td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-blue-50">{formatCurrency(categoryLaborTotal)}</td>
-                      <td className="p-3 text-center border-b bg-amber-50"></td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-amber-50">{formatCurrency(categorySubcontractorTotal)}</td>
-                      <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300 bg-gray-50">{formatCurrency(categoryTotal)}</td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500 bg-gray-50">-</td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-gray-50">{formatCurrency(categoryMarkupTotal)}</td>
-                      <td className="p-3 text-center border-b border-r-2 border-gray-300 text-gray-500 bg-gray-50">-</td>
-                      <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300 bg-gray-50">{formatCurrency(categoryFinalTotal)}</td>
-                      <td className="p-3 text-center border-b bg-gray-50"></td>
+                      <td className="p-2 text-center border-b border-r border-border/60"></td>
+                      <td className="p-2 text-center border-b border-r border-border/60"></td>
+                      <td className="p-2 text-center border-b"></td>
+                      <td className="p-2 text-center border-b border-r border-border/60 font-medium tabular-nums text-sky-600 dark:text-sky-400">
+                        {formatCurrency(categoryMaterialTotal)}
+                      </td>
+                      <td className="p-2 text-center border-b"></td>
+                      <td className="p-2 text-center border-b border-r border-border/60 font-medium tabular-nums text-amber-600 dark:text-amber-400">
+                        {formatCurrency(categoryLaborTotal)}
+                      </td>
+                      <td className="p-2 text-center border-b"></td>
+                      <td className="p-2 text-center border-b border-r border-border/60 font-medium tabular-nums text-teal-600 dark:text-teal-400">
+                        {formatCurrency(categorySubcontractorTotal)}
+                      </td>
+                      <td className="p-2 text-center border-b border-r border-border/60 font-semibold tabular-nums">
+                        {formatCurrency(categoryTotal)}
+                      </td>
+                      <td className="p-2 text-center border-b border-r border-border/60 text-muted-foreground">-</td>
+                      <td className="p-2 text-center border-b border-r border-border/60 font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(categoryMarkupTotal)}
+                      </td>
+                      <td className="p-2 text-center border-b border-r border-border/60 text-muted-foreground">-</td>
+                      <td className="p-2 text-center border-b border-r border-border/60 font-semibold tabular-nums text-rose-600 dark:text-rose-400">
+                        {formatCurrency(categoryFinalTotal)}
+                      </td>
+                      <td className="p-2 text-center border-b"></td>
                     </tr>
 
                     {/* Trade rows within category */}
@@ -1896,113 +1817,132 @@ function TradeTable({
                       const isTradeExpanded = expandedTrades.has(trade.id)
                       const tradeSubItems = subItemsByTrade[trade.id] || []
                       const hasSubItems = tradeSubItems.length > 0
+                      const tradeMarkup = trade.markupPercent || defaultMarkupPercent
 
                       return (
                         <React.Fragment key={trade.id}>
-                                <tr className="hover:bg-gray-50/80 bg-white">
-                                  <td className="p-3 border-b pl-12 border-r-2 border-l-2 border-l-slate-200 border-gray-300 bg-white">
-                                    <div className="flex items-center gap-2">
-                                      {hasSubItems && (
-                                        <button
-                                          onClick={() => onToggleTradeExpansion(trade.id)}
-                                          className="p-1 hover:bg-gray-200 rounded"
-                                          title={isTradeExpanded ? 'Collapse sub-items' : 'Expand sub-items'}
-                                        >
-                                          {isTradeExpanded ? (
-                                            <ChevronDown className="w-4 h-4" />
-                                          ) : (
-                                            <ChevronUp className="w-4 h-4 rotate-180" />
-                                          )}
-                                        </button>
+                          <tr className="bg-card transition-colors hover:bg-muted/20">
+                            <td className="p-2 pl-10 border-b border-r border-border/60">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {hasSubItems && (
+                                  <button
+                                    onClick={() => onToggleTradeExpansion(trade.id)}
+                                    className="rounded p-0.5 transition-colors hover:bg-accent"
+                                    title={isTradeExpanded ? 'Collapse sub-items' : 'Expand sub-items'}
+                                  >
+                                    <ChevronRight
+                                      className={cn(
+                                        'size-3.5 text-muted-foreground transition-transform',
+                                        isTradeExpanded && 'rotate-90',
                                       )}
-                                      <span>{trade.name}</span>
-                                      {hasSubItems && (
-                                        <span className="text-xs text-gray-500">({tradeSubItems.length} sub-items)</span>
-                                      )}
-                                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getEstimateStatusBadgeClass(trade.estimateStatus || 'budget')}`}>
-                                        {ESTIMATE_STATUS[trade.estimateStatus || 'budget']?.icon} {getEstimateStatusLabel(trade.estimateStatus || 'budget')}
+                                    />
+                                  </button>
+                                )}
+                                <span>{trade.name}</span>
+                                {hasSubItems && (
+                                  <span className="text-xs text-muted-foreground">
+                                    ({tradeSubItems.length} sub-items)
+                                  </span>
+                                )}
+                                <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${getEstimateStatusBadgeClass(trade.estimateStatus || 'budget')}`}>
+                                  {ESTIMATE_STATUS[trade.estimateStatus || 'budget']?.icon}{' '}
+                                  {getEstimateStatusLabel(trade.estimateStatus || 'budget')}
+                                </span>
+                                {trade.quoteFileUrl && (
+                                  <span
+                                    className="text-sky-600 dark:text-sky-400"
+                                    title="Quote PDF attached"
+                                  >
+                                    <FileText className="size-4" />
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-2 text-center border-b border-r border-border/60 tabular-nums">{trade.quantity}</td>
+                            <td className="p-2 text-center border-b border-r border-border/60 text-muted-foreground">{UNIT_TYPES[trade.unit]?.abbreviation || trade.unit}</td>
+                            <td className="p-2 text-center border-b tabular-nums text-sky-600/80 dark:text-sky-400/80">{trade.materialRate ? formatCurrency(trade.materialRate) : '-'}</td>
+                            <td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-sky-600 dark:text-sky-400">{formatCurrency(trade.materialCost)}</td>
+                            <td className="p-2 text-center border-b tabular-nums text-amber-600/80 dark:text-amber-400/80">{trade.laborRate ? formatCurrency(trade.laborRate) : '-'}</td>
+                            <td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-amber-600 dark:text-amber-400">{formatCurrency(trade.laborCost)}</td>
+                            <td className="p-2 text-center border-b tabular-nums text-teal-600/80 dark:text-teal-400/80">{trade.subcontractorRate ? formatCurrency(trade.subcontractorRate) : '-'}</td>
+                            <td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-teal-600 dark:text-teal-400">{formatCurrency(trade.subcontractorCost)}</td>
+                            <td className="p-2 text-center border-b border-r border-border/60 tabular-nums">
+                              {formatCurrency(trade.totalCost)}
+                              {trade.budgetTotalCost != null && trade.budgetTotalCost !== trade.totalCost && (
+                                <span className="block text-xs text-muted-foreground">
+                                  Budget: {formatCurrency(trade.budgetTotalCost)}
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-2 text-center border-b border-r border-border/60 tabular-nums">{tradeMarkup.toFixed(1)}%</td>
+                            <td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(trade.totalCost * (tradeMarkup / 100))}</td>
+                            <td className="p-2 text-center border-b border-r border-border/60 tabular-nums">{((tradeMarkup / (100 + tradeMarkup)) * 100).toFixed(1)}%</td>
+                            <td className="p-2 text-center border-b border-r border-border/60 tabular-nums font-semibold text-rose-600 dark:text-rose-400">{formatCurrency(trade.totalCost * (1 + tradeMarkup / 100))}</td>
+                            <td className="p-2 text-center border-b">
+                              <div className="flex flex-wrap justify-center gap-1">
+                                <Button size="sm" variant="outline" onClick={() => onEditTrade(trade)}>Edit</Button>
+                                {isOnlineMode() && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => onAddSubItem(trade.id)}
+                                    title="Add sub-item"
+                                  >
+                                    <PlusCircle className="size-3" />
+                                    Sub-item
+                                  </Button>
+                                )}
+                                <Button size="sm" variant="destructive" onClick={() => onDeleteTrade(trade.id)}>Delete</Button>
+                              </div>
+                            </td>
+                          </tr>
+                          {isTradeExpanded && tradeSubItems.map((subItem: SubItem) => {
+                            const subMarkup = subItem.markupPercent ?? defaultMarkupPercent
+                            return (
+                              <tr key={subItem.id} className="bg-muted/10 transition-colors hover:bg-muted/20">
+                                <td className="p-2 pl-16 border-b border-r border-border/60">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm">{subItem.name}</span>
+                                    {subItem.selectionOnly && (
+                                      <span
+                                        className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                                        title="This line is for selections only; it does not affect the trade total."
+                                      >
+                                        Selection only
                                       </span>
-                                      {trade.quoteFileUrl && (
-                                        <span className="text-blue-600" title="Quote PDF attached">
-                                          <FileText className="w-4 h-4" />
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{trade.quantity}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{UNIT_TYPES[trade.unit]?.abbreviation || trade.unit}</td>
-                                  <td className="p-3 text-center border-b bg-emerald-50">{trade.materialRate ? formatCurrency(trade.materialRate) : '-'}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-emerald-50">{formatCurrency(trade.materialCost)}</td>
-                                  <td className="p-3 text-center border-b bg-blue-50">{trade.laborRate ? formatCurrency(trade.laborRate) : '-'}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-blue-50">{formatCurrency(trade.laborCost)}</td>
-                                  <td className="p-3 text-center border-b bg-amber-50">{trade.subcontractorRate ? formatCurrency(trade.subcontractorRate) : '-'}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-amber-50">{formatCurrency(trade.subcontractorCost)}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">
-                                    {formatCurrency(trade.totalCost)}
-                                    {trade.budgetTotalCost != null && trade.budgetTotalCost !== trade.totalCost && (
-                                      <span className="block text-xs text-gray-500">Budget: {formatCurrency(trade.budgetTotalCost)}</span>
                                     )}
-                                  </td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{(trade.markupPercent || defaultMarkupPercent).toFixed(1)}%</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{formatCurrency(trade.totalCost * ((trade.markupPercent || defaultMarkupPercent) / 100))}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{(((trade.markupPercent || defaultMarkupPercent) / (100 + (trade.markupPercent || defaultMarkupPercent))) * 100).toFixed(1)}%</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{formatCurrency(trade.totalCost * (1 + (trade.markupPercent || defaultMarkupPercent) / 100))}</td>
-                                  <td className="p-3 text-center border-b bg-white">
-                                    <div className="flex gap-1 flex-wrap">
-                                      <Button size="sm" variant="outline" onClick={() => onEditTrade(trade)}>Edit</Button>
-                                      {isOnlineMode() && (
-                                        <Button 
-                                          size="sm" 
-                                          variant="outline"
-                                          onClick={() => onAddSubItem(trade.id)}
-                                          title="Add sub-item"
-                                        >
-                                          <PlusCircle className="w-3 h-3 mr-1" />
-                                          Sub-item
-                                        </Button>
-                                      )}
-                                      <Button size="sm" variant="destructive" onClick={() => onDeleteTrade(trade.id)}>Delete</Button>
-                                    </div>
-                                  </td>
-                                </tr>
-                                {isTradeExpanded && tradeSubItems.map((subItem: SubItem) => (
-                                  <tr key={subItem.id} className="bg-blue-50/40 hover:bg-blue-50/60">
-                                    <td className="p-3 border-b pl-20 border-r-2 border-l-2 border-l-blue-200 border-gray-300 bg-blue-50/40">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm">{subItem.name}</span>
-                                        {subItem.selectionOnly && (
-                                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-700" title="This line is for selections only; it does not affect the trade total.">
-                                            Selection only
-                                          </span>
-                                        )}
-                                        {Boolean((subItem.selection as any)?.includeInSchedule) && (
-                                          <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700" title="Included in Selection Schedules export.">
-                                            In schedules
-                                          </span>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.quantity}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{(UNIT_TYPES[subItem.unit as UnitType]?.abbreviation) || subItem.unit}</td>
-                                    <td className="p-3 text-center border-b text-sm bg-emerald-50">{subItem.selectionOnly ? '-' : (subItem.materialRate ? formatCurrency(subItem.materialRate) : '-')}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50">{subItem.selectionOnly ? '-' : formatCurrency(subItem.materialCost)}</td>
-                                    <td className="p-3 text-center border-b text-sm bg-blue-50">{subItem.selectionOnly ? '-' : (subItem.laborRate ? formatCurrency(subItem.laborRate) : '-')}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50">{subItem.selectionOnly ? '-' : formatCurrency(subItem.laborCost)}</td>
-                                    <td className="p-3 text-center border-b text-sm bg-amber-50">{subItem.selectionOnly ? '-' : (subItem.subcontractorRate ? formatCurrency(subItem.subcontractorRate) : '-')}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50">{subItem.selectionOnly ? '-' : formatCurrency(subItem.subcontractorCost)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold bg-blue-50/40">{subItem.selectionOnly ? '-' : formatCurrency(subItem.totalCost)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.selectionOnly ? '-' : `${(subItem.markupPercent ?? defaultMarkupPercent).toFixed(1)}%`}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.selectionOnly ? '-' : formatCurrency(subItem.totalCost * ((subItem.markupPercent ?? defaultMarkupPercent) / 100))}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.selectionOnly ? '-' : (((subItem.markupPercent ?? defaultMarkupPercent) / (100 + (subItem.markupPercent ?? defaultMarkupPercent))) * 100).toFixed(1) + '%'}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-semibold bg-blue-50/40">{subItem.selectionOnly ? '-' : formatCurrency(subItem.totalCost * (1 + (subItem.markupPercent ?? defaultMarkupPercent) / 100))}</td>
-                                    <td className="p-3 text-center border-b bg-blue-50/40">
-                                      <div className="flex gap-1">
-                                        <Button size="sm" variant="outline" onClick={() => onEditSubItem(trade.id, subItem)}>Edit</Button>
-                                        <Button size="sm" variant="destructive" onClick={() => onDeleteSubItem(subItem.id, trade.id)}>Delete</Button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
+                                    {Boolean((subItem.selection as any)?.includeInSchedule) && (
+                                      <span
+                                        className="rounded bg-violet-500/15 px-1.5 py-0.5 text-xs text-violet-600 dark:text-violet-400"
+                                        title="Included in Selection Schedules export."
+                                      >
+                                        In schedules
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums">{subItem.quantity}</td>
+                                <td className="p-2 text-center border-b border-r border-border/60 text-sm text-muted-foreground">{(UNIT_TYPES[subItem.unit as UnitType]?.abbreviation) || subItem.unit}</td>
+                                <td className="p-2 text-center border-b text-sm tabular-nums text-sky-600/60 dark:text-sky-400/60">{subItem.selectionOnly ? '-' : (subItem.materialRate ? formatCurrency(subItem.materialRate) : '-')}</td>
+                                <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-sky-600/80 dark:text-sky-400/80">{subItem.selectionOnly ? '-' : formatCurrency(subItem.materialCost)}</td>
+                                <td className="p-2 text-center border-b text-sm tabular-nums text-amber-600/60 dark:text-amber-400/60">{subItem.selectionOnly ? '-' : (subItem.laborRate ? formatCurrency(subItem.laborRate) : '-')}</td>
+                                <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-amber-600/80 dark:text-amber-400/80">{subItem.selectionOnly ? '-' : formatCurrency(subItem.laborCost)}</td>
+                                <td className="p-2 text-center border-b text-sm tabular-nums text-teal-600/60 dark:text-teal-400/60">{subItem.selectionOnly ? '-' : (subItem.subcontractorRate ? formatCurrency(subItem.subcontractorRate) : '-')}</td>
+                                <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-teal-600/80 dark:text-teal-400/80">{subItem.selectionOnly ? '-' : formatCurrency(subItem.subcontractorCost)}</td>
+                                <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums">{subItem.selectionOnly ? '-' : formatCurrency(subItem.totalCost)}</td>
+                                <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums">{subItem.selectionOnly ? '-' : `${subMarkup.toFixed(1)}%`}</td>
+                                <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-emerald-600/80 dark:text-emerald-400/80">{subItem.selectionOnly ? '-' : formatCurrency(subItem.totalCost * (subMarkup / 100))}</td>
+                                <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums">{subItem.selectionOnly ? '-' : `${((subMarkup / (100 + subMarkup)) * 100).toFixed(1)}%`}</td>
+                                <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums font-medium text-rose-600/80 dark:text-rose-400/80">{subItem.selectionOnly ? '-' : formatCurrency(subItem.totalCost * (1 + subMarkup / 100))}</td>
+                                <td className="p-2 text-center border-b">
+                                  <div className="flex justify-center gap-1">
+                                    <Button size="sm" variant="outline" onClick={() => onEditSubItem(trade.id, subItem)}>Edit</Button>
+                                    <Button size="sm" variant="destructive" onClick={() => onDeleteSubItem(subItem.id, trade.id)}>Delete</Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
                         </React.Fragment>
                       )
                     })}
@@ -2011,7 +1951,7 @@ function TradeTable({
               })}
               {trades.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="p-8 text-center text-gray-500">
+                  <td colSpan={15} className="p-8 text-center text-muted-foreground">
                     No cost items added yet. Click "Add Cost Item" to get started.
                   </td>
                 </tr>
@@ -2020,8 +1960,8 @@ function TradeTable({
           </table>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }
 
