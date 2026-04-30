@@ -444,6 +444,13 @@ For form sections that previously used `<Label className="text-[#E65133]">`, dro
 11. **Section header tag matters.** Use `<h2 className="text-lg font-semibold">` (~18px) for section headers — never `<CardTitle>` (which renders ~24px and is reserved for actual Card titles). The page should have one heading hierarchy: AppHeader's centered title (page name) → `<h2>` for sections inside the page. Card titles inside dialogs/modals are fine since those are scoped.
 12. **Drop the Card wrapper around tables.** Even if the original code had `<Card><CardHeader><CardTitle>...</CardTitle></CardHeader><CardContent><table.../></CardContent></Card>`, the v0 pattern is a flat `<section>` with a sibling `<h2>` + bordered `<div className="rounded-lg border border-border/60 bg-card/50">` around just the table. See §11 + §15.
 13. **Cell content containing inline buttons inflates row height.** Patterns like `<div className="flex flex-col items-center gap-0.5"><span>$X</span><Button>View</Button></div>` push cells to ~45px when the button shows. Use the inline count badge per §15.7 instead — keeps cells single-line.
+14. **Dual rendering branches (full-page vs embedded).** Some pages render two layouts depending on whether `onBack` is provided (standalone full-page shell vs embedded inside another page). When porting, normalize to the shell layout *first* — drop the `onBack ? <FullPage> : <Embedded>` ternary and just render the embedded variant. The AppLayout shell now handles "standalone full page" concerns (sidebar, header, navigation), so the ported page never needs its own full-page chrome. This avoids duplicating visual logic across both branches.
+15. **Dense CRUD admin page sequencing.** For pages with many UI surfaces (lists + tabs + chips + cards + multiple dialogs — `ContactDirectory.tsx` is the reference), follow this order to minimize churn:
+    1. Top-strip + outer-wrapper layout conversion (drop hero, add `usePageTitle`, swap wrapper)
+    2. Tab/chip token sweep (status filters, type pills, segmented controls)
+    3. Row/card token sweep (list item visuals, hover states, selected state)
+    4. Dialog/modal chrome sweep (last because dialogs are leaf nodes)
+    5. Run `npx tsc --noEmit` once at the end, not after each step (tsc is forgiving of mid-port states; running it earlier creates noise)
 
 ---
 

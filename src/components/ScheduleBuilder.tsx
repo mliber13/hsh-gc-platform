@@ -51,7 +51,8 @@ import {
   addDays,
 } from 'date-fns'
 import { toLocalDate, toLocalEndOfDay, getItemColsForWeek as getItemColsForWeekUtil } from '@/lib/scheduleCalendarUtils'
-import hshLogo from '/HSH Contractor Logo - Color.png'
+import { cn } from '@/lib/utils'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 
 // ----------------------------------------------------------------------------
 // Types
@@ -75,6 +76,9 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [scheduleView, setScheduleView] = useState<'list' | 'calendar'>('list')
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => project.startDate ? new Date(project.startDate) : new Date())
+
+  // Centered title in the AppHeader
+  usePageTitle('Schedule')
 
   // Load trades and initialize schedule (async when using hybrid)
   useEffect(() => {
@@ -320,10 +324,10 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
 
   const getStatusColor = (status: ScheduleItem['status']) => {
     switch (status) {
-      case 'complete': return 'bg-green-100 text-green-800 border-green-300'
-      case 'in-progress': return 'bg-orange-100 text-orange-800 border-orange-300'
-      case 'delayed': return 'bg-red-100 text-red-800 border-red-300'
-      default: return 'bg-gray-100 text-gray-800 border-gray-300'
+      case 'complete': return 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30'
+      case 'in-progress': return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+      case 'delayed': return 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+      default: return 'bg-muted/40 text-muted-foreground border-border/60'
     }
   }
 
@@ -363,200 +367,172 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     getItemColsForWeekUtil(calendarStart, item, weekIdx)
 
   return (
-    <div className="min-h-screen bg-background pb-20 sm:pb-0">
-      <div className="p-2 sm:p-4 lg:p-6">
-        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
-          {/* Header */}
-          <ScheduleBuilderHeader project={project} onBack={onBack} />
+    <div className="flex flex-col gap-6 p-6">
+      {/* Top action strip — back link only */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back to Project Overview
+        </button>
+      </div>
 
-          {/* Unsaved Changes Banner */}
-          {hasUnsavedChanges && (
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
-                <div>
-                  <p className="text-sm font-medium text-yellow-800">
-                    Auto-saving in progress...
-                  </p>
-                  <p className="text-xs text-yellow-700">
-                    Changes will be saved automatically in 2 seconds, or click "Save Schedule" to save immediately.
-                  </p>
-                </div>
-              </div>
+      {/* Unsaved Changes Banner */}
+      {hasUnsavedChanges && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="size-5 text-amber-600 dark:text-amber-400" />
+            <div>
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                Auto-saving in progress…
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Changes will be saved automatically in 2 seconds, or click "Save Schedule" to save immediately.
+              </p>
             </div>
-          )}
-
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Start Date</p>
-                    <p className="text-xl font-bold text-gray-900 mt-1">
-                      {projectStartDate.toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="bg-blue-100 rounded-full p-3">
-                    <CalendarIcon className="w-8 h-8 text-blue-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">End Date</p>
-                    <p className="text-xl font-bold text-gray-900 mt-1">
-                      {projectEndDate.toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="bg-orange-100 rounded-full p-3">
-                    <CalendarIcon className="w-8 h-8 text-orange-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Duration</p>
-                    <p className="text-xl font-bold text-gray-900 mt-1">
-                      {totalDays} days
-                    </p>
-                  </div>
-                  <div className="bg-purple-100 rounded-full p-3">
-                    <Clock className="w-8 h-8 text-purple-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Progress</p>
-                    <p className="text-xl font-bold text-gray-900 mt-1">
-                      {percentComplete.toFixed(0)}%
-                    </p>
-                  </div>
-                  <div className="bg-green-100 rounded-full p-3">
-                    <CheckCircle className="w-8 h-8 text-green-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
+        </div>
+      )}
 
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button
-              onClick={handleSaveSchedule}
-              className="flex-1 sm:flex-none bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226]"
-            >
-              <CheckCircle className="w-4 h-4 mr-2" />
-              {hasUnsavedChanges ? 'Save Schedule (Unsaved Changes)' : 'Save Schedule'}
-            </Button>
-            <Button
-              onClick={handleAutoCalculateDates}
-              variant="outline"
-              className="flex-1 sm:flex-none border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
-            >
-              <Link2 className="w-4 h-4 mr-2" />
-              Auto-Calculate Dates
-            </Button>
-            <Button
-              onClick={handleRegenerateSchedule}
-              variant="outline"
-              className="flex-1 sm:flex-none border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Regenerate from Estimate
-            </Button>
-            <Button
-              onClick={handleAddOfficeItem}
-              variant="outline"
-              className="flex-1 sm:flex-none border-slate-400 text-slate-600 hover:bg-slate-100"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Office Item
-            </Button>
-          </div>
+      {/* Summary Cards — rail-accent pattern */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Card className="relative overflow-hidden border-border/60 bg-card/50">
+          <div className="absolute inset-y-0 left-0 w-1 bg-sky-500" aria-hidden />
+          <CardContent className="p-4 pl-5">
+            <p className="mb-1 text-xs text-muted-foreground">Start Date</p>
+            <p className="text-xl font-semibold tabular-nums">{projectStartDate.toLocaleDateString()}</p>
+          </CardContent>
+        </Card>
 
-          {/* Schedule Items */}
-          <Card>
-            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
-              <CardTitle className="mb-0">Schedule Items</CardTitle>
-              {scheduleItems.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
-                    <button
-                      type="button"
-                      onClick={() => setScheduleView('list')}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'list' ? 'bg-white text-gray-900 shadow' : 'text-gray-600 hover:text-gray-900'}`}
-                    >
-                      <List className="w-4 h-4" />
-                      List
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setScheduleView('calendar')}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'calendar' ? 'bg-white text-gray-900 shadow' : 'text-gray-600 hover:text-gray-900'}`}
-                    >
-                      <CalendarDays className="w-4 h-4" />
-                      Calendar
-                    </button>
-                  </div>
-                  {scheduleView === 'calendar' && (
-                    <div className="flex items-center gap-1 border border-gray-200 rounded-lg bg-gray-50 px-1 py-0.5">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setCalendarMonth((m) => subMonths(m, 1))}
-                        aria-label="Previous month"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <span className="min-w-[140px] text-center text-sm font-medium text-gray-700">
-                        {format(calendarMonth, 'MMMM yyyy')}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setCalendarMonth((m) => addMonths(m, 1))}
-                        aria-label="Next month"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
+        <Card className="relative overflow-hidden border-border/60 bg-card/50">
+          <div className="absolute inset-y-0 left-0 w-1 bg-amber-500" aria-hidden />
+          <CardContent className="p-4 pl-5">
+            <p className="mb-1 text-xs text-muted-foreground">End Date</p>
+            <p className="text-xl font-semibold tabular-nums">{projectEndDate.toLocaleDateString()}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden border-border/60 bg-card/50">
+          <div className="absolute inset-y-0 left-0 w-1 bg-violet-500" aria-hidden />
+          <CardContent className="p-4 pl-5">
+            <p className="mb-1 text-xs text-muted-foreground">Total Duration</p>
+            <p className="text-xl font-semibold tabular-nums">{totalDays} days</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden border-border/60 bg-card/50">
+          <div className="absolute inset-y-0 left-0 w-1 bg-emerald-500" aria-hidden />
+          <CardContent className="p-4 pl-5">
+            <p className="mb-1 text-xs text-muted-foreground">Progress</p>
+            <p className="text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+              {percentComplete.toFixed(0)}%
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <Button onClick={handleSaveSchedule}>
+          <CheckCircle className="size-4" />
+          {hasUnsavedChanges ? 'Save Schedule (Unsaved Changes)' : 'Save Schedule'}
+        </Button>
+        <Button onClick={handleAutoCalculateDates} variant="outline">
+          <Link2 className="size-4" />
+          Auto-Calculate Dates
+        </Button>
+        <Button onClick={handleRegenerateSchedule} variant="outline">
+          <RefreshCw className="size-4" />
+          Regenerate from Estimate
+        </Button>
+        <Button onClick={handleAddOfficeItem} variant="outline">
+          <Plus className="size-4" />
+          Add Office Item
+        </Button>
+      </div>
+
+      {/* Schedule Items — flat section pattern */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Schedule Items</h2>
+          {scheduleItems.length > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setScheduleView('list')}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    scheduleView === 'list'
+                      ? 'bg-card text-foreground shadow'
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
+                >
+                  <List className="size-4" />
+                  List
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleView('calendar')}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    scheduleView === 'calendar'
+                      ? 'bg-card text-foreground shadow'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <CalendarDays className="size-4" />
+                  Calendar
+                </button>
+              </div>
+              {scheduleView === 'calendar' && (
+                <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/30 px-1 py-0.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={() => setCalendarMonth((m) => subMonths(m, 1))}
+                    aria-label="Previous month"
+                  >
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                  <span className="min-w-[140px] text-center text-sm font-medium">
+                    {format(calendarMonth, 'MMMM yyyy')}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={() => setCalendarMonth((m) => addMonths(m, 1))}
+                    aria-label="Next month"
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
                 </div>
               )}
-            </CardHeader>
-            <CardContent>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border/60 bg-card/50 p-4">
               {scheduleItems.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <CalendarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <div className="text-center py-12 text-muted-foreground">
+                  <CalendarIcon className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
                   <p className="text-lg font-medium mb-2">No Schedule Items</p>
                   <p>Add items to your estimate first, then click "Regenerate from Estimate"</p>
                 </div>
               ) : scheduleView === 'calendar' ? (
                 <div className="overflow-x-auto overflow-y-visible">
-                  <p className="text-xs text-gray-500 mb-2">One bar per schedule item (spans across its days). Bars appear under the week they belong to.</p>
+                  <p className="text-xs text-muted-foreground mb-2">One bar per schedule item (spans across its days). Bars appear under the week they belong to.</p>
                   <div className="min-w-[600px]">
                     {/* One 7-column grid: header then per-week date row + bar rows so bars align under that week */}
-                    <div className="grid grid-cols-7 border-b border-gray-200">
+                    <div className="grid grid-cols-7 border-b border-border/60">
                       {weekDayNames.map((name) => (
-                        <div key={name} className="p-2 text-center text-xs font-semibold text-gray-500 uppercase border-r border-gray-200 last:border-r-0">
+                        <div key={name} className="p-2 text-center text-xs font-semibold text-muted-foreground uppercase border-r border-border/60 last:border-r-0">
                           {name}
                         </div>
                       ))}
@@ -575,10 +551,10 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                             {row.map((day) => (
                               <div
                                 key={day.toISOString()}
-                                className={`min-h-[48px] border-r border-gray-100 last:border-r-0 p-1.5 flex flex-col ${!isSameMonth(day, calendarMonth) ? 'bg-gray-50/50' : 'bg-white'}`}
+                                className={`min-h-[48px] border-r border-gray-100 last:border-r-0 p-1.5 flex flex-col ${!isSameMonth(day, calendarMonth) ? 'bg-muted/30/50' : 'bg-card'}`}
                               >
                                 <div
-                                  className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full ${!isSameMonth(day, calendarMonth) ? 'text-gray-400' : isToday(day) ? 'bg-[#E65133] text-white' : 'text-gray-700'}`}
+                                  className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full ${!isSameMonth(day, calendarMonth) ? 'text-muted-foreground' : isToday(day) ? 'bg-rose-500 text-white' : 'text-foreground'}`}
                                 >
                                   {format(day, 'd')}
                                 </div>
@@ -603,7 +579,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                                     return (
                                       <div
                                         key={c}
-                                        className={`h-9 flex items-center border-r border-b border-gray-200 last:border-r-0 px-1.5 py-0.5 ${filled ? '' : 'bg-transparent'}`}
+                                        className={`h-9 flex items-center border-r border-b border-border/60 last:border-r-0 px-1.5 py-0.5 ${filled ? '' : 'bg-transparent'}`}
                                         style={{
                                           backgroundColor: filled ? bg : undefined,
                                           borderLeft: filled && isLeftEdge ? `4px solid ${accent.borderLeftColor}` : undefined,
@@ -612,7 +588,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                                         title={showName ? `${item.name} • ${format(start, 'MMM d')} – ${format(end, 'MMM d')}` : undefined}
                                       >
                                         {showName && (
-                                          <span className="text-xs font-medium text-gray-800 truncate block">{item.name}</span>
+                                          <span className="text-xs font-medium text-foreground truncate block">{item.name}</span>
                                         )}
                                       </div>
                                     )
@@ -636,30 +612,30 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                             <div className="flex items-center gap-2 mb-2">
                               <div className="flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded ${(item.type ?? 'field') === 'office' ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-800'}`}>
+                                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded ${(item.type ?? 'field') === 'office' ? 'bg-muted text-muted-foreground' : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'}`}>
                                     {(item.type ?? 'field') === 'office' ? <Briefcase className="w-3 h-3" /> : <HardHat className="w-3 h-3" />}
                                     {(item.type ?? 'field') === 'office' ? 'Office' : 'Field'}
                                   </span>
                                   <Input
                                     value={item.name}
                                     onChange={(e) => handleUpdateScheduleItem(item.id, { name: e.target.value })}
-                                    className="font-semibold text-gray-900 h-8 max-w-md border-gray-200"
+                                    className="font-semibold text-foreground h-8 max-w-md border-border/60"
                                     placeholder="Item name"
                                   />
                                   {item.predecessorIds.length > 0 && (
-                                    <span className="flex items-center gap-1 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
+                                    <span className="flex items-center gap-1 text-xs bg-violet-500/15 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded">
                                       <Link2 className="w-3 h-3" />
                                       Has Dependency
                                     </span>
                                   )}
                                   {item.estimateTradeId && (
-                                    <span className="text-xs text-gray-500">
+                                    <span className="text-xs text-muted-foreground">
                                       Linked: {trades.find(t => t.id === item.estimateTradeId)?.name ?? '—'}
                                     </span>
                                   )}
                                 </div>
                                 {(item.trade != null) && (
-                                  <p className="text-xs text-gray-500">
+                                  <p className="text-xs text-muted-foreground">
                                     {byKey[item.trade]?.label || item.trade}
                                   </p>
                                 )}
@@ -668,7 +644,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="text-gray-400 hover:text-red-600 shrink-0"
+                                className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 shrink-0"
                                 onClick={() => handleRemoveScheduleItem(item.id)}
                                 aria-label="Remove schedule item"
                               >
@@ -791,7 +767,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                                 </SelectContent>
                               </Select>
                               {item.predecessorIds.length > 0 && (
-                                <p className="text-xs text-gray-500 mt-1">
+                                <p className="text-xs text-muted-foreground mt-1">
                                   Depends on: {scheduleItems.find(si => si.id === item.predecessorIds[0])?.name}
                                 </p>
                               )}
@@ -820,7 +796,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                               {getStatusIcon(item.status)}
                               {item.status.replace('-', ' ').toUpperCase()}
                             </div>
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm text-muted-foreground">
                               <p className="font-semibold">
                                 End: {item.endDate instanceof Date && !isNaN(item.endDate.getTime()) 
                                   ? item.endDate.toLocaleDateString() 
@@ -834,94 +810,9 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
         </div>
-      </div>
-
-      {/* Mobile Back Button */}
-      {onBack && (
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
-          <Button onClick={onBack} variant="outline" className="border-gray-300 hover:bg-gray-50 w-full">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Project Detail
-          </Button>
-        </div>
-      )}
+      </section>
     </div>
-  )
-}
-
-// ----------------------------------------------------------------------------
-// Header Component
-// ----------------------------------------------------------------------------
-
-interface ScheduleBuilderHeaderProps {
-  project: Project
-  onBack?: () => void
-}
-
-function ScheduleBuilderHeader({ project, onBack }: ScheduleBuilderHeaderProps) {
-  const getStatusColor = (status: string) => {
-    const colors = {
-      estimating: 'bg-blue-100 text-blue-800',
-      'in-progress': 'bg-orange-100 text-orange-800',
-      complete: 'bg-green-100 text-green-800',
-    }
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
-  }
-
-  return (
-    <>
-      {/* Mobile Header */}
-      <header className="sm:hidden bg-white shadow-md border-b border-gray-200">
-        <div className="px-4 py-4">
-          <div className="flex items-center space-x-3">
-            <img src={hshLogo} alt="HSH Contractor" className="h-16 w-auto" />
-            <div className="flex-1">
-              <div className="flex flex-col gap-2 mb-1">
-                <h1 className="text-lg font-bold text-gray-900">Project Schedule</h1>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)} w-fit`}>
-                  {project.status.replace('-', ' ').toUpperCase()}
-                </span>
-              </div>
-              <p className="text-xs text-gray-600">{project.name}</p>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Desktop Header */}
-      <Card className="hidden sm:block bg-gradient-to-br from-gray-50 to-white border border-gray-200 shadow-lg">
-        <CardHeader className="pb-3 sm:pb-6">
-          <div className="space-y-2 sm:space-y-4">
-            <div className="flex items-center justify-center gap-2 sm:gap-4 lg:gap-6">
-              <div className="flex-shrink-0">
-                <img src={hshLogo} alt="HSH Contractor Logo" className="h-20 sm:h-32 lg:h-40 w-auto" />
-              </div>
-              <div className="flex-shrink-0">
-                <h2 className="text-xl sm:text-4xl lg:text-5xl font-bold text-gray-900">Project Schedule</h2>
-                <p className="text-sm sm:text-base text-gray-600 mt-1">{project.name}</p>
-              </div>
-            </div>
-
-            {onBack && (
-              <div className="hidden sm:flex justify-center">
-                <Button
-                  onClick={onBack}
-                  variant="outline"
-                  size="sm"
-                  className="border-gray-300 hover:bg-gray-50 w-full max-w-md text-xs sm:text-sm"
-                >
-                  <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                  Back to Project Detail
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-      </Card>
-    </>
   )
 }
 
