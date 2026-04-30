@@ -510,7 +510,7 @@ tsc --noEmit clean.
 | Project Documents | ✅ Ported | `src/components/ProjectDocuments.tsx` | Mode A — file list + upload/edit; removed dual page wrappers in favor of shell |
 | Purchase Orders | ✅ Ported | `src/components/PurchaseOrdersView.tsx` | Mode A — list/detail flow with tokenized issue panel + table |
 | Contact Directory | ✅ Ported | `src/components/ContactDirectory.tsx` | Mode A — CRUD list; tokenized tabs, rows, and dialogs |
-| Selection Book | ⬜ Pending | `src/components/SelectionBook.tsx` | Mode A — room-organized selections list |
+| Selection Book | ✅ Ported | `src/components/SelectionBook.tsx` | Mode A — preserved room/image/spec-sheet flows; swept hero/mobile action chrome and card/form token palette |
 | Selection Schedules | ⏸ Hold | `src/components/SelectionSchedules.tsx` | Pending owner-driven redesign — v0 has updated selections design that will eventually replace SelectionBook→SelectionLibrary; revisit when that lands |
 | Schedule Builder | ✅ Ported | `src/components/ScheduleBuilder.tsx` | Originally flagged Mode B; turned out to be Mode A after all. Calendar UI is custom but stylistically mechanical. References: rail-accent summary cards, list/calendar view toggle pattern with `cn(...)` conditional classes, "today" indicator uses `bg-rose-500 text-white`, item-type chips use muted/amber tokens |
 | Plan Library | ✅ Ported | `src/components/PlanLibrary.tsx` | Mode A — summary cards + searchable list normalized to rail-accent token recipe |

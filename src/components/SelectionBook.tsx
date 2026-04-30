@@ -13,6 +13,7 @@ import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Textarea } from './ui/textarea'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 import {
   ArrowLeft,
   Plus,
@@ -32,7 +33,6 @@ import {
   ArrowUp,
   ArrowDown,
 } from 'lucide-react'
-import hshLogo from '/HSH Contractor Logo - Color.png'
 import {
   getOrCreateSelectionBook,
   getSelectionBookWithRooms,
@@ -116,6 +116,7 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
   const [addingRoom, setAddingRoom] = useState(false)
   const [addingMultipleRooms, setAddingMultipleRooms] = useState(false)
   const [showMobileActions, setShowMobileActions] = useState(false)
+  usePageTitle(viewMode === 'overview' ? 'Selection Book' : selectedRoom?.room_name || 'Selection Book')
 
   useEffect(() => {
     loadSelectionBook()
@@ -300,10 +301,10 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading selection book...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading selection book...</p>
         </div>
       </div>
     )
@@ -311,7 +312,7 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
 
   if (!book && !loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
           <p className="text-red-600 mb-4">{error || 'Error loading selection book'}</p>
           <div className="flex gap-2 justify-center">
@@ -331,85 +332,54 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center space-x-3 sm:space-x-4">
-              {onBack && viewMode === 'overview' && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onBack}
-                  className="mr-2 text-gray-600 hover:text-gray-900"
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  <span className="hidden sm:inline">Back to Project</span>
-                  <span className="sm:hidden">Back</span>
-                </Button>
-              )}
-              {viewMode === 'room' && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleBackToOverview}
-                  className="mr-2 text-gray-600 hover:text-gray-900"
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Rooms
-                </Button>
-              )}
-              <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto" />
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-1">
-                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
-                    {viewMode === 'overview' ? 'Selection Book' : selectedRoom?.room_name}
-                  </h1>
-                  {project?.project_number && (
-                    <span className="px-2 sm:px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 w-fit">
-                      #{project.project_number}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  {viewMode === 'overview'
-                    ? `${book?.rooms?.length || 0} rooms`
-                    : 'Room selections'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {viewMode === 'overview' && (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={handleExport}
-                    className="hidden sm:flex"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Export
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handlePrint}
-                    className="hidden sm:flex"
-                  >
-                    <Printer className="w-4 h-4 mr-2" />
-                    Print
-                  </Button>
-                </>
-              )}
-            </div>
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            {onBack && viewMode === 'overview' && (
+              <button
+                onClick={onBack}
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Project
+              </button>
+            )}
+            {viewMode === 'room' && (
+              <button
+                onClick={handleBackToOverview}
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Rooms
+              </button>
+            )}
+            {project?.project_number && (
+              <span className="rounded-full border border-sky-500/30 bg-sky-500/15 px-2 py-1 text-xs text-sky-700 dark:text-sky-300">
+                #{project.project_number}
+              </span>
+            )}
           </div>
+          {viewMode === 'overview' && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={handleExport} className="hidden sm:flex">
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+              <Button variant="outline" onClick={handlePrint} className="hidden sm:flex">
+                <Printer className="w-4 h-4 mr-2" />
+                Print
+              </Button>
+            </div>
+          )}
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
-      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ${viewMode === 'overview' ? 'pb-24 sm:pb-8' : ''}`}>
+      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 ${viewMode === 'overview' ? 'pb-24 sm:pb-8' : ''}`}>
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-800">{error}</p>
+          <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4">
+            <p className="text-rose-700 dark:text-rose-300">{error}</p>
             <Button
               variant="outline"
               size="sm"
@@ -527,36 +497,36 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
 
       {/* Mobile: bottom Actions menu when in overview - match Project Actuals / Estimate Builder */}
       {viewMode === 'overview' && (
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border/60 z-40 safe-area-pb">
           {showMobileActions && (
-            <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
+            <div className="border-b border-border/60 px-3 py-2 bg-muted/20 max-h-72 overflow-y-auto">
               {onBack && (
                 <button
                   onClick={() => { onBack(); setShowMobileActions(false) }}
-                  className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
+                  className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-card text-muted-foreground"
                 >
-                  <ArrowLeft className="w-5 h-5 text-gray-400" />
+                  <ArrowLeft className="w-5 h-5 text-muted-foreground" />
                   <span className="font-medium">Back to Project</span>
                 </button>
               )}
               <button
                 onClick={() => { setShowQuickAdd(true); setShowMobileActions(false) }}
-                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-blue-500/30 bg-blue-50/50"
+                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-card border border-sky-500/30 bg-sky-500/15"
               >
-                <Plus className="w-5 h-5 text-blue-600" />
+                <Plus className="w-5 h-5 text-sky-600 dark:text-sky-400" />
                 <div>
-                  <p className="font-medium text-gray-900">Quick Add Rooms</p>
-                  <p className="text-xs text-gray-500">Add multiple rooms at once</p>
+                  <p className="font-medium text-foreground">Quick Add Rooms</p>
+                  <p className="text-xs text-muted-foreground">Add multiple rooms at once</p>
                 </div>
               </button>
               <button
                 onClick={() => { setShowAddRoom(true); setShowMobileActions(false) }}
-                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-green-500/30 bg-green-50/50"
+                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-card border border-emerald-500/30 bg-emerald-500/15"
               >
-                <Plus className="w-5 h-5 text-green-600" />
+                <Plus className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 <div>
-                  <p className="font-medium text-gray-900">Add Single Room</p>
-                  <p className="text-xs text-gray-500">Add one room with name and type</p>
+                  <p className="font-medium text-foreground">Add Single Room</p>
+                  <p className="text-xs text-muted-foreground">Add one room with name and type</p>
                 </div>
               </button>
             </div>
@@ -565,9 +535,9 @@ export const SelectionBook: React.FC<SelectionBookProps> = ({
             <Button
               onClick={() => setShowMobileActions(!showMobileActions)}
               variant="outline"
-              className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
+              className="w-full h-11 border-border/60 bg-card hover:bg-muted/20"
             >
-              <span className="flex items-center justify-center gap-2 text-gray-700">
+              <span className="flex items-center justify-center gap-2 text-muted-foreground">
                 Actions
                 <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
               </span>
@@ -634,10 +604,10 @@ const OverviewView: React.FC<OverviewViewProps> = ({
     <div className="space-y-6">
       {/* Quick Add Section */}
       {showQuickAdd ? (
-        <Card>
+        <Card className="border-border/60 bg-card/50">
           <CardHeader>
             <CardTitle>Quick Add Multiple Rooms</CardTitle>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Select multiple room categories to add them all at once with default names
             </p>
           </CardHeader>
@@ -653,15 +623,15 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                       onClick={() => toggleQuickAddType(category.value)}
                       className={`p-3 rounded-lg border-2 text-left transition-colors ${
                         selectedQuickAddTypes.includes(category.value)
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-primary bg-muted/20'
+                          : 'border-border/60 hover:border-border'
                       }`}
                     >
                       <div className="flex items-center gap-2">
                         <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
                           selectedQuickAddTypes.includes(category.value)
-                            ? 'border-blue-500 bg-blue-500'
-                            : 'border-gray-300'
+                            ? 'border-primary bg-primary'
+                            : 'border-border'
                         }`}>
                           {selectedQuickAddTypes.includes(category.value) && (
                             <span className="text-white text-xs">✓</span>
@@ -669,7 +639,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                         </div>
                         <span className="text-sm font-medium">{category.label}</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1 ml-6">
+                      <p className="text-xs text-muted-foreground mt-1 ml-6">
                         Will create: "{category.defaultName}"
                       </p>
                     </button>
@@ -701,10 +671,10 @@ const OverviewView: React.FC<OverviewViewProps> = ({
           </CardContent>
         </Card>
       ) : showAddRoom ? (
-        <Card>
+        <Card className="border-border/60 bg-card/50">
           <CardHeader>
             <CardTitle>Add New Room</CardTitle>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Room Name is the specific identifier (e.g., "Master Bedroom"). 
               Room Category helps organize and show relevant selection fields.
             </p>
@@ -719,7 +689,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                   onChange={(e) => setNewRoomName(e.target.value)}
                   placeholder="e.g., Master Bedroom, Guest Bathroom"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   The specific name for this room
                 </p>
               </div>
@@ -737,7 +707,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Category helps show relevant selection fields (e.g., cabinetry for kitchens)
                 </p>
               </div>
@@ -772,17 +742,17 @@ const OverviewView: React.FC<OverviewViewProps> = ({
           {book.rooms.map((room) => (
             <Card
               key={room.id}
-              className="hover:shadow-lg transition-shadow cursor-pointer"
+              className="cursor-pointer border-border/60 bg-card/50 transition-colors hover:bg-muted/20"
               onClick={() => onViewRoom(room)}
             >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                    <h3 className="text-lg font-semibold text-foreground mb-1">
                       {room.room_name}
                     </h3>
                     {room.room_type && (
-                      <p className="text-sm text-gray-500 capitalize">
+                      <p className="text-sm text-muted-foreground capitalize">
                         {room.room_type.replace('-', ' ')}
                       </p>
                     )}
@@ -794,7 +764,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                       e.stopPropagation()
                       onDeleteRoom(room.id)
                     }}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -805,7 +775,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                       {room.images.slice(0, 4).map((img) => (
                         <div
                           key={img.id}
-                          className="aspect-square rounded-lg overflow-hidden bg-gray-100"
+                          className="aspect-square rounded-lg overflow-hidden bg-muted/20"
                         >
                           <img
                             src={img.image_url}
@@ -816,13 +786,13 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                       ))}
                     </div>
                     {room.images.length > 4 && (
-                      <p className="text-xs text-gray-500 mt-2">
+                      <p className="text-xs text-muted-foreground mt-2">
                         +{room.images.length - 4} more images
                       </p>
                     )}
                   </div>
                 )}
-                <div className="flex items-center text-sm text-gray-600">
+                <div className="flex items-center text-sm text-muted-foreground">
                   <span>View room →</span>
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </div>
@@ -831,13 +801,13 @@ const OverviewView: React.FC<OverviewViewProps> = ({
           ))}
         </div>
       ) : (
-        <Card className="text-center py-12">
+        <Card className="border-border/60 bg-card/50 text-center py-12">
           <CardContent>
-            <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-foreground mb-2">
               No rooms yet
             </h3>
-            <p className="text-gray-500 mb-6">
+            <p className="text-muted-foreground mb-6">
               Add your first room to start building your selection book.
             </p>
             <div className="hidden sm:flex gap-2 justify-center">
@@ -969,13 +939,13 @@ const RoomView: React.FC<RoomViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Room Header */}
-      <Card>
+      <Card className="border-border/60 bg-card/50">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-2xl">{room.room_name}</CardTitle>
               {room.room_type && (
-                <p className="text-sm text-gray-500 mt-1 capitalize">
+                <p className="text-sm text-muted-foreground mt-1 capitalize">
                   {room.room_type.replace('-', ' ')}
                 </p>
               )}
