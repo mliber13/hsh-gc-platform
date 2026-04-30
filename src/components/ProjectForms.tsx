@@ -4,8 +4,8 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { usePageTitle } from '@/contexts/PageTitleContext';
 import { ArrowLeft, FileCheck, Plus, CheckCircle, Clock, Edit, X, Trash2, ChevronRight } from 'lucide-react';
-import hshLogo from '/HSH Contractor Logo - Color.png';
 import { supabase } from '../lib/supabase';
 import { requireUserOrgId } from '../services/userService';
 import { SignaturePad } from './ui/signature-pad';
@@ -56,6 +56,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
   const [forms, setForms] = useState<ProjectForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedForm, setSelectedForm] = useState<ProjectForm | null>(null);
+  usePageTitle('Forms');
 
   useEffect(() => {
     if (projectId) {
@@ -1318,172 +1319,144 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading forms...</p>
-        </div>
-      </div>
+      <Card className="border-border/60 bg-card/50">
+        <CardContent className="py-12 text-center">
+          <div className="mx-auto inline-block size-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading forms...</p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center space-x-3 sm:space-x-4">
-              {onBack && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onBack}
-                  className="mr-2 text-gray-600 hover:text-gray-900"
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  <span className="hidden sm:inline">Back to Project</span>
-                  <span className="sm:hidden">Back</span>
-                </Button>
-              )}
-              <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto" />
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-1">
-                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
-                    {project?.name || 'Project Forms'}
-                  </h1>
-                  {project?.project_number && (
-                    <span className="px-2 sm:px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 w-fit">
-                      #{project.project_number}
-                    </span>
-                  )}
-                  {project?.status && (
-                    <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium w-fit ${
-                      project.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      project.status === 'in-progress' ? 'bg-yellow-100 text-yellow-800' :
-                      project.status === 'planning' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {project.status.replace('-', ' ').toUpperCase()}
-                    </span>
-                  )}
+    <div className="flex flex-col gap-6 p-6">
+      <div className="flex items-center justify-between">
+        {onBack ? (
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Back to Project
+          </button>
+        ) : (
+          <span />
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Card className="relative overflow-hidden border-border/60 bg-card/50">
+          <div className="absolute inset-y-0 left-0 w-1 bg-sky-500" aria-hidden />
+          <CardContent className="p-4 pl-5">
+            <p className="mb-1 text-xs text-muted-foreground">Forms Created</p>
+            <p className="text-xl font-semibold tabular-nums text-foreground">{forms.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="relative overflow-hidden border-border/60 bg-card/50">
+          <div className="absolute inset-y-0 left-0 w-1 bg-emerald-500" aria-hidden />
+          <CardContent className="p-4 pl-5">
+            <p className="mb-1 text-xs text-muted-foreground">Completed</p>
+            <p className="text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+              {forms.filter(f => f.status === 'completed' || f.status === 'approved').length}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <section className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-semibold">Create New Form</h2>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card
+            className="cursor-pointer border-border/60 bg-card/50 transition-colors hover:bg-muted/30"
+            onClick={() => createNewForm('architect_verification')}
+          >
+            <div className="w-full p-6 text-left">
+              <div className="mb-3 flex items-center">
+                <div className="mr-4 rounded-lg bg-muted/40 p-3">
+                  <FileCheck className="h-6 w-6 text-sky-500" />
                 </div>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  Project Forms & Documentation
-                </p>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-semibold text-foreground">Architect Verification</h3>
+                  <p className="text-sm text-muted-foreground">Design verification checklist</p>
+                </div>
+              </div>
+              <div className="flex items-center text-sm text-muted-foreground">
+                <Plus className="mr-1 h-4 w-4" />
+                Create Form
               </div>
             </div>
-            {/* Forms Statistics */}
-            <div className="flex items-center space-x-6">
-              <div className="text-center">
-                <p className="text-xs sm:text-sm text-gray-500">Forms Created</p>
-                <p className="text-lg sm:text-2xl font-bold text-gray-900">{forms.length}</p>
+          </Card>
+
+          <Card
+            className="cursor-pointer border-border/60 bg-card/50 transition-colors hover:bg-muted/30"
+            onClick={() => createNewForm('closing_checklist')}
+          >
+            <div className="w-full p-6 text-left">
+              <div className="mb-3 flex items-center">
+                <div className="mr-4 rounded-lg bg-muted/40 p-3">
+                  <CheckCircle className="h-6 w-6 text-emerald-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-semibold text-foreground">Site Start Checklist</h3>
+                  <p className="text-sm text-muted-foreground">Pre-construction setup</p>
+                </div>
               </div>
-              <div className="text-center">
-                <p className="text-xs sm:text-sm text-gray-500">Completed</p>
-                <p className="text-lg sm:text-2xl font-bold text-green-600">
-                  {forms.filter(f => f.status === 'completed' || f.status === 'approved').length}
-                </p>
+              <div className="flex items-center text-sm text-muted-foreground">
+                <Plus className="mr-1 h-4 w-4" />
+                Create Form
               </div>
             </div>
-          </div>
+          </Card>
+
+          <Card
+            className="cursor-pointer border-border/60 bg-card/50 transition-colors hover:bg-muted/30"
+            onClick={() => createNewForm('due_diligence')}
+          >
+            <div className="w-full p-6 text-left">
+              <div className="mb-3 flex items-center">
+                <div className="mr-4 rounded-lg bg-muted/40 p-3">
+                  <Clock className="h-6 w-6 text-amber-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-semibold text-foreground">Due Diligence</h3>
+                  <p className="text-sm text-muted-foreground">Property analysis checklist</p>
+                </div>
+              </div>
+              <div className="flex items-center text-sm text-muted-foreground">
+                <Plus className="mr-1 h-4 w-4" />
+                Create Form
+              </div>
+            </div>
+          </Card>
         </div>
-      </header>
+      </section>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Create Forms Section */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Create New Form</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card 
-              className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-blue-200"
-              onClick={() => createNewForm('architect_verification')}
-            >
-              <div className="w-full text-left p-4 sm:p-6">
-                <div className="flex items-center mb-3">
-                  <div className="bg-blue-100 rounded-lg p-2 sm:p-3 mr-3 sm:mr-4 flex-shrink-0">
-                    <FileCheck className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Architect Verification</h3>
-                    <p className="text-xs sm:text-sm text-gray-500">Design verification checklist</p>
-                  </div>
-                </div>
-                <div className="flex items-center text-blue-600 text-xs sm:text-sm">
-                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                  Create Form
-                </div>
-              </div>
-            </Card>
-
-            <Card 
-              className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-green-200"
-              onClick={() => createNewForm('closing_checklist')}
-            >
-              <div className="w-full text-left p-4 sm:p-6">
-                <div className="flex items-center mb-3">
-                  <div className="bg-green-100 rounded-lg p-2 sm:p-3 mr-3 sm:mr-4 flex-shrink-0">
-                    <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Site Start Checklist</h3>
-                    <p className="text-xs sm:text-sm text-gray-500">Pre-construction setup</p>
-                  </div>
-                </div>
-                <div className="flex items-center text-green-600 text-xs sm:text-sm">
-                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                  Create Form
-                </div>
-              </div>
-            </Card>
-
-            <Card 
-              className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-orange-200"
-              onClick={() => createNewForm('due_diligence')}
-            >
-              <div className="w-full text-left p-4 sm:p-6">
-                <div className="flex items-center mb-3">
-                  <div className="bg-orange-100 rounded-lg p-2 sm:p-3 mr-3 sm:mr-4 flex-shrink-0">
-                    <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Due Diligence</h3>
-                    <p className="text-xs sm:text-sm text-gray-500">Property analysis checklist</p>
-                  </div>
-                </div>
-                <div className="flex items-center text-orange-600 text-xs sm:text-sm">
-                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                  Create Form
-                </div>
-              </div>
-            </Card>
-
-          </div>
-        </div>
-
-        {/* Existing Forms Section */}
-        {forms.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Existing Forms</h2>
-            <div className="grid gap-4">
+      {forms.length > 0 && (
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Existing Forms</h2>
+          <div className="grid gap-4">
               {forms.map((form) => (
-                <Card key={form.id} className="hover:shadow-md transition-shadow">
+                <Card key={form.id} className="border-border/60 bg-card/50">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <div className="bg-gray-100 rounded-lg p-3 mr-4">
-                          <FileCheck className="w-6 h-6 text-gray-600" />
+                        <div className="mr-4 rounded-lg bg-muted/40 p-3">
+                          <FileCheck className="h-6 w-6 text-muted-foreground" />
                         </div>
                         <div>
-                          <h3 className="font-semibold text-gray-900">{form.form_name}</h3>
-                          <div className="flex items-center space-x-4 text-sm text-gray-500">
+                          <h3 className="font-semibold text-foreground">{form.form_name}</h3>
+                          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              form.status === 'completed' ? 'bg-green-100 text-green-800' :
-                              form.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-gray-100 text-gray-800'
+                              form.status === 'completed' || form.status === 'approved'
+                                ? 'bg-sky-500/15 text-sky-500 border border-sky-500/30'
+                                : form.status === 'in_progress'
+                                  ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30'
+                                  : 'bg-muted text-muted-foreground border border-border'
                             }`}>
                               {form.status === 'completed' ? 'Completed' :
+                               form.status === 'approved' ? 'Approved' :
                                form.status === 'in_progress' ? 'In Progress' :
                                'Draft'}
                             </span>
@@ -1503,7 +1476,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                           variant="outline" 
                           size="sm"
                           onClick={() => deleteForm(form.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="text-destructive hover:text-destructive"
                         >
                           Delete
                         </Button>
@@ -1512,22 +1485,21 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                   </CardContent>
                 </Card>
               ))}
-            </div>
           </div>
-        )}
+        </section>
+      )}
 
-        {forms.length === 0 && (
-          <Card className="text-center py-12">
+      {forms.length === 0 && (
+        <Card className="border-border/60 bg-card/50 text-center">
             <CardContent>
-              <FileCheck className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No forms created yet</h3>
-              <p className="text-gray-500 mb-6">
+              <FileCheck className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
+              <h3 className="mb-2 text-lg font-medium text-foreground">No forms created yet</h3>
+              <p className="mb-6 text-muted-foreground">
                 Create your first project form using one of the options above.
               </p>
             </CardContent>
-          </Card>
-        )}
-      </div>
+        </Card>
+      )}
 
       {selectedForm && (
         <DynamicForm 
@@ -1624,12 +1596,13 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
   };
 
   const sections = form.form_schema.sections || [];
+  const activeSection = getCurrentSection();
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-lg border border-border bg-card">
         {/* Header */}
-        <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
+        <div className="border-b border-border/60 bg-muted/30 px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center space-x-3">
@@ -1637,15 +1610,15 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
                   <Button
                     variant="ghost"
                     onClick={handleBackToOverview}
-                    className="text-gray-500 hover:text-gray-700"
+                    className="text-muted-foreground hover:text-foreground"
                   >
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back
                   </Button>
                 )}
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">{form.form_name}</h2>
-                  <p className="text-sm text-gray-500">
+                  <h2 className="text-xl font-bold text-foreground">{form.form_name}</h2>
+                  <p className="text-sm text-muted-foreground">
                     {currentView === 'overview' 
                       ? `${sections.length} sections` 
                       : `${getCurrentSection()?.title || 'Section'}`
@@ -1655,15 +1628,15 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
               </div>
               {/* Project Information Header */}
               {project && (
-                <div className="mt-3 p-3 bg-white rounded-lg border">
+                <div className="mt-3 rounded-lg border border-border/60 bg-card p-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div>
-                      <span className="font-medium text-gray-700">Project:</span>
-                      <span className="ml-2 text-gray-900">{project.name || 'N/A'}</span>
+                      <span className="font-medium text-muted-foreground">Project:</span>
+                      <span className="ml-2 text-foreground">{project.name || 'N/A'}</span>
                     </div>
                     <div>
-                      <span className="font-medium text-gray-700">Address:</span>
-                      <span className="ml-2 text-gray-900">
+                      <span className="font-medium text-muted-foreground">Address:</span>
+                      <span className="ml-2 text-foreground">
                         {typeof project.address === 'string' 
                           ? project.address 
                           : project.address?.street || 'N/A'
@@ -1673,8 +1646,8 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
                       </span>
                     </div>
                     <div>
-                      <span className="font-medium text-gray-700">Plan:</span>
-                      <span className="ml-2 text-gray-900">
+                      <span className="font-medium text-muted-foreground">Plan:</span>
+                      <span className="ml-2 text-foreground">
                         {project.metadata?.planId || 'N/A'}
                       </span>
                     </div>
@@ -1682,7 +1655,7 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
                 </div>
               )}
             </div>
-            <Button variant="ghost" onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <Button variant="ghost" onClick={onClose} className="text-muted-foreground hover:text-foreground">
               <X className="w-4 h-4 mr-2" />
               Close
             </Button>
@@ -1707,33 +1680,33 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                          <h3 className="mb-2 text-lg font-semibold text-foreground">
                             {section.title}
                           </h3>
-                          <p className="text-sm text-gray-600 mb-3">
+                          <p className="mb-3 text-sm text-muted-foreground">
                             {section.fields.length} fields
                           </p>
                           <div className="flex items-center space-x-4">
                             <div className="flex items-center space-x-2">
-                              <div className="w-24 bg-gray-200 rounded-full h-2">
+                              <div className="h-2 w-24 rounded-full bg-muted">
                                 <div 
-                                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                  className="h-2 rounded-full bg-primary transition-all duration-300"
                                   style={{ width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%` }}
                                 />
                               </div>
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-muted-foreground">
                                 {progress.completed}/{progress.total}
                               </span>
                             </div>
                             {isComplete && (
-                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                              <span className="rounded-full border border-sky-500/30 bg-sky-500/15 px-2 py-1 text-xs text-sky-500">
                                 Complete
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="ml-4">
-                          <ChevronRight className="w-5 h-5 text-gray-400" />
+                          <ChevronRight className="h-5 w-5 text-muted-foreground" />
                         </div>
                       </div>
                     </CardContent>
@@ -1746,11 +1719,11 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
             <div className="space-y-6">
               {getCurrentSection() && (
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    {getCurrentSection()?.title}
+                  <h3 className="mb-4 text-lg font-semibold text-foreground">
+                    {activeSection?.title}
                   </h3>
                   <div className="grid gap-6">
-                    {getCurrentSection()?.fields.map((field) => (
+                    {activeSection?.fields.map((field) => (
                       <FormField
                         key={field.id}
                         field={field}
@@ -1766,7 +1739,7 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
         </div>
 
         {/* Footer */}
-        <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center justify-between border-t border-border/60 bg-muted/30 px-6 py-4">
           <div className="flex items-center space-x-4">
             <Button
               variant="outline"
@@ -1776,7 +1749,7 @@ const DynamicForm: React.FC<DynamicFormProps> = ({ form, project, onClose, onSav
                   onClose();
                 }
               }}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="text-destructive hover:text-destructive"
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Form
@@ -1873,14 +1846,14 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
 
       case 'checkbox':
         return (
-          <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border">
+          <div className="flex items-center space-x-3 rounded-lg border border-border/60 bg-muted/30 p-3">
             <input
               type="checkbox"
               checked={value || false}
               onChange={(e) => onChange(e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+              className="h-4 w-4 rounded border-border/60 text-primary focus:ring-primary"
             />
-            <Label className="text-sm font-medium text-gray-700 cursor-pointer">
+            <Label className="cursor-pointer text-sm font-medium text-foreground">
               {field.label}
               {field.required && <span className="text-red-500 ml-1">*</span>}
             </Label>
@@ -1890,7 +1863,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
       case 'signature':
         return (
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700">
+            <Label className="text-sm font-medium text-foreground">
               {field.label}
               {field.required && <span className="text-red-500 ml-1">*</span>}
             </Label>
@@ -1921,7 +1894,7 @@ const FormField: React.FC<FormFieldProps> = ({ field, value, onChange }) => {
   return (
     <div className="space-y-2">
       {field.type !== 'checkbox' && (
-        <Label className="text-sm font-medium text-gray-700">
+        <Label className="text-sm font-medium text-foreground">
           {field.label}
           {field.required && <span className="text-red-500 ml-1">*</span>}
         </Label>
