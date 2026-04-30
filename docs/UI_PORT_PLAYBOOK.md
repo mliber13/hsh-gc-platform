@@ -500,12 +500,12 @@ tsc --noEmit clean.
 | Change Orders | ✅ Ported | `src/components/ChangeOrders.tsx` | Cursor port |
 | Project Forms | ✅ Ported | `src/components/ProjectForms.tsx` | Cursor port |
 | My Feedback | ✅ Ported | `src/components/MyFeedback.tsx` | Filter-heavy list page; status chips use semantic pill recipe |
-| Project Documents | ⬜ Pending | `src/components/ProjectDocuments.tsx` | Mode A — file list + upload modal |
+| Project Documents | ✅ Ported | `src/components/ProjectDocuments.tsx` | Mode A — file list + upload/edit; removed dual page wrappers in favor of shell |
 | Purchase Orders | ⬜ Pending | `src/components/PurchaseOrdersView.tsx` | Mode A — list page |
 | Contact Directory | ✅ Ported | `src/components/ContactDirectory.tsx` | Mode A — CRUD list; tokenized tabs, rows, and dialogs |
 | Selection Book | ⬜ Pending | `src/components/SelectionBook.tsx` | Mode A — room-organized selections list |
 | Selection Schedules | ⏸ Hold | `src/components/SelectionSchedules.tsx` | Pending owner-driven redesign — v0 has updated selections design that will eventually replace SelectionBook→SelectionLibrary; revisit when that lands |
-| Schedule Builder | 🔵 Mode B | `src/components/ScheduleBuilder.tsx` | Calendar/timeline — needs human draft; not playbook-coverable |
+| Schedule Builder | ✅ Ported | `src/components/ScheduleBuilder.tsx` | Originally flagged Mode B; turned out to be Mode A after all. Calendar UI is custom but stylistically mechanical. References: rail-accent summary cards, list/calendar view toggle pattern with `cn(...)` conditional classes, "today" indicator uses `bg-rose-500 text-white`, item-type chips use muted/amber tokens |
 | Plan Library | ⬜ Pending | `src/components/PlanLibrary.tsx` | Mode A |
 | Plan Editor | ⬜ Pending | `src/components/PlanEditor.tsx` | Mode A — form-heavy |
 | Item Library | ⬜ Pending | `src/components/ItemLibrary.tsx` | Mode A |
