@@ -15,19 +15,22 @@
 
 import { Outlet } from 'react-router-dom'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { PageTitleProvider } from '@/contexts/PageTitleContext'
 import { AppSidebar } from './AppSidebar'
 import { AppHeader } from './AppHeader'
 
 export function AppLayout() {
   return (
-    <SidebarProvider defaultOpen>
-      <AppSidebar />
-      <SidebarInset>
-        <AppHeader />
-        <div className="flex-1 overflow-auto">
-          <Outlet />
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+    <PageTitleProvider>
+      <SidebarProvider defaultOpen>
+        <AppSidebar />
+        <SidebarInset>
+          <AppHeader />
+          <div className="flex-1 overflow-auto">
+            <Outlet />
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </PageTitleProvider>
   )
 }

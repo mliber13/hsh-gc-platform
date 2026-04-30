@@ -1,73 +1,100 @@
 // ============================================================================
-// HSH GC Platform - Projects Dashboard
+// Projects Dashboard
 // ============================================================================
 //
-// Main dashboard for viewing and managing all projects
+// Dashboard list view for the Projects workspace. Renders inside the AppLayout
+// shell (sidebar + AppHeader handle workspace nav + project selector +
+// workspace switcher), so this file focuses on the project list itself plus
+// summary cards, search/filters, and per-project rows.
+//
+// Data layer (load projects → progressively load stats → status inline-edit
+// → QB pending count) preserved 1:1 from the pre-shell version. View layer
+// rebuilt to match the v0 design language: token-driven colors, status pills
+// with violet/emerald/sky/amber recipe, summary cards above the list.
 //
 
-import React, { useState, useEffect, useRef } from 'react'
-import { Project } from '@/types'
-import type { ProjectStatus } from '@/types'
-import { getAllProjects } from '@/services/projectService'
-import { getProjects_Hybrid, getTradesForEstimate_Hybrid, updateProject_Hybrid } from '@/services/hybridService'
-import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
-import { getTradesForEstimate } from '@/services'
-import { usePermissions } from '@/hooks/usePermissions'
-import { isQBConnected, getQBJobTransactions } from '@/services/quickbooksService'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useEffect, useRef, useState } from 'react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PlusCircle, Search, Building2, DollarSign, FileText, Eye, ChevronDown, TrendingUp, Download, BookOpen, ClipboardList, BookMarked, Calendar } from 'lucide-react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import hshLogo from '/HSH Contractor Logo - Color.png'
-
-type ProjectSection = 'estimate' | 'actuals' | 'change-orders' | 'documents' | 'selection-book' | 'schedule' | 'forms'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Building2,
+  Download,
+  Eye,
+  PlusCircle,
+  Search,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Project, ProjectStatus } from '@/types'
+import { usePermissions } from '@/hooks/usePermissions'
+import { usePageTitle } from '@/contexts/PageTitleContext'
+import {
+  getProjects_Hybrid,
+  getTradesForEstimate_Hybrid,
+  updateProject_Hybrid,
+} from '@/services/hybridService'
+import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
+import { isQBConnected, getQBJobTransactions } from '@/services/quickbooksService'
+import {
+  ProjectCard,
+  ProjectSection,
+  ProjectWithStats,
+} from './dashboard/ProjectCard'
 
 interface ProjectsDashboardProps {
   onCreateProject: () => void
   onSelectProject: (project: Project) => void
   /** Open project directly into a section (faster than project detail → section) */
   onOpenProjectSection?: (project: Project, section: ProjectSection) => void
+  /** Header workspace switcher replaces these but the route layer still passes
+   * them — accept and ignore for now to keep the prop interface stable. */
   onOpenDealWorkspace?: () => void
   onOpenTenantPipeline?: () => void
   /** Open QuickBooks settings / import flow (e.g. for "X pending from QB" link) */
   onOpenQBSettings?: () => void
 }
 
-interface ProjectWithStats extends Project {
-  basePriceTotal?: number
-  estimatedValue?: number
-  actualCosts?: number
-  tradeCount?: number
-}
+// ============================================================================
+// Component
+// ============================================================================
 
-const SECTION_BUTTONS: { section: ProjectSection; label: string; icon: React.ReactNode }[] = [
-  { section: 'estimate', label: 'Estimate', icon: <BookOpen className="w-3.5 h-3.5" /> },
-  { section: 'actuals', label: 'Actuals', icon: <DollarSign className="w-3.5 h-3.5" /> },
-  { section: 'schedule', label: 'Schedule', icon: <Calendar className="w-3.5 h-3.5" /> },
-  { section: 'selection-book', label: 'Selection', icon: <BookMarked className="w-3.5 h-3.5" /> },
-  { section: 'documents', label: 'Docs', icon: <FileText className="w-3.5 h-3.5" /> },
-  { section: 'change-orders', label: 'COs', icon: <ClipboardList className="w-3.5 h-3.5" /> },
-]
-
-export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProjectSection, onOpenDealWorkspace, onOpenTenantPipeline, onOpenQBSettings }: ProjectsDashboardProps) {
+export function ProjectsDashboard({
+  onCreateProject,
+  onSelectProject,
+  onOpenProjectSection,
+  onOpenQBSettings,
+}: ProjectsDashboardProps) {
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('newest')
-  const [showMobileActions, setShowMobileActions] = useState(false)
   const [qbPendingCount, setQbPendingCount] = useState<number | null>(null)
-  const [statusMenuProjectId, setStatusMenuProjectId] = useState<string | null>(null)
+  const [statusMenuProjectId, setStatusMenuProjectId] = useState<string | null>(
+    null,
+  )
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
   const statusMenuRef = useRef<HTMLDivElement>(null)
   const { canCreate, isViewer } = usePermissions()
 
-  // Close status dropdown when clicking outside
+  // Centered title in the AppHeader
+  usePageTitle('Dashboard')
+
+  // Close status dropdown on outside click
   useEffect(() => {
     if (statusMenuProjectId === null) return
     const handleClick = (e: MouseEvent) => {
-      if (statusMenuRef.current && !statusMenuRef.current.contains(e.target as Node)) {
+      if (
+        statusMenuRef.current &&
+        !statusMenuRef.current.contains(e.target as Node)
+      ) {
         setStatusMenuProjectId(null)
       }
     }
@@ -75,6 +102,7 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
     return () => document.removeEventListener('mousedown', handleClick)
   }, [statusMenuProjectId])
 
+  // QB pending count
   useEffect(() => {
     const loadQBPending = async () => {
       try {
@@ -88,152 +116,82 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
         setQbPendingCount(null)
       }
     }
-    loadQBPending()
+    void loadQBPending()
   }, [])
 
+  // Project list + progressive stats loading
   useEffect(() => {
     const loadProjects = async () => {
       setLoading(true)
-      
-      // First, load projects immediately (fast)
       const allProjects = await getProjects_Hybrid()
-      
-      // Show projects immediately without stats
-      setProjects(allProjects.map(p => ({ ...p, basePriceTotal: 0, estimatedValue: 0, actualCosts: 0, tradeCount: 0 })))
+      // Show projects immediately (without stats) for fast first paint
+      setProjects(
+        allProjects.map((p) => ({
+          ...p,
+          basePriceTotal: 0,
+          estimatedValue: 0,
+          actualCosts: 0,
+          tradeCount: 0,
+        })),
+      )
       setLoading(false)
-      
-      // Then load stats in the background (progressive enhancement)
-      // Combine trade fetching to avoid duplicate calls
+
+      // Then enhance with stats in the background
       const projectsWithStats = await Promise.all(
         allProjects.map(async (project) => {
-          // Fetch trades once and use for estimated value and trade count
           const [trades, actuals] = await Promise.all([
             getTradesForEstimate_Hybrid(project.estimate.id),
-            getProjectActuals_Hybrid(project.id)
+            getProjectActuals_Hybrid(project.id),
           ])
-          
+
           const tradeCount = trades.length
-          // Base price from estimate book first (totals.basePriceTotal or subtotal), else sum trades
-          const baseFromTrades = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
+          const baseFromTrades = trades.reduce(
+            (sum, trade) => sum + trade.totalCost,
+            0,
+          )
           const basePriceTotal =
             project.estimate?.totals?.basePriceTotal ??
-            (project.estimate?.subtotal != null && project.estimate.subtotal > 0 ? project.estimate.subtotal : null) ??
+            (project.estimate?.subtotal != null && project.estimate.subtotal > 0
+              ? project.estimate.subtotal
+              : null) ??
             baseFromTrades
           const grossProfitTotal = trades.reduce((sum, trade) => {
             const markup = trade.markupPercent || 20
-            return sum + (trade.totalCost * (markup / 100))
+            return sum + trade.totalCost * (markup / 100)
           }, 0)
-          const contingency = (project.estimate?.totals?.contingency != null ? project.estimate.totals.contingency : basePriceTotal * 0.10)
+          const contingency =
+            project.estimate?.totals?.contingency != null
+              ? project.estimate.totals.contingency
+              : basePriceTotal * 0.1
           const calculatedTotal = basePriceTotal + grossProfitTotal + contingency
-          const fromBook = project.estimate?.totals?.totalEstimated ?? project.estimate?.totalEstimate
-          const estimatedValue = (typeof fromBook === 'number' && fromBook > 0) ? fromBook : calculatedTotal
+          const fromBook =
+            project.estimate?.totals?.totalEstimated ??
+            project.estimate?.totalEstimate
+          const estimatedValue =
+            typeof fromBook === 'number' && fromBook > 0
+              ? fromBook
+              : calculatedTotal
           const actualCosts = actuals?.totalActualCost || 0
-          
-          return { 
-            ...project, 
-            basePriceTotal, 
-            estimatedValue, 
-            actualCosts, 
-            tradeCount 
+
+          return {
+            ...project,
+            basePriceTotal,
+            estimatedValue,
+            actualCosts,
+            tradeCount,
           }
-        })
+        }),
       )
-      
-      // Update with stats once loaded
+
       setProjects(projectsWithStats)
     }
-    loadProjects()
+    void loadProjects()
   }, [])
 
-  // Calculate estimated value for a project from its trades (kept for compatibility)
-  const calculateEstimatedValue = async (project: Project): Promise<number> => {
-    const trades = await getTradesForEstimate_Hybrid(project.estimate.id)
-    const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
-    const grossProfitTotal = trades.reduce((sum, trade) => {
-      const markup = trade.markupPercent || 20
-      return sum + (trade.totalCost * (markup / 100))
-    }, 0)
-    const contingency = basePriceTotal * 0.10 // 10% default
-    return basePriceTotal + grossProfitTotal + contingency
-  }
-
-  const calculateTradeCount = async (project: Project): Promise<number> => {
-    const trades = await getTradesForEstimate_Hybrid(project.estimate.id)
-    return trades.length
-  }
-
-  // Calculate actual costs for a project from actuals entries
-  const calculateActualCosts = async (project: Project): Promise<number> => {
-    const actuals = await getProjectActuals_Hybrid(project.id)
-    if (!actuals) return 0
-    return actuals.totalActualCost || 0
-  }
-
-  const addressSearchStr = (addr: ProjectWithStats['address']): string => {
-    if (!addr) return ''
-    if (typeof addr === 'string') return addr
-    return 'street' in addr ? (addr.street ?? '') : ''
-  }
-  const filteredProjects = projects
-    .filter(project =>
-      project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      addressSearchStr(project.address).toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (project.city ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .filter(project => statusFilter === 'all' || project.status === statusFilter)
-    .slice()
-    .sort((a, b) => {
-      const dateMs = (d: Date | string | undefined) => (d instanceof Date ? d.getTime() : d ? new Date(d as string).getTime() : 0)
-      switch (sortBy) {
-        case 'name-asc':
-          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-        case 'name-desc':
-          return b.name.localeCompare(a.name, undefined, { sensitivity: 'base' })
-        case 'oldest':
-          return dateMs(a.createdAt) - dateMs(b.createdAt)
-        case 'newest':
-        default:
-          return dateMs(b.createdAt) - dateMs(a.createdAt)
-        case 'estimate-desc':
-          return (b.estimatedValue ?? 0) - (a.estimatedValue ?? 0)
-        case 'estimate-asc':
-          return (a.estimatedValue ?? 0) - (b.estimatedValue ?? 0)
-        case 'actual-desc':
-          return (b.actualCosts ?? 0) - (a.actualCosts ?? 0)
-        case 'actual-asc':
-          return (a.actualCosts ?? 0) - (b.actualCosts ?? 0)
-      }
-    })
-
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
-
-  const getStatusStyles = (status: string) => {
-    const borders: Record<string, string> = {
-      estimating: 'border-l-[#0E79C9]',
-      'in-progress': 'border-l-[#D95C00]',
-      complete: 'border-l-[#15803D]',
-    }
-    return `bg-gray-100 text-gray-700 border-l-4 ${borders[status] || 'border-l-gray-400'}`
-  }
-
-  /** Status colors for left bar + top border (same palette as header: blue, orange, green, purple). */
-  const getStatusAccentColor = (status: string): string => {
-    const colors: Record<string, string> = {
-      estimating: '#0E79C9',   // blue (aligns with New Project button)
-      'in-progress': '#D95C00', // orange (aligns with Plan Library)
-      complete: '#15803D',      // green (aligns with Estimate Library)
-    }
-    return colors[status] ?? '#9ca3af' // gray-400 fallback
-  }
-
-  const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
-    { value: 'estimating', label: 'Estimating' },
-    { value: 'in-progress', label: 'In progress' },
-    { value: 'complete', label: 'Complete' },
-  ]
-
-  const handleStatusChange = async (project: ProjectWithStats, newStatus: ProjectStatus) => {
+  const handleStatusChange = async (
+    project: ProjectWithStats,
+    newStatus: ProjectStatus,
+  ) => {
     if (newStatus === project.status) {
       setStatusMenuProjectId(null)
       return
@@ -243,7 +201,20 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
     try {
       const updated = await updateProject_Hybrid(project.id, { status: newStatus })
       if (updated) {
-        setProjects(prev => prev.map(p => p.id === project.id ? { ...p, ...updated, basePriceTotal: project.basePriceTotal, estimatedValue: project.estimatedValue, actualCosts: project.actualCosts, tradeCount: project.tradeCount } : p))
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.id === project.id
+              ? {
+                  ...p,
+                  ...updated,
+                  basePriceTotal: project.basePriceTotal,
+                  estimatedValue: project.estimatedValue,
+                  actualCosts: project.actualCosts,
+                  tradeCount: project.tradeCount,
+                }
+              : p,
+          ),
+        )
       }
     } catch (e) {
       console.error(e)
@@ -252,308 +223,267 @@ export function ProjectsDashboard({ onCreateProject, onSelectProject, onOpenProj
     }
   }
 
+  // Filter + sort
+  const addressSearchStr = (addr: ProjectWithStats['address']): string => {
+    if (!addr) return ''
+    if (typeof addr === 'string') return addr
+    return 'street' in addr ? (addr.street ?? '') : ''
+  }
 
+  const filteredProjects = projects
+    .filter(
+      (project) =>
+        project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        addressSearchStr(project.address)
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        (project.city ?? '').toLowerCase().includes(searchQuery.toLowerCase()),
+    )
+    .filter((project) => statusFilter === 'all' || project.status === statusFilter)
+    .slice()
+    .sort((a, b) => {
+      const dateMs = (d: Date | string | undefined) =>
+        d instanceof Date ? d.getTime() : d ? new Date(d as string).getTime() : 0
+      switch (sortBy) {
+        case 'name-asc':
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        case 'name-desc':
+          return b.name.localeCompare(a.name, undefined, { sensitivity: 'base' })
+        case 'oldest':
+          return dateMs(a.createdAt) - dateMs(b.createdAt)
+        case 'estimate-desc':
+          return (b.estimatedValue ?? 0) - (a.estimatedValue ?? 0)
+        case 'estimate-asc':
+          return (a.estimatedValue ?? 0) - (b.estimatedValue ?? 0)
+        case 'actual-desc':
+          return (b.actualCosts ?? 0) - (a.actualCosts ?? 0)
+        case 'actual-asc':
+          return (a.actualCosts ?? 0) - (b.actualCosts ?? 0)
+        case 'newest':
+        default:
+          return dateMs(b.createdAt) - dateMs(a.createdAt)
+      }
+    })
 
-  const activeCount = projects.filter(p => p.status === 'in-progress').length
+  // Summary stats
+  const estimatingCount = projects.filter((p) => p.status === 'estimating').length
+  const inProgressCount = projects.filter((p) => p.status === 'in-progress').length
+  const totalEstimated = projects.reduce(
+    (sum, p) => sum + (p.estimatedValue ?? 0),
+    0,
+  )
+  const totalActual = projects.reduce((sum, p) => sum + (p.actualCosts ?? 0), 0)
+
+  const formatCurrencyCompact = (amount: number) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header - match Project Detail weight */}
-      <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto shrink-0" />
-              <div className="min-w-0">
-                <h1 className="text-xl font-semibold text-gray-900 truncate">Projects Dashboard</h1>
-                <p className="text-xs text-gray-500 hidden sm:block">
-                  {activeCount} active · {projects.length} total
-                </p>
-              </div>
-            </div>
-            <nav className="hidden sm:flex items-center gap-1 shrink-0">
-              {canCreate && (
-                <Button onClick={onCreateProject} size="sm" className="bg-[#0E79C9] hover:bg-[#0A5A96] text-white">
-                  <PlusCircle className="w-4 h-4 mr-1.5" />
-                  New Project
-                </Button>
-              )}
-              {onOpenDealWorkspace && (
-                <Button
-                  onClick={onOpenDealWorkspace}
-                  variant="ghost"
-                  size="sm"
-                  className="bg-[#6D28D9] text-white hover:bg-[#5B21B6]"
-                >
-                  Deal Workspace
-                </Button>
-              )}
-              {onOpenTenantPipeline && (
-                <Button
-                  onClick={onOpenTenantPipeline}
-                  variant="ghost"
-                  size="sm"
-                  className="bg-[#D95C00] text-white hover:bg-[#C04F00]"
-                >
-                  Tenant Pipeline
-                </Button>
-              )}
-            </nav>
-          </div>
+    <div className="flex flex-col gap-6 p-6">
+      {/* QuickBooks pending banner (when connected + has pending) */}
+      {qbPendingCount !== null && qbPendingCount > 0 && onOpenQBSettings && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5">
+          <span className="text-sm text-emerald-700 dark:text-emerald-300">
+            <strong>{qbPendingCount}</strong> pending transaction
+            {qbPendingCount !== 1 ? 's' : ''} from QuickBooks
+          </span>
+          <Button
+            onClick={onOpenQBSettings}
+            variant="outline"
+            size="sm"
+            className="shrink-0 border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+          >
+            <Download className="size-4" />
+            Import
+          </Button>
         </div>
-      </header>
+      )}
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-8">
-        {/* QuickBooks pending - slim one-line */}
-        {qbPendingCount !== null && qbPendingCount > 0 && onOpenQBSettings && (
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-2 py-2.5 px-4 rounded-lg border border-emerald-200 bg-emerald-50/80">
-            <span className="text-sm text-emerald-800">
-              <strong>{qbPendingCount}</strong> pending transaction{qbPendingCount !== 1 ? 's' : ''} from QuickBooks
+      {/* Summary cards — counts + dollar totals */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <SummaryCard
+          label="Estimating"
+          value={String(estimatingCount)}
+          rail="bg-violet-500"
+        />
+        <SummaryCard
+          label="In Progress"
+          value={String(inProgressCount)}
+          rail="bg-emerald-500"
+        />
+        <SummaryCard
+          label="Total Estimated"
+          value={formatCurrencyCompact(totalEstimated)}
+          rail="bg-sky-500"
+          valueClass="text-sky-600 dark:text-sky-400"
+        />
+        <SummaryCard
+          label="Total Actual"
+          value={formatCurrencyCompact(totalActual)}
+          rail="bg-emerald-500"
+          valueClass={
+            totalActual > 0
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : 'text-muted-foreground'
+          }
+        />
+      </div>
+
+      {/* Search + filters */}
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search by name or address…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 bg-card/50"
+          />
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[160px] bg-card/50">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="estimating">Estimating</SelectItem>
+              <SelectItem value="bidding">Bidding</SelectItem>
+              <SelectItem value="awarded">Awarded</SelectItem>
+              <SelectItem value="in-progress">In progress</SelectItem>
+              <SelectItem value="complete">Complete</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-[180px] bg-card/50">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest first</SelectItem>
+              <SelectItem value="oldest">Oldest first</SelectItem>
+              <SelectItem value="name-asc">Name A–Z</SelectItem>
+              <SelectItem value="name-desc">Name Z–A</SelectItem>
+              <SelectItem value="estimate-desc">Est. value: high → low</SelectItem>
+              <SelectItem value="estimate-asc">Est. value: low → high</SelectItem>
+              <SelectItem value="actual-desc">Actual costs: high → low</SelectItem>
+              <SelectItem value="actual-asc">Actual costs: low → high</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Projects list */}
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Your Projects
+            <span className="ml-2 text-xs text-muted-foreground/70">
+              {filteredProjects.length} project
+              {filteredProjects.length !== 1 ? 's' : ''}
             </span>
-            <Button onClick={onOpenQBSettings} variant="outline" size="sm" className="border-emerald-300 text-emerald-800 hover:bg-emerald-100 shrink-0">
-              <Download className="w-4 h-4 mr-1" />
-              Import
-            </Button>
-          </div>
-        )}
-
-        {/* Search + filters toolbar */}
-        <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              type="text"
-              placeholder="Search by name or address..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-10 text-base bg-white border-gray-200 shadow-sm"
-            />
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[160px] h-10 bg-white border-gray-200 shadow-sm">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="estimating">Estimating</SelectItem>
-                <SelectItem value="bidding">Bidding</SelectItem>
-                <SelectItem value="awarded">Awarded</SelectItem>
-                <SelectItem value="in-progress">In progress</SelectItem>
-                <SelectItem value="complete">Complete</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-[180px] h-10 bg-white border-gray-200 shadow-sm">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="newest">Newest first</SelectItem>
-                <SelectItem value="oldest">Oldest first</SelectItem>
-                <SelectItem value="name-asc">Name A–Z</SelectItem>
-                <SelectItem value="name-desc">Name Z–A</SelectItem>
-                <SelectItem value="estimate-desc">Est. value: high → low</SelectItem>
-                <SelectItem value="estimate-asc">Est. value: low → high</SelectItem>
-                <SelectItem value="actual-desc">Actual costs: high → low</SelectItem>
-                <SelectItem value="actual-asc">Actual costs: low → high</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Your Projects - one card per project */}
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Your Projects</h2>
-          <p className="text-sm text-gray-500">
-            {filteredProjects.length} {filteredProjects.length === 1 ? 'project' : 'projects'}
-          </p>
+          </h2>
         </div>
 
         {loading && projects.length === 0 ? (
-          <Card className="bg-white shadow-lg">
-            <CardContent className="py-12">
-              <div className="text-center">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-[#0E79C9]"></div>
-                <p className="mt-4 text-gray-500 text-sm">Loading projects...</p>
-              </div>
+          <Card className="border-border/60 bg-card/50">
+            <CardContent className="py-12 text-center">
+              <div className="mx-auto inline-block size-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
+              <p className="mt-4 text-sm text-muted-foreground">
+                Loading projects…
+              </p>
             </CardContent>
           </Card>
         ) : filteredProjects.length === 0 ? (
-          <Card className="bg-white shadow-lg">
-            <CardContent className="py-12">
-              <div className="text-center">
-                <Building2 className="w-14 h-14 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-700 font-medium mb-1">
-                  {searchQuery ? 'No projects found' : 'No projects yet'}
+          <Card className="border-border/60 bg-card/50">
+            <CardContent className="py-12 text-center">
+              <Building2 className="mx-auto mb-3 size-12 text-muted-foreground/50" />
+              <p className="font-medium">
+                {searchQuery ? 'No projects found' : 'No projects yet'}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {searchQuery
+                  ? 'Try adjusting your search'
+                  : canCreate
+                    ? 'Create your first project to get started'
+                    : 'No projects yet'}
+              </p>
+              {!searchQuery && canCreate && (
+                <Button onClick={onCreateProject} size="sm" className="mt-4">
+                  <PlusCircle className="size-4" />
+                  Create Project
+                </Button>
+              )}
+              {!searchQuery && isViewer && (
+                <p className="mt-3 inline-flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+                  <Eye className="size-4" />
+                  View-only access
                 </p>
-                <p className="text-gray-500 text-sm mb-6">
-                  {searchQuery ? 'Try adjusting your search' : canCreate ? 'Create your first project to get started' : 'No projects yet'}
-                </p>
-                {!searchQuery && canCreate && (
-                  <Button onClick={onCreateProject} size="sm" className="bg-[#0E79C9] hover:bg-[#0A5A96]">
-                    <PlusCircle className="w-4 h-4 mr-2" />
-                    Create Project
-                  </Button>
-                )}
-                {!searchQuery && isViewer && (
-                  <div className="flex items-center justify-center gap-2 text-gray-500 text-sm">
-                    <Eye className="w-4 h-4" />
-                    <span>View-only access</span>
-                  </div>
-                )}
-              </div>
+              )}
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {filteredProjects.map((project) => {
-              const base = project.basePriceTotal ?? 0
-              const est = project.estimatedValue ?? 0
-              const actual = project.actualCosts ?? 0
-              return (
-                <Card
-                  key={project.id}
-                  onClick={() => onSelectProject(project)}
-                  className="bg-white shadow-lg rounded-xl overflow-hidden hover:shadow-xl transition-all cursor-pointer border border-gray-200 flex flex-row"
-                >
-                  <div
-                    className="shrink-0 w-1.5 sm:w-2 rounded-l-xl"
-                    style={{ backgroundColor: getStatusAccentColor(project.status) }}
-                    aria-hidden
-                  />
-                  <CardContent className="flex flex-col sm:flex-row sm:items-center gap-3 py-4 sm:py-5 flex-1 min-w-0 px-4 sm:px-6 rounded-r-xl items-center text-center sm:text-left pt-6">
-                    <div className="w-full sm:w-[300px] sm:shrink-0 min-w-0">
-                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
-                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{project.name}</h3>
-                        <div className="relative" ref={statusMenuProjectId === project.id ? statusMenuRef : undefined}>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (isViewer) return
-                              setStatusMenuProjectId(prev => prev === project.id ? null : project.id)
-                            }}
-                            disabled={!!updatingStatusId}
-                            className={`px-2.5 py-0.5 rounded text-xs font-medium transition-opacity ${getStatusStyles(project.status)} ${!isViewer ? 'hover:ring-1 hover:ring-gray-300 cursor-pointer' : 'cursor-default'} ${updatingStatusId === project.id ? 'opacity-60' : ''}`}
-                            title={isViewer ? undefined : 'Change status'}
-                          >
-                            {updatingStatusId === project.id ? '…' : project.status.replace('-', ' ')}
-                          </button>
-                          {statusMenuProjectId === project.id && (
-                            <div className="absolute left-0 top-full mt-1 z-10 min-w-[140px] rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                              {STATUS_OPTIONS.map((opt) => (
-                                <button
-                                  key={opt.value}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleStatusChange(project, opt.value)
-                                  }}
-                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 first:rounded-t-md last:rounded-b-md ${project.status === opt.value ? 'bg-gray-50 font-medium' : ''}`}
-                                >
-                                  {opt.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <p className="text-sm sm:text-base text-gray-500 truncate">
-                        {typeof project.address === 'string' ? project.address : project.address?.street || 'No address'}
-                        {project.city && ` · ${project.city}`}
-                        {project.state && `, ${project.state}`}
-                      </p>
-                      <p className="text-xs sm:text-sm text-gray-400 mt-0.5 sm:mt-1">
-                        {project.metadata?.isCustomPlan || !project.metadata?.planId ? 'Custom plan' : `Plan: ${project.metadata.planId}`}
-                        {' · '}
-                        {project.createdAt.toLocaleDateString()}
-                        {project.tradeCount != null && project.tradeCount > 0 && ` · ${project.tradeCount} items`}
-                      </p>
-                    </div>
-                    {onOpenProjectSection && (
-                      <div className="w-full sm:w-[380px] sm:shrink-0 flex flex-wrap items-center justify-center sm:justify-start gap-1 py-1 sm:py-1.5 sm:pl-2" onClick={(e) => e.stopPropagation()}>
-                        {SECTION_BUTTONS.map(({ section, label, icon }) => (
-                          <button
-                            key={section}
-                            type="button"
-                            onClick={() => onOpenProjectSection(project, section)}
-                            className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-200 hover:text-gray-900 border border-transparent hover:border-gray-300 transition-colors whitespace-nowrap"
-                            title={section === 'change-orders' ? 'Change orders' : section === 'selection-book' ? 'Selection book' : section === 'schedule' ? 'Schedule' : section === 'documents' ? 'Project documents' : section === 'estimate' ? 'Estimate book' : section === 'actuals' ? 'Project actuals' : 'Forms'}
-                          >
-                            {icon}
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0 sm:min-w-[24px]" aria-hidden />
-                    <div className="flex items-baseline gap-4 sm:gap-6 shrink-0 text-center min-w-0 sm:w-[320px] sm:justify-end">
-                      <div className="sm:w-[100px] sm:text-center">
-                        <p className="text-xs text-gray-500">Base</p>
-                        <p className="text-base sm:text-lg font-semibold text-sky-700 tabular-nums">{formatCurrency(base)}</p>
-                      </div>
-                      <div className="sm:w-[100px] sm:text-center">
-                        <p className="text-xs text-gray-500">Est.</p>
-                        <p className="text-base sm:text-lg font-semibold text-gray-900 tabular-nums">{formatCurrency(est)}</p>
-                      </div>
-                      <div className="sm:w-[100px] sm:text-center">
-                        <p className="text-xs text-gray-500">Actual</p>
-                        <p className="text-base sm:text-lg font-semibold text-emerald-700 tabular-nums">{formatCurrency(actual)}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
+          <div
+            ref={statusMenuRef}
+            className="flex flex-col gap-2"
+          >
+            {filteredProjects.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                onSelect={onSelectProject}
+                onOpenSection={onOpenProjectSection}
+                statusMenuOpen={statusMenuProjectId === project.id}
+                onToggleStatusMenu={() =>
+                  setStatusMenuProjectId((prev) =>
+                    prev === project.id ? null : project.id,
+                  )
+                }
+                onChangeStatus={handleStatusChange}
+                isUpdatingStatus={updatingStatusId === project.id}
+                isViewer={isViewer}
+              />
+            ))}
           </div>
         )}
-
-        {/* Mobile: bottom action bar */}
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
-          {showMobileActions && (
-            <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
-              {canCreate && (
-                <button
-                  onClick={() => { onCreateProject(); setShowMobileActions(false) }}
-                  className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-[#0E79C9]/20 bg-[#0E79C9]/5"
-                >
-                  <PlusCircle className="w-5 h-5 text-[#0E79C9]" />
-                  <div>
-                    <p className="font-medium text-gray-900">New Project</p>
-                    <p className="text-xs text-gray-500">Start a new project</p>
-                  </div>
-                </button>
-              )}
-              {onOpenDealWorkspace && (
-                <button onClick={() => { onOpenDealWorkspace(); setShowMobileActions(false) }} className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700">
-                  <TrendingUp className="w-5 h-5 text-gray-400" />
-                  <span className="font-medium">Deal Workspace</span>
-                </button>
-              )}
-              {onOpenTenantPipeline && (
-                <button onClick={() => { onOpenTenantPipeline(); setShowMobileActions(false) }} className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700">
-                  <Building2 className="w-5 h-5 text-gray-400" />
-                  <span className="font-medium">Tenant Pipeline</span>
-                </button>
-              )}
-            </div>
-          )}
-          <div className="p-2">
-            <Button
-              onClick={() => setShowMobileActions(!showMobileActions)}
-              variant="outline"
-              className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
-            >
-              <span className="flex items-center justify-center gap-2 text-gray-700">
-                Actions
-                <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
-              </span>
-            </Button>
-          </div>
-        </div>
-      </main>
-
+      </section>
     </div>
   )
 }
 
+// ============================================================================
+// Pieces
+// ============================================================================
+
+function SummaryCard({
+  label,
+  value,
+  rail,
+  valueClass,
+}: {
+  label: string
+  value: string
+  rail: string
+  valueClass?: string
+}) {
+  return (
+    <Card className="relative overflow-hidden border-border/60 bg-card/50">
+      <div className={cn('absolute inset-y-0 left-0 w-1', rail)} aria-hidden />
+      <CardContent className="p-4 pl-5">
+        <p className="mb-1 text-xs text-muted-foreground">{label}</p>
+        <p
+          className={cn(
+            'text-xl font-semibold tabular-nums',
+            valueClass ?? 'text-foreground',
+          )}
+        >
+          {value}
+        </p>
+      </CardContent>
+    </Card>
+  )
+}

@@ -29,12 +29,14 @@ import {
   Link2,
   ListChecks,
   PieChart,
+  Plus,
   Receipt,
   Settings,
   TrendingUp,
   UsersRound,
   Wallet,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   Sidebar,
   SidebarContent,
@@ -260,6 +262,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
         <BrandHeader />
+        <PrimaryAction workspace={workspace} />
       </SidebarHeader>
 
       <SidebarSeparator />
@@ -295,6 +298,29 @@ export function AppSidebar() {
 // ----------------------------------------------------------------------------
 // Pieces
 // ----------------------------------------------------------------------------
+
+/** Workspace-specific primary CTA in the sidebar header (e.g. "+ New Project").
+ * Hidden when the sidebar is collapsed to icon-only mode. */
+function PrimaryAction({ workspace }: { workspace: Workspace }) {
+  const navigate = useNavigate()
+
+  // For now we only have a "New" action for Projects. Deals/Tenants creation
+  // happens inside their respective workspace UIs.
+  if (workspace !== 'projects') return null
+
+  return (
+    <div className="px-1 group-data-[collapsible=icon]:hidden">
+      <Button
+        onClick={() => navigate('/projects/new')}
+        size="sm"
+        className="w-full justify-start gap-2"
+      >
+        <Plus className="size-4" />
+        New Project
+      </Button>
+    </div>
+  )
+}
 
 function BrandHeader() {
   const navigate = useNavigate()
