@@ -518,7 +518,7 @@ tsc --noEmit clean.
 | Item Library | ✅ Ported | `src/components/ItemLibrary.tsx` | Mode A — dual-branch tabs retained; removed hero/mobile shell and tokenized category accordion + modal forms |
 | SOW Management | ✅ Ported | `src/components/SOWManagement.tsx` | Mode A — removed legacy hero + gradient shell, normalized CRUD cards/dialogs to token surfaces |
 | Deal Workspace | ⏸ Hold | `src/components/DealWorkspace.tsx` | Wait for owner's in-flight Create Deal commit |
-| Tenant Pipeline | ⬜ Pending | `src/components/TenantPipeline.tsx` | Mode A — kanban board |
+| Tenant Pipeline | ✅ Ported | `src/components/TenantPipeline.tsx` | Kanban board with drag-drop preserved. 7 stages → 5 token colors using semantic repetition (sky/amber/emerald/violet/amber/emerald/rose). 8 categories use distinct hues per §7 (orange kept for Fitness). Layout: horizontal-scroll flex, `w-64 shrink-0` per column, `min-h-[420px]` drop zone. Mobile uses stage-picker chip strip + single-stage list view. |
 | Create Project Form | ✅ Ported | `src/components/CreateProjectForm.tsx` | Mode A — multi-section form tokenized; plan-option checkbox panel migrated to muted token card |
 
 ---

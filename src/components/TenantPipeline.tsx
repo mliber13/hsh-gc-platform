@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import hshLogo from '/HSH Contractor Logo - Color.png'
-import { ChevronDown } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 import { isOnlineMode } from '@/lib/supabase'
 import { createDeal } from '@/services/dealService'
 import {
@@ -24,91 +25,95 @@ const STAGES: ProspectStage[] = [
   'Dead',
 ]
 
+// Stage colors per docs/UI_PORT_PLAYBOOK.md §7 (semantic — repetition is intentional:
+// emerald = positive milestone, amber = action-needed, sky = scheduled/calm)
 const STAGE_STYLES: Record<
   ProspectStage,
   {
-    columnHeader: string
     title: string
     count: string
     dot: string
+    rail: string
   }
 > = {
   Contacted: {
-    columnHeader: 'bg-blue-100',
-    title: 'text-blue-800',
-    count: 'bg-blue-800 text-white',
-    dot: 'bg-blue-500',
+    title: 'text-sky-700 dark:text-sky-300',
+    count: 'bg-sky-500/20 text-sky-700 dark:text-sky-300',
+    dot: 'bg-sky-500',
+    rail: 'bg-sky-500',
   },
   'Meeting Set': {
-    columnHeader: 'bg-yellow-100',
-    title: 'text-yellow-800',
-    count: 'bg-yellow-800 text-white',
-    dot: 'bg-yellow-500',
+    title: 'text-amber-700 dark:text-amber-300',
+    count: 'bg-amber-500/20 text-amber-700 dark:text-amber-300',
+    dot: 'bg-amber-500',
+    rail: 'bg-amber-500',
   },
   'Meeting Complete': {
-    columnHeader: 'bg-green-100',
-    title: 'text-green-800',
-    count: 'bg-green-800 text-white',
-    dot: 'bg-green-500',
+    title: 'text-emerald-700 dark:text-emerald-300',
+    count: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300',
+    dot: 'bg-emerald-500',
+    rail: 'bg-emerald-500',
   },
   'Proposal Sent': {
-    columnHeader: 'bg-purple-100',
-    title: 'text-purple-800',
-    count: 'bg-purple-800 text-white',
-    dot: 'bg-purple-500',
+    title: 'text-violet-700 dark:text-violet-300',
+    count: 'bg-violet-500/20 text-violet-700 dark:text-violet-300',
+    dot: 'bg-violet-500',
+    rail: 'bg-violet-500',
   },
   Negotiating: {
-    columnHeader: 'bg-orange-100',
-    title: 'text-orange-800',
-    count: 'bg-orange-800 text-white',
-    dot: 'bg-orange-500',
+    title: 'text-amber-700 dark:text-amber-300',
+    count: 'bg-amber-500/20 text-amber-700 dark:text-amber-300',
+    dot: 'bg-amber-500',
+    rail: 'bg-amber-500',
   },
   'LOI Signed': {
-    columnHeader: 'bg-emerald-100',
-    title: 'text-emerald-800',
-    count: 'bg-emerald-800 text-white',
+    title: 'text-emerald-700 dark:text-emerald-300',
+    count: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300',
     dot: 'bg-emerald-500',
+    rail: 'bg-emerald-500',
   },
   Dead: {
-    columnHeader: 'bg-red-100',
-    title: 'text-red-800',
-    count: 'bg-red-800 text-white',
-    dot: 'bg-red-500',
+    title: 'text-rose-700 dark:text-rose-300',
+    count: 'bg-rose-500/20 text-rose-700 dark:text-rose-300',
+    dot: 'bg-rose-500',
+    rail: 'bg-rose-500',
   },
 }
 
+// Categories per docs/UI_PORT_PLAYBOOK.md §7 — orthogonal to stages, 8 distinct
+// hues for visual identification. Pill recipe: bg-X-500/15 + text-X-700/300 + border-X-500/30
 const CATEGORY_STYLES: Record<ProspectCategory, { badge: string; accent: string }> = {
   Grocer: {
-    badge: 'bg-emerald-100 text-emerald-800',
+    badge: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30',
     accent: 'bg-emerald-500',
   },
   QSR: {
-    badge: 'bg-amber-100 text-amber-800',
+    badge: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30',
     accent: 'bg-amber-500',
   },
   'Casual Dining': {
-    badge: 'bg-violet-100 text-violet-800',
+    badge: 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30',
     accent: 'bg-violet-500',
   },
   Entertainment: {
-    badge: 'bg-pink-100 text-pink-800',
+    badge: 'bg-pink-500/15 text-pink-700 dark:text-pink-300 border border-pink-500/30',
     accent: 'bg-pink-500',
   },
   Retail: {
-    badge: 'bg-blue-100 text-blue-800',
-    accent: 'bg-blue-500',
+    badge: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30',
+    accent: 'bg-sky-500',
   },
   Fitness: {
-    badge: 'bg-orange-100 text-orange-800',
+    badge: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30',
     accent: 'bg-orange-500',
   },
   Medical: {
-    badge: 'bg-teal-100 text-teal-800',
+    badge: 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30',
     accent: 'bg-teal-500',
   },
   Other: {
-    badge: 'bg-slate-100 text-slate-700',
-    accent: 'bg-slate-400',
+    badge: 'bg-muted text-muted-foreground border border-border',
+    accent: 'bg-muted-foreground',
   },
 }
 
@@ -299,13 +304,15 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
   const [form, setForm] = useState<ProspectFormState>(emptyForm())
   const [isEditing, setIsEditing] = useState(false)
   const [activeMobileStage, setActiveMobileStage] = useState<ProspectStage>('Contacted')
-  const [showMobileActions, setShowMobileActions] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [syncSuccess, setSyncSuccess] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [draggedProspectId, setDraggedProspectId] = useState<string | null>(null)
   const [dragOverStage, setDragOverStage] = useState<ProspectStage | null>(null)
+
+  // Centered title in the AppHeader
+  usePageTitle('Tenant Pipeline')
 
   const developmentOptions = useMemo(
     () => Array.from(new Set(prospects.map((p) => p.development))).sort(),
@@ -569,7 +576,7 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
             }
           : undefined
       }
-      className={`relative rounded-md border border-[#d4cfc5] bg-white p-3 shadow-sm transition-shadow hover:shadow-md ${
+      className={`relative rounded-md border border-border/60 bg-card p-3 shadow-sm transition-shadow hover:shadow-md ${
         isDraggable ? 'cursor-grab active:cursor-grabbing' : ''
       } ${draggedProspectId === prospect.id ? 'opacity-60' : ''}`}
     >
@@ -577,18 +584,18 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
         className={`absolute left-0 top-0 h-full w-1 rounded-l-md ${CATEGORY_STYLES[prospect.category].accent}`}
         aria-hidden
       />
-      <h3 className="pl-1 pr-24 text-sm font-semibold text-[#1a1a18]">{prospect.name}</h3>
+      <h3 className="pl-1 pr-24 text-sm font-semibold text-foreground">{prospect.name}</h3>
       <button
         type="button"
         onClick={() => openEditModal(prospect)}
-        className="absolute right-2 top-2 rounded border border-gray-300 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-600 hover:bg-gray-100"
+        className="absolute right-2 top-2 rounded border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/40"
       >
         Edit
       </button>
       <button
         type="button"
         onClick={() => handleDeleteProspect(prospect.id)}
-        className="absolute right-2 top-9 rounded border border-red-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-red-700 hover:bg-red-50"
+        className="absolute right-2 top-9 rounded border border-rose-500/30 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
       >
         Delete
       </button>
@@ -602,27 +609,27 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
         </span>
       </div>
 
-      <dl className="mt-2 space-y-1 pl-1 text-xs text-[#5e5e5a]">
-        <div><dt className="inline font-semibold text-[#444]">Development:</dt> <dd className="inline"> {prospect.development}</dd></div>
-        <div><dt className="inline font-semibold text-[#444]">Contact:</dt> <dd className="inline"> {prospect.contactName}</dd></div>
+      <dl className="mt-2 space-y-1 pl-1 text-xs text-muted-foreground">
+        <div><dt className="inline font-semibold text-foreground">Development:</dt> <dd className="inline"> {prospect.development}</dd></div>
+        <div><dt className="inline font-semibold text-foreground">Contact:</dt> <dd className="inline"> {prospect.contactName}</dd></div>
         {prospect.contactEmail && (
-          <div><dt className="inline font-semibold text-[#444]">Email:</dt> <dd className="inline"> {prospect.contactEmail}</dd></div>
+          <div><dt className="inline font-semibold text-foreground">Email:</dt> <dd className="inline"> {prospect.contactEmail}</dd></div>
         )}
         {prospect.contactPhone && (
-          <div><dt className="inline font-semibold text-[#444]">Phone:</dt> <dd className="inline"> {prospect.contactPhone}</dd></div>
+          <div><dt className="inline font-semibold text-foreground">Phone:</dt> <dd className="inline"> {prospect.contactPhone}</dd></div>
         )}
-        <div><dt className="inline font-semibold text-[#444]">Outreach:</dt> <dd className="inline"> {prospect.outreachMethod}</dd></div>
-        <div><dt className="inline font-semibold text-[#444]">Stage:</dt> <dd className="inline"> {prospect.stage}</dd></div>
-        <div><dt className="inline font-semibold text-[#444]">Owner:</dt> <dd className="inline"> {prospect.owner}</dd></div>
+        <div><dt className="inline font-semibold text-foreground">Outreach:</dt> <dd className="inline"> {prospect.outreachMethod}</dd></div>
+        <div><dt className="inline font-semibold text-foreground">Stage:</dt> <dd className="inline"> {prospect.stage}</dd></div>
+        <div><dt className="inline font-semibold text-foreground">Owner:</dt> <dd className="inline"> {prospect.owner}</dd></div>
       </dl>
 
-      <div className="mt-2 rounded-sm border-l-2 border-emerald-600 bg-[#f5f2eb] px-2 py-1 text-[11px] text-[#555]">
-        <span className="font-semibold text-[#444]">Next:</span> {prospect.nextAction}
+      <div className="mt-2 rounded-sm border-l-2 border-emerald-600 bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+        <span className="font-semibold text-foreground">Next:</span> {prospect.nextAction}
       </div>
-      <div className="mt-1 text-[11px] text-[#666]">
+      <div className="mt-1 text-[11px] text-muted-foreground">
         Due: <span className="font-medium">{formatDate(prospect.nextActionDate)}</span>
       </div>
-      <p className="mt-1 text-[11px] text-[#666]">{prospect.notes}</p>
+      <p className="mt-1 text-[11px] text-muted-foreground">{prospect.notes}</p>
 
       {prospect.stage === 'LOI Signed' && (
         <Button
@@ -637,107 +644,25 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
   )
 
   return (
-    <div className="min-h-screen bg-[#f5f2eb]">
-      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white shadow-md">
-        <div className="mx-auto flex max-w-[1700px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <img
-              src={hshLogo}
-              alt="HSH"
-              className="h-12 w-auto shrink-0 sm:h-16"
-            />
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Tenant Pipeline</h1>
-              <p className="text-xs text-gray-500 sm:text-sm">Prospect tracking by leasing stage</p>
-            </div>
-          </div>
-          <div className="hidden flex-wrap items-center gap-2 md:flex">
-            <label htmlFor="development-filter" className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-              Development
-            </label>
-            <select
-              id="development-filter"
-              value={developmentFilter}
-              onChange={(e) => setDevelopmentFilter(e.target.value)}
-              className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none"
-            >
-              <option value="all">All Developments</option>
-              {developmentOptions.map((development) => (
-                <option key={development} value={development}>
-                  {development}
-                </option>
-              ))}
-            </select>
-            <Button onClick={openAddModal} size="sm" className="bg-[#0E79C9] text-white hover:bg-[#0A5A96]">
-              + Prospect
-            </Button>
-            <Button onClick={onBack} size="sm" variant="outline">
-              Back to Dashboard
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="hidden border-b border-[#d4cfc5] bg-[#ede9df] px-4 py-2 sm:px-6 md:block lg:px-8">
-        <div className="mx-auto flex max-w-[1700px] items-center gap-4 overflow-x-auto">
-          {STAGES.map((stage) => (
-            <div key={stage} className="flex shrink-0 items-center gap-2 rounded-md px-2 py-1">
-              <span className={`h-2 w-2 rounded-full ${STAGE_STYLES[stage].dot}`} />
-              <span className="text-xs font-medium text-[#555]">{stage}</span>
-              <span className="text-xs font-bold text-[#1a1a18]">{stageCounts[stage]}</span>
-            </div>
-          ))}
-          <div className="ml-auto shrink-0 text-xs font-semibold text-[#1a1a18]">
-            Total: {filteredProspects.length}
-          </div>
-        </div>
-      </div>
-
-      {syncError && (
-        <div className="mx-auto mt-3 max-w-[1700px] px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            <span>{syncError}</span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 border-amber-300 bg-amber-100 px-2 text-[11px] text-amber-900 hover:bg-amber-200"
-              onClick={loadProspects}
-            >
-              Retry
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {syncSuccess && (
-        <div className="mx-auto mt-3 max-w-[1700px] px-4 sm:px-6 lg:px-8">
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-            {syncSuccess}
-          </div>
-        </div>
-      )}
-
-      {isLoading && (
-        <div className="mx-auto max-w-[1700px] px-4 py-6 text-sm text-gray-600 sm:px-6 lg:px-8">
-          Loading tenant pipeline...
-        </div>
-      )}
-
-      {/* Mobile stage picker + list */}
-      {!isLoading && (
-      <section className="mx-auto max-w-[1700px] px-4 py-4 pb-24 sm:px-6 md:hidden">
-        <div className="mb-3">
-          <label
-            htmlFor="development-filter-mobile-top"
-            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600"
-          >
+    <div className="flex flex-col gap-4 p-6">
+      {/* Top action strip — back link + Development filter + Add Prospect */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back to Dashboard
+        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="development-filter" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Development
           </label>
           <select
-            id="development-filter-mobile-top"
+            id="development-filter"
             value={developmentFilter}
             onChange={(e) => setDevelopmentFilter(e.target.value)}
-            className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none"
+            className="h-9 rounded-md border border-border/60 bg-card px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="all">All Developments</option>
             {developmentOptions.map((development) => (
@@ -746,19 +671,67 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
               </option>
             ))}
           </select>
+          <Button onClick={openAddModal} size="sm">
+            + Prospect
+          </Button>
         </div>
+      </div>
 
+      {/* Stage indicator strip — quick visual count of all stages */}
+      <div className="hidden flex-wrap items-center gap-4 rounded-lg border border-border/60 bg-card/50 px-3 py-2 md:flex">
+        {STAGES.map((stage) => (
+          <div key={stage} className="flex shrink-0 items-center gap-2">
+            <span className={`size-2 rounded-full ${STAGE_STYLES[stage].dot}`} />
+            <span className="text-xs font-medium text-muted-foreground">{stage}</span>
+            <span className="text-xs font-semibold tabular-nums text-foreground">{stageCounts[stage]}</span>
+          </div>
+        ))}
+        <div className="ml-auto shrink-0 text-xs font-semibold tabular-nums">
+          Total: {filteredProspects.length}
+        </div>
+      </div>
+
+      {syncError && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          <span>{syncError}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-[11px]"
+            onClick={loadProspects}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {syncSuccess && (
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+          {syncSuccess}
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="py-6 text-sm text-muted-foreground">
+          Loading tenant pipeline…
+        </div>
+      )}
+
+      {/* Mobile stage picker + list */}
+      {!isLoading && (
+      <section className="md:hidden">
         <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
           {STAGES.map((stage) => (
             <button
               key={stage}
               type="button"
               onClick={() => setActiveMobileStage(stage)}
-              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${
+              className={cn(
+                'shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
                 activeMobileStage === stage
-                  ? 'border-[#1c3d2e] bg-[#1c3d2e] text-white'
-                  : 'border-[#d4cfc5] bg-white text-[#444]'
-              }`}
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border/60 bg-card text-foreground hover:bg-accent',
+              )}
             >
               {stage} ({stageCounts[stage]})
             </button>
@@ -767,7 +740,7 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
 
         <div className="space-y-2">
           {mobileStageProspects.length === 0 ? (
-            <div className="rounded-md border border-dashed border-[#d4cfc5] bg-[#ede9df] p-5 text-center text-sm italic text-[#777]">
+            <div className="rounded-md border border-dashed border-border/60 bg-card/50 p-5 text-center text-sm italic text-muted-foreground">
               No prospects in {activeMobileStage}
             </div>
           ) : (
@@ -777,21 +750,27 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
       </section>
       )}
 
-      {/* Desktop board */}
+      {/* Desktop kanban — horizontal scroll, each column min-w-64 */}
       {!isLoading && (
-      <main className="mx-auto hidden max-w-[1700px] px-4 py-6 sm:px-6 md:block lg:px-8">
-        <div className="grid grid-cols-7 items-start gap-3">
+      <div className="hidden overflow-x-auto md:block">
+        <div className="flex items-start gap-3 pb-4">
           {STAGES.map((stage) => {
             const stageProspects = filteredProspects.filter((p) => p.stage === stage)
             const stageStyle = STAGE_STYLES[stage]
 
             return (
-              <section key={stage} className="min-w-0 overflow-hidden rounded-lg">
-                <div className={`flex items-center justify-between px-3 py-2 ${stageStyle.columnHeader}`}>
-                  <h2 className={`text-[11px] font-bold uppercase tracking-wide ${stageStyle.title}`}>
-                    {stage}
-                  </h2>
-                  <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold ${stageStyle.count}`}>
+              <section
+                key={stage}
+                className="flex w-64 shrink-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-card/50"
+              >
+                <div className="flex items-center justify-between border-b border-border/60 bg-card px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className={cn('size-2 rounded-full', stageStyle.dot)} />
+                    <h2 className={cn('text-xs font-semibold uppercase tracking-wide', stageStyle.title)}>
+                      {stage}
+                    </h2>
+                  </div>
+                  <span className={cn('flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums', stageStyle.count)}>
                     {stageProspects.length}
                   </span>
                 </div>
@@ -807,12 +786,13 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
                     event.preventDefault()
                     handleStageDrop(stage)
                   }}
-                  className={`min-h-[420px] space-y-2 border border-[#d4cfc5] border-t-0 bg-[#ede9df] p-2 ${
-                    dragOverStage === stage ? 'ring-2 ring-emerald-400 ring-inset' : ''
-                  }`}
+                  className={cn(
+                    'min-h-[420px] flex-1 space-y-2 p-2 transition-colors',
+                    dragOverStage === stage && 'ring-2 ring-primary ring-inset',
+                  )}
                 >
                   {stageProspects.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-[#d4cfc5] p-4 text-center text-xs italic text-[#999]">
+                    <div className="rounded-md border border-dashed border-border/60 p-4 text-center text-xs italic text-muted-foreground">
                       No prospects
                     </div>
                   ) : (
@@ -823,93 +803,52 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
             )
           })}
         </div>
-      </main>
-      )}
-
-      {/* Mobile bottom actions - mirrors dashboard pattern */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white md:hidden">
-        {showMobileActions && (
-          <div className="max-h-72 overflow-y-auto border-b border-gray-100 bg-gray-50 px-3 py-2">
-            <button
-              onClick={() => {
-                openAddModal()
-                setShowMobileActions(false)
-              }}
-              className="mb-1 w-full rounded-lg border border-[#0E79C9]/20 bg-[#0E79C9]/5 px-3 py-2.5 text-left text-sm font-medium text-gray-800 hover:bg-white"
-            >
-              + Add Prospect
-            </button>
-            <button
-              onClick={() => {
-                onBack()
-                setShowMobileActions(false)
-              }}
-              className="w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-white"
-            >
-              Back to Dashboard
-            </button>
-          </div>
-        )}
-
-        <div className="p-2">
-          <Button
-            onClick={() => setShowMobileActions(!showMobileActions)}
-            variant="outline"
-            className="h-11 w-full border-gray-200 bg-white hover:bg-gray-50"
-          >
-            <span className="flex items-center justify-center gap-2 text-gray-700">
-              Actions
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`}
-              />
-            </span>
-          </Button>
-        </div>
       </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
-          <div className="my-4 w-full max-w-2xl rounded-xl border border-gray-200 bg-white shadow-2xl sm:max-h-[90vh] sm:overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-              <h2 className="text-lg font-semibold text-gray-900">
+          <div className="my-4 w-full max-w-2xl rounded-xl border border-border/60 bg-card shadow-2xl sm:max-h-[90vh] sm:overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">
                 {isEditing ? 'Edit Prospect' : 'Add Prospect'}
               </h2>
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                className="rounded p-1 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
               >
                 ✕
               </button>
             </div>
 
             {formError && (
-              <div className="mx-5 mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <div className="mx-5 mt-4 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
                 {formError}
               </div>
             )}
 
             <div className="grid grid-cols-1 gap-4 px-5 py-4 md:grid-cols-2">
               <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Prospect Name
                 </label>
                 <input
                   value={form.name}
                   onChange={(e) => handleFormChange('name', e.target.value)}
-                  className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border/60 px-3 text-sm"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Development
                 </label>
                 <input
                   value={form.development}
                   onChange={(e) => handleFormChange('development', e.target.value)}
                   list="development-options"
-                  className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border/60 px-3 text-sm"
                 />
                 <datalist id="development-options">
                   {developmentOptions.map((development) => (
@@ -919,13 +858,13 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Category
                 </label>
                 <select
                   value={form.category}
                   onChange={(e) => handleFormChange('category', e.target.value as ProspectCategory)}
-                  className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border/60 px-3 text-sm"
                 >
                   {CATEGORIES.map((category) => (
                     <option key={category} value={category}>
@@ -936,13 +875,13 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Stage
                 </label>
                 <select
                   value={form.stage}
                   onChange={(e) => handleFormChange('stage', e.target.value as ProspectStage)}
-                  className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border/60 px-3 text-sm"
                 >
                   {STAGES.map((stage) => (
                     <option key={stage} value={stage}>
@@ -953,58 +892,58 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Owner
                 </label>
                 <input
                   value={form.owner}
                   onChange={(e) => handleFormChange('owner', e.target.value)}
-                  className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border/60 px-3 text-sm"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Contact Name
                 </label>
                 <input
                   value={form.contactName}
                   onChange={(e) => handleFormChange('contactName', e.target.value)}
-                  className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border/60 px-3 text-sm"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Contact Email
                 </label>
                 <input
                   type="email"
                   value={form.contactEmail}
                   onChange={(e) => handleFormChange('contactEmail', e.target.value)}
-                  className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border/60 px-3 text-sm"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Contact Phone
                 </label>
                 <input
                   value={form.contactPhone}
                   onChange={(e) => handleFormChange('contactPhone', e.target.value)}
-                  className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border/60 px-3 text-sm"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Outreach Method
                 </label>
                 <select
                   value={form.outreachMethod}
                   onChange={(e) => handleFormChange('outreachMethod', e.target.value)}
-                  className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border/60 px-3 text-sm"
                 >
                   {OUTREACH_METHODS.map((method) => (
                     <option key={method} value={method}>
@@ -1015,45 +954,45 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Next Action Date
                 </label>
                 <input
                   type="date"
                   value={form.nextActionDate}
                   onChange={(e) => handleFormChange('nextActionDate', e.target.value)}
-                  className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border/60 px-3 text-sm"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Next Action
                 </label>
                 <input
                   value={form.nextAction}
                   onChange={(e) => handleFormChange('nextAction', e.target.value)}
-                  className="h-10 w-full rounded-md border border-gray-300 px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border/60 px-3 text-sm"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Notes
                 </label>
                 <textarea
                   value={form.notes}
                   onChange={(e) => handleFormChange('notes', e.target.value)}
-                  className="min-h-24 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  className="min-h-24 w-full rounded-md border border-border/60 px-3 py-2 text-sm"
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">
+            <div className="flex justify-end gap-2 border-t border-border/60 px-5 py-4">
               <Button variant="outline" onClick={closeModal}>
                 Cancel
               </Button>
-              <Button onClick={handleSaveProspect} className="bg-[#1c3d2e] text-white hover:bg-[#2d6147]">
+              <Button onClick={handleSaveProspect}>
                 Save Prospect
               </Button>
             </div>
