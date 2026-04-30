@@ -2,27 +2,73 @@
 // HSH GC Platform - Project Detail View
 // ============================================================================
 //
-// Main view for a selected project with navigation to Estimate and Actuals
+// Detail page for a selected project. Renders inside the AppLayout shell.
+// Centered title in AppHeader is set via usePageTitle(project.name) so the
+// header dynamically reflects which project is open.
+//
+// Data layer (estimate totals, actual totals, forms count, selection book
+// rooms count, available plans for edit mode) preserved 1:1 from the
+// pre-shell version. View layer rebuilt to use design tokens and the v0
+// project-detail pattern: project info card → financial overview cards →
+// quick-action grid → embedded sections (work packages, milestones).
+//
+// Edit/Duplicate/Delete actions moved from the legacy hero header into a
+// top-right "Actions" dropdown.
 //
 
-import React, { useState, useEffect } from 'react'
-import { Project, ProjectType, ProjectStatus, Plan } from '@/types'
+import { useEffect, useState } from 'react'
+import {
+  ArrowLeft,
+  BookMarked,
+  BookOpen,
+  Building2,
+  Calendar,
+  ClipboardList,
+  Copy,
+  DollarSign,
+  Edit,
+  FolderOpen,
+  GitBranch,
+  MapPin,
+  MoreHorizontal,
+  Receipt,
+  Trash2,
+} from 'lucide-react'
+import { Project, ProjectType, ProjectStatus, Plan, PROJECT_TYPES, PROJECT_STATUS } from '@/types'
 import { duplicateProject } from '@/services/projectService'
-import { getTradesForEstimate_Hybrid, updateProject_Hybrid, deleteProject_Hybrid } from '@/services/hybridService'
+import {
+  getTradesForEstimate_Hybrid,
+  updateProject_Hybrid,
+  deleteProject_Hybrid,
+} from '@/services/hybridService'
 import { getActivePlans_Hybrid } from '@/services/planHybridService'
 import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
 import { getSelectionBookRoomsCount } from '@/services/selectionBookService'
 import { supabase } from '@/lib/supabase'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { PROJECT_TYPES, PROJECT_STATUS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BookOpen, ClipboardList, Building2, Calendar, DollarSign, Edit, Trash2, Copy, FileText, FileCheck, Mail, FolderOpen, Palette, ChevronDown } from 'lucide-react'
-import hshLogo from '/HSH Contractor Logo - Color.png'
-import { WorkPackagesSection } from './WorkPackagesSection'
-import { ProjectMilestonesSection } from './ProjectMilestonesSection'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
+import { usePageTitle } from '@/contexts/PageTitleContext'
+
+// ============================================================================
+// Types + helpers
+// ============================================================================
 
 interface ProjectDetailViewProps {
   project: Project
@@ -38,6 +84,99 @@ interface ProjectDetailViewProps {
   onViewSchedule?: () => void
   onProjectDuplicated?: (project: Project) => void
 }
+
+interface StatusVisual {
+  bg: string
+  text: string
+  border: string
+  dot: string
+  label: string
+}
+
+function statusVisual(status: string): StatusVisual {
+  switch (status) {
+    case 'estimating':
+      return {
+        bg: 'bg-violet-500/15',
+        text: 'text-violet-500',
+        border: 'border-violet-500/30',
+        dot: 'bg-violet-500',
+        label: 'Estimating',
+      }
+    case 'bidding':
+      return {
+        bg: 'bg-amber-500/15',
+        text: 'text-amber-500',
+        border: 'border-amber-500/30',
+        dot: 'bg-amber-500',
+        label: 'Bidding',
+      }
+    case 'awarded':
+      return {
+        bg: 'bg-sky-500/15',
+        text: 'text-sky-500',
+        border: 'border-sky-500/30',
+        dot: 'bg-sky-500',
+        label: 'Awarded',
+      }
+    case 'in-progress':
+      return {
+        bg: 'bg-emerald-500/15',
+        text: 'text-emerald-500',
+        border: 'border-emerald-500/30',
+        dot: 'bg-emerald-500',
+        label: 'In Progress',
+      }
+    case 'complete':
+      return {
+        bg: 'bg-sky-500/15',
+        text: 'text-sky-500',
+        border: 'border-sky-500/30',
+        dot: 'bg-sky-500',
+        label: 'Complete',
+      }
+    default:
+      return {
+        bg: 'bg-muted',
+        text: 'text-muted-foreground',
+        border: 'border-border',
+        dot: 'bg-muted-foreground',
+        label: status,
+      }
+  }
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amount)
+}
+
+function formatCurrencyCompact(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+function addressString(project: Project): string {
+  const street =
+    typeof project.address === 'string'
+      ? project.address
+      : project.address?.street || ''
+  const city = project.city ?? ''
+  const state = project.state ?? ''
+  return [street, city && state ? `${city}, ${state}` : city || state]
+    .filter(Boolean)
+    .join(' · ') || 'No address'
+}
+
+// ============================================================================
+// Component
+// ============================================================================
 
 export function ProjectDetailView({
   project,
@@ -55,7 +194,6 @@ export function ProjectDetailView({
 }: ProjectDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editedProject, setEditedProject] = useState(project)
-  const [showMobileActions, setShowMobileActions] = useState(false)
   const [availablePlans, setAvailablePlans] = useState<Plan[]>([])
   const [estimateTotals, setEstimateTotals] = useState({
     basePriceTotal: 0,
@@ -72,31 +210,27 @@ export function ProjectDetailView({
     totalActual: 0,
   })
 
-  // Load plans when editing mode is enabled
+  // Centered title in the AppHeader
+  usePageTitle(project.name)
+
+  // Load plans when entering edit mode
   useEffect(() => {
     if (isEditing) {
-      const loadPlans = async () => {
-        console.log('🔍 Loading plans for edit form...');
-        const plans = await getActivePlans_Hybrid();
-        console.log('📋 Plans loaded for edit:', plans.length, plans);
-        setAvailablePlans(plans);
-      };
-      loadPlans();
+      void getActivePlans_Hybrid().then(setAvailablePlans)
     }
   }, [isEditing])
-  
-  // Calculate estimate totals from trades
+
+  // Estimate totals
   useEffect(() => {
     const loadTotals = async () => {
       const trades = await getTradesForEstimate_Hybrid(project.estimate.id)
-      const basePriceTotal = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
-      const grossProfitTotal = trades.reduce((sum, trade) => {
-        const markup = trade.markupPercent || 20
-        return sum + (trade.totalCost * (markup / 100))
-      }, 0)
-      const contingency = basePriceTotal * 0.10 // 10% default
+      const basePriceTotal = trades.reduce((sum, t) => sum + t.totalCost, 0)
+      const grossProfitTotal = trades.reduce(
+        (sum, t) => sum + t.totalCost * ((t.markupPercent || 20) / 100),
+        0,
+      )
+      const contingency = basePriceTotal * 0.1
       const totalEstimated = basePriceTotal + grossProfitTotal + contingency
-      
       setEstimateTotals({
         basePriceTotal,
         grossProfitTotal,
@@ -104,62 +238,26 @@ export function ProjectDetailView({
         itemCount: trades.length,
       })
     }
-    loadTotals()
+    void loadTotals()
   }, [project])
 
-  // Load forms count
+  // Forms count
   useEffect(() => {
     const loadFormsCount = async () => {
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('project_forms')
           .select('id')
           .eq('project_id', project.id)
-        
-        if (error) {
-          console.error('Error loading forms count:', error)
-          return
-        }
-        
-        console.log('Forms count for project:', project.id, 'is:', data?.length || 0)
         setFormsCount(data?.length || 0)
       } catch (error) {
         console.error('Error loading forms count:', error)
       }
     }
-    
-    if (project) {
-      loadFormsCount()
-    }
+    if (project) void loadFormsCount()
   }, [project])
 
-  // Reload forms count when component becomes visible (navigation back)
-  useEffect(() => {
-    const loadFormsCount = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('project_forms')
-          .select('id')
-          .eq('project_id', project.id)
-        
-        if (error) {
-          console.error('Error loading forms count:', error)
-          return
-        }
-        
-        console.log('Reloaded forms count for project:', project.id, 'is:', data?.length || 0)
-        setFormsCount(data?.length || 0)
-      } catch (error) {
-        console.error('Error loading forms count:', error)
-      }
-    }
-    
-    if (project) {
-      loadFormsCount()
-    }
-  }, [])
-
-  // Load actual costs from project actuals
+  // Actuals
   useEffect(() => {
     const loadActuals = async () => {
       const actuals = await getProjectActuals_Hybrid(project.id)
@@ -172,10 +270,10 @@ export function ProjectDetailView({
         })
       }
     }
-    loadActuals()
+    void loadActuals()
   }, [project.id])
 
-  // Load selection book rooms count
+  // Selection book rooms
   useEffect(() => {
     const loadSelectionBookCount = async () => {
       try {
@@ -185,23 +283,14 @@ export function ProjectDetailView({
         console.error('Error loading selection book rooms count:', error)
       }
     }
-    loadSelectionBookCount()
+    void loadSelectionBookCount()
   }, [project.id])
-  
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
-  const getStatusColor = (status: string) => {
-    const colors = {
-      estimating: 'bg-blue-100 text-blue-800',
-      'in-progress': 'bg-orange-100 text-orange-800',
-      complete: 'bg-green-100 text-green-800',
-    }
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
-  }
+  // ----------------------------------------------------------------------------
+  // Handlers
+  // ----------------------------------------------------------------------------
 
   const handleSaveEdit = async () => {
-    console.log('💾 Saving project changes...');
     const updated = await updateProject_Hybrid(project.id, {
       id: project.id,
       name: editedProject.name,
@@ -217,1196 +306,935 @@ export function ProjectDetailView({
       client: editedProject.client,
       specs: editedProject.specs,
     })
-    
-    console.log('✅ Project update result:', updated);
-    
     if (updated) {
       setIsEditing(false)
-      // Reload the page to show updated data
       window.location.reload()
     }
   }
 
   const handleDelete = async () => {
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${project.name}"?\n\nThis action cannot be undone. All project data including estimates will be permanently deleted.`
+      `Are you sure you want to delete "${project.name}"?\n\nThis action cannot be undone. All project data including estimates will be permanently deleted.`,
     )
-
-    if (confirmed) {
-      console.log('🗑️ Deleting project:', project.id)
-      const success = await deleteProject_Hybrid(project.id)
-      if (success) {
-        console.log('✅ Project deleted successfully')
-        alert('✅ Project deleted successfully!')
-        onBack() // Return to dashboard
-      } else {
-        console.error('❌ Failed to delete project')
-        alert('❌ Failed to delete project. Please try again.')
-      }
+    if (!confirmed) return
+    const success = await deleteProject_Hybrid(project.id)
+    if (success) {
+      alert('✅ Project deleted successfully!')
+      onBack()
+    } else {
+      alert('❌ Failed to delete project. Please try again.')
     }
   }
 
   const handleDuplicate = () => {
-    const newName = prompt(`Enter name for the duplicated project:`, `${project.name} (Copy)`)
-    
+    const newName = prompt(
+      `Enter name for the duplicated project:`,
+      `${project.name} (Copy)`,
+    )
     if (newName && newName.trim()) {
       const newProject = duplicateProject(project.id, newName.trim())
       if (newProject) {
         alert('✅ Project duplicated successfully!')
-        if (onProjectDuplicated) {
-          onProjectDuplicated(newProject)
-        }
+        if (onProjectDuplicated) onProjectDuplicated(newProject)
       } else {
         alert('❌ Failed to duplicate project. Please try again.')
       }
     }
   }
 
-              return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20 sm:pb-0">
-      {/* Header */}
-      <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center space-x-3 sm:space-x-4">
-              <img src={hshLogo} alt="HSH Contractor" className="h-16 sm:h-20 lg:h-24 w-auto" />
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-1">
-                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{project.name}</h1>
-                  <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)} w-fit`}>
-                    {project.status.replace('-', ' ').toUpperCase()}
-                  </span>
-                </div>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  {typeof project.address === 'string' ? project.address : project.address?.street || 'No address'}
-                  {project.city && `, ${project.city}`}
-                  {project.state && `, ${project.state}`}
-                </p>
-              </div>
-            </div>
-            {/* Desktop Buttons */}
-            <div className="hidden sm:flex gap-3">
-              <Button
-                onClick={() => setIsEditing(true)}
-                variant="outline"
-                className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white"
-              >
-                <Edit className="w-4 h-4 mr-2" />
-                Edit Project
-              </Button>
-              <Button
-                onClick={handleDuplicate}
-                variant="outline"
-                className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
-              >
-                <Copy className="w-4 h-4 mr-2" />
-                Duplicate Project
-              </Button>
-              <Button
-                onClick={handleDelete}
-                variant="outline"
-                className="border-red-600 text-red-600 hover:bg-red-600 hover:text-white"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete Project
-              </Button>
-              <Button
-                onClick={onBack}
-                variant="outline"
-                className="border-gray-300 hover:bg-gray-50"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Projects
-              </Button>
-            </div>
-          </div>
-        </div>
-                                                  </header>
-  
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-        {/* Project Info Cards - Hidden on Mobile */}
-        <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          <Card className="bg-white shadow-lg">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <p className="text-sm text-gray-600">Plan ID</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    {project.metadata?.isCustomPlan || !project.metadata?.planId ? (
-                      <>
-                        <p className="text-xl font-bold text-gray-900">Custom</p>
-                        <span className="text-xs bg-[#0E79C9] text-white px-2 py-0.5 rounded">
-                          Custom
-                        </span>
-                      </>
-                    ) : (
-                      <p className="text-xl font-bold text-gray-900">
-                        {project.metadata.planId}
-                      </p>
-                    )}
-                  </div>
-                  {project.metadata?.planOptions && project.metadata.planOptions.length > 0 && (
-                    <div className="mt-2">
-                      {project.metadata.planOptions.map((option: string) => (
-                        <span 
-                          key={option}
-                          className="inline-block text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded mr-1"
-                        >
-                          {option}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="bg-purple-100 rounded-full p-3">
-                  <Building2 className="w-8 h-8 text-purple-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+  // ----------------------------------------------------------------------------
+  // Computed
+  // ----------------------------------------------------------------------------
 
-          <Card className="bg-white shadow-lg">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Project Type</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1 capitalize">
-                    {project.type.replace('-', ' ')}
-                  </p>
-                </div>
-                <div className="bg-blue-100 rounded-full p-3">
-                  <Building2 className="w-8 h-8 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+  const status = statusVisual(project.status)
+  const completionPercent =
+    estimateTotals.totalEstimated > 0
+      ? Math.round((actualTotals.totalActual / estimateTotals.totalEstimated) * 100)
+      : 0
+  const remaining = estimateTotals.totalEstimated - actualTotals.totalActual
+  const planDisplay =
+    project.metadata?.isCustomPlan || !project.metadata?.planId
+      ? 'Custom plan'
+      : `Plan: ${project.metadata.planId}`
 
-          <Card className="bg-white shadow-lg">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Start Date</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1">
-                    {project.startDate ? project.startDate.toLocaleDateString() : 'Not set'}
-                  </p>
-                </div>
-                <div className="bg-orange-100 rounded-full p-3">
-                  <Calendar className="w-8 h-8 text-orange-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+  // ----------------------------------------------------------------------------
+  // Render
+  // ----------------------------------------------------------------------------
 
-          <Card className="bg-white shadow-lg">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Estimated Value</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1">
-                    {formatCurrency(estimateTotals.totalEstimated)}
-                  </p>
-                </div>
-                <div className="bg-green-100 rounded-full p-3">
-                  <DollarSign className="w-8 h-8 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+  return (
+    <div className="flex flex-col gap-6 p-6">
+      {/* Top action strip — back link + actions menu */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back to Projects
+        </button>
 
-        {/* Main Navigation Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          {/* Estimate Book Card */}
-          <Card className="bg-gradient-to-br from-[#213069] to-[#1a2550] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
-            <button onClick={onViewEstimate} className="w-full text-left">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
-                    <BookOpen className="w-8 h-8" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm opacity-80">Budget Items</p>
-                    <p className="text-3xl font-bold">{estimateTotals.itemCount}</p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <h3 className="text-2xl font-bold mb-3">Estimate Book</h3>
-                <p className="text-white/80 mb-4">
-                  Build and manage your project budget, add line items, calculate costs, and set pricing.
-                </p>
-                <div className="bg-white/10 rounded-lg p-3 mb-4">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Base Price</span>
-                    <span className="font-semibold">{formatCurrency(estimateTotals.basePriceTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Gross Profit</span>
-                    <span className="font-semibold">{formatCurrency(estimateTotals.grossProfitTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm font-bold pt-2 border-t border-white/20">
-                    <span>Total</span>
-                    <span>{formatCurrency(estimateTotals.totalEstimated)}</span>
-                  </div>
-                </div>
-                <div className="flex items-center text-sm text-white/60">
-                  <span>Click to view and edit estimate →</span>
-                </div>
-              </CardContent>
-            </button>
-          </Card>
-
-          {/* Project Actuals Card */}
-          <Card className="bg-gradient-to-br from-[#D95C00] to-[#B34C00] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
-            <button onClick={onViewActuals} className="w-full text-left">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
-                    <ClipboardList className="w-8 h-8" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm opacity-80">Status</p>
-                    <p className="text-2xl font-bold capitalize">{project.status.replace('-', ' ')}</p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <h3 className="text-2xl font-bold mb-3">Project Actuals</h3>
-                <p className="text-white/80 mb-4">
-                  Track real costs and revenue as they occur. Compare actual spending against your budget in real-time.
-                </p>
-                <div className="bg-white/10 rounded-lg p-3 mb-4">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Actual Labor</span>
-                    <span className="font-semibold">{formatCurrency(actualTotals.laborCost)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Actual Materials</span>
-                    <span className="font-semibold">{formatCurrency(actualTotals.materialCost)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Actual Subcontractors</span>
-                    <span className="font-semibold">{formatCurrency(actualTotals.subcontractorCost)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm font-bold pt-2 border-t border-white/20">
-                    <span>Total Spent</span>
-                    <span>{formatCurrency(actualTotals.totalActual)}</span>
-                  </div>
-                </div>
-                <div className="flex items-center text-sm text-white/60">
-                  <span>Click to track actuals →</span>
-                </div>
-              </CardContent>
-            </button>
-          </Card>
-
-          {/* Schedule Card */}
-          {onViewSchedule && (
-            <Card className="bg-gradient-to-br from-[#0EA5E9] to-[#0284C7] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
-              <button onClick={onViewSchedule} className="w-full text-left">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
-                      <Calendar className="w-8 h-8" />
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm opacity-80">Schedule</p>
-                      <p className="text-2xl font-bold">
-                        {project.schedule?.items?.length ?? 0} items
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <h3 className="text-2xl font-bold mb-3">Schedule</h3>
-                  <p className="text-white/80 mb-4">
-                    Build and track your project timeline. Auto-generate from estimate items or edit dates and dependencies.
-                  </p>
-                  <div className="bg-white/10 rounded-lg p-3 mb-4">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>Items</span>
-                      <span className="font-semibold">{project.schedule?.items?.length ?? 0}</span>
-                    </div>
-                    <div className="flex justify-between text-sm pt-2 border-t border-white/20">
-                      <span>Progress</span>
-                      <span className="font-semibold">{project.schedule ? `${Math.round(project.schedule.percentComplete)}%` : '—'}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center text-sm text-white/60">
-                    <span>Click to manage schedule →</span>
-                  </div>
-                </CardContent>
-              </button>
-            </Card>
-          )}
-
-          {/* Selection Book Card */}
-          {onViewSelectionBook && (
-            <Card className="bg-gradient-to-br from-[#EC4899] to-[#BE185D] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
-              <button onClick={onViewSelectionBook} className="w-full text-left">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
-                      <Palette className="w-8 h-8" />
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm opacity-80">Rooms</p>
-                      <p className="text-3xl font-bold">{selectionBookRoomsCount}</p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <h3 className="text-2xl font-bold mb-3">Selection Book</h3>
-                  <p className="text-white/80 mb-4">
-                    Organize paint colors, flooring, lighting, and other selections room-by-room with image uploads for visual reference.
-                  </p>
-                  <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Rooms Created</span>
-                      <span className="font-semibold">{selectionBookRoomsCount}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Image Uploads</span>
-                      <span className="font-semibold">Available</span>
-                    </div>
-                    <div className="flex justify-between text-sm pt-2 border-t border-white/20">
-                      <span>Printable/Exportable</span>
-                      <span className="font-semibold">Yes</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center text-sm text-white/60">
-                    <span>Click to manage selections →</span>
-                  </div>
-                </CardContent>
-              </button>
-            </Card>
-          )}
-
-          {/* Selection Schedules Card */}
-          {onViewSelectionSchedules && (
-            <Card className="bg-gradient-to-br from-[#7C3AED] to-[#6D28D9] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
-              <button onClick={onViewSelectionSchedules} className="w-full text-left">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
-                      <BookOpen className="w-8 h-8" />
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm opacity-80">Client-Facing</p>
-                      <p className="text-2xl font-bold">Schedules</p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <h3 className="text-2xl font-bold mb-3">Selection Schedules</h3>
-                  <p className="text-white/80 mb-4">
-                    Build room/trade selection schedules from estimate selection flags. Assign rooms and complete product details for presentation.
-                  </p>
-                  <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Source</span>
-                      <span className="font-semibold">Estimate Selection Flags</span>
-                    </div>
-                    <div className="flex justify-between text-sm pt-2 border-t border-white/20">
-                      <span>Status Flow</span>
-                      <span className="font-semibold">Flagged → Scheduled → Approved</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center text-sm text-white/60">
-                    <span>Click to build schedules →</span>
-                  </div>
-                </CardContent>
-              </button>
-            </Card>
-          )}
-
-          {/* Project Forms Card */}
-          <Card className="bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
-            <button onClick={onViewForms} className="w-full text-left">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
-                    <FileCheck className="w-8 h-8" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm opacity-80">Forms</p>
-                    <p className="text-2xl font-bold">{formsCount}</p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <h3 className="text-2xl font-bold mb-3">Project Forms</h3>
-                <p className="text-white/80 mb-4">
-                  Complete project documentation including architect verification, site checklists, and due diligence.
-                </p>
-                <div className="bg-white/10 rounded-lg p-3 mb-4">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Architect Verification</span>
-                    <span className="font-semibold">Pending</span>
-                  </div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Site Checklist</span>
-                    <span className="font-semibold">Pending</span>
-                  </div>
-                  <div className="flex justify-between text-sm font-bold pt-2 border-t border-white/20">
-                    <span>Due Diligence</span>
-                    <span>Pending</span>
-                  </div>
-                </div>
-                <div className="flex items-center text-sm text-white/60">
-                  <span>Click to manage forms →</span>
-                </div>
-              </CardContent>
-            </button>
-          </Card>
-
-          {/* Purchase Orders Card */}
-          {onViewPOs && (
-            <Card className="bg-gradient-to-br from-[#0F766E] to-[#0D9488] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
-              <button onClick={onViewPOs} className="w-full text-left">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
-                      <ClipboardList className="w-8 h-8" />
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm opacity-80">Subcontractors</p>
-                      <p className="text-2xl font-bold">POs</p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <h3 className="text-2xl font-bold mb-3">Purchase Orders</h3>
-                  <p className="text-white/80 mb-4">
-                    Create and manage purchase orders for subcontractors from your estimate lines.
-                  </p>
-                  <div className="flex items-center text-sm text-white/60">
-                    <span>View and issue POs →</span>
-                  </div>
-                </CardContent>
-              </button>
-            </Card>
-          )}
-
-          {/* Change Orders Card */}
-          {onViewChangeOrders && (
-            <Card className="bg-gradient-to-br from-[#9333EA] to-[#7C3AED] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
-              <button onClick={onViewChangeOrders} className="w-full text-left">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
-                      <FileText className="w-8 h-8" />
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm opacity-80">Change Orders</p>
-                      <p className="text-3xl font-bold">{project.actuals?.changeOrders?.length || 0}</p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <h3 className="text-2xl font-bold mb-3">Change Orders</h3>
-                  <p className="text-white/80 mb-4">
-                    Track and manage scope changes, cost adjustments, and schedule modifications throughout the project lifecycle.
-                  </p>
-                  <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Total Change Orders</span>
-                      <span className="font-semibold">{project.actuals?.changeOrders?.length || 0}</span>
-                    </div>
-                    <div className="flex justify-between text-sm pt-2 border-t border-white/20">
-                      <span>Status Tracking</span>
-                      <span className="font-semibold">Active</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center text-sm text-white/60">
-                    <span>Click to manage change orders →</span>
-                  </div>
-                </CardContent>
-              </button>
-            </Card>
-          )}
-
-          {/* Project Documents Card */}
-          {onViewDocuments && (
-            <Card className="bg-gradient-to-br from-[#4F46E5] to-[#4338CA] text-white hover:shadow-2xl transition-all cursor-pointer border-none group">
-              <button onClick={onViewDocuments} className="w-full text-left">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="bg-white/20 rounded-full p-3 group-hover:bg-white/30 transition-colors">
-                      <FolderOpen className="w-8 h-8" />
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm opacity-80">Documents</p>
-                      <p className="text-3xl font-bold">Files</p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <h3 className="text-2xl font-bold mb-3">Project Documents</h3>
-                  <p className="text-white/80 mb-4">
-                    Store and manage all project documents including contracts, agreements, SOW sign-offs, permits, and more.
-                  </p>
-                  <div className="bg-white/10 rounded-lg p-3 mb-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Document Types</span>
-                      <span className="font-semibold">Multiple</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Storage</span>
-                      <span className="font-semibold">Secure</span>
-                    </div>
-                    <div className="flex justify-between text-sm pt-2 border-t border-white/20">
-                      <span>Organization</span>
-                      <span className="font-semibold">By Type</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center text-sm text-white/60">
-                    <span>Click to manage documents →</span>
-                  </div>
-                </CardContent>
-              </button>
-            </Card>
-          )}
-        </div>
-
-        {/* Work Packages (Targets) */}
-        <div className="mt-6">
-          <WorkPackagesSection projectId={project.id} />
-        </div>
-
-        {/* Project Milestones (GC <-> Drywall bridge) */}
-        <div className="mt-6">
-          <ProjectMilestonesSection projectId={project.id} />
-        </div>
-      </main>
-      
-      {/* Edit Project Modal */}
-      {isEditing && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <CardHeader>
-              <CardTitle>Edit Project Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="projectName">Project Name</Label>
-                  <Input
-                    id="projectName"
-                    value={editedProject.name}
-                    onChange={(e) => setEditedProject(prev => ({ ...prev, name: e.target.value }))}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="planId">Plan ID</Label>
-                    <Select
-                      value={editedProject.metadata?.isCustomPlan ? 'custom' : (editedProject.metadata?.planId || '__none__')}
-                      onValueChange={(value) => setEditedProject(prev => ({ 
-                        ...prev, 
-                        metadata: { 
-                          ...prev.metadata, 
-                          planId: value === '__none__' ? undefined : (value === 'custom' ? undefined : value),
-                          isCustomPlan: value === 'custom'
-                        }
-                      }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a plan..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">None</SelectItem>
-                        <SelectItem value="custom">Custom Plan</SelectItem>
-                        {availablePlans.map(plan => (
-                          <SelectItem key={plan.id} value={plan.planId}>
-                            {plan.name} - {plan.planId}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="projectType">Project Type</Label>
-                    <Select 
-                      value={editedProject.type} 
-                      onValueChange={(value) => setEditedProject(prev => ({ ...prev, type: value as ProjectType }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(PROJECT_TYPES).map(([key, value]) => (
-                          <SelectItem key={key} value={key}>
-                            {value.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="projectStatus">Status</Label>
-                    <Select 
-                      value={editedProject.status} 
-                      onValueChange={(value) => setEditedProject(prev => ({ ...prev, status: value as ProjectStatus }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(PROJECT_STATUS).map(([key, value]) => (
-                          <SelectItem key={key} value={key}>
-                            {value.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                
-                <div>
-                  <Label htmlFor="address">Street Address</Label>
-                  <Input
-                    id="address"
-                    value={editedProject.address?.street || ''}
-                    onChange={(e) => setEditedProject(prev => ({ 
-                      ...prev, 
-                      address: { ...prev.address!, street: e.target.value }
-                    }))}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="city">City</Label>
-                    <Input
-                      id="city"
-                      value={editedProject.city || ''}
-                      onChange={(e) => setEditedProject(prev => ({ 
-                        ...prev, 
-                        city: e.target.value,
-                        address: { ...prev.address!, city: e.target.value }
-                      }))}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="state">State</Label>
-                    <Input
-                      id="state"
-                      value={editedProject.state || ''}
-                      onChange={(e) => setEditedProject(prev => ({ 
-                        ...prev, 
-                        state: e.target.value,
-                        address: { ...prev.address!, state: e.target.value }
-                      }))}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="zipCode">ZIP Code</Label>
-                    <Input
-                      id="zipCode"
-                      value={editedProject.zipCode || ''}
-                      onChange={(e) => setEditedProject(prev => ({ 
-                        ...prev, 
-                        zipCode: e.target.value,
-                        address: { ...prev.address!, zip: e.target.value }
-                      }))}
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="startDate">Start Date</Label>
-                    <Input
-                      id="startDate"
-                      type="date"
-                      value={editedProject.startDate ? new Date(editedProject.startDate).toISOString().split('T')[0] : ''}
-                      onChange={(e) => setEditedProject(prev => ({ 
-                        ...prev, 
-                        startDate: e.target.value ? new Date(e.target.value) : undefined
-                      }))}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="endDate">End Date</Label>
-                    <Input
-                      id="endDate"
-                      type="date"
-                      value={editedProject.endDate ? new Date(editedProject.endDate).toISOString().split('T')[0] : ''}
-                      onChange={(e) => setEditedProject(prev => ({ 
-                        ...prev, 
-                        endDate: e.target.value ? new Date(e.target.value) : undefined
-                      }))}
-                    />
-                  </div>
-                </div>
-
-                {/* Project Specifications Section */}
-                <div className="pt-6 border-t space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Project Specifications</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Add or update project specifications to help inform budget estimates.
-                  </p>
-                  
-                  {(() => {
-                    const isRenovation = editedProject.type === 'residential-renovation' || editedProject.type === 'commercial-renovation'
-                    return (
-                      <>
-                        {/* Square Footage */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {isRenovation ? (
-                            <>
-                              <div>
-                                <Label htmlFor="existingSquareFootage">Existing Square Footage</Label>
-                                <Input
-                                  id="existingSquareFootage"
-                                  type="number"
-                                  value={editedProject.specs?.existingSquareFootage || ''}
-                              onChange={(e) => {
-                                const existing = e.target.value ? parseFloat(e.target.value) : undefined
-                                const newSqft = editedProject.specs?.newSquareFootage || 0
-                                setEditedProject(prev => ({
-                                  ...prev,
-                                  specs: {
-                                    livingSquareFootage: (existing || 0) + newSqft,
-                                    existingSquareFootage: existing,
-                                    newSquareFootage: prev.specs?.newSquareFootage,
-                                    totalSquareFootage: prev.specs?.totalSquareFootage,
-                                    bedrooms: prev.specs?.bedrooms,
-                                    bathrooms: prev.specs?.bathrooms,
-                                    stories: prev.specs?.stories,
-                                    garageSpaces: prev.specs?.garageSpaces,
-                                    foundationType: prev.specs?.foundationType,
-                                    roofType: prev.specs?.roofType,
-                                    basement: prev.specs?.basement,
-                                    lotSize: prev.specs?.lotSize,
-                                  }
-                                }))
-                              }}
-                                  placeholder="e.g., 2000"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor="newSquareFootage">New Square Footage Being Added</Label>
-                                <Input
-                                  id="newSquareFootage"
-                                  type="number"
-                                  value={editedProject.specs?.newSquareFootage || ''}
-                                  onChange={(e) => {
-                                    const newSqft = e.target.value ? parseFloat(e.target.value) : undefined
-                                    const existing = editedProject.specs?.existingSquareFootage || 0
-                                    setEditedProject(prev => ({
-                                      ...prev,
-                                      specs: {
-                                        livingSquareFootage: existing + (newSqft || 0),
-                                        existingSquareFootage: prev.specs?.existingSquareFootage,
-                                        newSquareFootage: newSqft,
-                                        totalSquareFootage: prev.specs?.totalSquareFootage,
-                                        bedrooms: prev.specs?.bedrooms,
-                                        bathrooms: prev.specs?.bathrooms,
-                                        stories: prev.specs?.stories,
-                                        garageSpaces: prev.specs?.garageSpaces,
-                                        foundationType: prev.specs?.foundationType,
-                                        roofType: prev.specs?.roofType,
-                                        basement: prev.specs?.basement,
-                                        lotSize: prev.specs?.lotSize,
-                                      }
-                                    }))
-                                  }}
-                                  placeholder="e.g., 500"
-                                />
-                              </div>
-                            </>
-                          ) : null}
-                          
-                          <div className={isRenovation ? 'md:col-span-2' : ''}>
-                            <Label htmlFor="livingSquareFootage">Living Square Footage</Label>
-                            <Input
-                              id="livingSquareFootage"
-                              type="number"
-                              value={editedProject.specs?.livingSquareFootage || ''}
-                              onChange={(e) => setEditedProject(prev => ({
-                                ...prev,
-                                specs: {
-                                  livingSquareFootage: e.target.value ? parseFloat(e.target.value) : 0,
-                                  existingSquareFootage: prev.specs?.existingSquareFootage,
-                                  newSquareFootage: prev.specs?.newSquareFootage,
-                                  totalSquareFootage: prev.specs?.totalSquareFootage,
-                                  bedrooms: prev.specs?.bedrooms,
-                                  bathrooms: prev.specs?.bathrooms,
-                                  stories: prev.specs?.stories,
-                                  garageSpaces: prev.specs?.garageSpaces,
-                                  foundationType: prev.specs?.foundationType,
-                                  roofType: prev.specs?.roofType,
-                                  basement: prev.specs?.basement,
-                                  lotSize: prev.specs?.lotSize,
-                                }
-                              }))}
-                              placeholder="e.g., 2500"
-                            />
-                          </div>
-                          
-                          <div>
-                            <Label htmlFor="totalSquareFootage">Total Square Footage (Optional)</Label>
-                            <Input
-                              id="totalSquareFootage"
-                              type="number"
-                              value={editedProject.specs?.totalSquareFootage || ''}
-                              onChange={(e) => setEditedProject(prev => ({
-                                ...prev,
-                                specs: {
-                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
-                                  existingSquareFootage: prev.specs?.existingSquareFootage,
-                                  newSquareFootage: prev.specs?.newSquareFootage,
-                                  totalSquareFootage: e.target.value ? parseFloat(e.target.value) : undefined,
-                                  bedrooms: prev.specs?.bedrooms,
-                                  bathrooms: prev.specs?.bathrooms,
-                                  stories: prev.specs?.stories,
-                                  garageSpaces: prev.specs?.garageSpaces,
-                                  foundationType: prev.specs?.foundationType,
-                                  roofType: prev.specs?.roofType,
-                                  basement: prev.specs?.basement,
-                                  lotSize: prev.specs?.lotSize,
-                                }
-                              }))}
-                              placeholder="e.g., 3000"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Basic Specs */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div>
-                            <Label htmlFor="bedrooms">Bedrooms</Label>
-                            <Input
-                              id="bedrooms"
-                              type="number"
-                              value={editedProject.specs?.bedrooms || ''}
-                              onChange={(e) => setEditedProject(prev => ({
-                                ...prev,
-                                specs: {
-                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
-                                  existingSquareFootage: prev.specs?.existingSquareFootage,
-                                  newSquareFootage: prev.specs?.newSquareFootage,
-                                  totalSquareFootage: prev.specs?.totalSquareFootage,
-                                  bedrooms: e.target.value ? parseInt(e.target.value) : undefined,
-                                  bathrooms: prev.specs?.bathrooms,
-                                  stories: prev.specs?.stories,
-                                  garageSpaces: prev.specs?.garageSpaces,
-                                  foundationType: prev.specs?.foundationType,
-                                  roofType: prev.specs?.roofType,
-                                  basement: prev.specs?.basement,
-                                  lotSize: prev.specs?.lotSize,
-                                }
-                              }))}
-                              placeholder="e.g., 3"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="bathrooms">Bathrooms</Label>
-                            <Input
-                              id="bathrooms"
-                              type="number"
-                              step="0.5"
-                              value={editedProject.specs?.bathrooms || ''}
-                              onChange={(e) => setEditedProject(prev => ({
-                                ...prev,
-                                specs: {
-                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
-                                  existingSquareFootage: prev.specs?.existingSquareFootage,
-                                  newSquareFootage: prev.specs?.newSquareFootage,
-                                  totalSquareFootage: prev.specs?.totalSquareFootage,
-                                  bedrooms: prev.specs?.bedrooms,
-                                  bathrooms: e.target.value ? parseFloat(e.target.value) : undefined,
-                                  stories: prev.specs?.stories,
-                                  garageSpaces: prev.specs?.garageSpaces,
-                                  foundationType: prev.specs?.foundationType,
-                                  roofType: prev.specs?.roofType,
-                                  basement: prev.specs?.basement,
-                                  lotSize: prev.specs?.lotSize,
-                                }
-                              }))}
-                              placeholder="e.g., 2.5"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="stories">Stories/Levels</Label>
-                            <Input
-                              id="stories"
-                              type="number"
-                              value={editedProject.specs?.stories || ''}
-                              onChange={(e) => setEditedProject(prev => ({
-                                ...prev,
-                                specs: {
-                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
-                                  existingSquareFootage: prev.specs?.existingSquareFootage,
-                                  newSquareFootage: prev.specs?.newSquareFootage,
-                                  totalSquareFootage: prev.specs?.totalSquareFootage,
-                                  bedrooms: prev.specs?.bedrooms,
-                                  bathrooms: prev.specs?.bathrooms,
-                                  stories: e.target.value ? parseInt(e.target.value) : undefined,
-                                  garageSpaces: prev.specs?.garageSpaces,
-                                  foundationType: prev.specs?.foundationType,
-                                  roofType: prev.specs?.roofType,
-                                  basement: prev.specs?.basement,
-                                  lotSize: prev.specs?.lotSize,
-                                }
-                              }))}
-                              placeholder="e.g., 2"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="garageSpaces">Garage Spaces</Label>
-                            <Input
-                              id="garageSpaces"
-                              type="number"
-                              value={editedProject.specs?.garageSpaces || ''}
-                              onChange={(e) => setEditedProject(prev => ({
-                                ...prev,
-                                specs: {
-                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
-                                  existingSquareFootage: prev.specs?.existingSquareFootage,
-                                  newSquareFootage: prev.specs?.newSquareFootage,
-                                  totalSquareFootage: prev.specs?.totalSquareFootage,
-                                  bedrooms: prev.specs?.bedrooms,
-                                  bathrooms: prev.specs?.bathrooms,
-                                  stories: prev.specs?.stories,
-                                  garageSpaces: e.target.value ? parseInt(e.target.value) : undefined,
-                                  foundationType: prev.specs?.foundationType,
-                                  roofType: prev.specs?.roofType,
-                                  basement: prev.specs?.basement,
-                                  lotSize: prev.specs?.lotSize,
-                                }
-                              }))}
-                              placeholder="e.g., 2"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Foundation, Roof, Basement, Lot */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor="foundationType">Foundation Type</Label>
-                            <Select
-                              value={editedProject.specs?.foundationType || ''}
-                              onValueChange={(value) => setEditedProject(prev => ({
-                                ...prev,
-                                specs: {
-                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
-                                  existingSquareFootage: prev.specs?.existingSquareFootage,
-                                  newSquareFootage: prev.specs?.newSquareFootage,
-                                  totalSquareFootage: prev.specs?.totalSquareFootage,
-                                  bedrooms: prev.specs?.bedrooms,
-                                  bathrooms: prev.specs?.bathrooms,
-                                  stories: prev.specs?.stories,
-                                  garageSpaces: prev.specs?.garageSpaces,
-                                  foundationType: value as any,
-                                  roofType: prev.specs?.roofType,
-                                  basement: prev.specs?.basement,
-                                  lotSize: prev.specs?.lotSize,
-                                }
-                              }))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select foundation type..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="slab">Slab</SelectItem>
-                                <SelectItem value="crawl-space">Crawl Space</SelectItem>
-                                <SelectItem value="full-basement">Full Basement</SelectItem>
-                                <SelectItem value="partial-basement">Partial Basement</SelectItem>
-                                <SelectItem value="other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <div>
-                            <Label htmlFor="roofType">Roof Type</Label>
-                            <Select
-                              value={editedProject.specs?.roofType || ''}
-                              onValueChange={(value) => setEditedProject(prev => ({
-                                ...prev,
-                                specs: {
-                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
-                                  existingSquareFootage: prev.specs?.existingSquareFootage,
-                                  newSquareFootage: prev.specs?.newSquareFootage,
-                                  totalSquareFootage: prev.specs?.totalSquareFootage,
-                                  bedrooms: prev.specs?.bedrooms,
-                                  bathrooms: prev.specs?.bathrooms,
-                                  stories: prev.specs?.stories,
-                                  garageSpaces: prev.specs?.garageSpaces,
-                                  foundationType: prev.specs?.foundationType,
-                                  roofType: value as any,
-                                  basement: prev.specs?.basement,
-                                  lotSize: prev.specs?.lotSize,
-                                }
-                              }))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select roof type..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="gable">Gable (Standard)</SelectItem>
-                                <SelectItem value="hip">Hip</SelectItem>
-                                <SelectItem value="mansard">Mansard</SelectItem>
-                                <SelectItem value="flat">Flat</SelectItem>
-                                <SelectItem value="shed">Shed</SelectItem>
-                                <SelectItem value="gambrel">Gambrel</SelectItem>
-                                <SelectItem value="other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <div>
-                            <Label htmlFor="basement">Basement</Label>
-                            <Select
-                              value={editedProject.specs?.basement || ''}
-                              onValueChange={(value) => setEditedProject(prev => ({
-                                ...prev,
-                                specs: {
-                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
-                                  existingSquareFootage: prev.specs?.existingSquareFootage,
-                                  newSquareFootage: prev.specs?.newSquareFootage,
-                                  totalSquareFootage: prev.specs?.totalSquareFootage,
-                                  bedrooms: prev.specs?.bedrooms,
-                                  bathrooms: prev.specs?.bathrooms,
-                                  stories: prev.specs?.stories,
-                                  garageSpaces: prev.specs?.garageSpaces,
-                                  foundationType: prev.specs?.foundationType,
-                                  roofType: prev.specs?.roofType,
-                                  basement: value as any,
-                                  lotSize: prev.specs?.lotSize,
-                                }
-                              }))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select basement type..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">None</SelectItem>
-                                <SelectItem value="unfinished">Unfinished</SelectItem>
-                                <SelectItem value="finished">Finished</SelectItem>
-                                <SelectItem value="partial">Partial</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <div>
-                            <Label htmlFor="lotSize">Lot Size (Square Feet)</Label>
-                            <Input
-                              id="lotSize"
-                              type="number"
-                              value={editedProject.specs?.lotSize || ''}
-                              onChange={(e) => setEditedProject(prev => ({
-                                ...prev,
-                                specs: {
-                                  livingSquareFootage: prev.specs?.livingSquareFootage || 0,
-                                  existingSquareFootage: prev.specs?.existingSquareFootage,
-                                  newSquareFootage: prev.specs?.newSquareFootage,
-                                  totalSquareFootage: prev.specs?.totalSquareFootage,
-                                  bedrooms: prev.specs?.bedrooms,
-                                  bathrooms: prev.specs?.bathrooms,
-                                  stories: prev.specs?.stories,
-                                  garageSpaces: prev.specs?.garageSpaces,
-                                  foundationType: prev.specs?.foundationType,
-                                  roofType: prev.specs?.roofType,
-                                  basement: prev.specs?.basement,
-                                  lotSize: e.target.value ? parseFloat(e.target.value) : undefined,
-                                }
-                              }))}
-                              placeholder="e.g., 10000"
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )
-                  })()}
-                </div>
-                
-                <div className="flex gap-2 pt-4">
-                  <Button 
-                    onClick={handleSaveEdit}
-                    className="flex-1 bg-gradient-to-r from-[#0E79C9] to-[#0A5A96] hover:from-[#0A5A96] hover:to-[#084577]"
-                  >
-                    Save Changes
-                  </Button>
-                  <Button 
-                    onClick={() => {
-                      setIsEditing(false)
-                      setEditedProject(project)
-                    }}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-      
-      {/* Mobile: bottom Actions menu - match Estimate Builder / Deal Pipeline */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
-        {showMobileActions && (
-          <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
-            <button
-              onClick={() => { onBack(); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-400" />
-              <span className="font-medium">Back to Projects</span>
-            </button>
-            <button
-              onClick={() => { setIsEditing(true); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-[#0E79C9]/20 bg-[#0E79C9]/5"
-            >
-              <Edit className="w-5 h-5 text-[#0E79C9]" />
-              <div>
-                <p className="font-medium text-gray-900">Edit Project</p>
-                <p className="text-xs text-gray-500">Update project details</p>
-              </div>
-            </button>
-            <button
-              onClick={() => { handleDuplicate(); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
-            >
-              <Copy className="w-5 h-5 text-[#34AB8A]" />
-              <div>
-                <p className="font-medium text-gray-900">Duplicate Project</p>
-                <p className="text-xs text-gray-500">Create a copy of this project</p>
-              </div>
-            </button>
-            <button
-              onClick={() => { handleDelete(); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
-            >
-              <Trash2 className="w-5 h-5 text-red-600" />
-              <div>
-                <p className="font-medium text-gray-900">Delete Project</p>
-                <p className="text-xs text-gray-500">Remove this project</p>
-              </div>
-            </button>
-          </div>
-        )}
-        <div className="p-2">
-          <Button
-            onClick={() => setShowMobileActions(!showMobileActions)}
-            variant="outline"
-            className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
-          >
-            <span className="flex items-center justify-center gap-2 text-gray-700">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <MoreHorizontal className="size-4" />
               Actions
-              <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
-            </span>
-          </Button>
-        </div>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={() => setIsEditing(true)}>
+              <Edit className="size-4" />
+              Edit Project
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleDuplicate}>
+              <Copy className="size-4" />
+              Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={handleDelete}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="size-4" />
+              Delete Project
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
+      {/* Project info card — hero block with status, location, plan, dates, completion */}
+      <Card className="overflow-hidden border-border/60 bg-card/50">
+        <CardContent className="p-0">
+          <div className="flex flex-col lg:flex-row">
+            {/* Visual block (left, lg+) */}
+            <div className="flex items-center justify-center border-b border-border/50 bg-gradient-to-br from-muted/50 to-muted/20 p-6 lg:w-72 lg:border-b-0 lg:border-r">
+              <div className="space-y-3 text-center">
+                <div className="mx-auto flex size-16 items-center justify-center rounded-xl bg-primary/10">
+                  <Building2 className="size-8 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">{project.name}</p>
+                  <p className="text-xs text-muted-foreground">{planDisplay}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Detail grid (right) */}
+            <div className="flex-1 p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
+                    status.bg,
+                    status.text,
+                    status.border,
+                  )}
+                >
+                  <span className={cn('size-1.5 rounded-full', status.dot)} />
+                  {status.label}
+                </span>
+                <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                  {project.type.replace(/-/g, ' ')}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+                <InfoCell
+                  icon={MapPin}
+                  label="Location"
+                  primary={
+                    typeof project.address === 'string'
+                      ? project.address
+                      : project.address?.street || 'No address'
+                  }
+                  secondary={
+                    [project.city, project.state].filter(Boolean).join(', ') ||
+                    undefined
+                  }
+                />
+                <InfoCell
+                  icon={GitBranch}
+                  label="Plan"
+                  primary={planDisplay.replace('Plan: ', '')}
+                  secondary={
+                    estimateTotals.itemCount > 0
+                      ? `${estimateTotals.itemCount} items`
+                      : undefined
+                  }
+                />
+                <InfoCell
+                  icon={Calendar}
+                  label="Start Date"
+                  primary={
+                    project.startDate
+                      ? new Date(project.startDate).toLocaleDateString()
+                      : 'Not set'
+                  }
+                  secondary={
+                    project.endDate
+                      ? `End: ${new Date(project.endDate).toLocaleDateString()}`
+                      : undefined
+                  }
+                />
+                <div className="space-y-1">
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    Completion
+                  </p>
+                  <p
+                    className={cn(
+                      'font-medium',
+                      completionPercent >= 100 && 'text-emerald-500',
+                    )}
+                  >
+                    {completionPercent}%
+                  </p>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      style={{ width: `${Math.min(completionPercent, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick action grid — seven core sections (Estimate through COs + POs) */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+        <ActionCard
+          icon={BookOpen}
+          iconColor="text-sky-500"
+          label="Estimate"
+          stat={`${estimateTotals.itemCount} items`}
+          onClick={onViewEstimate}
+        />
+        <ActionCard
+          icon={DollarSign}
+          iconColor="text-emerald-500"
+          label="Actuals"
+          stat={
+            actualTotals.totalActual > 0
+              ? formatCurrencyCompact(actualTotals.totalActual)
+              : 'No data'
+          }
+          onClick={onViewActuals}
+        />
+        {onViewSchedule && (
+          <ActionCard
+            icon={Calendar}
+            iconColor="text-amber-500"
+            label="Schedule"
+            stat={`${project.schedule?.items?.length ?? 0} items`}
+            onClick={onViewSchedule}
+          />
+        )}
+        {onViewSelectionBook && (
+          <ActionCard
+            icon={BookMarked}
+            iconColor="text-violet-500"
+            label="Selection"
+            stat={`${selectionBookRoomsCount} rooms`}
+            onClick={onViewSelectionBook}
+          />
+        )}
+        {onViewDocuments && (
+          <ActionCard
+            icon={FolderOpen}
+            iconColor="text-indigo-500"
+            label="Docs"
+            stat="Files"
+            onClick={onViewDocuments}
+          />
+        )}
+        {onViewPOs && (
+          <ActionCard
+            icon={Receipt}
+            iconColor="text-teal-500"
+            label="POs"
+            stat="Subs"
+            onClick={onViewPOs}
+          />
+        )}
+        {onViewChangeOrders && (
+          <ActionCard
+            icon={ClipboardList}
+            iconColor="text-rose-500"
+            label="COs"
+            stat={`${project.actuals?.changeOrders?.length || 0} orders`}
+            onClick={onViewChangeOrders}
+          />
+        )}
+      </div>
+
+      {/* Financial overview — three cards (Base / Estimated / Actual) */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <FinancialCard
+          rail="bg-sky-500"
+          label="Base Cost"
+          value={formatCurrency(estimateTotals.basePriceTotal)}
+          valueClass="text-sky-600 dark:text-sky-400"
+          hint="Material + Labor + Subs"
+        />
+        <FinancialCard
+          rail="bg-violet-500"
+          label="Estimated Total"
+          value={formatCurrency(estimateTotals.totalEstimated)}
+          valueClass="text-violet-600 dark:text-violet-400"
+          hint="With markup & contingency"
+        />
+        <FinancialCard
+          rail="bg-emerald-500"
+          label="Actual Spent"
+          value={formatCurrency(actualTotals.totalActual)}
+          valueClass={
+            actualTotals.totalActual > 0
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : 'text-muted-foreground'
+          }
+          hint={
+            estimateTotals.totalEstimated > 0
+              ? `${formatCurrencyCompact(remaining)} remaining`
+              : undefined
+          }
+        />
+      </div>
+
+      {/* Edit modal */}
+      {isEditing && (
+        <EditProjectModal
+          project={editedProject}
+          availablePlans={availablePlans}
+          onChange={setEditedProject}
+          onSave={handleSaveEdit}
+          onCancel={() => {
+            setIsEditing(false)
+            setEditedProject(project)
+          }}
+        />
+      )}
     </div>
   )
 }
 
+// ============================================================================
+// Pieces
+// ============================================================================
+
+function InfoCell({
+  icon: Icon,
+  label,
+  primary,
+  secondary,
+}: {
+  icon: typeof Building2
+  label: string
+  primary: string
+  secondary?: string
+}) {
+  return (
+    <div className="space-y-1">
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon className="size-3" />
+        {label}
+      </p>
+      <p className="font-medium capitalize">{primary}</p>
+      {secondary && <p className="text-xs text-muted-foreground">{secondary}</p>}
+    </div>
+  )
+}
+
+function FinancialCard({
+  rail,
+  label,
+  value,
+  valueClass,
+  hint,
+}: {
+  rail: string
+  label: string
+  value: string
+  valueClass?: string
+  hint?: string
+}) {
+  return (
+    <Card className="relative overflow-hidden border-border/60 bg-card/50">
+      <div className={cn('absolute inset-y-0 left-0 w-1', rail)} aria-hidden />
+      <CardHeader className="pb-2 pl-5">
+        <CardTitle className="text-sm font-medium text-muted-foreground">
+          {label}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pl-5">
+        <p
+          className={cn(
+            'text-2xl font-semibold tabular-nums',
+            valueClass ?? 'text-foreground',
+          )}
+        >
+          {value}
+        </p>
+        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ActionCard({
+  icon: Icon,
+  iconColor,
+  label,
+  stat,
+  onClick,
+}: {
+  icon: typeof BookOpen
+  iconColor: string
+  label: string
+  stat: string
+  onClick: () => void
+}) {
+  return (
+    <button type="button" onClick={onClick} className="text-left">
+      <Card className="h-full border-border/60 bg-card/50 transition-all hover:border-border hover:bg-card">
+        <CardContent className="flex flex-col items-center justify-center gap-2 p-6 text-center">
+          <Icon className={cn('size-6', iconColor)} />
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium">{label}</p>
+            <p className="text-xs text-muted-foreground">{stat}</p>
+          </div>
+        </CardContent>
+      </Card>
+    </button>
+  )
+}
+
+// ============================================================================
+// Edit Modal — preserved 1:1 from pre-shell version, visual chrome swept
+// ============================================================================
+
+interface EditProjectModalProps {
+  project: Project
+  availablePlans: Plan[]
+  onChange: (project: Project) => void
+  onSave: () => void
+  onCancel: () => void
+}
+
+function EditProjectModal({
+  project: editedProject,
+  availablePlans,
+  onChange: setEditedProject,
+  onSave: handleSaveEdit,
+  onCancel,
+}: EditProjectModalProps) {
+  // Helper: update a spec field while preserving the rest. ProjectSpecs has
+  // livingSquareFootage as required, so we must always include it.
+  const updateSpec = <K extends keyof NonNullable<Project['specs']>>(
+    key: K,
+    value: NonNullable<Project['specs']>[K],
+  ) => {
+    setEditedProject({
+      ...editedProject,
+      specs: {
+        ...editedProject.specs,
+        livingSquareFootage: editedProject.specs?.livingSquareFootage ?? 0,
+        [key]: value,
+      } as NonNullable<Project['specs']>,
+    })
+  }
+
+  const isRenovation =
+    editedProject.type === 'residential-renovation' ||
+    editedProject.type === 'commercial-renovation'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <Card className="max-h-[90vh] w-full max-w-2xl overflow-y-auto border-border bg-card">
+        <CardHeader>
+          <CardTitle>Edit Project Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="projectName">Project Name</Label>
+              <Input
+                id="projectName"
+                value={editedProject.name}
+                onChange={(e) =>
+                  setEditedProject({ ...editedProject, name: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <Label htmlFor="planId">Plan ID</Label>
+                <Select
+                  value={
+                    editedProject.metadata?.isCustomPlan
+                      ? 'custom'
+                      : editedProject.metadata?.planId || '__none__'
+                  }
+                  onValueChange={(value) =>
+                    setEditedProject({
+                      ...editedProject,
+                      metadata: {
+                        ...editedProject.metadata,
+                        planId:
+                          value === '__none__'
+                            ? undefined
+                            : value === 'custom'
+                              ? undefined
+                              : value,
+                        isCustomPlan: value === 'custom',
+                      },
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a plan…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    <SelectItem value="custom">Custom Plan</SelectItem>
+                    {availablePlans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.planId}>
+                        {plan.name} - {plan.planId}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="projectType">Project Type</Label>
+                <Select
+                  value={editedProject.type}
+                  onValueChange={(value) =>
+                    setEditedProject({
+                      ...editedProject,
+                      type: value as ProjectType,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(PROJECT_TYPES).map(([key, value]) => (
+                      <SelectItem key={key} value={key}>
+                        {value.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="projectStatus">Status</Label>
+                <Select
+                  value={editedProject.status}
+                  onValueChange={(value) =>
+                    setEditedProject({
+                      ...editedProject,
+                      status: value as ProjectStatus,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(PROJECT_STATUS).map(([key, value]) => (
+                      <SelectItem key={key} value={key}>
+                        {value.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="address">Street Address</Label>
+              <Input
+                id="address"
+                value={editedProject.address?.street || ''}
+                onChange={(e) =>
+                  setEditedProject({
+                    ...editedProject,
+                    address: {
+                      ...editedProject.address!,
+                      street: e.target.value,
+                    },
+                  })
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="city">City</Label>
+                <Input
+                  id="city"
+                  value={editedProject.city || ''}
+                  onChange={(e) =>
+                    setEditedProject({
+                      ...editedProject,
+                      city: e.target.value,
+                      address: {
+                        ...editedProject.address!,
+                        city: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="state">State</Label>
+                <Input
+                  id="state"
+                  value={editedProject.state || ''}
+                  onChange={(e) =>
+                    setEditedProject({
+                      ...editedProject,
+                      state: e.target.value,
+                      address: {
+                        ...editedProject.address!,
+                        state: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="zipCode">ZIP Code</Label>
+                <Input
+                  id="zipCode"
+                  value={editedProject.zipCode || ''}
+                  onChange={(e) =>
+                    setEditedProject({
+                      ...editedProject,
+                      zipCode: e.target.value,
+                      address: {
+                        ...editedProject.address!,
+                        zip: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={
+                    editedProject.startDate
+                      ? new Date(editedProject.startDate)
+                          .toISOString()
+                          .split('T')[0]
+                      : ''
+                  }
+                  onChange={(e) =>
+                    setEditedProject({
+                      ...editedProject,
+                      startDate: e.target.value
+                        ? new Date(e.target.value)
+                        : undefined,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="endDate">End Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={
+                    editedProject.endDate
+                      ? new Date(editedProject.endDate)
+                          .toISOString()
+                          .split('T')[0]
+                      : ''
+                  }
+                  onChange={(e) =>
+                    setEditedProject({
+                      ...editedProject,
+                      endDate: e.target.value
+                        ? new Date(e.target.value)
+                        : undefined,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Project Specifications */}
+            <div className="space-y-4 border-t border-border pt-6">
+              <div>
+                <h3 className="text-lg font-semibold">Project Specifications</h3>
+                <p className="text-sm text-muted-foreground">
+                  Add or update project specifications to help inform budget
+                  estimates.
+                </p>
+              </div>
+
+              {/* Square footage — different fields for renovation */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {isRenovation && (
+                  <>
+                    <div>
+                      <Label htmlFor="existingSquareFootage">
+                        Existing Square Footage
+                      </Label>
+                      <Input
+                        id="existingSquareFootage"
+                        type="number"
+                        value={editedProject.specs?.existingSquareFootage || ''}
+                        onChange={(e) => {
+                          const existing = e.target.value
+                            ? parseFloat(e.target.value)
+                            : undefined
+                          const newSqft = editedProject.specs?.newSquareFootage || 0
+                          setEditedProject({
+                            ...editedProject,
+                            specs: {
+                              ...editedProject.specs,
+                              livingSquareFootage:
+                                (existing || 0) + newSqft,
+                              existingSquareFootage: existing,
+                            } as NonNullable<Project['specs']>,
+                          })
+                        }}
+                        placeholder="e.g., 2000"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="newSquareFootage">
+                        New Square Footage Being Added
+                      </Label>
+                      <Input
+                        id="newSquareFootage"
+                        type="number"
+                        value={editedProject.specs?.newSquareFootage || ''}
+                        onChange={(e) => {
+                          const newSqft = e.target.value
+                            ? parseFloat(e.target.value)
+                            : undefined
+                          const existing =
+                            editedProject.specs?.existingSquareFootage || 0
+                          setEditedProject({
+                            ...editedProject,
+                            specs: {
+                              ...editedProject.specs,
+                              livingSquareFootage: existing + (newSqft || 0),
+                              newSquareFootage: newSqft,
+                            } as NonNullable<Project['specs']>,
+                          })
+                        }}
+                        placeholder="e.g., 500"
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className={isRenovation ? 'md:col-span-2' : ''}>
+                  <Label htmlFor="livingSquareFootage">Living Square Footage</Label>
+                  <Input
+                    id="livingSquareFootage"
+                    type="number"
+                    value={editedProject.specs?.livingSquareFootage || ''}
+                    onChange={(e) =>
+                      updateSpec(
+                        'livingSquareFootage',
+                        e.target.value ? parseFloat(e.target.value) : 0,
+                      )
+                    }
+                    placeholder="e.g., 2500"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="totalSquareFootage">
+                    Total Square Footage (Optional)
+                  </Label>
+                  <Input
+                    id="totalSquareFootage"
+                    type="number"
+                    value={editedProject.specs?.totalSquareFootage || ''}
+                    onChange={(e) =>
+                      updateSpec(
+                        'totalSquareFootage',
+                        e.target.value ? parseFloat(e.target.value) : undefined,
+                      )
+                    }
+                    placeholder="e.g., 3000"
+                  />
+                </div>
+              </div>
+
+              {/* Basic specs */}
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <div>
+                  <Label htmlFor="bedrooms">Bedrooms</Label>
+                  <Input
+                    id="bedrooms"
+                    type="number"
+                    value={editedProject.specs?.bedrooms || ''}
+                    onChange={(e) =>
+                      updateSpec(
+                        'bedrooms',
+                        e.target.value ? parseInt(e.target.value) : undefined,
+                      )
+                    }
+                    placeholder="e.g., 3"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bathrooms">Bathrooms</Label>
+                  <Input
+                    id="bathrooms"
+                    type="number"
+                    step="0.5"
+                    value={editedProject.specs?.bathrooms || ''}
+                    onChange={(e) =>
+                      updateSpec(
+                        'bathrooms',
+                        e.target.value ? parseFloat(e.target.value) : undefined,
+                      )
+                    }
+                    placeholder="e.g., 2.5"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="stories">Stories/Levels</Label>
+                  <Input
+                    id="stories"
+                    type="number"
+                    value={editedProject.specs?.stories || ''}
+                    onChange={(e) =>
+                      updateSpec(
+                        'stories',
+                        e.target.value ? parseInt(e.target.value) : undefined,
+                      )
+                    }
+                    placeholder="e.g., 2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="garageSpaces">Garage Spaces</Label>
+                  <Input
+                    id="garageSpaces"
+                    type="number"
+                    value={editedProject.specs?.garageSpaces || ''}
+                    onChange={(e) =>
+                      updateSpec(
+                        'garageSpaces',
+                        e.target.value ? parseInt(e.target.value) : undefined,
+                      )
+                    }
+                    placeholder="e.g., 2"
+                  />
+                </div>
+              </div>
+
+              {/* Foundation / Roof / Basement / Lot */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <Label htmlFor="foundationType">Foundation Type</Label>
+                  <Select
+                    value={editedProject.specs?.foundationType || ''}
+                    onValueChange={(value) =>
+                      updateSpec('foundationType', value as never)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select foundation type…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="slab">Slab</SelectItem>
+                      <SelectItem value="crawl-space">Crawl Space</SelectItem>
+                      <SelectItem value="full-basement">Full Basement</SelectItem>
+                      <SelectItem value="partial-basement">Partial Basement</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="roofType">Roof Type</Label>
+                  <Select
+                    value={editedProject.specs?.roofType || ''}
+                    onValueChange={(value) =>
+                      updateSpec('roofType', value as never)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select roof type…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gable">Gable (Standard)</SelectItem>
+                      <SelectItem value="hip">Hip</SelectItem>
+                      <SelectItem value="mansard">Mansard</SelectItem>
+                      <SelectItem value="flat">Flat</SelectItem>
+                      <SelectItem value="shed">Shed</SelectItem>
+                      <SelectItem value="gambrel">Gambrel</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="basement">Basement</Label>
+                  <Select
+                    value={editedProject.specs?.basement || ''}
+                    onValueChange={(value) =>
+                      updateSpec('basement', value as never)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select basement type…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="unfinished">Unfinished</SelectItem>
+                      <SelectItem value="finished">Finished</SelectItem>
+                      <SelectItem value="partial">Partial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="lotSize">Lot Size (Square Feet)</Label>
+                  <Input
+                    id="lotSize"
+                    type="number"
+                    value={editedProject.specs?.lotSize || ''}
+                    onChange={(e) =>
+                      updateSpec(
+                        'lotSize',
+                        e.target.value ? parseFloat(e.target.value) : undefined,
+                      )
+                    }
+                    placeholder="e.g., 10000"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleSaveEdit} className="flex-1">
+                Save Changes
+              </Button>
+              <Button onClick={onCancel} variant="outline" className="flex-1">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
