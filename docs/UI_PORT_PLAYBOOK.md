@@ -501,7 +501,7 @@ tsc --noEmit clean.
 | Project Forms | ✅ Ported | `src/components/ProjectForms.tsx` | Cursor port |
 | My Feedback | ✅ Ported | `src/components/MyFeedback.tsx` | Filter-heavy list page; status chips use semantic pill recipe |
 | Project Documents | ✅ Ported | `src/components/ProjectDocuments.tsx` | Mode A — file list + upload/edit; removed dual page wrappers in favor of shell |
-| Purchase Orders | ⬜ Pending | `src/components/PurchaseOrdersView.tsx` | Mode A — list page |
+| Purchase Orders | ✅ Ported | `src/components/PurchaseOrdersView.tsx` | Mode A — list/detail flow with tokenized issue panel + table |
 | Contact Directory | ✅ Ported | `src/components/ContactDirectory.tsx` | Mode A — CRUD list; tokenized tabs, rows, and dialogs |
 | Selection Book | ⬜ Pending | `src/components/SelectionBook.tsx` | Mode A — room-organized selections list |
 | Selection Schedules | ⏸ Hold | `src/components/SelectionSchedules.tsx` | Pending owner-driven redesign — v0 has updated selections design that will eventually replace SelectionBook→SelectionLibrary; revisit when that lands |

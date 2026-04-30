@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ArrowLeft, FileText, CheckCircle, Clock, Download } from 'lucide-react'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 
 interface PurchaseOrdersViewProps {
   projectId: string
@@ -31,6 +32,7 @@ interface POModel {
 }
 
 export function PurchaseOrdersView({ projectId, projectName, onBack }: PurchaseOrdersViewProps) {
+  usePageTitle('Purchase Orders')
   const [pos, setPos] = useState<POModel[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPO, setSelectedPO] = useState<POModel | null>(null)
@@ -83,20 +85,28 @@ export function PurchaseOrdersView({ projectId, projectName, onBack }: PurchaseO
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20 sm:pb-0">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        <Button variant="outline" onClick={onBack} className="mb-6">
-          <ArrowLeft className="w-4 h-4 mr-2" />
+    <div className="flex flex-col gap-6 p-6">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
           Back to Project
-        </Button>
+        </button>
+      </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Purchase Orders</h1>
-        {projectName && <p className="text-gray-600 mb-6">{projectName}</p>}
+      {projectName && <p className="text-sm text-muted-foreground">{projectName}</p>}
 
         {loading ? (
-          <p className="text-gray-500">Loading POs…</p>
+          <Card className="border-border/60 bg-card/50">
+            <CardContent className="py-12 text-center">
+              <div className="mx-auto inline-block size-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
+              <p className="mt-4 text-sm text-muted-foreground">Loading POs…</p>
+            </CardContent>
+          </Card>
         ) : selectedPO ? (
-          <div className="space-y-4">
+          <section className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <Button variant="ghost" size="sm" onClick={() => { setSelectedPO(null); setShowIssueForm(false) }}>
                 ← Back to list
@@ -107,7 +117,7 @@ export function PurchaseOrdersView({ projectId, projectName, onBack }: PurchaseO
                   Export PDF
                 </Button>
                 {selectedPO.status === 'draft' && !showIssueForm && (
-                  <Button onClick={() => setShowIssueForm(true)} className="bg-amber-600 hover:bg-amber-700">
+                  <Button onClick={() => setShowIssueForm(true)}>
                     <CheckCircle className="w-4 h-4 mr-2" />
                     Issue PO
                   </Button>
@@ -115,17 +125,17 @@ export function PurchaseOrdersView({ projectId, projectName, onBack }: PurchaseO
               </div>
             </div>
 
-            <Card>
+            <Card className="border-border/60 bg-card/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="w-5 h-5" />
                   {selectedPO.subcontractorName ?? 'Subcontractor'}
                   {selectedPO.poNumber && (
-                    <span className="text-base font-normal text-gray-500">— {selectedPO.poNumber}</span>
+                    <span className="text-base font-normal text-muted-foreground">— {selectedPO.poNumber}</span>
                   )}
                 </CardTitle>
-                <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                  <span className={selectedPO.status === 'issued' ? 'text-green-600 font-medium' : 'text-amber-600'}>
+                <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                  <span className={selectedPO.status === 'issued' ? 'text-sky-500 font-medium' : 'text-amber-500'}>
                     {selectedPO.status === 'issued' ? 'Issued' : 'Draft'}
                   </span>
                   {selectedPO.issuedAt && <span>Issued: {formatDate(selectedPO.issuedAt)}</span>}
@@ -134,8 +144,8 @@ export function PurchaseOrdersView({ projectId, projectName, onBack }: PurchaseO
               </CardHeader>
               <CardContent>
                 {showIssueForm && selectedPO.status === 'draft' && (
-                  <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-4">
-                    <h3 className="font-semibold text-amber-900">Issue this PO</h3>
+                  <div className="mb-6 space-y-4 rounded-lg border border-border/60 bg-muted/30 p-4">
+                    <h3 className="font-semibold text-foreground">Issue this PO</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="po-number">PO Number *</Label>
@@ -156,7 +166,7 @@ export function PurchaseOrdersView({ projectId, projectName, onBack }: PurchaseO
                         />
                       </div>
                     </div>
-                    {issueError && <p className="text-sm text-red-600">{issueError}</p>}
+                    {issueError && <p className="text-sm text-destructive">{issueError}</p>}
                     <div className="flex gap-2">
                       <Button onClick={handleIssue} disabled={issuing}>
                         {issuing ? 'Issuing…' : 'Issue PO'}
@@ -168,42 +178,44 @@ export function PurchaseOrdersView({ projectId, projectName, onBack }: PurchaseO
                   </div>
                 )}
 
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100">
+                <div className="rounded-lg border border-border/60 bg-card/50 overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead className="bg-muted/30 text-xs font-medium text-muted-foreground border-b border-border/60">
                     <tr>
-                      <th className="text-left p-2">Description</th>
-                      <th className="text-right p-2">Qty</th>
-                      <th className="text-right p-2">Unit</th>
-                      <th className="text-right p-2">Unit $</th>
+                      <th className="text-left p-2 border-r border-border/60">Description</th>
+                      <th className="text-right p-2 border-r border-border/60">Qty</th>
+                      <th className="text-right p-2 border-r border-border/60">Unit</th>
+                      <th className="text-right p-2 border-r border-border/60">Unit $</th>
                       <th className="text-right p-2">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
                     {selectedPO.lines.map((line) => (
-                      <tr key={line.id} className="border-b border-gray-100">
-                        <td className="p-2">{line.description}</td>
-                        <td className="p-2 text-right">{line.quantity}</td>
-                        <td className="p-2 text-right">{line.unit}</td>
-                        <td className="p-2 text-right">{formatCurrency(line.unitPrice)}</td>
-                        <td className="p-2 text-right font-medium">{formatCurrency(line.amount)}</td>
+                      <tr key={line.id} className="border-b border-border/60 bg-card transition-colors hover:bg-muted/20">
+                        <td className="p-2 border-r border-border/60">{line.description}</td>
+                        <td className="p-2 text-right border-r border-border/60">{line.quantity}</td>
+                        <td className="p-2 text-right border-r border-border/60">{line.unit}</td>
+                        <td className="p-2 text-right border-r border-border/60 tabular-nums text-sky-600 dark:text-sky-400">{formatCurrency(line.unitPrice)}</td>
+                        <td className="p-2 text-right font-medium tabular-nums">{formatCurrency(line.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <p className="text-right font-semibold mt-2">
+                </div>
+                <p className="text-right font-semibold mt-2 tabular-nums text-rose-600 dark:text-rose-400">
                   Total: {formatCurrency(poTotal(selectedPO))}
                 </p>
               </CardContent>
             </Card>
-          </div>
+          </section>
         ) : (
           <>
             {pos.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-gray-500">
-                  <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <Card className="border-border/60 bg-card/50">
+                <CardContent className="py-12 text-center">
+                  <FileText className="w-12 h-12 mx-auto mb-2 text-muted-foreground/50" />
                   <p>No purchase orders yet.</p>
-                  <p className="text-sm mt-1">Create a PO from the Estimate (Create PO) and it will appear here.</p>
+                  <p className="text-sm mt-1 text-muted-foreground">Create a PO from the Estimate (Create PO) and it will appear here.</p>
                 </CardContent>
               </Card>
             ) : (
@@ -211,29 +223,29 @@ export function PurchaseOrdersView({ projectId, projectName, onBack }: PurchaseO
                 {pos.map((po) => (
                   <Card
                     key={po.id}
-                    className="cursor-pointer hover:shadow-md transition-shadow"
+                    className="cursor-pointer border-border/60 bg-card/50 transition-colors hover:bg-muted/20"
                     onClick={() => setSelectedPO(po)}
                   >
                     <CardContent className="py-4">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2">
                           {po.status === 'issued' ? (
-                            <CheckCircle className="w-5 h-5 text-green-600" />
+                            <CheckCircle className="w-5 h-5 text-sky-500" />
                           ) : (
-                            <Clock className="w-5 h-5 text-amber-600" />
+                            <Clock className="w-5 h-5 text-amber-500" />
                           )}
                           <span className="font-medium">{po.subcontractorName ?? 'Subcontractor'}</span>
                           {po.poNumber && (
-                            <span className="text-gray-500 text-sm">{po.poNumber}</span>
+                            <span className="text-muted-foreground text-sm">{po.poNumber}</span>
                           )}
                         </div>
                         <div className="flex items-center gap-4 text-sm">
-                          <span className={po.status === 'issued' ? 'text-green-600' : 'text-amber-600'}>
+                          <span className={po.status === 'issued' ? 'text-sky-500' : 'text-amber-500'}>
                             {po.status === 'issued' ? 'Issued' : 'Draft'}
                           </span>
-                          <span className="font-medium">{formatCurrency(poTotal(po))}</span>
+                          <span className="font-medium tabular-nums">{formatCurrency(poTotal(po))}</span>
                           {po.issuedAt && (
-                            <span className="text-gray-500">{formatDate(po.issuedAt)}</span>
+                            <span className="text-muted-foreground">{formatDate(po.issuedAt)}</span>
                           )}
                         </div>
                       </div>
@@ -244,7 +256,6 @@ export function PurchaseOrdersView({ projectId, projectName, onBack }: PurchaseO
             )}
           </>
         )}
-      </div>
     </div>
   )
 }
