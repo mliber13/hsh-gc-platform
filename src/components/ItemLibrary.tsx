@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 import { TradeCategoriesEditor } from '@/components/TradeCategoriesManagement'
 import { getCategoryAccentLeftBorderStyle } from '@/lib/categoryAccent'
 import { EstimateTemplatesContent } from '@/components/EstimateTemplateManagement'
@@ -39,7 +40,6 @@ import {
   Layers,
   FileText,
 } from 'lucide-react'
-import hshLogo from '/HSH Contractor Logo - Color.png'
 
 // ----------------------------------------------------------------------------
 // Types
@@ -56,6 +56,7 @@ interface ItemLibraryProps {
 type ItemLibraryTab = 'items' | 'categories' | 'templates'
 
 export function ItemLibrary({ onBack }: ItemLibraryProps) {
+  usePageTitle('Estimate Library')
   const { categories, byKey } = useTradeCategories()
   const [activeTab, setActiveTab] = useState<ItemLibraryTab>('items')
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
@@ -151,21 +152,26 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20 sm:pb-0">
-      <div className="p-2 sm:p-4 lg:p-6">
-        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
-          {/* Header */}
-          <ItemLibraryHeader onBack={onBack} />
+    <div className="flex flex-col gap-6 p-6">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back
+        </button>
+      </div>
 
           {/* Tabs: Item templates | Trade categories | Estimate templates */}
-          <div className="flex border-b border-gray-200">
+          <div className="flex border-b border-border">
             <button
               type="button"
               onClick={() => setActiveTab('items')}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
                 activeTab === 'items'
-                  ? 'border-[#0E79C9] text-[#0E79C9]'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <span className="flex items-center gap-2">
@@ -178,8 +184,8 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
               onClick={() => setActiveTab('categories')}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
                 activeTab === 'categories'
-                  ? 'border-[#0E79C9] text-[#0E79C9]'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <span className="flex items-center gap-2">
@@ -192,8 +198,8 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
               onClick={() => setActiveTab('templates')}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
                 activeTab === 'templates'
-                  ? 'border-[#0E79C9] text-[#0E79C9]'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <span className="flex items-center gap-2">
@@ -215,7 +221,7 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
               onClick={handleAddItem}
-              className="flex-1 sm:flex-none bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226]"
+              className="flex-1 sm:flex-none"
             >
               <PlusCircle className="w-4 h-4 mr-2" />
               Add New Item
@@ -223,7 +229,7 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
             <Button
               onClick={handleResetToDefaults}
               variant="outline"
-              className="flex-1 sm:flex-none border-orange-600 text-orange-600 hover:bg-orange-600 hover:text-white"
+              className="flex-1 sm:flex-none text-amber-600 hover:text-amber-600"
             >
               <RotateCcw className="w-4 h-4 mr-2" />
               Reset to Defaults
@@ -231,15 +237,15 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
           </div>
 
           {/* Items by Category */}
-          <Card>
+          <Card className="border-border/60 bg-card/50">
             <CardHeader>
               <CardTitle>Item Templates by Category</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {categoryOrder.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
-                    <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Package className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
                     <p className="text-lg font-medium mb-2">No item templates</p>
                     <p>Click "Add New Item" to create your first template</p>
                   </div>
@@ -249,52 +255,52 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
                     const isCategoryExpanded = expandedCategories.has(category)
 
                     return (
-                      <Card key={category} className="border-2 border-blue-200 border-l-4" style={getCategoryAccentLeftBorderStyle(category)}>
+                      <Card key={category} className="border-border/60 border-l-4 bg-card/50" style={getCategoryAccentLeftBorderStyle(category)}>
                         <button
                           onClick={() => toggleCategory(category)}
-                          className="w-full p-3 sm:p-4 flex items-center justify-between hover:bg-blue-50 transition-colors"
+                          className="w-full p-3 sm:p-4 flex items-center justify-between hover:bg-muted/20 transition-colors"
                         >
                           <div className="flex items-center gap-3">
                             <div className="text-left">
-                              <p className="font-bold text-blue-800">
+                              <p className="font-bold text-foreground">
                                 {byKey[category]?.label || category}
                               </p>
-                              <p className="text-xs text-blue-600">{categoryItems.length} items</p>
+                              <p className="text-xs text-muted-foreground">{categoryItems.length} items</p>
                             </div>
                           </div>
                           {isCategoryExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                         </button>
 
                         {isCategoryExpanded && (
-                          <div className="border-t border-blue-200 bg-blue-50 p-4 space-y-3">
+                          <div className="border-t border-border bg-muted/20 p-4 space-y-3">
                             {categoryItems.map((item) => (
-                              <div key={item.id} className="bg-white rounded-lg p-3 border border-gray-200 flex items-center gap-4 flex-wrap">
+                              <div key={item.id} className="bg-card rounded-lg p-3 border border-border/60 flex items-center gap-4 flex-wrap">
                                 <div className="min-w-0 flex-shrink-0" style={{ minWidth: '140px' }}>
-                                  <h4 className="font-semibold text-gray-900">{item.name}</h4>
+                                  <h4 className="font-semibold">{item.name}</h4>
                                   {item.description && (
-                                    <p className="text-sm text-gray-600">{item.description}</p>
+                                    <p className="text-sm text-muted-foreground">{item.description}</p>
                                   )}
                                 </div>
                                 <div className="flex gap-x-6 gap-y-1 text-sm flex-1 min-w-0 justify-center">
                                   <div className="flex flex-col gap-0.5">
                                     <div>
-                                      <span className="text-gray-600">Default Unit:</span>
+                                      <span className="text-muted-foreground">Default Unit:</span>
                                       <span className="ml-2 font-medium">
                                         {UNIT_TYPES[item.defaultUnit]?.abbreviation || item.defaultUnit}
                                       </span>
                                     </div>
                                     <div>
-                                      <span className="text-gray-600">Material Unit Cost:</span>
+                                      <span className="text-muted-foreground">Material Unit Cost:</span>
                                       <span className="ml-2 font-medium">{formatCurrency(item.defaultMaterialRate)}</span>
                                     </div>
                                     <div>
-                                      <span className="text-gray-600">Labor Unit Cost:</span>
+                                      <span className="text-muted-foreground">Labor Unit Cost:</span>
                                       <span className="ml-2 font-medium">{formatCurrency(item.defaultLaborRate)}</span>
                                     </div>
                                   </div>
                                   <div className="flex flex-col gap-0.5">
                                     <div>
-                                      <span className="text-gray-600">Type:</span>
+                                      <span className="text-muted-foreground">Type:</span>
                                       <span className="ml-2 font-medium">
                                         {item.isSubcontracted ? 'Subcontracted' : 'Self-Performed'}
                                       </span>
@@ -302,13 +308,13 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
                                     {item.isSubcontracted && (
                                       <>
                                         <div>
-                                          <span className="text-gray-600">Subcontractor unit:</span>
+                                          <span className="text-muted-foreground">Subcontractor unit:</span>
                                           <span className="ml-2 font-medium">
                                             {formatCurrency(item.defaultSubcontractorRate)}
                                           </span>
                                         </div>
                                         <div>
-                                          <span className="text-gray-600">Subcontractor lump:</span>
+                                          <span className="text-muted-foreground">Subcontractor lump:</span>
                                           <span className="ml-2 font-medium">
                                             {formatCurrency(item.defaultSubcontractorCost)}
                                           </span>
@@ -317,18 +323,18 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
                                     )}
                                     {item.defaultWasteFactor != null && item.defaultWasteFactor > 0 && (
                                       <div>
-                                        <span className="text-gray-600">Waste %:</span>
+                                        <span className="text-muted-foreground">Waste %:</span>
                                         <span className="ml-2 font-medium">{item.defaultWasteFactor}%</span>
                                       </div>
                                     )}
                                     {(item.rateSourceName || item.rateSourceDate) && (
-                                      <div className="text-xs text-gray-500 mt-1">
+                                      <div className="text-xs text-muted-foreground mt-1">
                                         Rate: {[item.rateSourceName, item.rateSourceDate ? new Date(item.rateSourceDate).toLocaleDateString() : null].filter(Boolean).join(', ')}
                                         {item.rateSourceNotes && ` — ${item.rateSourceNotes}`}
                                       </div>
                                     )}
                                     {(item.defaultSubItems?.length ?? 0) > 0 && (
-                                      <div className="text-xs text-gray-600 mt-1">
+                                      <div className="text-xs text-muted-foreground mt-1">
                                         {item.defaultSubItems!.length} sub-item{item.defaultSubItems!.length !== 1 ? 's' : ''}
                                       </div>
                                     )}
@@ -345,7 +351,8 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
                                   </Button>
                                   <Button
                                     size="sm"
-                                    variant="destructive"
+                                    variant="outline"
+                                    className="text-destructive hover:text-destructive"
                                     onClick={() => handleDeleteItem(item.id)}
                                   >
                                     <Trash2 className="w-3 h-3 mr-1" />
@@ -365,10 +372,6 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
           </Card>
             </>
           )}
-        </div>
-      </div>
-
-      {/* Item Form Modal */}
       {showItemForm && (
         <ItemForm
           item={editingItem}
@@ -379,75 +382,7 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
           }}
         />
       )}
-
-      {/* Mobile Back Button */}
-      {onBack && (
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
-          <Button onClick={onBack} variant="outline" className="border-gray-300 hover:bg-gray-50 w-full">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Projects
-          </Button>
-        </div>
-      )}
     </div>
-  )
-}
-
-// ----------------------------------------------------------------------------
-// Header Component
-// ----------------------------------------------------------------------------
-
-interface ItemLibraryHeaderProps {
-  onBack?: () => void
-}
-
-function ItemLibraryHeader({ onBack }: ItemLibraryHeaderProps) {
-  return (
-    <>
-      {/* Mobile Header */}
-      <header className="sm:hidden bg-white shadow-md border-b border-gray-200">
-        <div className="px-4 py-4">
-          <div className="flex items-center space-x-3">
-            <img src={hshLogo} alt="HSH Contractor" className="h-16 w-auto" />
-            <div className="flex-1">
-              <h1 className="text-lg font-bold text-gray-900">Estimate Library</h1>
-              <p className="text-xs text-gray-600">Items, categories, and estimate templates</p>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Desktop Header */}
-      <Card className="hidden sm:block bg-gradient-to-br from-gray-50 to-white border border-gray-200 shadow-lg">
-        <CardHeader className="pb-3 sm:pb-6">
-          <div className="space-y-2 sm:space-y-4">
-            <div className="flex items-center justify-center gap-2 sm:gap-4 lg:gap-6">
-              <div className="flex-shrink-0">
-                <img src={hshLogo} alt="HSH Contractor Logo" className="h-20 sm:h-32 lg:h-40 w-auto" />
-              </div>
-              <div className="flex-shrink-0">
-                <h2 className="text-xl sm:text-4xl lg:text-5xl font-bold text-gray-900">Estimate Library</h2>
-                <p className="text-sm sm:text-base text-gray-600 mt-1">Item templates, trade categories, and estimate templates</p>
-              </div>
-            </div>
-
-            {onBack && (
-              <div className="hidden sm:flex justify-center">
-                <Button
-                  onClick={onBack}
-                  variant="outline"
-                  size="sm"
-                  className="border-gray-300 hover:bg-gray-50 w-full max-w-md text-xs sm:text-sm"
-                >
-                  <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                  Back to Projects
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-      </Card>
-    </>
   )
 }
 
@@ -729,7 +664,7 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
               </Select>
             </div>
             {formData.isSubcontracted && (
-              <p className="text-xs text-gray-500 -mt-2">
+              <p className="text-xs text-muted-foreground -mt-2">
                 Use unit cost for per-unit pricing (like material/labor), or lump sum for a fixed total.
               </p>
             )}
@@ -744,9 +679,9 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
             </div>
 
             {/* Default sub-items section */}
-            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
+            <div className="rounded-lg border border-border/60 bg-card/50 p-4 space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-gray-700">Default sub-items (optional)</p>
+                <p className="text-sm font-medium text-muted-foreground">Default sub-items (optional)</p>
                 <Button
                   type="button"
                   variant="outline"
@@ -772,7 +707,7 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
                 </Button>
               </div>
               {(formData.defaultSubItems ?? []).length === 0 ? (
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Use sub-items to define a default breakdown (e.g. material + labor + hardware) for this template.
                 </p>
               ) : (
@@ -784,12 +719,12 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
                     >
                       <span className="font-medium">
                         {sub.name || 'Sub-item'}{' '}
-                        <span className="text-gray-500">
+                        <span className="text-muted-foreground">
                           · {sub.quantity} {sub.unit}
                         </span>
                       </span>
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-500">
+                        <span className="text-muted-foreground">
                           ${(sub.materialCost ?? 0) + (sub.laborCost ?? 0) + (sub.subcontractorCost ?? 0)}
                         </span>
                         <Button
@@ -820,9 +755,9 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
               )}
             </div>
 
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
-              <p className="text-sm font-medium text-gray-700">Rate source (audit)</p>
-              <p className="text-xs text-gray-500">
+            <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3">
+              <p className="text-sm font-medium text-muted-foreground">Rate source (audit)</p>
+              <p className="text-xs text-muted-foreground">
                 Optional: who provided this rate and when, for reference and history.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -907,10 +842,7 @@ function ItemForm({ item, onSave, onCancel }: ItemFormProps) {
               <Button type="button" variant="outline" onClick={onCancel}>
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226]"
-              >
+              <Button type="submit">
                 {item ? 'Save Changes' : 'Add Item'}
               </Button>
             </div>
