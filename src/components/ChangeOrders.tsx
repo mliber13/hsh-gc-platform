@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 import {
   ArrowLeft,
   PlusCircle,
@@ -26,7 +27,6 @@ import {
   Edit,
   Trash2,
 } from 'lucide-react'
-import hshLogo from '/HSH Contractor Logo - Color.png'
 
 // ----------------------------------------------------------------------------
 // Types
@@ -46,6 +46,7 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
   const [showCOForm, setShowCOForm] = useState(false)
   const [editingCO, setEditingCO] = useState<ChangeOrder | null>(null)
   const [trades, setTrades] = useState<Trade[]>([])
+  usePageTitle('Change Orders')
 
   useEffect(() => {
     // Load trades for linking
@@ -111,13 +112,30 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
-  const getStatusColor = (status: ChangeOrder['status']) => {
+  const statusVisual = (status: ChangeOrder['status']) => {
     switch (status) {
-      case 'approved': return 'bg-green-100 text-green-800 border-green-300'
-      case 'rejected': return 'bg-red-100 text-red-800 border-red-300'
-      case 'pending-approval': return 'bg-yellow-100 text-yellow-800 border-yellow-300'
-      case 'implemented': return 'bg-blue-100 text-blue-800 border-blue-300'
-      default: return 'bg-gray-100 text-gray-800 border-gray-300'
+      case 'approved':
+      case 'implemented':
+        return {
+          bg: 'bg-sky-500/15',
+          text: 'text-sky-500',
+          border: 'border-sky-500/30',
+          dot: 'bg-sky-500',
+        }
+      case 'pending-approval':
+        return {
+          bg: 'bg-amber-500/15',
+          text: 'text-amber-500',
+          border: 'border-amber-500/30',
+          dot: 'bg-amber-500',
+        }
+      default:
+        return {
+          bg: 'bg-muted',
+          text: 'text-muted-foreground',
+          border: 'border-border',
+          dot: 'bg-muted-foreground',
+        }
     }
   }
 
@@ -138,126 +156,128 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
   const pendingCount = changeOrders.filter(co => co.status === 'pending-approval').length
   const approvedCount = changeOrders.filter(co => co.status === 'approved' || co.status === 'implemented').length
 
-              return (
-    <div className="min-h-screen bg-background pb-20 sm:pb-0">
-      <div className="p-2 sm:p-4 lg:p-6">
-        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
-          {/* Header */}
-          <ChangeOrdersHeader project={project} onBack={onBack} />
+  return (
+    <div className="flex flex-col gap-6 p-6">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back to Project Detail
+        </button>
+      </div>
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Change Orders</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{changeOrders.length}</p>
-                  </div>
-                  <div className="bg-blue-100 rounded-full p-3">
-                    <FileText className="w-8 h-8 text-blue-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="relative overflow-hidden border-border/60 bg-card/50">
+          <div className="absolute inset-y-0 left-0 w-1 bg-sky-500" aria-hidden />
+          <CardContent className="p-4 pl-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Total Change Orders</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{changeOrders.length}</p>
+              </div>
+              <FileText className="size-6 text-sky-500" />
+            </div>
+          </CardContent>
+        </Card>
 
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Pending Approval</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{pendingCount}</p>
-                  </div>
-                  <div className="bg-yellow-100 rounded-full p-3">
-                    <Clock className="w-8 h-8 text-yellow-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        <Card className="relative overflow-hidden border-border/60 bg-card/50">
+          <div className="absolute inset-y-0 left-0 w-1 bg-amber-500" aria-hidden />
+          <CardContent className="p-4 pl-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Pending Approval</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{pendingCount}</p>
+              </div>
+              <Clock className="size-6 text-amber-500" />
+            </div>
+          </CardContent>
+        </Card>
 
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Approved</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{approvedCount}</p>
-                  </div>
-                  <div className="bg-green-100 rounded-full p-3">
-                    <CheckCircle className="w-8 h-8 text-green-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        <Card className="relative overflow-hidden border-border/60 bg-card/50">
+          <div className="absolute inset-y-0 left-0 w-1 bg-emerald-500" aria-hidden />
+          <CardContent className="p-4 pl-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Approved</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{approvedCount}</p>
+              </div>
+              <CheckCircle className="size-6 text-emerald-500" />
+            </div>
+          </CardContent>
+        </Card>
 
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Cost Impact</p>
-                    <p className={`text-2xl font-bold mt-1 ${totalCostImpact >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {formatCurrency(Math.abs(totalCostImpact))}
-                    </p>
-                    <p className="text-xs text-gray-500">{totalCostImpact >= 0 ? 'Added' : 'Saved'}</p>
-                  </div>
-                  <div className="bg-orange-100 rounded-full p-3">
-                    <DollarSign className="w-8 h-8 text-orange-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+        <Card className="relative overflow-hidden border-border bg-card">
+          <div className="absolute inset-y-0 left-0 w-1 bg-rose-500" aria-hidden />
+          <CardContent className="p-4 pl-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Cost Impact</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-rose-600 dark:text-rose-400">
+                  {formatCurrency(Math.abs(totalCostImpact))}
+                </p>
+                <p className="text-xs text-muted-foreground">{totalCostImpact >= 0 ? 'Added' : 'Saved'}</p>
+              </div>
+              <DollarSign className="size-6 text-rose-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-          {/* Add Change Order Button */}
-          <div>
-            <Button
-              onClick={handleAddChangeOrder}
-              className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226]"
-            >
-              <PlusCircle className="w-4 h-4 mr-2" />
+      <section className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-semibold">Change Orders</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={handleAddChangeOrder}>
+              <PlusCircle className="mr-2 size-4" />
               Add Change Order
             </Button>
           </div>
+        </div>
 
-          {/* Change Orders List */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Change Orders</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {changeOrders.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-lg font-medium mb-2">No Change Orders</p>
-                  <p>Track scope changes and their impact on budget and schedule</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {changeOrders.map((co) => (
-                    <Card key={co.id} className="border-2">
+        <Card className="border-border/60 bg-card/50">
+          <CardContent className="p-4">
+            {changeOrders.length === 0 ? (
+              <div className="py-12 text-center">
+                <FileText className="mx-auto mb-3 size-12 text-muted-foreground/50" />
+                <p className="font-medium">No change orders yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">Track scope changes and their impact on budget and schedule</p>
+                <Button onClick={handleAddChangeOrder} size="sm" className="mt-4">
+                  <PlusCircle className="mr-2 size-4" />
+                  Add Change Order
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {changeOrders.map((co) => {
+                  const visual = statusVisual(co.status)
+                  return (
+                    <Card key={co.id} className="border-border/60 bg-card">
                       <CardContent className="pt-4">
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                           <div className="flex-1">
-                            <div className="flex items-start justify-between mb-2">
+                            <div className="mb-2 flex items-start justify-between">
                               <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="font-semibold text-gray-900">{co.title}</h4>
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(co.status)}`}>
-                                    {getStatusIcon(co.status)}
+                                <div className="mb-1 flex items-center gap-2">
+                                  <h4 className="font-semibold text-foreground">{co.title}</h4>
+                                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${visual.bg} ${visual.text} ${visual.border}`}>
+                                    <span className={`size-1.5 rounded-full ${visual.dot}`} />
                                     {co.status.replace('-', ' ').toUpperCase()}
                                   </span>
                                 </div>
-                                <p className="text-sm text-gray-600">{co.changeOrderNumber}</p>
+                                <p className="text-sm text-muted-foreground">{co.changeOrderNumber}</p>
                               </div>
                             </div>
 
-                            <p className="text-sm text-gray-700 mb-3">{co.description}</p>
+                            <p className="mb-3 text-sm text-foreground">{co.description}</p>
 
                             {co.trades && co.trades.length > 0 && (
                               <div className="mb-3">
-                                <p className="text-xs font-semibold text-gray-600 mb-1">Affected Items:</p>
+                                <p className="mb-1 text-xs font-semibold text-muted-foreground">Affected Items:</p>
                                 <div className="flex flex-wrap gap-1">
                                   {co.trades.map((trade) => (
-                                    <span key={trade.id} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                    <span key={trade.id} className="rounded border border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
                                       {trade.name}
                                     </span>
                                   ))}
@@ -265,58 +285,58 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
                               </div>
                             )}
 
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                               <div>
-                                <p className="text-gray-600">Requested By</p>
-                                <p className="font-medium">{co.requestedBy}</p>
+                                <p className="text-muted-foreground">Requested By</p>
+                                <p className="font-medium text-foreground">{co.requestedBy}</p>
                               </div>
                               <div>
-                                <p className="text-gray-600">Date</p>
-                                <p className="font-medium">{co.requestDate.toLocaleDateString()}</p>
+                                <p className="text-muted-foreground">Date</p>
+                                <p className="font-medium text-foreground">{co.requestDate.toLocaleDateString()}</p>
                               </div>
                               <div>
-                                <p className="text-gray-600">Cost Impact</p>
-                                <p className={`font-bold ${co.costImpact >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                  {co.costImpact >= 0 ? '+' : ''}{formatCurrency(co.costImpact)}
+                                <p className="text-muted-foreground">Cost Impact</p>
+                                <p className={`font-semibold tabular-nums ${co.costImpact >= 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                  {co.costImpact >= 0 ? '+' : ''}
+                                  {formatCurrency(co.costImpact)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-gray-600">Schedule Impact</p>
-                                <p className={`font-medium ${co.scheduleImpact > 0 ? 'text-red-600' : co.scheduleImpact < 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                                  {co.scheduleImpact > 0 ? '+' : ''}{co.scheduleImpact} days
+                                <p className="text-muted-foreground">Schedule Impact</p>
+                                <p className={`font-medium tabular-nums ${
+                                  co.scheduleImpact > 0
+                                    ? 'text-rose-600 dark:text-rose-400'
+                                    : co.scheduleImpact < 0
+                                      ? 'text-emerald-600 dark:text-emerald-400'
+                                      : 'text-muted-foreground'
+                                }`}>
+                                  {co.scheduleImpact > 0 ? '+' : ''}
+                                  {co.scheduleImpact} days
                                 </p>
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex sm:flex-col gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleEditChangeOrder(co)}
-                            >
-                              <Edit className="w-3 h-3 mr-1" />
+                          <div className="flex gap-2 sm:flex-col">
+                            <Button size="sm" variant="outline" onClick={() => handleEditChangeOrder(co)}>
+                              <Edit className="mr-1 h-3 w-3" />
                               Edit
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteChangeOrder(co.id)}
-                            >
-                              <Trash2 className="w-3 h-3 mr-1" />
+                            <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => handleDeleteChangeOrder(co.id)}>
+                              <Trash2 className="mr-1 h-3 w-3" />
                               Delete
                             </Button>
                           </div>
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
 
       {/* Change Order Form Modal */}
       {showCOForm && (
@@ -331,90 +351,7 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
           }}
         />
       )}
-
-      {/* Mobile Back Button */}
-      {onBack && (
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg z-40">
-          <Button onClick={onBack} variant="outline" className="border-gray-300 hover:bg-gray-50 w-full">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Project Detail
-          </Button>
-        </div>
-      )}
     </div>
-  )
-}
-
-// ----------------------------------------------------------------------------
-// Header Component
-// ----------------------------------------------------------------------------
-
-interface ChangeOrdersHeaderProps {
-  project: Project
-  onBack?: () => void
-}
-
-function ChangeOrdersHeader({ project, onBack }: ChangeOrdersHeaderProps) {
-  const getStatusColor = (status: string) => {
-    const colors = {
-      estimating: 'bg-blue-100 text-blue-800',
-      'in-progress': 'bg-orange-100 text-orange-800',
-      complete: 'bg-green-100 text-green-800',
-    }
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
-  }
-
-  return (
-    <>
-      {/* Mobile Header */}
-      <header className="sm:hidden bg-white shadow-md border-b border-gray-200">
-        <div className="px-4 py-4">
-          <div className="flex items-center space-x-3">
-            <img src={hshLogo} alt="HSH Contractor" className="h-16 w-auto" />
-            <div className="flex-1">
-              <div className="flex flex-col gap-2 mb-1">
-                <h1 className="text-lg font-bold text-gray-900">Change Orders</h1>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)} w-fit`}>
-                  {project.status.replace('-', ' ').toUpperCase()}
-                </span>
-              </div>
-              <p className="text-xs text-gray-600">{project.name}</p>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Desktop Header */}
-      <Card className="hidden sm:block bg-gradient-to-br from-gray-50 to-white border border-gray-200 shadow-lg">
-        <CardHeader className="pb-3 sm:pb-6">
-          <div className="space-y-2 sm:space-y-4">
-            <div className="flex items-center justify-center gap-2 sm:gap-4 lg:gap-6">
-              <div className="flex-shrink-0">
-                <img src={hshLogo} alt="HSH Contractor Logo" className="h-20 sm:h-32 lg:h-40 w-auto" />
-              </div>
-              <div className="flex-shrink-0">
-                <h2 className="text-xl sm:text-4xl lg:text-5xl font-bold text-gray-900">Change Orders</h2>
-                <p className="text-sm sm:text-base text-gray-600 mt-1">{project.name}</p>
-              </div>
-            </div>
-
-            {onBack && (
-              <div className="hidden sm:flex justify-center">
-                <Button
-                  onClick={onBack}
-                  variant="outline"
-                  size="sm"
-                  className="border-gray-300 hover:bg-gray-50 w-full max-w-md text-xs sm:text-sm"
-                >
-                  <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                  Back to Project Detail
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-      </Card>
-    </>
   )
 }
 
@@ -474,8 +411,8 @@ function ChangeOrderForm({ project, trades, changeOrder, onSave, onCancel }: Cha
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <Card className="max-h-[90vh] w-full max-w-2xl overflow-y-auto border-border bg-card">
         <CardHeader>
           <CardTitle>{changeOrder ? 'Edit Change Order' : 'Add Change Order'}</CardTitle>
         </CardHeader>
@@ -555,7 +492,7 @@ function ChangeOrderForm({ project, trades, changeOrder, onSave, onCancel }: Cha
                   onChange={(e) => setFormData(prev => ({ ...prev, costImpact: e.target.value }))}
                   placeholder="Positive = added cost, Negative = savings"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Use negative numbers for cost reductions
                 </p>
               </div>
@@ -568,7 +505,7 @@ function ChangeOrderForm({ project, trades, changeOrder, onSave, onCancel }: Cha
                   onChange={(e) => setFormData(prev => ({ ...prev, scheduleImpact: e.target.value }))}
                   placeholder="Positive = delay, Negative = time saved"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Use negative numbers for time savings
                 </p>
               </div>
@@ -576,12 +513,12 @@ function ChangeOrderForm({ project, trades, changeOrder, onSave, onCancel }: Cha
 
             <div>
               <Label htmlFor="affectedItems">Affected Cost Items (Optional)</Label>
-              <div className="space-y-2 max-h-48 overflow-y-auto border rounded p-3">
+              <div className="max-h-48 space-y-2 overflow-y-auto rounded border border-border/60 bg-card p-3">
                 {trades.length === 0 ? (
-                  <p className="text-sm text-gray-500">No estimate items available</p>
+                  <p className="text-sm text-muted-foreground">No estimate items available</p>
                 ) : (
                   trades.map((trade) => (
-                    <label key={trade.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                    <label key={trade.id} className="flex cursor-pointer items-center gap-2 rounded p-2 hover:bg-muted/30">
                       <input
                         type="checkbox"
                         checked={formData.affectedTradeIds.includes(trade.id)}
@@ -600,14 +537,14 @@ function ChangeOrderForm({ project, trades, changeOrder, onSave, onCancel }: Cha
                         }}
                         className="w-4 h-4"
                       />
-                      <span className="text-sm">
+                      <span className="text-sm text-foreground">
                         {trade.name} - {trade.category}
                       </span>
                     </label>
                   ))
                 )}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Select which estimate items are affected by this change order
               </p>
             </div>
@@ -622,14 +559,11 @@ function ChangeOrderForm({ project, trades, changeOrder, onSave, onCancel }: Cha
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t">
+            <div className="flex justify-end gap-2 border-t border-border/60 pt-4">
               <Button type="button" variant="outline" onClick={onCancel}>
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226]"
-              >
+              <Button type="submit">
                 {changeOrder ? 'Save Changes' : 'Add Change Order'}
               </Button>
             </div>
