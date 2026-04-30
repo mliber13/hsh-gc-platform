@@ -451,10 +451,8 @@ For form sections that previously used `<Label className="text-[#E65133]">`, dro
     3. Row/card token sweep (list item visuals, hover states, selected state)
     4. Dialog/modal chrome sweep (last because dialogs are leaf nodes)
     5. Run `npx tsc --noEmit` once at the end, not after each step (tsc is forgiving of mid-port states; running it earlier creates noise)
-
----
-
-## Verification Checklist
+16. **Upload-heavy pages (galleries, room organizers, document managers) — chrome-first.** When porting a page with significant image/file upload + display logic (`SelectionBook` is the reference), do a *top-down chrome-only sweep first* (header → action strip → error banners → top-level cards), then *selectively tokenize* the nested gallery/form cards. Don't touch data-heavy upload handlers, category-order state, signed-URL fetching, or organization logic — those are orthogonal to the visual port and risky to disturb. This preserves complex async flows while still making the page coherent with the design language.
+17. **Form-heavy editors with mixed native + shadcn controls — input parity first.** When porting an editor page with many `<Input>`, `<Label>`, `<Select>`, `<Textarea>` instances mixed with action buttons (`PlanEditor`, `EditProjectModal` are references), prioritize a *form-control parity pass* before sweeping buttons. Apply the same border/surface/muted helper recipe across all input controls (e.g., `bg-input border-border text-foreground`) so the form reads as one visually coherent block. Action buttons can be swept separately with less coordination required.
 
 Before committing a page port:
 
@@ -517,7 +515,7 @@ tsc --noEmit clean.
 | Plan Editor | ✅ Ported | `src/components/PlanEditor.tsx` | Mode A — form-heavy editor tokenized; preserved option/document upload flows and inline upload modal behavior |
 | Item Library | ✅ Ported | `src/components/ItemLibrary.tsx` | Mode A — dual-branch tabs retained; removed hero/mobile shell and tokenized category accordion + modal forms |
 | SOW Management | ✅ Ported | `src/components/SOWManagement.tsx` | Mode A — removed legacy hero + gradient shell, normalized CRUD cards/dialogs to token surfaces |
-| Deal Workspace | ⏸ Hold | `src/components/DealWorkspace.tsx` | Wait for owner's in-flight Create Deal commit |
+| Deal Workspace | ✅ Ported (partial) | `src/components/DealWorkspace.tsx` | 4848-line page. Outer wrapper converted from `fixed inset-0 bg-slate-900` fullscreen overlay to shell-friendly `flex h-[calc(100vh-3rem)]`. Custom h-20 header row + hshLogo dropped. Top action strip with Back link + Clear/Versions/Actions selects added. Full slate-X palette swept to tokens. STAGE_COLOR + STAGE_DEAL_ACCENT updated to v0 pill recipe (amber/sky/emerald). **Deferred:** Deal Selector in AppHeader (still uses inline left-aside list); deeper match to v0's two-column layout; per-modal chrome polish for ProForma config dialogs. |
 | Tenant Pipeline | ✅ Ported | `src/components/TenantPipeline.tsx` | Kanban board with drag-drop preserved. 7 stages → 5 token colors using semantic repetition (sky/amber/emerald/violet/amber/emerald/rose). 8 categories use distinct hues per §7 (orange kept for Fitness). Layout: horizontal-scroll flex, `w-64 shrink-0` per column, `min-h-[420px]` drop zone. Mobile uses stage-picker chip strip + single-stage list view. |
 | Create Project Form | ✅ Ported | `src/components/CreateProjectForm.tsx` | Mode A — multi-section form tokenized; plan-option checkbox panel migrated to muted token card |
 

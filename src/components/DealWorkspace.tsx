@@ -8,6 +8,8 @@ import { Textarea } from './ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
 import { ArrowLeft, ChevronDown, Download, Mic, MicOff, Pencil, Play, Plus, Save, Send, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 import type { Deal } from '@/types/deal'
 import type { Project } from '@/types'
 import type { ForSalePhaseInput, ProFormaInput, ProFormaMode, ProFormaProjection } from '@/types/proforma'
@@ -29,7 +31,6 @@ import {
 import { calculateProForma } from '@/services/proformaService'
 import { exportProFormaToExcel, exportProFormaToPDF } from '@/services/proformaExportService'
 import { supabase } from '@/lib/supabase'
-import hshLogo from '/HSH Contractor Logo - Color.png'
 
 type WorkspaceStage = 'coaching' | 'scenario' | 'proforma'
 type FieldStatus = 'confirmed' | 'approx' | 'empty'
@@ -183,16 +184,17 @@ const buildInitialCoachMessage = (dealName: string): WorkspaceMessage => ({
   createdAt: new Date().toISOString(),
 })
 
+// Stage colors per docs/UI_PORT_PLAYBOOK.md §7 pill recipe
 const STAGE_COLOR: Record<WorkspaceStage, string> = {
-  coaching: 'bg-amber-100 text-amber-800 border-amber-200',
-  scenario: 'bg-blue-100 text-blue-800 border-blue-200',
-  proforma: 'bg-green-100 text-green-800 border-green-200',
+  coaching: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+  scenario: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30',
+  proforma: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
 }
 
 const STAGE_DEAL_ACCENT: Record<WorkspaceStage, string> = {
   coaching: 'bg-amber-500',
-  scenario: 'bg-blue-500',
-  proforma: 'bg-green-500',
+  scenario: 'bg-sky-500',
+  proforma: 'bg-emerald-500',
 }
 
 function buildDealUnderwritingProject(deal: Deal): Project {
@@ -1069,7 +1071,7 @@ Rules:
 function fieldClass(status: FieldStatus): string {
   if (status === 'confirmed') return 'border-green-300 bg-green-50'
   if (status === 'approx') return 'border-amber-300 bg-amber-50'
-  return 'border-gray-200 bg-white text-gray-900 font-medium placeholder:text-gray-400'
+  return 'border-border bg-input text-foreground font-medium placeholder:text-muted-foreground'
 }
 
 function fmtMoney(n: number | undefined | null): string {
@@ -1091,9 +1093,9 @@ function fmtShortDate(d: Date | string | undefined): string {
 
 function MemoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[minmax(10rem,42%)_1fr] gap-2 py-1.5 border-b border-slate-700/60 text-sm last:border-b-0">
-      <span className="text-slate-400">{label}</span>
-      <span className="text-slate-100 tabular-nums">{value}</span>
+    <div className="grid grid-cols-[minmax(10rem,42%)_1fr] gap-2 py-1.5 border-b border-border/60/60 text-sm last:border-b-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-foreground tabular-nums">{value}</span>
     </div>
   )
 }
@@ -1109,8 +1111,8 @@ function AssumptionInputRow({
   unboundedControls?: boolean
 }) {
   return (
-    <div className="grid grid-cols-[160px_1fr] items-center gap-2 py-0.5 border-b border-slate-700/40 last:border-b-0">
-      <Label className="text-xs text-slate-300">{label}</Label>
+    <div className="grid grid-cols-[160px_1fr] items-center gap-2 py-0.5 border-b border-border/60/40 last:border-b-0">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
       <div
         className={
           unboundedControls
@@ -1150,10 +1152,10 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-4">
-      <div className="rounded-lg border border-slate-700 bg-slate-800/90 p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-100 tracking-tight">Pro forma memo</h2>
-        <p className="text-sm text-slate-400 mt-1">{dealName}</p>
-        <p className="text-sm text-slate-300 mt-3 leading-relaxed">
+      <div className="rounded-lg border border-border/60 bg-muted/90 p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-foreground tracking-tight">Pro forma memo</h2>
+        <p className="text-sm text-muted-foreground mt-1">{dealName}</p>
+        <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
           This is a living summary of the model. The deal assistant and your edits update the same underlying inputs. Use{' '}
           <button type="button" className="text-blue-400 hover:underline" onClick={onEditAssumptions}>
             All assumptions
@@ -1165,14 +1167,14 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
             className={`rounded border px-2 py-1 ${
               readiness.proformaReady
                 ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200'
-                : 'border-slate-600 bg-slate-900/60 text-slate-300'
+                : 'border-border/70 bg-card/60 text-muted-foreground'
             }`}
           >
             {readiness.proformaReady
               ? 'Model ready — run pro forma'
               : `Coverage ${readiness.score}% · ${readiness.failedCriticalCount} critical gap${readiness.failedCriticalCount === 1 ? '' : 's'}`}
           </span>
-          <span className="rounded border border-slate-600 bg-slate-900/60 px-2 py-1 text-slate-300">
+          <span className="rounded border border-border/70 bg-card/60 px-2 py-1 text-muted-foreground">
             {projection ? 'Engine run — results below' : 'Run ProForma in the header for full outputs'}
           </span>
         </div>
@@ -1191,8 +1193,8 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
         )}
       </div>
 
-      <div className="rounded-lg border border-slate-700 bg-slate-800/90 p-5">
-        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide mb-2">Deal overview</h3>
+      <div className="rounded-lg border border-border/60 bg-muted/90 p-5">
+        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-2">Deal overview</h3>
         <MemoRow label="Structure" value={modeLabel} />
         <MemoRow label="Start date" value={fmtShortDate(input.startDate)} />
         <MemoRow label="Projection (months)" value={input.projectionMonths ?? '—'} />
@@ -1200,8 +1202,8 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
         <MemoRow label="Total SF (if set)" value={input.totalProjectSquareFootage ? `${input.totalProjectSquareFootage.toLocaleString()} sf` : '—'} />
       </div>
 
-      <div className="rounded-lg border border-slate-700 bg-slate-800/90 p-5">
-        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide mb-2">Uses (underwriting basis)</h3>
+      <div className="rounded-lg border border-border/60 bg-muted/90 p-5">
+        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-2">Uses (underwriting basis)</h3>
         <MemoRow label="Est. construction / hard" value={fmtMoney(hard)} />
         <MemoRow label="Land" value={fmtMoney(land)} />
         <MemoRow label="Site work" value={fmtMoney(site)} />
@@ -1212,8 +1214,8 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
 
       {(fs &&
         ((fs.totalUnits ?? 0) > 0 || (fs.averageSalePrice ?? 0) > 0 || phases.length > 0)) && (
-        <div className="rounded-lg border border-slate-700 bg-slate-800/90 p-5">
-          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide mb-2">Development For-Sale / LOC</h3>
+        <div className="rounded-lg border border-border/60 bg-muted/90 p-5">
+          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-2">Development For-Sale / LOC</h3>
           <MemoRow label="Total units" value={fs?.totalUnits ?? '—'} />
           <MemoRow label="Average sale price" value={fmtMoney(fs?.averageSalePrice)} />
           <MemoRow label="Presale deposit" value={fs?.presaleDepositPercent != null ? fmtPct(fs.presaleDepositPercent, 0) : '—'} />
@@ -1232,9 +1234,9 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
           )}
           {phases.length > 0 && (
             <div className="mt-4 overflow-x-auto">
-              <div className="text-xs text-slate-400 mb-2">Phases</div>
-              <table className="w-full text-xs text-left border border-slate-700 rounded-md overflow-hidden">
-                <thead className="bg-slate-900/80 text-slate-400">
+              <div className="text-xs text-muted-foreground mb-2">Phases</div>
+              <table className="w-full text-xs text-left border border-border/60 rounded-md overflow-hidden">
+                <thead className="bg-card/80 text-muted-foreground">
                   <tr>
                     <th className="p-2 font-medium">Phase</th>
                     <th className="p-2 font-medium">Units</th>
@@ -1244,9 +1246,9 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
                     <th className="p-2 font-medium">Trigger %</th>
                   </tr>
                 </thead>
-                <tbody className="text-slate-200">
+                <tbody className="text-foreground">
                   {phases.map((p) => (
-                    <tr key={p.id} className="border-t border-slate-700">
+                    <tr key={p.id} className="border-t border-border/60">
                       <td className="p-2">{p.name || '—'}</td>
                       <td className="p-2">{p.unitCount || '—'}</td>
                       <td className="p-2">{p.buildMonths || '—'}</td>
@@ -1262,16 +1264,16 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-700 bg-slate-800/90 p-5">
-        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide mb-2">Financing (summary)</h3>
+      <div className="rounded-lg border border-border/60 bg-muted/90 p-5">
+        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-2">Financing (summary)</h3>
         <MemoRow label="Loan to cost (project)" value={input.loanToCostPercent != null ? fmtPct(input.loanToCostPercent, 0) : '—'} />
         <MemoRow label="Debt amount" value={fmtMoney(input.debtService?.loanAmount)} />
         <MemoRow label="Debt rate / term" value={`${input.debtService?.interestRate != null ? fmtPct(input.debtService.interestRate, 2) : '—'} · ${input.debtService?.loanTermMonths ?? '—'} mo`} />
       </div>
 
       {input.proFormaMode === 'rental-hold' && (
-        <div className="rounded-lg border border-slate-700 bg-slate-800/90 p-5">
-          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide mb-2">Rental operations</h3>
+        <div className="rounded-lg border border-border/60 bg-muted/90 p-5">
+          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-2">Rental operations</h3>
           <MemoRow label="Rental income included" value={input.includeRentalIncome ? 'Yes' : 'No'} />
           <MemoRow label="Operating expenses included" value={input.includeOperatingExpenses ? 'Yes' : 'No'} />
           <MemoRow label="Debt service included" value={input.includeDebtService ? 'Yes' : 'No'} />
@@ -1299,7 +1301,7 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
         <Button
           size="sm"
           variant="outline"
-          className="border-slate-500 bg-slate-800 text-slate-100 hover:bg-slate-700 hover:text-white"
+          className="border-border/60 bg-muted text-foreground hover:bg-muted/70 hover:text-white"
           onClick={onEditAssumptions}
         >
           Open all assumptions
@@ -1350,6 +1352,9 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   const [actionsMenuValue, setActionsMenuValue] = useState('')
   const [editingDebtAmount, setEditingDebtAmount] = useState<Record<string, string>>({})
   const [editingIncentiveAmount, setEditingIncentiveAmount] = useState<Record<string, string>>({})
+
+  // Centered title in the AppHeader (Deal Workspace renders inside shell now)
+  usePageTitle('Deal Workspace')
   /** Local string while Cost per SF is focused so typing is not overwritten by formatted derived value. */
   const [costPerSfDraft, setCostPerSfDraft] = useState<string | null>(null)
   /** Local string while Sale Price per SF is focused (derived from average sale price ÷ unit SF). */
@@ -2734,8 +2739,8 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   }
 
   const stageLegend = (
-    <div className="space-y-1 text-xs text-slate-300">
-      <div className="font-semibold text-slate-200">Stage Guide</div>
+    <div className="space-y-1 text-xs text-muted-foreground">
+      <div className="font-semibold text-foreground">Stage Guide</div>
       <div><span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />Coaching</div>
       <div><span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-2" />Scenario</div>
       <div><span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-2" />ProForma</div>
@@ -2743,23 +2748,23 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   )
 
   if (loading || loadingDealState) {
-    return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading deal workspace...</div>
+    return <div className="flex h-[60vh] items-center justify-center text-muted-foreground">Loading deal workspace…</div>
   }
 
   if (!selectedDeal) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-gray-500">
+      <div className="flex h-[60vh] items-center justify-center text-muted-foreground">
         No deals found for workspace.
       </div>
     )
   }
 
   if (!input) {
-    return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading deal workspace...</div>
+    return <div className="flex h-[60vh] items-center justify-center text-muted-foreground">Loading deal workspace…</div>
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-900 text-slate-100 flex flex-col">
+    <div className="flex h-[calc(100vh-3rem)] flex-col bg-background text-foreground">
       <Dialog open={createDealModalOpen} onOpenChange={setCreateDealModalOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -2866,27 +2871,24 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <div className="h-20 bg-slate-950 border-b border-slate-800 px-3 flex items-center">
-        <div className="flex flex-1 items-center gap-2 min-w-0">
-          <Button variant="outline" size="sm" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back
-          </Button>
-          <span className="font-semibold truncate">{selectedDeal.deal_name}</span>
-          <span className={`text-xs px-2 py-0.5 rounded border ${STAGE_COLOR[stage]}`}>{stage}</span>
+      {/* Top action strip — back link + deal name/stage on left, action menus on right */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-border/60 bg-card/50 px-4 py-3">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back
+        </button>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-semibold">{selectedDeal.deal_name}</span>
+          <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', STAGE_COLOR[stage])}>
+            {stage}
+          </span>
         </div>
-        <div className="flex items-center justify-center px-2">
-          <div className="rounded-md bg-slate-900/70 ring-1 ring-slate-700/70 px-2 py-1 shadow-[0_0_0_1px_rgba(148,163,184,0.08),0_4px_14px_rgba(0,0,0,0.45)]">
-            <img
-              src={hshLogo}
-              alt="HSH Contractor"
-              className="h-[6rem] w-auto shrink-0 [filter:drop-shadow(0_1px_0_rgba(255,255,255,0.12))_drop-shadow(0_3px_8px_rgba(0,0,0,0.5))_saturate(1.08)_contrast(1.08)_brightness(1.03)]"
-            />
-          </div>
-        </div>
-        <div className="flex flex-1 items-center justify-end gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <Select value={clearMenuValue} onValueChange={handleClearMenuChange} disabled={saving}>
-            <SelectTrigger className="h-8 w-[180px] border-slate-700 bg-slate-900 text-slate-100">
+            <SelectTrigger className="h-8 w-[160px]">
               <SelectValue placeholder="Clear Actions" />
             </SelectTrigger>
             <SelectContent>
@@ -2897,7 +2899,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
           </Select>
 
           <Select value={versionMenuValue} onValueChange={handleVersionMenuChange} disabled={saving}>
-            <SelectTrigger className="h-8 w-[240px] border-slate-700 bg-slate-900 text-slate-100">
+            <SelectTrigger className="h-8 w-[200px]">
               <SelectValue placeholder="Versions" />
             </SelectTrigger>
             <SelectContent>
@@ -2909,7 +2911,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
           </Select>
 
           <Select value={actionsMenuValue} onValueChange={handleActionsMenuChange} disabled={running || deletingDeal}>
-            <SelectTrigger className="h-8 w-[200px] border-slate-700 bg-slate-900 text-slate-100">
+            <SelectTrigger className="h-8 w-[160px]">
               <SelectValue placeholder="Actions" />
             </SelectTrigger>
             <SelectContent>
@@ -2923,16 +2925,16 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
       </div>
 
       <div className="flex-1 flex min-h-0">
-        <aside className="w-[220px] bg-slate-950 border-r border-slate-800 p-3 overflow-y-auto">
+        <aside className="w-[220px] bg-card border-r border-border/60 p-3 overflow-y-auto">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="text-xs uppercase text-slate-400">Deals</div>
+            <div className="text-xs uppercase text-muted-foreground">Deals</div>
             <Button
               type="button"
               size="sm"
               variant="outline"
               onClick={() => setCreateDealModalOpen(true)}
               disabled={creatingDeal}
-              className="h-7 border-slate-700 bg-slate-900 px-2 text-slate-100 hover:bg-slate-800"
+              className="h-7 border-border/60 bg-card px-2 text-foreground hover:bg-muted"
             >
               <Plus className="mr-1 h-3.5 w-3.5" />
               New
@@ -2948,11 +2950,11 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                     setSelectedDealId(d.id)
                     window.history.replaceState({}, '', `/deals/workspace/${d.id}`)
                   }}
-                  className={`relative w-full text-left rounded border p-2 pl-3 ${selectedDealId === d.id ? 'border-blue-500 bg-blue-950/40' : 'border-slate-700 bg-slate-900 hover:bg-slate-800'}`}
+                  className={`relative w-full text-left rounded border p-2 pl-3 ${selectedDealId === d.id ? 'border-blue-500 bg-blue-950/40' : 'border-border/60 bg-card hover:bg-muted'}`}
                 >
                   <span className={`absolute left-0 top-0 h-full w-1 rounded-l ${STAGE_DEAL_ACCENT[dStage]}`} />
-                  <div className="font-medium text-sm truncate text-slate-100">{d.deal_name}</div>
-                  <div className="text-xs text-slate-400 truncate">
+                  <div className="font-medium text-sm truncate text-foreground">{d.deal_name}</div>
+                  <div className="text-xs text-muted-foreground truncate">
                     {(d.unit_count || 0) > 0 ? `${d.unit_count} units` : 'Units TBD'} · {d.custom_type || d.type}
                   </div>
                   <div className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded border ${STAGE_COLOR[dStage]}`}>{dStage}</div>
@@ -2960,63 +2962,63 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               )
             })}
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-800">{stageLegend}</div>
+          <div className="mt-4 pt-3 border-t border-border/60">{stageLegend}</div>
         </aside>
 
-        <main className="flex-1 min-w-0 p-3 overflow-y-auto bg-slate-900 [&_label]:text-[11px] [&_label]:text-slate-200 [&_input]:h-8 [&_input]:text-xs [&_input]:bg-slate-200 [&_input]:border-slate-300 [&_input]:text-slate-900 [&_input]:placeholder:text-slate-500 [&_button[role='combobox']]:h-8 [&_button[role='combobox']]:text-xs [&_button[role='combobox']]:bg-slate-200 [&_button[role='combobox']]:border-slate-300 [&_button[role='combobox']]:text-slate-900 [&_.rounded-md]:rounded-sm">
-          <div className="mb-3 flex flex-wrap gap-2 border-b border-slate-800 pb-2">
-            <Button size="sm" className={centerTab === 'assumptions' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'assumptions' ? 'default' : 'outline'} onClick={() => setCenterTab('assumptions')}>Assumptions</Button>
-            <Button size="sm" className={centerTab === 'phase-pro-forma' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'phase-pro-forma' ? 'default' : 'outline'} onClick={() => setCenterTab('phase-pro-forma')}>Phase Pro Forma</Button>
-            <Button size="sm" className={centerTab === 'cash-flow' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'cash-flow' ? 'default' : 'outline'} onClick={() => setCenterTab('cash-flow')}>Cash Flow</Button>
-            <Button size="sm" className={centerTab === 'investor-returns' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'investor-returns' ? 'default' : 'outline'} onClick={() => setCenterTab('investor-returns')}>Investor Returns</Button>
-            <Button size="sm" className={centerTab === 'public-sector' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'public-sector' ? 'default' : 'outline'} onClick={() => setCenterTab('public-sector')}>Public Sector</Button>
-            <Button size="sm" className={centerTab === 'dashboard' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'dashboard' ? 'default' : 'outline'} onClick={() => setCenterTab('dashboard')}>Dashboard</Button>
-            <Button size="sm" className={centerTab === 'analysis' ? '' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'} variant={centerTab === 'analysis' ? 'default' : 'outline'} onClick={() => setCenterTab('analysis')}>Analysis & Insights</Button>
+        <main className="flex-1 min-w-0 p-3 overflow-y-auto bg-card [&_label]:text-[11px] [&_label]:text-foreground [&_input]:h-8 [&_input]:text-xs [&_input]:bg-input [&_input]:border-border [&_input]:text-foreground [&_input]:placeholder:text-muted-foreground [&_button[role='combobox']]:h-8 [&_button[role='combobox']]:text-xs [&_button[role='combobox']]:bg-input [&_button[role='combobox']]:border-border [&_button[role='combobox']]:text-foreground [&_.rounded-md]:rounded-sm">
+          <div className="mb-3 flex flex-wrap gap-2 border-b border-border/60 pb-2">
+            <Button size="sm" className={centerTab === 'assumptions' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'assumptions' ? 'default' : 'outline'} onClick={() => setCenterTab('assumptions')}>Assumptions</Button>
+            <Button size="sm" className={centerTab === 'phase-pro-forma' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'phase-pro-forma' ? 'default' : 'outline'} onClick={() => setCenterTab('phase-pro-forma')}>Phase Pro Forma</Button>
+            <Button size="sm" className={centerTab === 'cash-flow' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'cash-flow' ? 'default' : 'outline'} onClick={() => setCenterTab('cash-flow')}>Cash Flow</Button>
+            <Button size="sm" className={centerTab === 'investor-returns' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'investor-returns' ? 'default' : 'outline'} onClick={() => setCenterTab('investor-returns')}>Investor Returns</Button>
+            <Button size="sm" className={centerTab === 'public-sector' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'public-sector' ? 'default' : 'outline'} onClick={() => setCenterTab('public-sector')}>Public Sector</Button>
+            <Button size="sm" className={centerTab === 'dashboard' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'dashboard' ? 'default' : 'outline'} onClick={() => setCenterTab('dashboard')}>Dashboard</Button>
+            <Button size="sm" className={centerTab === 'analysis' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'analysis' ? 'default' : 'outline'} onClick={() => setCenterTab('analysis')}>Analysis & Insights</Button>
           </div>
 
           {centerTab === 'dashboard' && (
             <div className="space-y-3">
               <div className="mb-3">
-                <div className="flex items-center justify-between text-sm text-slate-200">
+                <div className="flex items-center justify-between text-sm text-foreground">
                   <span>Model coverage</span>
                   <span className="font-semibold">{readiness.score}%</span>
                 </div>
-                <div className="w-full h-2 bg-slate-700 rounded mt-1">
+                <div className="w-full h-2 bg-muted/70 rounded mt-1">
                   <div className="h-2 bg-green-500 rounded" style={{ width: `${readiness.score}%` }} />
                 </div>
                 {readiness.proformaReady ? (
                   <p className="text-xs text-emerald-400 mt-2">All critical checks pass — you can run pro forma.</p>
                 ) : (
-                  <p className="text-xs text-slate-400 mt-2 leading-snug">
-                    <span className="text-slate-300">Gaps: </span>
+                  <p className="text-xs text-muted-foreground mt-2 leading-snug">
+                    <span className="text-muted-foreground">Gaps: </span>
                     {readiness.blockers.slice(0, 5).join(' · ')}
                     {readiness.blockers.length > 5 ? ' …' : ''}
                   </p>
                 )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Card className="bg-slate-800 border-slate-700">
-                  <CardHeader className="py-3"><CardTitle className="text-base text-slate-200">Projected Profit</CardTitle></CardHeader>
-                  <CardContent className="pt-0 text-xl font-semibold text-slate-100">{fmtMoney(dashboardMetrics.projectedProfit)}</CardContent>
+                <Card className="bg-muted border-border/60">
+                  <CardHeader className="py-3"><CardTitle className="text-base text-foreground">Projected Profit</CardTitle></CardHeader>
+                  <CardContent className="pt-0 text-xl font-semibold text-foreground">{fmtMoney(dashboardMetrics.projectedProfit)}</CardContent>
                 </Card>
-                <Card className="bg-slate-800 border-slate-700">
-                  <CardHeader className="py-3"><CardTitle className="text-base text-slate-200">Investor MOIC</CardTitle></CardHeader>
-                  <CardContent className="pt-0 text-xl font-semibold text-slate-100">{dashboardMetrics.investorMoic != null ? `${dashboardMetrics.investorMoic.toFixed(2)}x` : '—'}</CardContent>
+                <Card className="bg-muted border-border/60">
+                  <CardHeader className="py-3"><CardTitle className="text-base text-foreground">Investor MOIC</CardTitle></CardHeader>
+                  <CardContent className="pt-0 text-xl font-semibold text-foreground">{dashboardMetrics.investorMoic != null ? `${dashboardMetrics.investorMoic.toFixed(2)}x` : '—'}</CardContent>
                 </Card>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Card className="bg-slate-800 border-slate-700"><CardHeader className="py-2"><CardTitle className="text-sm text-slate-200">Developer Share ({Number(input?.developerProfitShareOnCompletion || 80).toFixed(0)}%)</CardTitle></CardHeader><CardContent className="pt-0 text-slate-100">{fmtMoney(dashboardMetrics.developerShare)}</CardContent></Card>
-                <Card className="bg-slate-800 border-slate-700"><CardHeader className="py-2"><CardTitle className="text-sm text-slate-200">Peak LOC Balance</CardTitle></CardHeader><CardContent className="pt-0 text-slate-100">{fmtMoney(dashboardMetrics.peakLocBalance)}</CardContent></Card>
-                <Card className="bg-slate-800 border-slate-700"><CardHeader className="py-2"><CardTitle className="text-sm text-slate-200">TIF Payback (yrs)</CardTitle></CardHeader><CardContent className="pt-0 text-slate-100">{dashboardMetrics.tifPaybackYears != null ? dashboardMetrics.tifPaybackYears.toFixed(2) : '—'}</CardContent></Card>
+                <Card className="bg-muted border-border/60"><CardHeader className="py-2"><CardTitle className="text-sm text-foreground">Developer Share ({Number(input?.developerProfitShareOnCompletion || 80).toFixed(0)}%)</CardTitle></CardHeader><CardContent className="pt-0 text-foreground">{fmtMoney(dashboardMetrics.developerShare)}</CardContent></Card>
+                <Card className="bg-muted border-border/60"><CardHeader className="py-2"><CardTitle className="text-sm text-foreground">Peak LOC Balance</CardTitle></CardHeader><CardContent className="pt-0 text-foreground">{fmtMoney(dashboardMetrics.peakLocBalance)}</CardContent></Card>
+                <Card className="bg-muted border-border/60"><CardHeader className="py-2"><CardTitle className="text-sm text-foreground">TIF Payback (yrs)</CardTitle></CardHeader><CardContent className="pt-0 text-foreground">{dashboardMetrics.tifPaybackYears != null ? dashboardMetrics.tifPaybackYears.toFixed(2) : '—'}</CardContent></Card>
               </div>
               {dashboardMetrics.usesProjectionValues && (
-                <div className="text-[11px] text-slate-400">
+                <div className="text-[11px] text-muted-foreground">
                   Dashboard KPIs are synced to the latest ProForma engine output.
                 </div>
               )}
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Deal Snapshot</CardTitle></CardHeader>
-                <CardContent className="text-sm text-slate-200 space-y-1">
+              <Card className="bg-muted border-border/60">
+                <CardHeader className="py-2"><CardTitle className="text-base text-foreground">Deal Snapshot</CardTitle></CardHeader>
+                <CardContent className="text-sm text-foreground space-y-1">
                   <div><strong>Deal:</strong> {selectedDeal.deal_name}</div>
                   <div><strong>Mode:</strong> {input.proFormaMode === 'rental-hold' ? 'Rental Hold' : 'Development'}</div>
                   <div><strong>Current Stage:</strong> {stage}</div>
@@ -3035,7 +3037,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
 
           {centerTab === 'assumptions' && (
           <div className="space-y-2 [&_input]:h-7 [&_input]:text-xs [&_button[role='combobox']]:h-7 [&_button[role='combobox']]:text-xs">
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-muted border-border/60">
             <CardContent className="py-2">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
                 <div className="md:col-span-1">
@@ -3053,15 +3055,15 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="md:col-span-2 text-xs text-slate-300">
+                <div className="md:col-span-2 text-xs text-muted-foreground">
                   Select the model path before entering assumptions so readiness, sections, and calculations align with the deal type.
                 </div>
               </div>
             </CardContent>
           </Card>
           <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
-            <Card className="bg-slate-800 border-slate-700 md:col-span-3">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Project Overview</CardTitle></CardHeader>
+            <Card className="bg-muted border-border/60 md:col-span-3">
+              <CardHeader className="py-2"><CardTitle className="text-base text-foreground">Project Overview</CardTitle></CardHeader>
               <CardContent className="space-y-0.5">
                 <AssumptionInputRow label="Total Units">
                   <Input className={fieldClass(fieldMeta['forSalePhasedLoc.totalUnits']?.status || 'empty')} value={input.forSalePhasedLoc?.totalUnits ? formatWithCommas(input.forSalePhasedLoc.totalUnits) : ''} onChange={(e) => setField('forSalePhasedLoc.totalUnits', parseWholeNumberInput(e.target.value))} />
@@ -3109,7 +3111,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Construction Cost per Unit">
                   <Input
-                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
                     value={
                       (input.forSalePhasedLoc?.totalUnits || 0) > 0
                         ? formatCurrency((input.underwritingEstimatedConstructionCost || 0) / (input.forSalePhasedLoc?.totalUnits || 1), 2)
@@ -3152,7 +3154,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Sale Price per Unit">
                   <Input
-                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
                     value={input.forSalePhasedLoc?.averageSalePrice ? formatCurrency(input.forSalePhasedLoc.averageSalePrice, 2) : ''}
                     readOnly
                   />
@@ -3182,7 +3184,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 <AssumptionInputRow label="Presale Deposit ($)">
                   <div className="flex min-w-0 w-full flex-nowrap items-center gap-1.5">
                     <Input
-                      className="!h-7 shrink-0 !max-w-[210px] !bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                      className="!h-7 shrink-0 !max-w-[210px] !bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
                       value={formatCurrency(
                         (input.forSalePhasedLoc?.averageSalePrice || 0) *
                           ((input.forSalePhasedLoc?.presaleDepositPercent || 0) / 100),
@@ -3194,7 +3196,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                       <span className="sr-only">Deposit availability</span>
                       <div className="ml-auto flex max-w-full min-w-0 flex-nowrap items-center gap-1">
                         <div
-                          className="inline-flex shrink-0 rounded border border-slate-600 overflow-hidden"
+                          className="inline-flex shrink-0 rounded border border-border/70 overflow-hidden"
                           title="Deposit availability: when presale cash offsets construction draws during the build vs. held toward closing."
                         >
                           {(
@@ -3229,7 +3231,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 className={`h-7 min-w-0 shrink-0 rounded-none px-1.5 text-[10px] leading-none ${
                                   active
                                     ? 'bg-cyan-700/40 text-cyan-100 hover:bg-cyan-700/50'
-                                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                                    : 'bg-card text-muted-foreground hover:bg-muted'
                                 }`}
                                 onClick={() => {
                                   setField('forSalePhasedLoc.depositUsageMode', mode)
@@ -3251,7 +3253,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 w-full min-w-0 gap-px rounded border border-slate-600 bg-slate-900 px-0.5 text-[9px] text-cyan-100 hover:bg-slate-800"
+                                className="h-7 w-full min-w-0 gap-px rounded border border-border/70 bg-card px-0.5 text-[9px] text-cyan-100 hover:bg-muted"
                                 title="Edit share of deposit that offsets draws during the build"
                               >
                                 <span className="min-w-0 truncate tabular-nums leading-none">
@@ -3260,14 +3262,14 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 <ChevronDown className="h-2.5 w-2.5 shrink-0 opacity-70" aria-hidden />
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent align="end" className="w-64 space-y-2 border-slate-600 bg-slate-800 p-3">
-                              <p className="text-[11px] leading-snug text-slate-400">
+                            <PopoverContent align="end" className="w-64 space-y-2 border-border/70 bg-muted p-3">
+                              <p className="text-[11px] leading-snug text-muted-foreground">
                                 Portion of each presale deposit that reduces modeled construction draws during the build. The remainder is treated as held toward closing.
                               </p>
                               <div className="space-y-1">
-                                <Label className="text-xs text-slate-300">Usable during build</Label>
+                                <Label className="text-xs text-muted-foreground">Usable during build</Label>
                                 <Input
-                                  className="h-8 !border-slate-600 !bg-slate-900 text-xs text-slate-100"
+                                  className="h-8 !border-border/70 !bg-card text-xs text-foreground"
                                   inputMode="decimal"
                                   value={formatPercent(
                                     Math.min(100, Math.max(0, Number(input.forSalePhasedLoc?.depositUsablePercent ?? 100))),
@@ -3288,7 +3290,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                     type="button"
                                     size="sm"
                                     variant="ghost"
-                                    className="h-7 px-2 text-[10px] text-slate-300 hover:bg-slate-700 hover:text-white"
+                                    className="h-7 px-2 text-[10px] text-muted-foreground hover:bg-muted/70 hover:text-white"
                                     onClick={() => setField('forSalePhasedLoc.depositUsablePercent', n)}
                                   >
                                     {n}%
@@ -3317,8 +3319,8 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               </CardContent>
             </Card>
 
-            <Card className="bg-slate-800 border-slate-700 md:col-span-3">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Cost Summary</CardTitle></CardHeader>
+            <Card className="bg-muted border-border/60 md:col-span-3">
+              <CardHeader className="py-2"><CardTitle className="text-base text-foreground">Cost Summary</CardTitle></CardHeader>
               <CardContent className="space-y-0.5">
                 <AssumptionInputRow label="Land Purchase">
                   <Input
@@ -3398,7 +3400,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 <AssumptionInputRow label="Construction Cost">
                   <div className="flex min-w-0 w-full flex-nowrap items-center gap-1.5">
                     <Input
-                      className="!h-7 shrink-0 !max-w-[210px] !bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                      className="!h-7 shrink-0 !max-w-[210px] !bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
                       value={input.underwritingEstimatedConstructionCost ? formatCurrency(input.underwritingEstimatedConstructionCost, 2) : ''}
                       readOnly
                     />
@@ -3439,7 +3441,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 className={`h-7 shrink-0 rounded-none px-1.5 text-[10px] leading-none ${
                                   active
                                     ? 'bg-cyan-700/40 text-cyan-100 hover:bg-cyan-700/50'
-                                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                                    : 'bg-card text-muted-foreground hover:bg-muted'
                                 }`}
                                 onClick={() => setField('forSalePhasedLoc.constructionSpendCurve', curve)}
                               >
@@ -3452,7 +3454,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                           <>
                             <span className="sr-only">Presale trigger for construction draws</span>
                             <div
-                              className="inline-flex shrink-0 rounded-md border border-slate-600 overflow-hidden"
+                              className="inline-flex shrink-0 rounded-md border border-border/70 overflow-hidden"
                               title="Presale trigger — whether phase presold % thresholds gate modeled construction draws."
                             >
                               {(
@@ -3480,7 +3482,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                     className={`h-7 shrink-0 rounded-none px-1.5 text-[10px] leading-none ${
                                       active
                                         ? 'bg-cyan-700/40 text-cyan-100 hover:bg-cyan-700/50'
-                                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                                        : 'bg-card text-muted-foreground hover:bg-muted'
                                     }`}
                                     onClick={() => setField('forSalePhasedLoc.triggerUsesPresales', on)}
                                   >
@@ -3548,7 +3550,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Carry Cost">
                   <Input
-                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
                     title={getCarryCostFieldTitle(input)}
                     value={formatCurrency(getCalculatedCarryCost(input), 2)}
                     readOnly
@@ -3556,7 +3558,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Project Total Cost">
                   <Input
-                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
                     value={formatCurrency(getProjectTotalCost(input), 2)}
                     readOnly
                   />
@@ -3564,8 +3566,8 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               </CardContent>
             </Card>
 
-            <Card className="bg-slate-800 border-slate-700 md:col-span-2">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Investor Terms</CardTitle></CardHeader>
+            <Card className="bg-muted border-border/60 md:col-span-2">
+              <CardHeader className="py-2"><CardTitle className="text-base text-foreground">Investor Terms</CardTitle></CardHeader>
               <CardContent className="space-y-0.5">
                 <AssumptionInputRow label="Investor Equity">
                   <Input
@@ -3623,14 +3625,14 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Preferred Return Payment (Selected Period)">
                   <Input
-                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
                     value={formatCurrency((carbonMetrics?.prefPerPeriod as number) || 0, 2)}
                     readOnly
                   />
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Total Pref Returned">
                   <Input
-                    className="!bg-slate-800 !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
                     value={formatCurrency((carbonMetrics?.totalPref as number) || 0, 2)}
                     readOnly
                   />
@@ -3693,13 +3695,13 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
             </Card>
 
             {isDevelopmentMode && (
-            <Card className="bg-slate-800 border-slate-700 md:col-span-4">
+            <Card className="bg-muted border-border/60 md:col-span-4">
               <CardContent className="space-y-3 !p-3">
-                <CardTitle className="text-base font-semibold text-slate-200">Capital Stack & Incentive Stack</CardTitle>
+                <CardTitle className="text-base font-semibold text-foreground">Capital Stack & Incentive Stack</CardTitle>
                 <div className="grid gap-2 sm:gap-3 lg:grid-cols-2 lg:items-start">
                   <div className="min-w-0 space-y-1">
-                    <Label className="text-xs text-slate-300">Debt / LOC Stack</Label>
-                    <div className="inline-flex w-full min-w-0 max-w-full flex-nowrap rounded border border-cyan-600/50 overflow-hidden divide-x divide-slate-600/90">
+                    <Label className="text-xs text-muted-foreground">Debt / LOC Stack</Label>
+                    <div className="inline-flex w-full min-w-0 max-w-full flex-nowrap rounded border border-cyan-600/50 overflow-hidden divide-x divide-border/60">
                       {(
                         [
                           {
@@ -3719,8 +3721,8 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                           },
                         ] as const
                       ).map(({ short, title, value }) => (
-                        <div key={short} className="flex min-w-0 flex-1 flex-col gap-0.5 bg-slate-900/90 px-1 py-1">
-                          <span className="truncate text-[9px] font-medium uppercase tracking-wide text-slate-400" title={title}>
+                        <div key={short} className="flex min-w-0 flex-1 flex-col gap-0.5 bg-card/90 px-1 py-1">
+                          <span className="truncate text-[9px] font-medium uppercase tracking-wide text-muted-foreground" title={title}>
                             {short}
                           </span>
                           <Input
@@ -3734,8 +3736,8 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                     </div>
                   </div>
                   <div className="min-w-0 space-y-1">
-                    <Label className="text-xs text-slate-300">Closing sale proceeds split</Label>
-                    <div className="inline-flex w-full min-w-0 max-w-full flex-nowrap rounded border border-cyan-600/50 overflow-hidden divide-x divide-slate-600/90">
+                    <Label className="text-xs text-muted-foreground">Closing sale proceeds split</Label>
+                    <div className="inline-flex w-full min-w-0 max-w-full flex-nowrap rounded border border-cyan-600/50 overflow-hidden divide-x divide-border/60">
                       {(
                         [
                           {
@@ -3762,9 +3764,9 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                           },
                         ] as const
                       ).map(({ key, short, meta, ...rest }) => (
-                        <div key={key} className="flex min-w-0 flex-1 flex-col gap-0.5 bg-slate-900/90 px-1 py-1">
+                        <div key={key} className="flex min-w-0 flex-1 flex-col gap-0.5 bg-card/90 px-1 py-1">
                           <span
-                            className="truncate text-[9px] font-medium uppercase tracking-wide text-slate-400"
+                            className="truncate text-[9px] font-medium uppercase tracking-wide text-muted-foreground"
                             title={'longTitle' in rest ? rest.longTitle : undefined}
                           >
                             {short}
@@ -3788,7 +3790,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                     </div>
                   </div>
                 </div>
-                <div className="space-y-2 border-t border-slate-700/50 pt-2">
+                <div className="space-y-2 border-t border-border/60/50 pt-2">
                     {debtLocRows.map((row) => (
                       <div key={row.id} className="grid grid-cols-1 md:grid-cols-12 gap-2">
                         <div className="md:col-span-3">
@@ -3903,7 +3905,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </div>
 
                 <div>
-                  <Label className="text-xs text-slate-300">Incentive Stack</Label>
+                  <Label className="text-xs text-muted-foreground">Incentive Stack</Label>
                   <div className="mt-1 space-y-2">
                     {incentiveRows.map((row) => (
                       <div key={row.id} className="grid grid-cols-1 md:grid-cols-12 gap-2">
@@ -4016,7 +4018,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 applyStackRows(debtLocRows, next)
                               }}
                             />
-                            <p className="text-[10px] text-slate-500 mt-1">
+                            <p className="text-[10px] text-muted-foreground mt-1">
                               Names must match the Phases table (spacing/case ignored). Phase Pro Forma splits the TIF amount evenly across listed phases; the for-sale LOC engine books reimbursement cash evenly across construction months for each listed phase (then flows through sales cash and LOC paydown like other inflows).
                             </p>
                           </div>
@@ -4052,16 +4054,16 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
 
             <div className="space-y-2">
             {isDevelopmentMode && (
-              <Card className="bg-slate-800 border-slate-700">
+              <Card className="bg-muted border-border/60">
                 <CardHeader className="py-2">
                   <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto_1fr] items-center gap-2">
                     <div className="flex items-center gap-2 justify-self-start">
-                      <CardTitle className="text-base text-slate-200">Phases</CardTitle>
+                      <CardTitle className="text-base text-foreground">Phases</CardTitle>
                     </div>
                     <div className="flex items-center justify-center gap-3">
                       <div className="flex items-center gap-2">
-                        <Label className="text-xs text-slate-300">Sale Mode</Label>
-                        <div className="inline-flex rounded-md border border-slate-600/70 overflow-hidden">
+                        <Label className="text-xs text-muted-foreground">Sale Mode</Label>
+                        <div className="inline-flex rounded-md border border-border/70/70 overflow-hidden">
                           {(['combined', 'presales', 'closings'] as const).map((mode) => {
                             const active = (input.forSalePhasedLoc?.salesPaceMode || 'combined') === mode
                             return (
@@ -4073,7 +4075,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 className={`h-7 rounded-none px-2 text-[11px] ${
                                   active
                                     ? 'bg-cyan-700/35 text-cyan-100 hover:bg-cyan-700/45'
-                                    : 'bg-slate-900/60 text-slate-300 hover:bg-slate-800'
+                                    : 'bg-card/60 text-muted-foreground hover:bg-muted'
                                 }`}
                                 onClick={() => setField('forSalePhasedLoc.salesPaceMode', mode)}
                               >
@@ -4084,8 +4086,8 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Label className="text-xs text-slate-300">Timing</Label>
-                        <div className="inline-flex rounded-md border border-slate-600/70 overflow-hidden">
+                        <Label className="text-xs text-muted-foreground">Timing</Label>
+                        <div className="inline-flex rounded-md border border-border/70/70 overflow-hidden">
                           {(
                             [
                               { mode: 'trigger-based' as const, label: 'Trigger' },
@@ -4103,7 +4105,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 className={`h-7 rounded-none px-2 text-[11px] ${
                                   active
                                     ? 'bg-cyan-700/35 text-cyan-100 hover:bg-cyan-700/45'
-                                    : 'bg-slate-900/60 text-slate-300 hover:bg-slate-800'
+                                    : 'bg-card/60 text-muted-foreground hover:bg-muted'
                                 }`}
                                 onClick={() => setField('forSalePhasedLoc.phaseTimingMode', mode)}
                               >
@@ -4121,20 +4123,20 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="space-y-2">
-                    {phaseRows.length === 0 && <div className="text-xs text-gray-500">No phases added yet.</div>}
+                    {phaseRows.length === 0 && <div className="text-xs text-muted-foreground">No phases added yet.</div>}
                     {phaseRows.length > 0 && (
-                      <div className="overflow-x-auto rounded-lg border border-slate-700/30">
+                      <div className="overflow-x-auto rounded-lg border border-border/60/30">
                         <div className="min-w-[860px]">
-                          <div className="grid grid-cols-[minmax(8rem,0.9fr)_4.25rem_4.25rem_4.25rem_4.25rem_4.25rem_minmax(10rem,1fr)_3.6rem_4.2rem] gap-x-1 border-b border-slate-700/40 bg-slate-800/30 px-2 py-1">
-                            <Label className="text-[11px] text-slate-300">Phase</Label>
-                            <Label className="text-[11px] text-slate-300">Units</Label>
-                            <Label className="text-[11px] text-slate-300">Build</Label>
-                            <Label className="ml-1 text-[11px] text-slate-300">Start</Label>
-                            <Label className="text-[11px] text-slate-300">Presale</Label>
-                            <Label className="text-[11px] text-slate-300">Close</Label>
-                            <Label className="ml-1 text-[11px] text-slate-300">Allocation</Label>
-                            <Label className="text-[11px] text-slate-300">End</Label>
-                            <Label className="text-[11px] text-slate-300">Actions</Label>
+                          <div className="grid grid-cols-[minmax(8rem,0.9fr)_4.25rem_4.25rem_4.25rem_4.25rem_4.25rem_minmax(10rem,1fr)_3.6rem_4.2rem] gap-x-1 border-b border-border/60/40 bg-muted/30 px-2 py-1">
+                            <Label className="text-[11px] text-muted-foreground">Phase</Label>
+                            <Label className="text-[11px] text-muted-foreground">Units</Label>
+                            <Label className="text-[11px] text-muted-foreground">Build</Label>
+                            <Label className="ml-1 text-[11px] text-muted-foreground">Start</Label>
+                            <Label className="text-[11px] text-muted-foreground">Presale</Label>
+                            <Label className="text-[11px] text-muted-foreground">Close</Label>
+                            <Label className="ml-1 text-[11px] text-muted-foreground">Allocation</Label>
+                            <Label className="text-[11px] text-muted-foreground">End</Label>
+                            <Label className="text-[11px] text-muted-foreground">Actions</Label>
                           </div>
                           {phaseRows.map((phase, idx) => {
                             const pctStr = (v: number | undefined) =>
@@ -4146,15 +4148,15 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                             const isExpanded = expandedPhaseRowId === phase.id
                             const allocationSummary = `Infra ${Number(phase.infrastructureAllocationPercent || 0)} / Land ${Number(phase.landAllocationPercent || 0)} / Site ${Number(phase.siteWorkAllocationPercent || 0)}`
                             return (
-                              <div key={phase.id} className={idx % 2 === 0 ? 'bg-slate-900/22' : 'bg-slate-900/12'}>
-                                <div className="grid grid-cols-[minmax(8rem,0.9fr)_4.25rem_4.25rem_4.25rem_4.25rem_4.25rem_minmax(10rem,1fr)_3.6rem_4.2rem] gap-x-1 items-center px-2 py-1.5 border-b border-slate-800/55">
-                                  <div className="text-xs font-medium text-slate-100 truncate">{phase.name || `Phase ${idx + 1}`}</div>
-                                  <div className="text-xs text-slate-200 text-center">{phase.unitCount || 0}</div>
-                                  <div className="text-xs text-slate-200 text-center">{phase.buildMonths || 0}</div>
-                                  <div className="text-xs text-slate-200 text-center">{phase.startMonthOffset ?? 0}</div>
-                                  <div className="text-xs text-slate-200 text-center">{phase.presaleStartMonthOffset ?? 0}</div>
-                                  <div className="text-xs text-slate-200 text-center">{phase.closeStartMonthOffset ?? 0}</div>
-                                  <div className="text-xs text-slate-300 truncate">{allocationSummary}</div>
+                              <div key={phase.id} className={idx % 2 === 0 ? 'bg-card/22' : 'bg-card/12'}>
+                                <div className="grid grid-cols-[minmax(8rem,0.9fr)_4.25rem_4.25rem_4.25rem_4.25rem_4.25rem_minmax(10rem,1fr)_3.6rem_4.2rem] gap-x-1 items-center px-2 py-1.5 border-b border-border/60/55">
+                                  <div className="text-xs font-medium text-foreground truncate">{phase.name || `Phase ${idx + 1}`}</div>
+                                  <div className="text-xs text-foreground text-center">{phase.unitCount || 0}</div>
+                                  <div className="text-xs text-foreground text-center">{phase.buildMonths || 0}</div>
+                                  <div className="text-xs text-foreground text-center">{phase.startMonthOffset ?? 0}</div>
+                                  <div className="text-xs text-foreground text-center">{phase.presaleStartMonthOffset ?? 0}</div>
+                                  <div className="text-xs text-foreground text-center">{phase.closeStartMonthOffset ?? 0}</div>
+                                  <div className="text-xs text-muted-foreground truncate">{allocationSummary}</div>
                                   <div className="text-center">
                                     <span
                                       className={`inline-flex text-[10px] rounded-full border px-1.5 py-0.5 font-medium ${
@@ -4170,7 +4172,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                     <Button
                                       size="icon"
                                       variant="ghost"
-                                      className="h-7 w-7 p-0 text-slate-400/80 hover:text-slate-100"
+                                      className="h-7 w-7 p-0 text-muted-foreground/80 hover:text-foreground"
                                       title={isExpanded ? 'Collapse editor' : 'Edit phase'}
                                       onClick={() => setExpandedPhaseRowId((curr) => (curr === phase.id ? null : phase.id))}
                                     >
@@ -4179,7 +4181,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                     <Button
                                       size="icon"
                                       variant="outline"
-                                      className="h-7 w-7 p-0 border-slate-600/35 bg-slate-900/10"
+                                      className="h-7 w-7 p-0 border-border/70/35 bg-card/10"
                                       title={`Remove ${phase.name || 'phase'}`}
                                       aria-label={`Remove ${phase.name || 'phase'}`}
                                       onClick={() => removePhaseRow(phase.id)}
@@ -4189,47 +4191,47 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                   </div>
                                 </div>
                                 {isExpanded ? (
-                                  <div className="px-3 py-2 bg-slate-900/18 border-b border-slate-800/55">
+                                  <div className="px-3 py-2 bg-card/18 border-b border-border/60/55">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                       <div className="space-y-1.5">
-                                        <div className="text-[11px] font-medium text-slate-300">Core & Timeline</div>
+                                        <div className="text-[11px] font-medium text-muted-foreground">Core & Timeline</div>
                                         <div className="grid grid-cols-5 gap-1.5">
                                           <div>
-                                            <Label className="text-[10px] text-slate-400">Units</Label>
+                                            <Label className="text-[10px] text-muted-foreground">Units</Label>
                                             <Input
-                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              className="h-7 text-center bg-card/20 border-border/60/30 px-1 text-xs"
                                               value={phase.unitCount === 0 ? '' : String(phase.unitCount)}
                                               onChange={(e) => updatePhaseRow(phase.id, 'unitCount', parseInt(e.target.value || '0', 10))}
                                             />
                                           </div>
                                           <div>
-                                            <Label className="text-[10px] text-slate-400">Build</Label>
+                                            <Label className="text-[10px] text-muted-foreground">Build</Label>
                                             <Input
-                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              className="h-7 text-center bg-card/20 border-border/60/30 px-1 text-xs"
                                               value={phase.buildMonths === 0 ? '' : String(phase.buildMonths)}
                                               onChange={(e) => updatePhaseRow(phase.id, 'buildMonths', parseInt(e.target.value || '0', 10))}
                                             />
                                           </div>
                                           <div>
-                                            <Label className="text-[10px] text-slate-400">Start</Label>
+                                            <Label className="text-[10px] text-muted-foreground">Start</Label>
                                             <Input
-                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              className="h-7 text-center bg-card/20 border-border/60/30 px-1 text-xs"
                                               value={phase.startMonthOffset === undefined || phase.startMonthOffset === null ? '' : String(phase.startMonthOffset)}
                                               onChange={(e) => updatePhaseRow(phase.id, 'startMonthOffset', parseInt(e.target.value || '0', 10))}
                                             />
                                           </div>
                                           <div>
-                                            <Label className="text-[10px] text-slate-400">Presale</Label>
+                                            <Label className="text-[10px] text-muted-foreground">Presale</Label>
                                             <Input
-                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              className="h-7 text-center bg-card/20 border-border/60/30 px-1 text-xs"
                                               value={phase.presaleStartMonthOffset === undefined || phase.presaleStartMonthOffset === null ? '' : String(phase.presaleStartMonthOffset)}
                                               onChange={(e) => updatePhaseRow(phase.id, 'presaleStartMonthOffset', parseInt(e.target.value || '0', 10))}
                                             />
                                           </div>
                                           <div>
-                                            <Label className="text-[10px] text-slate-400">Close</Label>
+                                            <Label className="text-[10px] text-muted-foreground">Close</Label>
                                             <Input
-                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              className="h-7 text-center bg-card/20 border-border/60/30 px-1 text-xs"
                                               value={phase.closeStartMonthOffset === undefined || phase.closeStartMonthOffset === null ? '' : String(phase.closeStartMonthOffset)}
                                               onChange={(e) => updatePhaseRow(phase.id, 'closeStartMonthOffset', parseInt(e.target.value || '0', 10))}
                                             />
@@ -4237,28 +4239,28 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                         </div>
                                       </div>
                                       <div className="space-y-1.5">
-                                        <div className="text-[11px] font-medium text-slate-300">Cost Allocation</div>
+                                        <div className="text-[11px] font-medium text-muted-foreground">Cost Allocation</div>
                                         <div className="grid grid-cols-3 gap-1.5">
                                           <div>
-                                            <Label className="text-[10px] text-slate-400">Infra %</Label>
+                                            <Label className="text-[10px] text-muted-foreground">Infra %</Label>
                                             <Input
-                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              className="h-7 text-center bg-card/20 border-border/60/30 px-1 text-xs"
                                               value={pctStr(phase.infrastructureAllocationPercent)}
                                               onChange={(e) => updatePhaseRow(phase.id, 'infrastructureAllocationPercent', parseFloat(e.target.value) || 0)}
                                             />
                                           </div>
                                           <div>
-                                            <Label className="text-[10px] text-slate-400">Land %</Label>
+                                            <Label className="text-[10px] text-muted-foreground">Land %</Label>
                                             <Input
-                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              className="h-7 text-center bg-card/20 border-border/60/30 px-1 text-xs"
                                               value={pctStr(phase.landAllocationPercent)}
                                               onChange={(e) => updatePhaseRow(phase.id, 'landAllocationPercent', parseFloat(e.target.value) || 0)}
                                             />
                                           </div>
                                           <div>
-                                            <Label className="text-[10px] text-slate-400">Site %</Label>
+                                            <Label className="text-[10px] text-muted-foreground">Site %</Label>
                                             <Input
-                                              className="h-7 text-center bg-slate-900/20 border-slate-700/30 px-1 text-xs"
+                                              className="h-7 text-center bg-card/20 border-border/60/30 px-1 text-xs"
                                               value={pctStr(phase.siteWorkAllocationPercent)}
                                               onChange={(e) => updatePhaseRow(phase.id, 'siteWorkAllocationPercent', parseFloat(e.target.value) || 0)}
                                             />
@@ -4281,8 +4283,8 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
 
 
             {input.proFormaMode === 'rental-hold' && (
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Operations & Debt (Expanded)</CardTitle></CardHeader>
+            <Card className="bg-muted border-border/60">
+              <CardHeader className="py-2"><CardTitle className="text-base text-foreground">Operations & Debt (Expanded)</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs">Include Rental Income</Label>
@@ -4326,8 +4328,8 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
             )}
 
             {input.proFormaMode === 'rental-hold' && (
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Exit, Waterfall & Tax (Expanded)</CardTitle></CardHeader>
+            <Card className="bg-muted border-border/60">
+              <CardHeader className="py-2"><CardTitle className="text-base text-foreground">Exit, Waterfall & Tax (Expanded)</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div><Label className="text-xs">Exit Cap Rate %</Label><Input className={fieldClass(fieldMeta['exitCapRate']?.status || 'empty')} value={input.exitCapRate || ''} onChange={(e) => setField('exitCapRate', parseFloat(e.target.value) || 0)} /></div>
                 <div><Label className="text-xs">Refinance LTV %</Label><Input className={fieldClass(fieldMeta['refinanceLTVPercent']?.status || 'empty')} value={input.refinanceLTVPercent || ''} onChange={(e) => setField('refinanceLTVPercent', parseFloat(e.target.value) || 0)} /></div>
@@ -4350,15 +4352,15 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
           )}
 
           {centerTab === 'phase-pro-forma' && (
-            <Card className="bg-slate-800 border-slate-700">
+            <Card className="bg-muted border-border/60">
               <CardHeader className="py-2">
-                <CardTitle className="text-base text-slate-200">Phase Pro Forma</CardTitle>
+                <CardTitle className="text-base text-foreground">Phase Pro Forma</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-slate-200">
+              <CardContent className="space-y-2 text-sm text-foreground">
                 {phaseProFormaRows.length > 0 ? (
-                  <div className="overflow-auto border border-slate-700 rounded p-2 bg-slate-900">
+                  <div className="overflow-auto border border-border/60 rounded p-2 bg-card">
                     <div className="min-w-[1080px] space-y-1 text-[11px]">
-                      <div className="grid grid-cols-[140px_repeat(9,minmax(88px,1fr))] gap-1 text-slate-300 font-semibold">
+                      <div className="grid grid-cols-[140px_repeat(9,minmax(88px,1fr))] gap-1 text-muted-foreground font-semibold">
                         <div>Phase</div>
                         <div>Units</div>
                         <div>Presale</div>
@@ -4371,7 +4373,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                         <div>Margin</div>
                       </div>
                       {phaseProFormaRows.map((r) => (
-                        <div key={r.id} className="grid grid-cols-[140px_repeat(9,minmax(88px,1fr))] gap-1 border-t border-slate-800 pt-1">
+                        <div key={r.id} className="grid grid-cols-[140px_repeat(9,minmax(88px,1fr))] gap-1 border-t border-border/60 pt-1">
                           <div>{r.phase}</div>
                           <div>{r.units}</div>
                           <div>{Math.round(r.presale).toLocaleString('en-US')}</div>
@@ -4384,7 +4386,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                           <div>{r.totalRevenue > 0 ? `${((r.profit / r.totalRevenue) * 100).toFixed(1)}%` : '—'}</div>
                         </div>
                       ))}
-                      <div className="grid grid-cols-[140px_repeat(9,minmax(88px,1fr))] gap-1 border-t-2 border-slate-700 pt-1 font-semibold">
+                      <div className="grid grid-cols-[140px_repeat(9,minmax(88px,1fr))] gap-1 border-t-2 border-border/60 pt-1 font-semibold">
                         <div>TOTAL</div>
                         <div>{phaseProFormaRows.reduce((s, r) => s + r.units, 0)}</div>
                         <div>{Math.round(phaseProFormaRows.reduce((s, r) => s + r.presale, 0)).toLocaleString('en-US')}</div>
@@ -4401,36 +4403,36 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                         </div>
                       </div>
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-2">
+                    <p className="text-[10px] text-muted-foreground mt-2">
                       Carrying cost matches Assumptions (Carry Cost): when monthly carry per unit and phase build months are set, each phase gets carry proportional to (units × build months); otherwise it is split by unit count. Included in Total Costs (hard + land + site + infra + carry).
                     </p>
                   </div>
                 ) : (
-                  <div className="text-slate-300">No phases yet. Add phases under `Assumptions` in for-sale mode.</div>
+                  <div className="text-muted-foreground">No phases yet. Add phases under `Assumptions` in for-sale mode.</div>
                 )}
               </CardContent>
             </Card>
           )}
 
           {centerTab === 'cash-flow' && (
-            <Card className="bg-slate-800 border-slate-700">
+            <Card className="bg-muted border-border/60">
               <CardHeader className="py-2">
-                <CardTitle className="text-base text-slate-200">Cash Flow</CardTitle>
+                <CardTitle className="text-base text-foreground">Cash Flow</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-slate-200">
+              <CardContent className="space-y-2 text-sm text-foreground">
                 {projection?.monthlyCashFlows?.length ? (
                   <>
                     <div className="grid grid-cols-4 gap-2">
-                      <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Peak Cash Needed</div><div>{fmtMoney(projection.summary?.peakCashNeeded)}</div></div>
-                      <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Months Negative</div><div>{projection.summary?.monthsNegative ?? '—'}</div></div>
-                      <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Peak LOC</div><div>{fmtMoney(projection.summary?.forSalePeakLocBalance)}</div></div>
-                      <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">LOC Interest</div><div>{fmtMoney(projection.summary?.totalInterestDuringConstruction)}</div></div>
+                      <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Peak Cash Needed</div><div>{fmtMoney(projection.summary?.peakCashNeeded)}</div></div>
+                      <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Months Negative</div><div>{projection.summary?.monthsNegative ?? '—'}</div></div>
+                      <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Peak LOC</div><div>{fmtMoney(projection.summary?.forSalePeakLocBalance)}</div></div>
+                      <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">LOC Interest</div><div>{fmtMoney(projection.summary?.totalInterestDuringConstruction)}</div></div>
                     </div>
-                    <p className="text-[10px] text-slate-500">
+                    <p className="text-[10px] text-muted-foreground">
                       Monthly summary (first 36 months): engine rollup of all modeled cash sources (draws, sales, equity, etc.) vs uses; net is in minus out for that month.
                     </p>
-                    <div className="max-h-[360px] overflow-auto border border-slate-700 rounded">
-                      <div className="flex items-baseline gap-2 px-2 py-1.5 border-b border-slate-600 bg-slate-950/80 text-[10px] font-semibold uppercase tracking-wide text-slate-400 sticky top-0 z-[1]">
+                    <div className="max-h-[360px] overflow-auto border border-border/60 rounded">
+                      <div className="flex items-baseline gap-2 px-2 py-1.5 border-b border-border/70 bg-card/80 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sticky top-0 z-[1]">
                         <div className="w-[6.25rem] shrink-0">Month</div>
                         <div className="grid min-w-0 flex-1 grid-cols-3 gap-x-1.5">
                           <div className="text-right">Cash in</div>
@@ -4439,9 +4441,9 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                         </div>
                       </div>
                       {projection.monthlyCashFlows.slice(0, 36).map((m) => (
-                        <div key={m.month} className="flex items-baseline gap-2 px-2 py-1 border-b border-slate-800 text-xs">
+                        <div key={m.month} className="flex items-baseline gap-2 px-2 py-1 border-b border-border/60 text-xs">
                           <div
-                            className="w-[6.25rem] shrink-0 truncate pr-0.5 text-slate-300"
+                            className="w-[6.25rem] shrink-0 truncate pr-0.5 text-muted-foreground"
                             title={m.monthLabel}
                           >
                             {m.monthLabel}
@@ -4455,35 +4457,35 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                       ))}
                     </div>
                     {cashFlowWorkbookRows && (
-                      <div className="overflow-auto border border-slate-700 rounded p-2 bg-slate-900">
-                        <div className="text-xs text-slate-300 mb-2">Workbook-style monthly matrix (first 26 months)</div>
+                      <div className="overflow-auto border border-border/60 rounded p-2 bg-card">
+                        <div className="text-xs text-muted-foreground mb-2">Workbook-style monthly matrix (first 26 months)</div>
                         <div className="min-w-[1300px] space-y-1 text-[11px]">
                         <div className="grid grid-cols-[220px_repeat(26,minmax(56px,1fr))_100px] gap-1">
-                            <div className="text-slate-400">Row</div>
+                            <div className="text-muted-foreground">Row</div>
                             {cashFlowWorkbookRows.months.map((m, idx) => (
                               <div
                                 key={`mh-${idx}`}
-                                className="text-slate-300 whitespace-nowrap px-0.5"
+                                className="text-muted-foreground whitespace-nowrap px-0.5"
                                 title={m}
                               >
                                 {formatWorkbookMonthHeader(m)}
                               </div>
                             ))}
-                          <div className="text-slate-300 font-semibold">TOTAL</div>
+                          <div className="text-muted-foreground font-semibold">TOTAL</div>
                           </div>
                           {cashFlowWorkbookRows.rows.map((row) => (
                             row.kind === 'header' ? (
-                              <div key={row.label} className="grid grid-cols-[220px_repeat(26,minmax(56px,1fr))_100px] gap-1 border-t-2 border-slate-700 pt-2">
-                                <div className="text-slate-200 font-semibold">{row.label}</div>
+                              <div key={row.label} className="grid grid-cols-[220px_repeat(26,minmax(56px,1fr))_100px] gap-1 border-t-2 border-border/60 pt-2">
+                                <div className="text-foreground font-semibold">{row.label}</div>
                               </div>
                             ) : (
                               <div
                                 key={row.label}
-                                className={`grid grid-cols-[220px_repeat(26,minmax(56px,1fr))_100px] gap-1 border-t border-slate-800 pt-1 ${
-                                  row.kind === 'total' ? 'font-semibold bg-slate-950/40' : ''
+                                className={`grid grid-cols-[220px_repeat(26,minmax(56px,1fr))_100px] gap-1 border-t border-border/60 pt-1 ${
+                                  row.kind === 'total' ? 'font-semibold bg-card/40' : ''
                                 }`}
                               >
-                                <div className={row.kind === 'total' ? 'text-slate-200' : 'text-slate-400'}>{row.label}</div>
+                                <div className={row.kind === 'total' ? 'text-foreground' : 'text-muted-foreground'}>{row.label}</div>
                                 {row.values.map((v, idx) => (
                                   <div key={`${row.label}-${idx}`}>{Math.round(v).toLocaleString('en-US')}</div>
                                 ))}
@@ -4492,17 +4494,17 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                             )
                           ))}
                         </div>
-                        <div className="mt-3 text-[11px] text-slate-400 border-t border-slate-700 pt-2">
+                        <div className="mt-3 text-[11px] text-muted-foreground border-t border-border/60 pt-2">
                           TIF reimbursement follows the phased engine (same basis as Phase Pro Forma totals, spread over construction).
-                          {' '}Configured TIF: <span className="text-slate-300 font-semibold">{fmtMoney(input?.forSalePhasedLoc?.tifInfrastructureReduction || 0)}</span>.
-                          {' '}Workbook TIF total: <span className="text-slate-300 font-semibold">{fmtMoney(cashFlowWorkbookRows.fullTotalsByLabel?.['  TIF Reimbursement'] || 0)}</span>.
+                          {' '}Configured TIF: <span className="text-muted-foreground font-semibold">{fmtMoney(input?.forSalePhasedLoc?.tifInfrastructureReduction || 0)}</span>.
+                          {' '}Workbook TIF total: <span className="text-muted-foreground font-semibold">{fmtMoney(cashFlowWorkbookRows.fullTotalsByLabel?.['  TIF Reimbursement'] || 0)}</span>.
                           Preferred return is the first line under INVESTOR PAYOUTS; the total row is pref + completion amounts.
                           LOC draws in the engine now cover construction shortfalls plus preferred return, up to the LOC limit.
                           Equity return and profit share are concentrated at completion (Mo{' '}
                           {Math.max(1, Number(input?.projectionMonths || 26))} when applicable).
-                          Engine distributed cash: <span className="text-slate-300 font-semibold">{fmtMoney(projection?.summary?.forSaleDistributionTotal)}</span>.
+                          Engine distributed cash: <span className="text-muted-foreground font-semibold">{fmtMoney(projection?.summary?.forSaleDistributionTotal)}</span>.
                           {' '}Workbook vs engine:{' '}
-                          <span className="text-slate-300 font-semibold">
+                          <span className="text-muted-foreground font-semibold">
                             {fmtMoney(
                               Number(cashFlowWorkbookRows.fullTotalsByLabel?.['Total investor payouts'] || 0) -
                                 Number(projection?.summary?.forSaleDistributionTotal || 0),
@@ -4511,108 +4513,108 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                         </div>
                       </div>
                     )}
-                    <Card className="bg-slate-900 border-slate-700">
+                    <Card className="bg-card border-border/60">
                       <CardHeader className="py-2">
-                        <CardTitle className="text-sm text-slate-200">PROJECT TOTALS</CardTitle>
+                        <CardTitle className="text-sm text-foreground">PROJECT TOTALS</CardTitle>
                       </CardHeader>
                       <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                        <div className="rounded border border-slate-700 p-2">
-                          <div className="text-slate-400">Total Expenses (excl. interest)</div>
-                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.totalExpensesExInterest)}</div>
+                        <div className="rounded border border-border/60 p-2">
+                          <div className="text-muted-foreground">Total Expenses (excl. interest)</div>
+                          <div className="text-foreground font-semibold">{fmtMoney(analysisMetrics.totalExpensesExInterest)}</div>
                         </div>
-                        <div className="rounded border border-slate-700 p-2">
-                          <div className="text-slate-400">Total Revenue (Sales + TIF)</div>
-                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.totalRevenue)}</div>
+                        <div className="rounded border border-border/60 p-2">
+                          <div className="text-muted-foreground">Total Revenue (Sales + TIF)</div>
+                          <div className="text-foreground font-semibold">{fmtMoney(analysisMetrics.totalRevenue)}</div>
                         </div>
-                        <div className="rounded border border-slate-700 p-2">
-                          <div className="text-slate-400">Total LOC Interest Paid</div>
-                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.totalInterest)}</div>
+                        <div className="rounded border border-border/60 p-2">
+                          <div className="text-muted-foreground">Total LOC Interest Paid</div>
+                          <div className="text-foreground font-semibold">{fmtMoney(analysisMetrics.totalInterest)}</div>
                         </div>
-                        <div className="rounded border border-slate-700 p-2">
-                          <div className="text-slate-400">Total Preferred Return Paid</div>
-                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.totalPreferredReturn)}</div>
+                        <div className="rounded border border-border/60 p-2">
+                          <div className="text-muted-foreground">Total Preferred Return Paid</div>
+                          <div className="text-foreground font-semibold">{fmtMoney(analysisMetrics.totalPreferredReturn)}</div>
                         </div>
-                        <div className="rounded border border-slate-700 p-2">
-                          <div className="text-slate-400">Net Project Profit</div>
-                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.netProjectProfit)}</div>
+                        <div className="rounded border border-border/60 p-2">
+                          <div className="text-muted-foreground">Net Project Profit</div>
+                          <div className="text-foreground font-semibold">{fmtMoney(analysisMetrics.netProjectProfit)}</div>
                         </div>
-                        <div className="rounded border border-slate-700 p-2">
-                          <div className="text-slate-400">Developer Take-Home</div>
-                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.developerTakeHome)}</div>
+                        <div className="rounded border border-border/60 p-2">
+                          <div className="text-muted-foreground">Developer Take-Home</div>
+                          <div className="text-foreground font-semibold">{fmtMoney(analysisMetrics.developerTakeHome)}</div>
                         </div>
-                        <div className="rounded border border-slate-700 p-2">
-                          <div className="text-slate-400">
+                        <div className="rounded border border-border/60 p-2">
+                          <div className="text-muted-foreground">
                             Total Investor Payout (Mo {Math.max(1, Number(input?.projectionMonths || 26))})
                           </div>
-                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.investorPayout)}</div>
+                          <div className="text-foreground font-semibold">{fmtMoney(analysisMetrics.investorPayout)}</div>
                         </div>
-                        <div className="rounded border border-slate-700 p-2">
-                          <div className="text-slate-400">Peak LOC Balance</div>
-                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.peakLocBalance)}</div>
+                        <div className="rounded border border-border/60 p-2">
+                          <div className="text-muted-foreground">Peak LOC Balance</div>
+                          <div className="text-foreground font-semibold">{fmtMoney(analysisMetrics.peakLocBalance)}</div>
                         </div>
-                        <div className="rounded border border-slate-700 p-2">
-                          <div className="text-slate-400">Final LOC Balance</div>
-                          <div className="text-slate-100 font-semibold">{fmtMoney(analysisMetrics.finalLocBalance)}</div>
+                        <div className="rounded border border-border/60 p-2">
+                          <div className="text-muted-foreground">Final LOC Balance</div>
+                          <div className="text-foreground font-semibold">{fmtMoney(analysisMetrics.finalLocBalance)}</div>
                         </div>
                       </CardContent>
                     </Card>
                   </>
                 ) : (
-                  <div className="text-slate-300">Run ProForma to view monthly cash flow.</div>
+                  <div className="text-muted-foreground">Run ProForma to view monthly cash flow.</div>
                 )}
               </CardContent>
             </Card>
           )}
 
           {centerTab === 'investor-returns' && (
-            <Card className="bg-slate-800 border-slate-700">
+            <Card className="bg-muted border-border/60">
               <CardHeader className="py-2">
-                <CardTitle className="text-base text-slate-200">Investor Returns</CardTitle>
+                <CardTitle className="text-base text-foreground">Investor Returns</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-200">
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Investor Equity</div><div>{fmtMoney(investorReturnsMetrics.investorEquity)}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Monthly Preferred Return</div><div>{fmtMoney(investorReturnsMetrics.monthlyPreferredReturn)}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Total Preferred Return</div><div>{fmtMoney(investorReturnsMetrics.totalPreferredReturn)}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Investor Profit Share</div><div>{fmtMoney(investorReturnsMetrics.investorProfitShare)}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Investor / Developer Split</div><div>{`${investorReturnsMetrics.investorSplitPct}% / ${investorReturnsMetrics.developerSplitPct}%`}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Total Investor Payout</div><div>{fmtMoney(investorReturnsMetrics.totalInvestorPayout)}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Investor MOIC</div><div>{investorReturnsMetrics.investorMoic != null ? `${investorReturnsMetrics.investorMoic.toFixed(2)}x` : '—'}</div></div>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-foreground">
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Investor Equity</div><div>{fmtMoney(investorReturnsMetrics.investorEquity)}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Monthly Preferred Return</div><div>{fmtMoney(investorReturnsMetrics.monthlyPreferredReturn)}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Total Preferred Return</div><div>{fmtMoney(investorReturnsMetrics.totalPreferredReturn)}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Investor Profit Share</div><div>{fmtMoney(investorReturnsMetrics.investorProfitShare)}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Investor / Developer Split</div><div>{`${investorReturnsMetrics.investorSplitPct}% / ${investorReturnsMetrics.developerSplitPct}%`}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Total Investor Payout</div><div>{fmtMoney(investorReturnsMetrics.totalInvestorPayout)}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Investor MOIC</div><div>{investorReturnsMetrics.investorMoic != null ? `${investorReturnsMetrics.investorMoic.toFixed(2)}x` : '—'}</div></div>
               </CardContent>
             </Card>
           )}
 
           {centerTab === 'public-sector' && (
-            <Card className="bg-slate-800 border-slate-700">
+            <Card className="bg-muted border-border/60">
               <CardHeader className="py-2">
-                <CardTitle className="text-base text-slate-200">Public Sector</CardTitle>
+                <CardTitle className="text-base text-foreground">Public Sector</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-200">
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Infrastructure Cost</div><div>{fmtMoney(input.forSalePhasedLoc?.infrastructureCost)}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">TIF / Infra Reduction</div><div>{fmtMoney(input.forSalePhasedLoc?.tifInfrastructureReduction)}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Incentive Cost Reduction</div><div>{fmtMoney(input.forSalePhasedLoc?.incentiveCostReduction)}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Total Units</div><div>{input.forSalePhasedLoc?.totalUnits || 0}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Annual Property Tax Revenue (2.5% of revenue)</div><div>{fmtMoney(publicSectorMetrics.annualPropertyTaxRevenue)}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">TIF Payback Period</div><div>{publicSectorMetrics.tifPaybackYears != null ? `${publicSectorMetrics.tifPaybackYears.toFixed(2)} years` : '—'}</div></div>
-                <div className="rounded border border-slate-700 p-2 bg-slate-900"><div className="text-[10px] text-slate-400">Public 10yr Net Return</div><div>{fmtMoney(publicSectorMetrics.public10YrNetReturn)}</div></div>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-foreground">
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Infrastructure Cost</div><div>{fmtMoney(input.forSalePhasedLoc?.infrastructureCost)}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">TIF / Infra Reduction</div><div>{fmtMoney(input.forSalePhasedLoc?.tifInfrastructureReduction)}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Incentive Cost Reduction</div><div>{fmtMoney(input.forSalePhasedLoc?.incentiveCostReduction)}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Total Units</div><div>{input.forSalePhasedLoc?.totalUnits || 0}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Annual Property Tax Revenue (2.5% of revenue)</div><div>{fmtMoney(publicSectorMetrics.annualPropertyTaxRevenue)}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">TIF Payback Period</div><div>{publicSectorMetrics.tifPaybackYears != null ? `${publicSectorMetrics.tifPaybackYears.toFixed(2)} years` : '—'}</div></div>
+                <div className="rounded border border-border/60 p-2 bg-card"><div className="text-[10px] text-muted-foreground">Public 10yr Net Return</div><div>{fmtMoney(publicSectorMetrics.public10YrNetReturn)}</div></div>
               </CardContent>
             </Card>
           )}
 
           {centerTab === 'analysis' && (
             <div className="space-y-3">
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Validation Checks</CardTitle></CardHeader>
-                <CardContent className="space-y-1 text-xs text-slate-200">
+              <Card className="bg-muted border-border/60">
+                <CardHeader className="py-2"><CardTitle className="text-base text-foreground">Validation Checks</CardTitle></CardHeader>
+                <CardContent className="space-y-1 text-xs text-foreground">
                   {validationChecks.map((c) => (
-                    <div key={c.label} className="flex items-center justify-between rounded border border-slate-700 bg-slate-900 px-2 py-1">
+                    <div key={c.label} className="flex items-center justify-between rounded border border-border/60 bg-card px-2 py-1">
                       <span>{c.label}</span>
                       <span className={c.pass ? 'text-emerald-400' : 'text-rose-400'}>{c.pass ? 'PASS' : 'CHECK'}</span>
                     </div>
                   ))}
                 </CardContent>
               </Card>
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Deal Notes</CardTitle></CardHeader>
+              <Card className="bg-muted border-border/60">
+                <CardHeader className="py-2"><CardTitle className="text-base text-foreground">Deal Notes</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   <Textarea
                     value={notesDraft}
@@ -4622,8 +4624,8 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                   />
                 </CardContent>
               </Card>
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Deal Tasks</CardTitle></CardHeader>
+              <Card className="bg-muted border-border/60">
+                <CardHeader className="py-2"><CardTitle className="text-base text-foreground">Deal Tasks</CardTitle></CardHeader>
                 <CardContent>
                   <Textarea
                     value={tasksDraft}
@@ -4633,13 +4635,13 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                   />
                 </CardContent>
               </Card>
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="py-2"><CardTitle className="text-base text-slate-200">Activity Timeline</CardTitle></CardHeader>
+              <Card className="bg-muted border-border/60">
+                <CardHeader className="py-2"><CardTitle className="text-base text-foreground">Activity Timeline</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   {activityEvents.slice(0, 30).map((a) => (
-                    <div key={a.id} className="border border-slate-700 rounded p-2 text-xs bg-slate-900">
-                      <div className="font-semibold uppercase text-[10px] text-slate-400">{a.eventType}</div>
-                      <div className="text-slate-200 mt-0.5 whitespace-pre-wrap">{a.eventText}</div>
+                    <div key={a.id} className="border border-border/60 rounded p-2 text-xs bg-card">
+                      <div className="font-semibold uppercase text-[10px] text-muted-foreground">{a.eventType}</div>
+                      <div className="text-foreground mt-0.5 whitespace-pre-wrap">{a.eventText}</div>
                     </div>
                   ))}
                 </CardContent>
@@ -4648,14 +4650,14 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
           )}
         </main>
 
-        <aside className="w-[340px] bg-slate-950 border-l border-slate-800 flex flex-col min-h-0">
-          <div className="p-3 border-b border-slate-800">
+        <aside className="w-[340px] bg-card border-l border-border/60 flex flex-col min-h-0">
+          <div className="p-3 border-b border-border/60">
             <div className="text-sm font-semibold">Deal Assistant</div>
             <div className="mt-2 flex gap-1 flex-wrap">
               <Button
                 size="sm"
                 variant="outline"
-                className="bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700"
+                className="bg-muted border-border/60 text-foreground hover:bg-muted/70"
                 onClick={() => handleSend('What am I missing?')}
               >
                 What am I missing?
@@ -4663,7 +4665,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               <Button
                 size="sm"
                 variant="outline"
-                className="bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700"
+                className="bg-muted border-border/60 text-foreground hover:bg-muted/70"
                 onClick={() => handleSend('Run a scenario with conservative assumptions.')}
               >
                 Run a scenario
@@ -4671,7 +4673,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               <Button
                 size="sm"
                 variant="outline"
-                className="bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700"
+                className="bg-muted border-border/60 text-foreground hover:bg-muted/70"
                 onClick={() => handleSend('Stress test this deal.')}
               >
                 Stress test this
@@ -4679,7 +4681,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               <Button
                 size="sm"
                 variant="outline"
-                className="bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700"
+                className="bg-muted border-border/60 text-foreground hover:bg-muted/70"
                 onClick={() =>
                   handleSend(
                     'Summarize this deal in a clean audit format using visible UI labels only. In notesAppend, use sections: Ready, Needs input, Notes. Then return short action-oriented taskSuggestions tied to visible controls. Return notesAppend and taskSuggestions.',
@@ -4692,9 +4694,9 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
             {messages.map((m) => (
-              <div key={m.id} className={`rounded border p-2 ${m.role === 'assistant' ? 'bg-slate-900 border-slate-700' : 'bg-blue-950/35 border-blue-800/60'}`}>
-                <div className="text-xs uppercase text-slate-400 mb-1">{m.role}</div>
-                <div className="text-sm text-slate-100 whitespace-pre-wrap">{m.text}</div>
+              <div key={m.id} className={`rounded border p-2 ${m.role === 'assistant' ? 'bg-card border-border/60' : 'bg-blue-950/35 border-blue-800/60'}`}>
+                <div className="text-xs uppercase text-muted-foreground mb-1">{m.role}</div>
+                <div className="text-sm text-foreground whitespace-pre-wrap">{m.text}</div>
                 {!!m.extractionChips?.length && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {m.extractionChips.map((c) => (
@@ -4705,7 +4707,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               </div>
             ))}
             {markers.map((marker) => (
-              <div key={marker.id} className="text-center text-[11px] text-slate-400 py-1 border-y border-slate-700 bg-slate-800/50">
+              <div key={marker.id} className="text-center text-[11px] text-muted-foreground py-1 border-y border-border/60 bg-muted/50">
                 {marker.stage === 'coaching' ? 'Deal coaching' : marker.stage === 'scenario' ? 'Scenario exploration' : 'ProForma build'}
               </div>
             ))}
@@ -4719,7 +4721,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </div>
                 <div className="mt-2 flex gap-2">
                   <Button size="sm" onClick={() => { applyUpdates(pendingSuggestions, 'ai', 'approx'); setPendingSuggestions(null) }}>Apply all</Button>
-                  <Button size="sm" variant="outline" className="border-slate-600 text-slate-200 hover:bg-slate-700" onClick={() => setPendingSuggestions(null)}>Dismiss</Button>
+                  <Button size="sm" variant="outline" className="border-border/70 text-foreground hover:bg-muted/70" onClick={() => setPendingSuggestions(null)}>Dismiss</Button>
                 </div>
               </div>
             )}
@@ -4795,7 +4797,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                    className="border-border/70 text-foreground hover:bg-muted/70"
                     onClick={() => {
                       setPendingNotesAppend(null)
                       setPendingTaskSuggestions(null)
@@ -4807,7 +4809,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               </div>
             )}
           </div>
-          <div className="p-3 border-t border-slate-800">
+          <div className="p-3 border-t border-border/60">
             {stage !== 'proforma' && (readiness.proformaReady || !!runPromptReason) && (
               <div className="mb-2 rounded border border-green-300 bg-green-50 p-2 text-xs text-green-800">
                 {runPromptReason || 'AI indicates readiness for ProForma stage.'}
@@ -4825,7 +4827,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 variant="outline"
                 size="icon"
                 onClick={isListening ? stopVoice : startVoice}
-                className={isListening ? 'bg-green-900/40 border-green-600 text-green-200 hover:bg-green-800/50' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'}
+                className={isListening ? 'bg-green-900/40 border-green-600 text-green-200 hover:bg-green-800/50' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'}
               >
                 {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               </Button>
@@ -4833,7 +4835,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 value={chatValue}
                 onChange={(e) => setChatValue(e.target.value)}
                 placeholder="Ask the deal assistant..."
-                className="min-h-[42px] max-h-[120px] bg-slate-200 border-slate-300 text-slate-900 placeholder:text-slate-500"
+                className="min-h-[42px] max-h-[120px] bg-input border-border text-foreground placeholder:text-muted-foreground"
               />
               <Button onClick={() => handleSend()}>
                 <Send className="h-4 w-4" />
