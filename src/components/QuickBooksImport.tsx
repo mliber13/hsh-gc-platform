@@ -231,8 +231,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
 
   const projectActualsUrl = (id: string) => {
     if (typeof window === 'undefined') return '#'
-    const base = window.location.origin + (window.location.pathname || '/')
-    return `${base}?project=${encodeURIComponent(id)}&view=actuals`
+    return `${window.location.origin}/projects/${encodeURIComponent(id)}/actuals`
   }
 
   const handleVarianceClick = async (p: Project, variance: number) => {
