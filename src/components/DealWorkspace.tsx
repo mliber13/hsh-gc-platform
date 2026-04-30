@@ -6,13 +6,14 @@ import { Label } from './ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Textarea } from './ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
-import { ArrowLeft, ChevronDown, Download, Mic, MicOff, Pencil, Play, Save, Send, X } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
+import { ArrowLeft, ChevronDown, Download, Mic, MicOff, Pencil, Play, Plus, Save, Send, X } from 'lucide-react'
 import type { Deal } from '@/types/deal'
 import type { Project } from '@/types'
 import type { ForSalePhaseInput, ProFormaInput, ProFormaMode, ProFormaProjection } from '@/types/proforma'
 import { computeDealReadiness, materialForSaleContext, type DealReadiness } from '@/lib/dealReadiness'
 import { computePhaseAllocationShares } from '@/lib/forSalePhaseAllocation'
-import { deleteDeal, fetchDeals } from '@/services/dealService'
+import { createDeal, deleteDeal, fetchDeals } from '@/services/dealService'
 import {
   clearDealActivityEvents,
   clearDealActivityEventsByTypes,
@@ -1325,6 +1326,17 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState(false)
   const [deletingDeal, setDeletingDeal] = useState(false)
+  const [creatingDeal, setCreatingDeal] = useState(false)
+  const [createDealModalOpen, setCreateDealModalOpen] = useState(false)
+  const [newDealForm, setNewDealForm] = useState({
+    deal_name: '',
+    location: '',
+    type: 'commercial' as Deal['type'],
+    status: 'active-pipeline' as Deal['status'],
+    unit_count: '',
+    projected_cost: '',
+    expected_start_date: '',
+  })
   const [loadingDealState, setLoadingDealState] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [runPromptReason, setRunPromptReason] = useState<string | null>(null)
@@ -2654,6 +2666,48 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     }
   }
 
+  const handleCreateDeal = async () => {
+    if (creatingDeal) return
+    const dealName = newDealForm.deal_name.trim()
+    if (!dealName) return
+    const location = newDealForm.location.trim() || 'TBD'
+    const unitCount = newDealForm.unit_count.trim()
+    const projectedCost = newDealForm.projected_cost.trim()
+
+    setCreatingDeal(true)
+    try {
+      const created = await createDeal({
+        deal_name: dealName,
+        location,
+        type: newDealForm.type,
+        status: newDealForm.status,
+        unit_count: unitCount ? Number(unitCount) : undefined,
+        projected_cost: projectedCost ? Number(projectedCost) : undefined,
+        expected_start_date: newDealForm.expected_start_date || undefined,
+      })
+      if (!created) {
+        window.alert('Failed to create deal. Please try again.')
+        return
+      }
+
+      setDeals((prevDeals) => [created, ...prevDeals.filter((deal) => deal.id !== created.id)])
+      setSelectedDealId(created.id)
+      window.history.replaceState({}, '', `/deals/workspace/${created.id}`)
+      setCreateDealModalOpen(false)
+      setNewDealForm({
+        deal_name: '',
+        location: '',
+        type: 'commercial',
+        status: 'active-pipeline',
+        unit_count: '',
+        projected_cost: '',
+        expected_start_date: '',
+      })
+    } finally {
+      setCreatingDeal(false)
+    }
+  }
+
   const startVoice = () => {
     const SpeechRecognitionImpl = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SpeechRecognitionImpl) return
@@ -2706,6 +2760,112 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
 
   return (
     <div className="fixed inset-0 bg-slate-900 text-slate-100 flex flex-col">
+      <Dialog open={createDealModalOpen} onOpenChange={setCreateDealModalOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create New Deal</DialogTitle>
+            <DialogDescription>Enter deal details and open it in the workspace.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label htmlFor="new-deal-name">Deal Name *</Label>
+                <Input
+                  id="new-deal-name"
+                  value={newDealForm.deal_name}
+                  onChange={(e) => setNewDealForm((prev) => ({ ...prev, deal_name: e.target.value }))}
+                  placeholder="e.g. Oakwood Townhomes"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor="new-deal-location">Location</Label>
+                <Input
+                  id="new-deal-location"
+                  value={newDealForm.location}
+                  onChange={(e) => setNewDealForm((prev) => ({ ...prev, location: e.target.value }))}
+                  placeholder="Address or city"
+                />
+              </div>
+              <div>
+                <Label>Type</Label>
+                <Select
+                  value={newDealForm.type}
+                  onValueChange={(value) => setNewDealForm((prev) => ({ ...prev, type: value as Deal['type'] }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="commercial">Commercial</SelectItem>
+                    <SelectItem value="residential">Residential</SelectItem>
+                    <SelectItem value="new-single-family">New Single Family</SelectItem>
+                    <SelectItem value="multifamily">Multifamily</SelectItem>
+                    <SelectItem value="mixed-residential">Mixed Residential</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select
+                  value={newDealForm.status}
+                  onValueChange={(value) => setNewDealForm((prev) => ({ ...prev, status: value as Deal['status'] }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active-pipeline">Active Pipeline</SelectItem>
+                    <SelectItem value="early-stage">Early Stage</SelectItem>
+                    <SelectItem value="concept-pre-funding">Concept / Pre-Funding</SelectItem>
+                    <SelectItem value="very-early">Very Early</SelectItem>
+                    <SelectItem value="pending-docs">Pending Docs</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="new-deal-units">Unit Count</Label>
+                <Input
+                  id="new-deal-units"
+                  type="number"
+                  min="0"
+                  value={newDealForm.unit_count}
+                  onChange={(e) => setNewDealForm((prev) => ({ ...prev, unit_count: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="new-deal-projected-cost">Projected Cost</Label>
+                <Input
+                  id="new-deal-projected-cost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newDealForm.projected_cost}
+                  onChange={(e) => setNewDealForm((prev) => ({ ...prev, projected_cost: e.target.value }))}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor="new-deal-start-date">Expected Start Date</Label>
+                <Input
+                  id="new-deal-start-date"
+                  type="date"
+                  value={newDealForm.expected_start_date}
+                  onChange={(e) => setNewDealForm((prev) => ({ ...prev, expected_start_date: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCreateDealModalOpen(false)} disabled={creatingDeal}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void handleCreateDeal()} disabled={creatingDeal || !newDealForm.deal_name.trim()}>
+              {creatingDeal ? 'Creating...' : 'Create Deal'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="h-20 bg-slate-950 border-b border-slate-800 px-3 flex items-center">
         <div className="flex flex-1 items-center gap-2 min-w-0">
           <Button variant="outline" size="sm" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={onBack}>
@@ -2764,7 +2924,20 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
 
       <div className="flex-1 flex min-h-0">
         <aside className="w-[220px] bg-slate-950 border-r border-slate-800 p-3 overflow-y-auto">
-          <div className="text-xs uppercase text-slate-400 mb-2">Deals</div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-xs uppercase text-slate-400">Deals</div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setCreateDealModalOpen(true)}
+              disabled={creatingDeal}
+              className="h-7 border-slate-700 bg-slate-900 px-2 text-slate-100 hover:bg-slate-800"
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              New
+            </Button>
+          </div>
           <div className="grid grid-cols-1 gap-2">
             {deals.map((d) => {
               const dStage = selectedDealStage(d)
