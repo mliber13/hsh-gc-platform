@@ -12,8 +12,8 @@ import { getAllPlans_Hybrid, deletePlan_Hybrid } from '@/services/planHybridServ
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 import { PlusCircle, Search, FileText, Edit, Trash2, FolderOpen, Home } from 'lucide-react'
-import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface PlanLibraryProps {
   onBack: () => void
@@ -22,6 +22,7 @@ interface PlanLibraryProps {
 }
 
 export function PlanLibrary({ onBack, onCreatePlan, onEditPlan }: PlanLibraryProps) {
+  usePageTitle('Plan Library')
   const [plans, setPlans] = useState<Plan[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, withDocuments: 0, withOptions: 0 })
@@ -49,109 +50,90 @@ export function PlanLibrary({ onBack, onCreatePlan, onEditPlan }: PlanLibraryPro
     plan.description?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-              return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3 sm:space-x-4">
-              <img src={hshLogo} alt="HSH Contractor" className="h-20 sm:h-24 lg:h-28 w-auto" />
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Plan Library</h1>
-                <p className="text-sm text-gray-600 mt-1">Manage construction plan templates</p>
-              </div>
-            </div>
-            <Button
-              onClick={onBack}
-              variant="outline"
-              className="border-gray-300 hover:bg-gray-50"
-            >
-              <Home className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-          </div>
-        </div>
-                                          </header>
-  
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-          <Card className="bg-white shadow-lg">
+  return (
+    <div className="flex flex-col gap-6 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button onClick={onBack} variant="outline" className="text-muted-foreground">
+          <Home className="w-4 h-4 mr-2" />
+          Back to Dashboard
+        </Button>
+        <Button onClick={onCreatePlan}>
+          <PlusCircle className="w-4 h-4 mr-2" />
+          Create Plan
+        </Button>
+      </div>
+
+      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+        <Card className="border-border/60 bg-card/50">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Total Plans</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">{stats.total}</p>
+                  <p className="text-sm text-muted-foreground">Total Plans</p>
+                  <p className="text-3xl font-bold mt-1">{stats.total}</p>
                 </div>
-                <div className="bg-blue-100 rounded-full p-3">
-                  <FileText className="w-8 h-8 text-blue-600" />
+                <div className="rounded-lg border border-sky-500/30 bg-sky-500/15 p-3 text-sky-400">
+                  <FileText className="w-7 h-7" />
                 </div>
               </div>
             </CardContent>
-          </Card>
+        </Card>
 
-          <Card className="bg-white shadow-lg">
+        <Card className="border-border/60 bg-card/50">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Active</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">{stats.active}</p>
+                  <p className="text-sm text-muted-foreground">Active</p>
+                  <p className="text-3xl font-bold mt-1">{stats.active}</p>
                 </div>
-                <div className="bg-green-100 rounded-full p-3">
-                  <FileText className="w-8 h-8 text-green-600" />
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/15 p-3 text-emerald-400">
+                  <FileText className="w-7 h-7" />
                 </div>
               </div>
             </CardContent>
-          </Card>
+        </Card>
 
-          <Card className="bg-white shadow-lg">
+        <Card className="border-border/60 bg-card/50">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">With Documents</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">{stats.withDocuments}</p>
+                  <p className="text-sm text-muted-foreground">With Documents</p>
+                  <p className="text-3xl font-bold mt-1">{stats.withDocuments}</p>
                 </div>
-                <div className="bg-purple-100 rounded-full p-3">
-                  <FolderOpen className="w-8 h-8 text-purple-600" />
+                <div className="rounded-lg border border-violet-500/30 bg-violet-500/15 p-3 text-violet-400">
+                  <FolderOpen className="w-7 h-7" />
                 </div>
               </div>
             </CardContent>
-          </Card>
+        </Card>
 
-          <Card className="bg-white shadow-lg">
+        <Card className="border-border/60 bg-card/50">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">With Options</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">{stats.withOptions}</p>
+                  <p className="text-sm text-muted-foreground">With Options</p>
+                  <p className="text-3xl font-bold mt-1">{stats.withOptions}</p>
                 </div>
-                <div className="bg-orange-100 rounded-full p-3">
-                  <FileText className="w-8 h-8 text-orange-600" />
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/15 p-3 text-amber-400">
+                  <FileText className="w-7 h-7" />
                 </div>
               </div>
             </CardContent>
-          </Card>
+        </Card>
 
-          <Card 
-            className="bg-gradient-to-br from-[#0E79C9] to-[#0A5A96] text-white hover:shadow-xl transition-shadow cursor-pointer border-none"
-            onClick={onCreatePlan}
-          >
+        <Card className="cursor-pointer border-border/60 bg-card/50 transition-colors hover:bg-muted/20" onClick={onCreatePlan}>
             <CardContent className="pt-6">
               <div className="flex flex-col items-center justify-center h-full">
-                <PlusCircle className="w-12 h-12 mb-2" />
+                <PlusCircle className="w-10 h-10 mb-2 text-primary" />
                 <p className="text-lg font-bold">Create Plan</p>
               </div>
             </CardContent>
-          </Card>
-        </div>
+        </Card>
+      </section>
 
-        {/* Search Bar */}
-        <Card className="mb-6">
+      <Card className="border-border/60 bg-card/50">
           <CardContent className="pt-6">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
               <Input
                 type="text"
                 placeholder="Search plans by name or ID..."
@@ -161,14 +143,13 @@ export function PlanLibrary({ onBack, onCreatePlan, onEditPlan }: PlanLibraryPro
               />
             </div>
           </CardContent>
-        </Card>
+      </Card>
 
-        {/* Plans Grid */}
-        <Card>
+      <Card className="border-border/60 bg-card/50">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>All Plans</span>
-              <span className="text-sm font-normal text-gray-600">
+              <span className="text-sm font-normal text-muted-foreground">
                 {filteredPlans.length} {filteredPlans.length === 1 ? 'plan' : 'plans'}
               </span>
             </CardTitle>
@@ -176,18 +157,15 @@ export function PlanLibrary({ onBack, onCreatePlan, onEditPlan }: PlanLibraryPro
           <CardContent>
             {filteredPlans.length === 0 ? (
               <div className="text-center py-12">
-                <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-600 text-lg mb-2">
+                <FileText className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+                <p className="text-muted-foreground text-lg mb-2">
                   {searchQuery ? 'No plans found' : 'No plans yet'}
                 </p>
-                <p className="text-gray-500 mb-6">
+                <p className="text-muted-foreground mb-6">
                   {searchQuery ? 'Try adjusting your search' : 'Create your first plan template to get started'}
                 </p>
                 {!searchQuery && (
-                  <Button
-                    onClick={onCreatePlan}
-                    className="bg-gradient-to-r from-[#0E79C9] to-[#0A5A96]"
-                  >
+                  <Button onClick={onCreatePlan}>
                     <PlusCircle className="w-4 h-4 mr-2" />
                     Create Plan
                   </Button>
@@ -196,52 +174,52 @@ export function PlanLibrary({ onBack, onCreatePlan, onEditPlan }: PlanLibraryPro
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredPlans.map((plan) => (
-                  <Card key={plan.id} className="hover:shadow-lg transition-shadow">
+                  <Card key={plan.id} className="border-border/60 bg-card/50 transition-colors hover:bg-muted/20">
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
-                          <h3 className="text-lg font-bold text-gray-900 mb-1">{plan.name}</h3>
-                          <p className="text-sm text-gray-600">{plan.planId}</p>
+                          <h3 className="text-lg font-bold mb-1">{plan.name}</h3>
+                          <p className="text-sm text-muted-foreground">{plan.planId}</p>
                         </div>
                         {!plan.isActive && (
-                          <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
+                          <span className="inline-flex items-center rounded-full border border-muted-foreground/30 bg-muted px-2 py-1 text-xs text-muted-foreground">
                             Inactive
                           </span>
                         )}
                       </div>
 
                       {plan.description && (
-                        <p className="text-sm text-gray-600 mb-4 line-clamp-2">{plan.description}</p>
+                        <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{plan.description}</p>
                       )}
 
                       <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
                         {plan.squareFootage && (
                           <div>
-                            <span className="text-gray-500">Sq Ft:</span>
+                            <span className="text-muted-foreground">Sq Ft:</span>
                             <span className="ml-1 font-medium">{plan.squareFootage}</span>
                           </div>
                         )}
                         {plan.bedrooms && (
                           <div>
-                            <span className="text-gray-500">Beds:</span>
+                            <span className="text-muted-foreground">Beds:</span>
                             <span className="ml-1 font-medium">{plan.bedrooms}</span>
                           </div>
                         )}
                         {plan.bathrooms && (
                           <div>
-                            <span className="text-gray-500">Baths:</span>
+                            <span className="text-muted-foreground">Baths:</span>
                             <span className="ml-1 font-medium">{plan.bathrooms}</span>
                           </div>
                         )}
                         {plan.stories && (
                           <div>
-                            <span className="text-gray-500">Stories:</span>
+                            <span className="text-muted-foreground">Stories:</span>
                             <span className="ml-1 font-medium">{plan.stories}</span>
                           </div>
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-4">
                         <span>{plan.documents.length} documents</span>
                         <span>{plan.options.length} options</span>
                       </div>
@@ -260,7 +238,7 @@ export function PlanLibrary({ onBack, onCreatePlan, onEditPlan }: PlanLibraryPro
                           onClick={() => handleDeletePlan(plan.id)}
                           variant="outline"
                           size="sm"
-                          className="text-red-600 border-red-300 hover:bg-red-50"
+                          className="text-destructive hover:text-destructive"
                         >
                           <Trash2 className="w-3 h-3" />
                         </Button>
@@ -271,8 +249,7 @@ export function PlanLibrary({ onBack, onCreatePlan, onEditPlan }: PlanLibraryPro
               </div>
             )}
           </CardContent>
-        </Card>
-      </main>
+      </Card>
     </div>
   )
 }
