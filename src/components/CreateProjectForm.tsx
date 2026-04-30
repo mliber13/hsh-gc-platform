@@ -12,10 +12,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ArrowLeft } from 'lucide-react'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 import { PROJECT_TYPES, ProjectType, Plan } from '@/types'
 import { getActivePlans_Hybrid, getPlanById_Hybrid } from '@/services/planHybridService'
 import { getEstimateTemplateById, applyTemplateToEstimate } from '@/services'
-import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface CreateProjectFormProps {
   onBack: () => void
@@ -52,6 +52,7 @@ export interface ProjectFormData {
 }
 
 export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) {
+  usePageTitle('Create Project')
   const [formData, setFormData] = useState<ProjectFormData>({
     name: '',
     type: 'residential-new-build',
@@ -164,34 +165,17 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
     }
   }
 
-              return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3 sm:space-x-4">
-              <img src={hshLogo} alt="HSH Contractor" className="h-20 sm:h-24 lg:h-28 w-auto" />
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Create New Project</h1>
-                <p className="text-sm text-gray-600 mt-1">Enter project details to get started</p>
-              </div>
-            </div>
-            <Button
-              onClick={onBack}
-              variant="outline"
-              className="border-gray-300 hover:bg-gray-50"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-          </div>
-        </div>
-                                          </header>
-  
-      {/* Form */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Card>
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
+      <button
+        onClick={onBack}
+        className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" />
+        Back to Dashboard
+      </button>
+
+      <Card className="border-border/60 bg-card/50">
           <CardHeader>
             <CardTitle>Project Information</CardTitle>
           </CardHeader>
@@ -199,7 +183,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Project Details */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900">Project Details</h3>
+                <h3 className="text-lg font-semibold">Project Details</h3>
                 
                 <div>
                   <Label htmlFor="name">Project Name *</Label>
@@ -263,11 +247,11 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="custom">
-                        <span className="font-medium text-[#0E79C9]">✏️ Custom Plan (Enter ID)</span>
+                        <span className="font-medium text-primary">Custom Plan (Enter ID)</span>
                       </SelectItem>
                       {availablePlans.length > 0 && (
                         <>
-                          <div className="px-2 py-1 text-xs text-gray-500 font-semibold">FROM PLAN LIBRARY:</div>
+                          <div className="px-2 py-1 text-xs text-muted-foreground font-semibold">FROM PLAN LIBRARY:</div>
                           {availablePlans.map((plan) => (
                             <SelectItem key={plan.id} value={plan.id}>
                               {plan.name} ({plan.planId})
@@ -283,20 +267,20 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                     </SelectContent>
                   </Select>
                   {formData.planId === '' && (
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Select a plan from the library or enter a custom plan ID
                     </p>
                   )}
                   {isCustomPlan && (
                     <div className="mt-2">
-                      <p className="text-xs text-gray-600 italic">
-                        💡 Custom plan - no plan ID required
+                      <p className="text-xs text-muted-foreground italic">
+                        Custom plan - no plan ID required
                       </p>
                     </div>
                   )}
                   {selectedPlan && selectedPlan.options.length > 0 && (
-                    <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <p className="text-sm font-medium text-gray-700 mb-2">Plan Options:</p>
+                    <div className="mt-3 p-3 bg-muted/20 rounded-lg border border-border/60">
+                      <p className="text-sm font-medium text-muted-foreground mb-2">Plan Options:</p>
                       <div className="space-y-2">
                         {selectedPlan.options.map((option) => (
                           <label key={option.id} className="flex items-center space-x-2 cursor-pointer">
@@ -304,12 +288,12 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                               type="checkbox"
                               checked={formData.planOptions?.includes(option.name) || false}
                               onChange={() => handlePlanOptionToggle(option.name)}
-                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                              className="w-4 h-4 rounded"
                             />
                             <div className="flex-1">
-                              <span className="text-sm text-gray-700 font-medium">{option.name}</span>
+                              <span className="text-sm text-foreground font-medium">{option.name}</span>
                               {option.description && (
-                                <span className="text-xs text-gray-500 ml-2">- {option.description}</span>
+                                <span className="text-xs text-muted-foreground ml-2">- {option.description}</span>
                               )}
                               <div className="flex gap-2 mt-1">
                                 {option.additionalSquareFootage && (
@@ -355,8 +339,8 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
 
               {/* Project Specifications */}
               <div className="space-y-4 pt-6 border-t">
-                <h3 className="text-lg font-semibold text-gray-900">Project Specifications</h3>
-                <p className="text-sm text-gray-600 mb-4">
+                <h3 className="text-lg font-semibold">Project Specifications</h3>
+                <p className="text-sm text-muted-foreground mb-4">
                   These specifications help inform budget estimates and will be visible while building your estimate.
                 </p>
                 
@@ -384,7 +368,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                           }}
                           placeholder="e.g., 2000"
                         />
-                        <p className="text-xs text-gray-500 mt-1">Current living space</p>
+                        <p className="text-xs text-muted-foreground mt-1">Current living space</p>
                       </div>
                       <div>
                         <Label htmlFor="newSquareFootage">New Square Footage Being Added</Label>
@@ -406,7 +390,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                           }}
                           placeholder="e.g., 500"
                         />
-                        <p className="text-xs text-gray-500 mt-1">Additional space being added</p>
+                        <p className="text-xs text-muted-foreground mt-1">Additional space being added</p>
                       </div>
                     </>
                   ) : null}
@@ -428,9 +412,9 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       }))}
                       placeholder="e.g., 2500"
                       required={!isRenovation}
-                      className={!formData.specs?.livingSquareFootage && !isRenovation ? 'border-red-300' : ''}
+                      className={!formData.specs?.livingSquareFootage && !isRenovation ? 'border-rose-500/40' : ''}
                     />
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {isRenovation 
                         ? 'Total living space after renovation (auto-calculated from existing + new)'
                         : 'Total heated living space (required)'}
@@ -453,7 +437,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       }))}
                       placeholder="e.g., 3000"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Includes garage, basement, etc.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Includes garage, basement, etc.</p>
                   </div>
                 </div>
 
@@ -584,7 +568,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-gray-500 mt-1">Hip roofs typically cost more than standard gable</p>
+                    <p className="text-xs text-muted-foreground mt-1">Hip roofs typically cost more than standard gable</p>
                   </div>
                   
                   <div>
@@ -628,14 +612,14 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                       }))}
                       placeholder="e.g., 10000"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Or enter in acres (1 acre = 43,560 sq ft)</p>
+                    <p className="text-xs text-muted-foreground mt-1">Or enter in acres (1 acre = 43,560 sq ft)</p>
                   </div>
                 </div>
               </div>
 
               {/* Project Location */}
               <div className="space-y-4 pt-6 border-t">
-                <h3 className="text-lg font-semibold text-gray-900">Project Location</h3>
+                <h3 className="text-lg font-semibold">Project Location</h3>
                 
                 <div>
                   <Label htmlFor="address">Street Address *</Label>
@@ -693,15 +677,13 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
                 </Button>
                 <Button
                   type="submit"
-                  className="bg-gradient-to-r from-[#0E79C9] to-[#0A5A96] hover:from-[#0A5A96] hover:to-[#084577]"
                 >
                   Create Project & Build Estimate
                 </Button>
               </div>
             </form>
           </CardContent>
-        </Card>
-      </main>
+      </Card>
     </div>
   )
 }

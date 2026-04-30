@@ -519,7 +519,7 @@ tsc --noEmit clean.
 | SOW Management | ✅ Ported | `src/components/SOWManagement.tsx` | Mode A — removed legacy hero + gradient shell, normalized CRUD cards/dialogs to token surfaces |
 | Deal Workspace | ⏸ Hold | `src/components/DealWorkspace.tsx` | Wait for owner's in-flight Create Deal commit |
 | Tenant Pipeline | ⬜ Pending | `src/components/TenantPipeline.tsx` | Mode A — kanban board |
-| Create Project Form | ⬜ Pending | `src/components/CreateProjectForm.tsx` | Mode A — form-heavy |
+| Create Project Form | ✅ Ported | `src/components/CreateProjectForm.tsx` | Mode A — multi-section form tokenized; plan-option checkbox panel migrated to muted token card |
 
 ---
 
