@@ -66,6 +66,7 @@ import {
 import type { DeveloperInput, SubcontractorInput, SupplierInput, MunicipalityInput, LenderInput } from '@/types'
 import type { StandaloneContactLabel, ContactLabel } from '@/types'
 import { Shield, ShieldOff, UserPlus } from 'lucide-react'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 
 interface ContactDirectoryProps {
   onBack: () => void
@@ -75,6 +76,7 @@ interface ContactDirectoryProps {
 type PartnerTab = 'subcontractors' | 'suppliers' | 'developers' | 'municipalities' | 'lenders' | PartnerLabelTab
 
 export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps) {
+  usePageTitle('Contact Directory')
   const isAdmin = userProfile?.role === 'admin'
   const [mainTab, setMainTab] = useState<'people' | 'partners'>('people')
   const [peopleLabel, setPeopleLabel] = useState<StandaloneContactLabel>('EMPLOYEE')
@@ -795,20 +797,16 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
   const labelDisplay = STANDALONE_CONTACT_LABELS.find((l) => l.value === peopleLabel)?.label ?? peopleLabel
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="max-w-6xl mx-auto px-6 py-10">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <Button variant="ghost" className="mb-3 px-0" onClick={onBack}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-            <h1 className="text-3xl font-semibold text-slate-900">Contact Directory</h1>
-            <p className="text-sm text-slate-600 mt-1">
-              People & partners by label. Add standalone contacts or additional contacts under subcontractors, suppliers, and developers.
-            </p>
-          </div>
-          <Button variant="outline" onClick={() => {
+    <div className="flex flex-col gap-6 p-6">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back to Dashboard
+        </button>
+        <Button variant="outline" onClick={() => {
             if (mainTab === 'people') loadContacts(peopleLabel)
             else if (partnerTab === 'subcontractors') loadSubcontractors()
             else if (partnerTab === 'suppliers') loadSuppliers()
@@ -818,16 +816,16 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
           }}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
-          </Button>
-        </div>
+        </Button>
+      </div>
 
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex rounded-lg border border-slate-300 bg-white p-1">
+      <div className="flex items-center gap-3">
+          <div className="flex rounded-lg border border-border/60 bg-card p-1">
             <button
               type="button"
               onClick={() => setMainTab('people')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition ${
-                mainTab === 'people' ? 'bg-[#0E79C9] text-white shadow' : 'text-slate-600 hover:bg-slate-100'
+                mainTab === 'people' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/40'
               }`}
             >
               People
@@ -836,7 +834,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
               type="button"
               onClick={() => setMainTab('partners')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition ${
-                mainTab === 'partners' ? 'bg-[#0E79C9] text-white shadow' : 'text-slate-600 hover:bg-slate-100'
+                mainTab === 'partners' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/40'
               }`}
             >
               Partners
@@ -860,39 +858,39 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
 
           {mainTab === 'partners' && (
             <>
-              <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1">
+              <div className="flex flex-wrap gap-1 rounded-lg border border-border/60 bg-card p-1">
                 <button
                   type="button"
                   onClick={() => setPartnerTab('subcontractors')}
-                  className={`px-3 py-1.5 text-sm rounded ${partnerTab === 'subcontractors' ? 'bg-slate-200 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}
+                  className={`px-3 py-1.5 text-sm rounded ${partnerTab === 'subcontractors' ? 'bg-muted/40 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/30'}`}
                 >
                   Subcontractors
                 </button>
                 <button
                   type="button"
                   onClick={() => setPartnerTab('suppliers')}
-                  className={`px-3 py-1.5 text-sm rounded ${partnerTab === 'suppliers' ? 'bg-slate-200 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}
+                  className={`px-3 py-1.5 text-sm rounded ${partnerTab === 'suppliers' ? 'bg-muted/40 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/30'}`}
                 >
                   Suppliers
                 </button>
                 <button
                   type="button"
                   onClick={() => setPartnerTab('developers')}
-                  className={`px-3 py-1.5 text-sm rounded ${partnerTab === 'developers' ? 'bg-slate-200 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}
+                  className={`px-3 py-1.5 text-sm rounded ${partnerTab === 'developers' ? 'bg-muted/40 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/30'}`}
                 >
                   Developers
                 </button>
                 <button
                   type="button"
                   onClick={() => setPartnerTab('municipalities')}
-                  className={`px-3 py-1.5 text-sm rounded ${partnerTab === 'municipalities' ? 'bg-slate-200 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}
+                  className={`px-3 py-1.5 text-sm rounded ${partnerTab === 'municipalities' ? 'bg-muted/40 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/30'}`}
                 >
                   Municipalities
                 </button>
                 <button
                   type="button"
                   onClick={() => setPartnerTab('lenders')}
-                  className={`px-3 py-1.5 text-sm rounded ${partnerTab === 'lenders' ? 'bg-slate-200 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}
+                  className={`px-3 py-1.5 text-sm rounded ${partnerTab === 'lenders' ? 'bg-muted/40 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/30'}`}
                 >
                   Lenders
                 </button>
@@ -901,14 +899,14 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                     key={tab}
                     type="button"
                     onClick={() => setPartnerTab(tab)}
-                    className={`px-3 py-1.5 text-sm rounded ${partnerTab === tab ? 'bg-slate-200 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}
+                    className={`px-3 py-1.5 text-sm rounded ${partnerTab === tab ? 'bg-muted/40 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/30'}`}
                   >
                     {title}
                   </button>
                 ))}
               </div>
-              <label className="flex items-center gap-2 text-sm text-slate-600">
-                <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="h-4 w-4 rounded border-border/60" />
                 Show inactive
               </label>
               {partnerTab === 'subcontractors' && (
@@ -965,7 +963,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                   <div key={u.id} className="flex items-center justify-between border border-amber-200 rounded-lg p-3 text-sm bg-white">
                     <div>
                       <span className="font-medium">{u.full_name?.trim() || u.email}</span>
-                      <div className="text-slate-600 text-xs mt-0.5">{u.email}</div>
+                      <div className="text-muted-foreground text-xs mt-0.5">{u.email}</div>
                       {u.is_active === false && (
                         <span className="text-xs text-amber-700">Inactive</span>
                       )}
@@ -992,9 +990,9 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
             </CardHeader>
             <CardContent>
               {loadingContacts ? (
-                <p className="text-sm text-slate-500 py-8">Loading...</p>
+                <p className="text-sm text-muted-foreground py-8">Loading...</p>
               ) : peopleContacts.length === 0 ? (
-                <p className="text-sm text-slate-500 py-8">No contacts in this category. Add one above.</p>
+                <p className="text-sm text-muted-foreground py-8">No contacts in this category. Add one above.</p>
               ) : (
                 <div className="space-y-2">
                   {peopleContacts.map((c) => {
@@ -1003,24 +1001,24 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                       <div key={c.id} className="flex items-center justify-between border rounded-lg p-3 text-sm">
                         <div>
                           <span className="font-medium">{c.name}</span>
-                          {c.role && <span className="text-slate-500 ml-2">({c.role})</span>}
-                          <div className="text-slate-600 text-xs mt-1">
+                          {c.role && <span className="text-muted-foreground ml-2">({c.role})</span>}
+                          <div className="text-muted-foreground text-xs mt-1">
                             {c.email && <span>{c.email}</span>}
                             {c.phone && <span className="ml-2">{c.phone}</span>}
                           </div>
                           {isAdmin && c.email && (
                             <div className="mt-1 flex items-center gap-2">
                               {appUser ? (
-                                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${appUser.is_active === false ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+                                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${appUser.is_active === false ? 'bg-amber-500/15 text-amber-500' : 'bg-muted text-muted-foreground'}`}>
                                   {appUser.is_active === false ? <ShieldOff className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
                                   App: {appUser.is_active === false ? 'Inactive' : appUser.role}
                                 </span>
                               ) : (
-                                <span className="text-xs text-slate-500">No app access</span>
+                                <span className="text-xs text-muted-foreground">No app access</span>
                               )}
                             </div>
                           )}
-                          {c.notes && <p className="text-slate-500 text-xs mt-1">{c.notes}</p>}
+                          {c.notes && <p className="text-muted-foreground text-xs mt-1">{c.notes}</p>}
                         </div>
                         <div className="flex gap-1 items-center">
                           {isAdmin && c.email && (
@@ -1056,7 +1054,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                   {partnerTab === 'municipalities' && 'Municipalities'}
                   {partnerTab === 'lenders' && 'Lenders'}
                 </CardTitle>
-                <p className="text-sm text-slate-500 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   {currentPartnerLabelConfig ? 'Contacts for this partner type.' : 'Primary contact is on the company row. Expand a row to see and add additional contacts.'}
                 </p>
               </div>
@@ -1071,9 +1069,9 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
               {currentPartnerLabelConfig ? (
                 <>
                   {isLoadingPartners ? (
-                    <p className="text-sm text-slate-500 py-8">Loading...</p>
+                    <p className="text-sm text-muted-foreground py-8">Loading...</p>
                   ) : partnerLabelContacts.length === 0 ? (
-                    <p className="text-sm text-slate-500 py-8">No contacts yet. Add one above.</p>
+                    <p className="text-sm text-muted-foreground py-8">No contacts yet. Add one above.</p>
                   ) : (
                     <div className="space-y-2">
                       {partnerLabelContacts.map((c) => {
@@ -1082,24 +1080,24 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                           <div key={c.id} className="flex items-center justify-between border rounded-lg p-3 text-sm">
                             <div>
                               <span className="font-medium">{c.name}</span>
-                              {c.role && <span className="text-slate-500 ml-2">({c.role})</span>}
-                              <div className="text-slate-600 text-xs mt-1">
+                              {c.role && <span className="text-muted-foreground ml-2">({c.role})</span>}
+                              <div className="text-muted-foreground text-xs mt-1">
                                 {c.email && <span>{c.email}</span>}
                                 {c.phone && <span className="ml-2">{c.phone}</span>}
                               </div>
                               {isAdmin && c.email && (
                                 <div className="mt-1 flex items-center gap-2">
                                   {appUser ? (
-                                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${appUser.is_active === false ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+                                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${appUser.is_active === false ? 'bg-amber-500/15 text-amber-500' : 'bg-muted text-muted-foreground'}`}>
                                       {appUser.is_active === false ? <ShieldOff className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
                                       App: {appUser.is_active === false ? 'Inactive' : appUser.role}
                                     </span>
                                   ) : (
-                                    <span className="text-xs text-slate-500">No app access</span>
+                                    <span className="text-xs text-muted-foreground">No app access</span>
                                   )}
                                 </div>
                               )}
-                              {c.notes && <p className="text-slate-500 text-xs mt-1">{c.notes}</p>}
+                              {c.notes && <p className="text-muted-foreground text-xs mt-1">{c.notes}</p>}
                             </div>
                             <div className="flex gap-1 items-center">
                               {isAdmin && c.email && (
@@ -1121,9 +1119,9 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                   )}
                 </>
               ) : isLoadingPartners ? (
-                <p className="text-sm text-slate-500 py-8">Loading...</p>
+                <p className="text-sm text-muted-foreground py-8">Loading...</p>
               ) : currentPartnerList.length === 0 ? (
-                <p className="text-sm text-slate-500 py-8">
+                <p className="text-sm text-muted-foreground py-8">
                   No {partnerTab === 'subcontractors' ? 'subcontractors' : partnerTab === 'suppliers' ? 'suppliers' : partnerTab === 'developers' ? 'developers' : partnerTab === 'municipalities' ? 'municipalities' : 'lenders'} yet. Add one to get started.
                 </p>
               ) : (
@@ -1143,19 +1141,19 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                     return (
                       <div key={entity.id} className="border rounded-lg overflow-hidden">
                         <div
-                          className="flex items-center gap-2 p-3 bg-white hover:bg-slate-50 cursor-pointer"
+                          className="flex items-center gap-2 p-3 bg-card hover:bg-muted/20 cursor-pointer"
                           onClick={() => toggleExpand(entity.id)}
                         >
                           {expanded ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
                           <div className="flex-1 min-w-0">
                             <span className="font-medium">{name}</span>
-                            <span className="text-slate-500 text-sm ml-2">
+                            <span className="text-muted-foreground text-sm ml-2">
                               {isSub && (entity as Subcontractor).trade}
                               {isSupplier && (entity as Supplier).category}
                               {partnerTab === 'developers' && (entity as Developer).type}
                               {isLender && (entity as Lender).type}
                             </span>
-                            <div className="text-slate-600 text-xs mt-1">
+                            <div className="text-muted-foreground text-xs mt-1">
                               Primary: {primaryContact} · {email} · {phone}
                             </div>
                           </div>
@@ -1228,9 +1226,9 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                           </div>
                         </div>
                         {expanded && (
-                          <div className="border-t bg-slate-50 p-3 text-sm">
+                          <div className="border-t border-border/60 bg-muted/30 p-3 text-sm">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium text-slate-700">Additional contacts</span>
+                              <span className="font-medium text-foreground">Additional contacts</span>
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1247,28 +1245,28 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                               </Button>
                             </div>
                             {extraContacts.length === 0 ? (
-                              <p className="text-slate-500 text-xs">No additional contacts. Add one above.</p>
+                              <p className="text-muted-foreground text-xs">No additional contacts. Add one above.</p>
                             ) : (
                               <ul className="space-y-2">
                                 {extraContacts.map((c) => {
                                   const appUser = isAdmin && c.email ? getAppUserForContact(c) : null
                                   return (
-                                    <li key={c.id} className="flex justify-between items-start border-b border-slate-100 pb-2">
+                                    <li key={c.id} className="flex justify-between items-start border-b border-border/60 pb-2">
                                       <div>
                                         <span className="font-medium">{c.name}</span>
-                                        {c.role && <span className="text-slate-500 ml-1">({c.role})</span>}
-                                        <div className="text-slate-600 text-xs">
+                                        {c.role && <span className="text-muted-foreground ml-1">({c.role})</span>}
+                                        <div className="text-muted-foreground text-xs">
                                           {c.email && <span>{c.email}</span>}
                                           {c.phone && <span className="ml-2">{c.phone}</span>}
                                         </div>
                                         {isAdmin && c.email && (
                                           <div className="mt-1">
                                             {appUser ? (
-                                              <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${appUser.is_active === false ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+                                              <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${appUser.is_active === false ? 'bg-amber-500/15 text-amber-500' : 'bg-muted text-muted-foreground'}`}>
                                                 {appUser.is_active === false ? 'Inactive' : appUser.role}
                                               </span>
                                             ) : (
-                                              <span className="text-xs text-slate-500">No app access</span>
+                                              <span className="text-xs text-muted-foreground">No app access</span>
                                             )}
                                           </div>
                                         )}
@@ -1319,7 +1317,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                 <div>
                   <Label>Label</Label>
                   {['ARCHITECT', 'ENGINEER', 'TITLE_CLOSING', 'INSURANCE'].includes(contactFormLabel) ? (
-                    <p className="text-sm text-slate-600 py-2">
+                    <p className="text-sm text-muted-foreground py-2">
                       {PARTNER_LABEL_TABS.find((c) => c.label === contactFormLabel)?.title ?? contactFormLabel}
                     </p>
                   ) : (
@@ -1730,7 +1728,6 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
             )}
           </DialogContent>
         </Dialog>
-      </div>
     </div>
   )
 }
