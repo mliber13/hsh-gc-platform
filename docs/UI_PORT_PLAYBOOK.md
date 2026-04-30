@@ -347,6 +347,80 @@ For colored-group column headers (Material/Labor/Subcontractor pattern), use a c
 </th>
 ```
 
+### 15.5 Table cell coloring — colored TEXT, not colored BACKGROUND
+
+**Critical pattern learned from Project Actuals alignment.** When a column needs to be visually associated with a category color (Material→sky, Labor→amber, Subcontractor→teal), color the **text**, never the cell background.
+
+```tsx
+// ❌ Wrong — cell background tint, neutral text:
+<td className="p-2 text-center border-b border-r border-border/60 bg-sky-500/10">
+  {formatCurrency(value)}
+</td>
+
+// ✅ Right — colored text, transparent cell:
+<td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-sky-600 dark:text-sky-400">
+  {formatCurrency(value)}
+</td>
+```
+
+The bg-tinted approach makes cells look heavy and "containerized." The colored-text approach reads cleaner and lets the eye scan column → column quickly. Always pair with `tabular-nums` so digits align across rows.
+
+**Sub-item / nested rows** use lighter opacity to indicate depth:
+
+```tsx
+<td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-sky-600/80 dark:text-sky-400/80">
+  {formatCurrency(value)}
+</td>
+```
+
+**Exception — semantic background tints stay.** A whole-row tint that signals "this row is special" (e.g., uncategorized "Other / General" amber-tinted row, conditional variance highlighting like rose for over-budget) is legitimate. Don't sweep those.
+
+### 15.6 Table cell font-weight conventions
+
+| Row type | Class | Weight |
+|---|---|---|
+| Category aggregate rows | `font-medium` | 500 |
+| Trade rows | (default) | 400 |
+| Sub-item rows | `text-sm` (no weight) | 400 |
+| Highlighted "grand total" cell | `font-semibold` | 600 |
+
+**Never use `font-semibold` (600) on category aggregate cells** — it makes them too bold compared to Estimate Book's pattern. Use `font-medium` (500) instead. The visual cue for "this is an aggregate row" comes from `bg-muted/30` row background, not bold text.
+
+### 15.7 Inline count badge instead of stacked button
+
+When a cell needs a "view N entries" affordance (clickable detail), don't stack a button below the value — that pushes cell height to ~45px when entries exist. Use an inline count badge instead — keeps cells single-line at ~37px.
+
+```tsx
+// ❌ Stacks button below, makes cell tall:
+<td className="...">
+  <div className="flex flex-col items-center gap-0.5">
+    <span>{formatCurrency(value)}</span>
+    {entries.length > 0 && (
+      <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={...}>
+        <List className="w-3 h-3 mr-0.5 inline" /> View ({entries.length})
+      </Button>
+    )}
+  </div>
+</td>
+
+// ✅ Inline badge, single-line:
+<td className="...">
+  {formatCurrency(value)}
+  {entries.length > 0 && (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); openDialog(...) }}
+      className="ml-1.5 text-xs font-normal text-muted-foreground hover:text-foreground transition-colors"
+      title={`View ${entries.length} entries`}
+    >
+      · {entries.length}
+    </button>
+  )}
+</td>
+```
+
+Renders as: `$1,739.82 · 5` where the count is a click-target.
+
 ### 16. Form inputs
 
 The `<Input>`, `<Select>`, `<Label>`, `<Textarea>` primitives already render with tokens. Don't override their styling. Just use them.
@@ -355,7 +429,7 @@ For form sections that previously used `<Label className="text-[#E65133]">`, dro
 
 ---
 
-## Common Pitfalls (caught during the 3 reference ports)
+## Common Pitfalls (caught during reference ports)
 
 1. **Duplicate icon imports.** When you add a new icon, check the existing lucide-react import block first — most icons are already imported.
 2. **Unused imports after sweep.** After dropping the hero header, `hshLogo` and sometimes other icons are no longer referenced. Either delete the import or accept the warning (TypeScript with default config doesn't error on unused imports).
@@ -364,6 +438,12 @@ For form sections that previously used `<Label className="text-[#E65133]">`, dro
 5. **`onSave={undefined}` / unused props.** Routes still pass `onViewForms`, `onViewPOs`, etc. even if the page no longer uses them. Don't remove the props from the interface; just don't reference them in the body. TypeScript is fine with this.
 6. **Tailwind config plugin changes need dev restart.** Pure component changes are HMR-friendly.
 7. **`Mode B` ambiguity:** if you encounter a complex layout decision (e.g., what color rail belongs to a custom status), STOP and ask the human rather than guess. The status color recipe in §7 covers all known statuses; if a new one appears, escalate.
+8. **`replace_all` trailing-space gotcha.** When swapping a class with surrounding context — e.g., `<td className="p-3 ` → `<td className="p-2` — *include the trailing space in the new string* (`<td className="p-2 `). Otherwise the next class on the line gets jammed: `p-3 text-center` becomes `p-2text-center` which is one invalid class instead of two valid ones, and Tailwind silently drops it. After any `replace_all` sweep, grep the file for `p-2[a-z]` / `p-3[a-z]` / `bg-[a-z]+-[0-9]+/[0-9]+/[0-9]+` (chained slashes) style mashups.
+9. **Parallel-edit race condition.** If `npx tsc --noEmit` fails on a file you didn't touch, run `git status` first. Another agent or the human may be mid-edit — the errors are likely intermediate states, not real bugs. Report the errors + the dirty file list and stop. Don't try to "fix" unrelated files.
+10. **Don't blindly sweep semantic background tints.** Some `bg-X-500/10` cells are intentional row markers (uncategorized "Other / General" amber row, partial-CO yellow indicator, over-budget rose conditional). Distinguish: column-coloring tints (sweep to text colors per §15.5), row-marker tints (keep). Pattern: column tints appear in cells across many rows uniformly; row-marker tints span a whole row or vary conditionally on data.
+11. **Section header tag matters.** Use `<h2 className="text-lg font-semibold">` (~18px) for section headers — never `<CardTitle>` (which renders ~24px and is reserved for actual Card titles). The page should have one heading hierarchy: AppHeader's centered title (page name) → `<h2>` for sections inside the page. Card titles inside dialogs/modals are fine since those are scoped.
+12. **Drop the Card wrapper around tables.** Even if the original code had `<Card><CardHeader><CardTitle>...</CardTitle></CardHeader><CardContent><table.../></CardContent></Card>`, the v0 pattern is a flat `<section>` with a sibling `<h2>` + bordered `<div className="rounded-lg border border-border/60 bg-card/50">` around just the table. See §11 + §15.
+13. **Cell content containing inline buttons inflates row height.** Patterns like `<div className="flex flex-col items-center gap-0.5"><span>$X</span><Button>View</Button></div>` push cells to ~45px when the button shows. Use the inline count badge per §15.7 instead — keeps cells single-line.
 
 ---
 
@@ -415,25 +495,25 @@ tsc --noEmit clean.
 |---|---|---|---|
 | Dashboard | ✅ Ported | `src/components/ProjectsDashboard.tsx` | Reference for list pages |
 | Project Detail | ✅ Ported | `src/components/ProjectDetailView.tsx` | Reference for detail pages |
-| Estimate Builder | ✅ Ported | `src/components/EstimateBuilder.tsx` | Reference for table pages |
-| Project Actuals | 🔵 In progress | `src/components/ProjectActuals.tsx` | High-traffic; complex variance UI |
-| Change Orders | ⬜ Pending | `src/components/ChangeOrders.tsx` | |
-| Project Forms | ⬜ Pending | `src/components/ProjectForms.tsx` | |
-| Project Documents | ⬜ Pending | `src/components/ProjectDocuments.tsx` | |
-| Purchase Orders | ⬜ Pending | `src/components/PurchaseOrdersView.tsx` | |
-| Selection Book | ⬜ Pending | `src/components/SelectionBook.tsx` | |
-| Selection Schedules | ⬜ Pending | `src/components/SelectionSchedules.tsx` | Pending owner decision (sidebar / dead code) |
-| Schedule Builder | ⬜ Pending | `src/components/ScheduleBuilder.tsx` | Calendar/timeline — may need Mode B human draft |
-| Plan Library | ⬜ Pending | `src/components/PlanLibrary.tsx` | |
-| Plan Editor | ⬜ Pending | `src/components/PlanEditor.tsx` | |
-| Item Library | ⬜ Pending | `src/components/ItemLibrary.tsx` | |
-| Contact Directory | ⬜ Pending | `src/components/ContactDirectory.tsx` | |
-| SOW Management | ⬜ Pending | `src/components/SOWManagement.tsx` | |
+| Estimate Builder | ✅ Ported | `src/components/EstimateBuilder.tsx` | Reference for dense data table pages |
+| Project Actuals | ✅ Ported | `src/components/ProjectActuals.tsx` | Aligned with EstimateBuilder; reference for table cell coloring (§15.5–15.7), inline count badges |
+| Change Orders | ✅ Ported | `src/components/ChangeOrders.tsx` | Cursor port |
+| Project Forms | ✅ Ported | `src/components/ProjectForms.tsx` | Cursor port |
+| My Feedback | ✅ Ported | `src/components/MyFeedback.tsx` | Filter-heavy list page; status chips use semantic pill recipe |
+| Project Documents | ⬜ Pending | `src/components/ProjectDocuments.tsx` | Mode A — file list + upload modal |
+| Purchase Orders | ⬜ Pending | `src/components/PurchaseOrdersView.tsx` | Mode A — list page |
+| Contact Directory | ⬜ Pending | `src/components/ContactDirectory.tsx` | Mode A — CRUD list |
+| Selection Book | ⬜ Pending | `src/components/SelectionBook.tsx` | Mode A — room-organized selections list |
+| Selection Schedules | ⏸ Hold | `src/components/SelectionSchedules.tsx` | Pending owner-driven redesign — v0 has updated selections design that will eventually replace SelectionBook→SelectionLibrary; revisit when that lands |
+| Schedule Builder | 🔵 Mode B | `src/components/ScheduleBuilder.tsx` | Calendar/timeline — needs human draft; not playbook-coverable |
+| Plan Library | ⬜ Pending | `src/components/PlanLibrary.tsx` | Mode A |
+| Plan Editor | ⬜ Pending | `src/components/PlanEditor.tsx` | Mode A — form-heavy |
+| Item Library | ⬜ Pending | `src/components/ItemLibrary.tsx` | Mode A |
+| SOW Management | ⬜ Pending | `src/components/SOWManagement.tsx` | Mode A — template list |
 | Deal Workspace | ⏸ Hold | `src/components/DealWorkspace.tsx` | Wait for owner's in-flight Create Deal commit |
-| Tenant Pipeline | ⬜ Pending | `src/components/TenantPipeline.tsx` | |
-| My Feedback | ⬜ Pending | `src/components/MyFeedback.tsx` | |
-| Create Project Form | ⬜ Pending | `src/components/CreateProjectForm.tsx` | |
+| Tenant Pipeline | ⬜ Pending | `src/components/TenantPipeline.tsx` | Mode A — kanban board |
+| Create Project Form | ⬜ Pending | `src/components/CreateProjectForm.tsx` | Mode A — form-heavy |
 
 ---
 
-**End of playbook.** When in doubt, study the 3 ✅ files and copy patterns. When you encounter ambiguity not covered here, stop and escalate rather than guess.
+**End of playbook.** When in doubt, study the ✅ files and copy patterns. When you encounter ambiguity not covered here, stop and escalate rather than guess.

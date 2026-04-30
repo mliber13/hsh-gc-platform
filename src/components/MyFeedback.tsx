@@ -37,9 +37,9 @@ import type { Feedback, FeedbackType, FeedbackStatus } from '@/types/feedback'
 import {
   FEEDBACK_TYPE_LABELS,
   FEEDBACK_STATUS_LABELS,
-  FEEDBACK_STATUS_COLORS,
 } from '@/types/feedback'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 
 interface MyFeedbackProps {
   onBack: () => void
@@ -48,6 +48,7 @@ interface MyFeedbackProps {
 
 export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
   const { user } = useAuth()
+  usePageTitle('Feedback')
   const [feedback, setFeedback] = useState<Feedback[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -173,33 +174,43 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
     })
   }
 
+  const statusVisual = (status: FeedbackStatus) => {
+    switch (status) {
+      case 'completed':
+        return { bg: 'bg-sky-500/15', text: 'text-sky-500', border: 'border-sky-500/30', dot: 'bg-sky-500' }
+      case 'in-progress':
+        return { bg: 'bg-amber-500/15', text: 'text-amber-500', border: 'border-amber-500/30', dot: 'bg-amber-500' }
+      case 'new':
+        return { bg: 'bg-violet-500/15', text: 'text-violet-500', border: 'border-violet-500/30', dot: 'bg-violet-500' }
+      default:
+        return { bg: 'bg-muted', text: 'text-muted-foreground', border: 'border-border', dot: 'bg-muted-foreground' }
+    }
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={onBack}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Feedback & Feature Requests</h1>
-            <p className="text-gray-500 mt-1">View all feedback, feature requests, and their status</p>
-          </div>
-        </div>
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back
+        </button>
         <Button onClick={onNewFeedback}>
-          <MessageSquare className="w-4 h-4 mr-2" />
+          <MessageSquare className="mr-2 h-4 w-4" />
           New Feedback
         </Button>
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="border-border/60 bg-card/50">
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label htmlFor="search" className="text-sm font-medium text-gray-700">Search</label>
+              <label htmlFor="search" className="text-sm font-medium text-foreground">Search</label>
               <div className="relative mt-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
                 <Input
                   id="search"
                   placeholder="Search your feedback..."
@@ -210,7 +221,7 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
               </div>
             </div>
             <div>
-              <label htmlFor="status" className="text-sm font-medium text-gray-700">Status</label>
+              <label htmlFor="status" className="text-sm font-medium text-foreground">Status</label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="mt-1">
                   <SelectValue />
@@ -226,7 +237,7 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
               </Select>
             </div>
             <div>
-              <label htmlFor="type" className="text-sm font-medium text-gray-700">Type</label>
+              <label htmlFor="type" className="text-sm font-medium text-foreground">Type</label>
               <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger className="mt-1">
                   <SelectValue />
@@ -247,25 +258,22 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
 
       {/* Feedback List */}
       {loading ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0E79C9]"></div>
-              <p className="mt-4 text-gray-500">Loading your feedback...</p>
-            </div>
+        <Card className="border-border/60 bg-card/50">
+          <CardContent className="py-12 text-center">
+            <div className="mx-auto inline-block size-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
+            <p className="mt-4 text-sm text-muted-foreground">Loading your feedback...</p>
           </CardContent>
         </Card>
       ) : filteredFeedback.length === 0 ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center">
-              <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-600 text-lg mb-2">
+        <Card className="border-border/60 bg-card/50">
+          <CardContent className="py-12 text-center">
+              <MessageSquare className="mx-auto mb-3 size-12 text-muted-foreground/50" />
+              <p className="mb-2 text-lg font-medium text-foreground">
                 {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
                   ? 'No feedback found matching your filters'
                   : 'No feedback submitted yet'}
               </p>
-              <p className="text-gray-500 mb-6">
+              <p className="mb-6 text-sm text-muted-foreground">
                 {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
                   ? 'Try adjusting your search or filters'
                   : 'Be the first to share your ideas, report bugs, or request features'}
@@ -274,28 +282,29 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
                 <MessageSquare className="w-4 h-4 mr-2" />
                 Submit Your First Feedback
               </Button>
-            </div>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
-          {filteredFeedback.map((item) => (
-            <Card key={item.id}>
+          {filteredFeedback.map((item) => {
+            const visual = statusVisual(item.status)
+            return (
+            <Card key={item.id} className="border-border/60 bg-card/50">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       {getTypeIcon(item.type)}
                       <CardTitle className="text-lg">{item.title}</CardTitle>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${FEEDBACK_STATUS_COLORS[item.status]}`}>
-                        {getStatusIcon(item.status)}
-                        <span className="ml-1">{FEEDBACK_STATUS_LABELS[item.status]}</span>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${visual.bg} ${visual.text} ${visual.border}`}>
+                        <span className={`size-1.5 rounded-full ${visual.dot}`} />
+                        <span>{FEEDBACK_STATUS_LABELS[item.status]}</span>
                       </span>
-                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                         {FEEDBACK_TYPE_LABELS[item.type]}
                       </span>
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <UserIcon className="w-3 h-3" />
                         <span>Submitted by {item.submitted_by === user?.id ? 'you' : 'team member'}</span>
@@ -327,7 +336,7 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDelete(item.id)}
-                        className="text-red-600 hover:text-red-700"
+                        className="text-destructive hover:text-destructive"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -338,26 +347,26 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
               <CardContent>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Description</label>
-                    <p className="text-sm text-gray-900 whitespace-pre-wrap mt-1">
+                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
                       {item.description}
                     </p>
                   </div>
 
                   {item.admin_notes && (
-                    <div className="border-t pt-4">
-                      <label className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                    <div className="border-t border-border/60 pt-4">
+                      <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                         <MessageSquare className="w-4 h-4" />
                         Admin Response
                       </label>
-                      <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded mt-1 whitespace-pre-wrap">
+                      <p className="mt-1 whitespace-pre-wrap rounded bg-muted/30 p-3 text-sm text-foreground">
                         {item.admin_notes}
                       </p>
                     </div>
                   )}
 
                   {isAdmin && editingFeedback?.id === item.id && (
-                    <div className="border-t pt-4 space-y-4">
+                    <div className="space-y-4 border-t border-border/60 pt-4">
                       <div>
                         <Label htmlFor="status">Update Status</Label>
                         <Select
@@ -386,7 +395,7 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
 
                       <div>
                         <Label htmlFor="admin_notes">Admin Response</Label>
-                        <p className="text-xs text-gray-500 mb-1">
+                        <p className="mb-1 text-xs text-muted-foreground">
                           This response will be visible to all team members (transparent system)
                         </p>
                         <Textarea
@@ -421,7 +430,7 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
                 </div>
               </CardContent>
             </Card>
-          ))}
+          )})}
         </div>
       )}
     </div>
