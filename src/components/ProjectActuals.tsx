@@ -69,7 +69,15 @@ import {
   ArrowRightLeft,
   Download,
 } from 'lucide-react'
-import hshLogo from '/HSH Contractor Logo - Color.png'
+import { cn } from '@/lib/utils'
+import { usePageTitle } from '@/contexts/PageTitleContext'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ProjectInfoCard } from '@/components/project/ProjectInfoCard'
 
 // ----------------------------------------------------------------------------
 // Types
@@ -154,8 +162,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   const [reassignProjects, setReassignProjects] = useState<Project[]>([])
   const [reassignTargetId, setReassignTargetId] = useState<string>('')
   const [reassigning, setReassigning] = useState(false)
-  const [showMobileActions, setShowMobileActions] = useState(false)
-  const [showQBImport, setShowQBImport] = useState(false)
+
+  // Centered title in the AppHeader
+  usePageTitle('Project Actuals')
   /** Reconciliation checkboxes (session-only; for testing) */
   const [reconciledEntryIds, setReconciledEntryIds] = useState<Set<string>>(new Set())
   const toggleReconciled = (entryId: string) => {
@@ -349,11 +358,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
   const getVarianceColor = (type: string) => {
     switch (type) {
-      case 'under': return 'text-green-600'
-      case 'approved-change': return 'text-blue-600' // Blue for approved changes
-      case 'mixed': return 'text-yellow-600'
-      case 'overrun': return 'text-red-600'
-      default: return 'text-gray-900'
+      case 'under': return 'text-emerald-600 dark:text-emerald-400'
+      case 'approved-change': return 'text-amber-600 dark:text-amber-400' // Blue for approved changes
+      case 'mixed': return 'text-amber-600 dark:text-amber-400'
+      case 'overrun': return 'text-rose-600 dark:text-rose-400'
+      default: return 'text-foreground'
     }
   }
 
@@ -505,9 +514,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
   const getEntryColor = (type: EntryType) => {
     switch (type) {
-      case 'labor': return 'bg-blue-50 border-blue-200'
-      case 'material': return 'bg-green-50 border-green-200'
-      case 'subcontractor': return 'bg-orange-50 border-orange-200'
+      case 'labor': return 'bg-amber-500/10 border-amber-500/30'
+      case 'material': return 'bg-emerald-500/10 border-emerald-500/30'
+      case 'subcontractor': return 'bg-teal-500/10 border-teal-500/30'
     }
   }
 
@@ -624,7 +633,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     : []
 
   return (
-    <div className="min-h-screen bg-background pb-20 sm:pb-0">
+    <div className="flex flex-col gap-6 p-6">
       <Dialog open={!!viewEntriesCell} onOpenChange={(open) => !open && setViewEntriesCell(null)}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
@@ -632,9 +641,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           </DialogHeader>
           <div className="overflow-auto flex-1 min-h-0 space-y-2 pr-2">
             {viewEntriesCell?.generalOnly && (
-              <p className="text-xs text-gray-600 mb-2">Invoices and costs not tied to a specific estimate line. Use Edit to link to an item if needed.</p>
+              <p className="text-xs text-muted-foreground mb-2">Invoices and costs not tied to a specific estimate line. Use Edit to link to an item if needed.</p>
             )}
-            {viewEntriesList.length === 0 && <p className="text-sm text-gray-500">No entries</p>}
+            {viewEntriesList.length === 0 && <p className="text-sm text-muted-foreground">No entries</p>}
             {viewEntriesList.map((entry) => (
               <div
                 key={entry.id}
@@ -643,8 +652,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   {getEntryIcon(entry.type)}
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-900 truncate">{entry.description}</p>
-                    <p className="text-xs text-gray-600">
+                    <p className="font-medium text-foreground truncate">{entry.description}</p>
+                    <p className="text-xs text-muted-foreground">
                       {formatDate(entry.date)}
                       {entry.vendor && ` · ${entry.vendor}`}
                       {entry.invoiceNumber && ` · Invoice: ${entry.invoiceNumber}`}
@@ -671,7 +680,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Reassign to project</DialogTitle>
-            <p className="text-sm text-gray-500 font-normal">
+            <p className="text-sm text-muted-foreground font-normal">
               Move this {reassignEntry?.type === 'material' ? 'material' : 'subcontractor'} expense to another project. It will no longer appear under the current project.
             </p>
           </DialogHeader>
@@ -727,13 +736,13 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
               {allEntriesModalType === 'material' && 'Material entries'}
               {allEntriesModalType === 'subcontractor' && 'Subcontractor entries'}
             </DialogTitle>
-            <p className="text-sm text-gray-500 font-normal">
+            <p className="text-sm text-muted-foreground font-normal">
               {allEntriesModalType === 'all' ? 'Edit or assign any entry. Grouped by Labor, Material, Subcontractor.' : 'Edit or assign entries.'}
             </p>
           </DialogHeader>
           <div className="overflow-auto flex-1 min-h-0 space-y-6 pr-2">
             {actualEntries.length === 0 ? (
-              <p className="text-gray-500 text-sm">No actual entries recorded yet.</p>
+              <p className="text-muted-foreground text-sm">No actual entries recorded yet.</p>
             ) : (
               (() => {
                 const parentEntries = actualEntries.filter(e => !e.isSplitEntry)
@@ -751,34 +760,34 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                         <div className="flex items-start gap-3 flex-1">
                           {getEntryIcon(entry.type)}
                           <div className="flex-1 space-y-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                               <span>{formatDate(entry.date)}</span>
                               <span>•</span>
                               <span>{entry.category ? (byKey[entry.category]?.label || entry.category) : 'No category'}</span>
                               {splitChildren.length > 0 && (
-                                <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-semibold">Split ({splitChildren.length})</span>
+                                <span className="bg-sky-500/15 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded text-xs font-semibold">Split ({splitChildren.length})</span>
                               )}
                             </div>
-                            <p className="text-sm font-medium text-gray-900 truncate">{entry.description || entry.vendor || entry.subcontractorName || 'No description'}</p>
-                            <p className="text-xs text-gray-500">{tradeName ? <span className="text-green-700 font-semibold">Linked to {tradeName}</span> : <span className="text-red-600 font-semibold">Not linked</span>}</p>
+                            <p className="text-sm font-medium text-foreground truncate">{entry.description || entry.vendor || entry.subcontractorName || 'No description'}</p>
+                            <p className="text-xs text-muted-foreground">{tradeName ? <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Linked to {tradeName}</span> : <span className="text-rose-600 dark:text-rose-400 font-semibold">Not linked</span>}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 mt-2 sm:mt-0 shrink-0 flex-wrap justify-end">
                           {entry.type === 'labor' && (entry.grossWages != null || (entry.burdenAmount != null && entry.burdenAmount > 0)) ? (
                             <div className="text-right text-sm">
-                              <p className="text-gray-700">Wages: {formatCurrency(entry.grossWages ?? entry.amount)}</p>
-                              <p className="text-gray-700">Burden: {formatCurrency(entry.burdenAmount ?? 0)}</p>
-                              <p className="text-base font-bold text-gray-900 border-t border-gray-200 pt-0.5">Total: {formatCurrency(entry.amount)}</p>
+                              <p className="text-foreground">Wages: {formatCurrency(entry.grossWages ?? entry.amount)}</p>
+                              <p className="text-foreground">Burden: {formatCurrency(entry.burdenAmount ?? 0)}</p>
+                              <p className="text-base font-bold text-foreground border-t border-border/60 pt-0.5">Total: {formatCurrency(entry.amount)}</p>
                             </div>
                           ) : (
-                            <p className="text-base font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
+                            <p className="text-base font-bold text-foreground">{formatCurrency(entry.amount)}</p>
                           )}
-                          <label className="flex items-center gap-1 shrink-0 text-xs text-gray-500 cursor-pointer" title="Reconciliation (testing)">
+                          <label className="flex items-center gap-1 shrink-0 text-xs text-muted-foreground cursor-pointer" title="Reconciliation (testing)">
                             <input
                               type="checkbox"
                               checked={reconciledEntryIds.has(entry.id)}
                               onChange={() => toggleReconciled(entry.id)}
-                              className="rounded border-gray-400"
+                              className="rounded border-border/70"
                             />
                             Recon
                           </label>
@@ -790,14 +799,14 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                         </div>
                       </div>
                       {splitChildren.length > 0 && (
-                        <div className="ml-6 mt-2 space-y-1 border-l-2 border-blue-300 pl-3">
+                        <div className="ml-6 mt-2 space-y-1 border-l-2 border-amber-500/40 pl-3">
                           {splitChildren.map((child) => (
-                            <div key={child.id} className="flex items-center justify-between p-2 bg-blue-50 border border-blue-200 rounded text-sm">
+                            <div key={child.id} className="flex items-center justify-between p-2 bg-amber-500/10 border border-amber-500/30 rounded text-sm">
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium text-gray-900 truncate">{child.description}</p>
-                                <p className="text-xs text-gray-600">{child.tradeId ? trades.find(t => t.id === child.tradeId)?.name : null}</p>
+                                <p className="font-medium text-foreground truncate">{child.description}</p>
+                                <p className="text-xs text-muted-foreground">{child.tradeId ? trades.find(t => t.id === child.tradeId)?.name : null}</p>
                               </div>
-                              <p className="font-semibold text-gray-900 ml-2">{formatCurrency(child.amount)}</p>
+                              <p className="font-semibold text-foreground ml-2">{formatCurrency(child.amount)}</p>
                             </div>
                           ))}
                         </div>
@@ -806,33 +815,33 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   )
                 }
                 if (allEntriesModalType === 'labor') {
-                  return <div className="space-y-2">{labor.length === 0 ? <p className="text-gray-500 text-sm italic">No labor entries</p> : labor.map(renderEntryRow)}</div>
+                  return <div className="space-y-2">{labor.length === 0 ? <p className="text-muted-foreground text-sm italic">No labor entries</p> : labor.map(renderEntryRow)}</div>
                 }
                 if (allEntriesModalType === 'material') {
-                  return <div className="space-y-2">{material.length === 0 ? <p className="text-gray-500 text-sm italic">No material entries</p> : material.map(renderEntryRow)}</div>
+                  return <div className="space-y-2">{material.length === 0 ? <p className="text-muted-foreground text-sm italic">No material entries</p> : material.map(renderEntryRow)}</div>
                 }
                 if (allEntriesModalType === 'subcontractor') {
-                  return <div className="space-y-2">{subcontractor.length === 0 ? <p className="text-gray-500 text-sm italic">No subcontractor entries</p> : subcontractor.map(renderEntryRow)}</div>
+                  return <div className="space-y-2">{subcontractor.length === 0 ? <p className="text-muted-foreground text-sm italic">No subcontractor entries</p> : subcontractor.map(renderEntryRow)}</div>
                 }
                 return (
                   <>
                     <section>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                         <Users className="w-4 h-4" /> Labor ({labor.length})
                       </h3>
-                      <div className="space-y-2">{labor.length === 0 ? <p className="text-gray-500 text-sm italic">No labor entries</p> : labor.map(renderEntryRow)}</div>
+                      <div className="space-y-2">{labor.length === 0 ? <p className="text-muted-foreground text-sm italic">No labor entries</p> : labor.map(renderEntryRow)}</div>
                     </section>
                     <section>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                         <Package className="w-4 h-4" /> Material ({material.length})
                       </h3>
-                      <div className="space-y-2">{material.length === 0 ? <p className="text-gray-500 text-sm italic">No material entries</p> : material.map(renderEntryRow)}</div>
+                      <div className="space-y-2">{material.length === 0 ? <p className="text-muted-foreground text-sm italic">No material entries</p> : material.map(renderEntryRow)}</div>
                     </section>
                     <section>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                         <HardHat className="w-4 h-4" /> Subcontractor ({subcontractor.length})
                       </h3>
-                      <div className="space-y-2">{subcontractor.length === 0 ? <p className="text-gray-500 text-sm italic">No subcontractor entries</p> : subcontractor.map(renderEntryRow)}</div>
+                      <div className="space-y-2">{subcontractor.length === 0 ? <p className="text-muted-foreground text-sm italic">No subcontractor entries</p> : subcontractor.map(renderEntryRow)}</div>
                     </section>
                   </>
                 )
@@ -842,128 +851,116 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         </DialogContent>
       </Dialog>
 
-      <div className="p-2 sm:p-4 lg:p-6 xl:p-8">
-        <div className="w-full space-y-4 sm:space-y-6">
-          {/* Header */}
-          <ProjectActualsHeader project={project} onBack={onBack} onPrintReport={handlePrintReport} />
+      {/* Top action strip — back link only (Print Report moved to section header) */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back to Project Overview
+        </button>
+      </div>
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Estimated Total</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">
-                      {formatCurrency(calculateEstimatedTotal())}
-                    </p>
-                  </div>
-                  <div className="bg-blue-100 rounded-full p-3">
-                    <FileText className="w-8 h-8 text-blue-600" />
-                  </div>
-                </div>
+      {/* Project Info — 8-cell grid matching Estimate Book for parallelism */}
+      <ProjectInfoCard project={project} />
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+            <Card className="relative overflow-hidden border-border/60 bg-card/50">
+              <div className="absolute inset-y-0 left-0 w-1 bg-sky-500" aria-hidden />
+              <CardContent className="p-4 pl-5">
+                <p className="mb-1 text-xs text-muted-foreground">Estimated Total</p>
+                <p className="text-xl font-semibold tabular-nums">
+                  {formatCurrency(calculateEstimatedTotal())}
+                </p>
               </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Actual Spent</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">
-                      {formatCurrency(calculateActualTotal())}
-                    </p>
-                  </div>
-                  <div className="bg-orange-100 rounded-full p-3">
-                    <DollarSign className="w-8 h-8 text-orange-600" />
-                  </div>
-                </div>
+            <Card className="relative overflow-hidden border-border/60 bg-card/50">
+              <div className="absolute inset-y-0 left-0 w-1 bg-sky-500/100" aria-hidden />
+              <CardContent className="p-4 pl-5">
+                <p className="mb-1 text-xs text-muted-foreground">Actual Spent</p>
+                <p className={cn(
+                  'text-xl font-semibold tabular-nums',
+                  calculateActualTotal() > 0
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-foreground',
+                )}>
+                  {formatCurrency(calculateActualTotal())}
+                </p>
               </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Change Orders</p>
-                    <p className="text-2xl font-bold text-blue-900 mt-1">
-                      {formatCurrency(Math.abs(calculateChangeOrderImpact()))}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {changeOrders.length} approved
-                    </p>
-                  </div>
-                  <div className="bg-blue-100 rounded-full p-3">
-                    <FileText className="w-8 h-8 text-blue-600" />
-                  </div>
-                </div>
+            <Card className="relative overflow-hidden border-border/60 bg-card/50">
+              <div className="absolute inset-y-0 left-0 w-1 bg-violet-500" aria-hidden />
+              <CardContent className="p-4 pl-5">
+                <p className="mb-1 text-xs text-muted-foreground">Change Orders</p>
+                <p className="text-xl font-semibold tabular-nums text-violet-600 dark:text-violet-400">
+                  {formatCurrency(Math.abs(calculateChangeOrderImpact()))}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{changeOrders.length} approved</p>
               </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Variance</p>
-                    <p className={`text-2xl font-bold mt-1 ${
-                      isOverBudget ? 'text-red-600' : isUnderBudget ? 'text-green-600' : 'text-gray-900'
-                    }`}>
-                      {formatCurrency(Math.abs(variance))}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {isOverBudget ? 'Over Budget' : isUnderBudget ? 'Under Budget' : 'On Budget'}
-                    </p>
-                  </div>
-                  <div className={`rounded-full p-3 ${
-                    isOverBudget ? 'bg-red-100' : isUnderBudget ? 'bg-green-100' : 'bg-gray-100'
-                  }`}>
-                    {isOverBudget ? <TrendingUp className="w-8 h-8 text-red-600" /> :
-                     isUnderBudget ? <TrendingDown className="w-8 h-8 text-green-600" /> :
-                     <Minus className="w-8 h-8 text-gray-600" />}
-                  </div>
-                </div>
+            <Card className={cn(
+              'relative overflow-hidden border-border/60 bg-card/50',
+              isOverBudget && 'border-rose-500/30',
+              isUnderBudget && 'border-emerald-500/30',
+            )}>
+              <div className={cn(
+                'absolute inset-y-0 left-0 w-1',
+                isOverBudget ? 'bg-rose-500' : isUnderBudget ? 'bg-sky-500/100' : 'bg-muted-foreground',
+              )} aria-hidden />
+              <CardContent className="p-4 pl-5">
+                <p className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  Variance
+                  {isOverBudget && <TrendingUp className="size-3 text-rose-500" />}
+                  {isUnderBudget && <TrendingDown className="size-3 text-emerald-500" />}
+                  {!isOverBudget && !isUnderBudget && <Minus className="size-3 text-muted-foreground" />}
+                </p>
+                <p className={cn(
+                  'text-xl font-semibold tabular-nums',
+                  isOverBudget ? 'text-rose-600 dark:text-rose-400' :
+                  isUnderBudget ? 'text-emerald-600 dark:text-emerald-400' :
+                  'text-foreground',
+                )}>
+                  {formatCurrency(Math.abs(variance))}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {isOverBudget ? 'Over Budget' : isUnderBudget ? 'Under Budget' : 'On Budget'}
+                </p>
               </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-lg">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Entries</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">
-                      {actualEntries.length}
-                    </p>
-                  </div>
-                  <div className="bg-purple-100 rounded-full p-3">
-                    <Calendar className="w-8 h-8 text-purple-600" />
-                  </div>
-                </div>
+            <Card className="relative overflow-hidden border-border/60 bg-card/50">
+              <div className="absolute inset-y-0 left-0 w-1 bg-amber-500" aria-hidden />
+              <CardContent className="p-4 pl-5">
+                <p className="mb-1 text-xs text-muted-foreground">Total Entries</p>
+                <p className="text-xl font-semibold tabular-nums">{actualEntries.length}</p>
               </CardContent>
             </Card>
           </div>
 
-                      {/* Actuals breakdown: Material, Labor, Subcontractor (match estimate book order) */}
-          <Card className="bg-white shadow-lg border-slate-200">
-            <CardContent className="pt-6">
-              <p className="text-sm font-medium text-gray-600 mb-3">Actuals by type</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex items-center gap-3 rounded-lg bg-green-50 border border-green-200 p-3">
-                  <div className="bg-green-100 rounded-full p-2">
-                    <Package className="w-5 h-5 text-green-600" />
-                  </div>
+          {/* Actuals breakdown: Material, Labor, Subcontractor — flat 3-column chip grid */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="flex items-center gap-3 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3">
+                  <span className="flex size-8 items-center justify-center rounded-full bg-sky-500/20">
+                    <Package className="size-4 text-sky-600 dark:text-sky-400" />
+                  </span>
                   <div>
-                    <p className="text-xs text-green-700 font-medium">Material</p>
-                    <p className="text-lg font-bold text-gray-900">
+                    <p className="text-xs font-medium text-sky-700 dark:text-sky-300">Material</p>
+                    <p className="text-lg font-semibold tabular-nums">
                       {formatCurrency(actualEntries.filter(e => e.type === 'material').reduce((sum, entry) => sum + entry.amount, 0))}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg bg-blue-50 border border-blue-200 p-3">
-                  <div className="bg-blue-100 rounded-full p-2">
-                    <Users className="w-5 h-5 text-blue-600" />
-                  </div>
+                <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <span className="flex size-8 items-center justify-center rounded-full bg-amber-500/20">
+                    <Users className="size-4 text-amber-600 dark:text-amber-400" />
+                  </span>
                   <div className="min-w-0">
-                    <p className="text-xs text-blue-700 font-medium">Labor</p>
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300">Labor</p>
                     {(() => {
                       const laborEntries = actualEntries.filter(e => e.type === 'labor')
                       const total = laborEntries.reduce((sum, e) => sum + e.amount, 0)
@@ -971,69 +968,146 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       const burden = laborEntries.reduce((sum, e) => sum + (e.burdenAmount ?? 0), 0)
                       const hasBreakdown = laborEntries.some(e => e.grossWages != null || e.burdenAmount != null)
                       if (!hasBreakdown || (burden === 0 && wages === total)) {
-                        return <p className="text-lg font-bold text-gray-900">{formatCurrency(total)}</p>
+                        return <p className="text-lg font-semibold tabular-nums">{formatCurrency(total)}</p>
                       }
                       return (
-                        <div className="text-sm space-y-0.5">
-                          <p className="text-gray-700">Wages: {formatCurrency(wages)}</p>
-                          <p className="text-gray-700">Burden: {formatCurrency(burden)}</p>
-                          <p className="text-lg font-bold text-gray-900 border-t border-blue-200 pt-1 mt-1">Total: {formatCurrency(total)}</p>
+                        <div className="space-y-0.5 text-sm">
+                          <p className="text-muted-foreground">Wages: {formatCurrency(wages)}</p>
+                          <p className="text-muted-foreground">Burden: {formatCurrency(burden)}</p>
+                          <p className="mt-1 border-t border-amber-500/30 pt-1 text-lg font-semibold tabular-nums">Total: {formatCurrency(total)}</p>
                         </div>
                       )
                     })()}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg bg-orange-50 border border-orange-200 p-3">
-                  <div className="bg-orange-100 rounded-full p-2">
-                    <HardHat className="w-5 h-5 text-orange-600" />
-                  </div>
+                <div className="flex items-center gap-3 rounded-lg border border-teal-500/30 bg-teal-500/10 p-3">
+                  <span className="flex size-8 items-center justify-center rounded-full bg-teal-500/20">
+                    <HardHat className="size-4 text-teal-600 dark:text-teal-400" />
+                  </span>
                   <div>
-                    <p className="text-xs text-orange-700 font-medium">Subcontractor</p>
-                    <p className="text-lg font-bold text-gray-900">
+                    <p className="text-xs font-medium text-teal-700 dark:text-teal-300">Subcontractor</p>
+                    <p className="text-lg font-semibold tabular-nums">
                       {formatCurrency(actualEntries.filter(e => e.type === 'subcontractor').reduce((sum, entry) => sum + entry.amount, 0))}
                     </p>
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Quick Entry Buttons - hidden on mobile (moved to bottom Actions menu). Order: Material, Labor, Subcontractor (match columns). */}
-          <Card className="hidden sm:block">
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-3">
+          {/* Debug Information removed */}
+
+          {/* Variance Legend */}
+          {changeOrders.length > 0 && (
+            <Card className="border-sky-500/30 bg-sky-500/5">
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-3">
+                  <FileText className="mt-0.5 size-5 text-sky-600 dark:text-sky-400" />
+                  <div className="flex-1">
+                    <p className="mb-2 text-sm font-semibold">Variance Color Guide:</p>
+                    <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">✓ Green</span>
+                        <span className="text-muted-foreground">= Under budget</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sky-600 dark:text-sky-400">📋 Blue</span>
+                        <span className="text-muted-foreground">= Approved change order</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-amber-600 dark:text-amber-400">⚠️ Yellow</span>
+                        <span className="text-muted-foreground">= Partial CO + overrun</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-rose-600 dark:text-rose-400">⚠️ Red</span>
+                        <span className="text-muted-foreground">= Cost overrun (no CO)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Actuals by Category — flat section + actions matching Estimate Book pattern */}
+          <section className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-lg font-semibold">Actuals by Category</h2>
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
-                  onClick={() => {
-                    setEntryType('material')
-                    setShowEntryForm(true)
-                  }}
-                  className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAllEntriesModalType('all')}
                 >
-                  <Package className="w-4 h-4 mr-2" />
-                  Add Material Entry
+                  <List className="size-4" />
+                  View all entries
                 </Button>
-                <Button
-                  onClick={() => {
-                    setEntryType('labor')
-                    setShowEntryForm(true)
-                  }}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
-                >
-                  <Users className="w-4 h-4 mr-2" />
-                  Add Labor Entry
-                </Button>
-                <Button
-                  onClick={() => {
-                    setEntryType('subcontractor')
-                    setShowEntryForm(true)
-                  }}
-                  className="flex-1 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800"
-                >
-                  <HardHat className="w-4 h-4 mr-2" />
-                  Add Subcontractor Entry
-                </Button>
-              </div>
-              <div className="mt-3 pt-3 border-t border-gray-200">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Printer className="size-4" />
+                      Print Report
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuItem onClick={() => handlePrintReport('actuals', 'summary')}>
+                      <div className="flex flex-col">
+                        <span>Actuals — Summary</span>
+                        <span className="text-xs text-muted-foreground">Category totals only</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrintReport('actuals', 'category')}>
+                      <div className="flex flex-col">
+                        <span>Actuals — Category Detail</span>
+                        <span className="text-xs text-muted-foreground">Subtotals by category</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrintReport('actuals', 'full')}>
+                      <div className="flex flex-col">
+                        <span>Actuals — Full Detail</span>
+                        <span className="text-xs text-muted-foreground">Every entry</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrintReport('comparison', 'summary')}>
+                      <div className="flex flex-col">
+                        <span>Variance — Summary</span>
+                        <span className="text-xs text-muted-foreground">Estimate vs Actual</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrintReport('comparison', 'category')}>
+                      <div className="flex flex-col">
+                        <span>Variance — Category Detail</span>
+                        <span className="text-xs text-muted-foreground">Per-category variance</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrintReport('comparison', 'full')}>
+                      <div className="flex flex-col">
+                        <span>Variance — Full Detail</span>
+                        <span className="text-xs text-muted-foreground">Per-line variance</span>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm">
+                      <PlusCircle className="size-4" />
+                      Add Entry
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onClick={() => { setEntryType('material'); setShowEntryForm(true) }}>
+                      <Package className="size-4" />
+                      Add Material Entry
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { setEntryType('labor'); setShowEntryForm(true) }}>
+                      <Users className="size-4" />
+                      Add Labor Entry
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { setEntryType('subcontractor'); setShowEntryForm(true) }}>
+                      <HardHat className="size-4" />
+                      Add Subcontractor Entry
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <QuickBooksImport
                   trigger="button"
                   preSelectedProject={{
@@ -1044,76 +1118,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   onSuccess={() => setActualsRefreshKey((k) => k + 1)}
                 />
               </div>
-            </CardContent>
-          </Card>
-          {/* QuickBooksImport for mobile Actions - controlled open when opened from bottom menu */}
-          <div className="sm:hidden sr-only">
-            <QuickBooksImport
-              trigger="button"
-              preSelectedProject={{
-                id: project.id,
-                name: project.name,
-                estimateId: project.estimate?.id,
-              }}
-              onSuccess={() => setActualsRefreshKey((k) => k + 1)}
-              open={showQBImport}
-              onOpenChange={setShowQBImport}
-            />
-          </div>
+            </div>
 
-          {/* Debug Information removed */}
-
-          {/* Variance Legend */}
-          {changeOrders.length > 0 && (
-            <Card className="bg-blue-50 border-blue-200">
-              <CardContent className="pt-4">
-                <div className="flex items-start gap-3">
-                  <FileText className="w-5 h-5 text-blue-600 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-blue-900 mb-2">Variance Color Guide:</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-600 font-bold">✓ Green</span>
-                        <span className="text-gray-700">= Under budget</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-blue-600 font-bold">📋 Blue</span>
-                        <span className="text-gray-700">= Approved change order</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-yellow-600 font-bold">⚠️ Yellow</span>
-                        <span className="text-gray-700">= Partial CO + overrun</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-red-600 font-bold">⚠️ Red</span>
-                        <span className="text-gray-700">= Cost overrun (no CO)</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Actuals by Category */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <CardTitle>Actuals by Category</CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAllEntriesModalType('all')}
-                  className="shrink-0"
-                >
-                  <List className="w-4 h-4 mr-1.5" />
-                  View all entries
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
+            <div className="rounded-lg border border-border/60 bg-card/50">
               {/* Mobile - Cards (match EstimateBuilder card style) */}
-              <div className="md:hidden space-y-4">
+              <div className="md:hidden space-y-4 p-4">
                 {categoryOrder.map((category) => {
                   const categoryTrades = tradesByCategory[category] || []
                   const isCategoryExpanded = expandedCategories.has(category)
@@ -1130,7 +1139,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   const categorySubVariance = categoryActualBreakdown.subcontractor - categoryEstimateBreakdown.subcontractor
 
                   return (
-                    <div key={category} className="flex rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm">
+                    <div key={category} className="flex rounded-lg border border-border/60 bg-card overflow-hidden shadow-sm">
                       <div
                         className="shrink-0 w-1.5 rounded-l-md"
                         style={{ backgroundColor: getCategoryAccentColor(category) }}
@@ -1139,44 +1148,44 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       <Card className="flex-1 rounded-none border-0 shadow-none min-w-0">
                       <button
                         onClick={() => toggleCategory(category)}
-                        className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+                        className="w-full p-4 flex items-center justify-between hover:bg-muted/30 transition-colors text-left"
                       >
                         <div className="flex items-center gap-3">
                           <div className="text-left">
-                            <p className="font-bold text-gray-900">
+                            <p className="font-bold text-foreground">
                               {byKey[category]?.label || category}
                             </p>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted-foreground">
                               {categoryTrades.length} items • {getActualsByCategory(category).length} entries
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="text-right">
-                            <p className="text-sm text-gray-600">Est / Act</p>
-                            <p className="font-bold text-[#34AB8A]">{formatCurrency(categoryEstimate)} / <span className={isOver ? 'text-red-600' : 'text-green-600'}>{formatCurrency(categoryActual)}</span></p>
+                            <p className="text-sm text-muted-foreground">Est / Act</p>
+                            <p className="font-semibold tabular-nums text-foreground">{formatCurrency(categoryEstimate)} / <span className={isOver ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}>{formatCurrency(categoryActual)}</span></p>
                           </div>
                           {isCategoryExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                         </div>
                       </button>
 
                       {isCategoryExpanded && (
-                        <div className="border-t border-gray-200 bg-gray-50 p-4">
+                        <div className="border-t border-border/60 bg-muted/30 p-4">
                           {(categoryEntries.length > 0 || categoryEstimateBreakdown.labor > 0 || categoryEstimateBreakdown.material > 0 || categoryEstimateBreakdown.subcontractor > 0) && (
-                                  <div className="mb-3 pb-2 border-b border-gray-300">
+                                  <div className="mb-3 pb-2 border-b border-border/60">
                                     <div className="flex flex-wrap items-center gap-2 text-xs">
-                                      <span className="text-gray-600 font-semibold">Breakdown:</span>
-                                      <span className={`px-2 py-1 rounded ${categoryEstimateBreakdown.labor > 0 || categoryActualBreakdown.labor > 0 ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'text-gray-400'}`}>
+                                      <span className="text-muted-foreground font-semibold">Breakdown:</span>
+                                      <span className={`px-2 py-1 rounded ${categoryEstimateBreakdown.labor > 0 || categoryActualBreakdown.labor > 0 ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-amber-500/40' : 'text-muted-foreground'}`}>
                                         👷 Labor: Est {formatCurrency(categoryEstimateBreakdown.labor)} | Act {formatCurrency(categoryActualBreakdown.labor)}
                                       </span>
-                                      <span className={`px-2 py-1 rounded ${categoryEstimateBreakdown.material > 0 || categoryActualBreakdown.material > 0 ? 'bg-green-100 text-green-800 border border-green-300' : 'text-gray-400'}`}>
+                                      <span className={`px-2 py-1 rounded ${categoryEstimateBreakdown.material > 0 || categoryActualBreakdown.material > 0 ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30' : 'text-muted-foreground'}`}>
                                         📦 Material: Est {formatCurrency(categoryEstimateBreakdown.material)} | Act {formatCurrency(categoryActualBreakdown.material)}
                                       </span>
-                                      <span className={`px-2 py-1 rounded ${categoryEstimateBreakdown.subcontractor > 0 || categoryActualBreakdown.subcontractor > 0 ? 'bg-orange-100 text-orange-800 border border-orange-300' : 'text-gray-400'}`}>
+                                      <span className={`px-2 py-1 rounded ${categoryEstimateBreakdown.subcontractor > 0 || categoryActualBreakdown.subcontractor > 0 ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30' : 'text-muted-foreground'}`}>
                                         👷‍♂️ Sub: Est {formatCurrency(categoryEstimateBreakdown.subcontractor)} | Act {formatCurrency(categoryActualBreakdown.subcontractor)}
                                       </span>
                                       {unlinkedEntries.length > 0 && (
-                                        <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 border border-yellow-300 inline-flex items-center gap-1">
+                                        <span className="px-2 py-1 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 inline-flex items-center gap-1">
                                           📋 General ({unlinkedEntries.length}) {formatCurrency(unlinkedEntries.reduce((sum, e) => sum + e.amount, 0))}
                                           <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ category: category, label: `${byKey[category]?.label || category} · General (invoices not tied to a line)`, generalOnly: true }) }} title="View invoices and entries">View ({unlinkedEntries.length})</Button>
                                         </span>
@@ -1187,25 +1196,25 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                 
                                 {/* Breakdown by Type - Always show if category has any entries or estimates */}
                                 {(getActualsByCategory(category).length > 0 || categoryEstimateBreakdown.labor > 0 || categoryEstimateBreakdown.material > 0 || categoryEstimateBreakdown.subcontractor > 0) && (
-                                  <div className="mb-3 pb-3 border-b border-gray-200 bg-gray-50 p-3 rounded">
-                                    <p className="text-sm font-semibold text-gray-800 mb-2">💰 Breakdown: Estimate vs Actual</p>
+                                  <div className="mb-3 pb-3 border-b border-border/60 bg-muted/30 p-3 rounded">
+                                    <p className="text-sm font-semibold text-foreground mb-2">💰 Breakdown: Estimate vs Actual</p>
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                       <div className={`px-3 py-2 rounded-md border text-xs ${
                                         categoryEstimateBreakdown.labor > 0 || categoryActualBreakdown.labor > 0
-                                          ? 'bg-blue-50 border-blue-300' 
-                                          : 'bg-gray-50 border-gray-200'
+                                          ? 'bg-amber-500/10 border-amber-500/40' 
+                                          : 'bg-muted/30 border-border/60'
                                       }`}>
-                                        <div className="font-semibold mb-1.5 text-blue-900">👷 Labor</div>
+                                        <div className="font-semibold mb-1.5 text-amber-700 dark:text-amber-300">👷 Labor</div>
                                         <div className="space-y-1 text-[10px]">
                                           <div className="flex justify-between">
-                                            <span className="text-gray-600">Est:</span>
+                                            <span className="text-muted-foreground">Est:</span>
                                             <span className="font-semibold">{formatCurrency(categoryEstimateBreakdown.labor)}</span>
                                           </div>
                                           <div className="flex justify-between">
-                                            <span className="text-gray-600">Act:</span>
+                                            <span className="text-muted-foreground">Act:</span>
                                             <span className="font-semibold">{formatCurrency(categoryActualBreakdown.labor)}</span>
                                           </div>
-                                          <div className={`flex justify-between pt-1 border-t ${categoryLaborVariance > 0 ? 'text-red-600' : categoryLaborVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                                          <div className={`flex justify-between pt-1 border-t ${categoryLaborVariance > 0 ? 'text-rose-600 dark:text-rose-400' : categoryLaborVariance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                                             <span className="font-semibold">Var:</span>
                                             <span className="font-bold">{formatCurrency(Math.abs(categoryLaborVariance))} {categoryLaborVariance > 0 ? '⚠️' : categoryLaborVariance < 0 ? '✓' : ''}</span>
                                           </div>
@@ -1213,20 +1222,20 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                       </div>
                                       <div className={`px-3 py-2 rounded-md border text-xs ${
                                         categoryEstimateBreakdown.material > 0 || categoryActualBreakdown.material > 0
-                                          ? 'bg-green-50 border-green-300' 
-                                          : 'bg-gray-50 border-gray-200'
+                                          ? 'bg-emerald-500/10 border-emerald-500/40' 
+                                          : 'bg-muted/30 border-border/60'
                                       }`}>
-                                        <div className="font-semibold mb-1.5 text-green-900">📦 Material</div>
+                                        <div className="font-semibold mb-1.5 text-sky-700 dark:text-sky-300">📦 Material</div>
                                         <div className="space-y-1 text-[10px]">
                                           <div className="flex justify-between">
-                                            <span className="text-gray-600">Est:</span>
+                                            <span className="text-muted-foreground">Est:</span>
                                             <span className="font-semibold">{formatCurrency(categoryEstimateBreakdown.material)}</span>
                                           </div>
                                           <div className="flex justify-between">
-                                            <span className="text-gray-600">Act:</span>
+                                            <span className="text-muted-foreground">Act:</span>
                                             <span className="font-semibold">{formatCurrency(categoryActualBreakdown.material)}</span>
                                           </div>
-                                          <div className={`flex justify-between pt-1 border-t ${categoryMaterialVariance > 0 ? 'text-red-600' : categoryMaterialVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                                          <div className={`flex justify-between pt-1 border-t ${categoryMaterialVariance > 0 ? 'text-rose-600 dark:text-rose-400' : categoryMaterialVariance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                                             <span className="font-semibold">Var:</span>
                                             <span className="font-bold">{formatCurrency(Math.abs(categoryMaterialVariance))} {categoryMaterialVariance > 0 ? '⚠️' : categoryMaterialVariance < 0 ? '✓' : ''}</span>
                                           </div>
@@ -1234,20 +1243,20 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                       </div>
                                       <div className={`px-3 py-2 rounded-md border text-xs ${
                                         categoryEstimateBreakdown.subcontractor > 0 || categoryActualBreakdown.subcontractor > 0
-                                          ? 'bg-orange-50 border-orange-300' 
-                                          : 'bg-gray-50 border-gray-200'
+                                          ? 'bg-teal-500/10 border-teal-500/40' 
+                                          : 'bg-muted/30 border-border/60'
                                       }`}>
-                                        <div className="font-semibold mb-1.5 text-orange-900">👷‍♂️ Subcontractor</div>
+                                        <div className="font-semibold mb-1.5 text-teal-700 dark:text-teal-300">👷‍♂️ Subcontractor</div>
                                         <div className="space-y-1 text-[10px]">
                                           <div className="flex justify-between">
-                                            <span className="text-gray-600">Est:</span>
+                                            <span className="text-muted-foreground">Est:</span>
                                             <span className="font-semibold">{formatCurrency(categoryEstimateBreakdown.subcontractor)}</span>
                                           </div>
                                           <div className="flex justify-between">
-                                            <span className="text-gray-600">Act:</span>
+                                            <span className="text-muted-foreground">Act:</span>
                                             <span className="font-semibold">{formatCurrency(categoryActualBreakdown.subcontractor)}</span>
                                           </div>
-                                          <div className={`flex justify-between pt-1 border-t ${categorySubVariance > 0 ? 'text-red-600' : categorySubVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                                          <div className={`flex justify-between pt-1 border-t ${categorySubVariance > 0 ? 'text-rose-600 dark:text-rose-400' : categorySubVariance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                                             <span className="font-semibold">Var:</span>
                                             <span className="font-bold">{formatCurrency(Math.abs(categorySubVariance))} {categorySubVariance > 0 ? '⚠️' : categorySubVariance < 0 ? '✓' : ''}</span>
                                           </div>
@@ -1255,9 +1264,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                       </div>
                                     </div>
                                     {unlinkedEntries.length > 0 && (
-                                      <div className="mt-3 px-3 py-2 rounded-md border bg-yellow-50 border-yellow-300 text-yellow-800 text-xs flex items-center justify-between gap-2">
+                                      <div className="mt-3 px-3 py-2 rounded-md border bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs flex items-center justify-between gap-2">
                                         <span><span className="font-semibold">📋 General ({unlinkedEntries.length}):</span> {formatCurrency(unlinkedEntries.reduce((sum, e) => sum + e.amount, 0))}</span>
-                                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-yellow-800 hover:bg-yellow-100" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ category: category, label: `${byKey[category]?.label || category} · General (invoices not tied to a line)`, generalOnly: true }) }} title="View invoices and entries">View ({unlinkedEntries.length})</Button>
+                                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/15" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ category: category, label: `${byKey[category]?.label || category} · General (invoices not tied to a line)`, generalOnly: true }) }} title="View invoices and entries">View ({unlinkedEntries.length})</Button>
                                       </div>
                                     )}
                                   </div>
@@ -1281,14 +1290,14 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     const hasSubItems = tradeSubItems.length > 0
 
                                     return (
-                                      <div key={trade.id} className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
+                                      <div key={trade.id} className="bg-card rounded-lg p-3 sm:p-4 border border-border/60">
                                         {/* Item Header */}
                                         <div className="mb-3">
                                           <div className="flex items-center gap-2 flex-wrap">
                                             {hasSubItems && (
                                               <button
                                                 onClick={() => toggleTradeExpansion(trade.id)}
-                                                className="p-1 hover:bg-gray-200 rounded"
+                                                className="p-1 hover:bg-accent rounded"
                                                 title={isTradeExpanded ? 'Collapse sub-items' : 'Expand sub-items'}
                                               >
                                                 {isTradeExpanded ? (
@@ -1298,9 +1307,9 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                 )}
                                               </button>
                                             )}
-                                            <h4 className="font-semibold text-gray-900 text-sm sm:text-base">{trade.name}</h4>
+                                            <h4 className="font-semibold text-foreground text-sm sm:text-base">{trade.name}</h4>
                                             {hasSubItems && (
-                                              <span className="text-xs text-gray-500">({tradeSubItems.length} sub-items)</span>
+                                              <span className="text-xs text-muted-foreground">({tradeSubItems.length} sub-items)</span>
                                             )}
                                             {itemCOs.length > 0 && (
                                               <button
@@ -1313,24 +1322,24 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                   }
                                                   setExpandedCOItems(newExpanded)
                                                 }}
-                                                className="flex items-center gap-1 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
+                                                className="flex items-center gap-1 text-xs bg-sky-500/15 text-sky-700 dark:text-sky-300 px-2 py-1 rounded hover:bg-sky-500/25"
                                               >
                                                 <FileText className="w-3 h-3" />
                                                 {itemCOs.length} Change Order{itemCOs.length > 1 ? 's' : ''}
                                               </button>
                                             )}
                                           </div>
-                                          <p className="text-xs sm:text-sm text-gray-600">
+                                          <p className="text-xs sm:text-sm text-muted-foreground">
                                             {trade.quantity} {trade.unit}
                                           </p>
                                         </div>
 
                                         {/* Expanded Change Order Details */}
                                         {hasExpanded && itemCOs.length > 0 && (
-                                          <div className="mb-3 p-2 bg-blue-50 rounded border border-blue-200">
-                                            <p className="text-xs font-semibold text-blue-900 mb-2">Related Change Orders:</p>
+                                          <div className="mb-3 p-2 bg-amber-500/10 rounded border border-amber-500/30">
+                                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-2">Related Change Orders:</p>
                                             {itemCOs.map((co: any) => (
-                                              <div key={co.id} className="text-xs text-blue-800 mb-1">
+                                              <div key={co.id} className="text-xs text-amber-700 dark:text-amber-300 mb-1">
                                                 • {co.changeOrderNumber}: {co.title} ({formatCurrency(co.costImpact)})
                                               </div>
                                             ))}
@@ -1339,20 +1348,20 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
                                         {/* Mobile: Stacked Numbers */}
                                         <div className="sm:hidden grid grid-cols-3 gap-2 text-xs mb-3">
-                                          <div className="text-center bg-gray-50 rounded p-2">
-                                            <p className="text-gray-600 mb-1">Est.</p>
-                                            <p className="font-bold text-gray-900 text-xs">{formatCurrency(tradeEstimate)}</p>
+                                          <div className="text-center bg-muted/30 rounded p-2">
+                                            <p className="text-muted-foreground mb-1">Est.</p>
+                                            <p className="font-bold text-foreground text-xs">{formatCurrency(tradeEstimate)}</p>
                                           </div>
-                                          <div className="text-center bg-gray-50 rounded p-2">
-                                            <p className="text-gray-600 mb-1">Actual</p>
-                                            <p className="font-bold text-gray-900 text-xs">{formatCurrency(tradeActualTotal)}</p>
+                                          <div className="text-center bg-muted/30 rounded p-2">
+                                            <p className="text-muted-foreground mb-1">Actual</p>
+                                            <p className="font-bold text-foreground text-xs">{formatCurrency(tradeActualTotal)}</p>
                                           </div>
                                           <div className={`text-center rounded p-2 ${
-                                            varianceType === 'approved-change' ? 'bg-blue-50' :
-                                            varianceType === 'mixed' ? 'bg-yellow-50' :
-                                            isTradeOver ? 'bg-red-50' : 'bg-green-50'
+                                            varianceType === 'approved-change' ? 'bg-amber-500/10' :
+                                            varianceType === 'mixed' ? 'bg-amber-500/10' :
+                                            isTradeOver ? 'bg-rose-500/10' : 'bg-emerald-500/10'
                                           }`}>
-                                            <p className="text-gray-600 mb-1">Var.</p>
+                                            <p className="text-muted-foreground mb-1">Var.</p>
                                             <p className={`font-bold text-xs ${getVarianceColor(varianceType)}`}>
                                               {formatCurrency(Math.abs(tradeVariance))}
                                               {' '}{getVarianceIcon(varianceType)}
@@ -1363,24 +1372,24 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                         {/* Desktop: Row Layout */}
                                         <div className="hidden sm:flex justify-end gap-4 text-sm mb-3">
                                           <div className="text-right">
-                                            <p className="text-xs text-gray-600">Estimated</p>
-                                            <p className="font-bold text-gray-900">{formatCurrency(tradeEstimate)}</p>
+                                            <p className="text-xs text-muted-foreground">Estimated</p>
+                                            <p className="font-bold text-foreground">{formatCurrency(tradeEstimate)}</p>
                                           </div>
                                           <div className="text-right">
-                                            <p className="text-xs text-gray-600">Actual</p>
-                                            <p className="font-bold text-gray-900">{formatCurrency(tradeActualTotal)}</p>
+                                            <p className="text-xs text-muted-foreground">Actual</p>
+                                            <p className="font-bold text-foreground">{formatCurrency(tradeActualTotal)}</p>
                                           </div>
                                           <div className="text-right min-w-[100px]">
-                                            <p className="text-xs text-gray-600">Variance</p>
+                                            <p className="text-xs text-muted-foreground">Variance</p>
                                             <p className={`font-bold ${getVarianceColor(varianceType)}`}>
                                               {formatCurrency(Math.abs(tradeVariance))}
                                               {' '}{getVarianceIcon(varianceType)}
                                             </p>
                                             {varianceType === 'approved-change' && (
-                                              <p className="text-xs text-blue-600">Approved Change</p>
+                                              <p className="text-xs text-amber-600 dark:text-amber-400">Approved Change</p>
                                             )}
                                             {varianceType === 'mixed' && (
-                                              <p className="text-xs text-yellow-600">Partial Change</p>
+                                              <p className="text-xs text-amber-600 dark:text-amber-400">Partial Change</p>
                                             )}
                                           </div>
                                         </div>
@@ -1405,28 +1414,28 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                           }
                                           
                                           return (
-                                            <div className="mb-3 pb-3 border-b border-gray-200 bg-gray-50 p-2 rounded">
-                                              <p className="text-xs font-semibold text-gray-800 mb-2">💰 Item Breakdown: Estimate vs Actual</p>
+                                            <div className="mb-3 pb-3 border-b border-border/60 bg-muted/30 p-2 rounded">
+                                              <p className="text-xs font-semibold text-foreground mb-2">💰 Item Breakdown: Estimate vs Actual</p>
                                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                                 <div className={`px-2 py-1.5 rounded border text-[10px] ${
                                                   tradeEstimateBreakdown.labor > 0 || tradeBreakdown.labor > 0
-                                                    ? 'bg-blue-50 border-blue-200' 
-                                                    : 'bg-gray-50 border-gray-200'
+                                                    ? 'bg-amber-500/10 border-amber-500/30' 
+                                                    : 'bg-muted/30 border-border/60'
                                                 }`}>
-                                                  <div className="font-semibold mb-1 text-blue-900">👷 Labor</div>
+                                                  <div className="font-semibold mb-1 text-amber-700 dark:text-amber-300">👷 Labor</div>
                                                   <div className="space-y-0.5">
                                                     <div className="flex justify-between">
-                                                      <span className="text-gray-600">Est:</span>
+                                                      <span className="text-muted-foreground">Est:</span>
                                                       <span className="font-semibold">{formatCurrency(tradeEstimateBreakdown.labor)}</span>
                                                     </div>
                                                     <div className="flex justify-between">
-                                                      <span className="text-gray-600">Act:</span>
+                                                      <span className="text-muted-foreground">Act:</span>
                                                       <span className="font-semibold">{formatCurrency(tradeBreakdown.labor)}</span>
                                                     </div>
                                                     {allTradeActuals.filter(e => e.type === 'labor').length > 0 && (
-                                                      <button type="button" onClick={() => setViewEntriesCell({ type: 'labor', tradeId: trade.id, label: `${trade.name} · Labor` })} className="flex items-center gap-0.5 text-blue-700 hover:underline mt-0.5"><List className="w-2.5 h-2.5" /> View ({allTradeActuals.filter(e => e.type === 'labor').length})</button>
+                                                      <button type="button" onClick={() => setViewEntriesCell({ type: 'labor', tradeId: trade.id, label: `${trade.name} · Labor` })} className="flex items-center gap-0.5 text-amber-700 dark:text-amber-300 hover:underline mt-0.5"><List className="w-2.5 h-2.5" /> View ({allTradeActuals.filter(e => e.type === 'labor').length})</button>
                                                     )}
-                                                    <div className={`flex justify-between pt-0.5 border-t ${itemLaborVariance > 0 ? 'text-red-600' : itemLaborVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                                                    <div className={`flex justify-between pt-0.5 border-t ${itemLaborVariance > 0 ? 'text-rose-600 dark:text-rose-400' : itemLaborVariance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                                                       <span className="font-semibold">Var:</span>
                                                       <span className="font-bold">{formatCurrency(Math.abs(itemLaborVariance))} {itemLaborVariance > 0 ? '⚠️' : itemLaborVariance < 0 ? '✓' : ''}</span>
                                                     </div>
@@ -1434,23 +1443,23 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                 </div>
                                                 <div className={`px-2 py-1.5 rounded border text-[10px] ${
                                                   tradeEstimateBreakdown.material > 0 || tradeBreakdown.material > 0
-                                                    ? 'bg-green-50 border-green-200' 
-                                                    : 'bg-gray-50 border-gray-200'
+                                                    ? 'bg-emerald-500/10 border-emerald-500/30' 
+                                                    : 'bg-muted/30 border-border/60'
                                                 }`}>
-                                                  <div className="font-semibold mb-1 text-green-900">📦 Material</div>
+                                                  <div className="font-semibold mb-1 text-sky-700 dark:text-sky-300">📦 Material</div>
                                                   <div className="space-y-0.5">
                                                     <div className="flex justify-between">
-                                                      <span className="text-gray-600">Est:</span>
+                                                      <span className="text-muted-foreground">Est:</span>
                                                       <span className="font-semibold">{formatCurrency(tradeEstimateBreakdown.material)}</span>
                                                     </div>
                                                     <div className="flex justify-between">
-                                                      <span className="text-gray-600">Act:</span>
+                                                      <span className="text-muted-foreground">Act:</span>
                                                       <span className="font-semibold">{formatCurrency(tradeBreakdown.material)}</span>
                                                     </div>
                                                     {allTradeActuals.filter(e => e.type === 'material').length > 0 && (
-                                                      <button type="button" onClick={() => setViewEntriesCell({ type: 'material', tradeId: trade.id, label: `${trade.name} · Material` })} className="flex items-center gap-0.5 text-green-800 hover:underline mt-0.5"><List className="w-2.5 h-2.5" /> View ({allTradeActuals.filter(e => e.type === 'material').length})</button>
+                                                      <button type="button" onClick={() => setViewEntriesCell({ type: 'material', tradeId: trade.id, label: `${trade.name} · Material` })} className="flex items-center gap-0.5 text-sky-700 dark:text-sky-300 hover:underline mt-0.5"><List className="w-2.5 h-2.5" /> View ({allTradeActuals.filter(e => e.type === 'material').length})</button>
                                                     )}
-                                                    <div className={`flex justify-between pt-0.5 border-t ${itemMaterialVariance > 0 ? 'text-red-600' : itemMaterialVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                                                    <div className={`flex justify-between pt-0.5 border-t ${itemMaterialVariance > 0 ? 'text-rose-600 dark:text-rose-400' : itemMaterialVariance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                                                       <span className="font-semibold">Var:</span>
                                                       <span className="font-bold">{formatCurrency(Math.abs(itemMaterialVariance))} {itemMaterialVariance > 0 ? '⚠️' : itemMaterialVariance < 0 ? '✓' : ''}</span>
                                                     </div>
@@ -1458,23 +1467,23 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                 </div>
                                                 <div className={`px-2 py-1.5 rounded border text-[10px] ${
                                                   tradeEstimateBreakdown.subcontractor > 0 || tradeBreakdown.subcontractor > 0
-                                                    ? 'bg-orange-50 border-orange-200' 
-                                                    : 'bg-gray-50 border-gray-200'
+                                                    ? 'bg-teal-500/10 border-teal-500/30' 
+                                                    : 'bg-muted/30 border-border/60'
                                                 }`}>
-                                                  <div className="font-semibold mb-1 text-orange-900">👷‍♂️ Sub</div>
+                                                  <div className="font-semibold mb-1 text-teal-700 dark:text-teal-300">👷‍♂️ Sub</div>
                                                   <div className="space-y-0.5">
                                                     <div className="flex justify-between">
-                                                      <span className="text-gray-600">Est:</span>
+                                                      <span className="text-muted-foreground">Est:</span>
                                                       <span className="font-semibold">{formatCurrency(tradeEstimateBreakdown.subcontractor)}</span>
                                                     </div>
                                                     <div className="flex justify-between">
-                                                      <span className="text-gray-600">Act:</span>
+                                                      <span className="text-muted-foreground">Act:</span>
                                                       <span className="font-semibold">{formatCurrency(tradeBreakdown.subcontractor)}</span>
                                                     </div>
                                                     {allTradeActuals.filter(e => e.type === 'subcontractor').length > 0 && (
-                                                      <button type="button" onClick={() => setViewEntriesCell({ type: 'subcontractor', tradeId: trade.id, label: `${trade.name} · Subcontractor` })} className="flex items-center gap-0.5 text-orange-800 hover:underline mt-0.5"><List className="w-2.5 h-2.5" /> View ({allTradeActuals.filter(e => e.type === 'subcontractor').length})</button>
+                                                      <button type="button" onClick={() => setViewEntriesCell({ type: 'subcontractor', tradeId: trade.id, label: `${trade.name} · Subcontractor` })} className="flex items-center gap-0.5 text-teal-700 dark:text-teal-300 hover:underline mt-0.5"><List className="w-2.5 h-2.5" /> View ({allTradeActuals.filter(e => e.type === 'subcontractor').length})</button>
                                                     )}
-                                                    <div className={`flex justify-between pt-0.5 border-t ${itemSubVariance > 0 ? 'text-red-600' : itemSubVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                                                    <div className={`flex justify-between pt-0.5 border-t ${itemSubVariance > 0 ? 'text-rose-600 dark:text-rose-400' : itemSubVariance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                                                       <span className="font-semibold">Var:</span>
                                                       <span className="font-bold">{formatCurrency(Math.abs(itemSubVariance))} {itemSubVariance > 0 ? '⚠️' : itemSubVariance < 0 ? '✓' : ''}</span>
                                                     </div>
@@ -1487,8 +1496,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
                                         {/* Sub-Items */}
                                         {isTradeExpanded && hasSubItems && (
-                                          <div className="mb-3 pb-3 border-b border-gray-200 space-y-2">
-                                            <p className="text-xs font-semibold text-gray-700 uppercase mb-2">Sub-Items:</p>
+                                          <div className="mb-3 pb-3 border-b border-border/60 space-y-2">
+                                            <p className="text-xs font-semibold text-foreground uppercase mb-2">Sub-Items:</p>
                                             {tradeSubItems.map((subItem) => {
                                               const subItemActuals = getActualsBySubItem(subItem.id)
                                               const subItemActualTotal = subItemActuals.reduce((sum, entry) => sum + entry.amount, 0)
@@ -1496,22 +1505,22 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                               const subItemVariance = subItemActualTotal - subItemEstimate
                                               
                                               return (
-                                                <div key={subItem.id} className="bg-blue-50 rounded-lg p-2 border border-blue-200">
+                                                <div key={subItem.id} className="bg-amber-500/10 rounded-lg p-2 border border-amber-500/30">
                                                   <div className="flex items-center justify-between mb-2">
                                                     <div>
-                                                      <p className="text-sm font-medium text-gray-900">{subItem.name}</p>
-                                                      <p className="text-xs text-gray-600">{subItem.quantity} {subItem.unit}</p>
+                                                      <p className="text-sm font-medium text-foreground">{subItem.name}</p>
+                                                      <p className="text-xs text-muted-foreground">{subItem.quantity} {subItem.unit}</p>
                                                     </div>
                                                     <div className="text-right text-xs">
-                                                      <p className="text-gray-600">Est: {formatCurrency(subItemEstimate)}</p>
-                                                      <p className="text-gray-600">Act: {formatCurrency(subItemActualTotal)}</p>
-                                                      <p className={`font-semibold ${subItemVariance > 0 ? 'text-red-600' : subItemVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                                                      <p className="text-muted-foreground">Est: {formatCurrency(subItemEstimate)}</p>
+                                                      <p className="text-muted-foreground">Act: {formatCurrency(subItemActualTotal)}</p>
+                                                      <p className={`font-semibold ${subItemVariance > 0 ? 'text-rose-600 dark:text-rose-400' : subItemVariance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                                                         Var: {formatCurrency(Math.abs(subItemVariance))} {subItemVariance > 0 ? '⚠️' : subItemVariance < 0 ? '✓' : ''}
                                                       </p>
                                                     </div>
                                                   </div>
                                                   {subItemActuals.length > 0 && (
-                                                    <div className="mt-2 pt-2 border-t border-blue-200 space-y-1">
+                                                    <div className="mt-2 pt-2 border-t border-amber-500/30 space-y-1">
                                                       {subItemActuals.map((entry) => (
                                                         <div
                                                           key={entry.id}
@@ -1520,8 +1529,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                           <div className="flex items-center gap-1.5 flex-1">
                                                             {getEntryIcon(entry.type)}
                                                             <div className="flex-1">
-                                                              <p className="font-medium text-gray-900">{entry.description}</p>
-                                                              <p className="text-gray-600">
+                                                              <p className="font-medium text-foreground">{entry.description}</p>
+                                                              <p className="text-muted-foreground">
                                                                 {formatDate(entry.date)}
                                                                 {entry.vendor && ` • ${entry.vendor}`}
                                                                 {entry.invoiceNumber && ` • ${entry.invoiceNumber}`}
@@ -1529,7 +1538,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                             </div>
                                                           </div>
                                                           <div className="flex items-center gap-1">
-                                                            <p className="font-semibold text-gray-900">{formatCurrency(entry.amount)}</p>
+                                                            <p className="font-semibold text-foreground">{formatCurrency(entry.amount)}</p>
                                                             {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
                                                               <Button size="sm" variant="outline" className="h-6 px-1.5" title="Reassign to another project" onClick={() => setReassignEntry({ entry, type: entry.type as 'material' | 'subcontractor' })}><ArrowRightLeft className="w-3 h-3" /></Button>
                                                             )}
@@ -1562,8 +1571,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
                                         {/* Actual Entries for this trade */}
                                         {tradeActuals.length > 0 && (
-                                          <div className="space-y-2 mt-3 pt-3 border-t border-gray-200">
-                                            <p className="text-xs font-semibold text-gray-700 uppercase">Actual Entries:</p>
+                                          <div className="space-y-2 mt-3 pt-3 border-t border-border/60">
+                                            <p className="text-xs font-semibold text-foreground uppercase">Actual Entries:</p>
                                             {tradeActuals.map((entry) => (
                                               <div
                                                 key={entry.id}
@@ -1572,8 +1581,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                 <div className="flex items-center gap-2 flex-1">
                                                   {getEntryIcon(entry.type)}
                                                   <div className="flex-1">
-                                                    <p className="text-sm font-medium text-gray-900">{entry.description}</p>
-                                            <p className="text-xs text-gray-600">
+                                                    <p className="text-sm font-medium text-foreground">{entry.description}</p>
+                                            <p className="text-xs text-muted-foreground">
                                               {formatDate(entry.date)}
                                               {entry.category && ` • ${byKey[entry.category]?.label || entry.category}`}
                                                       {entry.tradeId && trades.find(t => t.id === entry.tradeId) && ` • ${trades.find(t => t.id === entry.tradeId)?.name}`}
@@ -1584,7 +1593,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                   </div>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                  <p className="font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
+                                                  <p className="font-bold text-foreground">{formatCurrency(entry.amount)}</p>
                                                   <div className="flex gap-1">
                                                     {(entry.type === 'material' || entry.type === 'subcontractor') && !entry.isSplitEntry && (
                                                       <Button size="sm" variant="outline" className="h-7 px-2" title="Reassign to another project" onClick={(e) => { e.stopPropagation(); setReassignEntry({ entry, type: entry.type as 'material' | 'subcontractor' }); setReassignTargetId('') }}><ArrowRightLeft className="w-3 h-3" /></Button>
@@ -1621,11 +1630,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                         {/* Show unlinked entries for this category */}
                                         {(() => {
                                           return unlinkedEntries.length > 0 && (
-                                            <div className="space-y-2 mt-3 pt-3 border-t border-gray-200">
+                                            <div className="space-y-2 mt-3 pt-3 border-t border-border/60">
                                               <div className="flex items-center justify-between">
-                                                <p className="text-xs font-semibold text-gray-700 uppercase">General Category Entries:</p>
+                                                <p className="text-xs font-semibold text-foreground uppercase">General Category Entries:</p>
                                                 <button
-                                                  className="text-xs h-6 px-2 border border-gray-300 rounded hover:bg-gray-100"
+                                                  className="text-xs h-6 px-2 border border-border/60 rounded hover:bg-muted/40"
                                                   onClick={(e) => {
                                                     e.stopPropagation()
                                                     const firstEntry = unlinkedEntries[0]
@@ -1643,8 +1652,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                   <div className="flex items-center gap-2 flex-1">
                                                     {getEntryIcon(entry.type)}
                                                     <div className="flex-1">
-                                                      <p className="text-sm font-medium text-gray-900">{entry.description}</p>
-                                                      <p className="text-xs text-gray-600">
+                                                      <p className="text-sm font-medium text-foreground">{entry.description}</p>
+                                                      <p className="text-xs text-muted-foreground">
                                                         {formatDate(entry.date)}
                                                         {entry.category && ` • ${byKey[entry.category]?.label || entry.category}`}
                                                         {entry.vendor && ` • ${entry.vendor}`}
@@ -1654,7 +1663,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                                     </div>
                                                   </div>
                                                   <div className="flex items-center gap-2">
-                                                    <p className="font-bold text-gray-900">{formatCurrency(entry.amount)}</p>
+                                                    <p className="font-bold text-foreground">{formatCurrency(entry.amount)}</p>
                                                     <div className="flex gap-1">
                                                       <Button
                                                         size="sm"
@@ -1690,7 +1699,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                           const categoryEntries = getActualsByCategory(category)
                                           const unlinkedEntries = categoryEntries.filter(entry => !entry.tradeId)
                                           return unlinkedEntries.length === 0 && (
-                                            <p className="text-sm text-gray-500 italic mt-2">No actual entries yet</p>
+                                            <p className="text-sm text-muted-foreground italic mt-2">No actual entries yet</p>
                                           )
                                         })()}
                                       </div>
@@ -1705,7 +1714,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
               })}
 
                 {categoryOrder.length === 0 && (
-                  <div className="text-center py-12 text-gray-500">
+                  <div className="text-center py-12 text-muted-foreground">
                     No estimate items found. Please add items to your estimate first.
                   </div>
                 )}
@@ -1714,49 +1723,58 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
               {/* Desktop - Table (match EstimateBuilder spreadsheet style) */}
               <div className="hidden md:block">
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse min-w-[1200px]">
+                  <table className="w-full border-collapse min-w-[1200px] text-sm">
                     <thead>
-                      <tr className="border-b">
-                        <th className="p-3"></th>
-                        <th className="p-3"></th>
-                        <th className="p-3 border-r-2 border-gray-300"></th>
-                        <th className="text-center p-3 bg-emerald-600 text-white border-r-2 border-emerald-700" colSpan={2}>
+                      <tr className="border-b border-border/60">
+                        <th className="p-2"></th>
+                        <th className="p-2"></th>
+                        <th className="p-2 border-r border-border/60"></th>
+                        <th className="p-2 text-center text-xs font-semibold text-muted-foreground bg-muted/30 border-r border-border/60" colSpan={2}>
                           <div className="flex items-center justify-center gap-2">
-                            <span className="text-2xl font-bold">Material</span>
-                            <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-xs bg-emerald-500 hover:bg-emerald-600 text-white border-0" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('material') }} title="View material entries"><List className="w-3.5 h-3.5" /></Button>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="size-2 rounded-full bg-sky-500" />
+                              Material
+                            </span>
+                            <Button type="button" variant="ghost" size="sm" className="h-6 px-2" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('material') }} title="View material entries"><List className="size-3.5" /></Button>
                           </div>
                         </th>
-                        <th className="text-center p-3 bg-blue-600 text-white border-r-2 border-blue-700" colSpan={2}>
+                        <th className="p-2 text-center text-xs font-semibold text-muted-foreground bg-muted/30 border-r border-border/60" colSpan={2}>
                           <div className="flex items-center justify-center gap-2">
-                            <span className="text-2xl font-bold">Labor</span>
-                            <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-xs bg-blue-500 hover:bg-blue-600 text-white border-0" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('labor') }} title="View labor entries"><List className="w-3.5 h-3.5" /></Button>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="size-2 rounded-full bg-amber-500" />
+                              Labor
+                            </span>
+                            <Button type="button" variant="ghost" size="sm" className="h-6 px-2" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('labor') }} title="View labor entries"><List className="size-3.5" /></Button>
                           </div>
                         </th>
-                        <th className="text-center p-3 bg-amber-600 text-white border-r-2 border-amber-700" colSpan={2}>
+                        <th className="p-2 text-center text-xs font-semibold text-muted-foreground bg-muted/30 border-r border-border/60" colSpan={2}>
                           <div className="flex items-center justify-center gap-2">
-                            <span className="text-2xl font-bold">Subcontractor</span>
-                            <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-xs bg-amber-500 hover:bg-amber-600 text-white border-0" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('subcontractor') }} title="View subcontractor entries"><List className="w-3.5 h-3.5" /></Button>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="size-2 rounded-full bg-teal-500" />
+                              Subcontractor
+                            </span>
+                            <Button type="button" variant="ghost" size="sm" className="h-6 px-2" onClick={(e) => { e.stopPropagation(); setAllEntriesModalType('subcontractor') }} title="View subcontractor entries"><List className="size-3.5" /></Button>
                           </div>
                         </th>
-                        <th className="p-3 border-r-2 border-gray-300"></th>
-                        <th className="p-3 border-r-2 border-gray-300"></th>
-                        <th className="p-3"></th>
-                        <th className="p-3"></th>
+                        <th className="p-2 border-r border-border/60"></th>
+                        <th className="p-2 border-r border-border/60"></th>
+                        <th className="p-2"></th>
+                        <th className="p-2"></th>
                       </tr>
-                      <tr className="border-b">
-                        <th className="text-left p-3 bg-[#213069] text-white border-r-2 border-gray-300">Category & Items</th>
-                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Qty</th>
-                        <th className="text-center p-3 bg-[#213069] text-white border-r-2 border-gray-300">Unit</th>
-                        <th className="text-center p-3 bg-emerald-700 text-white border-r-2 border-emerald-800">Material Est</th>
-                        <th className="text-center p-3 bg-emerald-700 text-white border-r-2 border-emerald-800">Material Act</th>
-                        <th className="text-center p-3 bg-blue-700 text-white border-r-2 border-blue-800">Labor Est</th>
-                        <th className="text-center p-3 bg-blue-700 text-white border-r-2 border-blue-800">Labor Act</th>
-                        <th className="text-center p-3 bg-amber-700 text-white border-r-2 border-amber-800">Sub Est</th>
-                        <th className="text-center p-3 bg-amber-700 text-white border-r-2 border-amber-800">Sub Act</th>
-                        <th className="text-center p-3 bg-[#0E79C9] text-white border-r-2 border-gray-300">Total Est</th>
-                        <th className="text-center p-3 bg-[#34AB8A] text-white border-r-2 border-gray-300">Total Act</th>
-                        <th className="text-center p-3 bg-[#D95C00] text-white border-r-2 border-gray-300">Variance</th>
-                        <th className="text-center p-3 bg-[#34AB8A] text-white">Actions</th>
+                      <tr className="border-b border-border/60 bg-muted/30 text-xs font-medium text-muted-foreground">
+                        <th className="p-2 text-left border-r border-border/60">Category &amp; Items</th>
+                        <th className="p-2 text-center border-r border-border/60">Qty</th>
+                        <th className="p-2 text-center border-r border-border/60">Unit</th>
+                        <th className="p-2 text-center">Material Est</th>
+                        <th className="p-2 text-center border-r border-border/60">Material Act</th>
+                        <th className="p-2 text-center">Labor Est</th>
+                        <th className="p-2 text-center border-r border-border/60">Labor Act</th>
+                        <th className="p-2 text-center">Sub Est</th>
+                        <th className="p-2 text-center border-r border-border/60">Sub Act</th>
+                        <th className="p-2 text-center border-r border-border/60">Total Est</th>
+                        <th className="p-2 text-center border-r border-border/60">Total Act</th>
+                        <th className="p-2 text-center border-r border-border/60">Variance</th>
+                        <th className="p-2 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1772,11 +1790,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                         return (
                           <React.Fragment key={category}>
                             <tr
-                              className="bg-gray-50 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                              className="bg-muted/30 font-semibold cursor-pointer hover:bg-muted/40 transition-colors"
                               onClick={() => toggleCategory(category)}
                             >
                               <td 
-                                className="p-3 border-b border-r-2 border-gray-300 pl-8 bg-gray-50"
+                                className="p-3 border-b border-r border-border/60 pl-8 bg-muted/30"
                                 style={{ borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: getCategoryAccentColor(category) }}
                               >
                                 <div className="flex items-center gap-2">
@@ -1784,20 +1802,20 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                   {byKey[category]?.label || category}
                                 </div>
                               </td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-gray-50"></td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-emerald-50">{formatCurrency(categoryEstimateBreakdown.material)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-emerald-50">{formatCurrency(categoryActualBreakdown.material)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-blue-50">{formatCurrency(categoryEstimateBreakdown.labor)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-blue-50">{formatCurrency(categoryActualBreakdown.labor)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-amber-50">{formatCurrency(categoryEstimateBreakdown.subcontractor)}</td>
-                              <td className="p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-amber-50">{formatCurrency(categoryActualBreakdown.subcontractor)}</td>
-                              <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300 bg-gray-50">{formatCurrency(categoryEstimate)}</td>
-                              <td className="p-3 text-center border-b font-semibold border-r-2 border-gray-300 bg-gray-50">{formatCurrency(categoryActual)}</td>
-                              <td className={`p-3 text-center border-b border-r-2 border-gray-300 font-semibold bg-gray-50 ${categoryVariance > 0 ? 'text-red-600' : categoryVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                              <td className="p-2 text-center border-b border-r border-border/60 bg-muted/30"></td>
+                              <td className="p-2 text-center border-b border-r border-border/60 bg-muted/30"></td>
+                              <td className="p-2 text-center border-b border-r border-border/60 font-medium tabular-nums text-sky-600 dark:text-sky-400">{formatCurrency(categoryEstimateBreakdown.material)}</td>
+                              <td className="p-2 text-center border-b border-r border-border/60 font-medium tabular-nums text-sky-600 dark:text-sky-400">{formatCurrency(categoryActualBreakdown.material)}</td>
+                              <td className="p-2 text-center border-b border-r border-border/60 font-medium tabular-nums text-amber-600 dark:text-amber-400">{formatCurrency(categoryEstimateBreakdown.labor)}</td>
+                              <td className="p-2 text-center border-b border-r border-border/60 font-medium tabular-nums text-amber-600 dark:text-amber-400">{formatCurrency(categoryActualBreakdown.labor)}</td>
+                              <td className="p-2 text-center border-b border-r border-border/60 font-medium tabular-nums text-teal-600 dark:text-teal-400">{formatCurrency(categoryEstimateBreakdown.subcontractor)}</td>
+                              <td className="p-2 text-center border-b border-r border-border/60 font-medium tabular-nums text-teal-600 dark:text-teal-400">{formatCurrency(categoryActualBreakdown.subcontractor)}</td>
+                              <td className="p-2 text-center border-b font-semibold border-r border-border/60 bg-muted/30">{formatCurrency(categoryEstimate)}</td>
+                              <td className="p-2 text-center border-b font-semibold border-r border-border/60 bg-muted/30">{formatCurrency(categoryActual)}</td>
+                              <td className={`p-2 text-center border-b border-r border-border/60 font-semibold bg-muted/30 ${categoryVariance > 0 ? 'text-rose-600 dark:text-rose-400' : categoryVariance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                                 {formatCurrency(Math.abs(categoryVariance))}
                               </td>
-                              <td className="p-3 text-center border-b bg-gray-50"></td>
+                              <td className="p-2 text-center border-b bg-muted/30"></td>
                             </tr>
                             {isCategoryExpanded && categoryTrades.map((trade) => {
                               const tradeActuals = getActualsByTrade(trade.id)
@@ -1818,58 +1836,52 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
 
                               return (
                                 <React.Fragment key={trade.id}>
-                                  <tr className="hover:bg-gray-50/80 bg-white">
-                                    <td className="p-3 border-b pl-12 border-r-2 border-l-2 border-l-slate-200 border-gray-300 bg-white">
+                                  <tr className="hover:bg-muted/30/80 bg-card">
+                                    <td className="p-2 border-b pl-12 border-r-2 border-l-2 border-l-border/60 border-border/60 bg-card">
                                       <div className="flex items-center gap-2">
                                         {hasSubItems && (
                                           <button
                                             type="button"
                                             onClick={(e) => { e.stopPropagation(); toggleTradeExpansion(trade.id) }}
-                                            className="p-1 hover:bg-gray-200 rounded"
+                                            className="p-1 hover:bg-accent rounded"
                                             title={isTradeExpanded ? 'Collapse' : 'Expand'}
                                           >
                                             {isTradeExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4 rotate-180" />}
                                           </button>
                                         )}
                                         <span>{trade.name}</span>
-                                        {hasSubItems && <span className="text-xs text-gray-500">({tradeSubItems.length} sub)</span>}
+                                        {hasSubItems && <span className="text-xs text-muted-foreground">({tradeSubItems.length} sub)</span>}
                                       </div>
                                     </td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{trade.quantity}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{UNIT_TYPES[trade.unit as UnitType]?.abbreviation || trade.unit}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-emerald-50">{formatCurrency(tradeEstimateBreakdown.material)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-emerald-50">
-                                      <div className="flex flex-col items-center gap-0.5">
-                                        <span>{formatCurrency(tradeActualBreakdown.material)}</span>
-                                        {(() => { const entries = getEntriesForCell('material', trade.id); return entries.length > 0 && (
-                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'material', tradeId: trade.id, label: `${trade.name} · Material` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({entries.length})</Button>
-                                        ); })()}
-                                      </div>
+                                    <td className="p-2 text-center border-b border-r border-border/60 bg-card">{trade.quantity}</td>
+                                    <td className="p-2 text-center border-b border-r border-border/60 bg-card">{UNIT_TYPES[trade.unit as UnitType]?.abbreviation || trade.unit}</td>
+                                    <td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-sky-600 dark:text-sky-400">{formatCurrency(tradeEstimateBreakdown.material)}</td>
+                                    <td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-sky-600 dark:text-sky-400">
+                                      {formatCurrency(tradeActualBreakdown.material)}
+                                      {(() => { const entries = getEntriesForCell('material', trade.id); return entries.length > 0 && (
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'material', tradeId: trade.id, label: `${trade.name} · Material` }) }} className="ml-1.5 text-xs font-normal text-muted-foreground hover:text-foreground transition-colors" title={`View ${entries.length} entries`}>· {entries.length}</button>
+                                      ); })()}
                                     </td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-blue-50">{formatCurrency(tradeEstimateBreakdown.labor)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-blue-50">
-                                      <div className="flex flex-col items-center gap-0.5">
-                                        <span>{formatCurrency(tradeActualBreakdown.labor)}</span>
-                                        {(() => { const entries = getEntriesForCell('labor', trade.id); return entries.length > 0 && (
-                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'labor', tradeId: trade.id, label: `${trade.name} · Labor` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({entries.length})</Button>
-                                        ); })()}
-                                      </div>
+                                    <td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-amber-600 dark:text-amber-400">{formatCurrency(tradeEstimateBreakdown.labor)}</td>
+                                    <td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-amber-600 dark:text-amber-400">
+                                      {formatCurrency(tradeActualBreakdown.labor)}
+                                      {(() => { const entries = getEntriesForCell('labor', trade.id); return entries.length > 0 && (
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'labor', tradeId: trade.id, label: `${trade.name} · Labor` }) }} className="ml-1.5 text-xs font-normal text-muted-foreground hover:text-foreground transition-colors" title={`View ${entries.length} entries`}>· {entries.length}</button>
+                                      ); })()}
                                     </td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-amber-50">{formatCurrency(tradeEstimateBreakdown.subcontractor)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-amber-50">
-                                      <div className="flex flex-col items-center gap-0.5">
-                                        <span>{formatCurrency(tradeActualBreakdown.subcontractor)}</span>
-                                        {(() => { const entries = getEntriesForCell('subcontractor', trade.id); return entries.length > 0 && (
-                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'subcontractor', tradeId: trade.id, label: `${trade.name} · Subcontractor` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({entries.length})</Button>
-                                        ); })()}
-                                      </div>
+                                    <td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-teal-600 dark:text-teal-400">{formatCurrency(tradeEstimateBreakdown.subcontractor)}</td>
+                                    <td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-teal-600 dark:text-teal-400">
+                                      {formatCurrency(tradeActualBreakdown.subcontractor)}
+                                      {(() => { const entries = getEntriesForCell('subcontractor', trade.id); return entries.length > 0 && (
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'subcontractor', tradeId: trade.id, label: `${trade.name} · Subcontractor` }) }} className="ml-1.5 text-xs font-normal text-muted-foreground hover:text-foreground transition-colors" title={`View ${entries.length} entries`}>· {entries.length}</button>
+                                      ); })()}
                                     </td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{formatCurrency(tradeEstimate)}</td>
-                                    <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-white">{formatCurrency(tradeActualTotal)}</td>
-                                    <td className={`p-3 text-center border-b border-r-2 border-gray-300 font-medium bg-white ${getVarianceColor(varianceType)}`}>
+                                    <td className="p-2 text-center border-b border-r border-border/60 bg-card">{formatCurrency(tradeEstimate)}</td>
+                                    <td className="p-2 text-center border-b border-r border-border/60 bg-card">{formatCurrency(tradeActualTotal)}</td>
+                                    <td className={`p-2 text-center border-b border-r border-border/60 font-medium bg-card ${getVarianceColor(varianceType)}`}>
                                       {formatCurrency(Math.abs(tradeVariance))} {getVarianceIcon(varianceType)}
                                     </td>
-                                    <td className="p-3 text-center border-b bg-white">
+                                    <td className="p-2 text-center border-b bg-card">
                                       <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setEditingEntry(null); setEntryType('material'); setShowEntryForm(true); }} className="h-7 px-2" title="Add entry">Add</Button>
                                     </td>
                                   </tr>
@@ -1882,57 +1894,51 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                     const siEstimate = subItem.totalCost * (1 + (subItem.markupPercent || 20) / 100)
                                     const siVariance = siActualTotal - siEstimate
                                     return (
-                                      <tr key={subItem.id} className="bg-blue-50/40 hover:bg-blue-50/60">
-                                        <td className="p-3 border-b pl-20 border-r-2 border-l-2 border-l-blue-200 border-gray-300 text-sm bg-blue-50/40">{subItem.name}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{subItem.quantity}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{UNIT_TYPES[subItem.unit as UnitType]?.abbreviation || subItem.unit}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50">{formatCurrency(subItem.laborCost || 0)}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50">
-                                          <div className="flex flex-col items-center gap-0.5">
-                                            <span>{formatCurrency(siLaborAct)}</span>
-                                            {siActuals.filter(e => e.type === 'labor').length > 0 && (
-                                              <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'labor', subItemId: subItem.id, label: `${subItem.name} · Labor` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View</Button>
-                                            )}
-                                          </div>
+                                      <tr key={subItem.id} className="bg-amber-500/15 hover:bg-amber-500/10/60">
+                                        <td className="p-2 border-b pl-20 border-r-2 border-l-2 border-l-amber-500/30 border-border/60 text-sm bg-amber-500/15">{subItem.name}</td>
+                                        <td className="p-2 text-center border-b border-r border-border/60 text-sm bg-amber-500/15">{subItem.quantity}</td>
+                                        <td className="p-2 text-center border-b border-r border-border/60 text-sm bg-amber-500/15">{UNIT_TYPES[subItem.unit as UnitType]?.abbreviation || subItem.unit}</td>
+                                        <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-amber-600/80 dark:text-amber-400/80">{formatCurrency(subItem.laborCost || 0)}</td>
+                                        <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-amber-600/80 dark:text-amber-400/80">
+                                          {formatCurrency(siLaborAct)}
+                                          {siActuals.filter(e => e.type === 'labor').length > 0 && (
+                                            <button type="button" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'labor', subItemId: subItem.id, label: `${subItem.name} · Labor` }) }} className="ml-1.5 text-xs font-normal text-muted-foreground hover:text-foreground transition-colors" title={`View ${siActuals.filter(e => e.type === 'labor').length} entries`}>· {siActuals.filter(e => e.type === 'labor').length}</button>
+                                          )}
                                         </td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50">{formatCurrency(subItem.materialCost || 0)}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50">
-                                          <div className="flex flex-col items-center gap-0.5">
-                                            <span>{formatCurrency(siMaterialAct)}</span>
-                                            {siActuals.filter(e => e.type === 'material').length > 0 && (
-                                              <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'material', subItemId: subItem.id, label: `${subItem.name} · Material` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View</Button>
-                                            )}
-                                          </div>
+                                        <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-sky-600/80 dark:text-sky-400/80">{formatCurrency(subItem.materialCost || 0)}</td>
+                                        <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-sky-600/80 dark:text-sky-400/80">
+                                          {formatCurrency(siMaterialAct)}
+                                          {siActuals.filter(e => e.type === 'material').length > 0 && (
+                                            <button type="button" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'material', subItemId: subItem.id, label: `${subItem.name} · Material` }) }} className="ml-1.5 text-xs font-normal text-muted-foreground hover:text-foreground transition-colors" title={`View ${siActuals.filter(e => e.type === 'material').length} entries`}>· {siActuals.filter(e => e.type === 'material').length}</button>
+                                          )}
                                         </td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50">{formatCurrency(subItem.subcontractorCost || 0)}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50">
-                                          <div className="flex flex-col items-center gap-0.5">
-                                            <span>{formatCurrency(siSubAct)}</span>
-                                            {siActuals.filter(e => e.type === 'subcontractor').length > 0 && (
-                                              <Button size="sm" variant="ghost" className="h-6 px-1 text-xs" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'subcontractor', subItemId: subItem.id, label: `${subItem.name} · Subcontractor` }) }} title="View entries"><List className="w-3 h-3 mr-0.5 inline" /> View</Button>
-                                            )}
-                                          </div>
+                                        <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-teal-600/80 dark:text-teal-400/80">{formatCurrency(subItem.subcontractorCost || 0)}</td>
+                                        <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-teal-600/80 dark:text-teal-400/80">
+                                          {formatCurrency(siSubAct)}
+                                          {siActuals.filter(e => e.type === 'subcontractor').length > 0 && (
+                                            <button type="button" onClick={(e) => { e.stopPropagation(); setViewEntriesCell({ type: 'subcontractor', subItemId: subItem.id, label: `${subItem.name} · Subcontractor` }) }} className="ml-1.5 text-xs font-normal text-muted-foreground hover:text-foreground transition-colors" title={`View ${siActuals.filter(e => e.type === 'subcontractor').length} entries`}>· {siActuals.filter(e => e.type === 'subcontractor').length}</button>
+                                          )}
                                         </td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{formatCurrency(siEstimate)}</td>
-                                        <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40">{formatCurrency(siActualTotal)}</td>
-                                        <td className={`p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50/40 ${siVariance > 0 ? 'text-red-600' : siVariance < 0 ? 'text-green-600' : 'text-gray-600'}`}>{formatCurrency(Math.abs(siVariance))}</td>
-                                        <td className="p-3 text-center border-b bg-blue-50/40"></td>
+                                        <td className="p-2 text-center border-b border-r border-border/60 text-sm bg-amber-500/15">{formatCurrency(siEstimate)}</td>
+                                        <td className="p-2 text-center border-b border-r border-border/60 text-sm bg-amber-500/15">{formatCurrency(siActualTotal)}</td>
+                                        <td className={`p-2 text-center border-b border-r border-border/60 text-sm bg-amber-500/15 ${siVariance > 0 ? 'text-rose-600 dark:text-rose-400' : siVariance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>{formatCurrency(Math.abs(siVariance))}</td>
+                                        <td className="p-2 text-center border-b bg-amber-500/15"></td>
                                       </tr>
                                     )
                                   })}
                                   {isTradeExpanded && (
                                     <tr>
-                                      <td colSpan={13} className="p-0 align-top bg-gray-50">
-                                        <div className="px-4 py-3 border-b border-gray-200 text-sm space-y-2 max-h-64 overflow-y-auto">
+                                      <td colSpan={13} className="p-0 align-top bg-muted/30">
+                                        <div className="px-4 py-3 border-b border-border/60 text-sm space-y-2 max-h-64 overflow-y-auto">
                                           {tradeActuals.length > 0 && (
                                             <div>
-                                              <p className="font-semibold text-gray-700 mb-1">Entries</p>
+                                              <p className="font-semibold text-foreground mb-1">Entries</p>
                                               {tradeActuals.map((entry) => (
                                                 <div key={entry.id} className={`flex items-center justify-between py-1.5 px-2 rounded border ${getEntryColor(entry.type)}`}>
                                                   <div className="flex items-center gap-2 flex-1 min-w-0">
                                                     {getEntryIcon(entry.type)}
                                                     <span className="truncate">{entry.description}</span>
-                                                    <span className="text-gray-500 text-xs shrink-0">{formatDate(entry.date)}</span>
+                                                    <span className="text-muted-foreground text-xs shrink-0">{formatDate(entry.date)}</span>
                                                   </div>
                                                   <div className="flex items-center gap-1 shrink-0">
                                                     <span className="font-semibold">{formatCurrency(entry.amount)}</span>
@@ -1946,7 +1952,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                                               ))}
                                             </div>
                                           )}
-                                          {tradeActuals.length === 0 && <p className="text-gray-500 italic">No entries yet</p>}
+                                          {tradeActuals.length === 0 && <p className="text-muted-foreground italic">No entries yet</p>}
                                         </div>
                                       </td>
                                     </tr>
@@ -1963,21 +1969,21 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                               const genSub = unlinkedForCategory.filter(e => e.type === 'subcontractor').reduce((s, e) => s + e.amount, 0)
                               const genTotal = genLab + genMat + genSub
                               return (
-                                <tr className="bg-yellow-50/80 hover:bg-yellow-50" onClick={(e) => e.stopPropagation()}>
-                                  <td className="p-3 border-b pl-12 border-r-2 border-l-2 border-l-amber-300 border-gray-300 text-sm italic text-yellow-900 bg-yellow-50/80">— Other / General</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 bg-yellow-50/80"></td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-xs text-gray-500 bg-yellow-50/80">—</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50"></td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-blue-50">{formatCurrency(genLab)}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50"></td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-emerald-50">{formatCurrency(genMat)}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50"></td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-amber-50">{formatCurrency(genSub)}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-yellow-50/80"></td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm font-medium bg-yellow-50/80">{formatCurrency(genTotal)}</td>
-                                  <td className="p-3 text-center border-b border-r-2 border-gray-300 text-sm bg-yellow-50/80">—</td>
-                                  <td className="p-3 text-center border-b bg-yellow-50/80">
-                                    <Button size="sm" variant="ghost" className="h-6 px-1 text-xs text-yellow-800" onClick={() => setViewEntriesCell({ category, label: `${byKey[category]?.label || category} · General (invoices not tied to a line)`, generalOnly: true })} title="View invoices and entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({unlinkedForCategory.length})</Button>
+                                <tr className="bg-amber-500/10 hover:bg-amber-500/15" onClick={(e) => e.stopPropagation()}>
+                                  <td className="p-2 border-b pl-12 border-r-2 border-l-2 border-l-amber-500/40 border-border/60 text-sm italic text-amber-700 dark:text-amber-300 bg-amber-500/10">— Other / General</td>
+                                  <td className="p-2 text-center border-b border-r border-border/60 tabular-nums text-amber-600 dark:text-amber-400"></td>
+                                  <td className="p-2 text-center border-b border-r border-border/60 text-xs text-muted-foreground bg-amber-500/10">—</td>
+                                  <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-amber-600/80 dark:text-amber-400/80"></td>
+                                  <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-amber-600/80 dark:text-amber-400/80">{formatCurrency(genLab)}</td>
+                                  <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-sky-600/80 dark:text-sky-400/80"></td>
+                                  <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-sky-600/80 dark:text-sky-400/80">{formatCurrency(genMat)}</td>
+                                  <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-teal-600/80 dark:text-teal-400/80"></td>
+                                  <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-teal-600/80 dark:text-teal-400/80">{formatCurrency(genSub)}</td>
+                                  <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-amber-600/80 dark:text-amber-400/80"></td>
+                                  <td className="p-2 text-center border-b border-r border-border/60 text-sm font-medium bg-amber-500/10">{formatCurrency(genTotal)}</td>
+                                  <td className="p-2 text-center border-b border-r border-border/60 text-sm tabular-nums text-amber-600/80 dark:text-amber-400/80">—</td>
+                                  <td className="p-2 text-center border-b bg-amber-500/10">
+                                    <Button size="sm" variant="ghost" className="h-6 px-1 text-xs text-amber-700 dark:text-amber-300" onClick={() => setViewEntriesCell({ category, label: `${byKey[category]?.label || category} · General (invoices not tied to a line)`, generalOnly: true })} title="View invoices and entries"><List className="w-3 h-3 mr-0.5 inline" /> View ({unlinkedForCategory.length})</Button>
                                   </td>
                                 </tr>
                               )
@@ -1987,7 +1993,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       })}
                       {categoryOrder.length === 0 && (
                         <tr>
-                          <td colSpan={13} className="p-8 text-center text-gray-500">
+                          <td colSpan={13} className="p-8 text-center text-muted-foreground">
                             No estimate items found. Please add items to your estimate first.
                           </td>
                         </tr>
@@ -1996,10 +2002,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   </table>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+            </div>
+          </section>
 
       {/* Print Report */}
       {showPrintReport && (
@@ -2517,208 +2521,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         />
       )}
 
-      {/* Mobile: bottom Actions menu - match Estimate Builder / Project Detail */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-pb">
-        {showMobileActions && (
-          <div className="border-b border-gray-100 px-3 py-2 bg-gray-50 max-h-72 overflow-y-auto">
-            {onBack && (
-              <button
-                onClick={() => { onBack(); setShowMobileActions(false) }}
-                className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
-              >
-                <ArrowLeft className="w-5 h-5 text-gray-400" />
-                <span className="font-medium">Back to Project</span>
-              </button>
-            )}
-            <button
-              onClick={() => { setEntryType('labor'); setShowEntryForm(true); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-blue-500/30 bg-blue-50/50"
-            >
-              <Users className="w-5 h-5 text-blue-600" />
-              <div>
-                <p className="font-medium text-gray-900">Labor Entry</p>
-                <p className="text-xs text-gray-500">Add labor / time entry</p>
-              </div>
-            </button>
-            <button
-              onClick={() => { setEntryType('material'); setShowEntryForm(true); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-green-500/30 bg-green-50/50"
-            >
-              <Package className="w-5 h-5 text-green-600" />
-              <div>
-                <p className="font-medium text-gray-900">Material Entry</p>
-                <p className="text-xs text-gray-500">Add material or purchase</p>
-              </div>
-            </button>
-            <button
-              onClick={() => { setEntryType('subcontractor'); setShowEntryForm(true); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white border border-orange-500/30 bg-orange-50/50"
-            >
-              <HardHat className="w-5 h-5 text-orange-600" />
-              <div>
-                <p className="font-medium text-gray-900">Subcontractor Entry</p>
-                <p className="text-xs text-gray-500">Add subcontractor cost</p>
-              </div>
-            </button>
-            <button
-              onClick={() => { setShowQBImport(true); setShowMobileActions(false) }}
-              className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 hover:bg-white text-gray-700"
-            >
-              <Download className="w-5 h-5 text-gray-500" />
-              <div>
-                <p className="font-medium text-gray-900">Import from QuickBooks</p>
-                <p className="text-xs text-gray-500">Sync transactions or import labor</p>
-              </div>
-            </button>
-          </div>
-        )}
-        <div className="p-2">
-          <Button
-            onClick={() => setShowMobileActions(!showMobileActions)}
-            variant="outline"
-            className="w-full h-11 border-gray-200 bg-white hover:bg-gray-50"
-          >
-            <span className="flex items-center justify-center gap-2 text-gray-700">
-              Actions
-              <ChevronDown className={`w-4 h-4 transition-transform ${showMobileActions ? 'rotate-180' : ''}`} />
-            </span>
-          </Button>
-        </div>
-      </div>
     </div>
-  )
-}
-
-// ----------------------------------------------------------------------------
-// Header Component
-// ----------------------------------------------------------------------------
-
-interface ProjectActualsHeaderProps {
-  project: Project
-  onBack?: () => void
-  onPrintReport?: (type: 'actuals' | 'comparison', depth: ReportDepth) => void
-}
-
-function ProjectActualsHeader({ project, onBack, onPrintReport }: ProjectActualsHeaderProps) {
-  const [showPrintMenu, setShowPrintMenu] = useState(false)
-  const getStatusColor = (status: string) => {
-    const colors = {
-      estimating: 'bg-blue-100 text-blue-800',
-      'in-progress': 'bg-orange-100 text-orange-800',
-      complete: 'bg-green-100 text-green-800',
-    }
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
-  }
-
-  return (
-    <>
-      {/* Mobile Header */}
-      <header className="sm:hidden bg-white shadow-md border-b border-gray-200">
-        <div className="px-4 py-4">
-          <div className="flex items-center space-x-3">
-            <img src={hshLogo} alt="HSH Contractor" className="h-16 w-auto" />
-            <div className="flex-1">
-              <div className="flex flex-col gap-2 mb-1">
-                <h1 className="text-lg font-bold text-gray-900">Project Actuals</h1>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)} w-fit`}>
-                  {project.status.replace('-', ' ').toUpperCase()}
-                </span>
-              </div>
-              <p className="text-xs text-gray-600">{project.name}</p>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Desktop Header */}
-      <Card className="hidden sm:block bg-gradient-to-br from-gray-50 to-white border border-gray-200 shadow-lg">
-        <CardHeader className="pb-3 sm:pb-6">
-          <div className="space-y-2 sm:space-y-4">
-            <div className="flex items-center justify-center gap-2 sm:gap-4 lg:gap-6">
-              <div className="flex-shrink-0">
-                <img src={hshLogo} alt="HSH Contractor Logo" className="h-20 sm:h-32 lg:h-40 w-auto" />
-              </div>
-              <div className="flex-shrink-0">
-                <h2 className="text-xl sm:text-4xl lg:text-5xl font-bold text-gray-900">Project Actuals</h2>
-                <p className="text-sm sm:text-base text-gray-600 mt-1">{project.name}</p>
-              </div>
-            </div>
-            
-            <div className="hidden sm:flex justify-center gap-3">
-              {onBack && (
-                <Button
-                  onClick={onBack}
-                  variant="outline"
-                  size="sm"
-                  className="border-gray-300 hover:bg-gray-50 text-xs sm:text-sm"
-                >
-                  <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                  Back to Project Detail
-                </Button>
-              )}
-              
-              {onPrintReport && (
-                <div className="relative">
-                  <Button
-                    onClick={() => setShowPrintMenu(!showPrintMenu)}
-                    variant="outline"
-                    size="sm"
-                    className="border-[#34AB8A] text-[#34AB8A] hover:bg-[#34AB8A] hover:text-white"
-                  >
-                    <Printer className="w-4 h-4 mr-2" />
-                    Export PDF
-                  </Button>
-                  
-                  {showPrintMenu && (
-                    <div className="absolute right-0 top-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[250px]">
-                      <div className="p-2">
-                        <p className="text-xs font-semibold text-gray-700 mb-2 px-2">Select Report Type & Detail:</p>
-                        <div className="space-y-1">
-                          <p className="text-xs text-gray-600 px-2 mt-2">Actuals Only:</p>
-                          <button
-                            onClick={() => { onPrintReport('actuals', 'summary'); setShowPrintMenu(false) }}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
-                          >
-                            📊 Summary
-                          </button>
-                          <button
-                            onClick={() => { onPrintReport('actuals', 'category'); setShowPrintMenu(false) }}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
-                          >
-                            📋 Category Detail
-                          </button>
-                          <button
-                            onClick={() => { onPrintReport('actuals', 'full'); setShowPrintMenu(false) }}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
-                          >
-                            📄 Full Detail
-                          </button>
-                          
-                          <div className="border-t my-2"></div>
-                          <p className="text-xs text-gray-600 px-2">Estimate vs Actuals:</p>
-                          <button
-                            onClick={() => { onPrintReport('comparison', 'summary'); setShowPrintMenu(false) }}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
-                          >
-                            📊 Comparison Summary
-                          </button>
-                          <button
-                            onClick={() => { onPrintReport('comparison', 'full'); setShowPrintMenu(false) }}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
-                          >
-                            📄 Full Comparison
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-      </Card>
-    </>
   )
 }
 
@@ -3012,7 +2815,7 @@ function ActualEntryForm({
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Changing the type will convert this entry. The original entry will be deleted and a new one created.
                 </p>
               </div>
@@ -3086,7 +2889,7 @@ function ActualEntryForm({
                       </SelectContent>
                     </Select>
                   ) : (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Add suppliers in the Partner Directory to reuse them here.
                     </p>
                   )}
@@ -3142,7 +2945,7 @@ function ActualEntryForm({
                     Split invoice across multiple items/categories
                   </Label>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   {editingEntry 
                     ? 'Convert this invoice to a split invoice. The current entry will be replaced with a parent entry and split allocations.'
                     : 'Use this when a single invoice contains materials for multiple trades or categories'}
@@ -3151,15 +2954,15 @@ function ActualEntryForm({
             )}
 
             {currentType === 'material' && editingEntry?.isSplitEntry && (
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-sm text-amber-700 dark:text-amber-300">
                   ⚠️ This is a split allocation entry. To edit the split invoice, edit the parent entry instead.
                 </p>
               </div>
             )}
 
               {currentType === 'material' && formData.isSplitInvoice && (
-                <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="space-y-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-semibold">Split Allocations</Label>
                     <Button
@@ -3183,7 +2986,7 @@ function ActualEntryForm({
                       : []
                     
                     return (
-                      <div key={allocation.id} className="p-3 bg-white border border-gray-300 rounded space-y-2">
+                      <div key={allocation.id} className="p-3 bg-card border border-border/60 rounded space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium">Allocation {index + 1}</span>
                           <Button
@@ -3191,7 +2994,7 @@ function ActualEntryForm({
                             size="sm"
                             variant="ghost"
                             onClick={() => removeSplitAllocation(allocation.id)}
-                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                            className="h-6 w-6 p-0 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300"
                           >
                             <Trash2 className="w-3 h-3" />
                           </Button>
@@ -3288,21 +3091,21 @@ function ActualEntryForm({
                   const allocatedTotal = splitAllocations.reduce((sum: number, a: SplitAllocation) => sum + a.amount, 0)
                   const remaining = parseFloat(formData.amount) - allocatedTotal
                   return (
-                    <div className="pt-2 border-t border-blue-300">
+                    <div className="pt-2 border-t border-amber-500/40">
                       <div className="flex justify-between text-sm">
                         <span className="font-semibold">Total Allocated:</span>
-                        <span className={Math.abs(remaining) < 0.01 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                        <span className={Math.abs(remaining) < 0.01 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-rose-600 dark:text-rose-400 font-bold'}>
                           {formatCurrency(allocatedTotal)}
                         </span>
                       </div>
                       <div className="flex justify-between text-xs mt-1">
                         <span>Remaining:</span>
-                        <span className={Math.abs(remaining) < 0.01 ? 'text-green-600' : 'text-red-600'}>
+                        <span className={Math.abs(remaining) < 0.01 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
                           {formatCurrency(remaining)}
                         </span>
                       </div>
                       {Math.abs(remaining) > 0.01 && (
-                        <p className="text-xs text-red-600 mt-1">
+                        <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">
                           ⚠️ Allocations must sum to the total invoice amount
                         </p>
                       )}
@@ -3339,7 +3142,7 @@ function ActualEntryForm({
                       </SelectContent>
                     </Select>
                   ) : (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Add subcontractors in the Partner Directory to reuse them here.
                     </p>
                   )}
@@ -3393,7 +3196,7 @@ function ActualEntryForm({
                         Split invoice across multiple items/categories
                       </Label>
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       {editingEntry 
                         ? 'Convert this invoice to a split invoice. The current entry will be replaced with a parent entry and split allocations.'
                         : 'Use this when a single invoice contains work for multiple trades or categories'}
@@ -3404,23 +3207,23 @@ function ActualEntryForm({
             )}
 
             {currentType === 'subcontractor' && editingEntry?.isSplitEntry && (
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-sm text-amber-700 dark:text-amber-300">
                   ⚠️ This is a split allocation entry. To edit the split invoice, edit the parent entry instead.
                 </p>
               </div>
             )}
 
             {currentType === 'subcontractor' && editingEntry?.isSplitEntry && (
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-sm text-amber-700 dark:text-amber-300">
                   ⚠️ This is a split allocation entry. To edit the split invoice, edit the parent entry instead.
                 </p>
               </div>
             )}
 
             {currentType === 'subcontractor' && formData.isSplitInvoice && (
-              <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="space-y-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold">Split Allocations</Label>
                   <Button
@@ -3444,7 +3247,7 @@ function ActualEntryForm({
                       : []
                     
                     return (
-                      <div key={allocation.id} className="p-3 bg-white border border-gray-300 rounded space-y-2">
+                      <div key={allocation.id} className="p-3 bg-card border border-border/60 rounded space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium">Allocation {index + 1}</span>
                           <Button
@@ -3452,7 +3255,7 @@ function ActualEntryForm({
                             size="sm"
                             variant="ghost"
                             onClick={() => removeSplitAllocation(allocation.id)}
-                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                            className="h-6 w-6 p-0 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300"
                           >
                             <Trash2 className="w-3 h-3" />
                           </Button>
@@ -3549,21 +3352,21 @@ function ActualEntryForm({
                   const allocatedTotal = splitAllocations.reduce((sum: number, a: SplitAllocation) => sum + a.amount, 0)
                   const remaining = parseFloat(formData.amount) - allocatedTotal
                   return (
-                    <div className="pt-2 border-t border-blue-300">
+                    <div className="pt-2 border-t border-amber-500/40">
                       <div className="flex justify-between text-sm">
                         <span className="font-semibold">Total Allocated:</span>
-                        <span className={Math.abs(remaining) < 0.01 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                        <span className={Math.abs(remaining) < 0.01 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-rose-600 dark:text-rose-400 font-bold'}>
                           {formatCurrency(allocatedTotal)}
                         </span>
                       </div>
                       <div className="flex justify-between text-xs mt-1">
                         <span>Remaining:</span>
-                        <span className={Math.abs(remaining) < 0.01 ? 'text-green-600' : 'text-red-600'}>
+                        <span className={Math.abs(remaining) < 0.01 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
                           {formatCurrency(remaining)}
                         </span>
                       </div>
                       {Math.abs(remaining) > 0.01 && (
-                        <p className="text-xs text-red-600 mt-1">
+                        <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">
                           ⚠️ Allocations must sum to the total invoice amount
                         </p>
                       )}
@@ -3611,7 +3414,7 @@ function ActualEntryForm({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   💡 <strong>Tip:</strong> Link to specific items for detailed tracking, or apply to category for general costs like permits, cleanup, etc.
                 </p>
               </div>
@@ -3636,7 +3439,7 @@ function ActualEntryForm({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   💡 <strong>Tip:</strong> Link to a specific sub-item for even more granular tracking (e.g., "Towel bars" within "Bath Hardware").
                 </p>
               </div>
@@ -3650,10 +3453,7 @@ function ActualEntryForm({
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                className="bg-gradient-to-r from-[#E65133] to-[#C0392B] hover:from-[#D14520] hover:to-[#A93226]"
-              >
+              <Button type="submit">
                 {editingEntry ? 'Save Changes' : 'Save Entry'}
               </Button>
             </div>
