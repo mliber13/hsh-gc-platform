@@ -4,6 +4,10 @@ import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import './index.css'
 
+// Geist variable fonts (loaded once globally)
+import '@fontsource-variable/geist'
+import '@fontsource-variable/geist-mono'
+
 // Register PWA Service Worker
 import { registerSW } from 'virtual:pwa-register'
 

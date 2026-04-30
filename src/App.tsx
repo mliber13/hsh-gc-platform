@@ -46,6 +46,8 @@ import { FeedbackForm } from './components/FeedbackForm'
 import { MyFeedback } from './components/MyFeedback'
 import { PrivacyPolicy } from './components/PrivacyPolicy'
 import { TermsOfUse } from './components/TermsOfUse'
+import { ThemeProvider } from './components/theme-provider'
+import { Toaster } from 'sonner'
 
 type View =
   | 'dashboard'
@@ -440,8 +442,9 @@ function App() {
   }
 
   return (
-    <AuthGate>
-      <TradeCategoriesProvider>
+    <ThemeProvider>
+      <AuthGate>
+        <TradeCategoriesProvider>
       <div className="min-h-screen bg-background">
         {/* User Menu - Only show if online and authenticated */}
         {isOnline && user && (
@@ -809,8 +812,10 @@ function App() {
       )}
 
       </div>
-      </TradeCategoriesProvider>
-    </AuthGate>
+        </TradeCategoriesProvider>
+      </AuthGate>
+      <Toaster richColors position="top-right" />
+    </ThemeProvider>
   )
 }
 
