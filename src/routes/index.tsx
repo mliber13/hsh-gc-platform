@@ -90,6 +90,7 @@ import { PrivacyPolicy } from '@/components/PrivacyPolicy'
 import { TermsOfUse } from '@/components/TermsOfUse'
 import { Button } from '@/components/ui/button'
 
+import { AppLayout } from '@/components/AppLayout'
 import { AuthedLayout } from './AuthedLayout'
 import { ProjectScope, useProjectContext } from './ProjectScope'
 
@@ -106,48 +107,53 @@ export function AppRoutes() {
       <Route path="/privacy" element={<PublicPrivacy />} />
       <Route path="/terms" element={<PublicTerms />} />
 
-      {/* Authed — wrapped in AuthGate + Provider + legacy user-menu */}
+      {/* Authed — wrapped in AuthGate + Provider, then in the sidebar shell */}
       <Route element={<AuthedLayout />}>
-        <Route index element={<DashboardRoute />} />
-        <Route path="/projects" element={<Navigate to="/" replace />} />
-        <Route path="/projects/new" element={<CreateProjectRoute />} />
-
-        <Route path="/projects/:projectId" element={<ProjectScope />}>
-          <Route index element={<ProjectDetailRoute />} />
-          <Route path="estimate" element={<EstimateRoute />} />
-          <Route path="actuals" element={<ActualsRoute />} />
-          <Route path="change-orders" element={<ChangeOrdersRoute />} />
-          <Route path="forms" element={<FormsRoute />} />
-          <Route path="documents" element={<DocumentsRoute />} />
-          <Route path="purchase-orders" element={<PurchaseOrdersRoute />} />
-          <Route path="selection-book" element={<SelectionBookRoute />} />
-          <Route path="selection-schedules" element={<SelectionSchedulesRoute />} />
-          <Route path="schedule" element={<ScheduleRoute />} />
-        </Route>
-
-        <Route path="/library/plans" element={<PlanLibraryRoute />} />
-        <Route path="/library/plans/new" element={<PlanEditorRoute />} />
-        <Route path="/library/plans/:planId" element={<PlanEditorRoute />} />
-        <Route path="/library/estimates" element={<EstimateLibraryRoute />} />
-
-        <Route path="/quickbooks/settings" element={<QuickBooksSettingsRoute />} />
+        {/* Authed but full-screen (no sidebar shell): OAuth callback only */}
         <Route path="/quickbooks/callback" element={<QuickBooksCallbackRoute />} />
         <Route path="/qb-callback" element={<QuickBooksCallbackRoute />} />
 
-        <Route path="/contacts" element={<ContactDirectoryRoute />} />
-        <Route path="/sow" element={<SOWManagementRoute />} />
+        {/* All other authed routes render inside the sidebar shell */}
+        <Route element={<AppLayout />}>
+          <Route index element={<DashboardRoute />} />
+          <Route path="/projects" element={<Navigate to="/" replace />} />
+          <Route path="/projects/new" element={<CreateProjectRoute />} />
 
-        <Route path="/deals" element={<DealWorkspaceRoute />} />
-        <Route path="/deals/workspace/:dealId" element={<DealWorkspaceRoute />} />
-        <Route path="/deal-pipeline" element={<Navigate to="/deals" replace />} />
+          <Route path="/projects/:projectId" element={<ProjectScope />}>
+            <Route index element={<ProjectDetailRoute />} />
+            <Route path="estimate" element={<EstimateRoute />} />
+            <Route path="actuals" element={<ActualsRoute />} />
+            <Route path="change-orders" element={<ChangeOrdersRoute />} />
+            <Route path="forms" element={<FormsRoute />} />
+            <Route path="documents" element={<DocumentsRoute />} />
+            <Route path="purchase-orders" element={<PurchaseOrdersRoute />} />
+            <Route path="selection-book" element={<SelectionBookRoute />} />
+            <Route path="selection-schedules" element={<SelectionSchedulesRoute />} />
+            <Route path="schedule" element={<ScheduleRoute />} />
+          </Route>
 
-        <Route path="/tenants" element={<TenantPipelineRoute />} />
-        <Route path="/tenant-pipeline" element={<Navigate to="/tenants" replace />} />
+          <Route path="/library/plans" element={<PlanLibraryRoute />} />
+          <Route path="/library/plans/new" element={<PlanEditorRoute />} />
+          <Route path="/library/plans/:planId" element={<PlanEditorRoute />} />
+          <Route path="/library/estimates" element={<EstimateLibraryRoute />} />
 
-        <Route path="/feedback" element={<MyFeedbackRoute />} />
+          <Route path="/quickbooks/settings" element={<QuickBooksSettingsRoute />} />
 
-        {/* Catch-all → dashboard */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/contacts" element={<ContactDirectoryRoute />} />
+          <Route path="/sow" element={<SOWManagementRoute />} />
+
+          <Route path="/deals" element={<DealWorkspaceRoute />} />
+          <Route path="/deals/workspace/:dealId" element={<DealWorkspaceRoute />} />
+          <Route path="/deal-pipeline" element={<Navigate to="/deals" replace />} />
+
+          <Route path="/tenants" element={<TenantPipelineRoute />} />
+          <Route path="/tenant-pipeline" element={<Navigate to="/tenants" replace />} />
+
+          <Route path="/feedback" element={<MyFeedbackRoute />} />
+
+          {/* Catch-all → dashboard */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       </Route>
     </Routes>
   )
