@@ -516,7 +516,7 @@ tsc --noEmit clean.
 | Plan Library | ⬜ Pending | `src/components/PlanLibrary.tsx` | Mode A |
 | Plan Editor | ⬜ Pending | `src/components/PlanEditor.tsx` | Mode A — form-heavy |
 | Item Library | ⬜ Pending | `src/components/ItemLibrary.tsx` | Mode A |
-| SOW Management | ⬜ Pending | `src/components/SOWManagement.tsx` | Mode A — template list |
+| SOW Management | ✅ Ported | `src/components/SOWManagement.tsx` | Mode A — removed legacy hero + gradient shell, normalized CRUD cards/dialogs to token surfaces |
 | Deal Workspace | ⏸ Hold | `src/components/DealWorkspace.tsx` | Wait for owner's in-flight Create Deal commit |
 | Tenant Pipeline | ⬜ Pending | `src/components/TenantPipeline.tsx` | Mode A — kanban board |
 | Create Project Form | ⬜ Pending | `src/components/CreateProjectForm.tsx` | Mode A — form-heavy |

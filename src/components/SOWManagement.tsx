@@ -27,6 +27,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 import {
   Dialog,
   DialogContent,
@@ -43,13 +44,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Plus, Edit, Trash2, ArrowLeft, X } from 'lucide-react'
-import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface SOWManagementProps {
   onBack: () => void
 }
 
 export function SOWManagement({ onBack }: SOWManagementProps) {
+  usePageTitle('SOW Templates')
   const { categories, byKey } = useTradeCategories()
   const [templates, setTemplates] = useState<SOWTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -266,36 +267,24 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
     : templates.filter(t => t.tradeCategory === selectedTradeCategory)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20 sm:pb-0">
-      {/* Header */}
-      <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <img src={hshLogo} alt="HSH Contractor" className="h-12 w-auto" />
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Scope of Work Templates</h1>
-                <p className="text-sm text-gray-600 mt-1">Manage SOW templates for quote requests</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={handleNewTemplate} className="bg-[#0E79C9] hover:bg-[#0A5A96]">
-                <Plus className="w-4 h-4 mr-2" />
-                New Template
-              </Button>
-              <Button onClick={onBack} variant="outline" className="border-[#0E79C9] text-[#0E79C9] hover:bg-[#0E79C9] hover:text-white">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="flex flex-col gap-6 p-6">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back
+        </button>
+        <Button onClick={handleNewTemplate}>
+          <Plus className="w-4 h-4 mr-2" />
+          New Template
+        </Button>
+      </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Filter */}
-        <div className="mb-6">
+      <section className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-semibold">Scope of Work Templates</h2>
           <Select value={selectedTradeCategory} onValueChange={setSelectedTradeCategory}>
             <SelectTrigger className="w-full sm:w-64">
               <SelectValue placeholder="Filter by trade category" />
@@ -311,17 +300,18 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
           </Select>
         </div>
 
-        {/* Templates List */}
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0E79C9] mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading SOW templates...</p>
-          </div>
+          <Card className="border-border/60 bg-card/50">
+            <CardContent className="py-12 text-center">
+              <div className="mx-auto inline-block size-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
+              <p className="mt-4 text-sm text-muted-foreground">Loading SOW templates...</p>
+            </CardContent>
+          </Card>
         ) : filteredTemplates.length === 0 ? (
-          <Card>
+          <Card className="border-border/60 bg-card/50">
             <CardContent className="pt-6 text-center py-12">
-              <p className="text-gray-600 mb-4">No SOW templates found</p>
-              <Button onClick={handleNewTemplate} className="bg-[#0E79C9] hover:bg-[#0A5A96]">
+              <p className="text-muted-foreground mb-4">No SOW templates found</p>
+              <Button onClick={handleNewTemplate}>
                 <Plus className="w-4 h-4 mr-2" />
                 Create First Template
               </Button>
@@ -330,13 +320,13 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredTemplates.map(template => (
-              <Card key={template.id} className="hover:shadow-lg transition-shadow">
+              <Card key={template.id} className="border-border/60 bg-card/50 transition-colors hover:bg-muted/20">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                 <CardTitle className="text-lg">{template.name}</CardTitle>
                 {template.tradeCategory && (
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {byKey[template.tradeCategory]?.label || template.tradeCategory}
                         </p>
                       )}
@@ -344,12 +334,12 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2 text-sm text-gray-600 mb-4">
+                  <div className="space-y-2 text-sm text-muted-foreground mb-4">
                     <p>{template.tasks.length} task(s)</p>
                     <p>{template.materialsIncluded.length} material(s) included</p>
                     <p>{template.materialsExcluded.length} material(s) excluded</p>
                     <p>{template.specifications.length} specification(s)</p>
-                    <p className="text-xs text-gray-500">Used {template.useCount} time(s)</p>
+                    <p className="text-xs text-muted-foreground">Used {template.useCount} time(s)</p>
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -363,7 +353,8 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
                     </Button>
                     <Button
                       onClick={() => handleDeleteTemplate(template.id)}
-                      variant="destructive"
+                      variant="outline"
+                      className="text-destructive hover:text-destructive"
                       size="sm"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -374,7 +365,7 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
             ))}
           </div>
         )}
-      </main>
+      </section>
 
       {/* Form Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
@@ -448,7 +439,7 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
                   </div>
                 ))}
                 {formTasks.length === 0 && (
-                  <p className="text-sm text-gray-500 italic">No tasks added yet</p>
+                  <p className="text-sm text-muted-foreground italic">No tasks added yet</p>
                 )}
               </div>
             </div>
@@ -481,7 +472,7 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
                   </div>
                 ))}
                 {formMaterialsIncluded.length === 0 && (
-                  <p className="text-sm text-gray-500 italic">No materials included yet</p>
+                  <p className="text-sm text-muted-foreground italic">No materials included yet</p>
                 )}
               </div>
             </div>
@@ -514,7 +505,7 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
                   </div>
                 ))}
                 {formMaterialsExcluded.length === 0 && (
-                  <p className="text-sm text-gray-500 italic">No materials excluded yet</p>
+                  <p className="text-sm text-muted-foreground italic">No materials excluded yet</p>
                 )}
               </div>
             </div>
@@ -554,7 +545,7 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
                   </div>
                 ))}
                 {formSpecifications.length === 0 && (
-                  <p className="text-sm text-gray-500 italic">No specifications added yet</p>
+                  <p className="text-sm text-muted-foreground italic">No specifications added yet</p>
                 )}
               </div>
             </div>
@@ -564,7 +555,7 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
             <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-[#0E79C9] hover:bg-[#0A5A96]">
+            <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Saving...' : editingTemplate ? 'Update' : 'Create'}
             </Button>
           </DialogFooter>
