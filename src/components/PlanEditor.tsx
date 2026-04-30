@@ -15,8 +15,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 import { ArrowLeft, Upload, FileText, Trash2, Plus, X, Eye } from 'lucide-react'
-import hshLogo from '/HSH Contractor Logo - Color.png'
 
 interface PlanEditorProps {
   plan?: Plan | null
@@ -25,6 +25,7 @@ interface PlanEditorProps {
 }
 
 export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
+  usePageTitle(plan ? 'Edit Plan' : 'Create Plan')
   const [formData, setFormData] = useState<CreatePlanInput>({
     planId: '',
     name: '',
@@ -216,39 +217,18 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
   }
 
-              return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3 sm:space-x-4">
-              <img src={hshLogo} alt="HSH Contractor" className="h-20 sm:h-24 lg:h-28 w-auto" />
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  {currentPlan ? 'Edit Plan' : 'Create New Plan'}
-                </h1>
-                <p className="text-sm text-gray-600 mt-1">
-                  {currentPlan ? `Editing ${currentPlan.name}` : 'Add a new plan template'}
-                </p>
-              </div>
-            </div>
-            <Button
-              onClick={onBack}
-              variant="outline"
-              className="border-gray-300 hover:bg-gray-50"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Library
-            </Button>
-          </div>
-        </div>
-                                          </header>
-  
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  return (
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
+      <button
+        onClick={onBack}
+        className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" />
+        Back to Library
+      </button>
+
         {/* Basic Information */}
-        <Card className="mb-6">
+        <Card className="border-border/60 bg-card/50">
           <CardHeader>
             <CardTitle>Basic Information</CardTitle>
           </CardHeader>
@@ -351,7 +331,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-muted-foreground">
                   Link an estimate template to automatically populate costs when creating projects from this plan
                 </p>
               </div>
@@ -376,13 +356,13 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                   placeholder="Additional notes about this plan..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full rounded-md border border-border/60 bg-card px-3 py-2"
                   rows={3}
                 />
               </div>
 
               <div className="flex justify-end">
-                <Button type="submit" className="bg-gradient-to-r from-[#0E79C9] to-[#0A5A96]">
+                <Button type="submit">
                   {currentPlan ? 'Save Changes' : 'Create Plan'}
                 </Button>
               </div>
@@ -393,7 +373,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
         {currentPlan && (
           <>
             {/* Base Plan Documents */}
-            <Card className="mb-6">
+            <Card className="border-border/60 bg-card/50">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Base Plan Documents</CardTitle>
@@ -403,7 +383,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                       setUploadingFor({ type: 'base' })
                     }}
                     size="sm"
-                    className="bg-[#0E79C9] hover:bg-[#0A5A96]"
+                    className=""
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     Upload Document
@@ -412,18 +392,18 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
               </CardHeader>
               <CardContent>
                 {currentPlan.documents.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">
+                  <p className="text-muted-foreground text-center py-8">
                     No documents uploaded yet. Click "Upload Document" to add plans.
                   </p>
                 ) : (
                   <div className="space-y-2">
                     {currentPlan.documents.map((doc) => (
-                      <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                      <div key={doc.id} className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/20 p-3">
                         <div className="flex items-center space-x-3">
-                          <FileText className="w-5 h-5 text-blue-600" />
+                          <FileText className="w-5 h-5 text-sky-500" />
                           <div>
-                            <p className="font-medium text-gray-900">{doc.name}</p>
-                            <p className="text-xs text-gray-500">
+                            <p className="font-medium">{doc.name}</p>
+                            <p className="text-xs text-muted-foreground">
                               {doc.type.replace('-', ' ')} • {formatFileSize(doc.fileSize)} • {doc.uploadedAt.toLocaleDateString()}
                             </p>
                           </div>
@@ -440,7 +420,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-red-600 border-red-300"
+                            className="text-destructive hover:text-destructive"
                             onClick={() => handleDeleteDocument(doc.id)}
                           >
                             <Trash2 className="w-3 h-3" />
@@ -454,14 +434,14 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
             </Card>
 
             {/* Plan Options */}
-            <Card className="mb-6">
+            <Card className="border-border/60 bg-card/50">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Plan Options</CardTitle>
                   <Button
                     onClick={() => setIsAddingOption(true)}
                     size="sm"
-                    className="bg-[#D95C00] hover:bg-[#B34C00]"
+                    className=""
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Option
@@ -470,7 +450,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
               </CardHeader>
               <CardContent>
                 {isAddingOption && (
-                  <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="mb-4 rounded-lg border border-border/60 bg-muted/20 p-4">
                     <div className="space-y-3">
                       <div>
                         <Label htmlFor="optionName">Option Name *</Label>
@@ -539,28 +519,28 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                 )}
 
                 {currentPlan.options.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">
+                  <p className="text-muted-foreground text-center py-8">
                     No options yet. Add options like "Finished Basement" or "3-Car Garage".
                   </p>
                 ) : (
                   <div className="space-y-4">
                     {currentPlan.options.map((option) => (
-                      <Card key={option.id} className="border-2 border-orange-200">
+                      <Card key={option.id} className="border-border/60 border-l-4 border-l-amber-500 bg-card/50">
                         <CardHeader className="pb-3">
                           <div className="flex items-center justify-between">
                             <div>
-                              <h4 className="font-bold text-gray-900">{option.name}</h4>
+                              <h4 className="font-bold">{option.name}</h4>
                               {option.description && (
-                                <p className="text-sm text-gray-600">{option.description}</p>
+                                <p className="text-sm text-muted-foreground">{option.description}</p>
                               )}
                               <div className="flex gap-3 mt-1">
                                 {option.additionalSquareFootage && (
-                                  <p className="text-sm text-blue-600 font-medium">
+                                  <p className="text-sm text-sky-600 dark:text-sky-400 font-medium">
                                     +{option.additionalSquareFootage.toLocaleString()} sq ft
                                   </p>
                                 )}
                                 {option.additionalCost && (
-                                  <p className="text-sm text-green-600 font-medium">
+                                  <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
                                     +${option.additionalCost.toLocaleString()}
                                   </p>
                                 )}
@@ -578,7 +558,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-red-600 border-red-300"
+                                className="text-destructive hover:text-destructive"
                                 onClick={() => handleDeleteOption(option.id)}
                               >
                                 <Trash2 className="w-3 h-3" />
@@ -588,16 +568,16 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                         </CardHeader>
                         <CardContent>
                           {option.documents.length === 0 ? (
-                            <p className="text-gray-400 text-sm">No documents for this option</p>
+                            <p className="text-muted-foreground text-sm">No documents for this option</p>
                           ) : (
                             <div className="space-y-2">
                               {option.documents.map((doc) => (
-                                <div key={doc.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                                <div key={doc.id} className="flex items-center justify-between rounded border border-border/60 bg-card p-2">
                                   <div className="flex items-center space-x-2">
-                                    <FileText className="w-4 h-4 text-orange-600" />
+                                    <FileText className="w-4 h-4 text-amber-500" />
                                     <div>
                                       <p className="text-sm font-medium">{doc.name}</p>
-                                      <p className="text-xs text-gray-500">{formatFileSize(doc.fileSize)}</p>
+                                      <p className="text-xs text-muted-foreground">{formatFileSize(doc.fileSize)}</p>
                                     </div>
                                   </div>
                                   <div className="flex gap-1">
@@ -611,7 +591,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                                     <Button
                                       size="sm"
                                       variant="ghost"
-                                      className="text-red-600"
+                                      className="text-destructive hover:text-destructive"
                                       onClick={() => handleDeleteDocument(doc.id, option.id)}
                                     >
                                       <Trash2 className="w-3 h-3" />
@@ -630,14 +610,12 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
             </Card>
           </>
         )}
-      </main>
-
       {/* Upload Modal */}
       {uploadingFor && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={(e) => {
           if (e.target === e.currentTarget) setUploadingFor(null)
         }}>
-          <Card className="w-full max-w-lg">
+          <Card className="w-full max-w-lg border-border/60 bg-card">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Upload Document</CardTitle>
@@ -713,7 +691,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                         placeholder="https://drive.google.com/... or https://dropbox.com/..."
                         required
                       />
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Paste a link to Google Drive, Dropbox, OneDrive, etc.
                       </p>
                     </div>
@@ -733,7 +711,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                         }}
                         placeholder="e.g., Gunnison_FloorPlan_v2.pdf"
                       />
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Enter the file name for your records (file stored locally on your computer)
                       </p>
                     </div>

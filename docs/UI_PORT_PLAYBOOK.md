@@ -514,7 +514,7 @@ tsc --noEmit clean.
 | Selection Schedules | ⏸ Hold | `src/components/SelectionSchedules.tsx` | Pending owner-driven redesign — v0 has updated selections design that will eventually replace SelectionBook→SelectionLibrary; revisit when that lands |
 | Schedule Builder | ✅ Ported | `src/components/ScheduleBuilder.tsx` | Originally flagged Mode B; turned out to be Mode A after all. Calendar UI is custom but stylistically mechanical. References: rail-accent summary cards, list/calendar view toggle pattern with `cn(...)` conditional classes, "today" indicator uses `bg-rose-500 text-white`, item-type chips use muted/amber tokens |
 | Plan Library | ✅ Ported | `src/components/PlanLibrary.tsx` | Mode A — summary cards + searchable list normalized to rail-accent token recipe |
-| Plan Editor | ⬜ Pending | `src/components/PlanEditor.tsx` | Mode A — form-heavy |
+| Plan Editor | ✅ Ported | `src/components/PlanEditor.tsx` | Mode A — form-heavy editor tokenized; preserved option/document upload flows and inline upload modal behavior |
 | Item Library | ✅ Ported | `src/components/ItemLibrary.tsx` | Mode A — dual-branch tabs retained; removed hero/mobile shell and tokenized category accordion + modal forms |
 | SOW Management | ✅ Ported | `src/components/SOWManagement.tsx` | Mode A — removed legacy hero + gradient shell, normalized CRUD cards/dialogs to token surfaces |
 | Deal Workspace | ⏸ Hold | `src/components/DealWorkspace.tsx` | Wait for owner's in-flight Create Deal commit |
