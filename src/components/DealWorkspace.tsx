@@ -2766,10 +2766,10 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   return (
     <div className="flex h-[calc(100vh-3rem)] flex-col bg-background text-foreground">
       <Dialog open={createDealModalOpen} onOpenChange={setCreateDealModalOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Create New Deal</DialogTitle>
-            <DialogDescription>Enter deal details and open it in the workspace.</DialogDescription>
+        <DialogContent className="sm:max-w-lg border-border/60 bg-card text-foreground">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-lg font-semibold">Create New Deal</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">Enter deal details and open it in the workspace.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -2797,7 +2797,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                   value={newDealForm.type}
                   onValueChange={(value) => setNewDealForm((prev) => ({ ...prev, type: value as Deal['type'] }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="border-border/60 bg-card text-foreground">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2816,7 +2816,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                   value={newDealForm.status}
                   onValueChange={(value) => setNewDealForm((prev) => ({ ...prev, status: value as Deal['status'] }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="border-border/60 bg-card text-foreground">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
