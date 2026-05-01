@@ -13,7 +13,7 @@
 //
 
 import { useEffect, useState } from 'react'
-import { NavLink, useMatch, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import {
   BarChart3,
   Briefcase,
@@ -67,6 +67,12 @@ type NavItem = {
   icon: typeof LayoutDashboard
   /** Match function for active state (defaults to exact path match) */
   matchPath?: string
+  /** Active when the URL's ?tab=<value> matches this. Used for deals nav. */
+  matchTab?: string
+  /** Active only when pathname exactly matches `to` AND there is no query
+   *  string. Used for the top-level Deals "Dashboard" so it stops being
+   *  active once the user picks a tab (?tab=...). */
+  matchExactNoQuery?: boolean
   /** When true and no project is selected, render disabled */
   requiresProject?: boolean
 }
@@ -173,26 +179,40 @@ function projectsNav(projectId: string | undefined): NavGroup[] {
   ]
 }
 
-const dealsNav: NavGroup[] = [
-  {
-    label: 'Deal Analysis',
-    items: [
-      { label: 'Dashboard', to: '/deals', icon: LayoutDashboard, matchPath: '/deals' },
-      { label: 'Assumptions', to: '/deals', icon: ClipboardList },
-      { label: 'Phase Pro Forma', to: '/deals', icon: Calendar },
-      { label: 'Cash Flow', to: '/deals', icon: TrendingUp },
-      { label: 'Investor Returns', to: '/deals', icon: Wallet },
-      { label: 'Public Sector', to: '/deals', icon: Briefcase },
-    ],
-  },
-  {
-    label: 'Analysis & Insights',
-    items: [
-      { label: 'Analysis & Insights', to: '/deals', icon: LineChart },
-      { label: 'Documents', to: '/deals', icon: FileText },
-    ],
-  },
-]
+function dealsNav(dealId: string | undefined): NavGroup[] {
+  // Tab-driven items live inside DealWorkspace and are activated via ?tab=<x>.
+  // When a deal is in the URL, preserve it; otherwise fall through to /deals
+  // (DealWorkspace will pick the most-recent deal).
+  const base = dealId ? `/deals/workspace/${dealId}` : '/deals'
+  const tab = (t: string) => `${base}?tab=${t}`
+
+  return [
+    {
+      // Top-level Dashboard sits above the Deal Analysis group; takes the user
+      // to /deals (today: DealWorkspace; future: dedicated Deals dashboard).
+      label: '',
+      items: [
+        { label: 'Dashboard', to: '/deals', icon: LayoutDashboard, matchExactNoQuery: true },
+      ],
+    },
+    {
+      label: 'Deal Analysis',
+      items: [
+        // "Overview" maps to the in-page Dashboard tab (Projected Profit /
+        // MOIC / Deal Snapshot / ProForma Memo).
+        { label: 'Overview', to: tab('dashboard'), icon: LayoutDashboard, matchTab: 'dashboard' },
+        { label: 'Assumptions', to: tab('assumptions'), icon: ClipboardList, matchTab: 'assumptions' },
+        { label: 'Phase Pro Forma', to: tab('phase-pro-forma'), icon: Calendar, matchTab: 'phase-pro-forma' },
+        { label: 'Cash Flow', to: tab('cash-flow'), icon: TrendingUp, matchTab: 'cash-flow' },
+        { label: 'Investor Returns', to: tab('investor-returns'), icon: Wallet, matchTab: 'investor-returns' },
+        { label: 'Public Sector', to: tab('public-sector'), icon: Briefcase, matchTab: 'public-sector' },
+        { label: 'Analysis & Insights', to: tab('analysis'), icon: LineChart, matchTab: 'analysis' },
+        // Documents has no in-page tab yet; placeholder per design language §5.4.
+        { label: 'Documents', to: '#', icon: FileText },
+      ],
+    },
+  ]
+}
 
 const tenantsNav: NavGroup[] = [
   {
@@ -223,12 +243,13 @@ const settingsNav: NavGroup = {
 function navForWorkspace(
   ws: Workspace,
   currentProjectId: string | undefined,
+  currentDealId: string | undefined,
 ): NavGroup[] {
   switch (ws) {
     case 'projects':
       return [...projectsNav(currentProjectId), settingsNav]
     case 'deals':
-      return [...dealsNav, settingsNav]
+      return [...dealsNav(currentDealId), settingsNav]
     case 'tenants':
       return [...tenantsNav, settingsNav]
   }
@@ -240,6 +261,9 @@ export function AppSidebar() {
   const projectIndexMatch = useMatch('/projects/:projectId')
   const currentProjectId =
     projectMatch?.params.projectId ?? projectIndexMatch?.params.projectId
+
+  const dealMatch = useMatch('/deals/workspace/:dealId')
+  const currentDealId = dealMatch?.params.dealId
 
   // For "requiresProject" nav items: if no project in URL but the user has
   // any projects at all, we'll fall back to "the most recent project" so the
@@ -259,7 +283,7 @@ export function AppSidebar() {
   }, [workspace, currentProjectId])
 
   const effectiveProjectId = currentProjectId ?? recentProjectId
-  const groups = navForWorkspace(workspace, effectiveProjectId)
+  const groups = navForWorkspace(workspace, effectiveProjectId, currentDealId)
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -273,7 +297,7 @@ export function AppSidebar() {
       <SidebarContent>
         {groups.map((group, idx) => (
           <SidebarGroup key={`${group.label}-${idx}`}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => (
@@ -307,22 +331,39 @@ export function AppSidebar() {
 function PrimaryAction({ workspace }: { workspace: Workspace }) {
   const navigate = useNavigate()
 
-  // For now we only have a "New" action for Projects. Deals/Tenants creation
-  // happens inside their respective workspace UIs.
-  if (workspace !== 'projects') return null
+  if (workspace === 'projects') {
+    return (
+      <div className="px-1 group-data-[collapsible=icon]:hidden">
+        <Button
+          onClick={() => navigate('/projects/new')}
+          size="sm"
+          className="w-full justify-start gap-2"
+        >
+          <Plus className="size-4" />
+          New Project
+        </Button>
+      </div>
+    )
+  }
 
-  return (
-    <div className="px-1 group-data-[collapsible=icon]:hidden">
-      <Button
-        onClick={() => navigate('/projects/new')}
-        size="sm"
-        className="w-full justify-start gap-2"
-      >
-        <Plus className="size-4" />
-        New Project
-      </Button>
-    </div>
-  )
+  if (workspace === 'deals') {
+    // Sidebar nav signals "open create modal" via /deals?new=1; DealWorkspace
+    // listens for the param and opens its existing modal.
+    return (
+      <div className="px-1 group-data-[collapsible=icon]:hidden">
+        <Button
+          onClick={() => navigate('/deals?new=1')}
+          size="sm"
+          className="w-full justify-start gap-2"
+        >
+          <Plus className="size-4" />
+          New Deal
+        </Button>
+      </div>
+    )
+  }
+
+  return null
 }
 
 function BrandHeader() {
@@ -357,6 +398,7 @@ function NavLinkItem({
   item: NavItem
   hasProject: boolean
 }) {
+  const location = useLocation()
   const Icon = item.icon
   const disabled = item.requiresProject && !hasProject
   const isHashOnly = item.to === '#'
@@ -380,15 +422,51 @@ function NavLinkItem({
     )
   }
 
+  // For tab-driven items (deals nav), active state is "we're on a /deals*
+  // path AND the active ?tab matches this item's matchTab". NavLink's default
+  // isActive ignores the query string, so do this manually.
+  const activeClass = 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+  if (item.matchTab) {
+    const params = new URLSearchParams(location.search)
+    const isActive =
+      location.pathname.startsWith('/deals') &&
+      params.get('tab') === item.matchTab
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild tooltip={item.label}>
+          <NavLink to={item.to} className={cn(isActive && activeClass)}>
+            <Icon className="size-4" />
+            <span>{item.label}</span>
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    )
+  }
+
+  // Top-level "Dashboard" needs to deactivate as soon as a tab is selected
+  // (otherwise both Dashboard and Overview light up on /deals?tab=dashboard).
+  if (item.matchExactNoQuery) {
+    const isActive =
+      location.pathname === item.to && location.search === ''
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild tooltip={item.label}>
+          <NavLink to={item.to} className={cn(isActive && activeClass)}>
+            <Icon className="size-4" />
+            <span>{item.label}</span>
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    )
+  }
+
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild tooltip={item.label}>
         <NavLink
           to={item.to}
           end={item.to === '/' || item.to === '/deals' || item.to === '/tenants'}
-          className={({ isActive }) =>
-            cn(isActive && 'bg-sidebar-accent text-sidebar-accent-foreground font-medium')
-          }
+          className={({ isActive }) => cn(isActive && activeClass)}
         >
           <Icon className="size-4" />
           <span>{item.label}</span>

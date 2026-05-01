@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Textarea } from './ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
-import { ArrowLeft, ChevronDown, Download, Mic, MicOff, Pencil, Play, Plus, Save, Send, X } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Download, Mic, MicOff, Pencil, Play, Save, Send, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import type { Deal } from '@/types/deal'
@@ -31,7 +31,7 @@ import {
 import { calculateProForma } from '@/services/proformaService'
 import { exportProFormaToExcel, exportProFormaToPDF } from '@/services/proformaExportService'
 import { supabase } from '@/lib/supabase'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 type WorkspaceStage = 'coaching' | 'scenario' | 'proforma'
 type FieldStatus = 'confirmed' | 'approx' | 'empty'
@@ -190,12 +190,6 @@ const STAGE_COLOR: Record<WorkspaceStage, string> = {
   coaching: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
   scenario: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30',
   proforma: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
-}
-
-const STAGE_DEAL_ACCENT: Record<WorkspaceStage, string> = {
-  coaching: 'bg-amber-500',
-  scenario: 'bg-sky-500',
-  proforma: 'bg-emerald-500',
 }
 
 function buildDealUnderwritingProject(deal: Deal): Project {
@@ -1314,6 +1308,7 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
 
 export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDealId, setSelectedDealId] = useState<string | undefined>(dealId)
@@ -1436,6 +1431,57 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     load()
   }, [dealId])
 
+  // Sync ?tab=<x> query param into centerTab. Lets sidebar nav drive
+  // which in-page tab is active.
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (!tab) return
+    const valid: WorkspaceCenterTab[] = [
+      'assumptions',
+      'phase-pro-forma',
+      'cash-flow',
+      'investor-returns',
+      'public-sector',
+      'dashboard',
+      'analysis',
+    ]
+    if (valid.includes(tab as WorkspaceCenterTab)) {
+      setCenterTab(tab as WorkspaceCenterTab)
+    }
+  }, [searchParams])
+
+  // Open the create-deal modal when arriving via ?new=1 (sidebar
+  // "+ New Deal" button), then strip the param so refresh doesn't reopen.
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setCreateDealModalOpen(true)
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          next.delete('new')
+          return next
+        },
+        { replace: true },
+      )
+    }
+  }, [searchParams, setSearchParams])
+
+  // Programmatic tab changes (clear-workspace flows, "edit assumptions" link)
+  // need to also update ?tab=<x> so the sidebar reflects the rendered content.
+  // Sidebar-driven changes flow URL → state via the effect above; this is the
+  // reverse path. Use this everywhere instead of bare setCenterTab(...).
+  const selectCenterTab = (tab: WorkspaceCenterTab) => {
+    setCenterTab(tab)
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('tab', tab)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
   useEffect(() => {
     const loadState = async () => {
       if (!selectedDeal) return
@@ -1482,7 +1528,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
       setPendingSuggestions(null)
       setMarkers([])
       setRunPromptReason(null)
-      setCenterTab('assumptions')
+      selectCenterTab('assumptions')
       hasLoadedDealRef.current = true
       setLoadingDealState(false)
     }
@@ -2054,12 +2100,6 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     }
   }, [input, projection, carbonMetrics?.investorPayout, cashFlowWorkbookRows])
 
-  const selectedDealStage = (deal: Deal): WorkspaceStage => {
-    if (deal.converted_to_projects) return 'proforma'
-    if ((deal.projected_cost || 0) > 0) return 'scenario'
-    return 'coaching'
-  }
-
   const setField = (path: string, value: any) => {
     if (!input) return
     const keys = path.split('.')
@@ -2463,7 +2503,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     setPendingNotesAppend(null)
     setPendingTaskSuggestions(null)
     setRunPromptReason('Loaded version inputs. Chat context was kept.')
-    setCenterTab('assumptions')
+    selectCenterTab('assumptions')
     appendActivity('version_load', 'Loaded a saved version (inputs only).')
   }
 
@@ -2496,7 +2536,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     setNotesDraft('')
     setTasksDraft('')
     setActivityEvents([])
-    setCenterTab('assumptions')
+    selectCenterTab('assumptions')
 
     await Promise.all([
       saveDealProFormaDraft(selectedDeal.id, {
@@ -2542,7 +2582,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     setPendingTaskSuggestions(null)
     setMarkers([])
     setRunPromptReason('Inputs reset. Chat/notes/tasks were kept.')
-    setCenterTab('assumptions')
+    selectCenterTab('assumptions')
 
     await saveDealProFormaDraft(selectedDeal.id, {
       currentInput: {
@@ -2740,15 +2780,6 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     setIsListening(false)
   }
 
-  const stageLegend = (
-    <div className="space-y-1 text-xs text-muted-foreground">
-      <div className="font-semibold text-foreground">Stage Guide</div>
-      <div><span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />Coaching</div>
-      <div><span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-2" />Scenario</div>
-      <div><span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-2" />ProForma</div>
-    </div>
-  )
-
   if (loading || loadingDealState) {
     return <div className="flex h-[60vh] items-center justify-center text-muted-foreground">Loading deal workspace…</div>
   }
@@ -2927,57 +2958,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
       </div>
 
       <div className="flex-1 flex min-h-0">
-        <aside className="w-[220px] bg-card border-r border-border/60 p-3 overflow-y-auto">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="text-xs uppercase text-muted-foreground">Deals</div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setCreateDealModalOpen(true)}
-              disabled={creatingDeal}
-              className="h-7 border-border/60 bg-card px-2 text-foreground hover:bg-muted"
-            >
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              New
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 gap-2">
-            {deals.map((d) => {
-              const dStage = selectedDealStage(d)
-              return (
-                <button
-                  key={d.id}
-                  onClick={() => {
-                    setSelectedDealId(d.id)
-                    navigate(`/deals/workspace/${d.id}`, { replace: true })
-                  }}
-                  className={`relative w-full text-left rounded border p-2 pl-3 ${selectedDealId === d.id ? 'border-blue-500 bg-blue-950/40' : 'border-border/60 bg-card hover:bg-muted'}`}
-                >
-                  <span className={`absolute left-0 top-0 h-full w-1 rounded-l ${STAGE_DEAL_ACCENT[dStage]}`} />
-                  <div className="font-medium text-sm truncate text-foreground">{d.deal_name}</div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {(d.unit_count || 0) > 0 ? `${d.unit_count} units` : 'Units TBD'} · {d.custom_type || d.type}
-                  </div>
-                  <div className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded border ${STAGE_COLOR[dStage]}`}>{dStage}</div>
-                </button>
-              )
-            })}
-          </div>
-          <div className="mt-4 pt-3 border-t border-border/60">{stageLegend}</div>
-        </aside>
-
         <main className="flex-1 min-w-0 p-3 overflow-y-auto bg-card [&_label]:text-[11px] [&_label]:text-foreground [&_input]:h-8 [&_input]:text-xs [&_input]:bg-input [&_input]:border-border [&_input]:text-foreground [&_input]:placeholder:text-muted-foreground [&_button[role='combobox']]:h-8 [&_button[role='combobox']]:text-xs [&_button[role='combobox']]:bg-input [&_button[role='combobox']]:border-border [&_button[role='combobox']]:text-foreground [&_.rounded-md]:rounded-sm">
-          <div className="mb-3 flex flex-wrap gap-2 border-b border-border/60 pb-2">
-            <Button size="sm" className={centerTab === 'assumptions' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'assumptions' ? 'default' : 'outline'} onClick={() => setCenterTab('assumptions')}>Assumptions</Button>
-            <Button size="sm" className={centerTab === 'phase-pro-forma' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'phase-pro-forma' ? 'default' : 'outline'} onClick={() => setCenterTab('phase-pro-forma')}>Phase Pro Forma</Button>
-            <Button size="sm" className={centerTab === 'cash-flow' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'cash-flow' ? 'default' : 'outline'} onClick={() => setCenterTab('cash-flow')}>Cash Flow</Button>
-            <Button size="sm" className={centerTab === 'investor-returns' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'investor-returns' ? 'default' : 'outline'} onClick={() => setCenterTab('investor-returns')}>Investor Returns</Button>
-            <Button size="sm" className={centerTab === 'public-sector' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'public-sector' ? 'default' : 'outline'} onClick={() => setCenterTab('public-sector')}>Public Sector</Button>
-            <Button size="sm" className={centerTab === 'dashboard' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'dashboard' ? 'default' : 'outline'} onClick={() => setCenterTab('dashboard')}>Dashboard</Button>
-            <Button size="sm" className={centerTab === 'analysis' ? '' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'} variant={centerTab === 'analysis' ? 'default' : 'outline'} onClick={() => setCenterTab('analysis')}>Analysis & Insights</Button>
-          </div>
-
           {centerTab === 'dashboard' && (
             <div className="space-y-3">
               <div className="mb-3">
@@ -3032,7 +3013,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 input={input}
                 projection={projection}
                 readiness={readiness}
-                onEditAssumptions={() => setCenterTab('assumptions')}
+                onEditAssumptions={() => selectCenterTab('assumptions')}
               />
             </div>
           )}
@@ -3113,7 +3094,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Construction Cost per Unit">
                   <Input
-                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-sky-500/40 !text-sky-700 dark:!text-sky-300 font-semibold cursor-not-allowed"
                     value={
                       (input.forSalePhasedLoc?.totalUnits || 0) > 0
                         ? formatCurrency((input.underwritingEstimatedConstructionCost || 0) / (input.forSalePhasedLoc?.totalUnits || 1), 2)
@@ -3156,7 +3137,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Sale Price per Unit">
                   <Input
-                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-sky-500/40 !text-sky-700 dark:!text-sky-300 font-semibold cursor-not-allowed"
                     value={input.forSalePhasedLoc?.averageSalePrice ? formatCurrency(input.forSalePhasedLoc.averageSalePrice, 2) : ''}
                     readOnly
                   />
@@ -3186,7 +3167,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 <AssumptionInputRow label="Presale Deposit ($)">
                   <div className="flex min-w-0 w-full flex-nowrap items-center gap-1.5">
                     <Input
-                      className="!h-7 shrink-0 !max-w-[210px] !bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                      className="!h-7 shrink-0 !max-w-[210px] !bg-muted !border-sky-500/40 !text-sky-700 dark:!text-sky-300 font-semibold cursor-not-allowed"
                       value={formatCurrency(
                         (input.forSalePhasedLoc?.averageSalePrice || 0) *
                           ((input.forSalePhasedLoc?.presaleDepositPercent || 0) / 100),
@@ -3232,7 +3213,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 title={title}
                                 className={`h-7 min-w-0 shrink-0 rounded-none px-1.5 text-[10px] leading-none ${
                                   active
-                                    ? 'bg-cyan-700/40 text-cyan-100 hover:bg-cyan-700/50'
+                                    ? 'bg-sky-500/20 text-sky-700 dark:text-sky-200 hover:bg-sky-500/30'
                                     : 'bg-card text-muted-foreground hover:bg-muted'
                                 }`}
                                 onClick={() => {
@@ -3402,7 +3383,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 <AssumptionInputRow label="Construction Cost">
                   <div className="flex min-w-0 w-full flex-nowrap items-center gap-1.5">
                     <Input
-                      className="!h-7 shrink-0 !max-w-[210px] !bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                      className="!h-7 shrink-0 !max-w-[210px] !bg-muted !border-sky-500/40 !text-sky-700 dark:!text-sky-300 font-semibold cursor-not-allowed"
                       value={input.underwritingEstimatedConstructionCost ? formatCurrency(input.underwritingEstimatedConstructionCost, 2) : ''}
                       readOnly
                     />
@@ -3410,7 +3391,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                       <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
                         <span className="sr-only">Construction spend curve</span>
                         <div
-                          className="inline-flex shrink-0 rounded-md border border-cyan-600/50 overflow-hidden"
+                          className="inline-flex shrink-0 rounded-md border border-sky-500/40 overflow-hidden"
                           title="Spend curve — how hard costs are spread across construction months."
                         >
                           {(
@@ -3442,7 +3423,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 title={title}
                                 className={`h-7 shrink-0 rounded-none px-1.5 text-[10px] leading-none ${
                                   active
-                                    ? 'bg-cyan-700/40 text-cyan-100 hover:bg-cyan-700/50'
+                                    ? 'bg-sky-500/20 text-sky-700 dark:text-sky-200 hover:bg-sky-500/30'
                                     : 'bg-card text-muted-foreground hover:bg-muted'
                                 }`}
                                 onClick={() => setField('forSalePhasedLoc.constructionSpendCurve', curve)}
@@ -3483,7 +3464,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                     title={title}
                                     className={`h-7 shrink-0 rounded-none px-1.5 text-[10px] leading-none ${
                                       active
-                                        ? 'bg-cyan-700/40 text-cyan-100 hover:bg-cyan-700/50'
+                                        ? 'bg-sky-500/20 text-sky-700 dark:text-sky-200 hover:bg-sky-500/30'
                                         : 'bg-card text-muted-foreground hover:bg-muted'
                                     }`}
                                     onClick={() => setField('forSalePhasedLoc.triggerUsesPresales', on)}
@@ -3552,7 +3533,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Carry Cost">
                   <Input
-                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-sky-500/40 !text-sky-700 dark:!text-sky-300 font-semibold cursor-not-allowed"
                     title={getCarryCostFieldTitle(input)}
                     value={formatCurrency(getCalculatedCarryCost(input), 2)}
                     readOnly
@@ -3560,7 +3541,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Project Total Cost">
                   <Input
-                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-sky-500/40 !text-sky-700 dark:!text-sky-300 font-semibold cursor-not-allowed"
                     value={formatCurrency(getProjectTotalCost(input), 2)}
                     readOnly
                   />
@@ -3627,14 +3608,14 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Preferred Return Payment (Selected Period)">
                   <Input
-                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-sky-500/40 !text-sky-700 dark:!text-sky-300 font-semibold cursor-not-allowed"
                     value={formatCurrency((carbonMetrics?.prefPerPeriod as number) || 0, 2)}
                     readOnly
                   />
                 </AssumptionInputRow>
                 <AssumptionInputRow label="Total Pref Returned">
                   <Input
-                    className="!bg-muted !border-cyan-600/70 !text-cyan-200 font-semibold cursor-not-allowed"
+                    className="!bg-muted !border-sky-500/40 !text-sky-700 dark:!text-sky-300 font-semibold cursor-not-allowed"
                     value={formatCurrency((carbonMetrics?.totalPref as number) || 0, 2)}
                     readOnly
                   />
@@ -3703,7 +3684,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 <div className="grid gap-2 sm:gap-3 lg:grid-cols-2 lg:items-start">
                   <div className="min-w-0 space-y-1">
                     <Label className="text-xs text-muted-foreground">Debt / LOC Stack</Label>
-                    <div className="inline-flex w-full min-w-0 max-w-full flex-nowrap rounded border border-cyan-600/50 overflow-hidden divide-x divide-border/60">
+                    <div className="inline-flex w-full min-w-0 max-w-full flex-nowrap rounded border border-sky-500/40 overflow-hidden divide-x divide-border/60">
                       {(
                         [
                           {
@@ -3739,7 +3720,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                   </div>
                   <div className="min-w-0 space-y-1">
                     <Label className="text-xs text-muted-foreground">Closing sale proceeds split</Label>
-                    <div className="inline-flex w-full min-w-0 max-w-full flex-nowrap rounded border border-cyan-600/50 overflow-hidden divide-x divide-border/60">
+                    <div className="inline-flex w-full min-w-0 max-w-full flex-nowrap rounded border border-sky-500/40 overflow-hidden divide-x divide-border/60">
                       {(
                         [
                           {
@@ -4076,7 +4057,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 variant="ghost"
                                 className={`h-7 rounded-none px-2 text-[11px] ${
                                   active
-                                    ? 'bg-cyan-700/35 text-cyan-100 hover:bg-cyan-700/45'
+                                    ? 'bg-sky-500/15 text-sky-700 dark:text-sky-200 hover:bg-sky-500/25'
                                     : 'bg-card/60 text-muted-foreground hover:bg-muted'
                                 }`}
                                 onClick={() => setField('forSalePhasedLoc.salesPaceMode', mode)}
@@ -4106,7 +4087,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 title={mode === 'fixed-schedule' ? 'Start phases by explicit start month' : 'Unlock phases by sales trigger'}
                                 className={`h-7 rounded-none px-2 text-[11px] ${
                                   active
-                                    ? 'bg-cyan-700/35 text-cyan-100 hover:bg-cyan-700/45'
+                                    ? 'bg-sky-500/15 text-sky-700 dark:text-sky-200 hover:bg-sky-500/25'
                                     : 'bg-card/60 text-muted-foreground hover:bg-muted'
                                 }`}
                                 onClick={() => setField('forSalePhasedLoc.phaseTimingMode', mode)}
