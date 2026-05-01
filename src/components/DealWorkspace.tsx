@@ -31,6 +31,7 @@ import {
 import { calculateProForma } from '@/services/proformaService'
 import { exportProFormaToExcel, exportProFormaToPDF } from '@/services/proformaExportService'
 import { supabase } from '@/lib/supabase'
+import { useNavigate } from 'react-router-dom'
 
 type WorkspaceStage = 'coaching' | 'scenario' | 'proforma'
 type FieldStatus = 'confirmed' | 'approx' | 'empty'
@@ -1312,6 +1313,7 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
 }
 
 export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
+  const navigate = useNavigate()
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDealId, setSelectedDealId] = useState<string | undefined>(dealId)
@@ -2662,7 +2664,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
         if (selectedDealId === targetDealId) {
           const nextDealId = remainingDeals[0].id
           setSelectedDealId(nextDealId)
-          window.history.replaceState({}, '', `/deals/workspace/${nextDealId}`)
+          navigate(`/deals/workspace/${nextDealId}`, { replace: true })
         }
         return remainingDeals
       })
@@ -2697,7 +2699,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
 
       setDeals((prevDeals) => [created, ...prevDeals.filter((deal) => deal.id !== created.id)])
       setSelectedDealId(created.id)
-      window.history.replaceState({}, '', `/deals/workspace/${created.id}`)
+      navigate(`/deals/workspace/${created.id}`, { replace: true })
       setCreateDealModalOpen(false)
       setNewDealForm({
         deal_name: '',
@@ -2948,7 +2950,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                   key={d.id}
                   onClick={() => {
                     setSelectedDealId(d.id)
-                    window.history.replaceState({}, '', `/deals/workspace/${d.id}`)
+                    navigate(`/deals/workspace/${d.id}`, { replace: true })
                   }}
                   className={`relative w-full text-left rounded border p-2 pl-3 ${selectedDealId === d.id ? 'border-blue-500 bg-blue-950/40' : 'border-border/60 bg-card hover:bg-muted'}`}
                 >
