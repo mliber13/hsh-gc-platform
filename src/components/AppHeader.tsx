@@ -17,6 +17,7 @@ import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { usePageTitleValue } from '@/contexts/PageTitleContext'
 import { ProjectSelector } from './ProjectSelector'
+import { DealSelector } from './DealSelector'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 /** Pathname → human title fallback for pages that haven't called usePageTitle yet. */
@@ -48,6 +49,7 @@ export function AppHeader() {
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mx-1 h-4" />
         <ProjectSelector />
+        <DealSelector />
       </div>
 
       {/* Center: page title (absolute-positioned so it stays centered
