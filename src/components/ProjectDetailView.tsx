@@ -47,6 +47,9 @@ import {
 import { getActivePlans_Hybrid } from '@/services/planHybridService'
 import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
 import { getSelectionBookRoomsCount } from '@/services/selectionBookService'
+import { getRecentProjectActivity } from '@/services/projectActivityService'
+import type { ProjectActivityEvent } from '@/types/projectActivity'
+import { RecentActivityCard } from './dashboard/RecentActivityCard'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -212,6 +215,8 @@ export function ProjectDetailView({
     subcontractorCost: 0,
     totalActual: 0,
   })
+  const [activityEvents, setActivityEvents] = useState<ProjectActivityEvent[]>([])
+  const [loadingActivity, setLoadingActivity] = useState(true)
 
   // Centered title in the AppHeader
   usePageTitle('Project Overview')
@@ -222,6 +227,38 @@ export function ProjectDetailView({
       void getActivePlans_Hybrid().then(setAvailablePlans)
     }
   }, [isEditing])
+
+  // Recent activity feed (derived from change_orders, po_headers,
+  // project_documents, project_forms — see projectActivityService).
+  useEffect(() => {
+    let cancelled = false
+    setLoadingActivity(true)
+    void getRecentProjectActivity(project.id, 10).then((events) => {
+      if (cancelled) return
+      setActivityEvents(events)
+      setLoadingActivity(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [project.id])
+
+  const handleActivityEventSelected = (event: ProjectActivityEvent) => {
+    switch (event.section) {
+      case 'change-orders':
+        onViewChangeOrders?.()
+        break
+      case 'purchase-orders':
+        onViewPOs?.()
+        break
+      case 'documents':
+        onViewDocuments?.()
+        break
+      case 'forms':
+        onViewForms()
+        break
+    }
+  }
 
   // Estimate totals
   useEffect(() => {
@@ -611,6 +648,13 @@ export function ProjectDetailView({
           }
         />
       </div>
+
+      {/* Recent activity — derived from change orders, POs, documents, forms */}
+      <RecentActivityCard
+        events={activityEvents}
+        loading={loadingActivity}
+        onSelectEvent={handleActivityEventSelected}
+      />
 
       {/* Edit modal */}
       {isEditing && (
