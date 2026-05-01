@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import { getCategoryAccentLeftBorderStyle } from '@/lib/categoryAccent'
 import {
@@ -77,6 +78,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [scheduleView, setScheduleView] = useState<'list' | 'calendar'>('list')
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => project.startDate ? new Date(project.startDate) : new Date())
+  const [editingItemId, setEditingItemId] = useState<string | null>(null)
 
   // Centered title in the AppHeader
   usePageTitle('Schedule')
@@ -189,6 +191,8 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     if (!confirm('Remove this schedule item?')) return
     setScheduleItems(items => items.filter(i => i.id !== itemId))
     setHasUnsavedChanges(true)
+    // If the removed item was open in the edit dialog, close it.
+    if (editingItemId === itemId) setEditingItemId(null)
   }
 
   const handleUpdateScheduleItem = (itemId: string, updates: Partial<ScheduleItem>) => {
@@ -367,6 +371,191 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
   const getItemColsForWeek = (item: ScheduleItem, weekIdx: number) =>
     getItemColsForWeekUtil(calendarStart, item, weekIdx)
 
+  // Editable form body for a schedule item. Used by both the List view (one
+  // per item) and the calendar's edit Dialog (single item, opened by clicking
+  // a calendar bar). Keeps a single source of truth for fields + handlers.
+  const renderItemEditBody = (item: ScheduleItem) => (
+    <div className="flex-1">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded ${(item.type ?? 'field') === 'office' ? 'bg-muted text-muted-foreground' : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'}`}>
+              {(item.type ?? 'field') === 'office' ? <Briefcase className="w-3 h-3" /> : <HardHat className="w-3 h-3" />}
+              {(item.type ?? 'field') === 'office' ? 'Office' : 'Field'}
+            </span>
+            <Input
+              value={item.name}
+              onChange={(e) => handleUpdateScheduleItem(item.id, { name: e.target.value })}
+              className="font-semibold text-foreground h-8 max-w-md border-border/60"
+              placeholder="Item name"
+            />
+            {item.predecessorIds.length > 0 && (
+              <span className="flex items-center gap-1 text-xs bg-violet-500/15 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded">
+                <Link2 className="w-3 h-3" />
+                Has Dependency
+              </span>
+            )}
+            {item.estimateTradeId && (
+              <span className="text-xs text-muted-foreground">
+                Linked: {trades.find(t => t.id === item.estimateTradeId)?.name ?? '—'}
+              </span>
+            )}
+          </div>
+          {(item.trade != null) && (
+            <p className="text-xs text-muted-foreground">
+              {byKey[item.trade]?.label || item.trade}
+            </p>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 shrink-0"
+          onClick={() => handleRemoveScheduleItem(item.id)}
+          aria-label="Remove schedule item"
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+        <div>
+          <Label htmlFor={`type-${item.id}`} className="text-xs">Type</Label>
+          <Select
+            value={item.type ?? 'field'}
+            onValueChange={(value: ScheduleItemType) => handleUpdateScheduleItem(item.id, { type: value })}
+          >
+            <SelectTrigger className="text-sm" id={`type-${item.id}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="field">Field</SelectItem>
+              <SelectItem value="office">Office</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {(item.type ?? 'field') === 'office' && (
+          <div className="col-span-2">
+            <Label htmlFor={`trade-${item.id}`} className="text-xs">Related trade (optional)</Label>
+            <Select
+              value={item.estimateTradeId ?? 'none'}
+              onValueChange={(value) => handleUpdateScheduleItem(item.id, {
+                estimateTradeId: value === 'none' ? undefined : value,
+                trade: value === 'none' ? undefined : trades.find(t => t.id === value)?.category,
+              })}
+            >
+              <SelectTrigger className="text-sm" id={`trade-${item.id}`}>
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {trades.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div>
+          <Label htmlFor={`start-${item.id}`} className="text-xs">Start Date</Label>
+          <Input
+            id={`start-${item.id}`}
+            type="date"
+            value={item.startDate instanceof Date && !isNaN(item.startDate.getTime())
+              ? item.startDate.toISOString().split('T')[0]
+              : new Date().toISOString().split('T')[0]}
+            onChange={(e) => handleUpdateScheduleItem(item.id, {
+              startDate: new Date(e.target.value)
+            })}
+            className="text-sm"
+          />
+        </div>
+        <div>
+          <Label htmlFor={`duration-${item.id}`} className="text-xs">Duration (days)</Label>
+          <Input
+            id={`duration-${item.id}`}
+            type="number"
+            value={item.duration}
+            onChange={(e) => handleUpdateScheduleItem(item.id, {
+              duration: parseInt(e.target.value) || 1
+            })}
+            className="text-sm"
+          />
+        </div>
+        <div>
+          <Label htmlFor={`status-${item.id}`} className="text-xs">Status</Label>
+          <Select
+            value={item.status}
+            onValueChange={(value: any) => handleUpdateScheduleItem(item.id, { status: value })}
+          >
+            <SelectTrigger className="text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="not-started">Not Started</SelectItem>
+              <SelectItem value="in-progress">In Progress</SelectItem>
+              <SelectItem value="complete">Complete</SelectItem>
+              <SelectItem value="delayed">Delayed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <Label htmlFor={`predecessors-${item.id}`} className="text-xs">
+          Predecessors (must complete before this starts)
+        </Label>
+        <Select
+          value={item.predecessorIds.length > 0 ? item.predecessorIds[0] : 'none'}
+          onValueChange={(value) => {
+            if (value === 'none') {
+              handleUpdateScheduleItem(item.id, { predecessorIds: [] })
+            } else {
+              handleUpdateScheduleItem(item.id, { predecessorIds: [value] })
+            }
+          }}
+        >
+          <SelectTrigger className="text-sm">
+            <SelectValue placeholder="No predecessor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">None - Can start immediately</SelectItem>
+            {scheduleItems
+              .filter(otherItem => otherItem.id !== item.id)
+              .map((otherItem) => (
+                <SelectItem key={otherItem.id} value={otherItem.id}>
+                  {otherItem.name}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+        {item.predecessorIds.length > 0 && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Depends on: {scheduleItems.find(si => si.id === item.predecessorIds[0])?.name}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-3">
+        <Label htmlFor={`progress-${item.id}`} className="text-xs">
+          Progress: {item.percentComplete}%
+        </Label>
+        <Input
+          id={`progress-${item.id}`}
+          type="range"
+          min="0"
+          max="100"
+          value={item.percentComplete}
+          onChange={(e) => handleUpdateScheduleItem(item.id, {
+            percentComplete: parseInt(e.target.value)
+          })}
+          className="w-full"
+        />
+      </div>
+    </div>
+  )
+
   return (
     <div className="flex flex-col gap-6 p-6">
       {/* Top action strip — back link only */}
@@ -448,16 +637,17 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
           <RefreshCw className="size-4" />
           Regenerate from Estimate
         </Button>
-        <Button onClick={handleAddOfficeItem} variant="outline">
-          <Plus className="size-4" />
-          Add Office Item
-        </Button>
       </div>
 
       {/* Schedule Items — flat section pattern */}
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">Schedule Items</h2>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleAddOfficeItem} size="sm">
+              <Plus className="size-4" />
+              Add Item
+            </Button>
           {scheduleItems.length > 0 && (
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
@@ -489,34 +679,45 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                 </button>
               </div>
               {scheduleView === 'calendar' && (
-                <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/30 px-1 py-0.5">
+                <>
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    onClick={() => setCalendarMonth((m) => subMonths(m, 1))}
-                    aria-label="Previous month"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCalendarMonth(new Date())}
                   >
-                    <ChevronLeft className="size-4" />
+                    Today
                   </Button>
-                  <span className="min-w-[140px] text-center text-sm font-medium">
-                    {format(calendarMonth, 'MMMM yyyy')}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    onClick={() => setCalendarMonth((m) => addMonths(m, 1))}
-                    aria-label="Next month"
-                  >
-                    <ChevronRight className="size-4" />
-                  </Button>
-                </div>
+                  <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/30 px-1 py-0.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      onClick={() => setCalendarMonth((m) => subMonths(m, 1))}
+                      aria-label="Previous month"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </Button>
+                    <span className="min-w-[140px] text-center text-sm font-medium">
+                      {format(calendarMonth, 'MMMM yyyy')}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      onClick={() => setCalendarMonth((m) => addMonths(m, 1))}
+                      aria-label="Next month"
+                    >
+                      <ChevronRight className="size-4" />
+                    </Button>
+                  </div>
+                </>
               )}
             </div>
           )}
+          </div>
         </div>
 
         <div className="rounded-lg border border-border/60 bg-card/50 p-4">
@@ -582,12 +783,14 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                                         className={cn(
                                           'h-9 flex items-center border-r border-b border-border/60 last:border-r-0 px-1.5 py-0.5',
                                           filled ? (isOffice ? 'bg-muted/60' : 'bg-amber-500/15') : 'bg-transparent',
+                                          filled && 'cursor-pointer transition-opacity hover:opacity-80',
                                         )}
                                         style={{
                                           borderLeft: filled && isLeftEdge ? `4px solid ${accent.borderLeftColor}` : undefined,
                                           borderRadius: filled && isLeftEdge && c > 0 ? 0 : filled && !cols.includes(c + 1) ? '0 4px 4px 0' : 0,
                                         }}
-                                        title={showName ? `${item.name} • ${format(start, 'MMM d')} – ${format(end, 'MMM d')}` : undefined}
+                                        title={filled ? `${item.name} • ${format(start, 'MMM d')} – ${format(end, 'MMM d')} • Click to edit` : undefined}
+                                        onClick={filled ? () => setEditingItemId(item.id) : undefined}
                                       >
                                         {showName && (
                                           <span className="text-xs font-medium text-foreground truncate block">{item.name}</span>
@@ -606,193 +809,11 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {scheduleItems.map((item, index) => (
+                  {scheduleItems.map((item) => (
                     <Card key={item.id} className="border-2 border-l-4" style={getCategoryAccentLeftBorderStyle(item.trade ?? '')}>
                       <CardContent className="pt-4">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded ${(item.type ?? 'field') === 'office' ? 'bg-muted text-muted-foreground' : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'}`}>
-                                    {(item.type ?? 'field') === 'office' ? <Briefcase className="w-3 h-3" /> : <HardHat className="w-3 h-3" />}
-                                    {(item.type ?? 'field') === 'office' ? 'Office' : 'Field'}
-                                  </span>
-                                  <Input
-                                    value={item.name}
-                                    onChange={(e) => handleUpdateScheduleItem(item.id, { name: e.target.value })}
-                                    className="font-semibold text-foreground h-8 max-w-md border-border/60"
-                                    placeholder="Item name"
-                                  />
-                                  {item.predecessorIds.length > 0 && (
-                                    <span className="flex items-center gap-1 text-xs bg-violet-500/15 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded">
-                                      <Link2 className="w-3 h-3" />
-                                      Has Dependency
-                                    </span>
-                                  )}
-                                  {item.estimateTradeId && (
-                                    <span className="text-xs text-muted-foreground">
-                                      Linked: {trades.find(t => t.id === item.estimateTradeId)?.name ?? '—'}
-                                    </span>
-                                  )}
-                                </div>
-                                {(item.trade != null) && (
-                                  <p className="text-xs text-muted-foreground">
-                                    {byKey[item.trade]?.label || item.trade}
-                                  </p>
-                                )}
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 shrink-0"
-                                onClick={() => handleRemoveScheduleItem(item.id)}
-                                aria-label="Remove schedule item"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-                              <div>
-                                <Label htmlFor={`type-${item.id}`} className="text-xs">Type</Label>
-                                <Select
-                                  value={item.type ?? 'field'}
-                                  onValueChange={(value: ScheduleItemType) => handleUpdateScheduleItem(item.id, { type: value })}
-                                >
-                                  <SelectTrigger className="text-sm" id={`type-${item.id}`}>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="field">Field</SelectItem>
-                                    <SelectItem value="office">Office</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              {(item.type ?? 'field') === 'office' && (
-                                <div className="col-span-2">
-                                  <Label htmlFor={`trade-${item.id}`} className="text-xs">Related trade (optional)</Label>
-                                  <Select
-                                    value={item.estimateTradeId ?? 'none'}
-                                    onValueChange={(value) => handleUpdateScheduleItem(item.id, {
-                                      estimateTradeId: value === 'none' ? undefined : value,
-                                      trade: value === 'none' ? undefined : trades.find(t => t.id === value)?.category,
-                                    })}
-                                  >
-                                    <SelectTrigger className="text-sm" id={`trade-${item.id}`}>
-                                      <SelectValue placeholder="None" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">None</SelectItem>
-                                      {trades.map((t) => (
-                                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              )}
-                              <div>
-                                <Label htmlFor={`start-${item.id}`} className="text-xs">Start Date</Label>
-                                <Input
-                                  id={`start-${item.id}`}
-                                  type="date"
-                                  value={item.startDate instanceof Date && !isNaN(item.startDate.getTime()) 
-                                    ? item.startDate.toISOString().split('T')[0] 
-                                    : new Date().toISOString().split('T')[0]}
-                                  onChange={(e) => handleUpdateScheduleItem(item.id, { 
-                                    startDate: new Date(e.target.value) 
-                                  })}
-                                  className="text-sm"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor={`duration-${item.id}`} className="text-xs">Duration (days)</Label>
-                                <Input
-                                  id={`duration-${item.id}`}
-                                  type="number"
-                                  value={item.duration}
-                                  onChange={(e) => handleUpdateScheduleItem(item.id, { 
-                                    duration: parseInt(e.target.value) || 1 
-                                  })}
-                                  className="text-sm"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor={`status-${item.id}`} className="text-xs">Status</Label>
-                                <Select
-                                  value={item.status}
-                                  onValueChange={(value: any) => handleUpdateScheduleItem(item.id, { status: value })}
-                                >
-                                  <SelectTrigger className="text-sm">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="not-started">Not Started</SelectItem>
-                                    <SelectItem value="in-progress">In Progress</SelectItem>
-                                    <SelectItem value="complete">Complete</SelectItem>
-                                    <SelectItem value="delayed">Delayed</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-
-                            {/* Predecessors */}
-                            <div className="mt-3">
-                              <Label htmlFor={`predecessors-${item.id}`} className="text-xs">
-                                Predecessors (must complete before this starts)
-                              </Label>
-                              <Select
-                                value={item.predecessorIds.length > 0 ? item.predecessorIds[0] : 'none'}
-                                onValueChange={(value) => {
-                                  if (value === 'none') {
-                                    handleUpdateScheduleItem(item.id, { predecessorIds: [] })
-                                  } else {
-                                    // For now, support single predecessor. Can expand to multiple later
-                                    handleUpdateScheduleItem(item.id, { predecessorIds: [value] })
-                                  }
-                                }}
-                              >
-                                <SelectTrigger className="text-sm">
-                                  <SelectValue placeholder="No predecessor" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">None - Can start immediately</SelectItem>
-                                  {scheduleItems
-                                    .filter(otherItem => otherItem.id !== item.id)
-                                    .map((otherItem) => (
-                                      <SelectItem key={otherItem.id} value={otherItem.id}>
-                                        {otherItem.name}
-                                      </SelectItem>
-                                    ))
-                                  }
-                                </SelectContent>
-                              </Select>
-                              {item.predecessorIds.length > 0 && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  Depends on: {scheduleItems.find(si => si.id === item.predecessorIds[0])?.name}
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="mt-3">
-                              <Label htmlFor={`progress-${item.id}`} className="text-xs">
-                                Progress: {item.percentComplete}%
-                              </Label>
-                              <Input
-                                id={`progress-${item.id}`}
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={item.percentComplete}
-                                onChange={(e) => handleUpdateScheduleItem(item.id, { 
-                                  percentComplete: parseInt(e.target.value) 
-                                })}
-                                className="w-full"
-                              />
-                            </div>
-                          </div>
-
+                          {renderItemEditBody(item)}
                           <div className="flex sm:flex-col gap-2">
                             <div className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(item.status)}`}>
                               {getStatusIcon(item.status)}
@@ -800,8 +821,8 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                             </div>
                             <div className="text-sm text-muted-foreground">
                               <p className="font-semibold">
-                                End: {item.endDate instanceof Date && !isNaN(item.endDate.getTime()) 
-                                  ? item.endDate.toLocaleDateString() 
+                                End: {item.endDate instanceof Date && !isNaN(item.endDate.getTime())
+                                  ? item.endDate.toLocaleDateString()
                                   : 'N/A'}
                               </p>
                             </div>
@@ -814,6 +835,30 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
               )}
         </div>
       </section>
+
+      {/* Edit dialog — opened by clicking a calendar bar. Reuses the same
+          form body the List view renders so there's a single source of truth
+          for fields + handlers. Auto-save still applies via handleUpdateScheduleItem. */}
+      <Dialog
+        open={editingItemId !== null}
+        onOpenChange={(open) => { if (!open) setEditingItemId(null) }}
+      >
+        <DialogContent className="sm:max-w-2xl border-border/60 bg-card text-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Edit Schedule Item</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const editingItem = scheduleItems.find((i) => i.id === editingItemId)
+            if (!editingItem) return null
+            return renderItemEditBody(editingItem)
+          })()}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setEditingItemId(null)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
