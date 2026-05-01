@@ -53,6 +53,7 @@ import {
 import { toLocalDate, toLocalEndOfDay, getItemColsForWeek as getItemColsForWeekUtil } from '@/lib/scheduleCalendarUtils'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/contexts/PageTitleContext'
+import { toast } from 'sonner'
 
 // ----------------------------------------------------------------------------
 // Types
@@ -302,9 +303,9 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     const updated = await updateProject_Hybrid(project.id, { schedule })
     if (updated) {
       setHasUnsavedChanges(false)
-      alert('✅ Schedule saved successfully!')
+      toast.success('Schedule saved')
     } else {
-      alert('Failed to save schedule. Please try again.')
+      toast.error('Failed to save schedule. Please try again.')
     }
   }
 
@@ -551,7 +552,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                             {row.map((day) => (
                               <div
                                 key={day.toISOString()}
-                                className={`min-h-[48px] border-r border-gray-100 last:border-r-0 p-1.5 flex flex-col ${!isSameMonth(day, calendarMonth) ? 'bg-muted/30/50' : 'bg-card'}`}
+                                className={`min-h-[48px] border-r border-border/60 last:border-r-0 p-1.5 flex flex-col ${!isSameMonth(day, calendarMonth) ? 'bg-muted/30' : 'bg-card'}`}
                               >
                                 <div
                                   className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full ${!isSameMonth(day, calendarMonth) ? 'text-muted-foreground' : isToday(day) ? 'bg-rose-500 text-white' : 'text-foreground'}`}
@@ -566,7 +567,6 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                               const end = toLocalDate(item.endDate)
                               const accent = getCategoryAccentLeftBorderStyle(item.trade ?? '')
                               const isOffice = (item.type ?? 'field') === 'office'
-                              const bg = isOffice ? 'rgb(241 245 249)' : 'rgb(254 243 199)'
                               const weekStart = addDays(calendarStart, weekIdx * 7)
                               const weekEnd = addDays(weekStart, 6)
                               const isStartWeek = isWithinInterval(start, { start: weekStart, end: weekEnd })
@@ -579,9 +579,11 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                                     return (
                                       <div
                                         key={c}
-                                        className={`h-9 flex items-center border-r border-b border-border/60 last:border-r-0 px-1.5 py-0.5 ${filled ? '' : 'bg-transparent'}`}
+                                        className={cn(
+                                          'h-9 flex items-center border-r border-b border-border/60 last:border-r-0 px-1.5 py-0.5',
+                                          filled ? (isOffice ? 'bg-muted/60' : 'bg-amber-500/15') : 'bg-transparent',
+                                        )}
                                         style={{
-                                          backgroundColor: filled ? bg : undefined,
                                           borderLeft: filled && isLeftEdge ? `4px solid ${accent.borderLeftColor}` : undefined,
                                           borderRadius: filled && isLeftEdge && c > 0 ? 0 : filled && !cols.includes(c + 1) ? '0 4px 4px 0' : 0,
                                         }}
