@@ -88,7 +88,7 @@ import { MyFeedback } from '@/components/MyFeedback'
 import { FeedbackForm } from '@/components/FeedbackForm'
 import { PrivacyPolicy } from '@/components/PrivacyPolicy'
 import { TermsOfUse } from '@/components/TermsOfUse'
-import { Button } from '@/components/ui/button'
+import { usePageTitle } from '@/contexts/PageTitleContext'
 
 import { AppLayout } from '@/components/AppLayout'
 import { AuthedLayout } from './AuthedLayout'
@@ -499,16 +499,11 @@ function EstimateLibraryRoute() {
 // ============================================================================
 
 function QuickBooksSettingsRoute() {
-  const navigate = useNavigate()
+  usePageTitle('QuickBooks')
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <Button onClick={() => navigate('/')} variant="outline" className="mb-6">
-          ← Back to Dashboard
-        </Button>
-        <QuickBooksConnect />
-        <QuickBooksImport />
-      </div>
+    <div className="flex flex-col gap-6 p-6">
+      <QuickBooksConnect />
+      <QuickBooksImport />
     </div>
   )
 }
