@@ -21,6 +21,7 @@ import {
   Calendar,
   ClipboardList,
   DollarSign,
+  Eye,
   FileText,
   Kanban,
   LayoutDashboard,
@@ -202,7 +203,7 @@ function dealsNav(dealId: string | undefined): NavGroup[] {
       items: [
         // "Overview" maps to the in-page Dashboard tab (Projected Profit /
         // MOIC / Deal Snapshot / ProForma Memo).
-        { label: 'Overview', to: tab('dashboard'), icon: LayoutDashboard, matchTab: 'dashboard' },
+        { label: 'Overview', to: tab('dashboard'), icon: Eye, matchTab: 'dashboard' },
         { label: 'Assumptions', to: tab('assumptions'), icon: ClipboardList, matchTab: 'assumptions' },
         { label: 'Phase Pro Forma', to: tab('phase-pro-forma'), icon: Calendar, matchTab: 'phase-pro-forma' },
         { label: 'Cash Flow', to: tab('cash-flow'), icon: TrendingUp, matchTab: 'cash-flow' },
