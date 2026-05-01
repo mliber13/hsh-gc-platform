@@ -1064,8 +1064,8 @@ Rules:
 }
 
 function fieldClass(status: FieldStatus): string {
-  if (status === 'confirmed') return 'border-green-300 bg-green-50'
-  if (status === 'approx') return 'border-amber-300 bg-amber-50'
+  if (status === 'confirmed') return 'border-emerald-500/40 bg-emerald-500/10'
+  if (status === 'approx') return 'border-amber-500/40 bg-amber-500/10'
   return 'border-border bg-input text-foreground font-medium placeholder:text-muted-foreground'
 }
 
@@ -1152,7 +1152,7 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
         <p className="text-sm text-muted-foreground mt-1">{dealName}</p>
         <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
           This is a living summary of the model. The deal assistant and your edits update the same underlying inputs. Use{' '}
-          <button type="button" className="text-blue-400 hover:underline" onClick={onEditAssumptions}>
+          <button type="button" className="text-sky-600 dark:text-sky-400 hover:underline" onClick={onEditAssumptions}>
             All assumptions
           </button>{' '}
           for full field-by-field control.
@@ -1161,7 +1161,7 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
           <span
             className={`rounded border px-2 py-1 ${
               readiness.proformaReady
-                ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200'
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
                 : 'border-border/70 bg-card/60 text-muted-foreground'
             }`}
           >
@@ -1174,15 +1174,15 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
           </span>
         </div>
         {!readiness.proformaReady && readiness.blockers.length > 0 && (
-          <div className="rounded border border-amber-900/45 bg-amber-950/25 p-3 mt-3">
-            <div className="text-xs font-medium text-amber-200/95 mb-1.5">Still needed</div>
-            <ul className="text-xs text-amber-100/90 list-disc pl-4 space-y-0.5">
+          <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 mt-3">
+            <div className="text-xs font-medium text-amber-700 dark:text-amber-200 mb-1.5">Still needed</div>
+            <ul className="text-xs text-amber-700/90 dark:text-amber-100/90 list-disc pl-4 space-y-0.5">
               {readiness.blockers.slice(0, 8).map((b) => (
                 <li key={b}>{b}</li>
               ))}
             </ul>
             {readiness.blockers.length > 8 && (
-              <div className="text-[10px] text-amber-200/70 mt-1.5">+{readiness.blockers.length - 8} more</div>
+              <div className="text-[10px] text-amber-700/70 dark:text-amber-200/70 mt-1.5">+{readiness.blockers.length - 8} more</div>
             )}
           </div>
         )}
@@ -1276,8 +1276,8 @@ function ProformaMemoView({ dealName, input, projection, readiness, onEditAssump
       )}
 
       {projection && s && (
-        <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-5">
-          <h3 className="text-sm font-semibold text-emerald-200 uppercase tracking-wide mb-2">Engine results</h3>
+        <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-5">
+          <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-200 uppercase tracking-wide mb-2">Engine results</h3>
           <MemoRow label="Total estimated cost" value={fmtMoney(projection.totalEstimatedCost)} />
           <MemoRow label="Projected profit" value={fmtMoney(projection.projectedProfit)} />
           <MemoRow label="Projected margin" value={projection.projectedMargin != null ? fmtPct(projection.projectedMargin, 1) : '—'} />
@@ -2967,10 +2967,10 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                   <span className="font-semibold">{readiness.score}%</span>
                 </div>
                 <div className="w-full h-2 bg-muted/70 rounded mt-1">
-                  <div className="h-2 bg-green-500 rounded" style={{ width: `${readiness.score}%` }} />
+                  <div className="h-2 bg-emerald-500 rounded" style={{ width: `${readiness.score}%` }} />
                 </div>
                 {readiness.proformaReady ? (
-                  <p className="text-xs text-emerald-400 mt-2">All critical checks pass — you can run pro forma.</p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-2">All critical checks pass — you can run pro forma.</p>
                 ) : (
                   <p className="text-xs text-muted-foreground mt-2 leading-snug">
                     <span className="text-muted-foreground">Gaps: </span>
@@ -3236,7 +3236,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 w-full min-w-0 gap-px rounded border border-border/70 bg-card px-0.5 text-[9px] text-cyan-100 hover:bg-muted"
+                                className="h-7 w-full min-w-0 gap-px rounded border border-border/70 bg-card px-0.5 text-[9px] text-sky-700 dark:text-sky-200 hover:bg-muted"
                                 title="Edit share of deposit that offsets draws during the build"
                               >
                                 <span className="min-w-0 truncate tabular-nums leading-none">
@@ -3709,7 +3709,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                             {short}
                           </span>
                           <Input
-                            className="!h-7 cursor-not-allowed border-0 bg-transparent px-0.5 text-center text-[11px] tabular-nums text-cyan-100 shadow-none focus-visible:ring-0"
+                            className="!h-7 cursor-not-allowed border-0 bg-transparent px-0.5 text-center text-[11px] tabular-nums text-sky-700 dark:text-sky-200 shadow-none focus-visible:ring-0"
                             readOnly
                             title={title}
                             value={value}
@@ -3859,14 +3859,17 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                         </div>
                         <div className="md:col-span-1 flex items-end">
                           <Button
-                            size="sm"
+                            size="icon"
                             variant="outline"
+                            className="h-7 w-7 p-0"
+                            title="Remove capital row"
+                            aria-label="Remove capital row"
                             onClick={() => {
                               const next = debtLocRows.filter((r) => r.id !== row.id)
                               applyStackRows(next, incentiveRows)
                             }}
                           >
-                            Remove
+                            <X className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </div>
@@ -3966,14 +3969,17 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                         </div>
                         <div className="md:col-span-1 flex items-end">
                           <Button
-                            size="sm"
+                            size="icon"
                             variant="outline"
+                            className="h-7 w-7 p-0"
+                            title="Remove incentive"
+                            aria-label="Remove incentive"
                             onClick={() => {
                               const next = incentiveRows.filter((r) => r.id !== row.id)
                               applyStackRows(debtLocRows, next)
                             }}
                           >
-                            Remove
+                            <X className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                         {row.timingMode === 'construction-percent' && (
@@ -4144,8 +4150,8 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                                     <span
                                       className={`inline-flex text-[10px] rounded-full border px-1.5 py-0.5 font-medium ${
                                         exceedsDuration
-                                          ? 'border-amber-500/60 text-amber-200 bg-amber-900/20'
-                                          : 'border-cyan-700/45 text-cyan-200 bg-cyan-900/20'
+                                          ? 'border-amber-500/60 text-amber-700 dark:text-amber-300 bg-amber-500/10'
+                                          : 'border-sky-500/40 text-sky-700 dark:text-sky-300 bg-sky-500/10'
                                       }`}
                                     >
                                       {endMo}
@@ -4591,7 +4597,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                   {validationChecks.map((c) => (
                     <div key={c.label} className="flex items-center justify-between rounded border border-border/60 bg-card px-2 py-1">
                       <span>{c.label}</span>
-                      <span className={c.pass ? 'text-emerald-400' : 'text-rose-400'}>{c.pass ? 'PASS' : 'CHECK'}</span>
+                      <span className={c.pass ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}>{c.pass ? 'PASS' : 'CHECK'}</span>
                     </div>
                   ))}
                 </CardContent>
@@ -4677,13 +4683,13 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
             {messages.map((m) => (
-              <div key={m.id} className={`rounded border p-2 ${m.role === 'assistant' ? 'bg-card border-border/60' : 'bg-blue-950/35 border-blue-800/60'}`}>
+              <div key={m.id} className={`rounded border p-2 ${m.role === 'assistant' ? 'bg-card border-border/60' : 'bg-sky-500/10 border-sky-500/30'}`}>
                 <div className="text-xs uppercase text-muted-foreground mb-1">{m.role}</div>
                 <div className="text-sm text-foreground whitespace-pre-wrap">{m.text}</div>
                 {!!m.extractionChips?.length && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {m.extractionChips.map((c) => (
-                      <span key={c} className="text-[11px] px-1.5 py-0.5 rounded bg-green-100 text-green-800 border border-green-200">{c}</span>
+                      <span key={c} className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">{c}</span>
                     ))}
                   </div>
                 )}
@@ -4695,9 +4701,9 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               </div>
             ))}
             {pendingSuggestions && (
-              <div className="rounded border border-amber-700/60 bg-amber-950/40 p-2">
-                <div className="text-xs font-semibold text-amber-300">Suggested updates (review then apply)</div>
-                <div className="mt-1 text-xs text-amber-200 space-y-1">
+              <div className="rounded border border-amber-500/30 bg-amber-500/10 p-2">
+                <div className="text-xs font-semibold text-amber-700 dark:text-amber-300">Suggested updates (review then apply)</div>
+                <div className="mt-1 text-xs text-amber-700 dark:text-amber-200 space-y-1">
                   {flattenFieldUpdates(pendingSuggestions as any).map((u) => (
                     <div key={u.path}>{toHumanFieldLabel(u.path)}: {formatValue(u.value, u.path)}</div>
                   ))}
@@ -4709,24 +4715,24 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
               </div>
             )}
             {(pendingNotesAppend || (pendingTaskSuggestions && pendingTaskSuggestions.length > 0)) && (
-              <div className="rounded border border-blue-700/60 bg-blue-950/40 p-2">
-                <div className="text-xs font-semibold text-blue-300">Suggested workspace capture</div>
+              <div className="rounded border border-sky-500/30 bg-sky-500/10 p-2">
+                <div className="text-xs font-semibold text-sky-700 dark:text-sky-300">Suggested workspace capture</div>
                 {!!pendingNotesAppend && (
                   <div className="mt-1">
-                    <div className="text-[11px] font-semibold text-blue-300">Notes summary</div>
+                    <div className="text-[11px] font-semibold text-sky-700 dark:text-sky-300">Notes summary</div>
                     {(() => {
                       const parsed = parseCaptureNotesSections(pendingNotesAppend)
                       if (!parsed.hasStructuredSections) {
-                        return <div className="text-xs text-blue-200 whitespace-pre-wrap">{pendingNotesAppend}</div>
+                        return <div className="text-xs text-sky-700 dark:text-sky-200 whitespace-pre-wrap">{pendingNotesAppend}</div>
                       }
                       return (
                         <div className="mt-1 space-y-1.5">
                           {parsed.sections.map((section) => (
                             <div key={section.heading}>
-                              <div className="text-[11px] font-semibold text-blue-200">{section.heading}</div>
+                              <div className="text-[11px] font-semibold text-sky-700 dark:text-sky-200">{section.heading}</div>
                               <div className="mt-0.5 space-y-0.5">
                                 {section.items.map((item, idx) => (
-                                  <div key={`${section.heading}-${idx}`} className="text-xs text-blue-200">
+                                  <div key={`${section.heading}-${idx}`} className="text-xs text-sky-700 dark:text-sky-200">
                                     - {item}
                                   </div>
                                 ))}
@@ -4734,7 +4740,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                             </div>
                           ))}
                           {parsed.remainingLines.length > 0 && (
-                            <div className="text-xs text-blue-200 whitespace-pre-wrap">{parsed.remainingLines.join('\n')}</div>
+                            <div className="text-xs text-sky-700 dark:text-sky-200 whitespace-pre-wrap">{parsed.remainingLines.join('\n')}</div>
                           )}
                         </div>
                       )
@@ -4743,10 +4749,10 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 )}
                 {!!pendingTaskSuggestions?.length && (
                   <div className="mt-1">
-                    <div className="text-[11px] font-semibold text-blue-300">Task suggestions</div>
+                    <div className="text-[11px] font-semibold text-sky-700 dark:text-sky-300">Task suggestions</div>
                     <div className="mt-0.5 space-y-0.5">
                       {pendingTaskSuggestions.map((task, idx) => (
-                        <div key={`${task}-${idx}`} className="text-xs text-blue-200">- {task}</div>
+                        <div key={`${task}-${idx}`} className="text-xs text-sky-700 dark:text-sky-200">- {task}</div>
                       ))}
                     </div>
                   </div>
@@ -4794,7 +4800,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
           </div>
           <div className="p-3 border-t border-border/60">
             {stage !== 'proforma' && (readiness.proformaReady || !!runPromptReason) && (
-              <div className="mb-2 rounded border border-green-300 bg-green-50 p-2 text-xs text-green-800">
+              <div className="mb-2 rounded border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs text-emerald-700 dark:text-emerald-300">
                 {runPromptReason || 'AI indicates readiness for ProForma stage.'}
                 <div className="mt-1">
                   <div className="flex gap-2">
@@ -4810,7 +4816,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 variant="outline"
                 size="icon"
                 onClick={isListening ? stopVoice : startVoice}
-                className={isListening ? 'bg-green-900/40 border-green-600 text-green-200 hover:bg-green-800/50' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'}
+                className={isListening ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/25' : 'bg-muted border-border/60 text-foreground hover:bg-muted/70'}
               >
                 {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               </Button>
