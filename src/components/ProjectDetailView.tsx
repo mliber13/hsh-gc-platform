@@ -29,6 +29,7 @@ import {
   Copy,
   DollarSign,
   Edit,
+  FileText,
   FolderOpen,
   GitBranch,
   MapPin,
@@ -502,8 +503,8 @@ export function ProjectDetailView({
         </CardContent>
       </Card>
 
-      {/* Quick action grid — seven core sections (Estimate through COs + POs) */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+      {/* Quick action grid — eight core sections (Estimate through COs + POs + Forms) */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
         <ActionCard
           icon={BookOpen}
           iconColor="text-sky-500"
@@ -538,6 +539,15 @@ export function ProjectDetailView({
             label="Selection"
             stat={`${selectionBookRoomsCount} rooms`}
             onClick={onViewSelectionBook}
+          />
+        )}
+        {onViewForms && (
+          <ActionCard
+            icon={FileText}
+            iconColor="text-orange-500"
+            label="Forms"
+            stat="Submit"
+            onClick={onViewForms}
           />
         )}
         {onViewDocuments && (

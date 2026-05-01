@@ -21,6 +21,8 @@ import {
   ClipboardList,
   DollarSign,
   FileText,
+  FolderOpen,
+  Receipt,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,6 +37,7 @@ export type ProjectSection =
   | 'selection-book'
   | 'schedule'
   | 'forms'
+  | 'purchase-orders'
 
 export interface ProjectWithStats extends Project {
   basePriceTotal?: number
@@ -111,18 +114,24 @@ function statusVisual(status: string): StatusVisual {
   }
 }
 
+// Icon + color choices mirror ProjectDetailView's action grid so users see
+// the same visual identity for each section across surfaces. Forms uses
+// orange (an unused brand hue) since it has no Project Detail counterpart.
 const SECTION_BUTTONS: {
   section: ProjectSection
   label: string
   icon: typeof BookOpen
+  iconColor: string
   title: string
 }[] = [
-  { section: 'estimate', label: 'Estimate', icon: BookOpen, title: 'Estimate book' },
-  { section: 'actuals', label: 'Actuals', icon: DollarSign, title: 'Project actuals' },
-  { section: 'schedule', label: 'Schedule', icon: Calendar, title: 'Schedule' },
-  { section: 'selection-book', label: 'Selection', icon: BookMarked, title: 'Selection book' },
-  { section: 'documents', label: 'Docs', icon: FileText, title: 'Project documents' },
-  { section: 'change-orders', label: 'COs', icon: ClipboardList, title: 'Change orders' },
+  { section: 'estimate', label: 'Estimate', icon: BookOpen, iconColor: 'text-sky-500', title: 'Estimate book' },
+  { section: 'actuals', label: 'Actuals', icon: DollarSign, iconColor: 'text-emerald-500', title: 'Project actuals' },
+  { section: 'schedule', label: 'Schedule', icon: Calendar, iconColor: 'text-amber-500', title: 'Schedule' },
+  { section: 'selection-book', label: 'Selection', icon: BookMarked, iconColor: 'text-violet-500', title: 'Selection book' },
+  { section: 'forms', label: 'Forms', icon: FileText, iconColor: 'text-orange-500', title: 'Project forms' },
+  { section: 'documents', label: 'Docs', icon: FolderOpen, iconColor: 'text-indigo-500', title: 'Project documents' },
+  { section: 'purchase-orders', label: 'POs', icon: Receipt, iconColor: 'text-teal-500', title: 'Purchase orders' },
+  { section: 'change-orders', label: 'COs', icon: ClipboardList, iconColor: 'text-rose-500', title: 'Change orders' },
 ]
 
 const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
@@ -200,71 +209,93 @@ export function ProjectCard({
         {/* Status rail (left edge) */}
         <div className={cn('w-1 shrink-0', status.rail)} aria-hidden />
 
-        <div className="flex flex-1 flex-col gap-3 p-4 lg:flex-row lg:items-center lg:gap-4">
-          {/* Project info: name + status pill + address + plan line */}
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-base font-semibold">{project.name}</h3>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (isViewer) return
-                    onToggleStatusMenu()
-                  }}
-                  disabled={isUpdatingStatus}
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-opacity',
-                    status.bg,
-                    status.text,
-                    status.border,
-                    !isViewer && 'cursor-pointer hover:opacity-80',
-                    isViewer && 'cursor-default',
-                    isUpdatingStatus && 'opacity-60',
-                  )}
-                  title={isViewer ? undefined : 'Change status'}
-                >
-                  <span className={cn('size-1.5 rounded-full', status.dot)} />
-                  {isUpdatingStatus ? '…' : status.label}
-                </button>
-                {statusMenuOpen && (
-                  <div
-                    className="absolute left-0 top-full z-20 mt-1 min-w-[140px] rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md"
-                    onClick={(e) => e.stopPropagation()}
+        <div className="flex flex-1 flex-col gap-3 p-4">
+          {/* Top row: project info + financial summary */}
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+            {/* Project info: name + status pill + address + plan line */}
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <h3 className="truncate text-base font-semibold">{project.name}</h3>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (isViewer) return
+                      onToggleStatusMenu()
+                    }}
+                    disabled={isUpdatingStatus}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-opacity',
+                      status.bg,
+                      status.text,
+                      status.border,
+                      !isViewer && 'cursor-pointer hover:opacity-80',
+                      isViewer && 'cursor-default',
+                      isUpdatingStatus && 'opacity-60',
+                    )}
+                    title={isViewer ? undefined : 'Change status'}
                   >
-                    {STATUS_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => onChangeStatus(project, opt.value)}
-                        className={cn(
-                          'block w-full px-3 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground',
-                          project.status === opt.value && 'bg-accent/50 font-medium',
-                        )}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                    <span className={cn('size-1.5 rounded-full', status.dot)} />
+                    {isUpdatingStatus ? '…' : status.label}
+                  </button>
+                  {statusMenuOpen && (
+                    <div
+                      className="absolute left-0 top-full z-20 mt-1 min-w-[140px] rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {STATUS_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => onChangeStatus(project, opt.value)}
+                          className={cn(
+                            'block w-full px-3 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground',
+                            project.status === opt.value && 'bg-accent/50 font-medium',
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
+              <p className="truncate text-sm text-muted-foreground">
+                {addressLine(project)}
+              </p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground/70">
+                {planLine(project)}
+              </p>
             </div>
-            <p className="truncate text-sm text-muted-foreground">
-              {addressLine(project)}
-            </p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground/70">
-              {planLine(project)}
-            </p>
+
+            {/* Financial summary (3 columns) */}
+            <div className="flex items-baseline gap-6 text-right lg:shrink-0">
+              <FinancialColumn
+                label="Base"
+                value={formatCurrency(base)}
+                tone="base"
+              />
+              <FinancialColumn
+                label="Est."
+                value={formatCurrency(est)}
+                tone="default"
+              />
+              <FinancialColumn
+                label="Actual"
+                value={formatCurrency(actual)}
+                tone={actual > 0 ? 'actual' : 'muted'}
+              />
+            </div>
           </div>
 
-          {/* Quick actions (md+ inline; mobile shows below) */}
+          {/* Footer: quick-action buttons across the full row width */}
           {onOpenSection && (
             <div
-              className="flex flex-wrap items-center gap-1 lg:shrink-0"
+              className="flex flex-wrap items-center gap-1 border-t border-border/40 pt-3"
               onClick={(e) => e.stopPropagation()}
             >
-              {SECTION_BUTTONS.map(({ section, label, icon: Icon, title }) => (
+              {SECTION_BUTTONS.map(({ section, label, icon: Icon, iconColor, title }) => (
                 <Button
                   key={section}
                   type="button"
@@ -272,33 +303,14 @@ export function ProjectCard({
                   size="sm"
                   onClick={() => onOpenSection(project, section)}
                   title={title}
-                  className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  className="h-8 gap-1.5 px-2.5 text-xs text-foreground hover:bg-muted"
                 >
-                  <Icon className="size-3.5" />
+                  <Icon className={cn('size-4', iconColor)} />
                   {label}
                 </Button>
               ))}
             </div>
           )}
-
-          {/* Financial summary (3 columns) */}
-          <div className="flex items-baseline gap-6 text-right lg:shrink-0">
-            <FinancialColumn
-              label="Base"
-              value={formatCurrency(base)}
-              tone="base"
-            />
-            <FinancialColumn
-              label="Est."
-              value={formatCurrency(est)}
-              tone="default"
-            />
-            <FinancialColumn
-              label="Actual"
-              value={formatCurrency(actual)}
-              tone={actual > 0 ? 'actual' : 'muted'}
-            />
-          </div>
         </div>
       </CardContent>
     </Card>
