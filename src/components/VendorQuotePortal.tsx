@@ -16,21 +16,15 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Plus, Trash2, Upload, FileText, Building2, MapPin, Calendar, CheckCircle, AlertCircle } from 'lucide-react'
 import hshLogo from '/HSH Contractor Logo - Color.png'
+import { useParams } from 'react-router-dom'
 
 interface VendorQuotePortalProps {
   token?: string
 }
 
 export function VendorQuotePortal({ token: tokenProp }: VendorQuotePortalProps = {}) {
-  // Extract token from URL if not provided as prop
-  const getTokenFromUrl = () => {
-    if (tokenProp) return tokenProp
-    const path = window.location.pathname
-    const match = path.match(/\/(vendor-quote|quote)\/([^/]+)/)
-    return match ? match[2] : null
-  }
-  
-  const token = getTokenFromUrl()
+  const { token: routeToken } = useParams<{ token: string }>()
+  const token = tokenProp ?? routeToken ?? null
   const [quoteRequest, setQuoteRequest] = useState<QuoteRequest | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
