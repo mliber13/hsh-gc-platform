@@ -154,11 +154,14 @@ function projectsNav(projectId: string | undefined): NavGroup[] {
     {
       label: 'Reports',
       items: [
+        // Budget Reports + Analytics are placeholders for future report-generation
+        // surfaces. Currently render as disabled "Coming soon" — owner explicitly
+        // wants Budget Reports as a future home for actual report generation,
+        // distinct from the existing Actuals page (which lives in Modules).
         {
           label: 'Budget Reports',
-          to: p ? `${p}/actuals` : '#',
+          to: '#',
           icon: PieChart,
-          requiresProject: true,
         },
         {
           label: 'Analytics',

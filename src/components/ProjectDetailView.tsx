@@ -3,8 +3,10 @@
 // ============================================================================
 //
 // Detail page for a selected project. Renders inside the AppLayout shell.
-// Centered title in AppHeader is set via usePageTitle(project.name) so the
-// header dynamically reflects which project is open.
+// Centered title in AppHeader is "Project Overview" — the project name is
+// already visible in the ProjectSelector pill on the left of the header, so
+// the centered title acts as a page-section label instead of repeating the
+// entity name.
 //
 // Data layer (estimate totals, actual totals, forms count, selection book
 // rooms count, available plans for edit mode) preserved 1:1 from the
@@ -211,7 +213,7 @@ export function ProjectDetailView({
   })
 
   // Centered title in the AppHeader
-  usePageTitle(project.name)
+  usePageTitle('Project Overview')
 
   // Load plans when entering edit mode
   useEffect(() => {
