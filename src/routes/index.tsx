@@ -29,7 +29,8 @@
 //   /quickbooks/callback                           → QuickBooksCallback (OAuth)
 //   /contacts                                      → ContactDirectory
 //   /sow                                           → SOWManagement
-//   /deals                                         → DealWorkspace (no deal)
+//   /deals                                         → DealsDashboard
+//   /deals/workspace                               → DealWorkspace (no deal, tab nav)
 //   /deals/workspace/:dealId                       → DealWorkspace (specific)
 //   /tenants                                       → TenantPipeline
 //   /feedback                                      → MyFeedback
@@ -83,6 +84,7 @@ import { PurchaseOrdersView } from '@/components/PurchaseOrdersView'
 import { ContactDirectory } from '@/components/ContactDirectory'
 import { SOWManagement } from '@/components/SOWManagement'
 import { DealWorkspace } from '@/components/DealWorkspace'
+import { DealsDashboard } from '@/components/DealsDashboard'
 import { TenantPipeline } from '@/components/TenantPipeline'
 import { MyFeedback } from '@/components/MyFeedback'
 import { FeedbackForm } from '@/components/FeedbackForm'
@@ -142,7 +144,8 @@ export function AppRoutes() {
           <Route path="/contacts" element={<ContactDirectoryRoute />} />
           <Route path="/sow" element={<SOWManagementRoute />} />
 
-          <Route path="/deals" element={<DealWorkspaceRoute />} />
+          <Route path="/deals" element={<DealsDashboard />} />
+          <Route path="/deals/workspace" element={<DealWorkspaceRoute />} />
           <Route path="/deals/workspace/:dealId" element={<DealWorkspaceRoute />} />
           <Route path="/deal-pipeline" element={<Navigate to="/deals" replace />} />
 

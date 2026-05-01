@@ -6,7 +6,7 @@ import { Label } from './ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Textarea } from './ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
+import { CreateDealDialog } from './CreateDealDialog'
 import { ArrowLeft, ChevronDown, Download, Mic, MicOff, Pencil, Play, Save, Send, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/contexts/PageTitleContext'
@@ -15,7 +15,7 @@ import type { Project } from '@/types'
 import type { ForSalePhaseInput, ProFormaInput, ProFormaMode, ProFormaProjection } from '@/types/proforma'
 import { computeDealReadiness, materialForSaleContext, type DealReadiness } from '@/lib/dealReadiness'
 import { computePhaseAllocationShares } from '@/lib/forSalePhaseAllocation'
-import { createDeal, deleteDeal, fetchDeals } from '@/services/dealService'
+import { deleteDeal, fetchDeals } from '@/services/dealService'
 import {
   clearDealActivityEvents,
   clearDealActivityEventsByTypes,
@@ -1325,17 +1325,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState(false)
   const [deletingDeal, setDeletingDeal] = useState(false)
-  const [creatingDeal, setCreatingDeal] = useState(false)
   const [createDealModalOpen, setCreateDealModalOpen] = useState(false)
-  const [newDealForm, setNewDealForm] = useState({
-    deal_name: '',
-    location: '',
-    type: 'commercial' as Deal['type'],
-    status: 'active-pipeline' as Deal['status'],
-    unit_count: '',
-    projected_cost: '',
-    expected_start_date: '',
-  })
   const [loadingDealState, setLoadingDealState] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [runPromptReason, setRunPromptReason] = useState<string | null>(null)
@@ -2713,46 +2703,10 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     }
   }
 
-  const handleCreateDeal = async () => {
-    if (creatingDeal) return
-    const dealName = newDealForm.deal_name.trim()
-    if (!dealName) return
-    const location = newDealForm.location.trim() || 'TBD'
-    const unitCount = newDealForm.unit_count.trim()
-    const projectedCost = newDealForm.projected_cost.trim()
-
-    setCreatingDeal(true)
-    try {
-      const created = await createDeal({
-        deal_name: dealName,
-        location,
-        type: newDealForm.type,
-        status: newDealForm.status,
-        unit_count: unitCount ? Number(unitCount) : undefined,
-        projected_cost: projectedCost ? Number(projectedCost) : undefined,
-        expected_start_date: newDealForm.expected_start_date || undefined,
-      })
-      if (!created) {
-        window.alert('Failed to create deal. Please try again.')
-        return
-      }
-
-      setDeals((prevDeals) => [created, ...prevDeals.filter((deal) => deal.id !== created.id)])
-      setSelectedDealId(created.id)
-      navigate(`/deals/workspace/${created.id}`, { replace: true })
-      setCreateDealModalOpen(false)
-      setNewDealForm({
-        deal_name: '',
-        location: '',
-        type: 'commercial',
-        status: 'active-pipeline',
-        unit_count: '',
-        projected_cost: '',
-        expected_start_date: '',
-      })
-    } finally {
-      setCreatingDeal(false)
-    }
+  const handleDealCreated = (created: Deal) => {
+    setDeals((prevDeals) => [created, ...prevDeals.filter((deal) => deal.id !== created.id)])
+    setSelectedDealId(created.id)
+    navigate(`/deals/workspace/${created.id}`, { replace: true })
   }
 
   const startVoice = () => {
@@ -2798,112 +2752,11 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
 
   return (
     <div className="flex h-[calc(100vh-3rem)] flex-col bg-background text-foreground">
-      <Dialog open={createDealModalOpen} onOpenChange={setCreateDealModalOpen}>
-        <DialogContent className="sm:max-w-lg border-border/60 bg-card text-foreground">
-          <DialogHeader className="space-y-1">
-            <DialogTitle className="text-lg font-semibold">Create New Deal</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">Enter deal details and open it in the workspace.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Label htmlFor="new-deal-name">Deal Name *</Label>
-                <Input
-                  id="new-deal-name"
-                  value={newDealForm.deal_name}
-                  onChange={(e) => setNewDealForm((prev) => ({ ...prev, deal_name: e.target.value }))}
-                  placeholder="e.g. Oakwood Townhomes"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <Label htmlFor="new-deal-location">Location</Label>
-                <Input
-                  id="new-deal-location"
-                  value={newDealForm.location}
-                  onChange={(e) => setNewDealForm((prev) => ({ ...prev, location: e.target.value }))}
-                  placeholder="Address or city"
-                />
-              </div>
-              <div>
-                <Label>Type</Label>
-                <Select
-                  value={newDealForm.type}
-                  onValueChange={(value) => setNewDealForm((prev) => ({ ...prev, type: value as Deal['type'] }))}
-                >
-                  <SelectTrigger className="border-border/60 bg-card text-foreground">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="commercial">Commercial</SelectItem>
-                    <SelectItem value="residential">Residential</SelectItem>
-                    <SelectItem value="new-single-family">New Single Family</SelectItem>
-                    <SelectItem value="multifamily">Multifamily</SelectItem>
-                    <SelectItem value="mixed-residential">Mixed Residential</SelectItem>
-                    <SelectItem value="custom">Custom</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Status</Label>
-                <Select
-                  value={newDealForm.status}
-                  onValueChange={(value) => setNewDealForm((prev) => ({ ...prev, status: value as Deal['status'] }))}
-                >
-                  <SelectTrigger className="border-border/60 bg-card text-foreground">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active-pipeline">Active Pipeline</SelectItem>
-                    <SelectItem value="early-stage">Early Stage</SelectItem>
-                    <SelectItem value="concept-pre-funding">Concept / Pre-Funding</SelectItem>
-                    <SelectItem value="very-early">Very Early</SelectItem>
-                    <SelectItem value="pending-docs">Pending Docs</SelectItem>
-                    <SelectItem value="custom">Custom</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="new-deal-units">Unit Count</Label>
-                <Input
-                  id="new-deal-units"
-                  type="number"
-                  min="0"
-                  value={newDealForm.unit_count}
-                  onChange={(e) => setNewDealForm((prev) => ({ ...prev, unit_count: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="new-deal-projected-cost">Projected Cost</Label>
-                <Input
-                  id="new-deal-projected-cost"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={newDealForm.projected_cost}
-                  onChange={(e) => setNewDealForm((prev) => ({ ...prev, projected_cost: e.target.value }))}
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <Label htmlFor="new-deal-start-date">Expected Start Date</Label>
-                <Input
-                  id="new-deal-start-date"
-                  type="date"
-                  value={newDealForm.expected_start_date}
-                  onChange={(e) => setNewDealForm((prev) => ({ ...prev, expected_start_date: e.target.value }))}
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setCreateDealModalOpen(false)} disabled={creatingDeal}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void handleCreateDeal()} disabled={creatingDeal || !newDealForm.deal_name.trim()}>
-              {creatingDeal ? 'Creating...' : 'Create Deal'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CreateDealDialog
+        open={createDealModalOpen}
+        onOpenChange={setCreateDealModalOpen}
+        onCreated={handleDealCreated}
+      />
       {/* Top action strip — back link + deal name/stage on left, action menus on right */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border/60 bg-card/50 px-4 py-3">
         <button

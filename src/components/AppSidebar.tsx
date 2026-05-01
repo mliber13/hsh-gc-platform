@@ -181,15 +181,17 @@ function projectsNav(projectId: string | undefined): NavGroup[] {
 
 function dealsNav(dealId: string | undefined): NavGroup[] {
   // Tab-driven items live inside DealWorkspace and are activated via ?tab=<x>.
-  // When a deal is in the URL, preserve it; otherwise fall through to /deals
-  // (DealWorkspace will pick the most-recent deal).
-  const base = dealId ? `/deals/workspace/${dealId}` : '/deals'
+  // When a deal is in the URL, preserve it; otherwise fall through to
+  // /deals/workspace (DealWorkspace picks the most-recent deal). We point
+  // tabs at /deals/workspace specifically — not /deals — because /deals is
+  // the dedicated Deals dashboard.
+  const base = dealId ? `/deals/workspace/${dealId}` : '/deals/workspace'
   const tab = (t: string) => `${base}?tab=${t}`
 
   return [
     {
-      // Top-level Dashboard sits above the Deal Analysis group; takes the user
-      // to /deals (today: DealWorkspace; future: dedicated Deals dashboard).
+      // Top-level Dashboard sits above the Deal Analysis group; takes the
+      // user to the Deals dashboard at /deals.
       label: '',
       items: [
         { label: 'Dashboard', to: '/deals', icon: LayoutDashboard, matchExactNoQuery: true },
