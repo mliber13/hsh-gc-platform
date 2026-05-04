@@ -7,6 +7,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 // Token will be passed via props or extracted from URL
 import { QuoteRequest, SubmitQuoteInput, QuoteLineItem } from '@/types/quote'
 import { fetchQuoteRequestByToken_Hybrid, submitQuote_Hybrid } from '@/services/hybridService'
@@ -113,12 +114,12 @@ export function VendorQuotePortal({ token: tokenProp }: VendorQuotePortalProps =
 
     // Validation
     if (!vendorName.trim() || !vendorEmail.trim()) {
-      alert('Please enter your name and email')
+      toast.info('Please enter your name and email')
       return
     }
 
     if (lineItems.some(item => !item.description.trim() || item.price <= 0)) {
-      alert('Please complete all line items with descriptions and prices')
+      toast.info('Please complete all line items with descriptions and prices')
       return
     }
 
@@ -142,11 +143,11 @@ export function VendorQuotePortal({ token: tokenProp }: VendorQuotePortalProps =
       if (submitted) {
         setSubmitted(true)
       } else {
-        alert('Failed to submit quote. Please try again.')
+        toast.error('Failed to submit quote. Please try again.')
       }
     } catch (err) {
       console.error('Error submitting quote:', err)
-      alert('Failed to submit quote. Please try again.')
+      toast.error('Failed to submit quote. Please try again.')
     } finally {
       setSubmitting(false)
     }

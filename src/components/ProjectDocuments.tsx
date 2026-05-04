@@ -6,6 +6,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { ProjectDocument, DocumentType } from '@/types'
 import {
   uploadProjectDocument,
@@ -111,7 +112,7 @@ export function ProjectDocuments({ projectId, onBack, projectName }: ProjectDocu
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      alert('Please select a file to upload')
+      toast.info('Please select a file to upload')
       return
     }
 
@@ -140,13 +141,13 @@ export function ProjectDocuments({ projectId, onBack, projectName }: ProjectDocu
         setCategory('')
         setTags('')
         setShowUploadForm(false)
-        alert('Document uploaded successfully!')
+        toast.success('Document uploaded successfully!')
       } else {
-        alert('Failed to upload document. Please try again.')
+        toast.error('Failed to upload document. Please try again.')
       }
     } catch (error) {
       console.error('Error uploading document:', error)
-      alert('Error uploading document. Please try again.')
+      toast.error('Error uploading document. Please try again.')
     } finally {
       setUploading(false)
     }
@@ -161,13 +162,13 @@ export function ProjectDocuments({ projectId, onBack, projectName }: ProjectDocu
       const success = await deleteProjectDocument(doc.id)
       if (success) {
         await loadDocuments()
-        alert('Document deleted successfully!')
+        toast.success('Document deleted successfully!')
       } else {
-        alert('Failed to delete document. Please try again.')
+        toast.error('Failed to delete document. Please try again.')
       }
     } catch (error) {
       console.error('Error deleting document:', error)
-      alert('Error deleting document. Please try again.')
+      toast.error('Error deleting document. Please try again.')
     }
   }
 
@@ -201,13 +202,13 @@ export function ProjectDocuments({ projectId, onBack, projectName }: ProjectDocu
         setDescription('')
         setCategory('')
         setTags('')
-        alert('Document updated successfully!')
+        toast.success('Document updated successfully!')
       } else {
-        alert('Failed to update document. Please try again.')
+        toast.error('Failed to update document. Please try again.')
       }
     } catch (error) {
       console.error('Error updating document:', error)
-      alert('Error updating document. Please try again.')
+      toast.error('Error updating document. Please try again.')
     }
   }
 

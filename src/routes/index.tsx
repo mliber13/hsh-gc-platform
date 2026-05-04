@@ -41,6 +41,7 @@
 //
 
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
   Navigate,
   Route,
@@ -592,7 +593,7 @@ function MyFeedbackRoute() {
             if ((window as any).refreshMyFeedback) {
               ;(window as any).refreshMyFeedback()
             }
-            alert("✅ Thank you for your feedback! We'll review it soon.")
+            toast.success("Thank you for your feedback! We'll review it soon.")
           }}
         />
       )}

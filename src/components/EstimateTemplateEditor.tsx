@@ -6,6 +6,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import {
   PlanEstimateTemplate,
   UpdatePlanEstimateTemplateInput,
@@ -96,12 +97,12 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
         }))
         setTrades(editableTrades)
       } else {
-        alert('Template not found')
+        toast.error('Template not found')
         onBack()
       }
     } catch (error) {
       console.error('Error loading template:', error)
-      alert('Failed to load template')
+      toast.error('Failed to load template')
     } finally {
       setLoading(false)
     }
@@ -273,15 +274,15 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
 
       const updated = await updateEstimateTemplate(template.id, updates)
       if (updated) {
-        alert('Template saved successfully!')
+        toast.success('Template saved successfully!')
         onSave?.()
         onBack()
       } else {
-        alert('Failed to save template')
+        toast.error('Failed to save template')
       }
     } catch (error) {
       console.error('Error saving template:', error)
-      alert('Failed to save template')
+      toast.error('Failed to save template')
     } finally {
       setSaving(false)
     }
@@ -768,7 +769,7 @@ function TradeFormDialog({
       setShowCreateItemModal(false)
     } catch (err) {
       console.error('Create item template failed:', err)
-      alert('Failed to add item to library.')
+      toast.error('Failed to add item to library.')
     } finally {
       setCreateItemSaving(false)
     }
@@ -1280,7 +1281,7 @@ function TemplateSubItemForm({ subItem, defaultMarkupPercent, onSave, onCancel }
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name?.trim()) {
-      alert('Please enter a name for the sub-item')
+      toast.info('Please enter a name for the sub-item')
       return
     }
     onSave({ ...formData, id: subItem.id })

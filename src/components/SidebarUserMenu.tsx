@@ -14,6 +14,7 @@
 //
 
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import { useTheme } from 'next-themes'
 import {
@@ -83,19 +84,19 @@ export function SidebarUserMenu() {
 
   const handleBackupData = async () => {
     if (!isOnline) {
-      alert('You must be online to backup data from Supabase')
+      toast.error('You must be online to backup data from Supabase')
       return
     }
     setIsBackingUp(true)
     try {
       await backupAllData()
-      alert(
-        '✅ Backup successful! Your data has been downloaded.\n\nCheck the browser console (F12) for verification results.',
+      toast.success(
+        'Backup successful! Your data has been downloaded.\n\nCheck the browser console (F12) for verification results.',
       )
     } catch (error) {
       console.error('Backup failed:', error)
-      alert(
-        `❌ Backup failed: ${
+      toast.error(
+        `Backup failed: ${
           error instanceof Error ? error.message : 'Unknown error'
         }`,
       )

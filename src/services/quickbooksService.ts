@@ -7,6 +7,7 @@
 //
 
 import { supabase } from '@/lib/supabase'
+import { toast } from 'sonner'
 
 // QuickBooks API Configuration (sandbox for development; switch to production when going live)
 const QB_API_BASE = 'https://sandbox-quickbooks.api.intuit.com/v3/company'
@@ -410,22 +411,22 @@ export async function testQBConnection(): Promise<boolean> {
     
     if (error) {
       console.error('QB connection test failed:', error)
-      alert(`QB Test Error: ${error.message}\n\nCheck console for details.`)
+      toast.error(`QB Test Error: ${error.message}\n\nCheck console for details.`)
       return false
     }
     
     if (data.connected) {
       console.log('QB Company Info:', data)
-      alert(`✅ Connected to: ${data.company}\n\nBank Accounts: ${data.bankAccounts?.length || 0}\nExpense Accounts: ${data.expenseAccounts?.length || 0}`)
+      toast.success(`Connected to: ${data.company}\n\nBank Accounts: ${data.bankAccounts?.length || 0}\nExpense Accounts: ${data.expenseAccounts?.length || 0}`)
       return true
     }
     
     console.error('QB test failed:', data)
-    alert(`QB Test Failed: ${data.error}\n\nDetails: ${JSON.stringify(data.details)}`)
+    toast.error(`QB Test Failed: ${data.error}\n\nDetails: ${JSON.stringify(data.details)}`)
     return false
   } catch (error) {
     console.error('QB connection test failed:', error)
-    alert(`Exception during test: ${(error as Error).message}`)
+    toast.error(`Exception during test: ${(error as Error).message}`)
     return false
   }
 }

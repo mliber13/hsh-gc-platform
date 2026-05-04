@@ -6,6 +6,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -135,7 +136,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
     
     // Validate required fields
     if (!isRenovation && !formData.specs?.livingSquareFootage) {
-      alert('Please enter the living square footage. This is required for new builds.')
+      toast.info('Please enter the living square footage. This is required for new builds.')
       return
     }
     

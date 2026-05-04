@@ -6,6 +6,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -79,7 +80,7 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
       await loadFeedback()
       setEditingFeedback(null)
     } else {
-      alert('Failed to update feedback status')
+      toast.error('Failed to update feedback status')
     }
   }
 
@@ -90,7 +91,7 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
       setEditingFeedback(null)
       setAdminNotes('')
     } else {
-      alert('Failed to update admin response')
+      toast.error('Failed to update admin response')
     }
   }
 
@@ -103,7 +104,7 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
     if (success) {
       await loadFeedback()
     } else {
-      alert('Failed to delete feedback')
+      toast.error('Failed to delete feedback')
     }
   }
 

@@ -6,6 +6,7 @@
 //
 
 import React, { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
   Project,
   Trade,
@@ -392,7 +393,7 @@ export function QuoteRequestForm({ project, trade, onClose, onSuccess }: QuoteRe
           message += `All quote request emails have been sent to vendors.`
         }
         
-        alert(message)
+        toast.success(message)
         onClose()
       }
     } catch (err: any) {

@@ -6,6 +6,7 @@
 //
 
 import React, { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
   PlanEstimateTemplate,
   UpdatePlanEstimateTemplateInput,
@@ -56,7 +57,7 @@ export function EstimateTemplatesContent({ onOpenEditor }: EstimateTemplatesCont
       setTemplates(data)
     } catch (error) {
       console.error('Error loading estimate templates:', error)
-      alert('Failed to load estimate templates')
+      toast.error('Failed to load estimate templates')
     } finally {
       setLoading(false)
     }
@@ -76,7 +77,7 @@ export function EstimateTemplatesContent({ onOpenEditor }: EstimateTemplatesCont
       onOpenEditor(newTemplate.id)
     } catch (error) {
       console.error('Error creating template:', error)
-      alert('Failed to create template')
+      toast.error('Failed to create template')
     } finally {
       setCreating(false)
     }
@@ -92,7 +93,7 @@ export function EstimateTemplatesContent({ onOpenEditor }: EstimateTemplatesCont
   const handleSaveTemplate = async () => {
     if (!editingTemplate) return
     if (!formName.trim()) {
-      alert('Template name is required')
+      toast.info('Template name is required')
       return
     }
     setSaving(true)
@@ -106,11 +107,11 @@ export function EstimateTemplatesContent({ onOpenEditor }: EstimateTemplatesCont
         setShowEditDialog(false)
         setEditingTemplate(null)
       } else {
-        alert('Failed to update template')
+        toast.error('Failed to update template')
       }
     } catch (error) {
       console.error('Error updating template:', error)
-      alert('Failed to update template')
+      toast.error('Failed to update template')
     } finally {
       setSaving(false)
     }
@@ -122,10 +123,10 @@ export function EstimateTemplatesContent({ onOpenEditor }: EstimateTemplatesCont
     try {
       const success = await deleteEstimateTemplate(templateId)
       if (success) await loadTemplates()
-      else alert('Failed to delete template')
+      else toast.error('Failed to delete template')
     } catch (error) {
       console.error('Error deleting template:', error)
-      alert('Failed to delete template')
+      toast.error('Failed to delete template')
     } finally {
       setDeleting(null)
     }

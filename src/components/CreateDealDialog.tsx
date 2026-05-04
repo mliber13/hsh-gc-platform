@@ -8,6 +8,7 @@
 //
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from './ui/button'
 import {
   Dialog,
@@ -66,7 +67,7 @@ export function CreateDealDialog({ open, onOpenChange, onCreated }: CreateDealDi
         expected_start_date: form.expected_start_date || undefined,
       })
       if (!created) {
-        window.alert('Failed to create deal. Please try again.')
+        toast.error('Failed to create deal. Please try again.')
         return
       }
       setForm(INITIAL_FORM)

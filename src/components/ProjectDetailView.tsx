@@ -19,6 +19,7 @@
 //
 
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
   ArrowLeft,
   BookMarked,
@@ -359,10 +360,10 @@ export function ProjectDetailView({
     if (!confirmed) return
     const success = await deleteProject_Hybrid(project.id)
     if (success) {
-      alert('✅ Project deleted successfully!')
+      toast.success('Project deleted successfully!')
       onBack()
     } else {
-      alert('❌ Failed to delete project. Please try again.')
+      toast.error('Failed to delete project. Please try again.')
     }
   }
 
@@ -374,10 +375,10 @@ export function ProjectDetailView({
     if (newName && newName.trim()) {
       const newProject = duplicateProject(project.id, newName.trim())
       if (newProject) {
-        alert('✅ Project duplicated successfully!')
+        toast.success('Project duplicated successfully!')
         if (onProjectDuplicated) onProjectDuplicated(newProject)
       } else {
-        alert('❌ Failed to duplicate project. Please try again.')
+        toast.error('Failed to duplicate project. Please try again.')
       }
     }
   }

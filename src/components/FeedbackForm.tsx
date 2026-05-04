@@ -6,6 +6,7 @@
 //
 
 import React, { useState } from 'react'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -62,7 +63,7 @@ export function FeedbackForm({ onClose, onSuccess }: FeedbackFormProps) {
         if (onSuccess) {
           onSuccess()
         } else {
-          alert('✅ Thank you for your feedback! We\'ll review it soon.')
+          toast.success('Thank you for your feedback! We\'ll review it soon.')
           onClose()
         }
       } else {

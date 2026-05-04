@@ -7,6 +7,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -911,13 +912,13 @@ const RoomView: React.FC<RoomViewProps> = ({
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
+      toast.info('Please select an image file')
       return
     }
 
     // Validate file size (10MB limit)
     if (file.size > 10 * 1024 * 1024) {
-      alert('Image size must be less than 10MB')
+      toast.error('Image size must be less than 10MB')
       return
     }
 
@@ -930,7 +931,7 @@ const RoomView: React.FC<RoomViewProps> = ({
     } catch (error) {
       console.error('Error uploading image:', error)
       const msg = error instanceof Error ? error.message : 'Failed to upload image. Please try again.'
-      alert(msg)
+      toast.error(msg)
     } finally {
       setUploading(false)
     }
@@ -1035,13 +1036,13 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
+      toast.info('Please select an image file')
       return
     }
 
     // Validate file size (10MB limit)
     if (file.size > 10 * 1024 * 1024) {
-      alert('Image size must be less than 10MB')
+      toast.error('Image size must be less than 10MB')
       return
     }
 
@@ -1053,7 +1054,7 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
     } catch (error) {
       console.error('Error uploading image:', error)
       const msg = error instanceof Error ? error.message : 'Failed to upload image. Please try again.'
-      alert(msg)
+      toast.error(msg)
     } finally {
       setUploadingCategory(null)
       e.target.value = '' // Reset so same file can be selected again
@@ -1080,13 +1081,13 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
     // Validate file type (PDF or image)
     const isValidType = file.type === 'application/pdf' || file.type.startsWith('image/')
     if (!isValidType) {
-      alert('Please select a PDF or image file')
+      toast.info('Please select a PDF or image file')
       return
     }
 
     // Validate file size (10MB limit)
     if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB')
+      toast.error('File size must be less than 10MB')
       return
     }
 
@@ -1098,7 +1099,7 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
     } catch (error) {
       console.error('Error uploading spec sheet:', error)
       const msg = error instanceof Error ? error.message : 'Failed to upload. Please try again.'
-      alert(msg)
+      toast.error(msg)
     } finally {
       setUploadingCategory(null)
       e.target.value = '' // Reset so same file can be selected again
@@ -1150,7 +1151,7 @@ const SelectionsForm: React.FC<SelectionsFormProps> = ({
     
     // Check if category already exists
     if (newSelections.customCategories[categoryName]) {
-      alert('This category already exists')
+      toast.info('This category already exists')
       return
     }
     

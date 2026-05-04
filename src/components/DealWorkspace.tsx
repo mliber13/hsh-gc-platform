@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from './ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Input } from './ui/input'
@@ -2679,7 +2680,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
       const targetDealId = selectedDeal.id
       const success = await deleteDeal(targetDealId)
       if (!success) {
-        window.alert('Failed to delete deal. Please try again.')
+        toast.error('Failed to delete deal. Please try again.')
         return
       }
 

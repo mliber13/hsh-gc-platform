@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useRef } from 'react';
+import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -42,7 +43,7 @@ export default function ImportEstimate({
 
     // Validate file type
     if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
-      alert('Please upload a CSV file. You can export your Excel file as CSV first.');
+      toast.info('Please upload a CSV file. You can export your Excel file as CSV first.');
       return;
     }
 
@@ -64,7 +65,7 @@ export default function ImportEstimate({
       setStep('preview');
     } catch (error) {
       console.error('Parse error:', error);
-      alert(`Failed to parse file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Failed to parse file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

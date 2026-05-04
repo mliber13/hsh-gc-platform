@@ -3,6 +3,7 @@
 // ============================================================================
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -346,7 +347,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
 
   const handleAllocate = async () => {
     if (!selectedTxn || !projectId || !category) {
-      alert('Please select project and category.')
+      toast.info('Please select project and category.')
       return
     }
     setAllocating(true)
@@ -387,7 +388,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
       onSuccess?.()
     } catch (e) {
       console.error(e)
-      alert('Failed to create entry. See console.')
+      toast.error('Failed to create entry. See console.')
     }
     setAllocating(false)
   }
@@ -422,7 +423,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                 if (result._debug) {
                   const excludedCount = Array.isArray(result._excluded) ? result._excluded.length : 0
                   console.log('QB Job Transactions debug: excluded count =', excludedCount)
-                  alert(`Debug: excluded count = ${excludedCount}. Full response in Network tab (qb-get-job-transactions).`)
+                  toast.info(`Debug: excluded count = ${excludedCount}. Full response in Network tab (qb-get-job-transactions).`)
                 }
               }}
               variant="ghost"
@@ -1045,7 +1046,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                         const msg =
                           (result.error ?? 'No accounts/classes matched') +
                           ' QuickBooks connection may be wrong company, or account/class names don’t match our patterns. See console for yourAccounts / yourClasses.'
-                        alert(msg)
+                        toast.error(msg)
                         return
                       }
                       const counts = d.counts as { beforeProjectFilter?: number; afterProjectFilter?: number; pendingCount?: number } | undefined
@@ -1075,9 +1076,9 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                       const msg = counts
                         ? `beforeProject: ${counts.beforeProjectFilter ?? 0}, afterProject: ${counts.afterProjectFilter ?? 0}, pending: ${counts.pendingCount ?? 0}. See console for checksSummary.`
                         : 'See console for _debug.'
-                      alert(msg)
+                      toast.info(msg)
                     } else {
-                      alert('No debug data. Check console/network for errors.')
+                      toast.info('No debug data. Check console/network for errors.')
                     }
                   }}
                 >

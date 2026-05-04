@@ -6,6 +6,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
@@ -44,9 +45,9 @@ export function QuickBooksConnect() {
     setTesting(false)
     
     if (testResult) {
-      alert('✅ QuickBooks connection is working!')
+      toast.success('QuickBooks connection is working!')
     } else {
-      alert('❌ QuickBooks connection failed. Please reconnect.')
+      toast.error('QuickBooks connection failed. Please reconnect.')
       setConnected(false)
     }
   }

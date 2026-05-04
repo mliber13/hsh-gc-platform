@@ -6,6 +6,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Plan, PlanDocument, PlanOption, CreatePlanInput, UpdatePlanInput, PlanOptionInput } from '@/types'
 import { addPlanOption, deletePlanOption, addPlanDocument, deletePlanDocument, getPlanById } from '@/services/planService'
 import { createPlan_Hybrid, updatePlan_Hybrid } from '@/services/planHybridService'
@@ -153,7 +154,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
     e.preventDefault()
     if (!currentPlan || !uploadingFor) return
     if (!uploadForm.fileUrl && !uploadForm.file) {
-      alert('Please provide either a file or external link')
+      toast.info('Please provide either a file or external link')
       return
     }
 
@@ -179,7 +180,7 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
       setUploadForm({ name: '', type: 'floor-plan', file: null, fileUrl: '', storageType: 'local-reference', notes: '' })
     } catch (error) {
       console.error('Error uploading file:', error)
-      alert('Failed to add document: ' + (error as Error).message)
+      toast.error('Failed to add document: ' + (error as Error).message)
     }
   }
 

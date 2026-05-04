@@ -6,6 +6,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { ItemTemplate, ItemTemplateInput, ItemSubItemTemplate, Subcontractor } from '@/types'
 import {
   getAllItemTemplates,
@@ -109,7 +110,7 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
     if (editingItem) {
       const updated = await updateItemTemplate(editingItem.id, payload)
       if (updated === null) {
-        alert('Failed to save item template. If you added sub-items, ensure the database has run the latest migration (default_sub_items column on item_templates).')
+        toast.error('Failed to save item template. If you added sub-items, ensure the database has run the latest migration (default_sub_items column on item_templates).')
         return
       }
     } else {

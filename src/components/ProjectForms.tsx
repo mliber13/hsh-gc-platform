@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -1520,7 +1521,7 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
 
               if (error) {
                 console.error('Error saving form:', error);
-                alert('Failed to save form. Please try again.');
+                toast.error('Failed to save form. Please try again.');
                 return;
               }
 
@@ -1534,10 +1535,10 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
               setSelectedForm(updatedForm);
               
               // Show success message
-              alert('Form saved successfully!');
+              toast.success('Form saved successfully!');
             } catch (error) {
               console.error('Error saving form:', error);
-              alert('Failed to save form. Please try again.');
+              toast.error('Failed to save form. Please try again.');
             }
           }}
           onDelete={deleteForm}
