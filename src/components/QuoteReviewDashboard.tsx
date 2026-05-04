@@ -6,6 +6,7 @@
 //
 
 import React, { useState, useEffect, useMemo } from 'react'
+import { toast } from 'sonner'
 import { Project, Trade } from '@/types'
 import { QuoteRequest, SubmittedQuote, UpdateQuoteStatusInput } from '@/types/quote'
 import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
@@ -128,16 +129,16 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
           newMap.delete(quoteRequestToDelete)
           return newMap
         })
-        alert('Quote request deleted successfully')
+        toast.success('Quote request deleted')
         setDeleteDialogOpen(false)
         setQuoteRequestToDelete(null)
       } else {
         console.error('deleteQuoteRequest_Hybrid returned false')
-        alert('Failed to delete quote request')
+        toast.error('Failed to delete quote request')
       }
     } catch (error) {
       console.error('Error deleting quote request:', error)
-      alert('Failed to delete quote request: ' + (error instanceof Error ? error.message : String(error)))
+      toast.error('Failed to delete quote request: ' + (error instanceof Error ? error.message : String(error)))
     }
   }
 
@@ -151,13 +152,13 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
         // Reload quote requests to get updated sent_at timestamp
         const requests = await fetchQuoteRequestsForProject_Hybrid(project.id)
         setQuoteRequests(requests)
-        alert('Quote request email resent successfully!')
+        toast.success('Quote request email resent')
       } else {
-        alert('Failed to resend quote request email. Please check:\n1. Edge Function is deployed\n2. RESEND_API_KEY is configured\n3. FROM_EMAIL is verified\n\nCheck console for more details.')
+        toast.error('Failed to resend quote request email. Please check:\n1. Edge Function is deployed\n2. RESEND_API_KEY is configured\n3. FROM_EMAIL is verified\n\nCheck console for more details.')
       }
     } catch (error) {
       console.error('Error resending quote request:', error)
-      alert(`Failed to resend quote request email: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(`Failed to resend quote request email: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -211,16 +212,16 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
         const costLabel = vendorType === 'supplier' ? 'material' : 'subcontractor'
         const clearedLabel = vendorType === 'supplier' ? 'subcontractor' : 'labor'
         console.log(`✅ Applied ${costLabel} quote amount ${formatCurrency(quote.totalAmount)} to trade ${tradeId} (cleared ${clearedLabel} cost)`)
-        alert(`Quote amount ${formatCurrency(quote.totalAmount)} applied to ${costLabel} cost. ${clearedLabel.charAt(0).toUpperCase() + clearedLabel.slice(1)} cost cleared.`)
+        toast.success(`Quote amount ${formatCurrency(quote.totalAmount)} applied to ${costLabel} cost. ${clearedLabel.charAt(0).toUpperCase() + clearedLabel.slice(1)} cost cleared`)
         return true
       } else {
         console.warn(`Trade ${tradeId} not found`)
-        alert('Trade not found')
+        toast.error('Trade not found')
         return false
       }
     } catch (tradeError) {
       console.error('Error applying quote to trade:', tradeError)
-      alert('Failed to apply quote to trade')
+      toast.error('Failed to apply quote to trade')
       return false
     }
   }
@@ -315,13 +316,13 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
         
         const appliedCostLabel = getVendorTypeForQuote(quote) === 'supplier' ? 'material' : 'subcontractor'
         const message = status === 'accepted' && input.assignedTradeId
-          ? `Quote accepted and applied to ${appliedCostLabel} cost! Amount: ${formatCurrency(quote.totalAmount)}`
-          : `Quote ${status === 'accepted' ? 'accepted' : status === 'rejected' ? 'rejected' : 'status updated'} successfully!`
-        alert(message)
+          ? `Quote accepted and applied to ${appliedCostLabel} cost. Amount: ${formatCurrency(quote.totalAmount)}`
+          : `Quote ${status === 'accepted' ? 'accepted' : status === 'rejected' ? 'rejected' : 'status updated'}`
+        toast.success(message)
       }
     } catch (error) {
       console.error('Error updating quote status:', error)
-      alert('Failed to update quote status')
+      toast.error('Failed to update quote status')
     }
   }
 
@@ -355,7 +356,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
     setSelectedQuote(null)
     setSelectedTradeId('')
     getTradesForEstimate_Hybrid(project.estimate!.id).then(setTrades)
-    alert('Quote unaccepted. Trade reverted to budget total where applicable.')
+    toast.info('Quote unaccepted. Trade reverted to budget total where applicable')
   }
 
   const getStatusBadge = (status: SubmittedQuote['status']) => {
@@ -951,7 +952,7 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                                       })
                                       setSelectedQuote(null)
                                       setSelectedTradeId('')
-                                      alert('Quote assigned to trade successfully!')
+                                      toast.success('Quote assigned to trade')
                                     }
                                   })
                                 }}

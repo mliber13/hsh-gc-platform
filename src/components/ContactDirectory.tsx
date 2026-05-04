@@ -3,6 +3,7 @@
 // ============================================================================
 
 import React, { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { ArrowLeft, Plus, ChevronDown, ChevronRight, Edit, Trash2, RefreshCw, Archive, ArchiveRestore } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -165,7 +166,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       setSubcontractors(data)
     } catch (e: any) {
       console.error(e)
-      alert(e?.message || 'Failed to load subcontractors')
+      toast.error(e?.message || 'Failed to load subcontractors')
     } finally {
       setLoadingSubs(false)
     }
@@ -178,7 +179,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       setSuppliers(data)
     } catch (e: any) {
       console.error(e)
-      alert(e?.message || 'Failed to load suppliers')
+      toast.error(e?.message || 'Failed to load suppliers')
     } finally {
       setLoadingSuppliers(false)
     }
@@ -191,7 +192,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       setDevelopers(data)
     } catch (e: any) {
       console.error(e)
-      alert(e?.message || 'Failed to load developers')
+      toast.error(e?.message || 'Failed to load developers')
     } finally {
       setLoadingDevs(false)
     }
@@ -204,7 +205,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       setMunicipalities(data)
     } catch (e: any) {
       console.error(e)
-      alert(e?.message || 'Failed to load municipalities')
+      toast.error(e?.message || 'Failed to load municipalities')
     } finally {
       setLoadingMunicipalities(false)
     }
@@ -217,7 +218,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       setLenders(data)
     } catch (e: any) {
       console.error(e)
-      alert(e?.message || 'Failed to load lenders')
+      toast.error(e?.message || 'Failed to load lenders')
     } finally {
       setLoadingLenders(false)
     }
@@ -230,7 +231,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       setContacts(data)
     } catch (e: any) {
       console.error(e)
-      alert(e?.message || 'Failed to load contacts')
+      toast.error(e?.message || 'Failed to load contacts')
     } finally {
       setLoadingContacts(false)
     }
@@ -341,7 +342,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       setOrgUsersByEmail(next)
       setAccessDialogOpen(false)
     } catch (e: any) {
-      alert(e?.message ?? 'Failed to update role')
+      toast.error(e?.message ?? 'Failed to update role')
     } finally {
       setSavingAccess(false)
     }
@@ -357,7 +358,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       setOrgUsersByEmail(next)
       setAccessDialogOpen(false)
     } catch (e: any) {
-      alert(e?.message ?? 'Failed to update access')
+      toast.error(e?.message ?? 'Failed to update access')
     } finally {
       setSavingAccess(false)
     }
@@ -388,7 +389,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
         })
       } else {
         if (!addUserAsContactEntityType || !addUserAsContactEntityId) {
-          alert('Please select a partner and company.')
+          toast.error('Please select a partner and company')
           return
         }
         const entityLabel = addUserAsContactEntityType === 'subcontractors' ? 'SUBCONTRACTOR' : addUserAsContactEntityType === 'suppliers' ? 'SUPPLIER' : addUserAsContactEntityType === 'developers' ? 'DEVELOPER' : addUserAsContactEntityType === 'municipalities' ? 'MUNICIPALITY' : 'LENDER'
@@ -413,7 +414,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       setOrgUsersByEmail(nextMap)
       if (mainTab === 'people') loadContacts(peopleLabel)
     } catch (e: any) {
-      alert(e?.message ?? 'Failed to add contact')
+      toast.error(e?.message ?? 'Failed to add contact')
     } finally {
       setSavingAddUserAsContact(false)
     }
@@ -479,7 +480,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
 
   const handleSaveContact = async () => {
     if (!contactForm.name.trim()) {
-      alert('Name is required.')
+      toast.error('Name is required')
       return
     }
     setSavingContact(true)
@@ -519,7 +520,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
         loadEntityContacts(expandedEntityId, key)
       }
     } catch (e: any) {
-      alert(e?.message || 'Failed to save contact')
+      toast.error(e?.message || 'Failed to save contact')
     } finally {
       setSavingContact(false)
     }
@@ -536,7 +537,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
         loadEntityContacts(expandedEntityId, key)
       }
     } catch (e: any) {
-      alert(e?.message || 'Failed to delete contact')
+      toast.error(e?.message || 'Failed to delete contact')
     }
   }
 
@@ -572,7 +573,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
 
   const handleSaveDeveloper = async () => {
     if (!developerForm.name.trim()) {
-      alert('Name is required.')
+      toast.error('Name is required')
       return
     }
     setSavingDeveloper(true)
@@ -595,7 +596,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       setDeveloperFormOpen(false)
       loadDevelopers()
     } catch (e: any) {
-      alert(e?.message || 'Failed to save developer')
+      toast.error(e?.message || 'Failed to save developer')
     } finally {
       setSavingDeveloper(false)
     }
@@ -683,7 +684,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
 
   const handleSavePartner = async () => {
     if (!partnerForm.name.trim()) {
-      alert('Name is required.')
+      toast.error('Name is required')
       return
     }
     setSavingPartner(true)
@@ -763,7 +764,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       setPartnerFormOpen(false)
       setEditingPartnerId(null)
     } catch (e: any) {
-      alert(e?.message || 'Failed to save')
+      toast.error(e?.message || 'Failed to save')
     } finally {
       setSavingPartner(false)
     }
@@ -786,7 +787,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
         await loadLenders()
       }
     } catch (e: any) {
-      alert(e?.message || 'Failed to update')
+      toast.error(e?.message || 'Failed to update')
     }
   }
 
@@ -1617,7 +1618,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                   onClick={() => {
                     const url = typeof window !== 'undefined' ? window.location.origin : ''
                     navigator.clipboard?.writeText(url)
-                    alert('Link copied to clipboard.')
+                    toast.success('Link copied to clipboard')
                   }}
                 >
                   Copy sign-up link

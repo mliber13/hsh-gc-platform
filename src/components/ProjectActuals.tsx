@@ -7,6 +7,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import {
   Project,
@@ -709,11 +710,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       setReassignEntry(null)
                       setReassignTargetId('')
                     } else {
-                      alert('Reassign is only available when online. Please check your connection and try again.')
+                      toast.error('Reassign is only available when online. Please check your connection and try again.')
                     }
                   } catch (e) {
                     console.error(e)
-                    alert('Failed to reassign entry.')
+                    toast.error('Failed to reassign entry.')
                   } finally {
                     setReassigning(false)
                   }
@@ -2049,7 +2050,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 })
 
                 if (!parentEntry) {
-                  alert('Failed to create parent invoice entry')
+                  toast.error('Failed to create parent invoice entry')
                   return
                 }
 
@@ -2086,7 +2087,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 })
 
                 if (!parentEntry) {
-                  alert('Failed to create parent invoice entry')
+                  toast.error('Failed to create parent invoice entry')
                   return
                 }
 
@@ -2206,7 +2207,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   })
 
                   if (!parentEntry) {
-                    alert('Failed to create parent invoice entry')
+                    toast.error('Failed to create parent invoice entry')
                     return
                   }
 
@@ -2254,7 +2255,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   })
 
                   if (!parentEntry) {
-                    alert('Failed to create parent invoice entry')
+                    toast.error('Failed to create parent invoice entry')
                     return
                   }
 
@@ -2635,7 +2636,7 @@ function ActualEntryForm({
       const totalAmount = parseFloat(formData.amount)
       
       if (Math.abs(totalAllocated - totalAmount) > 0.01) {
-        alert(`Split allocations must sum to the total amount (${formatCurrency(totalAmount)}). Current total: ${formatCurrency(totalAllocated)}`)
+        toast.error(`Split allocations must sum to the total amount (${formatCurrency(totalAmount)}). Current total: ${formatCurrency(totalAllocated)}`)
         return
       }
       

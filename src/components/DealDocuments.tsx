@@ -6,6 +6,7 @@
 //
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { DealDocument, DealDocumentType } from '@/types/deal'
 import {
   uploadDealDocument,
@@ -121,7 +122,7 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      alert('Please select a file to upload')
+      toast.error('Please select a file to upload')
       return
     }
 
@@ -150,13 +151,13 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
         setCategory('')
         setTags('')
         setShowUploadForm(false)
-        alert('Document uploaded successfully!')
+        toast.success('Document uploaded')
       } else {
-        alert('Failed to upload document. Please try again.')
+        toast.error('Failed to upload document. Please try again.')
       }
     } catch (error) {
       console.error('Error uploading document:', error)
-      alert('Error uploading document. Please try again.')
+      toast.error('Error uploading document. Please try again.')
     } finally {
       setUploading(false)
     }
@@ -171,13 +172,13 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
       const success = await deleteDealDocument(doc.id)
       if (success) {
         await loadDocuments()
-        alert('Document deleted successfully!')
+        toast.success('Document deleted')
       } else {
-        alert('Failed to delete document. Please try again.')
+        toast.error('Failed to delete document. Please try again.')
       }
     } catch (error) {
       console.error('Error deleting document:', error)
-      alert('Error deleting document. Please try again.')
+      toast.error('Error deleting document. Please try again.')
     }
   }
 
@@ -211,13 +212,13 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
         setDescription('')
         setCategory('')
         setTags('')
-        alert('Document updated successfully!')
+        toast.success('Document updated')
       } else {
-        alert('Failed to update document. Please try again.')
+        toast.error('Failed to update document. Please try again.')
       }
     } catch (error) {
       console.error('Error updating document:', error)
-      alert('Error updating document. Please try again.')
+      toast.error('Error updating document. Please try again.')
     }
   }
 
@@ -251,12 +252,12 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
 
   const handleShareSubmit = async () => {
     if (!shareDoc || !shareToEmail.trim()) {
-      alert('Please enter a recipient email address.')
+      toast.error('Please enter a recipient email address.')
       return
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(shareToEmail.trim())) {
-      alert('Please enter a valid email address.')
+      toast.error('Please enter a valid email address.')
       return
     }
     setShareSending(true)
@@ -268,16 +269,16 @@ export function DealDocuments({ dealId }: DealDocumentsProps) {
         message: shareMessage.trim() || undefined,
       })
       if (success) {
-        alert(`Document "${shareDoc.name}" shared successfully with ${shareToEmail.trim()}.`)
+        toast.success(`Document "${shareDoc.name}" shared with ${shareToEmail.trim()}`)
         setShareDoc(null)
         setShareToEmail('')
         setShareMessage('')
       } else {
-        alert('Failed to send share email. Please try again or check that the Edge Function is deployed and email is configured.')
+        toast.error('Failed to send share email. Please try again or check that the Edge Function is deployed and email is configured.')
       }
     } catch (error) {
       console.error('Error sharing document:', error)
-      alert('Failed to send share email. Please try again.')
+      toast.error('Failed to send share email. Please try again.')
     } finally {
       setShareSending(false)
     }

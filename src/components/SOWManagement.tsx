@@ -6,6 +6,7 @@
 //
 
 import React, { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
   SOWTemplate,
   CreateSOWTemplateInput,
@@ -80,7 +81,7 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
       setTemplates(data)
     } catch (error) {
       console.error('Error loading SOW templates:', error)
-      alert('Failed to load SOW templates')
+      toast.error('Failed to load SOW templates')
     } finally {
       setLoading(false)
     }
@@ -112,13 +113,13 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
       const deleted = await deleteSOWTemplate(templateId)
       if (deleted) {
         await loadTemplates()
-        alert('SOW template deleted successfully')
+        toast.success('SOW template deleted')
       } else {
-        alert('Failed to delete SOW template')
+        toast.error('Failed to delete SOW template')
       }
     } catch (error) {
       console.error('Error deleting SOW template:', error)
-      alert('Failed to delete SOW template')
+      toast.error('Failed to delete SOW template')
     }
   }
 
@@ -133,7 +134,7 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
 
   const handleSave = async () => {
     if (!formName.trim()) {
-      alert('Please enter a name for the SOW template')
+      toast.error('Please enter a name for the SOW template')
       return
     }
 
@@ -152,9 +153,9 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
         if (updated) {
           await loadTemplates()
           setShowForm(false)
-          alert('SOW template updated successfully')
+          toast.success('SOW template updated')
         } else {
-          alert('Failed to update SOW template')
+          toast.error('Failed to update SOW template')
         }
       } else {
         const createInput: CreateSOWTemplateInput = {
@@ -169,14 +170,14 @@ export function SOWManagement({ onBack }: SOWManagementProps) {
         if (created) {
           await loadTemplates()
           setShowForm(false)
-          alert('SOW template created successfully')
+          toast.success('SOW template created')
         } else {
-          alert('Failed to create SOW template')
+          toast.error('Failed to create SOW template')
         }
       }
     } catch (error) {
       console.error('Error saving SOW template:', error)
-      alert('Failed to save SOW template')
+      toast.error('Failed to save SOW template')
     } finally {
       setSaving(false)
     }

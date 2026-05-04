@@ -6,6 +6,7 @@
 //
 
 import React, { useState, useEffect, useRef } from 'react'
+import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { PrintableReport, ReportDepth } from './PrintableReport'
 import { usePageTitle } from '@/contexts/PageTitleContext'
@@ -455,7 +456,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       }
     } catch (error) {
       console.error('Error saving sub-item:', error)
-      alert('Failed to save sub-item. Please try again.')
+      toast.error('Failed to save sub-item. Please try again.')
     }
   }
 
@@ -477,7 +478,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       }
     } catch (error) {
       console.error('Error deleting sub-item:', error)
-      alert('Failed to delete sub-item. Please try again.')
+      toast.error('Failed to delete sub-item. Please try again.')
     }
   }
 
@@ -499,7 +500,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
 
     const newMarkup = parseFloat(bulkMarkupPercent)
     if (isNaN(newMarkup) || newMarkup < 0) {
-      alert('Please enter a valid markup percentage')
+      toast.error('Please enter a valid markup percentage')
       return
     }
 
@@ -578,10 +579,10 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       }
       
       setShowBulkMarkupDialog(false)
-      alert(`Successfully updated markup to ${newMarkup.toFixed(1)}% for all ${trades.length} item(s).`)
+      toast.success(`Updated markup to ${newMarkup.toFixed(1)}% for all ${trades.length} item(s)`)
     } catch (error) {
       console.error('Error updating bulk markup:', error)
-      alert('Failed to update markup. Please try again.')
+      toast.error('Failed to update markup. Please try again.')
     }
   }
 
@@ -590,7 +591,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
 
     const tradeCount = trades.length
     if (tradeCount === 0) {
-      alert('There are no cost items to clear.')
+      toast.info('There are no cost items to clear')
       return
     }
 
@@ -606,13 +607,13 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         setTrades([])
         setSubItemsByTrade({})
         setProjectData({ ...projectData, updatedAt: new Date() })
-        alert(`Successfully cleared all ${tradeCount} cost item(s) from the estimate.`)
+        toast.success(`Cleared all ${tradeCount} cost item(s) from the estimate`)
       } else {
-        alert('Failed to clear all cost items. Please try again.')
+        toast.error('Failed to clear all cost items. Please try again.')
       }
     } catch (error) {
       console.error('Error clearing all trades:', error)
-      alert('Failed to clear all cost items. Please try again.')
+      toast.error('Failed to clear all cost items. Please try again.')
     }
   }
 
@@ -665,10 +666,10 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       // Update local state
       setProjectData({ ...projectData, updatedAt: new Date() })
       
-      alert(`Successfully added ${newTrades.length} default category items.`)
+      toast.success(`Added ${newTrades.length} default category items`)
     } catch (error) {
       console.error('Error adding default categories:', error)
-      alert('Failed to add default categories. Please try again.')
+      toast.error('Failed to add default categories. Please try again.')
     }
   }
 
@@ -746,12 +747,12 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
 
   const handleSaveAsTemplate = async () => {
     if (!templateName.trim()) {
-      alert('Please enter a template name')
+      toast.error('Please enter a template name')
       return
     }
 
     if (trades.length === 0) {
-      alert('Cannot save an empty estimate as a template')
+      toast.error('Cannot save an empty estimate as a template')
       return
     }
 
@@ -764,13 +765,13 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         defaultContingencyPercent: contingencyPercent,
       })
 
-      alert(`Template "${template.name}" saved successfully!`)
+      toast.success(`Template "${template.name}" saved`)
       setShowSaveTemplateDialog(false)
       setTemplateName('')
       setTemplateDescription('')
     } catch (error) {
       console.error('Error saving template:', error)
-      alert('Failed to save template')
+      toast.error('Failed to save template')
     }
   }
 
@@ -784,13 +785,13 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     console.log('🔵 Apply Template clicked', { selectedTemplateToApply, projectData: projectData?.id })
     
     if (!selectedTemplateToApply) {
-      alert('Please select a template')
+      toast.error('Please select a template')
       return
     }
 
     if (!projectData) {
       console.error('❌ No project data')
-      alert('Error: No project data found')
+      toast.error('Error: No project data found')
       return
     }
 
@@ -813,7 +814,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       console.log('✅ Template trades created:', templateTrades.length)
       
       if (templateTrades.length === 0) {
-        alert('Template has no trades to apply')
+        toast.error('Template has no trades to apply')
         return
       }
 
@@ -870,12 +871,12 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       setTrades(updatedTrades)
       console.log('✅ Trades reloaded:', updatedTrades.length)
 
-      alert(`Successfully applied template! Added ${templateTrades.length} trade(s).`)
+      toast.success(`Applied template — added ${templateTrades.length} trade(s)`)
       setShowApplyTemplateDialog(false)
       setSelectedTemplateToApply('')
     } catch (error) {
       console.error('❌ Error applying template:', error)
-      alert(`Failed to apply template: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(`Failed to apply template: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -2156,11 +2157,11 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                           if (fileUrl) {
                             setFormData(prev => ({ ...prev, quoteFileUrl: fileUrl }))
                           } else {
-                            alert('Failed to upload file. Please try again.')
+                            toast.error('Failed to upload file. Please try again.')
                           }
                         } catch (error) {
                           console.error('Error uploading file:', error)
-                          alert('Error uploading file. Please try again.')
+                          toast.error('Error uploading file. Please try again.')
                         }
                       }
                     }}
@@ -2431,7 +2432,7 @@ function SubItemForm({ tradeId, estimateId, subItem, onSave, onCancel, isAdding,
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name) {
-      alert('Please enter a name for the sub-item')
+      toast.error('Please enter a name for the sub-item')
       return
     }
     await onSave(tradeId, formData)
