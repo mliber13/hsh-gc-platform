@@ -7,7 +7,14 @@
 // Selecting persists to localStorage and navigates to the workspace home.
 //
 
-import { Briefcase, Building2, ChevronsUpDown, Check, Users } from 'lucide-react'
+import {
+  Briefcase,
+  Building2,
+  CalendarDays,
+  ChevronsUpDown,
+  Check,
+  Users,
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +52,12 @@ const WORKSPACES: WorkspaceMeta[] = [
     label: 'Tenants',
     description: 'Tenant pipeline',
     icon: Users,
+  },
+  {
+    id: 'meeting',
+    label: 'Meeting',
+    description: 'Weekly meeting workflow',
+    icon: CalendarDays,
   },
 ]
 

@@ -227,6 +227,16 @@ const tenantsNav: NavGroup[] = [
   },
 ]
 
+const meetingNav: NavGroup[] = [
+  {
+    label: 'Meeting',
+    items: [
+      { label: 'Meeting', to: '/meeting', icon: Calendar, matchPath: '/meeting' },
+      { label: 'Pre-read', to: '/pre-read', icon: FileText, matchPath: '/pre-read' },
+    ],
+  },
+]
+
 const settingsNav: NavGroup = {
   label: 'Settings',
   items: [
@@ -255,6 +265,8 @@ function navForWorkspace(
       return [...dealsNav(currentDealId), settingsNav]
     case 'tenants':
       return [...tenantsNav, settingsNav]
+    case 'meeting':
+      return [...meetingNav, settingsNav]
   }
 }
 

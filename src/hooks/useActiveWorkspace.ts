@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
-export type Workspace = 'projects' | 'deals' | 'tenants'
+export type Workspace = 'projects' | 'deals' | 'tenants' | 'meeting'
 
 const STORAGE_KEY = 'hsh:activeWorkspace'
 
@@ -26,12 +26,22 @@ const WORKSPACE_HOME: Record<Workspace, string> = {
   projects: '/',
   deals: '/deals',
   tenants: '/tenants',
+  meeting: '/meeting',
 }
 
 /** Map a pathname to a workspace, or null if it's workspace-agnostic. */
 function workspaceFromPath(pathname: string): Workspace | null {
   if (pathname.startsWith('/deals')) return 'deals'
   if (pathname.startsWith('/tenants')) return 'tenants'
+  if (
+    pathname.startsWith('/meeting') ||
+    pathname.startsWith('/meetings') ||
+    pathname.startsWith('/pre-read') ||
+    pathname.startsWith('/action-items') ||
+    pathname.startsWith('/admin/meeting-prompts')
+  ) {
+    return 'meeting'
+  }
   if (pathname === '/' || pathname.startsWith('/projects')) return 'projects'
   // /library/*, /quickbooks/*, /contacts, /sow, /feedback are workspace-agnostic
   return null
@@ -40,7 +50,14 @@ function workspaceFromPath(pathname: string): Workspace | null {
 function readStoredWorkspace(): Workspace {
   if (typeof window === 'undefined') return 'projects'
   const raw = window.localStorage.getItem(STORAGE_KEY)
-  if (raw === 'projects' || raw === 'deals' || raw === 'tenants') return raw
+  if (
+    raw === 'projects' ||
+    raw === 'deals' ||
+    raw === 'tenants' ||
+    raw === 'meeting'
+  ) {
+    return raw
+  }
   return 'projects'
 }
 

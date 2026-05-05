@@ -41,6 +41,7 @@
 //
 
 import { useEffect, useState } from 'react'
+import { addDays, format, parseISO, startOfWeek } from 'date-fns'
 import { toast } from 'sonner'
 import {
   Navigate,
@@ -91,7 +92,10 @@ import { MyFeedback } from '@/components/MyFeedback'
 import { FeedbackForm } from '@/components/FeedbackForm'
 import { PrivacyPolicy } from '@/components/PrivacyPolicy'
 import { TermsOfUse } from '@/components/TermsOfUse'
+import { MeetingPreRead } from '@/components/meeting/MeetingPreRead'
+import { MeetingView } from '@/components/meeting/MeetingView'
 import { usePageTitle } from '@/contexts/PageTitleContext'
+import { getCurrentWeekOf } from '@/services/meetingService'
 
 import { AppLayout } from '@/components/AppLayout'
 import { AuthedLayout } from './AuthedLayout'
@@ -154,6 +158,9 @@ export function AppRoutes() {
           <Route path="/tenant-pipeline" element={<Navigate to="/tenants" replace />} />
 
           <Route path="/feedback" element={<MyFeedbackRoute />} />
+          <Route path="/pre-read" element={<MeetingPreReadRoute />} />
+          <Route path="/meeting" element={<MeetingRedirectRoute />} />
+          <Route path="/meeting/:date" element={<MeetingViewRoute />} />
 
           {/* Catch-all → dashboard */}
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -599,5 +606,58 @@ function MyFeedbackRoute() {
       )}
     </div>
   )
+}
+
+function MeetingPreReadRoute() {
+  return <MeetingPreRead />
+}
+
+function MeetingRedirectRoute() {
+  const [targetDate, setTargetDate] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const resolveTarget = async () => {
+      try {
+        const weekOf = await getCurrentWeekOf()
+        const tuesday = addDays(parseISO(weekOf), 1)
+        if (!cancelled) setTargetDate(format(tuesday, 'yyyy-MM-dd'))
+      } catch (error) {
+        console.error('Failed resolving meeting redirect date', error)
+        toast.error('Could not resolve meeting date.')
+      }
+    }
+
+    void resolveTarget()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!targetDate) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <div className="mx-auto inline-block size-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
+      </div>
+    )
+  }
+
+  return <Navigate to={`/meeting/${targetDate}`} replace />
+}
+
+function MeetingViewRoute() {
+  const { date } = useParams<{ date: string }>()
+  if (!date) return <Navigate to="/meeting" replace />
+
+  const parsedDate = parseISO(date)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return <Navigate to="/meeting" replace />
+  }
+
+  const weekStart = startOfWeek(parsedDate, { weekStartsOn: 1 })
+  const weekOf = format(weekStart, 'yyyy-MM-dd')
+
+  return <MeetingView meetingDate={date} weekOf={weekOf} />
 }
 
