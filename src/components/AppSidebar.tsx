@@ -53,8 +53,10 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar'
 import { useActiveWorkspace, Workspace } from '@/hooks/useActiveWorkspace'
+import { useAuth } from '@/contexts/AuthContext'
 import { Project } from '@/types'
 import { getProjects_Hybrid } from '@/services/hybridService'
+import { getCurrentUserMeetingLead } from '@/services/meetingService'
 import { cn } from '@/lib/utils'
 import { SidebarUserMenu } from './SidebarUserMenu'
 
@@ -227,15 +229,23 @@ const tenantsNav: NavGroup[] = [
   },
 ]
 
-const meetingNav: NavGroup[] = [
-  {
-    label: 'Meeting',
-    items: [
-      { label: 'Meeting', to: '/meeting', icon: Calendar, matchPath: '/meeting' },
-      { label: 'Pre-read', to: '/pre-read', icon: FileText, matchPath: '/pre-read' },
-    ],
-  },
-]
+function meetingNav(showManage: boolean): NavGroup[] {
+  const items: NavItem[] = [
+    { label: 'Meeting', to: '/meeting', icon: Calendar, matchPath: '/meeting' },
+    { label: 'Pre-read', to: '/pre-read', icon: FileText, matchPath: '/pre-read' },
+    { label: 'Action Items', to: '/action-items', icon: ListChecks, matchPath: '/action-items' },
+    { label: 'History', to: '/meetings', icon: LineChart, matchPath: '/meetings' },
+  ]
+  if (showManage) {
+    items.push({
+      label: 'Manage',
+      to: '/admin/meeting-prompts',
+      icon: Settings,
+      matchPath: '/admin/meeting-prompts',
+    })
+  }
+  return [{ label: 'Meeting', items }]
+}
 
 const settingsNav: NavGroup = {
   label: 'Settings',
@@ -257,6 +267,7 @@ function navForWorkspace(
   ws: Workspace,
   currentProjectId: string | undefined,
   currentDealId: string | undefined,
+  showMeetingManage: boolean,
 ): NavGroup[] {
   switch (ws) {
     case 'projects':
@@ -266,12 +277,13 @@ function navForWorkspace(
     case 'tenants':
       return [...tenantsNav, settingsNav]
     case 'meeting':
-      return [...meetingNav, settingsNav]
+      return [...meetingNav(showMeetingManage), settingsNav]
   }
 }
 
 export function AppSidebar() {
   const { workspace } = useActiveWorkspace()
+  const { user } = useAuth()
   const projectMatch = useMatch('/projects/:projectId/*')
   const projectIndexMatch = useMatch('/projects/:projectId')
   const currentProjectId =
@@ -287,6 +299,7 @@ export function AppSidebar() {
   const [recentProjectId, setRecentProjectId] = useState<string | undefined>(
     undefined,
   )
+  const [isMeetingOperator, setIsMeetingOperator] = useState(false)
 
   useEffect(() => {
     if (workspace !== 'projects' || currentProjectId) return
@@ -297,8 +310,35 @@ export function AppSidebar() {
     })
   }, [workspace, currentProjectId])
 
+  useEffect(() => {
+    let cancelled = false
+
+    const loadOperator = async () => {
+      if (!user?.id) {
+        if (!cancelled) setIsMeetingOperator(false)
+        return
+      }
+      try {
+        const lead = await getCurrentUserMeetingLead(user.id)
+        if (!cancelled) setIsMeetingOperator(Boolean(lead?.is_meeting_operator))
+      } catch {
+        if (!cancelled) setIsMeetingOperator(false)
+      }
+    }
+
+    void loadOperator()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
   const effectiveProjectId = currentProjectId ?? recentProjectId
-  const groups = navForWorkspace(workspace, effectiveProjectId, currentDealId)
+  const groups = navForWorkspace(
+    workspace,
+    effectiveProjectId,
+    currentDealId,
+    isMeetingOperator,
+  )
 
   return (
     <Sidebar collapsible="icon" variant="inset">

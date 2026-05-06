@@ -94,6 +94,9 @@ import { PrivacyPolicy } from '@/components/PrivacyPolicy'
 import { TermsOfUse } from '@/components/TermsOfUse'
 import { MeetingPreRead } from '@/components/meeting/MeetingPreRead'
 import { MeetingView } from '@/components/meeting/MeetingView'
+import { MyActionItems } from '@/components/meeting/MyActionItems'
+import { MeetingAdmin } from '@/components/meeting/MeetingAdmin'
+import { MeetingsList } from '@/components/meeting/MeetingsList'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { getCurrentWeekOf } from '@/services/meetingService'
 
@@ -159,6 +162,9 @@ export function AppRoutes() {
 
           <Route path="/feedback" element={<MyFeedbackRoute />} />
           <Route path="/pre-read" element={<MeetingPreReadRoute />} />
+          <Route path="/action-items" element={<MyActionItemsRoute />} />
+          <Route path="/meetings" element={<MeetingsListRoute />} />
+          <Route path="/admin/meeting-prompts" element={<MeetingAdminRoute />} />
           <Route path="/meeting" element={<MeetingRedirectRoute />} />
           <Route path="/meeting/:date" element={<MeetingViewRoute />} />
 
@@ -610,6 +616,18 @@ function MyFeedbackRoute() {
 
 function MeetingPreReadRoute() {
   return <MeetingPreRead />
+}
+
+function MyActionItemsRoute() {
+  return <MyActionItems />
+}
+
+function MeetingsListRoute() {
+  return <MeetingsList />
+}
+
+function MeetingAdminRoute() {
+  return <MeetingAdmin />
 }
 
 function MeetingRedirectRoute() {

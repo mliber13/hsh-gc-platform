@@ -306,7 +306,18 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
                 {hasNoPrompts ? (
                   <p className="text-base text-muted-foreground">(no prompts configured)</p>
                 ) : showNotSubmitted ? (
-                  <p className="text-base text-muted-foreground">— not submitted —</p>
+                  <div className="space-y-3">
+                    <p className="text-base text-muted-foreground">
+                      — not submitted; topics for verbal review —
+                    </p>
+                    <div className="space-y-2">
+                      {section.prompts.map((prompt, index) => (
+                        <p key={prompt.prompt_id} className="text-base text-muted-foreground">
+                          {index + 1}. {prompt.question_text}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
                 ) : (
                   <div className="space-y-6">
                     {section.prompts.map((prompt) => (

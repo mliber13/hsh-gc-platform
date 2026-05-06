@@ -6,6 +6,8 @@ export interface MeetingLead {
   is_meeting_operator: boolean
   display_order: number
   is_active: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface MeetingPrompt {
@@ -15,6 +17,8 @@ export interface MeetingPrompt {
   default_live_discuss: boolean
   display_order: number
   is_active: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface MeetingSubmission {
@@ -70,4 +74,15 @@ export interface MeetingActionItem {
   created_at: string
   updated_at: string
   created_by: string | null
+}
+
+export interface MeetingsSummaryRow {
+  id: string
+  meeting_date: string
+  week_of: string
+  notes: string | null
+  created_at: string
+  submission_count: number
+  action_item_count: number
+  open_action_item_count: number
 }

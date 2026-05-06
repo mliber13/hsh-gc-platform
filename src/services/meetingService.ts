@@ -3,6 +3,7 @@ import type {
   ActionItemStatus,
   MeetingActionItem,
   MeetingLeadSection,
+  MeetingsSummaryRow,
   MeetingViewData,
   MeetingLead,
   MeetingPrompt,
@@ -10,13 +11,19 @@ import type {
   PreReadPromptState,
 } from '@/types/meeting'
 
+export interface AssignableUser {
+  id: string
+  email: string
+  currently_linked_lead_id: string | null
+}
+
 export async function getCurrentUserMeetingLead(
   userId: string,
 ): Promise<MeetingLead | null> {
   const { data, error } = await supabase
     .from('meeting_leads')
     .select(
-      'id, user_id, display_name, area_label, is_meeting_operator, display_order, is_active',
+      'id, user_id, display_name, area_label, is_meeting_operator, display_order, is_active, created_at, updated_at',
     )
     .eq('user_id', userId)
     .eq('is_active', true)
@@ -41,7 +48,7 @@ export async function getPreReadPromptState(
       supabase
         .from('meeting_prompts')
         .select(
-          'id, lead_id, question_text, default_live_discuss, display_order, is_active',
+          'id, lead_id, question_text, default_live_discuss, display_order, is_active, created_at, updated_at',
         )
         .eq('lead_id', leadId)
         .eq('is_active', true)
@@ -126,14 +133,14 @@ export async function getMeetingViewData(
     supabase
       .from('meeting_leads')
       .select(
-        'id, user_id, display_name, area_label, is_meeting_operator, display_order, is_active',
+        'id, user_id, display_name, area_label, is_meeting_operator, display_order, is_active, created_at, updated_at',
       )
       .eq('is_active', true)
       .order('display_order', { ascending: true }),
     supabase
       .from('meeting_prompts')
       .select(
-        'id, lead_id, question_text, default_live_discuss, display_order, is_active',
+        'id, lead_id, question_text, default_live_discuss, display_order, is_active, created_at, updated_at',
       )
       .eq('is_active', true)
       .order('lead_id', { ascending: true })
@@ -214,6 +221,20 @@ export async function getMeetingActionItems(
   return (data ?? []) as MeetingActionItem[]
 }
 
+export async function getMyActionItems(
+  leadId: string,
+): Promise<MeetingActionItem[]> {
+  const { data, error } = await supabase
+    .from('meeting_action_items')
+    .select(
+      'id, meeting_id, task, owner_lead_id, due_date, status, notes, created_at, updated_at, created_by',
+    )
+    .eq('owner_lead_id', leadId)
+
+  if (error) throw error
+  return (data ?? []) as MeetingActionItem[]
+}
+
 export async function createMeetingActionItem(params: {
   meetingId: string
   task: string
@@ -253,6 +274,23 @@ export async function updateMeetingActionItemStatus(
   const { data, error } = await supabase
     .from('meeting_action_items')
     .update({ status })
+    .eq('id', id)
+    .select(
+      'id, meeting_id, task, owner_lead_id, due_date, status, notes, created_at, updated_at, created_by',
+    )
+    .single()
+
+  if (error) throw error
+  return data as MeetingActionItem
+}
+
+export async function updateMeetingActionItemNotes(
+  id: string,
+  notes: string | null,
+): Promise<MeetingActionItem> {
+  const { data, error } = await supabase
+    .from('meeting_action_items')
+    .update({ notes })
     .eq('id', id)
     .select(
       'id, meeting_id, task, owner_lead_id, due_date, status, notes, created_at, updated_at, created_by',
@@ -313,4 +351,147 @@ export function subscribeMeetingActionItems(
   return () => {
     void supabase.removeChannel(channel)
   }
+}
+
+export async function getAllMeetingLeads(): Promise<MeetingLead[]> {
+  const { data, error } = await supabase
+    .from('meeting_leads')
+    .select(
+      'id, user_id, display_name, area_label, is_meeting_operator, display_order, is_active, created_at, updated_at',
+    )
+    .order('display_order', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as MeetingLead[]
+}
+
+export async function createMeetingLead(params: {
+  display_name: string
+  area_label: string
+  display_order: number
+}): Promise<MeetingLead> {
+  const { data, error } = await supabase
+    .from('meeting_leads')
+    .insert({
+      display_name: params.display_name,
+      area_label: params.area_label,
+      display_order: params.display_order,
+    })
+    .select(
+      'id, user_id, display_name, area_label, is_meeting_operator, display_order, is_active, created_at, updated_at',
+    )
+    .single()
+
+  if (error) throw error
+  return data as MeetingLead
+}
+
+export async function updateMeetingLead(
+  id: string,
+  patch: Partial<
+    Pick<
+      MeetingLead,
+      | 'display_name'
+      | 'area_label'
+      | 'user_id'
+      | 'is_meeting_operator'
+      | 'is_active'
+      | 'display_order'
+    >
+  >,
+): Promise<MeetingLead> {
+  const { data, error } = await supabase
+    .from('meeting_leads')
+    .update(patch)
+    .eq('id', id)
+    .select(
+      'id, user_id, display_name, area_label, is_meeting_operator, display_order, is_active, created_at, updated_at',
+    )
+    .single()
+
+  if (error) throw error
+  return data as MeetingLead
+}
+
+export async function deleteMeetingLead(id: string): Promise<void> {
+  const { error } = await supabase.from('meeting_leads').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function getAllPromptsForLead(
+  leadId: string,
+): Promise<MeetingPrompt[]> {
+  const { data, error } = await supabase
+    .from('meeting_prompts')
+    .select(
+      'id, lead_id, question_text, default_live_discuss, display_order, is_active, created_at, updated_at',
+    )
+    .eq('lead_id', leadId)
+    .order('display_order', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as MeetingPrompt[]
+}
+
+export async function createMeetingPrompt(params: {
+  lead_id: string
+  question_text: string
+  default_live_discuss: boolean
+  display_order: number
+}): Promise<MeetingPrompt> {
+  const { data, error } = await supabase
+    .from('meeting_prompts')
+    .insert(params)
+    .select(
+      'id, lead_id, question_text, default_live_discuss, display_order, is_active, created_at, updated_at',
+    )
+    .single()
+
+  if (error) throw error
+  return data as MeetingPrompt
+}
+
+export async function updateMeetingPrompt(
+  id: string,
+  patch: Partial<
+    Pick<
+      MeetingPrompt,
+      'question_text' | 'default_live_discuss' | 'display_order' | 'is_active'
+    >
+  >,
+): Promise<MeetingPrompt> {
+  const { data, error } = await supabase
+    .from('meeting_prompts')
+    .update(patch)
+    .eq('id', id)
+    .select(
+      'id, lead_id, question_text, default_live_discuss, display_order, is_active, created_at, updated_at',
+    )
+    .single()
+
+  if (error) throw error
+  return data as MeetingPrompt
+}
+
+export async function deleteMeetingPrompt(id: string): Promise<void> {
+  const { error } = await supabase.from('meeting_prompts').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function listAssignableMeetingLeadUsers(): Promise<AssignableUser[]> {
+  const { data, error } = await supabase.rpc('list_assignable_meeting_lead_users')
+  if (error) throw error
+  return (data ?? []) as AssignableUser[]
+}
+
+export async function getMeetingsList(): Promise<MeetingsSummaryRow[]> {
+  const { data, error } = await supabase
+    .from('v_meetings_summary')
+    .select(
+      'id, meeting_date, week_of, notes, created_at, submission_count, action_item_count, open_action_item_count',
+    )
+    .order('meeting_date', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as MeetingsSummaryRow[]
 }
