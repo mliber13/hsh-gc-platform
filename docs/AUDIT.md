@@ -128,6 +128,18 @@ The original audit body is significantly outpaced by recent commits. This entry 
 
 Phase A is now ~1 day of secrets work, not 1 week. Phase B is 60-70% closed. Phase C is partly closed. The 6-8 week V1 estimate is closer to **3-5 weeks** at current pace, dominated by C1 (secrets), C10 (deal→project wiring), C11 (offline sync), H20 (backup restore), the DealWorkspace cluster, and the V1 polish items. Several "small" items can be batched into single sessions (H2/H3/H4/H10/H11 are all small, all in different files — natural to bundle).
 
+#### Post-re-audit closures
+
+After the re-audit table above, the following items closed in subsequent commits. Table is left as the snapshot; this list tracks drift since.
+
+- **2026-05-07, commit `0483d8c`** — Small-fix bundle:
+  - **H2** ✓ ProjectDetailView no longer reloads on edit save. Added `onProjectUpdated` callback; route uses `setProject` from `useProjectContext()`.
+  - **H3** ✓ CreateProjectForm renovation sqft no longer races setState. Computes via local `finalFormData` var, passes to `onCreate` directly.
+  - **H4** ✓ SelectionSchedules GripVertical icon removed. Real dnd deferred until needed.
+  - **H10** ✓ ProFormaGenerator mode-switch confirms before changing. Dialog-based confirm via `pendingProFormaMode` state + `requestModeChange` helper.
+  - **H11** ✓ VendorQuotePortal re-checks expiry in `handleSubmit`, not just on load.
+  - **M11** ✓ `(window as any).refreshMyFeedback` replaced with module-scoped event bus at `src/lib/feedbackEventBus.ts`.
+
 ---
 
 ## PART 1 — COMPLETE FEATURE MAP
