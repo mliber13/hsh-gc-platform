@@ -7,6 +7,7 @@
 //
 
 import { supabase, isOnlineMode } from '@/lib/supabase'
+import { parseISO } from 'date-fns'
 import {
   Project,
   CreateProjectInput,
@@ -82,8 +83,8 @@ async function transformProject(row: any): Promise<Project> {
     state: row.state,
     zipCode: row.zip_code,
     client: row.client,
-    startDate: row.start_date ? new Date(row.start_date) : undefined,
-    endDate: row.end_date ? new Date(row.end_date) : undefined,
+    startDate: row.start_date ? parseISO(row.start_date) : undefined,
+    endDate: row.end_date ? parseISO(row.end_date) : undefined,
     metadata: row.metadata || {},
     specs: row.specs || undefined,
     qbProjectId: row.qb_project_id ?? undefined,
@@ -173,15 +174,15 @@ function mapScheduleItemRowToModel(row: ScheduleItemRow): ScheduleItem {
     description: row.description ?? undefined,
     trade: (row.trade as ScheduleItem['trade']) ?? undefined,
     estimateTradeId: row.estimate_trade_id ?? undefined,
-    startDate: new Date(row.start_date),
-    endDate: new Date(row.end_date),
+    startDate: parseISO(row.start_date),
+    endDate: parseISO(row.end_date),
     duration: row.duration,
     predecessorIds: predecessors.map((predecessor) => predecessor.predecessorId),
     predecessors,
     status: row.status,
     percentComplete: row.percent_complete,
-    actualStartDate: row.actual_start_date ? new Date(row.actual_start_date) : undefined,
-    actualEndDate: row.actual_end_date ? new Date(row.actual_end_date) : undefined,
+    actualStartDate: row.actual_start_date ? parseISO(row.actual_start_date) : undefined,
+    actualEndDate: row.actual_end_date ? parseISO(row.actual_end_date) : undefined,
     assignedTo: row.assigned_to ?? [],
     assignedCompanyId: row.assigned_company_id ?? null,
     notes: row.notes ?? undefined,
@@ -238,8 +239,8 @@ export async function fetchScheduleByProjectId(projectId: string): Promise<Proje
     return null
   }
 
-  const startDate = data.start_date ? new Date(data.start_date) : new Date()
-  const endDate = data.end_date ? new Date(data.end_date) : new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000)
+  const startDate = data.start_date ? parseISO(data.start_date) : new Date()
+  const endDate = data.end_date ? parseISO(data.end_date) : new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000)
   const items = Array.isArray(itemRows)
     ? itemRows.map((row) => mapScheduleItemRowToModel(row as ScheduleItemRow))
     : []
