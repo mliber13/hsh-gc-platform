@@ -35,8 +35,8 @@ function fallbackFromCode(): TradeCategoryRecord[] {
 export async function getTradeCategories(): Promise<TradeCategoryRecord[]> {
   if (!isOnlineMode()) return fallbackFromCode()
   const profile = await getCurrentUserProfile()
-  const organizationId = profile?.organization_id ?? 'default-org'
-  const rows = await fetchTradeCategoriesInDB(organizationId)
+  if (!profile?.organization_id) return fallbackFromCode()
+  const rows = await fetchTradeCategoriesInDB(profile.organization_id)
   if (rows.length === 0) return fallbackFromCode()
   return rows.map((r) => ({
     id: r.id,

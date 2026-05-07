@@ -1,11 +1,45 @@
 # HSH GC Platform — Full Codebase Audit
 
-**Date:** 2026-04-22
+**Date:** 2026-04-22 (snapshot — see CHANGELOG below for drift)
 **Stack:** React 19 + Vite 7 + TypeScript + Supabase (Postgres + RLS + Edge Functions) + Vercel + PWA
 **Scope:** 50+ components, 36 services, 24 type modules, 63 migrations, 15 edge functions, ~40K LOC app code
 **Overall production readiness:** ~65%. Phase 1 core (estimating, actuals, multi-user, reports) is live and working. Phase 2 (deal workspace, proforma, tenant pipeline, QR) is 50–80% complete with multiple half-wired features. Phase 3 (intelligence, notifications, backup restore) is not implemented.
 
 > **How to use this doc with Cursor:** Point Cursor at this file and ask it to work through Part 4 by phase, or cherry-pick numbered items (e.g. "Fix C6 and C7 from docs/AUDIT.md"). Every item references concrete file paths and line numbers.
+
+---
+
+## CHANGELOG / STATUS UPDATES
+
+The body of this doc is a 2026-04-22 snapshot. Items below have changed since. Always cross-check against `git log` and the actual code — body text is **not** rewritten as items close.
+
+### 2026-05-07 — Phase A quick-wins survey
+
+Items closed since the audit was written (most via A5-d/A5-e migrations, recent commits, or this session):
+
+- **C6** ✓ `MigratePlans.tsx` and `DataMigration.tsx` deleted; broken import gone.
+- **M2** ✓ `ProjectActuals.tsx.backup` removed from `src/components/`.
+- **L6** ✓ Vite boilerplate (`main.ts`, `counter.ts`, `style.css`, `typescript.svg`) removed.
+- **C2** ✓ All 17 edge functions ACTIVE on prod (verified via `supabase functions list` against `rvtdavpsvrhbktbxquzm`). Includes the two new meeting-digest functions from 2026-05-06.
+- **M22** ✓ `get_user_organization()`, `user_can_edit()`, `get_user_organization_uuid()` defined in migrations 002, 008, 20260424, 20260425, 20260429.
+- **C13** ✓ in code — all live `'default-org'` literal references retired from `tradeCategoryService.ts`, `sowService.ts`. Schema-side: `profiles.organization_id` and `sow_templates.organization_id` are now `uuid` columns (per A5-e migration 20260429_a5e_typeconvert.sql). Remaining `'default-org'` strings in `src/services/` are explanatory comments only.
+
+Phase A status: 6 of 7 items closed. **Only secrets rotation (item 1) remains** — that's its own dedicated session due to involving Supabase + QB credential rotation, Vercel env vars, and `git filter-repo` history purge.
+
+Items modified or surfaced this session:
+
+- **Updated risk on `backupService.ts`**: the old C13 framing ('default-org' breaks UUID validation) is no longer the issue, but a related risk now exists. Post-A5-e, `profiles.organization_id` is nullable for invite-first users. The existing `orgFilter` function falls through to an unfiltered SELECT when `organizationId` is null — for tenant-scoped tables this is a real cross-org leak. Worth a focused fix when next touching backups (likely Phase D when the restore TODO at `backupService.ts:415` lands).
+- **`qb-suggest-allocation` edge function**: deployed and ACTIVE on prod since 2026-02-27, never updated since. Other QB functions all updated 2026-05-06. Either dead code that should be undeployed, or quietly working with no callsite changes — investigate during Phase B's QB cleanup.
+
+Major scope shifts not in the original audit:
+
+- **Toast sweep underway** (Phase E item #37): ~30 of 176 `alert()` calls converted to `sonner` across recent commits (5a4527b, fe7eb9a). Substantial progress; many files still pending.
+- **Deal Workspace progress** (Phase C): nav restructured, light-mode color sweep, new `/deals` dashboard, ProForma chrome polish (commits 070d2bc, a81f698, bc59a62). The audit's 78% complete number is stale — closer to 85% on UX, though `convertDealToProjects()` (C10) is still not wired.
+- **Tenant pipeline** committed (was uncommitted in audit). Sample prospects removed.
+- **Schedule module**: `docs/SCHEDULE_TARGET_MODEL.md` dropped 2026-05-05 — major redesign planning doc reframing the schedule module around field communication. Pre-build artifact.
+- **New module: meeting workflow** shipped 2026-05-06 (org-internal tool, not a V1 launch blocker — outside audit scope). Lives in Meeting workspace alongside Projects/Deals/Tenants.
+
+Realistic V1 target adjustment: Phase A is now ~1 day of secrets work, not 1 week. Phases B and C are partially closed. Net effect: the 6-8 week V1 estimate is closer to 4-6 weeks if work continues at current pace.
 
 ---
 

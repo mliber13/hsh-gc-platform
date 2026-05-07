@@ -35,11 +35,7 @@ export async function fetchSOWTemplates(tradeCategory?: string): Promise<SOWTemp
     .eq('id', user.id)
     .single()
 
-  // Validate organization_id is a valid UUID
-  const organizationId = profile?.organization_id && 
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profile.organization_id)
-    ? profile.organization_id
-    : null
+  const organizationId = profile?.organization_id ?? null
 
   // Include user templates, organization templates, and system templates (user_id IS NULL)
   let query = supabase
@@ -143,21 +139,13 @@ export async function createSOWTemplate(input: CreateSOWTemplateInput): Promise<
     .eq('id', user.id)
     .single()
 
-  const organizationIdRaw = profile?.organization_id || null
-  const organizationId = organizationIdRaw === 'default-org' ? null : organizationIdRaw
-
-  // Validate organization_id - must be a valid UUID or null (exclude 'default-org' and other invalid values)
-  const validOrganizationId = organizationId && 
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(organizationId) &&
-    organizationId !== 'default-org'
-    ? organizationId
-    : null
+  const organizationId = profile?.organization_id ?? null
 
   const { data, error } = await supabase
     .from('sow_templates')
     .insert({
       user_id: user.id,
-      organization_id: validOrganizationId,
+      organization_id: organizationId,
       name: input.name,
       description: input.description || null,
       trade_category: input.tradeCategory || null,
@@ -260,8 +248,7 @@ export async function deleteSOWTemplate(templateId: string): Promise<boolean> {
     .eq('id', user.id)
     .single()
 
-  const organizationIdRaw = profile?.organization_id || null
-  const organizationId = organizationIdRaw === 'default-org' ? null : organizationIdRaw
+  const organizationId = profile?.organization_id ?? null
 
   // Load template to determine ownership
   const { data: template, error: fetchError } = await supabase
@@ -275,8 +262,7 @@ export async function deleteSOWTemplate(templateId: string): Promise<boolean> {
     return false
   }
 
-  const templateOrganizationId =
-    template.organization_id === 'default-org' ? null : template.organization_id
+  const templateOrganizationId = template.organization_id
 
   const canDelete =
     template.user_id === user.id ||
