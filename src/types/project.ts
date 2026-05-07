@@ -646,6 +646,7 @@ export interface ScheduleItem {
   
   // Resources
   assignedTo?: string[]     // Crew or subs
+  assignedCompanyId?: string | null
   
   // Notes
   notes?: string

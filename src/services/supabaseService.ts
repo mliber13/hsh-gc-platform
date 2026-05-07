@@ -113,6 +113,7 @@ type ScheduleItemRow = {
   actual_start_date: string | null
   actual_end_date: string | null
   assigned_to: string[] | null
+  assigned_company_id: string | null
   notes: string | null
 }
 
@@ -140,6 +141,7 @@ function mapScheduleItemRowToModel(row: ScheduleItemRow): ScheduleItem {
     actualStartDate: row.actual_start_date ? new Date(row.actual_start_date) : undefined,
     actualEndDate: row.actual_end_date ? new Date(row.actual_end_date) : undefined,
     assignedTo: row.assigned_to ?? [],
+    assignedCompanyId: row.assigned_company_id ?? null,
     notes: row.notes ?? undefined,
   }
 }
@@ -169,6 +171,7 @@ function mapScheduleItemModelToRowInput(
     actual_start_date: item.actualStartDate ? toISODate(item.actualStartDate) : null,
     actual_end_date: item.actualEndDate ? toISODate(item.actualEndDate) : null,
     assigned_to: item.assignedTo ?? [],
+    assigned_company_id: item.assignedCompanyId ?? null,
     notes: item.notes ?? null,
   }
 }
