@@ -13,57 +13,120 @@
 
 The body of this doc is a 2026-04-22 snapshot. Items below have changed since. Always cross-check against `git log` and the actual code — body text is **not** rewritten as items close.
 
-### 2026-05-07 — Phase A quick-wins survey
+### 2026-05-07 — Comprehensive re-audit (Part 2 C/H/M items)
 
-Items closed since the audit was written (most via A5-d/A5-e migrations, recent commits, or this session):
+The original audit body is significantly outpaced by recent commits. This entry replaces piecemeal status updates with a full re-verification of every Critical, High, and Medium item in Part 2 against the current codebase. Low items (L1-L10) and Parts 1/3/4 are out of scope here — they're aggregate hygiene or subjective scoring.
 
-- **C6** ✓ `MigratePlans.tsx` and `DataMigration.tsx` deleted; broken import gone.
-- **M2** ✓ `ProjectActuals.tsx.backup` removed from `src/components/`.
-- **L6** ✓ Vite boilerplate (`main.ts`, `counter.ts`, `style.css`, `typescript.svg`) removed.
-- **C2** ✓ All 17 edge functions ACTIVE on prod (verified via `supabase functions list` against `rvtdavpsvrhbktbxquzm`). Includes the two new meeting-digest functions from 2026-05-06.
-- **M22** ✓ `get_user_organization()`, `user_can_edit()`, `get_user_organization_uuid()` defined in migrations 002, 008, 20260424, 20260425, 20260429.
-- **C13** ✓ in code — all live `'default-org'` literal references retired from `tradeCategoryService.ts`, `sowService.ts`. Schema-side: `profiles.organization_id` and `sow_templates.organization_id` are now `uuid` columns (per A5-e migration 20260429_a5e_typeconvert.sql). Remaining `'default-org'` strings in `src/services/` are explanatory comments only.
+**Code changes that landed alongside this re-audit**:
+- `'default-org'` literal references retired from `tradeCategoryService.ts:38` and `sowService.ts` (4 spots) — closes C13 in code; the column-type conversion to uuid in A5-e migration was the schema half.
+- `MigratePlans.tsx`, `DataMigration.tsx`, `ProjectActuals.tsx.backup`, and the four Vite boilerplate files (`main.ts`, `counter.ts`, `style.css`, `typescript.svg`) were already gone — verified by direct filesystem check.
+- All 17 edge functions verified ACTIVE on prod via `supabase functions list` against `rvtdavpsvrhbktbxquzm`.
 
-Phase A status: 6 of 7 items closed. **Only secrets rotation (item 1) remains** — that's its own dedicated session due to involving Supabase + QB credential rotation, Vercel env vars, and `git filter-repo` history purge.
+#### Status table — all C/H/M items
 
-Items modified or surfaced this session:
+| ID | Status | Evidence | Recommendation |
+|---|---|---|---|
+| C1 | OPEN | `.env` still committed; no rotation evidence in commits | Phase A dedicated session — large |
+| C2 | DONE | All 17 functions ACTIVE on prod | — |
+| C3 | OPEN | `quickbooksService.ts:13` sandbox URL hardcoded (frontend); edge functions correctly env-switch via `_shared/qb.ts:10` | Frontend QB calls now go through edge functions — small (delete or env-switch) |
+| C4 | DONE | `_shared/qb.ts:24` `getValidQbToken()` refreshes via QB_TOKEN_ENDPOINT with 5-min buffer; all qb-* edge functions use it | — |
+| C5 | UNKNOWN | Migration `006_create_quote_documents_bucket.sql` exists but bucket runtime state requires Supabase Dashboard verification | Verify bucket on prod; small once verified |
+| C6 | DONE | `MigratePlans.tsx` + `DataMigration.tsx` deleted | — |
+| C7 | DONE | `ProjectForms.tsx:100-134` complete with `requireUserOrgId()` | — |
+| C8 | DONE | `EstimateTemplateEditor.tsx:191-251` merges via `setTrades((prev) => [...prev, ...newTrades])` at line 248 | — |
+| C9 | DONE | `TenantPipeline.tsx:465-497` handler wired to button at :637; route nav at `routes/index.tsx:582` | — |
+| C10 | OPEN | `convertDealToProjects` defined `dealService.ts:385`, no callsite in components — only grep hit is the definition | Wire UI button — medium |
+| C11 | OPEN | `actualsHybridService.ts:46` falls back to localStorage on Supabase failure with only `console.warn`; no offline→online sync queue exists | Build sync queue — large |
+| C12 | DONE | `ProjectForms.tsx:103,107` uses `requireUserOrgId()`, not `'default-org'` | — |
+| C13 | DONE | A5-e migration converted org_id to uuid; all live literal references retired from src/services/ this session | — |
+| H1 | WRONG-FRAMING | `duplicateProject` (`projectService.ts:319`) is sync localStorage-only; not async, so "not awaited" is moot. Real issue: localStorage-only function used in DB-backed flows — won't persist for online users | Promote to `_Hybrid` — medium |
+| H2 | OPEN | `ProjectDetailView.tsx:352` still uses `window.location.reload()` after edit save | Replace with state refetch — small |
+| H3 | OPEN | `CreateProjectForm.tsx:144-156` renovation sqft calc'd inside setState; `onCreate` runs synchronously before commit | Move calc out of setState — small |
+| H4 | OPEN | `SelectionSchedules.tsx:611` GripVertical with no draggable/onDragStart/onDrop handlers | Wire dnd or remove icon — small if remove, medium if wire |
+| H5 | OPEN | `PlanEditor.tsx:160-185` calls `addPlanDocument` without size/type checks | Add 20MB cap + mime allowlist — small |
+| H6 | PARTIAL | `ScheduleBuilder.tsx:124` uses fixed `duration = 5` (mitigated 0-day case), but no per-trade heuristic or user-editable | Editable default — small |
+| H7 | OPEN | `DealWorkspace.tsx:556-560` two-way sync exists via `applyGeneralDevLtcDebtSyncAfterMerge`, but desync structurally possible since both stored separately | Single source of truth — medium |
+| H8 | OPEN | `DealWorkspace.tsx:1373` `expandedPhaseRowId` is local `useState`, not persisted to `customStacks` | Persist — small |
+| H9 | OPEN | No `isDirty`/`unsavedChanges` flag in DealWorkspace | Add nav guard — medium |
+| H10 | OPEN | `ProFormaGenerator.tsx:3647,3653,3668` mode toggles call `setProFormaMode` directly, no confirm dialog | Add AlertDialog — small |
+| H11 | OPEN | `VendorQuotePortal.tsx:65-69` expiry checked on load only; `handleSubmit:110-154` does no expiry recheck | Re-check on submit — small |
+| H12 | WRONG-FRAMING | URL token now extracted via `useParams` (`VendorQuotePortal.tsx:27`); regex framing obsolete | — |
+| H13 | PARTIAL | `VendorQuotePortal.tsx:136` sets `totalAmount: calculateTotal()` from line items (correct path), but no validation on vendor-edited total | Hardening — small |
+| H14 | PARTIAL | `QuickBooksImport.tsx:340-344` tries qbProjectId first, then case-insensitive name fallback — collisions still possible | Explicit linker UI — medium |
+| H15 | OPEN | `quickbooksService.ts:73,90,127` still uses sessionStorage for OAuth state | Move to DB-backed/cookie — small |
+| H16 | DONE | `issuePOInDB` defined `supabaseService.ts:2529`, called from `PurchaseOrdersView.tsx:69` | — |
+| H17 | OPEN | No `source_trade_id` column anywhere except the audit doc itself | Add FK migration — medium |
+| H18 | OPEN | `ChangeOrders.tsx:443-444` has approved/rejected statuses but no rollup into project totals/variance | Wire into variance — medium |
+| H19 | OPEN | `actualsHybridService.ts:46,67,80` silent `console.warn` fallbacks, no toast/UI surface | Surface to user — small |
+| H20 | OPEN | `backupService.ts:415-422` still throws "Restore functionality coming soon" | Implement — large |
+| H21 | OPEN | `AuthContext.tsx:94-98` profile insert awaited but no error check; race with DB trigger possible | Add error handling + retry — small |
+| H22 | OPEN | `AuthContext.tsx:31-71` `needsNewPassword` cleared only via explicit `clearRecoveryMode()`. Trap if user navigates away mid-flow | Add timeout/escape — small |
+| H23 | OPEN | `VarianceReport.tsx:344` still `const tradeActual = 0 // TODO` | Load actuals per trade — medium |
+| H24 | OPEN | `usePermissions.ts:33` offline mode still grants `role: 'admin'` | Match online defaults — small |
+| H25 | OPEN | All 6 empty `catch (_) {}` still in `selectionBookService.ts:560,568,604,810,818,855`; `selectionScheduleService.ts:63` empty | Add logging — small |
+| H26 | DONE | `20260427_a5c2_c9_c10_meta_infra.sql:30-104` enables RLS + policies for `project_events`, `work_packages`, `org_team` | — |
+| M1 | OPEN | `ProjectDetailView.tsx` still has 2-3 console statements; majority cleared elsewhere | Remove — small |
+| M2 | DONE | `.backup` removed from `src/components/` | — |
+| M3 | DONE | `ProjectActuals.tsx:34-35` imports + `:706` UI calls reassign fns | — |
+| M4 | UNKNOWN | Forms count loaded once at `ProjectDetailView.tsx:286-299`; original `:138` line shifted | Likely DONE — verify |
+| M5 | OPEN | `TradeCategoryIcon` still has zero importers in src/ | Wire into headers — small |
+| M6 | OPEN | `types/itemTemplate.ts:37-38,61-62` both subcontractor fields still present | Pick one — small |
+| M7 | OPEN | `PlanLibrary.tsx` no pagination/loadMore | Add pagination — small |
+| M8 | PARTIAL | `SelectionBook.tsx:1296-1311` categoryOrder array maintained; visual reorder application unverified | Verify rendering uses order — small |
+| M9 | OPEN | No PDF export in `SelectionSchedules.tsx` | Add jspdf export — medium |
+| M10 | WRONG-FRAMING | `selectedDealId`, `costSummaryMoneyDraft`, `investorTermsPercentDraft` still defined and actively used | — |
+| M11 | OPEN | `(window as any).refreshMyFeedback` still exists — moved to `MyFeedback.tsx:118-120` and `routes/index.tsx:606-607` (audit's App.tsx:766 line is stale) | Lift state — small |
+| M12 | OPEN | `ContactDirectory.tsx` no CSV import; no email regex validation | Add — small |
+| M13 | WRONG-FRAMING | `PROSPECTS` const only used as offline-mode demo data | — |
+| M14 | WRONG-FRAMING | `FeedbackForm.tsx:80-89` getTypeIcon has working default branch (MessageSquare) for general-feedback | — |
+| M15 | UNKNOWN | Migration 028 enables RLS; org isolation policies need DB inspection | Verify policies — small |
+| M16 | OPEN | `quoteService.ts:268,287` defines viewed transition, but no formal status-transition guard | Add state machine — small |
+| M17 | OPEN | `dealReadiness.ts:383` still uses `Math.abs(phaseUnits - totalU) <= 1` absolute tolerance | Switch to percentage — small |
+| M18 | OPEN | `dealReadiness.ts:39-48` allows ltc=0 + debt=0 with no equity check | Add equity-source check — small |
+| M19 | OPEN | No plan-option-cost-rollup wiring between PlanEditor and estimate roll-up | Build rollup — medium |
+| M20 | OPEN | SOW stored as text in quote; no FK/version | Add FK — medium |
+| M21 | OPEN | `lastSyncedTotalRef` tracks contract value but no UI badge for last-synced | Add UI badge — small |
+| M22 | DONE | RLS helpers defined in 5 migrations | — |
 
-- **Updated risk on `backupService.ts`**: the old C13 framing ('default-org' breaks UUID validation) is no longer the issue, but a related risk now exists. Post-A5-e, `profiles.organization_id` is nullable for invite-first users. The existing `orgFilter` function falls through to an unfiltered SELECT when `organizationId` is null — for tenant-scoped tables this is a real cross-org leak. Worth a focused fix when next touching backups (likely Phase D when the restore TODO at `backupService.ts:415` lands).
-- **`qb-suggest-allocation` edge function**: deployed and ACTIVE on prod since 2026-02-27, never updated since. Other QB functions all updated 2026-05-06. Either dead code that should be undeployed, or quietly working with no callsite changes — investigate during Phase B's QB cleanup.
+#### Counts
 
-Major scope shifts not in the original audit:
+- **Critical**: 7 DONE, 5 OPEN, 1 UNKNOWN (C5)
+- **High**: 2 DONE, 19 OPEN, 3 PARTIAL (H6, H13, H14), 2 WRONG-FRAMING (H1, H12)
+- **Medium**: 3 DONE, 11 OPEN, 1 PARTIAL (M8), 3 WRONG-FRAMING (M10, M13, M14), 2 UNKNOWN (M4, M15)
 
-- **Toast sweep underway** (Phase E item #37): ~30 of 176 `alert()` calls converted to `sonner` across recent commits (5a4527b, fe7eb9a). Substantial progress; many files still pending.
-- **Deal Workspace progress** (Phase C): nav restructured, light-mode color sweep, new `/deals` dashboard, ProForma chrome polish (commits 070d2bc, a81f698, bc59a62). The audit's 78% complete number is stale — closer to 85% on UX, though `convertDealToProjects()` (C10) is still not wired.
-- **Tenant pipeline** committed (was uncommitted in audit). Sample prospects removed.
-- **Schedule module**: `docs/SCHEDULE_TARGET_MODEL.md` dropped 2026-05-05 — major redesign planning doc reframing the schedule module around field communication. Pre-build artifact.
-- **New module: meeting workflow** shipped 2026-05-06 (org-internal tool, not a V1 launch blocker — outside audit scope). Lives in Meeting workspace alongside Projects/Deals/Tenants.
+#### Top 5 V1 hit-list (impact × effort)
 
-Realistic V1 target adjustment: Phase A is now ~1 day of secrets work, not 1 week. Phases B and C are partially closed. Net effect: the 6-8 week V1 estimate is closer to 4-6 weeks if work continues at current pace.
+1. **C1** — Secrets rotation. Non-negotiable for launch. Large effort, dedicated session.
+2. **C10** — Wire `convertDealToProjects()`. Function exists; medium UI work; unblocks deal→project flow.
+3. **H10** — ProFormaGenerator mode-switch silently nukes data. Tiny fix (AlertDialog), high data-loss prevention value.
+4. **H11 + H13** — Vendor portal expiry-on-submit + total validation. Both tiny, both prevent bad-quote intake.
+5. **H4** — SelectionSchedules: either wire drag-drop or remove icon. Tiny "remove" path closes false affordance immediately.
 
-### 2026-05-07 — Phase B spot-check
+#### Patterns
 
-Surveyed several Phase B items the audit flagged as broken; most are already closed by subsequent commits. The audit body line numbers are also stale because files have been edited since 2026-04-22.
+- **All QB-back-half is fixed** by `_shared/qb.ts` token refresh. C4 done; C3 (sandbox URL on frontend) is mostly inert since calls go through edge functions.
+- **DealWorkspace state issues (H7-H10) all remain** — real but mostly small individual fixes; the system is stable.
+- **Several "never called" / "orphaned" claims were wrong**: `incrementSOWTemplateUseCount` IS called (`QuoteRequestForm.tsx:317`); `selectedDealId` and Draft state vars (M10) are actively used; `getTypeIcon` (M14) has a working default branch. Audit had pattern-matched stale code.
+- **All `'default-org'` literals are gone from live code** — only in comments now. C12/C13/M22 cluster fully closed by A5-d/A5-e plus this session.
 
-- **C7** ✓ `ProjectForms.createNewForm()` is fully implemented (`ProjectForms.tsx:100`). Uses `requireUserOrgId()`, inserts into `project_forms`, returns the row. Wired to multiple onClick handlers in the form-type selection grid.
-- **C8** ✓ `EstimateTemplateEditor` "Add from Library" merges correctly (`EstimateTemplateEditor.tsx:191-251`). `handleAddFromLibraryConfirm` builds `newTrades` from `addFromLibrarySelectedIds` and calls `setTrades((prev) => [...prev, ...newTrades])`. The audit's claim that "checkboxes don't merge into trades array" was wrong as of this audit date or has been fixed since.
-- **C9** ✓ `TenantPipeline` "Push to Deal Workspace" is fully wired. `handlePushToDealWorkspace` (`TenantPipeline.tsx:465`) maps prospect → `createDeal()`, button onClick at line 637, route wires `onOpenDealWorkspace={(dealId) => navigate('/deals/workspace/${dealId}')}` (`src/routes/index.tsx:582`). Button gated to `prospect.stage === 'LOI Signed'` only.
-- **M13** RECLASSIFIED — the `PROSPECTS` constant in `TenantPipeline.tsx:120` still exists but is only used in `loadProspects()` line 351 as offline-mode demo data. Not a production data leak. Defensible. The "remove before commit" framing assumed they'd be unconditionally rendered; they aren't.
+#### Issues the audit missed (surfaced during re-audit)
 
-Remaining Phase B item still genuinely broken:
+- `MyFeedback.tsx:118` still has `(window as any).refreshMyFeedback` — audit pointed at App.tsx:766 (refactored), but the global hack just moved.
+- `backupService.ts:89-91` `orgFilter` falls through to UNFILTERED select when `organizationId` is null — post-A5-e profiles can be null for invite-first users, creating a real cross-org backup leak. Should be promoted to a Critical item.
+- `usePermissions.ts:32` offline org_id is the literal string `'offline'` — could theoretically pass any UUID coercion path. Worth a defensive look.
+- `qb-suggest-allocation` edge function deployed and ACTIVE on prod since 2026-02-27, never updated since. Other QB functions all updated 2026-05-06. Either dead code or quietly working — investigate.
 
-- **H4** `SelectionSchedules.tsx` GripVertical icon at line 611, no `draggable` / `onDragStart` handlers in surrounding markup. Reorder UI affordance is still cosmetic-only. Real fix needed.
+#### Major scope shifts since the audit (not in C/H/M items)
 
-Other Phase B items not yet re-verified:
-- C11 (Actuals offline→online sync)
-- C12 (ProjectForms 'default-org' hardcode — likely already addressed by `requireUserOrgId()` adoption above)
-- H5 (PlanEditor file upload validation)
-- H6 (ScheduleBuilder duration regex hardcoded)
-- H7-H10 (DealWorkspace state issues)
-- H11-H13 (Vendor portal validation)
-- H14-H15 (QB OAuth)
+- **Toast sweep underway** (Part 3 #37 / Phase E): ~30 of 176 `alert()` calls converted to `sonner` (commits 5a4527b, fe7eb9a). Substantial progress.
+- **Deal Workspace progress** (Phase C): nav restructured, light-mode color sweep, new `/deals` dashboard, ProForma chrome polish. Audit's 78% complete number is stale — closer to 85% on UX, though C10 still open.
+- **Tenant pipeline** committed (was uncommitted in audit). Sample prospects are offline-only (M13 reclassified).
+- **Schedule module redesign**: `docs/SCHEDULE_TARGET_MODEL.md` dropped 2026-05-05. Pre-build artifact.
+- **New module: meeting workflow** shipped 2026-05-06 (org-internal tool, outside audit scope).
 
-Audit is significantly more outpaced than the 2026-04-22 snapshot suggests. **Recommend a focused re-audit pass before continuing to chase individual items**, otherwise we keep "fixing" things that don't need fixing. A quick re-audit (~half day) would yield a cleaner V1 work-list than line-item-chasing the original audit.
+#### Realistic V1 estimate
+
+Phase A is now ~1 day of secrets work, not 1 week. Phase B is 60-70% closed. Phase C is partly closed. The 6-8 week V1 estimate is closer to **3-5 weeks** at current pace, dominated by C1 (secrets), C10 (deal→project wiring), C11 (offline sync), H20 (backup restore), the DealWorkspace cluster, and the V1 polish items. Several "small" items can be batched into single sessions (H2/H3/H4/H10/H11 are all small, all in different files — natural to bundle).
 
 ---
 
