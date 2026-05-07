@@ -41,6 +41,30 @@ Major scope shifts not in the original audit:
 
 Realistic V1 target adjustment: Phase A is now ~1 day of secrets work, not 1 week. Phases B and C are partially closed. Net effect: the 6-8 week V1 estimate is closer to 4-6 weeks if work continues at current pace.
 
+### 2026-05-07 — Phase B spot-check
+
+Surveyed several Phase B items the audit flagged as broken; most are already closed by subsequent commits. The audit body line numbers are also stale because files have been edited since 2026-04-22.
+
+- **C7** ✓ `ProjectForms.createNewForm()` is fully implemented (`ProjectForms.tsx:100`). Uses `requireUserOrgId()`, inserts into `project_forms`, returns the row. Wired to multiple onClick handlers in the form-type selection grid.
+- **C8** ✓ `EstimateTemplateEditor` "Add from Library" merges correctly (`EstimateTemplateEditor.tsx:191-251`). `handleAddFromLibraryConfirm` builds `newTrades` from `addFromLibrarySelectedIds` and calls `setTrades((prev) => [...prev, ...newTrades])`. The audit's claim that "checkboxes don't merge into trades array" was wrong as of this audit date or has been fixed since.
+- **C9** ✓ `TenantPipeline` "Push to Deal Workspace" is fully wired. `handlePushToDealWorkspace` (`TenantPipeline.tsx:465`) maps prospect → `createDeal()`, button onClick at line 637, route wires `onOpenDealWorkspace={(dealId) => navigate('/deals/workspace/${dealId}')}` (`src/routes/index.tsx:582`). Button gated to `prospect.stage === 'LOI Signed'` only.
+- **M13** RECLASSIFIED — the `PROSPECTS` constant in `TenantPipeline.tsx:120` still exists but is only used in `loadProspects()` line 351 as offline-mode demo data. Not a production data leak. Defensible. The "remove before commit" framing assumed they'd be unconditionally rendered; they aren't.
+
+Remaining Phase B item still genuinely broken:
+
+- **H4** `SelectionSchedules.tsx` GripVertical icon at line 611, no `draggable` / `onDragStart` handlers in surrounding markup. Reorder UI affordance is still cosmetic-only. Real fix needed.
+
+Other Phase B items not yet re-verified:
+- C11 (Actuals offline→online sync)
+- C12 (ProjectForms 'default-org' hardcode — likely already addressed by `requireUserOrgId()` adoption above)
+- H5 (PlanEditor file upload validation)
+- H6 (ScheduleBuilder duration regex hardcoded)
+- H7-H10 (DealWorkspace state issues)
+- H11-H13 (Vendor portal validation)
+- H14-H15 (QB OAuth)
+
+Audit is significantly more outpaced than the 2026-04-22 snapshot suggests. **Recommend a focused re-audit pass before continuing to chase individual items**, otherwise we keep "fixing" things that don't need fixing. A quick re-audit (~half day) would yield a cleaner V1 work-list than line-item-chasing the original audit.
+
 ---
 
 ## PART 1 — COMPLETE FEATURE MAP
