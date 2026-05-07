@@ -52,6 +52,7 @@ import {
   addDays,
 } from 'date-fns'
 import { toLocalDate, toLocalEndOfDay, getItemColsForWeek as getItemColsForWeekUtil } from '@/lib/scheduleCalendarUtils'
+import { cascadeSchedule } from '@/lib/scheduleDateMath'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { toast } from 'sonner'
@@ -201,25 +202,14 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     setScheduleItems(items => {
       const updatedItems = items.map(item => {
         if (item.id === itemId) {
-          const updated = { ...item, ...updates }
-          
-          // Recalculate end date if duration or start date changed
-          if (updates.duration !== undefined || updates.startDate !== undefined) {
-            const startDate = updates.startDate || item.startDate
-            const duration = updates.duration || item.duration
-            const endDate = new Date(startDate)
-            endDate.setDate(endDate.getDate() + duration)
-            updated.endDate = endDate
-          }
-          
-          return updated
+          return { ...item, ...updates }
         }
         return item
       })
 
       // If duration or end date changed, cascade to dependent items
       if (updates.duration !== undefined || updates.startDate !== undefined) {
-        cascadeDateChanges(updatedItems, itemId)
+        return cascadeSchedule(updatedItems).items
       }
 
       return updatedItems
@@ -229,64 +219,12 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     setHasUnsavedChanges(true)
   }
 
-  // Cascade date changes to dependent items
-  const cascadeDateChanges = (items: ScheduleItem[], changedItemId: string) => {
-    const changedItem = items.find(i => i.id === changedItemId)
-    if (!changedItem) return
-
-    // Find items that depend on this one
-    const dependentItems = items.filter(item => 
-      item.predecessorIds.includes(changedItemId)
-    )
-
-    dependentItems.forEach(dependent => {
-      // Update start date to 1 day after predecessor ends
-      const newStartDate = new Date(changedItem.endDate)
-      newStartDate.setDate(newStartDate.getDate() + 1)
-      
-      dependent.startDate = newStartDate
-      
-      // Recalculate end date
-      const newEndDate = new Date(newStartDate)
-      newEndDate.setDate(newEndDate.getDate() + dependent.duration)
-      dependent.endDate = newEndDate
-
-      // Recursively cascade to items that depend on this one
-      cascadeDateChanges(items, dependent.id)
-    })
-  }
-
   const handleAutoCalculateDates = () => {
     if (!confirm('Auto-calculate start dates based on predecessors? This will adjust dates for items with dependencies.')) {
       return
     }
 
-    setScheduleItems(items => {
-      const updatedItems = [...items]
-      
-      // Process each item
-      updatedItems.forEach(item => {
-        if (item.predecessorIds.length > 0) {
-          // Find the predecessor
-          const predecessor = updatedItems.find(i => i.id === item.predecessorIds[0])
-          
-          if (predecessor && predecessor.endDate) {
-            // Start this item 1 day after predecessor ends
-            const newStartDate = new Date(predecessor.endDate)
-            newStartDate.setDate(newStartDate.getDate() + 1)
-            
-            item.startDate = newStartDate
-            
-            // Recalculate end date
-            const newEndDate = new Date(newStartDate)
-            newEndDate.setDate(newEndDate.getDate() + item.duration)
-            item.endDate = newEndDate
-          }
-        }
-      })
-      
-      return updatedItems
-    })
+    setScheduleItems((items) => cascadeSchedule(items).items)
     
     setHasUnsavedChanges(true)
   }
