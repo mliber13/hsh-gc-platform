@@ -133,36 +133,40 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Validate required fields
     if (!isRenovation && !formData.specs?.livingSquareFootage) {
       toast.info('Please enter the living square footage. This is required for new builds.')
       return
     }
-    
-    // For renovations, calculate living sqft if not set
+
+    // For renovations, derive living sqft from existing + new if not already set.
+    // Compute against the local var rather than going through setFormData, since
+    // setState is async and onCreate below would otherwise see stale data.
+    let finalFormData = formData
     if (isRenovation && !formData.specs?.livingSquareFootage) {
       const existing = formData.specs?.existingSquareFootage || 0
       const newSqft = formData.specs?.newSquareFootage || 0
       if (existing > 0 || newSqft > 0) {
-        setFormData(prev => ({
-          ...prev,
+        finalFormData = {
+          ...formData,
           specs: {
-            ...prev.specs,
+            ...formData.specs,
             livingSquareFootage: existing + newSqft,
           }
-        }))
+        }
+        setFormData(finalFormData)
       }
     }
-    
+
     // Check if selected plan has an estimate template
     if (selectedPlan?.estimateTemplateId) {
       onCreate({
-        ...formData,
+        ...finalFormData,
         estimateTemplateId: selectedPlan.estimateTemplateId
       })
     } else {
-      onCreate(formData)
+      onCreate(finalFormData)
     }
   }
 

@@ -90,6 +90,7 @@ interface ProjectDetailViewProps {
   onViewSelectionSchedules?: () => void
   onViewSchedule?: () => void
   onProjectDuplicated?: (project: Project) => void
+  onProjectUpdated?: (project: Project) => void
 }
 
 interface StatusVisual {
@@ -198,6 +199,7 @@ export function ProjectDetailView({
   onViewSelectionSchedules,
   onViewSchedule,
   onProjectDuplicated,
+  onProjectUpdated,
 }: ProjectDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editedProject, setEditedProject] = useState(project)
@@ -349,7 +351,7 @@ export function ProjectDetailView({
     })
     if (updated) {
       setIsEditing(false)
-      window.location.reload()
+      onProjectUpdated?.(updated)
     }
   }
 

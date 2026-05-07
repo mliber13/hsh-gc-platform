@@ -43,6 +43,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { X, Plus, Trash2, Download, FileText, Calendar, DollarSign } from 'lucide-react'
 import { buildDealSummary } from '@/services/proformaSummaryService'
 import { cn } from '@/lib/utils'
@@ -317,6 +325,13 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
   type ValueMethod = 'stabilized' | 'noi-based'
   const [valueMethod, setValueMethod] = useState<ValueMethod>('stabilized')
   const [proFormaMode, setProFormaMode] = useState<ProFormaMode>('general-development')
+  // Mode-switch confirm: switching modes can clear mode-specific fields, so
+  // we stage the desired mode here and ask for confirmation before applying.
+  const [pendingProFormaMode, setPendingProFormaMode] = useState<ProFormaMode | null>(null)
+  const requestModeChange = (next: ProFormaMode) => {
+    if (next === proFormaMode) return
+    setPendingProFormaMode(next)
+  }
   const [forSaleTotalUnits, setForSaleTotalUnits] = useState<number>(39)
   const [forSaleAverageSalePrice, setForSaleAverageSalePrice] = useState<number>(250000)
   const [forSalePresaleDepositPercent, setForSalePresaleDepositPercent] = useState<number>(5)
@@ -3644,13 +3659,13 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                       block
                       active={proFormaMode === 'rental-hold'}
                       label="Rental Hold"
-                      onClick={() => setProFormaMode('rental-hold')}
+                      onClick={() => requestModeChange('rental-hold')}
                     />
                     <ModeTabButton
                       block
                       active={proFormaMode !== 'rental-hold'}
                       label="Development"
-                      onClick={() => setProFormaMode('general-development')}
+                      onClick={() => requestModeChange('general-development')}
                     />
                   </div>
                 </div>
@@ -3665,7 +3680,7 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                         type="checkbox"
                         checked={isForSaleLocMode}
                         onChange={(e) =>
-                          setProFormaMode(e.target.checked ? 'for-sale-phased-loc' : 'general-development')
+                          requestModeChange(e.target.checked ? 'for-sale-phased-loc' : 'general-development')
                         }
                         className="h-4 w-4"
                       />
@@ -3675,6 +3690,37 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     </div>
                   </div>
                 )}
+
+                <Dialog
+                  open={pendingProFormaMode !== null}
+                  onOpenChange={(open) => {
+                    if (!open) setPendingProFormaMode(null)
+                  }}
+                >
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Switch pro forma mode?</DialogTitle>
+                      <DialogDescription>
+                        Switching modes may clear or hide fields specific to the current
+                        mode. Saved versions are preserved; in-progress edits since the
+                        last save may be lost.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setPendingProFormaMode(null)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          if (pendingProFormaMode) setProFormaMode(pendingProFormaMode)
+                          setPendingProFormaMode(null)
+                        }}
+                      >
+                        Switch mode
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
 
                 <div className="space-y-1.5 border-t border-slate-200 pt-2">
                   <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">Version</p>

@@ -41,6 +41,7 @@ import {
 } from '@/types/feedback'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePageTitle } from '@/contexts/PageTitleContext'
+import { onFeedbackChange } from '@/lib/feedbackEventBus'
 
 interface MyFeedbackProps {
   onBack: () => void
@@ -108,17 +109,13 @@ export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
     }
   }
 
-  // Expose refresh function to parent
+  // Subscribe to "feedback list changed" events so the FeedbackForm modal
+  // (mounted elsewhere) can trigger a refetch here without going through
+  // window globals.
   useEffect(() => {
-    // This will be called when component mounts or when parent triggers refresh
-    const handleRefresh = () => {
+    return onFeedbackChange(() => {
       loadFeedback()
-    }
-    // Store refresh function on window for parent to call if needed
-    ;(window as any).refreshMyFeedback = handleRefresh
-    return () => {
-      delete (window as any).refreshMyFeedback
-    }
+    })
   }, [])
 
   const loadFeedback = async () => {

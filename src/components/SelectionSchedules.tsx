@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
-  GripVertical,
   Image as ImageIcon,
   Library,
   PanelLeftClose,
@@ -608,10 +607,6 @@ export function SelectionSchedules({ project, onBack }: SelectionSchedulesProps)
                       className="group cursor-default rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm transition-shadow hover:border-slate-300 hover:shadow"
                     >
                       <div className="flex items-start gap-2">
-                        <GripVertical
-                          className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 group-hover:text-slate-400"
-                          aria-hidden
-                        />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             {item.swatch ? (

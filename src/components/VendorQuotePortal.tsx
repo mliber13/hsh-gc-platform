@@ -112,6 +112,14 @@ export function VendorQuotePortal({ token: tokenProp }: VendorQuotePortalProps =
 
     if (!quoteRequest || !token) return
 
+    // Re-check expiry at submit time. The initial check on load can be hours
+    // stale if the vendor leaves the form open before submitting.
+    if (quoteRequest.expiresAt && new Date(quoteRequest.expiresAt) < new Date()) {
+      setError('This quote request has expired')
+      toast.error('This quote request expired while you were filling it out.')
+      return
+    }
+
     // Validation
     if (!vendorName.trim() || !vendorEmail.trim()) {
       toast.info('Please enter your name and email')

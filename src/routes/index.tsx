@@ -90,6 +90,7 @@ import { DealsDashboard } from '@/components/DealsDashboard'
 import { TenantPipeline } from '@/components/TenantPipeline'
 import { MyFeedback } from '@/components/MyFeedback'
 import { FeedbackForm } from '@/components/FeedbackForm'
+import { emitFeedbackChange } from '@/lib/feedbackEventBus'
 import { PrivacyPolicy } from '@/components/PrivacyPolicy'
 import { TermsOfUse } from '@/components/TermsOfUse'
 import { MeetingPreRead } from '@/components/meeting/MeetingPreRead'
@@ -348,7 +349,7 @@ function CreateProjectRoute() {
 // ============================================================================
 
 function ProjectDetailRoute() {
-  const { project } = useProjectContext()
+  const { project, setProject } = useProjectContext()
   const navigate = useNavigate()
   return (
     <ProjectDetailView
@@ -366,6 +367,7 @@ function ProjectDetailRoute() {
       }
       onViewSchedule={() => navigate(`/projects/${project.id}/schedule`)}
       onProjectDuplicated={(newProject) => navigate(`/projects/${newProject.id}`)}
+      onProjectUpdated={setProject}
     />
   )
 }
@@ -603,9 +605,7 @@ function MyFeedbackRoute() {
           onClose={() => setShowFeedbackForm(false)}
           onSuccess={() => {
             setShowFeedbackForm(false)
-            if ((window as any).refreshMyFeedback) {
-              ;(window as any).refreshMyFeedback()
-            }
+            emitFeedbackChange()
             toast.success("Thank you for your feedback! We'll review it soon.")
           }}
         />
