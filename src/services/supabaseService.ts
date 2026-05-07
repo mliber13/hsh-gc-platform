@@ -94,30 +94,110 @@ async function transformProject(row: any): Promise<Project> {
   }
 }
 
-/** Parse schedule items from DB (dates may be ISO strings) */
-function parseScheduleItems(items: any[]): ScheduleItem[] {
-  if (!Array.isArray(items)) return []
-  return items.map((item: any) => ({
-    ...item,
+type ScheduleItemRow = {
+  id: string
+  schedule_id: string
+  project_id: string
+  organization_id: string
+  type: 'field' | 'office'
+  name: string
+  description: string | null
+  trade: string | null
+  estimate_trade_id: string | null
+  start_date: string
+  end_date: string
+  duration: number
+  predecessor_ids: string[] | null
+  status: 'not-started' | 'in-progress' | 'complete' | 'delayed'
+  percent_complete: number
+  actual_start_date: string | null
+  actual_end_date: string | null
+  assigned_to: string[] | null
+  notes: string | null
+}
+
+function toISODate(value: Date | string | undefined): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  if (typeof value === 'string' && value.length >= 10) return value.slice(0, 10)
+  return new Date().toISOString().slice(0, 10)
+}
+
+function mapScheduleItemRowToModel(row: ScheduleItemRow): ScheduleItem {
+  return {
+    id: row.id,
+    scheduleId: row.schedule_id,
+    type: row.type === 'office' ? 'office' : 'field',
+    name: row.name,
+    description: row.description ?? undefined,
+    trade: (row.trade as ScheduleItem['trade']) ?? undefined,
+    estimateTradeId: row.estimate_trade_id ?? undefined,
+    startDate: new Date(row.start_date),
+    endDate: new Date(row.end_date),
+    duration: row.duration,
+    predecessorIds: row.predecessor_ids ?? [],
+    status: row.status,
+    percentComplete: row.percent_complete,
+    actualStartDate: row.actual_start_date ? new Date(row.actual_start_date) : undefined,
+    actualEndDate: row.actual_end_date ? new Date(row.actual_end_date) : undefined,
+    assignedTo: row.assigned_to ?? [],
+    notes: row.notes ?? undefined,
+  }
+}
+
+function mapScheduleItemModelToRowInput(
+  item: ScheduleItem,
+  scheduleId: string,
+  projectId: string,
+  organizationId: string
+) {
+  return {
+    id: item.id,
+    schedule_id: scheduleId,
+    project_id: projectId,
+    organization_id: organizationId,
     type: item.type === 'office' ? 'office' : 'field',
-    startDate: item.startDate ? new Date(item.startDate) : new Date(),
-    endDate: item.endDate ? new Date(item.endDate) : new Date(),
-    actualStartDate: item.actualStartDate ? new Date(item.actualStartDate) : undefined,
-    actualEndDate: item.actualEndDate ? new Date(item.actualEndDate) : undefined,
-  }))
+    name: item.name,
+    description: item.description ?? null,
+    trade: item.trade ?? null,
+    estimate_trade_id: item.estimateTradeId ?? null,
+    start_date: toISODate(item.startDate),
+    end_date: toISODate(item.endDate),
+    duration: item.duration ?? 1,
+    predecessor_ids: item.predecessorIds ?? [],
+    status: item.status ?? 'not-started',
+    percent_complete: typeof item.percentComplete === 'number' ? item.percentComplete : 0,
+    actual_start_date: item.actualStartDate ? toISODate(item.actualStartDate) : null,
+    actual_end_date: item.actualEndDate ? toISODate(item.actualEndDate) : null,
+    assigned_to: item.assignedTo ?? [],
+    notes: item.notes ?? null,
+  }
 }
 
 export async function fetchScheduleByProjectId(projectId: string): Promise<ProjectSchedule | null> {
   if (!isOnlineMode()) return null
   const { data, error } = await supabase
     .from('schedules')
-    .select('*')
+    .select('id, start_date, end_date')
     .eq('project_id', projectId)
     .maybeSingle()
   if (error || !data) return null
+
+  const { data: itemRows, error: itemError } = await supabase
+    .from('schedule_items')
+    .select('*')
+    .eq('schedule_id', data.id)
+    .order('start_date', { ascending: true })
+    .order('created_at', { ascending: true })
+  if (itemError) {
+    console.error('Error fetching schedule items:', itemError)
+    return null
+  }
+
   const startDate = data.start_date ? new Date(data.start_date) : new Date()
   const endDate = data.end_date ? new Date(data.end_date) : new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000)
-  const items = parseScheduleItems(data.items || [])
+  const items = Array.isArray(itemRows)
+    ? itemRows.map((row) => mapScheduleItemRowToModel(row as ScheduleItemRow))
+    : []
   const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
   const now = Date.now()
   const daysElapsed = Math.ceil((now - startDate.getTime()) / (1000 * 60 * 60 * 24))
@@ -146,33 +226,61 @@ export async function upsertScheduleForProject(projectId: string, schedule: Proj
   if (!user) return
   const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single()
   if (!profile) return
-  const itemsJson = (schedule.items || []).map((item: ScheduleItem) => ({
-    ...item,
-    startDate: item.startDate instanceof Date ? item.startDate.toISOString() : item.startDate,
-    endDate: item.endDate instanceof Date ? item.endDate.toISOString() : item.endDate,
-    actualStartDate: item.actualStartDate instanceof Date ? item.actualStartDate.toISOString() : item.actualStartDate,
-    actualEndDate: item.actualEndDate instanceof Date ? item.actualEndDate.toISOString() : item.actualEndDate,
-  }))
   const { data: existing } = await supabase.from('schedules').select('id').eq('project_id', projectId).maybeSingle()
+  let scheduleId = existing?.id as string | undefined
   if (existing) {
-    await supabase
+    const { error: updateError } = await supabase
       .from('schedules')
       .update({
         start_date: schedule.startDate instanceof Date ? schedule.startDate.toISOString() : schedule.startDate,
         end_date: schedule.endDate instanceof Date ? schedule.endDate.toISOString() : schedule.endDate,
-        items: itemsJson,
         updated_at: new Date().toISOString(),
       })
       .eq('project_id', projectId)
+    if (updateError) {
+      console.error('Error updating schedule:', updateError)
+      return
+    }
   } else {
-    await supabase.from('schedules').insert({
-      project_id: projectId,
-      user_id: user.id,
-      organization_id: profile.organization_id,
-      start_date: schedule.startDate instanceof Date ? schedule.startDate.toISOString() : schedule.startDate,
-      end_date: schedule.endDate instanceof Date ? schedule.endDate.toISOString() : schedule.endDate,
-      items: itemsJson,
-    })
+    const { data: insertedSchedule, error: insertError } = await supabase
+      .from('schedules')
+      .insert({
+        project_id: projectId,
+        user_id: user.id,
+        organization_id: profile.organization_id,
+        start_date: schedule.startDate instanceof Date ? schedule.startDate.toISOString() : schedule.startDate,
+        end_date: schedule.endDate instanceof Date ? schedule.endDate.toISOString() : schedule.endDate,
+      })
+      .select('id')
+      .single()
+    if (insertError || !insertedSchedule) {
+      console.error('Error inserting schedule:', insertError)
+      return
+    }
+    scheduleId = insertedSchedule.id
+  }
+
+  if (!scheduleId) return
+
+  const { error: deleteError } = await supabase
+    .from('schedule_items')
+    .delete()
+    .eq('schedule_id', scheduleId)
+  if (deleteError) {
+    console.error('Error clearing schedule items:', deleteError)
+    return
+  }
+
+  const itemPayload = (schedule.items || []).map((item: ScheduleItem) =>
+    mapScheduleItemModelToRowInput(item, scheduleId as string, projectId, profile.organization_id as string)
+  )
+  if (itemPayload.length > 0) {
+    const { error: itemInsertError } = await supabase
+      .from('schedule_items')
+      .insert(itemPayload)
+    if (itemInsertError) {
+      console.error('Error writing schedule items:', itemInsertError)
+    }
   }
 }
 
