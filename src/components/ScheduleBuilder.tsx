@@ -137,6 +137,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
           endDate,
           duration,
           predecessorIds: [], // Can be set manually
+          predecessors: [],
           status: 'not-started',
           percentComplete: 0,
         })
@@ -181,6 +182,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
       endDate,
       duration,
       predecessorIds: [],
+      predecessors: [],
       status: 'not-started',
       percentComplete: 0,
     }])

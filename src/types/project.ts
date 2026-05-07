@@ -619,6 +619,11 @@ export interface ProjectSchedule {
 
 export type ScheduleItemType = 'field' | 'office'
 
+export interface SchedulePredecessor {
+  predecessorId: string
+  lagDays: number
+}
+
 export interface ScheduleItem {
   id: string
   scheduleId: string
@@ -636,7 +641,8 @@ export interface ScheduleItem {
   duration: number          // Days
   
   // Dependencies
-  predecessorIds: string[]  // Must complete before this starts
+  predecessorIds: string[]  // BACKWARD COMPAT — derived from predecessors
+  predecessors: SchedulePredecessor[]
   
   // Progress
   status: 'not-started' | 'in-progress' | 'complete' | 'delayed'

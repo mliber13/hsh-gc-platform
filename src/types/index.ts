@@ -58,6 +58,7 @@ export type {
   // Schedule
   ProjectSchedule,
   ScheduleItem,
+  SchedulePredecessor,
   ScheduleItemType,
   Milestone,
   

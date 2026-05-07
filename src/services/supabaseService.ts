@@ -24,6 +24,7 @@ import {
   DocumentType,
   ProjectSchedule,
   ScheduleItem,
+  SchedulePredecessor,
 } from '@/types'
 import {
   DealDocument,
@@ -108,6 +109,7 @@ type ScheduleItemRow = {
   end_date: string
   duration: number
   predecessor_ids: string[] | null
+  predecessors: unknown[] | null
   status: 'not-started' | 'in-progress' | 'complete' | 'delayed'
   percent_complete: number
   actual_start_date: string | null
@@ -117,13 +119,52 @@ type ScheduleItemRow = {
   notes: string | null
 }
 
+type SchedulePredecessorRow = {
+  predecessor_id: string
+  lag_days: number
+}
+
 function toISODate(value: Date | string | undefined): string {
   if (value instanceof Date) return value.toISOString().slice(0, 10)
   if (typeof value === 'string' && value.length >= 10) return value.slice(0, 10)
   return new Date().toISOString().slice(0, 10)
 }
 
+function mapSchedulePredecessorRowToModel(row: SchedulePredecessorRow): SchedulePredecessor | null {
+  if (!row?.predecessor_id) return null
+  return {
+    predecessorId: row.predecessor_id,
+    lagDays: Number.isFinite(row.lag_days) ? row.lag_days : 0,
+  }
+}
+
+function mapSchedulePredecessorModelToRow(
+  predecessor: SchedulePredecessor
+): SchedulePredecessorRow | null {
+  if (!predecessor?.predecessorId) return null
+  return {
+    predecessor_id: predecessor.predecessorId,
+    lag_days: Number.isFinite(predecessor.lagDays) ? predecessor.lagDays : 0,
+  }
+}
+
+function normalizeSchedulePredecessors(item: ScheduleItem): SchedulePredecessorRow[] {
+  if (Array.isArray(item.predecessors) && item.predecessors.length > 0) {
+    return item.predecessors
+      .map((predecessor) => mapSchedulePredecessorModelToRow(predecessor))
+      .filter((predecessor): predecessor is SchedulePredecessorRow => predecessor !== null)
+  }
+  return (item.predecessorIds ?? [])
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    .map((id) => ({ predecessor_id: id, lag_days: 0 }))
+}
+
 function mapScheduleItemRowToModel(row: ScheduleItemRow): ScheduleItem {
+  const predecessors = Array.isArray(row.predecessors)
+    ? row.predecessors
+      .map((predecessor) => mapSchedulePredecessorRowToModel(predecessor as SchedulePredecessorRow))
+      .filter((predecessor): predecessor is SchedulePredecessor => predecessor !== null)
+    : []
   return {
     id: row.id,
     scheduleId: row.schedule_id,
@@ -135,7 +176,8 @@ function mapScheduleItemRowToModel(row: ScheduleItemRow): ScheduleItem {
     startDate: new Date(row.start_date),
     endDate: new Date(row.end_date),
     duration: row.duration,
-    predecessorIds: row.predecessor_ids ?? [],
+    predecessorIds: predecessors.map((predecessor) => predecessor.predecessorId),
+    predecessors,
     status: row.status,
     percentComplete: row.percent_complete,
     actualStartDate: row.actual_start_date ? new Date(row.actual_start_date) : undefined,
@@ -165,7 +207,7 @@ function mapScheduleItemModelToRowInput(
     start_date: toISODate(item.startDate),
     end_date: toISODate(item.endDate),
     duration: item.duration ?? 1,
-    predecessor_ids: item.predecessorIds ?? [],
+    predecessors: normalizeSchedulePredecessors(item),
     status: item.status ?? 'not-started',
     percent_complete: typeof item.percentComplete === 'number' ? item.percentComplete : 0,
     actual_start_date: item.actualStartDate ? toISODate(item.actualStartDate) : null,
