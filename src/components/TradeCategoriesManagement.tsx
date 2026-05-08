@@ -104,20 +104,20 @@ export function TradeCategoriesEditor() {
     <Card>
           <CardHeader>
             <CardTitle>Trade categories</CardTitle>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Built-in categories are locked. Add your own (e.g. Flooring, Painting) for estimates and item library.
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
             {loading ? (
-              <p className="text-gray-500">Loading…</p>
+              <p className="text-muted-foreground">Loading…</p>
             ) : (
               <>
                 <ul className="space-y-2">
                   {systemFirst.map((c) => (
                     <li
                       key={c.id}
-                      className="flex items-center gap-3 py-2 px-3 rounded-lg border border-gray-200 bg-white overflow-hidden"
+                      className="flex items-center gap-3 py-2 px-3 rounded-lg border border-border/60 bg-card overflow-hidden"
                     >
                       <div
                         className="shrink-0 w-1.5 rounded-l-md"
@@ -142,7 +142,7 @@ export function TradeCategoriesEditor() {
                         ) : (
                           <>
                             <span className="font-medium">{c.label}</span>
-                            <span className="text-gray-400 text-sm ml-2">({c.key})</span>
+                            <span className="text-muted-foreground text-sm ml-2">({c.key})</span>
                           </>
                         )}
                       </div>
@@ -186,7 +186,7 @@ export function TradeCategoriesEditor() {
                   ))}
                 </ul>
                 {showAdd ? (
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                  <div className="rounded-lg border border-border/60 bg-muted/40 p-4 space-y-3">
                     <Label>New category</Label>
                     <div>
                       <Label className="text-xs">Label (e.g. Flooring)</Label>

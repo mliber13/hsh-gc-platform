@@ -411,7 +411,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-600 mb-3">
+            <p className="text-sm text-muted-foreground mb-3">
               Pull in material and subcontractor transactions from QuickBooks, then allocate them to a project and trade.
             </p>
             <Button onClick={handleOpen} variant="outline" className="w-full">
@@ -428,7 +428,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
               }}
               variant="ghost"
               size="sm"
-              className="w-full text-xs text-gray-500 mt-1"
+              className="w-full text-xs text-muted-foreground mt-1"
             >
               Debug QB fetch
             </Button>
@@ -480,10 +480,10 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
 
           {view === 'reconcile' && (
             <div className="overflow-auto flex-1 min-h-0 border-t pt-4">
-              <p className="text-sm text-gray-600 mb-3">
+              <p className="text-sm text-muted-foreground mb-3">
                 Compare app actuals to your QuickBooks report. Enter the total from the QBO Project Profitability (or job cost) report in the &quot;QBO total&quot; column to see variance.
               </p>
-              <p className="text-xs text-gray-500 mb-2">
+              <p className="text-xs text-muted-foreground mb-2">
                 &quot;Fill from QBO&quot; fills the column from the same transactions we sync (Bills, Purchases, etc.). It will match the app if everything is imported; for the official number from the QBO report, enter it manually.
               </p>
               <div className="flex items-center gap-2 mb-3">
@@ -545,13 +545,13 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
               </div>
               {loadingReconcile && (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                 </div>
               )}
               {!loadingReconcile && projects.length > 0 && (
                 <div className="border rounded overflow-auto max-h-[50vh]">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0">
+                    <thead className="bg-muted/40 sticky top-0">
                       <tr>
                         <th className="text-left p-2">Project</th>
                         <th className="text-right p-2">App total</th>
@@ -567,13 +567,13 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                         const variance = qboNum != null && !Number.isNaN(qboNum) ? qboNum - appTotal : null
                         const isLoadingVariance = loadingVariance === p.id
                         return (
-                          <tr key={p.id} className="border-t hover:bg-gray-50">
+                          <tr key={p.id} className="border-t hover:bg-muted/40">
                             <td className="p-2 font-medium">
                               <a
                                 href={projectActualsUrl(p.id)}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline inline-flex items-center gap-1"
+                                className="text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-1"
                               >
                                 {p.name}
                                 <ExternalLink className="w-3 h-3" />
@@ -595,7 +595,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                                   type="button"
                                   onClick={() => handleVarianceClick(p, variance)}
                                   disabled={isLoadingVariance}
-                                  className={`font-medium text-left hover:bg-gray-100 rounded px-1 -mx-1 ${variance > 0 ? 'text-amber-600' : variance < 0 ? 'text-green-600' : 'text-gray-600'}`}
+                                  className={`font-medium text-left hover:bg-muted rounded px-1 -mx-1 ${variance > 0 ? 'text-amber-600 dark:text-amber-400' : variance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}
                                   title="Click to find entries that match this variance"
                                 >
                                   {isLoadingVariance ? <Loader2 className="w-4 h-4 animate-spin inline" /> : <Search className="w-3.5 h-3.5 inline mr-0.5 opacity-70" />}
@@ -611,31 +611,31 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                 </div>
               )}
               {varianceTip && (
-                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
-                  <p className="font-medium text-blue-900 mb-1">
+                <div className="mt-3 p-3 bg-sky-500/10 border border-sky-500/30 rounded text-sm">
+                  <p className="font-medium text-sky-700 dark:text-sky-300 mb-1">
                     Variance {varianceTip.variance > 0 ? '+' : ''}{formatCurrency(varianceTip.variance)} on {varianceTip.projectName}
                   </p>
                   {varianceTip.entries.length > 0 ? (
                     <>
-                      <p className="text-blue-800 mb-1">Entry(ies) matching this amount (possible misassignment):</p>
-                      <ul className="list-disc list-inside text-blue-800 space-y-0.5 mb-2">
+                      <p className="text-sky-700 dark:text-sky-300 mb-1">Entry(ies) matching this amount (possible misassignment):</p>
+                      <ul className="list-disc list-inside text-sky-700 dark:text-sky-300 space-y-0.5 mb-2">
                         {varianceTip.entries.map((e, i) => (
                           <li key={i}>{e.type}: {e.description} — {formatCurrency(e.amount)}</li>
                         ))}
                       </ul>
                     </>
                   ) : (
-                    <p className="text-blue-700">No single entry matches this variance. Check multiple entries or the other project.</p>
+                    <p className="text-sky-700 dark:text-sky-300">No single entry matches this variance. Check multiple entries or the other project.</p>
                   )}
                   <a
                     href={projectActualsUrl(varianceTip.projectId)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-blue-600 hover:underline font-medium"
+                    className="inline-flex items-center gap-1 text-sky-600 dark:text-sky-400 hover:underline font-medium"
                   >
                     Open project actuals <ExternalLink className="w-3 h-3" />
                   </a>
-                  <button type="button" onClick={() => setVarianceTip(null)} className="ml-3 text-blue-600 hover:underline">
+                  <button type="button" onClick={() => setVarianceTip(null)} className="ml-3 text-sky-600 dark:text-sky-400 hover:underline">
                     Dismiss
                   </button>
                 </div>
@@ -646,14 +646,14 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
           {view === 'labor' && (
             <div className="overflow-auto flex-1 min-h-0 border-t pt-4 space-y-5">
               {error && (
-                <div className="p-2 rounded bg-amber-50 border border-amber-200">
-                  <p className="text-sm text-amber-800">{error}</p>
+                <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30">
+                  <p className="text-sm text-amber-700 dark:text-amber-300">{error}</p>
                 </div>
               )}
               {/* Configuration */}
               <section className="space-y-2">
-                <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Configuration</p>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Configuration</p>
+                <p className="text-sm text-muted-foreground">
                   Wage allocation account IDs from your QBO Chart of Accounts (one per line or comma-separated). Saved automatically when you click Save.
                 </p>
                 <textarea
@@ -662,7 +662,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                   value={laborWageAccountIds}
                   onChange={(e) => setLaborWageAccountIds(e.target.value)}
                 />
-                <p className="text-sm text-gray-600 mt-2">
+                <p className="text-sm text-muted-foreground mt-2">
                   Account IDs with no burden (e.g. 1099 subcontractors). Burden % will not be applied to these wage accounts.
                 </p>
                 <textarea
@@ -721,7 +721,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                     {laborAccountsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Search className="w-4 h-4 mr-1" />}
                     Select from QuickBooks
                   </Button>
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-muted-foreground">
                     {laborWageAccountCount} wage account{laborWageAccountCount !== 1 ? 's' : ''} configured
                     {laborNoBurdenAccountCount > 0 && (
                       <>, {laborNoBurdenAccountCount} no-burden (e.g. 1099)</>
@@ -732,17 +732,17 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
 
               {/* Default burden % */}
               <section className="space-y-2 border-t pt-4">
-                <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Default burden %</p>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Default burden %</p>
+                <p className="text-sm text-muted-foreground">
                   Applied to imported wages as estimated payroll burden (taxes, benefits, etc.). Used when you run Import labor.
                 </p>
                 {laborBurdenPercent != null && laborBurdenEffectiveDate && (
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-foreground">
                     Current: <strong>{laborBurdenPercent}%</strong> effective {laborBurdenEffectiveDate}
                   </p>
                 )}
                 {laborBurdenPercent == null && !laborBurdenEffectiveDate && (
-                  <p className="text-sm text-gray-500">Not set — imports will use 0% burden.</p>
+                  <p className="text-sm text-muted-foreground">Not set — imports will use 0% burden.</p>
                 )}
                 <div className="flex flex-wrap items-end gap-3">
                   <div>
@@ -829,7 +829,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                             {filtered.map((a) => (
                               <label
                                 key={a.id}
-                                className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                                className="flex items-center gap-2 p-2 hover:bg-muted/40 cursor-pointer border-b last:border-b-0"
                               >
                                 <input
                                   type="checkbox"
@@ -843,13 +843,13 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                                     })
                                   }}
                                 />
-                                <span className="font-mono text-gray-600">{a.accountNumber || '—'}</span>
+                                <span className="font-mono text-muted-foreground">{a.accountNumber || '—'}</span>
                                 <span>{a.name}</span>
-                                <span className="text-xs text-gray-400">({a.accountType})</span>
+                                <span className="text-xs text-muted-foreground">({a.accountType})</span>
                               </label>
                             ))}
                             {laborAccountsFromQB.length > 0 && filtered.length === 0 && (
-                              <p className="p-3 text-gray-500 text-sm">No accounts match your search.</p>
+                              <p className="p-3 text-muted-foreground text-sm">No accounts match your search.</p>
                             )}
                           </>
                         )
@@ -885,8 +885,8 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
 
               {/* Execution: date range, preview, confirm */}
               <section className="space-y-3 border-t pt-4">
-                <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Import</p>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Import</p>
+                <p className="text-sm text-muted-foreground">
                   Choose a date range, preview matching Journal Entry lines, then confirm to import.
                 </p>
                 <div className="flex flex-wrap items-end gap-3">
@@ -960,23 +960,23 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                   </Button>
                 </div>
                 {laborPreview && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-900">
+                  <div className="p-3 bg-sky-500/10 border border-sky-500/30 rounded text-sm text-sky-700 dark:text-sky-300">
                     <p className="font-medium mb-1">Preview</p>
-                    <ul className="space-y-0.5 text-blue-800">
+                    <ul className="space-y-0.5 text-sky-700 dark:text-sky-300">
                       <li>Journal entries found: {laborPreview.journalEntriesFound}</li>
                       <li>Matching wage lines (with project): {laborPreview.matchingWageLines}</li>
                       <li>Total gross wages: {formatCurrency(laborPreview.totalGrossWages)}</li>
                       <li>Distinct projects affected: {laborPreview.distinctProjectsAffected}</li>
                     </ul>
                     {laborPreview.journalEntriesFound === 0 && (
-                      <p className="mt-2 text-blue-700 text-xs">
+                      <p className="mt-2 text-sky-700 dark:text-sky-300 text-xs">
                         No journal entries in QuickBooks for this date range. Try a different range or confirm JEs exist in QBO.
                       </p>
                     )}
                   </div>
                 )}
                 {laborResult && (
-                  <div className={`p-3 rounded text-sm ${laborResult.rowCount > 0 ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-amber-50 border border-amber-200 text-amber-800'}`}>
+                  <div className={`p-3 rounded text-sm ${laborResult.rowCount > 0 ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300'}`}>
                     {laborResult.rowCount > 0 ? (
                       <>
                         Imported {laborResult.rowCount} row(s), {formatCurrency(laborResult.totalWages)} total wages.
@@ -992,16 +992,16 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
               {/* Last import summary */}
               {laborBatches.length > 0 && (
                 <section className="border-t pt-4">
-                  <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Last import</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Last import</p>
                   {(() => {
                     const last = laborBatches[0]
                     return (
-                      <div className="text-sm text-gray-700">
+                      <div className="text-sm text-foreground">
                         <span>
                           {last.periodStart}–{last.periodEnd}: {last.rowCount} rows, {formatCurrency(last.totalWages)}
                           {last.errorCount > 0 && ` (${last.errorCount} skipped)`}
                         </span>
-                        <span className={last.status === 'failed' ? ' text-red-600 font-medium' : ''}>
+                        <span className={last.status === 'failed' ? ' text-destructive font-medium' : ''}>
                           {' '}
                           — {last.status === 'failed' ? 'Failed' : 'Completed'}
                         </span>
@@ -1009,7 +1009,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                     )
                   })()}
                   {laborBatches.length > 1 && (
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Previous: {laborBatches.slice(1, 4).map((b) => `${b.periodStart}–${b.periodEnd}`).join('; ')}
                     </p>
                   )}
@@ -1035,7 +1035,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-xs text-gray-500"
+                  className="text-xs text-muted-foreground"
                   disabled={loading}
                   onClick={async () => {
                     const result = await getQBJobTransactions(true, includeUnassigned)
@@ -1087,17 +1087,17 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
               </div>
               {loading && (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                 </div>
               )}
               {error && (
                 <div className="mb-2 space-y-2">
-                  <p className="text-sm text-amber-600 bg-amber-50 p-2 rounded">{error}</p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/30 p-2 rounded">{error}</p>
                   {help && (
-                    <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-200 whitespace-pre-wrap">{help}</p>
+                    <p className="text-sm text-foreground bg-muted/40 p-2 rounded border border-border/60 whitespace-pre-wrap">{help}</p>
                   )}
                   {(yourAccounts.length > 0 || yourClasses.length > 0) && (
-                    <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded border border-gray-200 space-y-1">
+                    <div className="text-xs text-muted-foreground bg-muted/40 p-2 rounded border border-border/60 space-y-1">
                       {yourAccounts.length > 0 && (
                         <p><strong>Your QuickBooks accounts:</strong> {yourAccounts.map(a => `${a.name} (${a.type})`).join(', ')}</p>
                       )}
@@ -1110,12 +1110,12 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                 </div>
               )}
               {!loading && transactions.length === 0 && !error && (
-                <p className="text-sm text-gray-500 py-4">No pending transactions. Add bills or expenses to Job Materials, Subcontractor Expense, or Utilities in QuickBooks.</p>
+                <p className="text-sm text-muted-foreground py-4">No pending transactions. Add bills or expenses to Job Materials, Subcontractor Expense, or Utilities in QuickBooks.</p>
               )}
               {!loading && transactions.length > 0 && (
                 <div className="border rounded overflow-auto max-h-[50vh]">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0">
+                    <thead className="bg-muted/40 sticky top-0">
                       <tr>
                         <th className="text-left p-2">Vendor</th>
                         <th className="text-left p-2">Date</th>
@@ -1129,7 +1129,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                     </thead>
                     <tbody>
                       {transactions.map((txn) => (
-                        <tr key={`${txn.qbTransactionType}:${txn.qbTransactionId}:${txn.qbLineId ?? ''}`} className="border-t hover:bg-gray-50">
+                        <tr key={`${txn.qbTransactionType}:${txn.qbTransactionId}:${txn.qbLineId ?? ''}`} className="border-t hover:bg-muted/40">
                           <td className="p-2">{txn.vendorName}</td>
                           <td className="p-2">{txn.txnDate}</td>
                           <td className="p-2">{txn.docNumber || '—'}</td>
@@ -1157,12 +1157,12 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
 
           {view === 'pending' && step === 'allocate' && selectedTxn && (
             <div className="space-y-4 overflow-auto">
-              <div className="p-3 bg-gray-50 rounded text-sm space-y-1">
+              <div className="p-3 bg-muted/40 rounded text-sm space-y-1">
                 <div>
                   <strong>{selectedTxn.vendorName}</strong> · {selectedTxn.txnDate} · {selectedTxn.docNumber || '—'} · ${Math.abs(selectedTxn.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
                 {selectedTxn.description && (
-                  <div className="text-gray-700">Description: {selectedTxn.description}</div>
+                  <div className="text-foreground">Description: {selectedTxn.description}</div>
                 )}
               </div>
               <div className="grid gap-3">

@@ -333,10 +333,10 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0E79C9]"></div>
-          <p className="mt-4 text-gray-500">Loading template...</p>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="mt-4 text-muted-foreground">Loading template...</p>
         </div>
       </div>
     )
@@ -347,16 +347,16 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-white shadow-md border-b border-gray-200">
+      <header className="bg-card shadow-sm border-b border-border/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <img src={hshLogo} alt="HSH Contractor" className="h-16 w-auto" />
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Edit Template: {template.name}</h1>
-                <p className="text-sm text-gray-600">{template.description || 'No description'}</p>
+                <h1 className="text-2xl font-bold text-foreground">Edit Template: {template.name}</h1>
+                <p className="text-sm text-muted-foreground">{template.description || 'No description'}</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -378,26 +378,26 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardContent className="pt-6">
-              <p className="text-sm text-gray-600">Base Price Total</p>
-              <p className="text-2xl font-bold text-[#0E79C9]">{formatCurrency(totals.basePriceTotal)}</p>
+              <p className="text-sm text-muted-foreground">Base Price Total</p>
+              <p className="text-2xl font-bold text-sky-600 dark:text-sky-400">{formatCurrency(totals.basePriceTotal)}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
-              <p className="text-sm text-gray-600">Gross Profit Total</p>
-              <p className="text-2xl font-bold text-[#D95C00]">{formatCurrency(totals.grossProfitTotal)}</p>
+              <p className="text-sm text-muted-foreground">Gross Profit Total</p>
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totals.grossProfitTotal)}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
-              <p className="text-sm text-gray-600">Contingency</p>
-              <p className="text-2xl font-bold text-[#D95C00]">{formatCurrency(totals.contingency)}</p>
+              <p className="text-sm text-muted-foreground">Contingency</p>
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totals.contingency)}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
-              <p className="text-sm text-gray-600">Total Estimated</p>
-              <p className="text-2xl font-bold text-[#34AB8A]">{formatCurrency(totals.totalEstimated)}</p>
+              <p className="text-sm text-muted-foreground">Total Estimated</p>
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(totals.totalEstimated)}</p>
             </CardContent>
           </Card>
         </div>
@@ -422,7 +422,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
           <CardContent>
             {trades.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-gray-600 mb-4">No items in this template</p>
+                <p className="text-muted-foreground mb-4">No items in this template</p>
                 <Button onClick={handleAddTrade}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add First Item
@@ -436,7 +436,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
                   const categoryTotal = categoryTrades.reduce((sum, t) => sum + t.totalCost, 0)
 
                   return (
-                    <div key={category} className="flex rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm">
+                    <div key={category} className="flex rounded-lg border border-border/60 bg-card overflow-hidden shadow-sm">
                       <div
                         className="shrink-0 w-1.5 rounded-l-md"
                         style={{ backgroundColor: getCategoryAccentColor(category) }}
@@ -446,67 +446,67 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
                         <button
                           type="button"
                           onClick={() => toggleCategory(category)}
-                          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+                          className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/40 transition-colors text-left"
                         >
                           <div className="flex items-center gap-3">
                             <div className="text-left">
-                              <p className="font-semibold text-gray-900">
+                              <p className="font-semibold text-foreground">
                                 {byKey[category]?.label || category}
                               </p>
-                              <p className="text-xs text-gray-500">{categoryTrades.length} items</p>
+                              <p className="text-xs text-muted-foreground">{categoryTrades.length} items</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="text-right">
-                              <p className="text-xs text-gray-500">Base Total</p>
-                              <p className="text-sm font-semibold text-gray-900">{formatCurrency(categoryTotal)}</p>
+                              <p className="text-xs text-muted-foreground">Base Total</p>
+                              <p className="text-sm font-semibold text-foreground">{formatCurrency(categoryTotal)}</p>
                             </div>
                             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                           </div>
                         </button>
 
                         {isExpanded && (
-                          <div className="border-t border-gray-200 bg-gray-50 px-3 py-2">
+                          <div className="border-t border-border/60 bg-muted/40 px-3 py-2">
                             <div className="overflow-x-auto">
                               <table className="w-full border-collapse text-xs sm:text-sm">
                                 <thead>
-                                  <tr className="bg-gray-100 text-gray-600">
-                                    <th className="p-2 text-left border-b border-r border-gray-300">Item</th>
-                                    <th className="p-2 text-center border-b border-r border-gray-300">Qty</th>
-                                    <th className="p-2 text-center border-b border-r border-gray-300">Unit</th>
-                                    <th className="p-2 text-center border-b border-r border-gray-300" title="Material $/unit">Mat $/u</th>
-                                    <th className="p-2 text-center border-b border-r border-gray-300" title="Labor $/unit">Lab $/u</th>
-                                    <th className="p-2 text-center border-b border-r border-gray-300" title="Subcontractor $/unit">Sub $/u</th>
-                                    <th className="p-2 text-center border-b border-r border-gray-300">Material</th>
-                                    <th className="p-2 text-center border-b border-r border-gray-300">Labor</th>
-                                    <th className="p-2 text-center border-b border-r border-gray-300">Sub</th>
-                                    <th className="p-2 text-center border-b border-r border-gray-300">Total</th>
-                                    <th className="p-2 text-center border-b border-r border-gray-300">Markup %</th>
-                                    <th className="p-2 text-center border-b border-gray-300">Actions</th>
+                                  <tr className="bg-muted text-muted-foreground">
+                                    <th className="p-2 text-left border-b border-r border-border/60">Item</th>
+                                    <th className="p-2 text-center border-b border-r border-border/60">Qty</th>
+                                    <th className="p-2 text-center border-b border-r border-border/60">Unit</th>
+                                    <th className="p-2 text-center border-b border-r border-border/60" title="Material $/unit">Mat $/u</th>
+                                    <th className="p-2 text-center border-b border-r border-border/60" title="Labor $/unit">Lab $/u</th>
+                                    <th className="p-2 text-center border-b border-r border-border/60" title="Subcontractor $/unit">Sub $/u</th>
+                                    <th className="p-2 text-center border-b border-r border-border/60">Material</th>
+                                    <th className="p-2 text-center border-b border-r border-border/60">Labor</th>
+                                    <th className="p-2 text-center border-b border-r border-border/60">Sub</th>
+                                    <th className="p-2 text-center border-b border-r border-border/60">Total</th>
+                                    <th className="p-2 text-center border-b border-r border-border/60">Markup %</th>
+                                    <th className="p-2 text-center border-b border-border/60">Actions</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {categoryTrades.map((trade) => (
-                                    <tr key={trade.tempId} className="bg-white hover:bg-gray-50">
-                                      <td className="p-2 border-b border-r border-gray-200">
-                                        <div className="truncate font-medium text-gray-900">{trade.name}</div>
+                                    <tr key={trade.tempId} className="bg-card hover:bg-muted/40">
+                                      <td className="p-2 border-b border-r border-border/60">
+                                        <div className="truncate font-medium text-foreground">{trade.name}</div>
                                         {trade.description && (
-                                          <div className="text-[11px] text-gray-500 truncate">{trade.description}</div>
+                                          <div className="text-[11px] text-muted-foreground truncate">{trade.description}</div>
                                         )}
                                       </td>
-                                      <td className="p-2 text-center border-b border-r border-gray-200">{trade.quantity}</td>
-                                      <td className="p-2 text-center border-b border-r border-gray-200">{trade.unit}</td>
-                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.materialRate ?? 0)}</td>
-                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.laborRate ?? 0)}</td>
-                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.subcontractorRate ?? 0)}</td>
-                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.materialCost)}</td>
-                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.laborCost)}</td>
-                                      <td className="p-2 text-center border-b border-r border-gray-200">{formatCurrency(trade.subcontractorCost)}</td>
-                                      <td className="p-2 text-center border-b border-r border-gray-200 font-semibold">{formatCurrency(trade.totalCost)}</td>
-                                      <td className="p-2 text-center border-b border-r border-gray-200">
+                                      <td className="p-2 text-center border-b border-r border-border/60">{trade.quantity}</td>
+                                      <td className="p-2 text-center border-b border-r border-border/60">{trade.unit}</td>
+                                      <td className="p-2 text-center border-b border-r border-border/60">{formatCurrency(trade.materialRate ?? 0)}</td>
+                                      <td className="p-2 text-center border-b border-r border-border/60">{formatCurrency(trade.laborRate ?? 0)}</td>
+                                      <td className="p-2 text-center border-b border-r border-border/60">{formatCurrency(trade.subcontractorRate ?? 0)}</td>
+                                      <td className="p-2 text-center border-b border-r border-border/60">{formatCurrency(trade.materialCost)}</td>
+                                      <td className="p-2 text-center border-b border-r border-border/60">{formatCurrency(trade.laborCost)}</td>
+                                      <td className="p-2 text-center border-b border-r border-border/60">{formatCurrency(trade.subcontractorCost)}</td>
+                                      <td className="p-2 text-center border-b border-r border-border/60 font-semibold">{formatCurrency(trade.totalCost)}</td>
+                                      <td className="p-2 text-center border-b border-r border-border/60">
                                         {trade.markupPercent || effectiveDefaultMarkup}%
                                       </td>
-                                      <td className="p-2 text-center border-b border-gray-200">
+                                      <td className="p-2 text-center border-b border-border/60">
                                         <div className="flex gap-1 justify-center">
                                           <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleEditTrade(trade)}>
                                             <Edit className="w-3 h-3" />
@@ -539,7 +539,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
           <DialogHeader>
             <DialogTitle>Add items from library</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-muted-foreground">
             Choose a category, then select one or more items to add to this template at once.
           </p>
           <div>
@@ -560,7 +560,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <button
               type="button"
               onClick={selectAllAddFromLibrary}
@@ -584,7 +584,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
           </div>
           <div className="border rounded-lg overflow-auto flex-1 min-h-[200px] max-h-[40vh]">
             {addFromLibraryTemplates.length === 0 ? (
-              <div className="p-6 text-center text-gray-500">
+              <div className="p-6 text-center text-muted-foreground">
                 {addFromLibraryCategory
                   ? 'No items in this category. Add items in Estimate Library first.'
                   : 'Select a category to see items.'}
@@ -593,15 +593,15 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
               <ul className="divide-y divide-gray-100">
                 {addFromLibraryTemplates.map((t) => (
                   <li key={t.id}>
-                    <label className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 cursor-pointer">
+                    <label className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={addFromLibrarySelectedIds.has(t.id)}
                         onChange={() => toggleAddFromLibrarySelection(t.id)}
-                        className="rounded border-gray-300 h-4 w-4 text-primary focus:ring-primary"
+                        className="rounded border-border h-4 w-4 text-primary focus:ring-primary"
                       />
-                      <span className="font-medium text-gray-900 flex-1 truncate">{t.name}</span>
-                      <span className="text-xs text-gray-500 shrink-0">
+                      <span className="font-medium text-foreground flex-1 truncate">{t.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">
                         {UNIT_TYPES[t.defaultUnit]?.abbreviation ?? t.defaultUnit}
                       </span>
                     </label>
@@ -1080,7 +1080,7 @@ function TradeFormDialog({
                             size="sm"
                             onClick={() => setFormData(prev => ({ ...prev, subItems: (prev.subItems ?? []).filter(s => s.id !== sub.id) }))}
                           >
-                            <Trash2 className="w-4 h-4 text-red-600" />
+                            <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
                         </div>
                       </li>
@@ -1110,7 +1110,7 @@ function TradeFormDialog({
           <Card className="w-full max-w-md">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg">Add trade category</CardTitle>
-              <p className="text-sm text-gray-500">Add a new category for estimates and the item library.</p>
+              <p className="text-sm text-muted-foreground">Add a new category for estimates and the item library.</p>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCreateCategory} className="space-y-4">
@@ -1127,15 +1127,15 @@ function TradeFormDialog({
                   />
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Key (optional)</Label>
+                  <Label className="text-xs text-muted-foreground">Key (optional)</Label>
                   <Input
                     value={createCategoryKey}
                     onChange={(e) => setCreateCategoryKey(e.target.value)}
                     placeholder="e.g. flooring — auto-filled from label"
                   />
-                  <p className="text-xs text-gray-400 mt-1">Internal ID used in data. Leave blank to use a safe version of the label.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Internal ID used in data. Leave blank to use a safe version of the label.</p>
                 </div>
-                {createCategoryError && <p className="text-sm text-red-600">{createCategoryError}</p>}
+                {createCategoryError && <p className="text-sm text-destructive">{createCategoryError}</p>}
                 <div className="flex justify-end gap-2 pt-2">
                   <Button type="button" variant="outline" onClick={() => setShowCreateCategoryModal(false)}>Cancel</Button>
                   <Button type="submit" disabled={createCategorySaving || !createCategoryLabel.trim()}>
@@ -1154,7 +1154,7 @@ function TradeFormDialog({
           <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg">Add to item library</CardTitle>
-              <p className="text-sm text-gray-500">Save this as a reusable item template and apply to this line.</p>
+              <p className="text-sm text-muted-foreground">Save this as a reusable item template and apply to this line.</p>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCreateItemTemplate} className="space-y-4">
