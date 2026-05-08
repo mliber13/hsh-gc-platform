@@ -2463,8 +2463,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
       )
       setProjection(proj)
       setStage('proforma')
-      setCenterTab('proforma')
-      setProformaView('memo')
+      selectCenterTab('dashboard')
       setRunPromptReason(null)
       setMarkers((prev) => [...prev, { id: uid(), stage: 'proforma', createdAt: new Date().toISOString() }])
       appendActivity('proforma_run', 'Ran ProForma projection.')
@@ -2479,7 +2478,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
           createdAt: new Date().toISOString(),
         },
       ])
-      setCenterTab('overview')
+      selectCenterTab('assumptions')
     } finally {
       setRunning(false)
     }
