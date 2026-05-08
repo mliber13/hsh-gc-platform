@@ -48,6 +48,7 @@ interface EstimateTemplateEditorProps {
 // Trade with temporary ID for editing
 interface EditableTrade extends Omit<Trade, 'id' | 'estimateId' | 'createdAt' | 'updatedAt'> {
   tempId: string // Temporary ID for editing
+  pendingReview?: boolean
 }
 
 export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateTemplateEditorProps) {
@@ -79,6 +80,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
         const editableTrades: EditableTrade[] = loadedTemplate.trades.map((trade, index) => ({
           ...trade,
           tempId: `temp_${index}_${Date.now()}`,
+          pendingReview: false,
           subItems: (trade as { subItems?: Array<Partial<SubItem> & { id?: string; tradeId?: string }> }).subItems?.map((sub, si) => ({
             ...sub,
             id: sub.id || `tempSub_${index}_${si}`,
@@ -124,6 +126,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
   const handleAddTrade = () => {
     const newTrade: EditableTrade = {
       tempId: `temp_new_${Date.now()}`,
+      pendingReview: false,
       category: 'site-prep',
       name: '',
       description: '',
@@ -225,6 +228,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
       })
       return {
         tempId: `temp_lib_${t.id}_${Date.now()}_${i}`,
+        pendingReview: true,
         category: t.category,
         name: t.name,
         description: t.description ?? '',
@@ -251,10 +255,11 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
   }
 
   const handleSaveTrade = (tradeData: EditableTrade) => {
+    const updatedTrade = { ...tradeData, pendingReview: false }
     if (isAddingTrade) {
-      setTrades(prev => [...prev, tradeData])
+      setTrades(prev => [...prev, updatedTrade])
     } else {
-      setTrades(prev => prev.map(t => t.tempId === tradeData.tempId ? tradeData : t))
+      setTrades(prev => prev.map(t => t.tempId === tradeData.tempId ? updatedTrade : t))
     }
     setEditingTrade(null)
     setIsAddingTrade(false)
@@ -266,7 +271,7 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
     setSaving(true)
     try {
       // Convert editable trades back to template format (remove tempId only; keep full subItems shape)
-      const templateTrades = trades.map(({ tempId, ...trade }) => trade)
+      const templateTrades = trades.map(({ tempId, pendingReview, ...trade }) => trade)
 
       const updates: UpdatePlanEstimateTemplateInput = {
         trades: templateTrades,
@@ -489,7 +494,14 @@ export function EstimateTemplateEditor({ templateId, onBack, onSave }: EstimateT
                                   {categoryTrades.map((trade) => (
                                     <tr key={trade.tempId} className="bg-card hover:bg-muted/40">
                                       <td className="p-2 border-b border-r border-border/60">
-                                        <div className="truncate font-medium text-foreground">{trade.name}</div>
+                                        <div className="flex items-center gap-2">
+                                          {trade.pendingReview && (
+                                            <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                              Review
+                                            </span>
+                                          )}
+                                          <div className="truncate font-medium text-foreground">{trade.name}</div>
+                                        </div>
                                         {trade.description && (
                                           <div className="text-[11px] text-muted-foreground truncate">{trade.description}</div>
                                         )}
@@ -719,7 +731,7 @@ function TradeFormDialog({
       existingIdx >= 0
         ? subItems.map((s, i) => (i === existingIdx ? { ...s, ...withTotal, id: s.id, tradeId: s.tradeId } : s))
         : [...subItems, { ...withTotal, id: data.id || `tempSub_${Date.now()}`, tradeId: '' } as SubItem]
-    setFormData(prev => ({ ...prev, subItems: nextSubItems }))
+    setFormData(prev => ({ ...prev, subItems: nextSubItems, pendingReview: false }))
     setEditingSubItem(null)
   }
 

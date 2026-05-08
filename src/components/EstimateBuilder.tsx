@@ -102,7 +102,8 @@ import {
   ArrowLeft,
   Printer,
   Save,
-  Mail
+  Mail,
+  Loader2
 } from 'lucide-react'
 
 // ----------------------------------------------------------------------------
@@ -146,6 +147,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   const [showApplyTemplateDialog, setShowApplyTemplateDialog] = useState(false)
   const [availableTemplates, setAvailableTemplates] = useState<any[]>([])
   const [selectedTemplateToApply, setSelectedTemplateToApply] = useState<string>('')
+  const [isApplyingTemplate, setIsApplyingTemplate] = useState(false)
   const [availableSubcontractors, setAvailableSubcontractors] = useState<DirectorySubcontractor[]>([])
   const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set())
   const [editingSubItem, setEditingSubItem] = useState<{ tradeId: string; subItem?: SubItem } | null>(null)
@@ -336,7 +338,10 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       if (isAddingTrade) {
         // Add new trade
         console.log('Adding new trade to estimate:', projectData.estimate.id)
-        updatedTrade = await addTrade_Hybrid(projectData.estimate.id, tradeData)
+        updatedTrade = await addTrade_Hybrid(projectData.estimate.id, {
+          ...tradeData,
+          pendingReview: false,
+        })
         console.log('Trade added successfully:', updatedTrade)
         setTrades(prev => [...prev, updatedTrade])
       } else {
@@ -347,7 +352,10 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         }
         
         console.log('Updating trade:', tradeData.id)
-        const result = await updateTrade_Hybrid(tradeData.id, tradeData)
+        const result = await updateTrade_Hybrid(tradeData.id, {
+          ...tradeData,
+          pendingReview: false,
+        })
         if (!result) {
           console.error('Failed to update trade')
           return
@@ -444,6 +452,11 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       }
 
       if (updatedSubItem) {
+        const trade = trades.find(t => t.id === tradeId)
+        if (trade?.pendingReview) {
+          await updateTrade_Hybrid(tradeId, { pendingReview: false })
+        }
+
         // Reload sub-items for this trade
         const subItems = await fetchSubItemsForTrade(tradeId)
         setSubItemsByTrade(prev => ({ ...prev, [tradeId]: subItems }))
@@ -807,6 +820,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     }
 
     try {
+      setIsApplyingTemplate(true)
       console.log('📋 Applying template:', selectedTemplateToApply)
       
       // Apply template creates new trades from the template
@@ -818,52 +832,62 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         return
       }
 
-      // Add each trade to the database using hybrid service; then create sub-items from template when online
-      console.log('💾 Adding trades to database...')
-      for (const templateTrade of templateTrades) {
-        console.log('  Adding trade:', templateTrade.name)
-        const created = await addTrade_Hybrid(projectData.estimate.id, {
-          category: templateTrade.category,
-          name: templateTrade.name,
-          description: templateTrade.description,
-          quantity: templateTrade.quantity,
-          unit: templateTrade.unit,
-          laborCost: templateTrade.laborCost,
-          laborRate: templateTrade.laborRate,
-          laborHours: templateTrade.laborHours,
-          materialCost: templateTrade.materialCost,
-          materialRate: templateTrade.materialRate,
-          subcontractorCost: templateTrade.subcontractorCost,
-          isSubcontracted: templateTrade.isSubcontracted,
-          wasteFactor: templateTrade.wasteFactor,
-          markupPercent: templateTrade.markupPercent,
-          notes: templateTrade.notes,
-        })
-        if (created && isOnlineMode() && templateTrade.subItems?.length) {
-          for (let i = 0; i < templateTrade.subItems.length; i++) {
-            const sub = templateTrade.subItems[i]
-            await createSubItemInDB(created.id, projectData.estimate.id, {
-              name: sub.name ?? '',
-              description: sub.description,
-              quantity: sub.quantity ?? 0,
-              unit: sub.unit ?? 'each',
-              laborCost: sub.laborCost ?? 0,
-              laborRate: sub.laborRate,
-              laborHours: sub.laborHours,
-              materialCost: sub.materialCost ?? 0,
-              materialRate: sub.materialRate,
-              subcontractorCost: sub.subcontractorCost ?? 0,
-              subcontractorRate: sub.subcontractorRate,
-              isSubcontracted: sub.isSubcontracted ?? false,
-              wasteFactor: sub.wasteFactor ?? 10,
-              markupPercent: sub.markupPercent,
-              sortOrder: sub.sortOrder ?? i,
-              selectionOnly: sub.selectionOnly,
-              selection: sub.selection,
-            })
+      // Add trades in parallel; for each created trade, add sub-items in parallel.
+      console.log('💾 Adding trades to database in parallel...', { tradeCount: templateTrades.length })
+      const createdTrades = await Promise.all(
+        templateTrades.map(async (templateTrade) => {
+          const created = await addTrade_Hybrid(projectData.estimate.id, {
+            category: templateTrade.category,
+            name: templateTrade.name,
+            description: templateTrade.description,
+            quantity: templateTrade.quantity,
+            unit: templateTrade.unit,
+            laborCost: templateTrade.laborCost,
+            laborRate: templateTrade.laborRate,
+            laborHours: templateTrade.laborHours,
+            materialCost: templateTrade.materialCost,
+            materialRate: templateTrade.materialRate,
+            subcontractorCost: templateTrade.subcontractorCost,
+          subcontractorRate: templateTrade.subcontractorRate,
+          pendingReview: true,
+            isSubcontracted: templateTrade.isSubcontracted,
+            wasteFactor: templateTrade.wasteFactor,
+            markupPercent: templateTrade.markupPercent,
+            notes: templateTrade.notes,
+          })
+
+          if (created && isOnlineMode() && templateTrade.subItems?.length) {
+            await Promise.all(
+              templateTrade.subItems.map((sub, i) =>
+                createSubItemInDB(created.id, projectData.estimate.id, {
+                  name: sub.name ?? '',
+                  description: sub.description,
+                  quantity: sub.quantity ?? 0,
+                  unit: sub.unit ?? 'each',
+                  laborCost: sub.laborCost ?? 0,
+                  laborRate: sub.laborRate,
+                  laborHours: sub.laborHours,
+                  materialCost: sub.materialCost ?? 0,
+                  materialRate: sub.materialRate,
+                  subcontractorCost: sub.subcontractorCost ?? 0,
+                  subcontractorRate: sub.subcontractorRate,
+                  isSubcontracted: sub.isSubcontracted ?? false,
+                  wasteFactor: sub.wasteFactor ?? 10,
+                  markupPercent: sub.markupPercent,
+                  sortOrder: sub.sortOrder ?? i,
+                  selectionOnly: sub.selectionOnly,
+                  selection: sub.selection,
+                })
+              )
+            )
           }
-        }
-      }
+
+          return created
+        })
+      )
+      console.log('✅ Parallel inserts complete', {
+        createdTradeCount: createdTrades.filter(Boolean).length,
+      })
 
       // Reload trades to show the new ones
       console.log('🔄 Reloading trades...')
@@ -877,6 +901,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     } catch (error) {
       console.error('❌ Error applying template:', error)
       toast.error(`Failed to apply template: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsApplyingTemplate(false)
     }
   }
 
@@ -1113,15 +1139,25 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
                       e.stopPropagation()
                       handleApplyTemplate()
                     }}
-                    disabled={!selectedTemplateToApply || availableTemplates.length === 0}
+                    disabled={!selectedTemplateToApply || availableTemplates.length === 0 || isApplyingTemplate}
                     className="flex-1"
                   >
-                    <FileText className="size-4" />
-                    Apply Template
+                    {isApplyingTemplate ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        Applying template…
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="size-4" />
+                        Apply Template
+                      </>
+                    )}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
+                    disabled={isApplyingTemplate}
                     onClick={() => {
                       setShowApplyTemplateDialog(false)
                       setSelectedTemplateToApply('')
@@ -1501,7 +1537,14 @@ function TradeTable({
                             className="rounded-lg border border-border/60 bg-card p-3"
                           >
                             <div className="mb-2 flex items-start justify-between gap-2">
-                              <h4 className="font-semibold">{trade.name}</h4>
+                              <div className="flex items-center gap-2">
+                                {trade.pendingReview === true && (
+                                  <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                    Review
+                                  </span>
+                                )}
+                                <h4 className="font-semibold">{trade.name}</h4>
+                              </div>
                               <p className="text-lg font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                                 {formatCurrency(trade.totalCost * 1.111)}
                               </p>
@@ -1719,6 +1762,11 @@ function TradeTable({
                                     />
                                   </button>
                                 )}
+                                {trade.pendingReview === true && (
+                                  <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                    Review
+                                  </span>
+                                )}
                                 <span>{trade.name}</span>
                                 {hasSubItems && (
                                   <span className="text-xs text-muted-foreground">
@@ -1783,6 +1831,11 @@ function TradeTable({
                               <tr key={subItem.id} className="bg-muted/10 transition-colors hover:bg-muted/20">
                                 <td className="p-2 pl-16 border-b border-r border-border/60">
                                   <div className="flex flex-wrap items-center gap-2">
+                                    {trade.pendingReview === true && (
+                                      <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                        Review
+                                      </span>
+                                    )}
                                     <span className="text-sm">{subItem.name}</span>
                                     {subItem.selectionOnly && (
                                       <span

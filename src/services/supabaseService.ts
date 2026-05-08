@@ -1004,6 +1004,7 @@ function transformTrade(row: any): Trade {
     quoteDate: row.quote_date ? new Date(row.quote_date) : undefined,
     quoteReference: row.quote_reference,
     quoteFileUrl: row.quote_file_url,
+    pendingReview: row.pending_review ?? false,
     notes: row.notes || '',
     sortOrder: 0,
   }
@@ -1071,6 +1072,7 @@ export async function createTradeInDB(estimateId: string, input: TradeInput): Pr
       material_rate: input.materialRate || 0,
       subcontractor_cost: input.subcontractorCost || 0,
       subcontractor_rate: input.subcontractorRate || 0,
+      pending_review: input.pendingReview ?? false,
       total_cost: totalCost,
       budget_total_cost: totalCost,
       is_subcontracted: input.isSubcontracted || false,
@@ -1126,6 +1128,7 @@ export async function updateTradeInDB(tradeId: string, updates: Partial<TradeInp
   if (updates.materialRate !== undefined) updateData.material_rate = updates.materialRate
   if (updates.subcontractorCost !== undefined) updateData.subcontractor_cost = updates.subcontractorCost
   if (updates.subcontractorRate !== undefined) updateData.subcontractor_rate = updates.subcontractorRate
+  if (updates.pendingReview !== undefined) updateData.pending_review = updates.pendingReview
   if (updates.isSubcontracted !== undefined) updateData.is_subcontracted = updates.isSubcontracted
   if (updates.wasteFactor !== undefined) updateData.waste_factor = updates.wasteFactor
   if (updates.markupPercent !== undefined) updateData.markup_percent = updates.markupPercent
@@ -2181,7 +2184,7 @@ export async function createEstimateTemplateInDB(input: CreatePlanEstimateTempla
 
   // Convert trades to template format
   const templateTrades = input.trades.map(trade => {
-    const { id, estimateId, ...tradeData } = trade
+    const { id, estimateId, pendingReview, ...tradeData } = trade
     return tradeData
   })
 

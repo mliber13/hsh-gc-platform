@@ -239,6 +239,7 @@ export interface Trade {
   
   // Markup
   markupPercent?: number    // Percentage markup for this line item
+  pendingReview?: boolean   // Indicates this row came from template apply and still needs review
   
   // Total for this trade (includes sub-items)
   totalCost: number         // labor + material + sub (after quote: quoted amount)

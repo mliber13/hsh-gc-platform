@@ -297,6 +297,8 @@ function CreateProjectRoute() {
             materialCost: templateTrade.materialCost,
             materialRate: templateTrade.materialRate,
             subcontractorCost: templateTrade.subcontractorCost,
+            subcontractorRate: templateTrade.subcontractorRate,
+            pendingReview: true,
             isSubcontracted: templateTrade.isSubcontracted,
             wasteFactor: templateTrade.wasteFactor,
             markupPercent: templateTrade.markupPercent,

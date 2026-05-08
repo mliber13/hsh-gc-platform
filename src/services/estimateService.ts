@@ -142,6 +142,8 @@ export function addTrade(estimateId: string, input: TradeInput): Trade {
     materialCost: input.materialCost,
     materialRate: input.materialRate,
     subcontractorCost: input.subcontractorCost,
+    subcontractorRate: input.subcontractorRate,
+    pendingReview: input.pendingReview ?? false,
     isSubcontracted: input.isSubcontracted,
     wasteFactor: input.wasteFactor || DEFAULT_VALUES.WASTE_FACTOR,
     markupPercent: input.markupPercent,

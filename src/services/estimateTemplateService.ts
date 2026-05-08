@@ -64,7 +64,7 @@ export async function createEstimateTemplate(input: CreatePlanEstimateTemplateIn
     
     // Convert trades to template format (remove IDs)
     const templateTrades = input.trades.map(trade => {
-      const { id, estimateId, ...tradeData } = trade
+      const { id, estimateId, pendingReview, ...tradeData } = trade
       return tradeData
     })
     
