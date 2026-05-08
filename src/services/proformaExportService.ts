@@ -17,16 +17,6 @@ import { format } from 'date-fns'
 export function exportProFormaToPDF(
   projection: ProFormaProjection,
 ): void {
-  console.log('[FOR-SALE LOC] exportProFormaToPDF input summary', {
-    engineVersion: projection.summary.forSaleEngineVersion,
-    peakLoc: projection.summary.forSalePeakLocBalance,
-    endingLoc: projection.summary.forSaleEndingLocBalance,
-    sweepExecuted: projection.summary.forSaleSweepExecuted,
-    finalLocBeforeSweep: projection.summary.forSaleFinalLocBeforeSweep,
-    finalLocAfterSweep: projection.summary.forSaleFinalLocAfterSweep,
-    closedUnits: projection.summary.forSaleClosedUnits,
-    totalUnits: projection.summary.forSaleTotalUnits,
-  })
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
@@ -62,10 +52,6 @@ export function exportProFormaToPDF(
       `For-Sale LOC export guard failed: expected mode "for-sale-phased-loc", got "${projection.summary.proFormaModeUsed ?? 'undefined'}".`,
     )
   }
-  if (projection.summary.proFormaModeUsed === 'for-sale-phased-loc') {
-    console.log('FINAL LOC AFTER SWEEP USED IN EXPORT', projection.summary.forSaleFinalLocAfterSweep ?? projection.summary.forSaleEndingLocBalance ?? 0)
-  }
-
   // Title
   doc.setFontSize(18)
   doc.setFont('helvetica', 'bold')
@@ -687,10 +673,6 @@ export function exportProFormaToExcel(
       `For-Sale LOC export guard failed: expected mode "for-sale-phased-loc", got "${projection.summary.proFormaModeUsed ?? 'undefined'}".`,
     )
   }
-  if (projection.summary.proFormaModeUsed === 'for-sale-phased-loc') {
-    console.log('FINAL LOC AFTER SWEEP USED IN EXPORT', projection.summary.forSaleFinalLocAfterSweep ?? projection.summary.forSaleEndingLocBalance ?? 0)
-  }
-
   // Summary Sheet
   const summaryData: any[][] = [
     ['Pro Forma Financial Projection', ''],

@@ -82,7 +82,10 @@ function phaseWellFormed(
   p: ForSalePhaseInput,
   phaseTimingMode: 'trigger-based' | 'fixed-schedule' = 'trigger-based',
 ): boolean {
-  const triggerOk = phaseTimingMode === 'fixed-schedule' || (p.presaleTriggerPercent || 0) > 0
+  // presaleTriggerPercent of 0 is valid — it means "unlock next phase immediately" with no
+  // presale requirement. Allow any non-negative value; the engine handles 0 correctly.
+  const trigger = p.presaleTriggerPercent ?? 0
+  const triggerOk = phaseTimingMode === 'fixed-schedule' || trigger >= 0
   return (
     (p.unitCount || 0) > 0 &&
     (p.buildMonths || 0) > 0 &&

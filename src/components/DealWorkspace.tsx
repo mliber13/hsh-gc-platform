@@ -299,7 +299,7 @@ function defaultInputForDeal(deal: Deal): ProFormaInput {
     },
     includeDebtService: false,
     forSalePhasedLoc: {
-      enabled: true,
+      enabled: false,
       totalUnits: 0,
       averageSalePrice: 0,
       presaleDepositPercent: 0,
@@ -773,12 +773,14 @@ function parseForSaleImportFromText(text: string): Partial<ProFormaInput> {
   if (pace != null) forSalePatch.salesPaceUnitsPerMonth = pace
   if (phases.length > 0) forSalePatch.phases = phases
   if (paydown != null || reinvest != null || reserve != null || distribution != null) {
-    forSalePatch.salesAllocationBuckets = {
-      locPaydownPercent: paydown ?? 0,
-      reinvestPercent: reinvest ?? 0,
-      reservePercent: reserve ?? 0,
-      distributionPercent: distribution ?? 0,
-    }
+    // Only set the buckets that were actually parsed — do not zero out unspecified ones,
+    // as that would silently destroy any previously entered values on merge.
+    const bucketPatch: Partial<Record<string, number>> = {}
+    if (paydown != null) bucketPatch.locPaydownPercent = paydown
+    if (reinvest != null) bucketPatch.reinvestPercent = reinvest
+    if (reserve != null) bucketPatch.reservePercent = reserve
+    if (distribution != null) bucketPatch.distributionPercent = distribution
+    forSalePatch.salesAllocationBuckets = bucketPatch as any
   }
 
   if (devCost != null) parsed.underwritingEstimatedConstructionCost = devCost
@@ -1582,7 +1584,9 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
   const readiness = useMemo(() => computeDealReadiness(input), [input])
 
   const roughMetrics = useMemo(() => {
-    if (!input) return { equityRequired: 0, roughIrr: 0 }
+    if (!input) return { equityRequired: 0, roughRoe: 0, projYears: 0 }
+
+    const projYears = Math.max(1, (input.projectionMonths || 24) / 12)
 
     if (materialForSaleContext(input) && input.forSalePhasedLoc) {
       const loc = input.forSalePhasedLoc
@@ -1593,8 +1597,10 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
       const incentiveEquity = loc.incentiveEquitySource || 0
       const equityRequired = Math.max(0, totalDev - locLimit - tif - grants - incentiveEquity)
       const totalRevenue = (loc.totalUnits || 0) * (loc.averageSalePrice || 0)
-      const roughIrr = equityRequired > 0 ? ((totalRevenue - totalDev) / equityRequired) * 100 : 0
-      return { equityRequired, roughIrr }
+      // Total profit-on-equity divided by project years = annualized simple ROE.
+      const totalRoe = equityRequired > 0 ? ((totalRevenue - totalDev) / equityRequired) * 100 : 0
+      const roughRoe = totalRoe / projYears
+      return { equityRequired, roughRoe, projYears }
     }
 
     const hard = input.underwritingEstimatedConstructionCost || 0
@@ -1602,12 +1608,14 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
     const soft = hard * ((input.softCostPercent || 0) / 100)
     const contingency = hard * ((input.contingencyPercent || 0) / 100)
     const totalDev = hard + land + soft + contingency
+    // Use LTC-derived debt only — matches the proforma engine which sizes debt from totalUses × LTC%.
     const debtFromLtc = totalDev * ((input.loanToCostPercent || 0) / 100)
-    const debt = Math.max(input.debtService?.loanAmount || 0, debtFromLtc)
-    const equityRequired = Math.max(0, totalDev - debt)
+    const equityRequired = Math.max(0, totalDev - debtFromLtc)
     const value = input.contractValue || 0
-    const roughIrr = equityRequired > 0 ? ((value - totalDev) / equityRequired) * 100 : 0
-    return { equityRequired, roughIrr }
+    // Total profit-on-equity divided by project years = annualized simple ROE.
+    const totalRoe = equityRequired > 0 ? ((value - totalDev) / equityRequired) * 100 : 0
+    const roughRoe = totalRoe / projYears
+    return { equityRequired, roughRoe, projYears }
   }, [input])
 
   const carbonMetrics = useMemo(() => {
@@ -2455,9 +2463,23 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
       )
       setProjection(proj)
       setStage('proforma')
+      setCenterTab('proforma')
+      setProformaView('memo')
       setRunPromptReason(null)
       setMarkers((prev) => [...prev, { id: uid(), stage: 'proforma', createdAt: new Date().toISOString() }])
       appendActivity('proforma_run', 'Ran ProForma projection.')
+    } catch (err: any) {
+      appendActivity('proforma_error', `ProForma run failed: ${err?.message || 'Unknown error'}`)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          role: 'assistant',
+          text: `ProForma calculation failed: ${err?.message || 'Unknown error'}. Check that all required inputs (hard cost, start date, mode-specific fields) are complete and valid.`,
+          createdAt: new Date().toISOString(),
+        },
+      ])
+      setCenterTab('overview')
     } finally {
       setRunning(false)
     }
@@ -2858,6 +2880,7 @@ export function DealWorkspace({ dealId, onBack }: DealWorkspaceProps) {
                 <CardContent className="text-sm text-foreground space-y-1">
                   <div><strong>Deal:</strong> {selectedDeal.deal_name}</div>
                   <div><strong>Mode:</strong> {input.proFormaMode === 'rental-hold' ? 'Rental Hold' : 'Development'}</div>
+                  <div><strong>Mode:</strong> {input.proFormaMode || 'general-development'}</div>
                   <div><strong>Current Stage:</strong> {stage}</div>
                   <div><strong>Messages:</strong> {messages.length}</div>
                 </CardContent>

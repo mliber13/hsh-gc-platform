@@ -842,6 +842,9 @@ function calculateForSalePhasedLocProForma(
   let sweepExecuted = false
   let finalLocBeforeSweep = 0
   let debtRepaymentWarning: string | undefined
+  // Per-month equity investor cash flows for proper IRR calculation:
+  // negative = equity deployed that month, positive = distributions received that month.
+  const equityMonthlyFlows: number[] = []
 
   const monthlyCashFlows: MonthlyCashFlow[] = []
   const forSaleLocTimeline: NonNullable<ProFormaProjection['forSaleLocTimeline']> = []
@@ -1152,6 +1155,9 @@ function calculateForSalePhasedLocProForma(
     const netCashFlow = totalInflow - totalOutflow
     cumulativeBalance += netCashFlow
 
+    // Track equity investor net flow this month: distributions received minus equity deployed.
+    equityMonthlyFlows.push(distributionAdd - equityNeeded)
+
     monthlyCashFlows.push({
       month: monthKey,
       monthLabel,
@@ -1204,17 +1210,19 @@ function calculateForSalePhasedLocProForma(
   const projectedMargin = totalRevenue > 0 ? (projectedProfit / totalRevenue) * 100 : 0
   const totalClosedUnits = phaseCumulativeClosings.reduce((sum, u) => sum + u, 0)
 
-  // IRR approximation: equity is modeled as a single period-0 outflow equal to total
-  // equity deployed across the project. In practice equity is drawn gradually over months,
-  // so this will slightly overstate IRR (early deployment = longer hold = lower true IRR).
-  // For a more precise IRR, track per-month equity deployment in the timeline.
-  const projectCashFlows = [-equityDeployedTotal, ...monthlyCashFlows.map((m) => m.netCashFlow)]
-  const forSaleProjectIrr = calculateIRR(projectCashFlows)
-  const totalPositiveDistributions = projectCashFlows
-    .slice(1)
-    .reduce((sum, cf) => sum + Math.max(0, cf), 0)
-  const forSaleEquityMultiple =
-    equityDeployedTotal > 0 ? totalPositiveDistributions / equityDeployedTotal : undefined
+  // Per-month equity IRR: use the equity investor cash flow series built during the loop.
+  // Each month: distributionAdd (inflow to equity) minus equityNeeded (equity deployed).
+  // Terminal value: any remaining reserve + reinvest balances are added to the last period
+  // as they would be returned to equity holders at project close.
+  const terminalValue = reserveBalance + reinvestBalance
+  if (equityMonthlyFlows.length > 0 && terminalValue > 0) {
+    equityMonthlyFlows[equityMonthlyFlows.length - 1] += terminalValue
+  }
+  const forSaleProjectIrr = equityDeployedTotal > 0 ? calculateIRR(equityMonthlyFlows) : undefined
+  // Equity multiple = total value returned to equity / equity invested.
+  // Distributions are paid monthly; reserve + reinvest balances are residual terminal value.
+  const totalEquityReturn = distributedTotal + terminalValue
+  const forSaleEquityMultiple = equityDeployedTotal > 0 ? Math.max(0, totalEquityReturn) / equityDeployedTotal : undefined
 
   const result: ProFormaProjection = {
     projectId: project.id,
@@ -1436,7 +1444,7 @@ function calculateRentalSummary(
   const monthlyRents = rentalUnits.map(unit => {
     const term = pickRepresentativeTerm(unit)
     const rentType = term?.rentType || unit.rentType
-    const occupancyRate = (term?.occupancyRate ?? unit.occupancyRate) / 100
+    const occupancyRate = (term?.occupancyRate ?? unit.occupancyRate ?? 100) / 100
     if (rentType === 'fixed') {
       const monthlyRent = term?.monthlyRent ?? unit.monthlyRent ?? 0
       return monthlyRent * occupancyRate
@@ -1457,7 +1465,7 @@ function calculateRentalSummary(
   const averageOccupancy = rentalUnits.length > 0
     ? rentalUnits.reduce((sum, unit) => {
       const term = pickRepresentativeTerm(unit)
-      return sum + (term?.occupancyRate ?? unit.occupancyRate)
+      return sum + (term?.occupancyRate ?? unit.occupancyRate ?? 100)
     }, 0) / rentalUnits.length
     : 0
 
@@ -1723,7 +1731,7 @@ function calculateMonthlyRentalIncome(rentalUnits: RentalUnit[], currentDate: Da
           term.squareFootage ?? unit.squareFootage,
           term.rentPerSqft ?? unit.rentPerSqft,
         )
-        const occupancyRate = (term.occupancyRate ?? unit.occupancyRate) / 100
+        const occupancyRate = (term.occupancyRate ?? unit.occupancyRate ?? 100) / 100
         totalIncome += monthlyRent * occupancyRate
       }
       continue
@@ -1740,8 +1748,8 @@ function calculateMonthlyRentalIncome(rentalUnits: RentalUnit[], currentDate: Da
       unit.rentPerSqft,
     )
 
-    // Apply occupancy rate
-    const effectiveRent = monthlyRent * (unit.occupancyRate / 100)
+    // Apply occupancy rate (default to 100% if field is missing from deserialized data)
+    const effectiveRent = monthlyRent * ((unit.occupancyRate ?? 100) / 100)
     totalIncome += effectiveRent
   }
 
