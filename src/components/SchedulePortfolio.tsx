@@ -416,6 +416,16 @@ export function SchedulePortfolio() {
         onClose={() => setModalItem(null)}
         item={modalItem}
         projectName={modalProjectName}
+        onItemUpdated={(patch) => {
+          if (!modalItem) return
+          const merged = { ...modalItem, ...patch }
+          setModalItem(merged)
+          setItems((current) =>
+            current.map((item) =>
+              item.id === merged.id ? { ...item, ...patch } : item,
+            ),
+          )
+        }}
       />
     </div>
   )

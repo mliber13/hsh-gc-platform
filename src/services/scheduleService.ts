@@ -25,6 +25,8 @@ export interface PortfolioItem {
   start_date: string
   end_date: string
   confirmation_status: ConfirmationStatus
+  confirmation_notes: string | null
+  status: 'not-started' | 'in-progress' | 'complete' | 'delayed'
   assigned_company_id: string | null
   assigned_company_name: string | null
   notes: string | null
@@ -45,6 +47,8 @@ type PortfolioItemRow = {
   start_date: string
   end_date: string
   confirmation_status: ConfirmationStatus | null
+  confirmation_notes: string | null
+  status: 'not-started' | 'in-progress' | 'complete' | 'delayed' | null
   assigned_company_id: string | null
   notes: string | null
   subcontractors?: { name: string | null } | Array<{ name: string | null }> | null
@@ -97,7 +101,7 @@ export async function fetchPortfolioScheduleItems(
   const { data, error } = await supabase
     .from('schedule_items')
     .select(
-      'id, project_id, schedule_id, name, start_date, end_date, confirmation_status, assigned_company_id, notes, subcontractors:assigned_company_id(name)',
+      'id, project_id, schedule_id, name, start_date, end_date, confirmation_status, confirmation_notes, status, assigned_company_id, notes, subcontractors:assigned_company_id(name)',
     )
     .in('project_id', projectIds)
     .lte('start_date', endDate)
@@ -114,6 +118,8 @@ export async function fetchPortfolioScheduleItems(
     start_date: item.start_date,
     end_date: item.end_date,
     confirmation_status: item.confirmation_status ?? 'unsent',
+    confirmation_notes: item.confirmation_notes,
+    status: item.status ?? 'not-started',
     assigned_company_id: item.assigned_company_id,
     assigned_company_name: assignedCompanyName(item.subcontractors),
     notes: item.notes,

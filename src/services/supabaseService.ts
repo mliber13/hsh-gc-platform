@@ -131,6 +131,16 @@ type SchedulePredecessorRow = {
   lag_days: number
 }
 
+export type ScheduleItemQuickPatch = {
+  confirmation_status?: ConfirmationStatus
+  confirmation_notes?: string | null
+  status?: 'not-started' | 'in-progress' | 'complete' | 'delayed'
+  start_date?: string
+  end_date?: string
+  assigned_company_id?: string | null
+  notes?: string | null
+}
+
 function toISODate(value: Date | string | undefined): string {
   if (value instanceof Date) return value.toISOString().slice(0, 10)
   if (typeof value === 'string' && value.length >= 10) return value.slice(0, 10)
@@ -362,6 +372,21 @@ export async function upsertScheduleForProject(projectId: string, schedule: Proj
       console.error('Error writing schedule items:', itemUpsertError)
     }
   }
+}
+
+export async function updateScheduleItemQuickEdit(
+  itemId: string,
+  patch: ScheduleItemQuickPatch,
+): Promise<ScheduleItem> {
+  const { data, error } = await supabase
+    .from('schedule_items')
+    .update(patch)
+    .eq('id', itemId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return mapScheduleItemRowToModel(data as ScheduleItemRow)
 }
 
 export async function fetchProjects(): Promise<Project[]> {
