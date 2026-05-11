@@ -8,6 +8,7 @@
 
 import { supabase, isOnlineMode } from '@/lib/supabase'
 import { parseISO } from 'date-fns'
+import { v4 as uuidv4 } from 'uuid'
 import {
   Project,
   CreateProjectInput,
@@ -308,24 +309,44 @@ export async function upsertScheduleForProject(projectId: string, schedule: Proj
 
   if (!scheduleId) return
 
-  const { error: deleteError } = await supabase
+  const { data: existingItems, error: existingItemsError } = await supabase
     .from('schedule_items')
-    .delete()
+    .select('id')
     .eq('schedule_id', scheduleId)
-  if (deleteError) {
-    console.error('Error clearing schedule items:', deleteError)
+  if (existingItemsError) {
+    console.error('Error fetching existing schedule items:', existingItemsError)
     return
   }
 
-  const itemPayload = (schedule.items || []).map((item: ScheduleItem) =>
-    mapScheduleItemModelToRowInput(item, scheduleId as string, projectId, profile.organization_id as string)
-  )
-  if (itemPayload.length > 0) {
-    const { error: itemInsertError } = await supabase
+  const scheduleItems = schedule.items || []
+  const itemPayload = scheduleItems.map((item: ScheduleItem) => {
+    const itemWithStableId = item.id ? item : { ...item, id: uuidv4() }
+    return mapScheduleItemModelToRowInput(itemWithStableId, scheduleId as string, projectId, profile.organization_id as string)
+  })
+
+  const incomingIds = new Set(itemPayload.map((item) => item.id))
+  const deletedIds = (existingItems || [])
+    .map((item) => item.id as string)
+    .filter((id) => !incomingIds.has(id))
+
+  if (deletedIds.length > 0) {
+    const { error: deleteError } = await supabase
       .from('schedule_items')
-      .insert(itemPayload)
-    if (itemInsertError) {
-      console.error('Error writing schedule items:', itemInsertError)
+      .delete()
+      .in('id', deletedIds)
+    if (deleteError) {
+      console.error('Error deleting removed schedule items:', deleteError)
+      return
+    }
+  }
+
+  if (itemPayload.length > 0) {
+    const { error: itemUpsertError } = await supabase
+      .from('schedule_items')
+      .upsert(itemPayload, { onConflict: 'id' })
+      .select()
+    if (itemUpsertError) {
+      console.error('Error writing schedule items:', itemUpsertError)
     }
   }
 }
