@@ -3,11 +3,13 @@
 // ============================================================================
 //
 // Workspace = which top-level domain the user is operating in: Projects,
-// Deals, or Tenants. Drives the sidebar nav and the workspace switcher.
+// Deals, Tenants, Meeting, or Schedule. Drives the sidebar nav and the
+// workspace switcher.
 //
 // Source-of-truth strategy:
 //   1. URL is authoritative if pathname implies a workspace
-//      (/, /projects/* → projects; /deals/* → deals; /tenants/* → tenants)
+//      (/, /projects/* → projects; /deals/* → deals; /tenants/* → tenants;
+//      /schedule/* → schedule)
 //   2. Otherwise (workspace-agnostic Settings paths like /library/*,
 //      /quickbooks/*, /contacts, /sow, /feedback) fall back to localStorage
 //      so we preserve "what was the user just doing" context.
@@ -18,7 +20,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
-export type Workspace = 'projects' | 'deals' | 'tenants' | 'meeting'
+export type Workspace = 'projects' | 'deals' | 'tenants' | 'meeting' | 'schedule'
 
 const STORAGE_KEY = 'hsh:activeWorkspace'
 
@@ -27,12 +29,14 @@ const WORKSPACE_HOME: Record<Workspace, string> = {
   deals: '/deals',
   tenants: '/tenants',
   meeting: '/meeting',
+  schedule: '/schedule',
 }
 
 /** Map a pathname to a workspace, or null if it's workspace-agnostic. */
 function workspaceFromPath(pathname: string): Workspace | null {
   if (pathname.startsWith('/deals')) return 'deals'
   if (pathname.startsWith('/tenants')) return 'tenants'
+  if (pathname.startsWith('/schedule')) return 'schedule'
   if (
     pathname.startsWith('/meeting') ||
     pathname.startsWith('/meetings') ||
@@ -54,7 +58,8 @@ function readStoredWorkspace(): Workspace {
     raw === 'projects' ||
     raw === 'deals' ||
     raw === 'tenants' ||
-    raw === 'meeting'
+    raw === 'meeting' ||
+    raw === 'schedule'
   ) {
     return raw
   }

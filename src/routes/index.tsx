@@ -33,6 +33,7 @@
 //   /deals/workspace                               → DealWorkspace (no deal, tab nav)
 //   /deals/workspace/:dealId                       → DealWorkspace (specific)
 //   /tenants                                       → TenantPipeline
+//   /schedule                                      → SchedulePortfolio
 //   /feedback                                      → MyFeedback
 //   /privacy                                       → PrivacyPolicy        (public)
 //   /terms                                         → TermsOfUse           (public)
@@ -74,6 +75,7 @@ import { ProjectDocuments } from '@/components/ProjectDocuments'
 import { SelectionBook } from '@/components/SelectionBook'
 import { SelectionSchedules } from '@/components/SelectionSchedules'
 import { ScheduleBuilder } from '@/components/ScheduleBuilder'
+import { SchedulePortfolio } from '@/components/SchedulePortfolio'
 import { CreateProjectForm, ProjectFormData } from '@/components/CreateProjectForm'
 import { PlanLibrary } from '@/components/PlanLibrary'
 import { PlanEditor } from '@/components/PlanEditor'
@@ -160,6 +162,8 @@ export function AppRoutes() {
 
           <Route path="/tenants" element={<TenantPipelineRoute />} />
           <Route path="/tenant-pipeline" element={<Navigate to="/tenants" replace />} />
+
+          <Route path="/schedule" element={<SchedulePortfolioRoute />} />
 
           <Route path="/feedback" element={<MyFeedbackRoute />} />
           <Route path="/pre-read" element={<MeetingPreReadRoute />} />
@@ -586,6 +590,11 @@ function TenantPipelineRoute() {
       onOpenDealWorkspace={(dealId) => navigate(`/deals/workspace/${dealId}`)}
     />
   )
+}
+
+function SchedulePortfolioRoute() {
+  usePageTitle('Schedule')
+  return <SchedulePortfolio />
 }
 
 // ============================================================================

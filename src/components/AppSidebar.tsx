@@ -19,6 +19,7 @@ import {
   Briefcase,
   Calculator,
   Calendar,
+  CalendarDays,
   ClipboardList,
   DollarSign,
   Eye,
@@ -229,6 +230,15 @@ const tenantsNav: NavGroup[] = [
   },
 ]
 
+const scheduleNav: NavGroup[] = [
+  {
+    label: 'Schedule',
+    items: [
+      { label: 'Portfolio', to: '/schedule', icon: CalendarDays, matchPath: '/schedule' },
+    ],
+  },
+]
+
 function meetingNav(showManage: boolean): NavGroup[] {
   const items: NavItem[] = [
     { label: 'Meeting', to: '/meeting', icon: Calendar, matchPath: '/meeting' },
@@ -278,6 +288,8 @@ function navForWorkspace(
       return [...tenantsNav, settingsNav]
     case 'meeting':
       return [...meetingNav(showMeetingManage), settingsNav]
+    case 'schedule':
+      return [...scheduleNav, settingsNav]
   }
 }
 
@@ -520,7 +532,12 @@ function NavLinkItem({
       <SidebarMenuButton asChild tooltip={item.label}>
         <NavLink
           to={item.to}
-          end={item.to === '/' || item.to === '/deals' || item.to === '/tenants'}
+          end={
+            item.to === '/' ||
+            item.to === '/deals' ||
+            item.to === '/tenants' ||
+            item.to === '/schedule'
+          }
           className={({ isActive }) => cn(isActive && activeClass)}
         >
           <Icon className="size-4" />

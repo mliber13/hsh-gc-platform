@@ -11,6 +11,7 @@ import {
   Briefcase,
   Building2,
   CalendarDays,
+  CalendarRange,
   ChevronsUpDown,
   Check,
   Users,
@@ -58,6 +59,12 @@ const WORKSPACES: WorkspaceMeta[] = [
     label: 'Meeting',
     description: 'Weekly meeting workflow',
     icon: CalendarDays,
+  },
+  {
+    id: 'schedule',
+    label: 'Schedule',
+    description: 'Cross-project calendar + comms',
+    icon: CalendarRange,
   },
 ]
 
