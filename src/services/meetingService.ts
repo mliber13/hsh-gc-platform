@@ -111,6 +111,21 @@ export async function upsertPreReadSubmissions(params: {
   if (error) throw error
 }
 
+export async function updateSubmissionLiveDiscuss(params: {
+  leadId: string
+  promptId: string
+  weekOf: string
+  isLiveDiscuss: boolean
+}): Promise<void> {
+  const { error } = await supabase
+    .from('meeting_submissions')
+    .update({ is_live_discuss: params.isLiveDiscuss })
+    .eq('lead_id', params.leadId)
+    .eq('prompt_id', params.promptId)
+    .eq('week_of', params.weekOf)
+  if (error) throw error
+}
+
 export async function ensureMeeting(meetingDate: string): Promise<string> {
   const { data, error } = await supabase.rpc('ensure_meeting', {
     p_meeting_date: meetingDate,

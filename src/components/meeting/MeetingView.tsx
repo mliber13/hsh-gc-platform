@@ -3,13 +3,16 @@ import { format, isBefore, parseISO, startOfDay } from 'date-fns'
 import { toast } from 'sonner'
 import { Trash2 } from 'lucide-react'
 import { usePageTitle } from '@/contexts/PageTitleContext'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   createMeetingActionItem,
   deleteMeetingActionItem,
+  getCurrentUserMeetingLead,
   getMeetingActionItems,
   getMeetingViewData,
   subscribeMeetingActionItems,
   updateMeetingActionItemStatus,
+  updateSubmissionLiveDiscuss,
 } from '@/services/meetingService'
 import type {
   ActionItemStatus,
@@ -49,8 +52,10 @@ function displayAnswer(value: string | null): string {
 
 export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
   usePageTitle('Meeting')
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<MeetingViewData | null>(null)
+  const [isOperator, setIsOperator] = useState(false)
   const [actionItems, setActionItems] = useState<MeetingActionItem[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -100,6 +105,60 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
       cancelled = true
     }
   }, [meetingDate, weekOf])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!user?.id) {
+      setIsOperator(false)
+      return
+    }
+    void getCurrentUserMeetingLead(user.id)
+      .then((lead) => {
+        if (!cancelled) setIsOperator(Boolean(lead?.is_meeting_operator))
+      })
+      .catch((error) => {
+        console.error('Failed to load operator status', error)
+        if (!cancelled) setIsOperator(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
+  const handleToggleLiveDiscuss = async (
+    leadId: string,
+    promptId: string,
+    currentValue: boolean,
+  ) => {
+    if (!data) return
+    const previous = data
+    const next = !currentValue
+    setData({
+      ...data,
+      sections: data.sections.map((section) =>
+        section.lead_id !== leadId
+          ? section
+          : {
+              ...section,
+              prompts: section.prompts.map((p) =>
+                p.prompt_id !== promptId ? p : { ...p, is_live_discuss: next },
+              ),
+            },
+      ),
+    })
+    try {
+      await updateSubmissionLiveDiscuss({
+        leadId,
+        promptId,
+        weekOf,
+        isLiveDiscuss: next,
+      })
+    } catch (error) {
+      console.error('Failed to update live-discuss flag', error)
+      setData(previous)
+      toast.error('Could not update live-discuss flag.')
+    }
+  }
 
   useEffect(() => {
     if (!data?.meeting_id) return undefined
@@ -323,11 +382,36 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
                     {section.prompts.map((prompt) => (
                       <article key={prompt.prompt_id} className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-base font-medium">{prompt.question_text}</h3>
-                          {prompt.is_live_discuss && (
-                            <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">
-                              Discuss live
-                            </span>
+                          <h3 className="text-base font-semibold text-foreground">{prompt.question_text}</h3>
+                          {isOperator ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleToggleLiveDiscuss(
+                                  section.lead_id,
+                                  prompt.prompt_id,
+                                  prompt.is_live_discuss,
+                                )
+                              }
+                              className={
+                                prompt.is_live_discuss
+                                  ? 'rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 transition-colors hover:bg-amber-500/25 dark:text-amber-300'
+                                  : 'rounded-md border border-dashed border-muted-foreground/40 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:border-amber-500/60 hover:text-amber-700 dark:hover:text-amber-300'
+                              }
+                              title={
+                                prompt.is_live_discuss
+                                  ? 'Click to unmark live discussion'
+                                  : 'Click to mark for live discussion'
+                              }
+                            >
+                              {prompt.is_live_discuss ? 'Discuss live' : 'Mark live'}
+                            </button>
+                          ) : (
+                            prompt.is_live_discuss && (
+                              <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">
+                                Discuss live
+                              </span>
+                            )
                           )}
                         </div>
                         <p
@@ -336,7 +420,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
                               ? 'text-base leading-relaxed text-amber-600 dark:text-amber-400'
                               : displayAnswer(prompt.answer_text) === '—'
                                 ? 'text-base leading-relaxed text-muted-foreground'
-                                : 'text-base leading-relaxed'
+                                : 'text-base leading-relaxed text-muted-foreground'
                           }
                         >
                           {displayAnswer(prompt.answer_text)}
