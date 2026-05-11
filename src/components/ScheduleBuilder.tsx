@@ -7,15 +7,18 @@
 
 import React, { useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { Project, Trade, ScheduleItem, ProjectSchedule, ScheduleItemType } from '@/types'
+import { Project, Trade, ScheduleItem, ProjectSchedule, ScheduleItemType, ConfirmationStatus } from '@/types'
 import { getTradesForEstimate_Hybrid, updateProject_Hybrid } from '@/services/hybridService'
+import { updateScheduleItemConfirmation } from '@/services/supabaseService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { CommsLogPanel } from '@/components/CommsLogPanel'
+import { ConfirmationDot } from '@/components/ConfirmationDot'
 import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import { getCategoryAccentLeftBorderStyle } from '@/lib/categoryAccent'
 import {
@@ -147,6 +150,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
           predecessors: [],
           status: 'not-started',
           percentComplete: 0,
+          confirmation_status: 'unsent',
         })
 
         // Move to next item (add 1 day buffer between items)
@@ -192,6 +196,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
       predecessors: [],
       status: 'not-started',
       percentComplete: 0,
+      confirmation_status: 'unsent',
     }])
     setHasUnsavedChanges(true)
   }
@@ -252,6 +257,11 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
 
     const updated = await updateProject_Hybrid(project.id, { schedule })
     if (updated) {
+      if (updated.schedule) {
+        setScheduleItems(updated.schedule.items)
+        setProjectStartDate(updated.schedule.startDate)
+        setProjectEndDate(updated.schedule.endDate)
+      }
       setHasUnsavedChanges(false)
       toast.success('Schedule saved')
     } else {
@@ -309,6 +319,37 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     })
   }
 
+  const replaceScheduleItem = (updatedItem: ScheduleItem) => {
+    setScheduleItems((items) =>
+      items.map((item) => (
+        item.id === updatedItem.id
+          ? {
+              ...item,
+              confirmation_status: updatedItem.confirmation_status,
+              confirmation_last_sent_at: updatedItem.confirmation_last_sent_at,
+              confirmation_last_responded_at: updatedItem.confirmation_last_responded_at,
+              confirmation_notes: updatedItem.confirmation_notes,
+            }
+          : item
+      ))
+    )
+  }
+
+  const handleConfirmationChange = async (
+    item: ScheduleItem,
+    status: ConfirmationStatus,
+    notes?: string | null,
+  ) => {
+    try {
+      const updatedItem = await updateScheduleItemConfirmation(item.id, status, notes)
+      replaceScheduleItem(updatedItem)
+      toast.success('Confirmation updated')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not update confirmation.'
+      toast.error(message)
+    }
+  }
+
   // Calendar: get schedule items that overlap a given day (used for any day-scoped logic)
   const getItemsForDay = (day: Date): ScheduleItem[] => {
     const d = startOfDay(day)
@@ -337,6 +378,10 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
       <div className="flex items-center gap-2 mb-2">
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-2">
+            <ConfirmationDot
+              status={item.confirmation_status ?? 'unsent'}
+              onChange={(status) => handleConfirmationChange(item, status, item.confirmation_notes)}
+            />
             <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded ${(item.type ?? 'field') === 'office' ? 'bg-muted text-muted-foreground' : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'}`}>
               {(item.type ?? 'field') === 'office' ? <Briefcase className="w-3 h-3" /> : <HardHat className="w-3 h-3" />}
               {(item.type ?? 'field') === 'office' ? 'Office' : 'Field'}
@@ -510,6 +555,56 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
           })}
           className="w-full"
         />
+      </div>
+
+      <div className="mt-4 rounded-lg border border-border/60 bg-muted/20 p-3">
+        <div className="mb-3 flex items-center gap-2">
+          <ConfirmationDot status={item.confirmation_status ?? 'unsent'} />
+          <p className="text-sm font-medium text-foreground">Confirmation</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label htmlFor={`confirmation-${item.id}`} className="text-xs">Status</Label>
+            <Select
+              value={item.confirmation_status ?? 'unsent'}
+              onValueChange={(value: ConfirmationStatus) =>
+                handleConfirmationChange(item, value, item.confirmation_notes)
+              }
+            >
+              <SelectTrigger className="text-sm" id={`confirmation-${item.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unsent">Unsent</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="confirmed">Confirmed</SelectItem>
+                <SelectItem value="declined">Declined</SelectItem>
+                <SelectItem value="no-reply">No reply</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor={`confirmation-notes-${item.id}`} className="text-xs">
+              Confirmation notes
+            </Label>
+            <Textarea
+              id={`confirmation-notes-${item.id}`}
+              value={item.confirmation_notes ?? ''}
+              onChange={(event) =>
+                handleUpdateScheduleItem(item.id, { confirmation_notes: event.target.value })
+              }
+              onBlur={(event) =>
+                handleConfirmationChange(
+                  item,
+                  item.confirmation_status ?? 'unsent',
+                  event.target.value || null,
+                )
+              }
+              className="min-h-[72px] text-sm"
+              placeholder="Optional context..."
+            />
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -755,7 +850,10 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                                         onClick={filled ? () => setEditingItemId(item.id) : undefined}
                                       >
                                         {showName && (
-                                          <span className="text-xs font-medium text-foreground truncate block">{item.name}</span>
+                                          <span className="flex min-w-0 items-center gap-1.5">
+                                            <ConfirmationDot status={item.confirmation_status ?? 'unsent'} size="md" />
+                                            <span className="block truncate text-xs font-medium text-foreground">{item.name}</span>
+                                          </span>
                                         )}
                                       </div>
                                     )

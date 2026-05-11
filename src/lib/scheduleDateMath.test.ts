@@ -25,6 +25,7 @@ function makeItem(overrides: Partial<ScheduleItem> & { id: string; name: string 
     predecessors: overrides.predecessors ?? [],
     status: overrides.status ?? 'not-started',
     percentComplete: overrides.percentComplete ?? 0,
+    confirmation_status: overrides.confirmation_status ?? 'unsent',
     assignedCompanyId: overrides.assignedCompanyId ?? null,
     assignedTo: overrides.assignedTo ?? [],
     description: overrides.description,

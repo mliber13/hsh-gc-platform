@@ -60,6 +60,7 @@ export type {
   ScheduleItem,
   SchedulePredecessor,
   ScheduleItemType,
+  ConfirmationStatus,
   Milestone,
   
   // Documents

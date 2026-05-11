@@ -27,6 +27,7 @@ import {
   ProjectSchedule,
   ScheduleItem,
   SchedulePredecessor,
+  ConfirmationStatus,
 } from '@/types'
 import {
   DealDocument,
@@ -116,6 +117,10 @@ type ScheduleItemRow = {
   percent_complete: number
   actual_start_date: string | null
   actual_end_date: string | null
+  confirmation_status: ConfirmationStatus | null
+  confirmation_last_sent_at: string | null
+  confirmation_last_responded_at: string | null
+  confirmation_notes: string | null
   assigned_to: string[] | null
   assigned_company_id: string | null
   notes: string | null
@@ -184,6 +189,10 @@ function mapScheduleItemRowToModel(row: ScheduleItemRow): ScheduleItem {
     percentComplete: row.percent_complete,
     actualStartDate: row.actual_start_date ? parseISO(row.actual_start_date) : undefined,
     actualEndDate: row.actual_end_date ? parseISO(row.actual_end_date) : undefined,
+    confirmation_status: (row.confirmation_status as ConfirmationStatus | null) ?? 'unsent',
+    confirmation_last_sent_at: row.confirmation_last_sent_at ?? null,
+    confirmation_last_responded_at: row.confirmation_last_responded_at ?? null,
+    confirmation_notes: row.confirmation_notes ?? null,
     assignedTo: row.assigned_to ?? [],
     assignedCompanyId: row.assigned_company_id ?? null,
     notes: row.notes ?? undefined,
@@ -214,10 +223,33 @@ function mapScheduleItemModelToRowInput(
     percent_complete: typeof item.percentComplete === 'number' ? item.percentComplete : 0,
     actual_start_date: item.actualStartDate ? toISODate(item.actualStartDate) : null,
     actual_end_date: item.actualEndDate ? toISODate(item.actualEndDate) : null,
+    confirmation_status: item.confirmation_status ?? 'unsent',
+    confirmation_last_sent_at: item.confirmation_last_sent_at ?? null,
+    confirmation_last_responded_at: item.confirmation_last_responded_at ?? null,
+    confirmation_notes: item.confirmation_notes ?? null,
     assigned_to: item.assignedTo ?? [],
     assigned_company_id: item.assignedCompanyId ?? null,
     notes: item.notes ?? null,
   }
+}
+
+export async function updateScheduleItemConfirmation(
+  itemId: string,
+  status: ConfirmationStatus,
+  notes?: string | null,
+): Promise<ScheduleItem> {
+  const patch: Record<string, unknown> = { confirmation_status: status }
+  if (notes !== undefined) patch.confirmation_notes = notes
+
+  const { data, error } = await supabase
+    .from('schedule_items')
+    .update(patch)
+    .eq('id', itemId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return mapScheduleItemRowToModel(data as ScheduleItemRow)
 }
 
 export async function fetchScheduleByProjectId(projectId: string): Promise<ProjectSchedule | null> {

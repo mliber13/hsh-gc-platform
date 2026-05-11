@@ -619,6 +619,7 @@ export interface ProjectSchedule {
 }
 
 export type ScheduleItemType = 'field' | 'office'
+export type ConfirmationStatus = 'unsent' | 'pending' | 'confirmed' | 'declined' | 'no-reply'
 
 export interface SchedulePredecessor {
   predecessorId: string
@@ -650,6 +651,10 @@ export interface ScheduleItem {
   percentComplete: number
   actualStartDate?: Date
   actualEndDate?: Date
+  confirmation_status: ConfirmationStatus
+  confirmation_last_sent_at?: string | null
+  confirmation_last_responded_at?: string | null
+  confirmation_notes?: string | null
   
   // Resources
   assignedTo?: string[]     // Crew or subs
