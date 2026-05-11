@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { CommsLogPanel } from '@/components/CommsLogPanel'
 import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import { getCategoryAccentLeftBorderStyle } from '@/lib/categoryAccent'
 import {
@@ -34,6 +35,7 @@ import {
   ChevronLeft,
   ChevronRight,
   List,
+  MessageSquare,
 } from 'lucide-react'
 import {
   format,
@@ -80,6 +82,10 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
   const [scheduleView, setScheduleView] = useState<'list' | 'calendar'>('list')
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => project.startDate ? new Date(project.startDate) : new Date())
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [commsPanelState, setCommsPanelState] = useState<{
+    open: boolean
+    scheduleItem: { id: string; name: string } | null
+  }>({ open: false, scheduleItem: null })
 
   // Centered title in the AppHeader
   usePageTitle('Schedule')
@@ -290,6 +296,18 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     .filter(item => item.status === 'complete')
     .reduce((sum, item) => sum + item.duration, 0)
   const percentComplete = totalDays > 0 ? (completedDays / totalDays) * 100 : 0
+  const editingItem = editingItemId ? scheduleItems.find((i) => i.id === editingItemId) ?? null : null
+
+  const openProjectComms = () => {
+    setCommsPanelState({ open: true, scheduleItem: null })
+  }
+
+  const openItemComms = (item: ScheduleItem) => {
+    setCommsPanelState({
+      open: true,
+      scheduleItem: { id: item.id, name: item.name },
+    })
+  }
 
   // Calendar: get schedule items that overlap a given day (used for any day-scoped logic)
   const getItemsForDay = (day: Date): ScheduleItem[] => {
@@ -584,6 +602,10 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">Schedule Items</h2>
           <div className="flex items-center gap-2">
+            <Button type="button" onClick={openProjectComms} variant="outline" size="sm">
+              <MessageSquare className="size-4" />
+              Comms
+            </Button>
             <Button onClick={handleAddOfficeItem} size="sm">
               <Plus className="size-4" />
               Add Item
@@ -755,6 +777,16 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                           {renderItemEditBody(item)}
                           <div className="flex sm:flex-col gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="size-8"
+                              onClick={() => openItemComms(item)}
+                              aria-label={`View communications for ${item.name}`}
+                            >
+                              <MessageSquare className="size-4" />
+                            </Button>
                             <div className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(item.status)}`}>
                               {getStatusIcon(item.status)}
                               {item.status.replace('-', ' ').toUpperCase()}
@@ -787,18 +819,34 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">Edit Schedule Item</DialogTitle>
           </DialogHeader>
-          {(() => {
-            const editingItem = scheduleItems.find((i) => i.id === editingItemId)
-            if (!editingItem) return null
-            return renderItemEditBody(editingItem)
-          })()}
+          {editingItem ? renderItemEditBody(editingItem) : null}
           <DialogFooter>
+            {editingItem && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const itemForComms = editingItem
+                  setEditingItemId(null)
+                  openItemComms(itemForComms)
+                }}
+              >
+                <MessageSquare className="size-4" />
+                View communications
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={() => setEditingItemId(null)}>
               Done
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <CommsLogPanel
+        open={commsPanelState.open}
+        onClose={() => setCommsPanelState({ open: false, scheduleItem: null })}
+        projectId={project.id}
+        scheduleItem={commsPanelState.scheduleItem}
+      />
     </div>
   )
 }
