@@ -9,7 +9,6 @@ import React, { useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { Project, Trade, ScheduleItem, ProjectSchedule, ScheduleItemType, ConfirmationStatus } from '@/types'
 import { getTradesForEstimate_Hybrid, updateProject_Hybrid } from '@/services/hybridService'
-import { updateScheduleItemConfirmation } from '@/services/supabaseService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -319,35 +318,14 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     })
   }
 
-  const replaceScheduleItem = (updatedItem: ScheduleItem) => {
-    setScheduleItems((items) =>
-      items.map((item) => (
-        item.id === updatedItem.id
-          ? {
-              ...item,
-              confirmation_status: updatedItem.confirmation_status,
-              confirmation_last_sent_at: updatedItem.confirmation_last_sent_at,
-              confirmation_last_responded_at: updatedItem.confirmation_last_responded_at,
-              confirmation_notes: updatedItem.confirmation_notes,
-            }
-          : item
-      ))
-    )
-  }
-
-  const handleConfirmationChange = async (
+  const handleConfirmationChange = (
     item: ScheduleItem,
     status: ConfirmationStatus,
     notes?: string | null,
   ) => {
-    try {
-      const updatedItem = await updateScheduleItemConfirmation(item.id, status, notes)
-      replaceScheduleItem(updatedItem)
-      toast.success('Confirmation updated')
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not update confirmation.'
-      toast.error(message)
-    }
+    const patch: Partial<ScheduleItem> = { confirmation_status: status }
+    if (notes !== undefined) patch.confirmation_notes = notes
+    handleUpdateScheduleItem(item.id, patch)
   }
 
   // Calendar: get schedule items that overlap a given day (used for any day-scoped logic)
@@ -588,18 +566,15 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
               Confirmation notes
             </Label>
             <Textarea
+              key={item.id}
               id={`confirmation-notes-${item.id}`}
-              value={item.confirmation_notes ?? ''}
-              onChange={(event) =>
-                handleUpdateScheduleItem(item.id, { confirmation_notes: event.target.value })
-              }
-              onBlur={(event) =>
-                handleConfirmationChange(
-                  item,
-                  item.confirmation_status ?? 'unsent',
-                  event.target.value || null,
-                )
-              }
+              defaultValue={item.confirmation_notes ?? ''}
+              onBlur={(event) => {
+                const next = event.target.value || null
+                if (next !== (item.confirmation_notes ?? null)) {
+                  handleUpdateScheduleItem(item.id, { confirmation_notes: next })
+                }
+              }}
               className="min-h-[72px] text-sm"
               placeholder="Optional context..."
             />

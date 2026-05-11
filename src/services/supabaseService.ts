@@ -233,25 +233,6 @@ function mapScheduleItemModelToRowInput(
   }
 }
 
-export async function updateScheduleItemConfirmation(
-  itemId: string,
-  status: ConfirmationStatus,
-  notes?: string | null,
-): Promise<ScheduleItem> {
-  const patch: Record<string, unknown> = { confirmation_status: status }
-  if (notes !== undefined) patch.confirmation_notes = notes
-
-  const { data, error } = await supabase
-    .from('schedule_items')
-    .update(patch)
-    .eq('id', itemId)
-    .select()
-    .single()
-
-  if (error) throw error
-  return mapScheduleItemRowToModel(data as ScheduleItemRow)
-}
-
 export async function fetchScheduleByProjectId(projectId: string): Promise<ProjectSchedule | null> {
   if (!isOnlineMode()) return null
   const { data, error } = await supabase

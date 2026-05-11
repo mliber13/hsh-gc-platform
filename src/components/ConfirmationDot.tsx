@@ -21,7 +21,7 @@ const STATUS_META: Record<ConfirmationStatus, {
   unsent: {
     label: 'Unsent',
     description: 'not sent yet',
-    dotClassName: 'bg-muted-foreground/40',
+    dotClassName: 'bg-slate-400 dark:bg-slate-500',
   },
   pending: {
     label: 'Pending',
