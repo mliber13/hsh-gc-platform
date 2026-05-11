@@ -59,6 +59,7 @@ import { toLocalDate, toLocalEndOfDay, getItemColsForWeek as getItemColsForWeekU
 import { cascadeSchedule } from '@/lib/scheduleDateMath'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/contexts/PageTitleContext'
+import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 
 // ----------------------------------------------------------------------------
@@ -70,6 +71,12 @@ interface ScheduleBuilderProps {
   onBack: () => void
 }
 
+interface SubcontractorOption {
+  id: string
+  name: string
+  is_internal: boolean
+}
+
 // ----------------------------------------------------------------------------
 // Main Component
 // ----------------------------------------------------------------------------
@@ -77,6 +84,7 @@ interface ScheduleBuilderProps {
 export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
   const { byKey } = useTradeCategories()
   const [trades, setTrades] = useState<Trade[]>([])
+  const [subcontractors, setSubcontractors] = useState<SubcontractorOption[]>([])
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([])
   const [projectStartDate, setProjectStartDate] = useState<Date>(project.startDate || new Date())
   const [projectEndDate, setProjectEndDate] = useState<Date>(project.endDate || new Date())
@@ -91,6 +99,29 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
 
   // Centered title in the AppHeader
   usePageTitle('Schedule')
+
+  useEffect(() => {
+    let cancelled = false
+
+    void supabase
+      .from('subcontractors')
+      .select('id, name, is_internal')
+      .eq('is_active', true)
+      .order('is_internal', { ascending: false })
+      .order('name', { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) {
+          console.error('Failed to load subcontractors', error)
+          return
+        }
+        setSubcontractors((data ?? []) as SubcontractorOption[])
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Load trades and initialize schedule (async when using hybrid)
   useEffect(() => {
@@ -478,6 +509,36 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
               <SelectItem value="in-progress">In Progress</SelectItem>
               <SelectItem value="complete">Complete</SelectItem>
               <SelectItem value="delayed">Delayed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor={`assigned-${item.id}`} className="text-xs">Assigned company</Label>
+          <Select
+            value={item.assignedCompanyId ?? 'unassigned'}
+            onValueChange={(value) =>
+              handleUpdateScheduleItem(item.id, {
+                assignedCompanyId: value === 'unassigned' ? null : value,
+              })
+            }
+          >
+            <SelectTrigger id={`assigned-${item.id}`} className="text-sm">
+              <SelectValue placeholder="Unassigned" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {item.assignedCompanyId &&
+                !subcontractors.some((sub) => sub.id === item.assignedCompanyId) && (
+                  <SelectItem value={item.assignedCompanyId}>
+                    {item.assignedCompanyId} (unknown)
+                  </SelectItem>
+                )}
+              {subcontractors.map((subcontractor) => (
+                <SelectItem key={subcontractor.id} value={subcontractor.id}>
+                  {subcontractor.name}
+                  {subcontractor.is_internal ? ' (in-house)' : ''}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
