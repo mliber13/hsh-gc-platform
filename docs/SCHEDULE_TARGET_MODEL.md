@@ -1,7 +1,7 @@
 # Schedule — Target Model & IA
 
-**Status:** v2, post-walkthrough (2026-05-04)
-**Source:** Owner walkthrough 2026-05-04. v1 reorganized after owner clarified "the comms loop is the differentiator, schedule mechanics themselves are mundane."
+**Status:** v3, post-walkthrough (2026-05-11)
+**Source:** v3 adds the **portfolio view** as a first-class lens and locks in **Schedule as its own workspace** alongside a forthcoming Drywall workspace — surfaced during the Drywall-as-workspace merge planning, 2026-05-11. v2 reorganized around comms loop as differentiator (2026-05-04). v1 was schedule-mechanics-first.
 **Predecessor docs:** `docs/DESIGN_LANGUAGE.md`, `docs/UI_PORT_PLAYBOOK.md`. Current implementation: `src/components/ScheduleBuilder.tsx` (post Tier 1).
 
 ---
@@ -10,9 +10,9 @@
 
 Schedules in construction software are largely solved. Dependencies, calendar grids, mark-complete — every shop does it the same way and reinventing it adds nothing. **What remains genuinely hard is the communication loop with the field**, in both directions, kept clean and audit-traceable.
 
-The product differentiator is therefore not the schedule itself but **the comms-and-actuals layer wrapped around it**, plus the **resource-compare view** for manpower availability.
+The product differentiator is therefore not the schedule itself but **the comms-and-actuals layer wrapped around it**, the **portfolio view** (one calendar across every job), and the **resource-compare view** for manpower availability.
 
-This doc treats the schedule mechanics as table stakes (build them solid but don't over-invest), and the comms layer as the centerpiece.
+This doc treats the schedule mechanics as table stakes (build them solid but don't over-invest), and the comms layer as the centerpiece. Schedule is its own top-level workspace; Portfolio is its default landing.
 
 ---
 
@@ -21,8 +21,9 @@ This doc treats the schedule mechanics as table stakes (build them solid but don
 1. **A durable, filterable communication log** tied to schedule items — every change has a logged "why," every sub message lives next to the work it's about, every phone call is captured even though the channel was voice.
 2. **Two-way comms with subs** — push schedule out (SMS + email + app), receive updates back (SMS replies, app, manually-entered phone calls), surface both in one log.
 3. **PM-initiated cascades with preview-then-commit** — when a slip happens, PM sees the impact, opts out per-recipient if needed, then commits and the right SMS go out.
-4. **Resource-compare view** — side-by-side per-company columns to spot conflicts and under/over-allocation across projects.
-5. **Solid dependency math underneath** — multi-predecessor with lag, weekend + holiday-aware cascade, critical-path highlight. Foundational but not differentiating.
+4. **Portfolio view across all jobs** — calendar landing for the Schedule workspace. PM walks in Monday morning and sees every project's bars on one grid. Filter chips per project for focus. Single source of truth shared by GC Projects and Drywall workspaces — the Drywall workspace schedule view is this same surface pre-filtered to drywall jobs.
+5. **Resource-compare view** — side-by-side per-company columns to spot conflicts and under/over-allocation across projects. Scope spans GC subs **and** in-house drywall crews; manpower overallocation doesn't respect the GC/drywall divide.
+6. **Solid dependency math underneath** — multi-predecessor with lag, weekend + holiday-aware cascade, critical-path highlight. Foundational but not differentiating.
 
 **Non-goals (deliberate scope cuts):**
 - ❌ Hourly progress detail. Day-grain only — that's how the work actually runs.
@@ -168,17 +169,36 @@ Office user can always re-classify a misparsed message in the log UI.
 
 ---
 
-## 4. Three user surfaces
+## 4. User surfaces
 
-### 4.1 Office / PM (full edit)
+PM has two primary surfaces (Portfolio + Per-project), plus the field crew and outside-sub surfaces below. Schedule is its own workspace; the workspace switcher (`WorkspaceSwitcher.tsx`) routes PMs to the Portfolio landing.
 
-Existing `ScheduleBuilder.tsx`-shaped surface. Three view modes (List / Calendar / Resource — see §6). Adds:
+### 4.1 Office / PM — Portfolio (workspace landing, NEW)
+
+Lands here when the user clicks "Schedule" in the workspace switcher (`/schedule`). Calendar grid across all in-flight projects, project rows top-to-bottom, days left-to-right. Default window: this week + next week (14 days). See §6.1 for full UI.
+
+Reached from:
+- Workspace switcher → "Schedule"
+- Drywall workspace → "Schedule" (same surface, pre-filtered to `type='drywall'`)
+- Comms inbox sidebar (always-on in this surface)
+
+### 4.2 Office / PM — Per-project (existing `ScheduleBuilder.tsx`)
+
+Deep-edit surface for one project at `/projects/:projectId/schedule`. Two view modes (List / Calendar — see §6.2). Adds:
 - **Comms log panel** — toggleable side panel showing the per-item or whole-job comms feed.
 - **Cascade preview modal** for any move with dependencies.
 - **"Log call" button** on each schedule item header.
 - **Confirmation status indicator** on items: subtle dot color (green confirmed / amber pending / rose declined).
 
-### 4.2 Field crew (in-house)
+Reached from: Portfolio drill-in (click a bar / chip-solo) or directly from a project's overview page.
+
+### 4.2a Edit conflicts (cross-workspace)
+
+A schedule item can surface in both the GC PM's per-project view AND the Drywall workspace's portfolio (one row, two views — see §5.2). Either side may edit it.
+
+**Resolution: last-write-wins.** The comms log captures both edits as system entries with author and timestamp. No formal handshake. Matches the in-house dynamic — "PM says ready to hang the 12th, drywall scheduler bumps to the 13th because crews aren't free" — where the back-and-forth is audited but not formalized. A `Confirmation` reset to `'pending'` accompanies any date change so the other side sees the move and can respond in the log.
+
+### 4.3 Field crew (in-house)
 
 Mobile-first scoped view at `/schedule/me`. Card list of "items where assigned_company_id = HSH internal."
 - **Today** — items today.
@@ -187,7 +207,7 @@ Mobile-first scoped view at `/schedule/me`. Card list of "items where assigned_c
 - Per card: project + address + scope + start day + confirm/decline buttons + comms thread for the item.
 - Replies post to comms log, channel='in-app'.
 
-### 4.3 Outside subs (sub portal)
+### 4.4 Outside subs (sub portal)
 
 Separate route `/schedule/sub/:companyId`, RLS-gated to that company.
 Same shape as field crew but scoped to one company. Most subs won't log in — for them, the SMS push channel IS their experience. The portal is for subs who want to see ahead more than the next text.
@@ -217,7 +237,11 @@ Stored as JSON on `projects.schedule`. No separate table. No assignee, no comms 
 
 ### 5.2 Target deltas
 
-**Promote storage** — extract to `schedule_items` table. Required for cross-project queries (resource compare, sub portal "all my work for HSH"), proper FKs, indexable created_at, RLS scoping for sub portal.
+**Promote storage** — extract to `schedule_items` table. Required for cross-project queries (portfolio view, resource compare, sub portal "all my work for HSH"), proper FKs, indexable created_at, RLS scoping for sub portal.
+
+**Cross-workspace one-row-two-views** — a single `schedule_items` row may surface in multiple workspace views. Example: HSH Drywall hangs drywall on a GC project. The row is the **drywall trade row** in the GC project's per-project schedule AND a **job entry** in the Drywall workspace portfolio. Both views read/write the same row. Drywall workspace projects drywall-internal attributes onto the row (crew assignment, internal status); GC view projects trade-row attributes (sub_id, dates, dependencies). Edit-conflict semantics: §4.2a.
+
+Drywall-only jobs (no GC parent) live in the Drywall workspace portfolio only; they are filtered out of the GC portfolio default view via `metadata.app_scope = 'DRYWALL_ONLY'`.
 
 **Add `assigned_company_id`** — FK to subcontractors table. HSH internal entities are rows in `subcontractors` with `is_internal: true`. "Internal" here means **1099 contractors who work exclusively for HSH** (the in-house crew model) — not W-2 employees per se. Operationally they're treated as ours-by-default for scheduling, dispatch priority, and notification rules. External subs (1099, work for many GCs) have `is_internal: false`. The flag drives:
 - Resource compare default sort (internals first)
@@ -294,17 +318,45 @@ interface SubcontractorContact {
 
 ---
 
-## 6. IA — three view modes
+## 6. IA — workspace surfaces and view modes
+
+Four surfaces within the Schedule workspace:
 
 ```
-[ List ]  [ Calendar ]  [ Resource ]
+[ Portfolio ]   [ Per-project ]   [ Resource ]   [ Inbox ]
+     ↑ default landing
 ```
+
+Each surface has its own view modes where useful. **Gantt remains out** (per §2 non-goals) on all surfaces.
+
+### 6.1 Portfolio (workspace landing, NEW)
+
+Default view of `/schedule`. Calendar grid spanning all in-flight GC projects.
+
+- **Visual:** rows = projects (one bar row per project, color-coded), columns = days. Default window: this week + next week (14 days), pageable in 2-week increments.
+- **Filter chips** at top: one per project. Click toggles inclusion. Each chip has a "solo" icon for one-click focus — functionally identical to drilling into Per-project for that project.
+- **Type filter chips** top right: All / GC / Drywall (default: All). Drywall workspace lands on this same surface with "Drywall" pre-selected.
+- **Drywall-only projects** (`metadata.app_scope = 'DRYWALL_ONLY'`) are excluded from the GC portfolio default view; they appear in the Drywall workspace only.
+- **Comms inbox sidebar** on the right (collapsible) — see §6.4. Always-on in Portfolio by default. PM walks in, sees what came in overnight across all jobs without switching context.
+- **Click a bar** → schedule item detail with comms thread visible. Drill-in to Per-project for full edit.
+- **List toggle** at top right — secondary view mode that flattens to a project-grouped list using the same filter chips.
+
+Density: calendar gets crowded past ~8 active project rows; use the chip filter or the list toggle when that happens. Resource compare (§6.3) is the better surface when "who's overallocated" is the actual question.
+
+PM-only. Field/sub surfaces remain scoped (§4.3, §4.4).
+
+### 6.2 Per-project view modes
+
+Within the per-project surface (`/projects/:projectId/schedule`):
 
 **List view** (existing). Dense edit, one row per item. Best for "I need to change something." Adds: comms thread popover per item, confirmation status dot, critical-path highlight.
 
 **Calendar view** (existing). Month grid with bars. Click bar → edit dialog (already shipped Tier 1). Adds: critical-path highlight, confirmation dot on bars, drag-to-reschedule (triggers cascade preview).
 
-**Resource view (NEW)** — side-by-side columns per company.
+### 6.3 Resource compare (NEW)
+
+Side-by-side columns per company. Scope: **all crews including in-house HSH Drywall crews and external subs** — manpower overallocation doesn't respect the GC/drywall divide.
+
 ```
                 Acme Plumbing    HSH In-house     Smith Framing    ABC Trim
    Mon May 5    ─────────────    Frame walls      Frame walls      ─────────
@@ -322,6 +374,16 @@ interface SubcontractorContact {
 
 This is the "compare schedules like products" view. Owner-stated novel feature. PM-only.
 
+### 6.4 Comms inbox (NEW)
+
+Cross-project comms feed. Always-on as a sidebar inside Portfolio (§6.1); reachable standalone at `/schedule/inbox`.
+
+- **Default filter:** last 24h, inbound + system, unread or "needs response."
+- **Secondary filters:** by project, by assigned company, by direction.
+- **Click an entry** → drill into the originating schedule item (opens Per-project at that item with comms thread expanded).
+
+PM-only. Not a sub-facing surface.
+
 ---
 
 ## 7. Lifecycle workflows
@@ -334,10 +396,12 @@ This is the "compare schedules like products" view. Owner-stated novel feature. 
 5. Subs reply (or don't). Confirmations track in real time.
 
 ### 7.2 Daily ops (PM)
-- Open Schedule. Default to Calendar or Resource view.
-- Glance at confirmation dots — anything pending too long?
-- Inbox: new comms entries since last visit (badge count).
-- Sub texts "running late, will be 10am" → office sees notification → opens item → reads message in comms log → judges impact → optionally bumps the schedule (triggers cascade preview).
+- Open Schedule workspace → lands on **Portfolio** (calendar, all projects, this week + next).
+- Comms inbox sidebar (right) — new entries since last visit (badge count + unread highlight).
+- Glance at confirmation dots on bars — anything pending too long?
+- Sub texts "running late, will be 10am" → notification → click into the inbox entry → drill to the item → judges impact → optionally bumps the schedule (triggers cascade preview).
+- For deeper edit on one project, "solo" a project chip or drill into Per-project.
+- For "who's overallocated this week," switch to Resource view.
 
 ### 7.3 Field/sub day-of
 - Sub gets morning SMS reminder.
@@ -372,9 +436,13 @@ Concrete utility module: `src/lib/scheduleDateMath.ts` (workday math) + `src/lib
 
 **Forms / inspections** — future: passing form submission marks a milestone complete automatically.
 
-**Time clock** *(future module)* — clock-in references active schedule items. Closes loop on actual hours per task.
+**Time clock** *(future module)* — clock-in references active schedule items. Closes loop on actual hours per task. TimeClock lives in the HR workspace today; may promote to its own workspace once geofencing / photo-verification land.
 
 **Recent Activity** (existing card on Project Detail) — schedule item creation, completion, and major changes feed it. Cheap add once table promotion lands.
+
+**Drywall workspace** — shares the `schedule_items` table. The Drywall workspace's schedule view is the Portfolio surface (§6.1) pre-filtered to `type='drywall'`. Drywall scheduler edits the same rows the GC PM edits; edit-conflict semantics in §4.2a. Drywall-only jobs are visible only in the Drywall workspace, GC PMs don't see them by default. Drywall trade work on a GC project surfaces in both workspaces as a single row, two views (§5.2).
+
+**Workspace switcher** (`src/components/WorkspaceSwitcher.tsx`) — Schedule appears as a top-level workspace alongside Projects, Deals, Tenants, Meetings, HR, Drywall. Seven workspaces total post-merge.
 
 ---
 
@@ -389,26 +457,28 @@ Re-prioritized from v1 to put comms layer earlier. Steps:
 5. **Add `communication_log_entries` table** — the central new entity.
 6. **Manual comms log UI in PM view** — manual entries first (no SMS yet). Office can log calls, type messages.
 7. **Confirmation state on items** — visible as colored dots. Manual confirm/decline initially.
-8. **SMS outbound (Twilio)** — assignment, weekly digest, reminders. No inbound yet.
-9. **Cascade preview modal** — uses #4 + #8.
-10. **SMS inbound (Twilio webhook)** — parse confirmations, route messages to log + office notifications.
-11. **Field/sub portal routes** — mobile views, RLS by `assigned_company_id`.
-12. **Resource compare view** — needs cross-project queries (#1 enables this).
-13. **Critical-path compute + display** — `criticalPath.ts` + UI highlights.
-14. **Holidays + unavailability tables** — config UI for org admins.
-15. **Baseline + variance** *(deferred Tier)*.
+8. **Schedule workspace + Portfolio view + Comms inbox sidebar** *(NEW)* — promote Schedule to a top-level workspace via `WorkspaceSwitcher.tsx`. Build the Portfolio calendar surface at `/schedule` (§6.1) and the always-on Comms inbox sidebar (§6.4). Per-project schedule still reachable at `/projects/:projectId/schedule`. Depends on #1 (cross-project queries) and #6 (comms log to display). SMS layer slots into the surface in #9–#11.
+9. **SMS outbound (Twilio)** — assignment, weekly digest, reminders. No inbound yet.
+10. **Cascade preview modal** — uses #4 + #9.
+11. **SMS inbound (Twilio webhook)** — parse confirmations, route messages to log + office notifications.
+12. **Field/sub portal routes** — mobile views, RLS by `assigned_company_id`.
+13. **Resource compare view** — all crews (GC subs + in-house drywall). Needs cross-project queries (#1 enables this).
+14. **Critical-path compute + display** — `criticalPath.ts` + UI highlights.
+15. **Holidays + unavailability tables** — config UI for org admins.
+16. **Baseline + variance** *(deferred Tier)*.
 
 Sizing:
 - 1–4 ≈ 2 sessions (foundational data + math)
 - 5–7 ≈ 2 sessions (comms log central UI)
-- 8–10 ≈ 2–3 sessions (Twilio integration both ways)
-- 11 ≈ 2 sessions (field/sub portal + RLS)
-- 12 ≈ 1 session
+- 8 ≈ 1–2 sessions (workspace + Portfolio + inbox sidebar)
+- 9–11 ≈ 2–3 sessions (Twilio integration both ways)
+- 12 ≈ 2 sessions (field/sub portal + RLS)
 - 13 ≈ 1 session
 - 14 ≈ 1 session
-- 15 ≈ deferred
+- 15 ≈ 1 session
+- 16 ≈ deferred
 
-Roughly 11–14 dev sessions to reach the target state.
+Roughly 12–15 dev sessions to reach the target state.
 
 ---
 
@@ -428,6 +498,12 @@ Items asked in v1 that the walkthrough resolved:
 | Baseline | **Deferred** — useful eventually, not Tier 1. Owner didn't push for it. |
 | Recurring items | **Out of scope.** Separate future "daily tasks" module. |
 | Reply parsing messiness | Auto-handle `Y/yes/ok/👍`, escalate ambiguous to PM. |
+| Portfolio view as a first-class lens? *(v3)* | **Yes** — calendar landing at `/schedule`, spans all in-flight projects. Filter chips per project with "solo" focus. Drywall workspace shares this surface pre-filtered. |
+| Schedule a top-level workspace? *(v3)* | **Yes.** Sibling of Projects/Deals/Tenants/Meetings/HR/Drywall. Not nested under Projects or HR. |
+| Workspace landing page? *(v3)* | **Portfolio calendar** — this week + next week, all GC projects, comms inbox sidebar open. |
+| Resource-compare scope — GC subs only, or include in-house drywall crews? *(v3)* | **All crews.** Manpower overallocation doesn't respect the GC/drywall divide. |
+| Two-views-one-row edit conflicts (GC PM vs drywall scheduler editing the same row)? *(v3)* | **Last-write-wins.** Comms log captures both edits as system entries. Confirmation resets to `'pending'` on date change so the other side sees the move. No formal handshake. |
+| Drywall-only projects in GC portfolio? *(v3)* | **Hidden by default.** `metadata.app_scope = 'DRYWALL_ONLY'` filters them out of GC views; visible only in Drywall workspace. |
 
 ---
 
@@ -443,10 +519,18 @@ Resolutions added since v2:
 - In-house sub distinction → `is_internal: boolean` on `subcontractors`. Means "1099 working exclusively for HSH" (not a W-2 distinction). Drives sort, filter, and default notification channel.
 - Phone → company resolution → handled by the new `subcontractor_contacts` one-to-many table. Multiple phones per company supported; unmatched inbound numbers route to a "needs triage" inbox for the office.
 
+Resolutions added in v3 (Drywall-as-workspace merge planning):
+- Schedule is its own workspace; Portfolio is its default landing.
+- Portfolio is calendar-primary, project-row layout, 14-day default window, filter chips with "solo" focus, type filter (All / GC / Drywall).
+- Comms inbox is a fourth surface (§6.4), always-on as a sidebar in Portfolio.
+- Cross-workspace edit conflicts on shared rows use last-write-wins with comms-log audit (§4.2a).
+- Drywall workspace's schedule view is the Portfolio surface pre-filtered to drywall jobs.
+- Resource-compare spans all crews including in-house drywall.
+
 ---
 
 ## 13. What this doc is for
 
 This is the planning artifact we work from. Build sessions reference it. Sequence in §10 governs ordering. When something doesn't match reality, we update the doc — it's living, not a contract.
 
-Tomorrow's question is: of the 15 migration steps in §10, which 1–2 do we tackle first?
+Tomorrow's question is: of the 16 migration steps in §10, which 1–2 do we tackle first? Note the new §8 (Schedule workspace + Portfolio + Comms inbox) is the visible turning point — once that lands, the rest of the work plugs into a surface PMs are already using.
