@@ -5,7 +5,7 @@
 // Manage project schedule with auto-generation from estimate items
 //
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { Project, Trade, ScheduleItem, ProjectSchedule, ScheduleItemType, ConfirmationStatus } from '@/types'
 import { getTradesForEstimate_Hybrid, updateProject_Hybrid } from '@/services/hybridService'
@@ -52,19 +52,28 @@ import {
   addMonths,
   subMonths,
   isWithinInterval,
+  parseISO,
   startOfDay,
   endOfDay,
   addDays,
 } from 'date-fns'
 import { toLocalDate, toLocalEndOfDay, getItemColsForWeek as getItemColsForWeekUtil } from '@/lib/scheduleCalendarUtils'
-import { cascadeSchedule } from '@/lib/scheduleDateMath'
+import { addWorkdays, cascadeSchedule } from '@/lib/scheduleDateMath'
+import {
+  classifySmsEligibility,
+  computeCascadeDiff,
+  type CascadeRowWithSmsContext,
+} from '@/lib/scheduleCascadeDiff'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
+import { CascadePreviewModal } from '@/components/CascadePreviewModal'
 import {
   buildPublishPreview,
+  sendOneCascadeUpdate,
   sendOneAssignment,
+  writeSystemCascadeEntry,
   type PublishPreview,
 } from '@/services/smsService'
 
@@ -81,6 +90,22 @@ interface SubcontractorOption {
   id: string
   name: string
   is_internal: boolean
+  phone: string | null
+}
+
+function buildOriginalDatesMap(
+  items: ScheduleItem[],
+): Map<string, { startDate: Date; endDate: Date }> {
+  return new Map(
+    items.map((item) => [
+      item.id,
+      { startDate: new Date(item.startDate), endDate: new Date(item.endDate) },
+    ]),
+  )
+}
+
+function buildOriginalDurationsMap(items: ScheduleItem[]): Map<string, number> {
+  return new Map(items.map((item) => [item.id, item.duration]))
 }
 
 // ----------------------------------------------------------------------------
@@ -92,6 +117,12 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
   const [trades, setTrades] = useState<Trade[]>([])
   const [subcontractors, setSubcontractors] = useState<SubcontractorOption[]>([])
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([])
+  const [originalDatesById, setOriginalDatesById] = useState<
+    Map<string, { startDate: Date; endDate: Date }>
+  >(() => new Map())
+  const [originalDurationsById, setOriginalDurationsById] = useState<Map<string, number>>(
+    () => new Map(),
+  )
   const [projectStartDate, setProjectStartDate] = useState<Date>(project.startDate || new Date())
   const [projectEndDate, setProjectEndDate] = useState<Date>(project.endDate || new Date())
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
@@ -108,6 +139,9 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     total: number
     failed: number
   } | null>(null)
+  const [cascadePreviewRows, setCascadePreviewRows] = useState<CascadeRowWithSmsContext[] | null>(null)
+  const [cascadePreviewItems, setCascadePreviewItems] = useState<ScheduleItem[] | null>(null)
+  const [committingCascade, setCommittingCascade] = useState(false)
 
   // Centered title in the AppHeader
   usePageTitle('Schedule')
@@ -117,7 +151,7 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
 
     void supabase
       .from('subcontractors')
-      .select('id, name, is_internal')
+      .select('id, name, is_internal, phone')
       .eq('is_active', true)
       .order('is_internal', { ascending: false })
       .order('name', { ascending: true })
@@ -146,6 +180,8 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
 
         if (project.schedule && project.schedule.items.length > 0) {
           setScheduleItems(project.schedule.items)
+          setOriginalDatesById(buildOriginalDatesMap(project.schedule.items))
+          setOriginalDurationsById(buildOriginalDurationsMap(project.schedule.items))
           setProjectStartDate(project.schedule.startDate)
           setProjectEndDate(project.schedule.endDate)
         } else {
@@ -255,15 +291,21 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     setScheduleItems(items => {
       const updatedItems = items.map(item => {
         if (item.id === itemId) {
-          return { ...item, ...updates }
+          const nextItem = { ...item, ...updates }
+          if (updates.duration !== undefined) {
+            const normalizedDuration = Math.max(1, updates.duration || 1)
+            nextItem.duration = normalizedDuration
+            nextItem.endDate = addWorkdays(
+              nextItem.startDate,
+              Math.max(0, normalizedDuration - 1),
+              undefined,
+              nextItem.assignedCompanyId ?? undefined,
+            )
+          }
+          return nextItem
         }
         return item
       })
-
-      // If duration or end date changed, cascade to dependent items
-      if (updates.duration !== undefined || updates.startDate !== undefined) {
-        return cascadeSchedule(updatedItems).items
-      }
 
       return updatedItems
     })
@@ -282,15 +324,18 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     setHasUnsavedChanges(true)
   }
 
-  const handleSaveSchedule = async () => {
+  const handleSaveSchedule = async (
+    options: { showToast?: boolean; itemsOverride?: ScheduleItem[] } = {},
+  ) => {
+    const itemsToSave = options.itemsOverride ?? scheduleItems
     const schedule: ProjectSchedule = {
       projectId: project.id,
       startDate: projectStartDate,
       endDate: projectEndDate,
       duration: Math.ceil((projectEndDate.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24)),
-      items: scheduleItems,
+      items: itemsToSave,
       milestones: [],
-      percentComplete: scheduleItems.reduce((sum, item) => sum + item.percentComplete, 0) / (scheduleItems.length || 1),
+      percentComplete: itemsToSave.reduce((sum, item) => sum + item.percentComplete, 0) / (itemsToSave.length || 1),
       daysElapsed: Math.ceil((new Date().getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24)),
       daysRemaining: Math.ceil((projectEndDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
       isOnSchedule: true,
@@ -301,29 +346,48 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     if (updated) {
       if (updated.schedule) {
         setScheduleItems(updated.schedule.items)
+        setOriginalDatesById(buildOriginalDatesMap(updated.schedule.items))
+        setOriginalDurationsById(buildOriginalDurationsMap(updated.schedule.items))
         setProjectStartDate(updated.schedule.startDate)
         setProjectEndDate(updated.schedule.endDate)
       }
       setHasUnsavedChanges(false)
-      toast.success('Schedule saved')
+      if (options.showToast !== false) toast.success('Schedule saved')
     } else {
       toast.error('Failed to save schedule. Please try again.')
     }
+    return updated
   }
-
-  // Auto-save changes after a delay
-  useEffect(() => {
-    if (hasUnsavedChanges && scheduleItems.length > 0) {
-      const timer = setTimeout(() => {
-        handleSaveSchedule()
-      }, 2000) // Auto-save after 2 seconds of no changes
-
-      return () => clearTimeout(timer)
-    }
-  }, [scheduleItems, hasUnsavedChanges])
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+
+  const dateChangeCount = useMemo(() => {
+    let count = 0
+    for (const item of scheduleItems) {
+      const orig = originalDatesById.get(item.id)
+      if (!orig) continue
+      const durationChanged = originalDurationsById.get(item.id) !== item.duration
+      const startChanged = format(orig.startDate, 'yyyy-MM-dd') !== format(item.startDate, 'yyyy-MM-dd')
+      const endChanged = format(orig.endDate, 'yyyy-MM-dd') !== format(item.endDate, 'yyyy-MM-dd')
+      if (startChanged || endChanged || durationChanged) count += 1
+    }
+    return count
+  }, [scheduleItems, originalDatesById, originalDurationsById])
+  const hasPendingDateChanges = dateChangeCount > 0
+
+  // Auto-save non-date changes after a delay. Date changes require explicit
+  // review through the cascade preview.
+  useEffect(() => {
+    if (!hasUnsavedChanges || scheduleItems.length === 0) return
+    if (hasPendingDateChanges) return
+
+    const timer = setTimeout(() => {
+      void handleSaveSchedule()
+    }, 2000)
+
+    return () => clearTimeout(timer)
+  }, [scheduleItems, hasUnsavedChanges, hasPendingDateChanges])
 
   const getStatusColor = (status: ScheduleItem['status']) => {
     switch (status) {
@@ -427,6 +491,134 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
       )
     } else {
       toast.error(firstErrorMessage ?? `${failed} SMS failed - check Comms log.`)
+    }
+  }
+
+  const handleSaveScheduleClick = async () => {
+    if (!hasPendingDateChanges) {
+      await handleSaveSchedule()
+      return
+    }
+
+    const result = cascadeSchedule(scheduleItems)
+    if (result.cycle) {
+      toast.error('Could not preview schedule changes: dependency cycle detected.')
+      return
+    }
+
+    const diff = computeCascadeDiff(result.items, originalDatesById)
+    const subcontractorById = new Map(
+      subcontractors.map((subcontractor) => [
+        subcontractor.id,
+        { name: subcontractor.name, phone: subcontractor.phone },
+      ]),
+    )
+    const classified = diff.map((row) =>
+      classifySmsEligibility(row, subcontractorById),
+    )
+
+    if (classified.length === 0) {
+      await handleSaveSchedule()
+      return
+    }
+
+    setCascadePreviewItems(result.items)
+    setScheduleItems(result.items)
+    setCascadePreviewRows(classified)
+  }
+
+  const handleCascadeCancel = () => {
+    setScheduleItems((items) =>
+      items.map((item) => {
+        const orig = originalDatesById.get(item.id)
+        const originalDuration = originalDurationsById.get(item.id)
+        if (!orig) return item
+        return {
+          ...item,
+          startDate: new Date(orig.startDate),
+          endDate: new Date(orig.endDate),
+          duration: originalDuration ?? item.duration,
+        }
+      }),
+    )
+    setCascadePreviewItems(null)
+    setCascadePreviewRows(null)
+  }
+
+  const handleCascadeCommit = async (selectedSmsItemIds: Set<string>) => {
+    if (!cascadePreviewRows || !cascadePreviewItems) return
+    setCommittingCascade(true)
+
+    try {
+      const updated = await handleSaveSchedule({
+        showToast: false,
+        itemsOverride: cascadePreviewItems,
+      })
+      if (!updated) throw new Error('Schedule save failed')
+
+      let smsSuccess = 0
+      let smsFailed = 0
+      let inAppOnly = 0
+
+      for (const row of cascadePreviewRows) {
+        if (row.sms_eligibility !== 'eligible') {
+          inAppOnly += 1
+          await writeSystemCascadeEntry({
+            project_id: project.id,
+            schedule_item_id: row.item_id,
+            item_name: row.item_name,
+            old_start: row.old_start,
+            new_start: row.new_start,
+            old_end: row.old_end,
+            new_end: row.new_end,
+            reason: row.sms_eligibility,
+          })
+          continue
+        }
+
+        if (!selectedSmsItemIds.has(row.item_id)) {
+          inAppOnly += 1
+          await writeSystemCascadeEntry({
+            project_id: project.id,
+            schedule_item_id: row.item_id,
+            item_name: row.item_name,
+            old_start: row.old_start,
+            new_start: row.new_start,
+            old_end: row.old_end,
+            new_end: row.new_end,
+            reason: 'pm_opt_out',
+          })
+          continue
+        }
+
+        const smsResult = await sendOneCascadeUpdate({
+          schedule_item_id: row.item_id,
+          project_id: project.id,
+          recipient_phone: row.recipient_phone as string,
+          recipient_company_id: row.assigned_company_id as string,
+          item_name: row.item_name,
+          project_name: project.name,
+          new_start: row.new_start,
+          new_end: row.new_end,
+        })
+        if (smsResult.success) {
+          smsSuccess += 1
+        } else {
+          smsFailed += 1
+          console.error('Cascade SMS failed', smsResult.error)
+        }
+      }
+
+      setCascadePreviewItems(null)
+      setCascadePreviewRows(null)
+      toast.success(
+        `${cascadePreviewRows.length} items updated. ${smsSuccess} SMS sent${inAppOnly > 0 ? `, ${inAppOnly} in-app only` : ''}${smsFailed > 0 ? `, ${smsFailed} failed` : ''}.`,
+      )
+    } catch (error) {
+      console.error('Cascade commit failed', error)
+      toast.error('Could not commit cascade changes.')
+    } finally {
+      setCommittingCascade(false)
     }
   }
 
@@ -546,10 +738,10 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
             id={`start-${item.id}`}
             type="date"
             value={item.startDate instanceof Date && !isNaN(item.startDate.getTime())
-              ? item.startDate.toISOString().split('T')[0]
-              : new Date().toISOString().split('T')[0]}
+              ? format(item.startDate, 'yyyy-MM-dd')
+              : format(new Date(), 'yyyy-MM-dd')}
             onChange={(e) => handleUpdateScheduleItem(item.id, {
-              startDate: new Date(e.target.value)
+              startDate: parseISO(e.target.value)
             })}
             className="text-sm"
           />
@@ -739,7 +931,9 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
                 Auto-saving in progress…
               </p>
               <p className="text-xs text-muted-foreground">
-                Changes will be saved automatically in 2 seconds, or click "Save Schedule" to save immediately.
+                {hasPendingDateChanges
+                  ? 'Date changes require Save Schedule review before they are committed.'
+                  : 'Changes will be saved automatically in 2 seconds, or click "Save Schedule" to save immediately.'}
               </p>
             </div>
           </div>
@@ -785,9 +979,13 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
 
       {/* Action Buttons */}
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button onClick={handleSaveSchedule}>
+        <Button onClick={() => void handleSaveScheduleClick()} disabled={committingCascade}>
           <CheckCircle className="size-4" />
-          {hasUnsavedChanges ? 'Save Schedule (Unsaved Changes)' : 'Save Schedule'}
+          {hasPendingDateChanges
+            ? `Save Schedule (${dateChangeCount} date changes)`
+            : hasUnsavedChanges
+              ? 'Save Schedule (Unsaved Changes)'
+              : 'Save Schedule'}
         </Button>
         <Button onClick={handleAutoCalculateDates} variant="outline">
           <Link2 className="size-4" />
@@ -1056,6 +1254,15 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
         projectId={project.id}
         scheduleItem={commsPanelState.scheduleItem}
       />
+      {cascadePreviewRows && (
+        <CascadePreviewModal
+          open
+          onClose={handleCascadeCancel}
+          rows={cascadePreviewRows}
+          projectName={project.name}
+          onCommit={handleCascadeCommit}
+        />
+      )}
       <Dialog
         open={publishPreview !== null}
         onOpenChange={(open) => {

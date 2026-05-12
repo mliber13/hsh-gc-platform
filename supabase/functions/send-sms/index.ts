@@ -14,6 +14,7 @@ interface SendSmsRequest {
   recipient_phone: string
   recipient_company_id: string
   body: string
+  message_type?: string
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -57,7 +58,9 @@ serve(async (req) => {
       recipient_phone,
       recipient_company_id,
       body,
+      message_type,
     } = payload
+    const messageType = message_type || 'assignment_publish'
 
     if (!schedule_item_id || !project_id || !recipient_phone || !recipient_company_id || !body) {
       return jsonResponse({ error: 'Missing required SMS payload fields' }, 400)
@@ -106,13 +109,13 @@ serve(async (req) => {
       body: success ? body : `[FAILED] ${body}`,
       metadata: success
         ? {
-          type: 'assignment_publish',
+          type: messageType,
           twilio_sid: twilioJson.sid,
           recipient_phone,
           recipient_company_id,
         }
         : {
-          type: 'assignment_publish',
+          type: messageType,
           failed: true,
           error: twilioJson,
           recipient_phone,

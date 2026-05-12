@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase'
+import { requireUserOrgId } from '@/services/userService'
+import type { SmsEligibilityReason } from '@/lib/scheduleCascadeDiff'
 
 export interface PublishCandidate {
   schedule_item_id: string
@@ -149,4 +151,119 @@ export async function sendOneAssignment(
     error: null,
     errorMessage: null,
   }
+}
+
+export function buildCascadeMessage(
+  itemName: string,
+  projectName: string,
+  newStart: Date,
+  newEnd: Date,
+): string {
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
+  const startStr = newStart.toLocaleDateString('en-US', opts)
+  const endStr = newEnd.toLocaleDateString('en-US', opts)
+  return `HSH GC schedule update - ${itemName} at ${projectName} moved to ${startStr} - ${endStr}. Reply Y to confirm or N to decline.`
+}
+
+export async function sendOneCascadeUpdate(params: {
+  schedule_item_id: string
+  project_id: string
+  recipient_phone: string
+  recipient_company_id: string
+  item_name: string
+  project_name: string
+  new_start: Date
+  new_end: Date
+}): Promise<SendSmsResult> {
+  const body = buildCascadeMessage(
+    params.item_name,
+    params.project_name,
+    params.new_start,
+    params.new_end,
+  )
+  const { data, error } = await supabase.functions.invoke('send-sms', {
+    body: {
+      schedule_item_id: params.schedule_item_id,
+      project_id: params.project_id,
+      recipient_phone: params.recipient_phone,
+      recipient_company_id: params.recipient_company_id,
+      body,
+      message_type: 'cascade_update',
+    },
+  })
+
+  if (error) {
+    return {
+      schedule_item_id: params.schedule_item_id,
+      success: false,
+      error,
+      errorMessage: error.message,
+    }
+  }
+  if (!(data as any)?.success) {
+    const errorMessage =
+      (data as any)?.error?.message ??
+      (data as any)?.error ??
+      (data as any)?.log_error ??
+      (data as any)?.update_error ??
+      'SMS send failed'
+    return {
+      schedule_item_id: params.schedule_item_id,
+      success: false,
+      error: data,
+      errorMessage: typeof errorMessage === 'string'
+        ? errorMessage
+        : JSON.stringify(errorMessage),
+    }
+  }
+
+  return {
+    schedule_item_id: params.schedule_item_id,
+    success: true,
+    error: null,
+    errorMessage: null,
+  }
+}
+
+export async function writeSystemCascadeEntry(params: {
+  project_id: string
+  schedule_item_id: string
+  item_name: string
+  old_start: Date
+  new_start: Date
+  old_end: Date
+  new_end: Date
+  reason: SmsEligibilityReason | 'pm_opt_out'
+}): Promise<void> {
+  const organizationId = await requireUserOrgId()
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
+  const oldStart = params.old_start.toLocaleDateString('en-US', opts)
+  const newStart = params.new_start.toLocaleDateString('en-US', opts)
+  const reasonLabel = params.reason === 'pm_opt_out'
+    ? 'PM opted out'
+    : params.reason.replaceAll('_', ' ')
+
+  const { error } = await supabase
+    .from('communication_log_entries')
+    .insert({
+      organization_id: organizationId,
+      project_id: params.project_id,
+      schedule_item_id: params.schedule_item_id,
+      direction: 'system',
+      channel: 'system',
+      author_user_id: null,
+      author_company_id: null,
+      author_label: 'system',
+      body: `Date moved from ${oldStart} to ${newStart} (no SMS - ${reasonLabel})`,
+      metadata: {
+        type: 'cascade_silent',
+        old_start: params.old_start.toISOString(),
+        new_start: params.new_start.toISOString(),
+        old_end: params.old_end.toISOString(),
+        new_end: params.new_end.toISOString(),
+        reason: params.reason,
+      },
+    })
+
+  if (error) throw error
 }
