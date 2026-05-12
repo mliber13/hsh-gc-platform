@@ -1,6 +1,9 @@
 import { supabase } from '@/lib/supabase'
 import { requireUserOrgId } from '@/services/userService'
-import type { SmsEligibilityReason } from '@/lib/scheduleCascadeDiff'
+import type {
+  CascadeRowWithSmsContext,
+  SmsEligibilityReason,
+} from '@/lib/scheduleCascadeDiff'
 
 export interface PublishCandidate {
   schedule_item_id: string
@@ -266,4 +269,91 @@ export async function writeSystemCascadeEntry(params: {
     })
 
   if (error) throw error
+}
+
+export interface PersistCascadeResult {
+  smsSuccess: number
+  smsFailed: number
+  silentLogged: number
+  total: number
+}
+
+export async function persistCascadeChanges(params: {
+  projectId: string
+  projectName: string
+  rows: CascadeRowWithSmsContext[]
+  selectedSmsItemIds: Set<string>
+}): Promise<PersistCascadeResult> {
+  const { projectId, projectName, rows, selectedSmsItemIds } = params
+
+  // Per-row UPDATEs (not bulk upsert) to avoid RLS WITH CHECK on the
+  // INSERT path: our payload is partial (id + dates only), so the
+  // INSERT-side org-scope check would reject the row even though the
+  // UPDATE policy would pass. UPDATE-only sidesteps the issue cleanly.
+  for (const row of rows) {
+    const { error } = await supabase
+      .from('schedule_items')
+      .update({
+        start_date: row.new_start.toISOString().slice(0, 10),
+        end_date: row.new_end.toISOString().slice(0, 10),
+      })
+      .eq('id', row.item_id)
+    if (error) throw error
+  }
+
+  let smsSuccess = 0
+  let smsFailed = 0
+  let silentLogged = 0
+
+  for (const row of rows) {
+    if (!selectedSmsItemIds.has(row.item_id)) {
+      await writeSystemCascadeEntry({
+        project_id: projectId,
+        schedule_item_id: row.item_id,
+        item_name: row.item_name,
+        old_start: row.old_start,
+        new_start: row.new_start,
+        old_end: row.old_end,
+        new_end: row.new_end,
+        reason: 'pm_opt_out',
+      })
+      silentLogged += 1
+      continue
+    }
+
+    if (row.sms_eligibility !== 'eligible') {
+      await writeSystemCascadeEntry({
+        project_id: projectId,
+        schedule_item_id: row.item_id,
+        item_name: row.item_name,
+        old_start: row.old_start,
+        new_start: row.new_start,
+        old_end: row.old_end,
+        new_end: row.new_end,
+        reason: row.sms_eligibility,
+      })
+      silentLogged += 1
+      continue
+    }
+
+    const result = await sendOneCascadeUpdate({
+      schedule_item_id: row.item_id,
+      project_id: projectId,
+      recipient_phone: row.recipient_phone as string,
+      recipient_company_id: row.assigned_company_id as string,
+      item_name: row.item_name,
+      project_name: projectName,
+      new_start: row.new_start,
+      new_end: row.new_end,
+    })
+
+    if (result.success) {
+      smsSuccess += 1
+    } else {
+      smsFailed += 1
+      console.error('Cascade SMS failed', result.error)
+    }
+  }
+
+  return { smsSuccess, smsFailed, silentLogged, total: rows.length }
 }

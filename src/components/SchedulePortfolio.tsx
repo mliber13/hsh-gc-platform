@@ -556,6 +556,16 @@ export function SchedulePortfolio() {
             ),
           )
         }}
+        onCascadeItemsUpdated={(updatedItems) => {
+          const updatedById = new Map(updatedItems.map((item) => [item.id, item]))
+          setItems((current) =>
+            current.map((item) => updatedById.get(item.id) ?? item),
+          )
+          setModalItem((current) =>
+            current ? updatedById.get(current.id) ?? current : current,
+          )
+          refreshInbox()
+        }}
       />
 
       {commsPanelState.projectId && (

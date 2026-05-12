@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { format, parseISO } from 'date-fns'
+import { differenceInCalendarDays, format, parseISO } from 'date-fns'
 import { AlertCircle, CheckCircle, Clock, PlayCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -25,10 +25,21 @@ import {
   ConfirmationDot,
   confirmationStatusLabel,
 } from '@/components/ConfirmationDot'
+import { CascadePreviewModal } from '@/components/CascadePreviewModal'
+import { cascadeSchedule } from '@/lib/scheduleDateMath'
+import {
+  classifySmsEligibility,
+  computeCascadeDiff,
+  type CascadeRowWithSmsContext,
+} from '@/lib/scheduleCascadeDiff'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { fetchCommsForScheduleItem } from '@/services/communicationLogService'
-import { updateScheduleItemQuickEdit } from '@/services/supabaseService'
+import {
+  fetchScheduleByProjectId,
+  updateScheduleItemQuickEdit,
+} from '@/services/supabaseService'
+import { persistCascadeChanges } from '@/services/smsService'
 import type { CommunicationLogEntry } from '@/types/communicationLog'
 import type { ConfirmationStatus, ScheduleItem } from '@/types'
 import type { PortfolioItem } from '@/services/scheduleService'
@@ -39,6 +50,22 @@ interface SubcontractorOption {
   id: string
   name: string
   is_internal: boolean
+  phone: string | null
+}
+
+type RefreshedPortfolioItemRow = {
+  id: string
+  project_id: string
+  schedule_id: string
+  name: string
+  start_date: string
+  end_date: string
+  confirmation_status: PortfolioItem['confirmation_status'] | null
+  confirmation_notes: string | null
+  status: PortfolioItem['status'] | null
+  assigned_company_id: string | null
+  notes: string | null
+  subcontractors?: { name: string | null } | Array<{ name: string | null }> | null
 }
 
 interface SchedulePortfolioItemModalProps {
@@ -47,6 +74,7 @@ interface SchedulePortfolioItemModalProps {
   item: PortfolioItem | null
   projectName: string
   onItemUpdated: (patch: Partial<PortfolioItem>) => void
+  onCascadeItemsUpdated?: (items: PortfolioItem[]) => void
   onOpenLog: () => void
   onLogEntry: () => void
 }
@@ -111,12 +139,35 @@ function syncPortfolioItem(
   }
 }
 
+function joinedOne<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null
+  return value ?? null
+}
+
+function portfolioItemFromRow(row: RefreshedPortfolioItemRow): PortfolioItem {
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    schedule_id: row.schedule_id,
+    name: row.name,
+    start_date: row.start_date,
+    end_date: row.end_date,
+    confirmation_status: row.confirmation_status ?? 'unsent',
+    confirmation_notes: row.confirmation_notes,
+    status: row.status ?? 'not-started',
+    assigned_company_id: row.assigned_company_id,
+    assigned_company_name: joinedOne(row.subcontractors)?.name ?? null,
+    notes: row.notes,
+  }
+}
+
 export function SchedulePortfolioItemModal({
   open,
   onClose,
   item,
   projectName,
   onItemUpdated,
+  onCascadeItemsUpdated,
   onOpenLog,
   onLogEntry,
 }: SchedulePortfolioItemModalProps) {
@@ -127,6 +178,8 @@ export function SchedulePortfolioItemModal({
   const [commsLoading, setCommsLoading] = useState(false)
   const [profileNames, setProfileNames] = useState<Record<string, string>>({})
   const [companyNames, setCompanyNames] = useState<Record<string, string>>({})
+  const [cascadePreviewRows, setCascadePreviewRows] = useState<CascadeRowWithSmsContext[] | null>(null)
+  const [committingCascade, setCommittingCascade] = useState(false)
 
   useEffect(() => {
     setLocalItem(item)
@@ -140,7 +193,7 @@ export function SchedulePortfolioItemModal({
       try {
         const { data, error } = await supabase
           .from('subcontractors')
-          .select('id, name, is_internal')
+          .select('id, name, is_internal, phone')
           .eq('is_active', true)
           .order('is_internal', { ascending: false })
           .order('name', { ascending: true })
@@ -250,10 +303,27 @@ export function SchedulePortfolioItemModal({
     return entry.author_label || 'System'
   }
 
+  const datesDirty = useMemo(() => {
+    if (!localItem || !item) return false
+    return (
+      localItem.start_date !== item.start_date ||
+      localItem.end_date !== item.end_date
+    )
+  }, [localItem?.start_date, localItem?.end_date, item?.start_date, item?.end_date])
+
   if (!localItem) return null
 
   const start = format(parseISO(localItem.start_date), 'MMM d, yyyy')
   const end = format(parseISO(localItem.end_date), 'MMM d, yyyy')
+
+  const toParentUpdate = (next: PortfolioItem): PortfolioItem => {
+    if (!item) return next
+    return {
+      ...next,
+      start_date: item.start_date,
+      end_date: item.end_date,
+    }
+  }
 
   const applySyncedItem = (
     previous: PortfolioItem,
@@ -261,16 +331,26 @@ export function SchedulePortfolioItemModal({
     assignedCompanyName?: string | null,
   ) => {
     const synced = syncPortfolioItem(previous, updated, assignedCompanyName)
-    setLocalItem(synced)
-    onItemUpdated(synced)
-    return synced
+    const nextLocal = item && (
+      previous.start_date !== item.start_date ||
+      previous.end_date !== item.end_date
+    )
+      ? {
+        ...synced,
+        start_date: previous.start_date,
+        end_date: previous.end_date,
+      }
+      : synced
+    setLocalItem(nextLocal)
+    onItemUpdated(toParentUpdate(synced))
+    return nextLocal
   }
 
   const handleSaveConfirmation = async (next: ConfirmationStatus) => {
     const previous = localItem
     const optimistic = { ...previous, confirmation_status: next }
     setLocalItem(optimistic)
-    onItemUpdated(optimistic)
+    onItemUpdated(toParentUpdate(optimistic))
 
     try {
       const updated = await updateScheduleItemQuickEdit(previous.id, {
@@ -279,7 +359,7 @@ export function SchedulePortfolioItemModal({
       applySyncedItem(previous, updated)
     } catch (error) {
       setLocalItem(previous)
-      onItemUpdated(previous)
+      onItemUpdated(toParentUpdate(previous))
       console.error('Could not update confirmation', error)
       toast.error('Could not update confirmation.')
     }
@@ -289,7 +369,7 @@ export function SchedulePortfolioItemModal({
     const previous = localItem
     const optimistic = { ...previous, status: next }
     setLocalItem(optimistic)
-    onItemUpdated(optimistic)
+    onItemUpdated(toParentUpdate(optimistic))
 
     try {
       const updated = await updateScheduleItemQuickEdit(previous.id, {
@@ -298,49 +378,27 @@ export function SchedulePortfolioItemModal({
       applySyncedItem(previous, updated)
     } catch (error) {
       setLocalItem(previous)
-      onItemUpdated(previous)
+      onItemUpdated(toParentUpdate(previous))
       console.error('Could not update item status', error)
       toast.error('Could not update item status.')
     }
   }
 
-  const handleSaveDates = async (
+  const handleSaveDates = (
     nextStartDate: string,
     nextEndDate: string,
   ) => {
-    const previous = localItem
-    const optimistic = {
-      ...previous,
-      start_date: nextStartDate,
-      end_date: nextEndDate,
-    }
-    setLocalItem(optimistic)
-    onItemUpdated(optimistic)
-
     if (!nextStartDate || !nextEndDate) return
     if (nextEndDate < nextStartDate) {
       toast.warning('End date must be on or after start date.')
       return
     }
-    if (
-      nextStartDate === previous.start_date &&
-      nextEndDate === previous.end_date
-    ) {
-      return
-    }
 
-    try {
-      const updated = await updateScheduleItemQuickEdit(previous.id, {
-        start_date: nextStartDate,
-        end_date: nextEndDate,
-      })
-      applySyncedItem(previous, updated)
-    } catch (error) {
-      setLocalItem(previous)
-      onItemUpdated(previous)
-      console.error('Could not update item dates', error)
-      toast.error('Could not update item dates.')
-    }
+    setLocalItem({
+      ...localItem,
+      start_date: nextStartDate,
+      end_date: nextEndDate,
+    })
   }
 
   const handleSaveAssignedCompany = async (value: string) => {
@@ -355,7 +413,7 @@ export function SchedulePortfolioItemModal({
       assigned_company_name: assignedCompanyName,
     }
     setLocalItem(optimistic)
-    onItemUpdated(optimistic)
+    onItemUpdated(toParentUpdate(optimistic))
 
     try {
       const updated = await updateScheduleItemQuickEdit(previous.id, {
@@ -364,7 +422,7 @@ export function SchedulePortfolioItemModal({
       applySyncedItem(previous, updated, assignedCompanyName)
     } catch (error) {
       setLocalItem(previous)
-      onItemUpdated(previous)
+      onItemUpdated(toParentUpdate(previous))
       console.error('Could not update assigned company', error)
       toast.error('Could not update assigned company.')
     }
@@ -380,7 +438,7 @@ export function SchedulePortfolioItemModal({
 
     const optimistic = { ...previous, [field]: nextValue }
     setLocalItem(optimistic)
-    onItemUpdated(optimistic)
+    onItemUpdated(toParentUpdate(optimistic))
 
     try {
       const updated = await updateScheduleItemQuickEdit(previous.id, {
@@ -390,13 +448,152 @@ export function SchedulePortfolioItemModal({
       toast.success(field === 'notes' ? 'Notes updated' : 'Confirmation notes updated')
     } catch (error) {
       setLocalItem(previous)
-      onItemUpdated(previous)
+      onItemUpdated(toParentUpdate(previous))
       console.error(`Could not update ${field}`, error)
       toast.error(field === 'notes' ? 'Could not update notes.' : 'Could not update confirmation notes.')
     }
   }
 
+  const handleOpenCascadePreview = async () => {
+    if (!localItem || !item) return
+
+    setCommittingCascade(true)
+    try {
+      const schedule = await fetchScheduleByProjectId(localItem.project_id)
+      if (!schedule?.items) {
+        throw new Error('Could not load project schedule for cascade math.')
+      }
+
+      const nextStart = parseISO(localItem.start_date)
+      const nextEnd = parseISO(localItem.end_date)
+      const proposedDuration = Math.max(
+        1,
+        differenceInCalendarDays(nextEnd, nextStart) + 1,
+      )
+      const proposedItems = schedule.items.map((scheduleItem) =>
+        scheduleItem.id === localItem.id
+          ? {
+            ...scheduleItem,
+            startDate: nextStart,
+            endDate: nextEnd,
+            duration: proposedDuration,
+          }
+          : scheduleItem,
+      )
+
+      const cascadeResult = cascadeSchedule(proposedItems)
+      if (cascadeResult.cycle) {
+        toast.error('Could not preview schedule changes: dependency cycle detected.')
+        return
+      }
+
+      const originalDatesById = new Map(
+        schedule.items.map((scheduleItem) => [
+          scheduleItem.id,
+          {
+            startDate: scheduleItem.startDate,
+            endDate: scheduleItem.endDate,
+          },
+        ]),
+      )
+      const diff = computeCascadeDiff(cascadeResult.items, originalDatesById)
+
+      const subMap = new Map(
+        subcontractors.map((subcontractor) => [
+          subcontractor.id,
+          { name: subcontractor.name, phone: subcontractor.phone ?? null },
+        ]),
+      )
+      const assignedIds = Array.from(
+        new Set(
+          cascadeResult.items
+            .map((scheduleItem) => scheduleItem.assignedCompanyId)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      )
+      const missingIds = assignedIds.filter((id) => !subMap.has(id))
+      if (missingIds.length > 0) {
+        const { data, error } = await supabase
+          .from('subcontractors')
+          .select('id, name, phone')
+          .in('id', missingIds)
+        if (error) throw error
+        for (const subcontractor of data ?? []) {
+          subMap.set(subcontractor.id, {
+            name: subcontractor.name,
+            phone: subcontractor.phone ?? null,
+          })
+        }
+      }
+
+      const classified = diff.map((row) => classifySmsEligibility(row, subMap))
+      if (classified.length === 0) {
+        toast.info('No schedule changes to preview.')
+        return
+      }
+      setCascadePreviewRows(classified)
+    } catch (error) {
+      console.error('Could not build cascade preview', error)
+      toast.error('Could not build cascade preview.')
+    } finally {
+      setCommittingCascade(false)
+    }
+  }
+
+  const handleCascadeCancel = () => {
+    if (item && localItem) {
+      setLocalItem({
+        ...localItem,
+        start_date: item.start_date,
+        end_date: item.end_date,
+      })
+    }
+    setCascadePreviewRows(null)
+  }
+
+  const handleCascadeCommit = async (selectedSmsItemIds: Set<string>) => {
+    if (!cascadePreviewRows || !localItem) return
+
+    setCommittingCascade(true)
+    try {
+      const result = await persistCascadeChanges({
+        projectId: localItem.project_id,
+        projectName,
+        rows: cascadePreviewRows,
+        selectedSmsItemIds,
+      })
+
+      const ids = cascadePreviewRows.map((row) => row.item_id)
+      const { data: refreshedRows, error } = await supabase
+        .from('schedule_items')
+        .select('id, project_id, schedule_id, name, start_date, end_date, confirmation_status, confirmation_notes, status, assigned_company_id, notes, subcontractors:assigned_company_id(name)')
+        .in('id', ids)
+      if (error) throw error
+
+      const refreshedItems = ((refreshedRows ?? []) as RefreshedPortfolioItemRow[])
+        .map(portfolioItemFromRow)
+      const refreshedCurrent = refreshedItems.find((updatedItem) => updatedItem.id === localItem.id)
+
+      if (refreshedCurrent) {
+        setLocalItem(refreshedCurrent)
+        onItemUpdated(refreshedCurrent)
+      }
+      onCascadeItemsUpdated?.(refreshedItems)
+
+      setCascadePreviewRows(null)
+      toast.success(
+        `${result.total} items updated. ${result.smsSuccess} SMS sent${result.smsFailed > 0 ? `, ${result.smsFailed} failed` : ''}.`,
+      )
+    } catch (error) {
+      console.error('Cascade commit failed', error)
+      toast.error('Could not commit cascade changes.')
+    } finally {
+      setCommittingCascade(false)
+    }
+  }
+
   return (
+    <>
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
@@ -521,6 +718,11 @@ export function SchedulePortfolioItemModal({
             <div className="text-xs text-muted-foreground">
               {start} – {end}
             </div>
+            {datesDirty && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Pending — click "Save schedule changes" below to preview impact.
+              </p>
+            )}
           </section>
 
           <div className="space-y-1.5">
@@ -577,6 +779,11 @@ export function SchedulePortfolioItemModal({
         </div>
 
         <DialogFooter>
+          {datesDirty && (
+            <Button onClick={() => void handleOpenCascadePreview()} disabled={committingCascade}>
+              Save schedule changes
+            </Button>
+          )}
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
@@ -591,5 +798,15 @@ export function SchedulePortfolioItemModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {cascadePreviewRows && (
+      <CascadePreviewModal
+        open
+        onClose={handleCascadeCancel}
+        rows={cascadePreviewRows}
+        projectName={projectName}
+        onCommit={handleCascadeCommit}
+      />
+    )}
+    </>
   )
 }
