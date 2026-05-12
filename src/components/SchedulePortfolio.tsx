@@ -9,9 +9,14 @@ import {
 } from 'date-fns'
 import { ChevronLeft, ChevronRight, Target } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CommsLogPanel } from '@/components/CommsLogPanel'
+import { LogCommsModal } from '@/components/LogCommsModal'
+import { SchedulePortfolioInbox } from '@/components/SchedulePortfolioInbox'
 import { SchedulePortfolioItemModal } from '@/components/SchedulePortfolioItemModal'
+import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { projectColor } from '@/lib/projectColor'
 import {
@@ -21,11 +26,27 @@ import {
   PortfolioProject,
   PortfolioTypeFilter,
 } from '@/services/scheduleService'
+import type { InboxEntry } from '@/services/communicationLogService'
 
 const DAY_COUNT = 14
-const DAY_WIDTH = 96
+const DAY_WIDTH = 80
 const BAR_HEIGHT = 40
 const PROJECT_COLUMN_WIDTH = 220
+
+type ScheduleItemLookupRow = {
+  id: string
+  project_id: string
+  schedule_id: string
+  name: string
+  start_date: string
+  end_date: string
+  confirmation_status: PortfolioItem['confirmation_status'] | null
+  confirmation_notes: string | null
+  status: PortfolioItem['status'] | null
+  assigned_company_id: string | null
+  notes: string | null
+  subcontractors?: { name: string | null } | Array<{ name: string | null }> | null
+}
 
 const TYPE_FILTERS: Array<{ label: string; value: PortfolioTypeFilter }> = [
   { label: 'All', value: 'all' },
@@ -44,6 +65,30 @@ function barColor(hex: string): string {
   const g = (value >> 8) & 255
   const b = value & 255
   return `rgba(${r}, ${g}, ${b}, 0.6)`
+}
+
+function assignedCompanyName(
+  subcontractors: ScheduleItemLookupRow['subcontractors'],
+): string | null {
+  if (Array.isArray(subcontractors)) return subcontractors[0]?.name ?? null
+  return subcontractors?.name ?? null
+}
+
+function toPortfolioItem(row: ScheduleItemLookupRow): PortfolioItem {
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    schedule_id: row.schedule_id,
+    name: row.name,
+    start_date: row.start_date,
+    end_date: row.end_date,
+    confirmation_status: row.confirmation_status ?? 'unsent',
+    confirmation_notes: row.confirmation_notes,
+    status: row.status ?? 'not-started',
+    assigned_company_id: row.assigned_company_id,
+    assigned_company_name: assignedCompanyName(row.subcontractors),
+    notes: row.notes,
+  }
 }
 
 function assignLanes(
@@ -93,6 +138,17 @@ export function SchedulePortfolio() {
   const [error, setError] = useState<string | null>(null)
   const [modalItem, setModalItem] = useState<PortfolioItem | null>(null)
   const [modalProjectName, setModalProjectName] = useState('')
+  const [inboxRefreshKey, setInboxRefreshKey] = useState(0)
+  const [commsPanelState, setCommsPanelState] = useState<{
+    open: boolean
+    projectId: string
+    scheduleItem: { id: string; name: string } | null
+  }>({ open: false, projectId: '', scheduleItem: null })
+  const [logModalState, setLogModalState] = useState<{
+    open: boolean
+    projectId: string
+    scheduleItemId: string | null
+  }>({ open: false, projectId: '', scheduleItemId: null })
 
   const windowEnd = useMemo(
     () => addDays(windowStart, DAY_COUNT - 1),
@@ -214,9 +270,80 @@ export function SchedulePortfolio() {
     })
   }
 
-  const openItemModal = (item: PortfolioItem) => {
+  const refreshInbox = () => {
+    setInboxRefreshKey((key) => key + 1)
+  }
+
+  const openItemModal = (item: PortfolioItem, projectNameOverride?: string) => {
     setModalItem(item)
-    setModalProjectName(projectNameById.get(item.project_id) ?? '')
+    setModalProjectName(
+      projectNameOverride ?? projectNameById.get(item.project_id) ?? '',
+    )
+  }
+
+  const closeItemModal = () => {
+    setModalItem(null)
+    refreshInbox()
+  }
+
+  const handleInboxClick = async (entry: InboxEntry) => {
+    if (!entry.schedule_item_id) {
+      // Job-level entry — open whole-job CommsLogPanel in place
+      // rather than navigating to per-project. Mirrors item-level
+      // entries' "stay in workspace" behavior.
+      setCommsPanelState({
+        open: true,
+        projectId: entry.project_id,
+        scheduleItem: null,
+      })
+      return
+    }
+
+    const existingItem = items.find((item) => item.id === entry.schedule_item_id)
+    if (existingItem) {
+      openItemModal(existingItem, entry.project_name)
+      return
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('schedule_items')
+        .select(
+          'id, project_id, schedule_id, name, start_date, end_date, confirmation_status, confirmation_notes, status, assigned_company_id, notes, subcontractors:assigned_company_id(name)',
+        )
+        .eq('id', entry.schedule_item_id)
+        .single()
+
+      if (error) throw error
+      openItemModal(toPortfolioItem(data as ScheduleItemLookupRow), entry.project_name)
+    } catch (loadError) {
+      console.error('Failed to load schedule item from inbox', loadError)
+      toast.error('Could not open that schedule item.')
+    }
+  }
+
+  const openModalItemLog = () => {
+    if (!modalItem) return
+    const itemForLog = modalItem
+    setModalItem(null)
+    refreshInbox()
+    setCommsPanelState({
+      open: true,
+      projectId: itemForLog.project_id,
+      scheduleItem: { id: itemForLog.id, name: itemForLog.name },
+    })
+  }
+
+  const openModalItemLogEntry = () => {
+    if (!modalItem) return
+    const itemForLog = modalItem
+    setModalItem(null)
+    refreshInbox()
+    setLogModalState({
+      open: true,
+      projectId: itemForLog.project_id,
+      scheduleItemId: itemForLog.id,
+    })
   }
 
   return (
@@ -406,16 +533,19 @@ export function SchedulePortfolio() {
       </main>
 
       <aside className="hidden w-[360px] flex-col border-l border-border/60 xl:flex">
-        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          Comms inbox — coming soon
-        </div>
+        <SchedulePortfolioInbox
+          onEntryClick={(entry) => void handleInboxClick(entry)}
+          refreshKey={inboxRefreshKey}
+        />
       </aside>
 
       <SchedulePortfolioItemModal
         open={!!modalItem}
-        onClose={() => setModalItem(null)}
+        onClose={closeItemModal}
         item={modalItem}
         projectName={modalProjectName}
+        onOpenLog={openModalItemLog}
+        onLogEntry={openModalItemLogEntry}
         onItemUpdated={(patch) => {
           if (!modalItem) return
           const merged = { ...modalItem, ...patch }
@@ -427,6 +557,28 @@ export function SchedulePortfolio() {
           )
         }}
       />
+
+      {commsPanelState.projectId && (
+        <CommsLogPanel
+          open={commsPanelState.open}
+          onClose={() => {
+            setCommsPanelState({ open: false, projectId: '', scheduleItem: null })
+            refreshInbox()
+          }}
+          projectId={commsPanelState.projectId}
+          scheduleItem={commsPanelState.scheduleItem}
+        />
+      )}
+
+      {logModalState.projectId && (
+        <LogCommsModal
+          open={logModalState.open}
+          onClose={() => setLogModalState({ open: false, projectId: '', scheduleItemId: null })}
+          onCreated={() => refreshInbox()}
+          projectId={logModalState.projectId}
+          scheduleItemId={logModalState.scheduleItemId}
+        />
+      )}
     </div>
   )
 }

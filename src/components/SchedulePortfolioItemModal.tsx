@@ -27,7 +27,9 @@ import {
 } from '@/components/ConfirmationDot'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { fetchCommsForScheduleItem } from '@/services/communicationLogService'
 import { updateScheduleItemQuickEdit } from '@/services/supabaseService'
+import type { CommunicationLogEntry } from '@/types/communicationLog'
 import type { ConfirmationStatus, ScheduleItem } from '@/types'
 import type { PortfolioItem } from '@/services/scheduleService'
 
@@ -45,6 +47,8 @@ interface SchedulePortfolioItemModalProps {
   item: PortfolioItem | null
   projectName: string
   onItemUpdated: (patch: Partial<PortfolioItem>) => void
+  onOpenLog: () => void
+  onLogEntry: () => void
 }
 
 const STATUS_OPTIONS: Array<{ value: ScheduleStatus; label: string }> = [
@@ -113,10 +117,16 @@ export function SchedulePortfolioItemModal({
   item,
   projectName,
   onItemUpdated,
+  onOpenLog,
+  onLogEntry,
 }: SchedulePortfolioItemModalProps) {
   const navigate = useNavigate()
   const [localItem, setLocalItem] = useState<PortfolioItem | null>(item)
   const [subcontractors, setSubcontractors] = useState<SubcontractorOption[]>([])
+  const [commsEntries, setCommsEntries] = useState<CommunicationLogEntry[]>([])
+  const [commsLoading, setCommsLoading] = useState(false)
+  const [profileNames, setProfileNames] = useState<Record<string, string>>({})
+  const [companyNames, setCompanyNames] = useState<Record<string, string>>({})
 
   useEffect(() => {
     setLocalItem(item)
@@ -148,6 +158,80 @@ export function SchedulePortfolioItemModal({
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open || !item?.id) {
+      setCommsEntries([])
+      setCommsLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setCommsLoading(true)
+
+    ;(async () => {
+      try {
+        const nextEntries = await fetchCommsForScheduleItem(item.id)
+        if (cancelled) return
+        setCommsEntries(nextEntries)
+
+        const profileIds = Array.from(
+          new Set(nextEntries.map((entry) => entry.author_user_id).filter(Boolean)),
+        ) as string[]
+        const companyIds = Array.from(
+          new Set(nextEntries.map((entry) => entry.author_company_id).filter(Boolean)),
+        ) as string[]
+
+        const [profilesResult, companiesResult] = await Promise.all([
+          profileIds.length > 0
+            ? supabase
+              .from('profiles')
+              .select('id, full_name, email')
+              .in('id', profileIds)
+            : Promise.resolve({ data: [], error: null }),
+          companyIds.length > 0
+            ? supabase
+              .from('subcontractors')
+              .select('id, name')
+              .in('id', companyIds)
+            : Promise.resolve({ data: [], error: null }),
+        ])
+
+        if (profilesResult.error) throw profilesResult.error
+        if (companiesResult.error) throw companiesResult.error
+        if (cancelled) return
+
+        setProfileNames(
+          Object.fromEntries(
+            (profilesResult.data ?? []).map((profile: any) => [
+              profile.id,
+              profile.full_name || profile.email || 'User',
+            ]),
+          ),
+        )
+        setCompanyNames(
+          Object.fromEntries(
+            (companiesResult.data ?? []).map((company: any) => [
+              company.id,
+              company.name || 'Company',
+            ]),
+          ),
+        )
+      } catch (error) {
+        console.error('Could not load item communications', error)
+        if (!cancelled) {
+          setCommsEntries([])
+          toast.error('Could not load item communications.')
+        }
+      } finally {
+        if (!cancelled) setCommsLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [open, item?.id])
+
   const subcontractorNameById = useMemo(() => {
     const map = new Map<string, string>()
     for (const subcontractor of subcontractors) {
@@ -155,6 +239,16 @@ export function SchedulePortfolioItemModal({
     }
     return map
   }, [subcontractors])
+
+  const authorLabel = (entry: CommunicationLogEntry) => {
+    if (entry.author_company_id && companyNames[entry.author_company_id]) {
+      return companyNames[entry.author_company_id]
+    }
+    if (entry.author_user_id && profileNames[entry.author_user_id]) {
+      return profileNames[entry.author_user_id]
+    }
+    return entry.author_label || 'System'
+  }
 
   if (!localItem) return null
 
@@ -442,6 +536,44 @@ export function SchedulePortfolioItemModal({
               className="min-h-24"
             />
           </div>
+
+          <section className="space-y-2 border-t pt-3">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold">
+                Comms ({commsEntries.length})
+              </h4>
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={onOpenLog}>
+                  View full log
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={onLogEntry}>
+                  + Log entry
+                </Button>
+              </div>
+            </div>
+            {commsLoading ? (
+              <p className="text-xs text-muted-foreground">Loading…</p>
+            ) : commsEntries.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No comms logged yet.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {commsEntries.slice(0, 5).map((entry) => (
+                  <li key={entry.id} className="text-xs">
+                    <span className="text-muted-foreground">
+                      {format(parseISO(entry.created_at), 'MMM d, h:mm a')} ·{' '}
+                      {entry.direction === 'inbound'
+                        ? '←'
+                        : entry.direction === 'outbound'
+                          ? '→'
+                          : '·'}{' '}
+                      {authorLabel(entry)}
+                    </span>
+                    <p className="line-clamp-2 text-foreground">{entry.body}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
 
         <DialogFooter>
