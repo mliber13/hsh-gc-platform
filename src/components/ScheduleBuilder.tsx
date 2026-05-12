@@ -38,6 +38,7 @@ import {
   ChevronRight,
   List,
   MessageSquare,
+  Send,
 } from 'lucide-react'
 import {
   format,
@@ -61,6 +62,11 @@ import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
+import {
+  buildPublishPreview,
+  sendOneAssignment,
+  type PublishPreview,
+} from '@/services/smsService'
 
 // ----------------------------------------------------------------------------
 // Types
@@ -96,6 +102,12 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     open: boolean
     scheduleItem: { id: string; name: string } | null
   }>({ open: false, scheduleItem: null })
+  const [publishPreview, setPublishPreview] = useState<PublishPreview | null>(null)
+  const [publishProgress, setPublishProgress] = useState<{
+    sent: number
+    total: number
+    failed: number
+  } | null>(null)
 
   // Centered title in the AppHeader
   usePageTitle('Schedule')
@@ -357,6 +369,65 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     const patch: Partial<ScheduleItem> = { confirmation_status: status }
     if (notes !== undefined) patch.confirmation_notes = notes
     handleUpdateScheduleItem(item.id, patch)
+  }
+
+  const handleOpenPublishPreview = async () => {
+    try {
+      const preview = await buildPublishPreview(project.id)
+      setPublishPreview(preview)
+    } catch (error) {
+      console.error('Could not build publish preview', error)
+      toast.error('Could not build publish preview')
+    }
+  }
+
+  const handleSendPublish = async () => {
+    if (!publishPreview) return
+    const { ready } = publishPreview
+    setPublishProgress({ sent: 0, total: ready.length, failed: 0 })
+
+    let sent = 0
+    let failed = 0
+    let firstErrorMessage: string | null = null
+    const successfulItemIds = new Set<string>()
+
+    for (const candidate of ready) {
+      const result = await sendOneAssignment(candidate)
+      if (result.success) {
+        sent += 1
+        successfulItemIds.add(result.schedule_item_id)
+      } else {
+        failed += 1
+        firstErrorMessage ||= result.errorMessage
+        console.error('Assignment SMS failed', result.error)
+      }
+      setPublishProgress({ sent: sent + failed, total: ready.length, failed })
+    }
+
+    if (successfulItemIds.size > 0) {
+      const sentAt = new Date().toISOString()
+      setScheduleItems((current) =>
+        current.map((item) =>
+          successfulItemIds.has(item.id)
+            ? {
+              ...item,
+              confirmation_status: 'pending',
+              confirmation_last_sent_at: sentAt,
+            }
+            : item,
+        ),
+      )
+    }
+
+    setPublishPreview(null)
+    setPublishProgress(null)
+    if (sent > 0) {
+      toast.success(
+        `Sent ${sent} SMS${failed > 0 ? `, ${failed} failed - check Comms log` : ''}.`,
+      )
+    } else {
+      toast.error(firstErrorMessage ?? `${failed} SMS failed - check Comms log.`)
+    }
   }
 
   // Calendar: get schedule items that overlap a given day (used for any day-scoped logic)
@@ -726,6 +797,10 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
           <RefreshCw className="size-4" />
           Regenerate from Estimate
         </Button>
+        <Button type="button" onClick={handleOpenPublishPreview}>
+          <Send className="size-4" />
+          Publish schedule
+        </Button>
       </div>
 
       {/* Schedule Items — flat section pattern */}
@@ -981,6 +1056,94 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
         projectId={project.id}
         scheduleItem={commsPanelState.scheduleItem}
       />
+      <Dialog
+        open={publishPreview !== null}
+        onOpenChange={(open) => {
+          if (!open && !publishProgress) setPublishPreview(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl border-border/60 bg-card text-foreground">
+          <DialogHeader>
+            <DialogTitle>Publish schedule - assignment SMS</DialogTitle>
+          </DialogHeader>
+          {publishPreview && (
+            <div className="space-y-4 text-sm">
+              <p className="text-muted-foreground">
+                Send {publishPreview.ready.length} SMS to{' '}
+                {new Set(publishPreview.ready.map((item) => item.assigned_company_id)).size}{' '}
+                companies for {publishPreview.ready.length} schedule items.
+              </p>
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Ready to send</h3>
+                {publishPreview.ready.length === 0 ? (
+                  <p className="rounded-md border border-border/60 bg-muted/30 p-3 text-muted-foreground">
+                    No unsent assigned items have a phone number on file.
+                  </p>
+                ) : (
+                  <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border border-border/60 p-3">
+                    {publishPreview.ready.map((candidate) => (
+                      <div key={candidate.schedule_item_id} className="flex flex-col gap-0.5">
+                        <span className="font-medium text-foreground">
+                          {candidate.item_name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {candidate.company_name} ({candidate.recipient_phone})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {publishPreview.skipped.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Skipped</h3>
+                  <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border border-border/60 bg-muted/20 p-3">
+                    {publishPreview.skipped.map((item) => (
+                      <div key={item.schedule_item_id} className="flex flex-col gap-0.5">
+                        <span className="font-medium text-foreground">{item.item_name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {item.reason === 'no_phone'
+                            ? `Skipped - no phone on file for ${item.company_name ?? 'company'}`
+                            : 'Skipped - no assigned company'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {publishProgress && (
+                <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+                  Sent {publishProgress.sent} of {publishProgress.total}
+                  {publishProgress.failed > 0
+                    ? ` (${publishProgress.failed} failed)`
+                    : ''}
+                  ...
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!!publishProgress}
+              onClick={() => setPublishPreview(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!publishPreview?.ready.length || !!publishProgress}
+              onClick={() => void handleSendPublish()}
+            >
+              Send {publishPreview?.ready.length ?? 0} SMS
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
