@@ -82,11 +82,10 @@ function toInsertPayload(input: TenantProspectInput, organizationId: string) {
 }
 
 export async function fetchTenantProspects(): Promise<TenantProspect[]> {
-  const organizationId = await requireOrganizationId()
+  if (!isOnlineMode()) throw new Error('Offline mode')
   const { data, error } = await supabase
     .from('tenant_pipeline_prospects')
     .select('*')
-    .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -111,7 +110,6 @@ export async function updateTenantProspect(id: string, input: TenantProspectInpu
     .from('tenant_pipeline_prospects')
     .update(toInsertPayload(input, organizationId))
     .eq('id', id)
-    .eq('organization_id', organizationId)
     .select('*')
     .single()
 
@@ -120,12 +118,10 @@ export async function updateTenantProspect(id: string, input: TenantProspectInpu
 }
 
 export async function deleteTenantProspect(id: string): Promise<void> {
-  const organizationId = await requireOrganizationId()
   const { error } = await supabase
     .from('tenant_pipeline_prospects')
     .delete()
     .eq('id', id)
-    .eq('organization_id', organizationId)
 
   if (error) throw error
 }
