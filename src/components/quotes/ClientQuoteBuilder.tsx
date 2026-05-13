@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ChevronDown } from 'lucide-react'
+import { ArrowLeft, ChevronDown, FileSearch } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Project } from '@/types'
 import { CLIENT_QUOTE_STATUS } from '@/types/clientQuote'
-import type { PreparedFor } from '@/types/clientQuote'
+import type { ClientQuoteWithChildren, PreparedFor } from '@/types/clientQuote'
 import {
   buildLineItemsFromEstimate,
   createDraftQuote,
@@ -12,6 +12,7 @@ import {
   getDefaultInclusionsForProjectType,
   updateDraftQuote,
 } from '@/services/clientQuoteService'
+import { generateClientQuotePDFBlob } from '@/services/clientQuotePdf'
 import { getCurrentUserProfile } from '@/services/userService'
 import { isOnlineMode } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -61,6 +62,7 @@ export function ClientQuoteBuilder({
 }: ClientQuoteBuilderProps) {
   const [loading, setLoading] = useState(mode === 'edit')
   const [saving, setSaving] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [prepared, setPrepared] = useState<PreparedFor>(emptyPrepared)
@@ -73,6 +75,7 @@ export function ClientQuoteBuilder({
   const [inclusions, setInclusions] = useState<string[]>([])
   const [exclusions, setExclusions] = useState<string[]>([])
   const [quoteNumber, setQuoteNumber] = useState<string | null>(null)
+  const [revision, setRevision] = useState(0)
   const [status, setStatus] = useState<'draft' | string>('draft')
 
   const [estimateHint, setEstimateHint] = useState<string | null>(null)
@@ -152,6 +155,7 @@ export function ClientQuoteBuilder({
           return
         }
         setQuoteNumber(q.quote_number)
+        setRevision(q.revision)
         setStatus(q.status)
         setPrepared({
           company: q.prepared_for?.company ?? '',
@@ -251,6 +255,120 @@ export function ClientQuoteBuilder({
     }
   }
 
+  const buildSyntheticQuoteForPreview = useCallback(async (): Promise<ClientQuoteWithChildren> => {
+    const profile = await getCurrentUserProfile()
+    const organization_id = profile?.organization_id ?? '00000000-0000-0000-0000-000000000001'
+    const now = new Date().toISOString()
+    const qNum =
+      mode === 'edit' && quoteNumber && quoteNumber !== 'Assigned when you save'
+        ? quoteNumber
+        : 'Q-DRAFT'
+
+    const prepared_for: PreparedFor | null =
+      prepared.company.trim() ||
+      prepared.attn_name.trim() ||
+      prepared.mailing_address.trim() ||
+      prepared.phone?.trim() ||
+      prepared.email?.trim()
+        ? {
+            company: prepared.company.trim(),
+            attn_name: prepared.attn_name.trim(),
+            attn_title: prepared.attn_title?.trim() || undefined,
+            mailing_address: prepared.mailing_address.trim(),
+            phone: prepared.phone?.trim() || undefined,
+            email: prepared.email?.trim() || undefined,
+          }
+        : null
+
+    const line_items = lineItems.map((li, i) => ({
+      id: `preview-li-${i}`,
+      organization_id,
+      client_quote_id: 'preview',
+      trade_category: li.trade_category,
+      display_label: li.display_label.trim() || li.trade_category,
+      amount: li.amount,
+      sort_order: li.sort_order ?? i,
+    }))
+
+    const optionRows = options.map((o, i) => ({
+      id: `preview-opt-${i}`,
+      organization_id,
+      client_quote_id: 'preview',
+      label: o.label.trim() || `Option ${i + 1}`,
+      description: o.description.trim() || null,
+      amount: o.amount,
+      sort_order: o.sort_order ?? i,
+    }))
+
+    return {
+      id: mode === 'edit' && quoteId ? quoteId : 'preview',
+      organization_id,
+      project_id: project.id,
+      quote_number: qNum,
+      revision,
+      status: 'draft',
+      prepared_for,
+      project_address_override: showAddressOverride ? addressOverride.trim() || null : null,
+      scope_narrative: scopeNarrative.trim() || null,
+      inclusions: normalizeBullets(inclusions),
+      exclusions: normalizeBullets(exclusions),
+      validity_days: validityDays,
+      issued_at: null,
+      expires_at: null,
+      accepted_at: null,
+      declined_at: null,
+      sent_total: null,
+      sent_pdf_url: null,
+      superseded_by_id: null,
+      created_at: now,
+      updated_at: now,
+      created_by: null,
+      line_items,
+      options: optionRows,
+    }
+  }, [
+    mode,
+    quoteId,
+    quoteNumber,
+    revision,
+    project.id,
+    prepared,
+    lineItems,
+    options,
+    inclusions,
+    exclusions,
+    validityDays,
+    scopeNarrative,
+    addressOverride,
+    showAddressOverride,
+  ])
+
+  const handlePreviewPdf = async () => {
+    if (!prepared.company.trim()) {
+      toast('Preview', {
+        description:
+          'Company is empty — PDF will show "[Not yet specified]" for Prepared for.',
+      })
+    }
+    setPreviewing(true)
+    try {
+      const synthetic = await buildSyntheticQuoteForPreview()
+      const blob = await generateClientQuotePDFBlob(synthetic, project)
+      const url = URL.createObjectURL(blob)
+      const win = window.open(url, '_blank', 'noopener,noreferrer')
+      if (!win) {
+        toast.error('Pop-up blocked — allow pop-ups to preview the PDF.')
+        URL.revokeObjectURL(url)
+        return
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not generate PDF preview')
+    } finally {
+      setPreviewing(false)
+    }
+  }
+
   const handleSave = async () => {
     if (!isOnlineMode()) {
       toast.error('Quotes require online mode.')
@@ -317,9 +435,19 @@ export function ClientQuoteBuilder({
           Back
         </Button>
         <h1 className="text-center text-xl font-semibold">{title}</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>
             Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={previewing}
+            onClick={() => void handlePreviewPdf()}
+          >
+            <FileSearch className="mr-2 size-4" />
+            {previewing ? 'Generating…' : 'Preview PDF'}
           </Button>
           <Button type="button" size="sm" disabled={saving} onClick={() => void handleSave()}>
             {saving ? 'Saving…' : 'Save draft'}
