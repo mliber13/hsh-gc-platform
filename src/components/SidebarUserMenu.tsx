@@ -3,11 +3,11 @@
 // ============================================================================
 //
 // Replaces the legacy floating top-right user menu (in src/routes/AuthedLayout
-// before the shell scaffolding). All the same menu items are here:
+// before the shell scaffolding). Identity + preferences only — workspace
+// destinations (libraries, QuickBooks, contacts, SOW, feedback) live under
+// Settings in AppSidebar.
 //   - Profile chip (email + role badge)
-//   - Plan Library, Estimate Library, QuickBooks, Contacts, SOW (admin/editor)
-//   - Feedback & Requests
-//   - Theme toggle
+//   - Theme picker (Light / Dark / Daisy)
 //   - Privacy Policy, Terms of Use links
 //   - Backup Data (online only)
 //   - Sign Out
@@ -18,19 +18,15 @@ import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import { useTheme } from 'next-themes'
 import {
-  Building2,
   ChevronUp,
   Crown,
   Download,
   Eye,
   FileText,
-  Link2,
   LogOut,
-  MessageSquare,
   Moon,
   Pencil,
   Sun,
-  User as UserIcon,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -106,8 +102,6 @@ export function SidebarUserMenu() {
   }
 
   const initials = getInitials(user.email)
-  const isAdminOrEditor =
-    !!userProfile && ['admin', 'editor'].includes(userProfile.role)
 
   const roleIcons = {
     admin: <Crown className="size-3" />,
@@ -167,36 +161,6 @@ export function SidebarUserMenu() {
                 </span>
               )}
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-
-            <DropdownMenuItem onClick={() => navigate('/library/plans')}>
-              <FileText className="size-4" />
-              Plan Library
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/library/estimates')}>
-              <Building2 className="size-4" />
-              Estimate Library
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/quickbooks/settings')}>
-              <Link2 className="size-4" />
-              QuickBooks
-            </DropdownMenuItem>
-            {isAdminOrEditor && (
-              <>
-                <DropdownMenuItem onClick={() => navigate('/contacts')}>
-                  <UserIcon className="size-4" />
-                  Contact Directory
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/sow')}>
-                  <FileText className="size-4" />
-                  SOW Templates
-                </DropdownMenuItem>
-              </>
-            )}
-            <DropdownMenuItem onClick={() => navigate('/feedback')}>
-              <MessageSquare className="size-4" />
-              Feedback & Requests
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
 
             <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">

@@ -30,6 +30,7 @@ import {
   LineChart,
   Link2,
   ListChecks,
+  MessageSquare,
   PieChart,
   Plus,
   Receipt,
@@ -262,9 +263,9 @@ const settingsNav: NavGroup = {
   items: [
     { label: 'Item Library', to: '/library/estimates', icon: Library },
     { label: 'Plan Library', to: '/library/plans', icon: FileText },
-    { label: 'SOW Management', to: '/sow', icon: ClipboardList },
+    { label: 'SOW Templates', to: '/sow', icon: ClipboardList },
     { label: 'Contact Directory', to: '/contacts', icon: UsersRound },
-    { label: 'Feedback', to: '/feedback', icon: Settings },
+    { label: 'Feedback', to: '/feedback', icon: MessageSquare },
     { label: 'QuickBooks', to: '/quickbooks/settings', icon: Link2 },
   ],
 }
