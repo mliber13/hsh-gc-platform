@@ -32,6 +32,8 @@ import {
   Search,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { DaisyMascot } from '@/components/DaisyMascot'
+import { useTheme } from 'next-themes'
 import { Project, ProjectStatus } from '@/types'
 import { usePermissions } from '@/hooks/usePermissions'
 import { usePageTitle } from '@/contexts/PageTitleContext'
@@ -83,6 +85,7 @@ export function ProjectsDashboard({
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
   const statusMenuRef = useRef<HTMLDivElement>(null)
   const { canCreate, isViewer } = usePermissions()
+  const { theme } = useTheme()
 
   // Centered title in the AppHeader
   usePageTitle('Dashboard')
@@ -401,7 +404,15 @@ export function ProjectsDashboard({
         ) : filteredProjects.length === 0 ? (
           <Card className="border-border/60 bg-card/50">
             <CardContent className="py-12 text-center">
-              <Building2 className="mx-auto mb-3 size-12 text-muted-foreground/50" />
+              {theme === 'daisy' ? (
+                <DaisyMascot
+                  pose={searchQuery ? 'confused' : 'curious'}
+                  size="md"
+                  className="mx-auto mb-3"
+                />
+              ) : (
+                <Building2 className="mx-auto mb-3 size-12 text-muted-foreground/50" />
+              )}
               <p className="font-medium">
                 {searchQuery ? 'No projects found' : 'No projects yet'}
               </p>

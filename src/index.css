@@ -7,7 +7,7 @@
 
 @layer base {
   :root {
-    --background: oklch(1 0 0);
+    --background: oklch(0.975 0.004 85);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
     --card-foreground: oklch(0.145 0 0);
@@ -15,29 +15,29 @@
     --popover-foreground: oklch(0.145 0 0);
     --primary: oklch(0.205 0 0);
     --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
+    --secondary: oklch(0.945 0.004 85);
     --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
+    --muted: oklch(0.945 0.004 85);
     --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
+    --accent: oklch(0.945 0.004 85);
     --accent-foreground: oklch(0.205 0 0);
     --destructive: oklch(0.577 0.245 27.325);
     --destructive-foreground: oklch(0.985 0 0);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
+    --border: oklch(0.895 0.005 85);
+    --input: oklch(0.895 0.005 85);
     --ring: oklch(0.708 0 0);
     --chart-1: oklch(0.646 0.222 41.116);
     --chart-2: oklch(0.6 0.118 184.704);
     --chart-3: oklch(0.398 0.07 227.392);
     --chart-4: oklch(0.828 0.189 84.429);
     --chart-5: oklch(0.769 0.188 70.08);
-    --sidebar: oklch(0.985 0 0);
+    --sidebar: oklch(0.955 0.005 85);
     --sidebar-foreground: oklch(0.145 0 0);
     --sidebar-primary: oklch(0.205 0 0);
     --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent: oklch(0.925 0.005 85);
     --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-border: oklch(0.895 0.005 85);
     --sidebar-ring: oklch(0.708 0 0);
     --radius: 0.625rem;
   }
@@ -75,6 +75,50 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+  }
+
+  /*
+   * Daisy theme — for Daisy, HSH's Head of Happiness.
+   * Light-base palette derived from her fur:
+   *   - background: photo backdrop cream
+   *   - foreground: her chocolate-brown nose
+   *   - primary: marigold orange from her paw tag (CTAs)
+   *   - secondary / accent: warm honey + amber from her fur and eyes
+   *   - chart-4: plum-burgundy from her collar
+   */
+  .daisy {
+    --background: oklch(0.96 0.012 80);
+    --foreground: oklch(0.22 0.030 50);
+    --card: oklch(0.985 0.010 80);
+    --card-foreground: oklch(0.22 0.030 50);
+    --popover: oklch(0.985 0.010 80);
+    --popover-foreground: oklch(0.22 0.030 50);
+    --primary: oklch(0.72 0.16 60);
+    --primary-foreground: oklch(0.99 0.005 80);
+    --secondary: oklch(0.92 0.025 75);
+    --secondary-foreground: oklch(0.30 0.030 50);
+    --muted: oklch(0.93 0.018 80);
+    --muted-foreground: oklch(0.50 0.025 60);
+    --accent: oklch(0.85 0.040 75);
+    --accent-foreground: oklch(0.30 0.030 50);
+    --destructive: oklch(0.58 0.22 27);
+    --destructive-foreground: oklch(0.99 0.005 80);
+    --border: oklch(0.86 0.020 75);
+    --input: oklch(0.86 0.020 75);
+    --ring: oklch(0.72 0.16 60);
+    --chart-1: oklch(0.72 0.16 60);
+    --chart-2: oklch(0.65 0.12 75);
+    --chart-3: oklch(0.50 0.10 35);
+    --chart-4: oklch(0.55 0.18 0);
+    --chart-5: oklch(0.80 0.08 90);
+    --sidebar: oklch(0.91 0.024 75);
+    --sidebar-foreground: oklch(0.22 0.030 50);
+    --sidebar-primary: oklch(0.72 0.16 60);
+    --sidebar-primary-foreground: oklch(0.99 0.005 80);
+    --sidebar-accent: oklch(0.87 0.030 70);
+    --sidebar-accent-foreground: oklch(0.22 0.030 50);
+    --sidebar-border: oklch(0.83 0.025 75);
+    --sidebar-ring: oklch(0.72 0.16 60);
   }
 }
 

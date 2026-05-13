@@ -199,20 +199,34 @@ export function SidebarUserMenu() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
 
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+              Theme
+            </DropdownMenuLabel>
             <DropdownMenuItem
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              onClick={() => setTheme('light')}
+              className={cn(theme === 'light' && 'bg-accent text-accent-foreground')}
             >
-              {theme === 'dark' ? (
-                <>
-                  <Sun className="size-4" />
-                  Light theme
-                </>
-              ) : (
-                <>
-                  <Moon className="size-4" />
-                  Dark theme
-                </>
-              )}
+              <Sun className="size-4" />
+              Light
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setTheme('dark')}
+              className={cn(theme === 'dark' && 'bg-accent text-accent-foreground')}
+            >
+              <Moon className="size-4" />
+              Dark
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setTheme('daisy')}
+              className={cn(theme === 'daisy' && 'bg-accent text-accent-foreground')}
+            >
+              <img
+                src="/daisy/daisy-avatar.png"
+                alt=""
+                className="size-4 rounded-full object-cover"
+                draggable={false}
+              />
+              Daisy
             </DropdownMenuItem>
             <DropdownMenuSeparator />
 

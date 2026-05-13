@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { DaisyMascot } from '@/components/DaisyMascot'
 import { ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/contexts/PageTitleContext'
@@ -740,8 +741,9 @@ export function TenantPipeline({ onBack, onOpenDealWorkspace }: TenantPipelinePr
 
         <div className="space-y-2">
           {mobileStageProspects.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border/60 bg-card/50 p-5 text-center text-sm italic text-muted-foreground">
-              No prospects in {activeMobileStage}
+            <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border/60 bg-card/50 p-5 text-center text-sm italic text-muted-foreground">
+              <DaisyMascot pose="curious" size="sm" />
+              <span>No prospects in {activeMobileStage}</span>
             </div>
           ) : (
             mobileStageProspects.map((prospect) => renderProspectCard(prospect))

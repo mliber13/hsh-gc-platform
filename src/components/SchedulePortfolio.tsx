@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CommsLogPanel } from '@/components/CommsLogPanel'
 import { LogCommsModal } from '@/components/LogCommsModal'
+import { DaisyMascot } from '@/components/DaisyMascot'
 import { SchedulePortfolioInbox } from '@/components/SchedulePortfolioInbox'
 import { SchedulePortfolioItemModal } from '@/components/SchedulePortfolioItemModal'
 import { supabase } from '@/lib/supabase'
@@ -503,6 +504,11 @@ export function SchedulePortfolio() {
               <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
                 No projects selected. Toggle a project chip back on to show rows.
               </div>
+            ) : items.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-sm text-muted-foreground">
+                <DaisyMascot pose="sleeping" size="md" />
+                <p>No items in this window. Quiet stretch.</p>
+              </div>
             ) : (
               <div className="divide-y divide-border/60">
                 {visibleProjects.map((project) => (
@@ -522,14 +528,6 @@ export function SchedulePortfolio() {
         </div>
 
         {error && <div className="text-sm text-destructive">{error}</div>}
-        {!projectsLoading &&
-          !itemsLoading &&
-          visibleProjects.length > 0 &&
-          items.length === 0 && (
-            <div className="text-sm text-muted-foreground">
-              No items in this window.
-            </div>
-          )}
       </main>
 
       <aside className="hidden w-[360px] flex-col border-l border-border/60 xl:flex">
