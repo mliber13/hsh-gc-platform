@@ -6,6 +6,7 @@
 //
 
 import React, { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { PrintableReport, ReportDepth } from './PrintableReport'
@@ -58,6 +59,7 @@ import {
 } from '@/services/supabaseService'
 import { isOnlineMode } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -103,7 +105,8 @@ import {
   Printer,
   Save,
   Mail,
-  Loader2
+  Loader2,
+  FileSignature,
 } from 'lucide-react'
 
 // ----------------------------------------------------------------------------
@@ -131,6 +134,7 @@ interface TradeFormData extends TradeInput {
 // ----------------------------------------------------------------------------
 
 export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProps) {
+  const navigate = useNavigate()
   const { categories, byKey } = useTradeCategories()
   // State
   const [projectData, setProjectData] = useState<Project | null>(project || null)
@@ -909,7 +913,7 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   return (
     <div className="flex flex-col gap-6 p-6">
       {/* Top action strip — back link only; primary actions live inside SummarySection */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           onClick={onBack}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -917,6 +921,33 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           <ArrowLeft className="size-4" />
           Back to Project Overview
         </button>
+        {projectData && (
+          <div className="flex items-center gap-2">
+            {trades.length === 0 ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button type="button" variant="default" size="sm" disabled>
+                      <FileSignature className="mr-2 size-4" />
+                      Generate Quote
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Add trades to the estimate before generating a quote.</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={() => navigate(`/projects/${projectData.id}/quotes/new?from=estimate`)}
+              >
+                <FileSignature className="mr-2 size-4" />
+                Generate Quote
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Project Info card — 8-cell grid (Name / Plan / Type / Location / Start / End / Status / Created) */}

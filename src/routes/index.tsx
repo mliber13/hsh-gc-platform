@@ -20,6 +20,7 @@
 //                                                    ├── /purchase-orders
 //                                                    ├── /selection-book
 //                                                    ├── /selection-schedules
+//                                                    ├── /quotes, /quotes/new, /quotes/:quoteId/edit
 //                                                    └── /schedule
 //   /library/plans                                 → PlanLibrary
 //   /library/plans/new                             → PlanEditor (new mode)
@@ -51,6 +52,7 @@ import {
   useLocation,
   useNavigate,
   useParams,
+  useSearchParams,
 } from 'react-router-dom'
 import { Project, Plan } from '@/types'
 import {
@@ -76,6 +78,8 @@ import { SelectionBook } from '@/components/SelectionBook'
 import { SelectionSchedules } from '@/components/SelectionSchedules'
 import { ScheduleBuilder } from '@/components/ScheduleBuilder'
 import { SchedulePortfolio } from '@/components/SchedulePortfolio'
+import { ProjectQuotesView } from '@/components/quotes/ProjectQuotesView'
+import { ClientQuoteBuilder } from '@/components/quotes/ClientQuoteBuilder'
 import { CreateProjectForm, ProjectFormData } from '@/components/CreateProjectForm'
 import { PlanLibrary } from '@/components/PlanLibrary'
 import { PlanEditor } from '@/components/PlanEditor'
@@ -145,6 +149,9 @@ export function AppRoutes() {
             <Route path="selection-book" element={<SelectionBookRoute />} />
             <Route path="selection-schedules" element={<SelectionSchedulesRoute />} />
             <Route path="schedule" element={<ScheduleRoute />} />
+            <Route path="quotes" element={<ProjectQuotesRoute />} />
+            <Route path="quotes/new" element={<ClientQuoteNewRoute />} />
+            <Route path="quotes/:quoteId/edit" element={<ClientQuoteEditRoute />} />
           </Route>
 
           <Route path="/library/plans" element={<PlanLibraryRoute />} />
@@ -373,6 +380,7 @@ function ProjectDetailRoute() {
       project={project}
       onBack={() => navigate('/')}
       onViewEstimate={() => navigate(`/projects/${project.id}/estimate`)}
+      onViewQuotes={() => navigate(`/projects/${project.id}/quotes`)}
       onViewActuals={() => navigate(`/projects/${project.id}/actuals`)}
       onViewChangeOrders={() => navigate(`/projects/${project.id}/change-orders`)}
       onViewForms={() => navigate(`/projects/${project.id}/forms`)}
@@ -385,6 +393,51 @@ function ProjectDetailRoute() {
       onViewSchedule={() => navigate(`/projects/${project.id}/schedule`)}
       onProjectDuplicated={(newProject) => navigate(`/projects/${newProject.id}`)}
       onProjectUpdated={setProject}
+    />
+  )
+}
+
+function ProjectQuotesRoute() {
+  const { project } = useProjectContext()
+  const navigate = useNavigate()
+  return (
+    <ProjectQuotesView
+      project={project}
+      onBack={() => navigate(`/projects/${project.id}`)}
+      onNewQuote={() => navigate(`/projects/${project.id}/quotes/new`)}
+      onEditDraft={(quoteId) => navigate(`/projects/${project.id}/quotes/${quoteId}/edit`)}
+    />
+  )
+}
+
+function ClientQuoteNewRoute() {
+  const { project } = useProjectContext()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const prefilledFromEstimate = searchParams.get('from') === 'estimate'
+  return (
+    <ClientQuoteBuilder
+      project={project}
+      mode="new"
+      prefilledFromEstimate={prefilledFromEstimate}
+      onCancel={() => navigate(`/projects/${project.id}/quotes`)}
+      onSaved={() => navigate(`/projects/${project.id}/quotes`)}
+    />
+  )
+}
+
+function ClientQuoteEditRoute() {
+  const { project } = useProjectContext()
+  const { quoteId } = useParams<{ quoteId: string }>()
+  const navigate = useNavigate()
+  if (!quoteId) return null
+  return (
+    <ClientQuoteBuilder
+      project={project}
+      mode="edit"
+      quoteId={quoteId}
+      onCancel={() => navigate(`/projects/${project.id}/quotes`)}
+      onSaved={() => navigate(`/projects/${project.id}/quotes`)}
     />
   )
 }

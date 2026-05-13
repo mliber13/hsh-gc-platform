@@ -31,6 +31,7 @@ import {
   DollarSign,
   Edit,
   FileText,
+  FileSignature,
   FolderOpen,
   GitBranch,
   MapPin,
@@ -81,6 +82,7 @@ interface ProjectDetailViewProps {
   project: Project
   onBack: () => void
   onViewEstimate: () => void
+  onViewQuotes?: () => void
   onViewActuals: () => void
   onViewChangeOrders?: () => void
   onViewForms: () => void
@@ -190,6 +192,7 @@ export function ProjectDetailView({
   project,
   onBack,
   onViewEstimate,
+  onViewQuotes,
   onViewActuals,
   onViewChangeOrders,
   onViewForms,
@@ -543,8 +546,8 @@ export function ProjectDetailView({
         </CardContent>
       </Card>
 
-      {/* Quick action grid — eight core sections (Estimate through COs + POs + Forms) */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
+      {/* Quick action grid — project sections (Estimate, Quotes, Actuals, …) */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5">
         <ActionCard
           icon={BookOpen}
           iconColor="text-sky-500"
@@ -552,6 +555,15 @@ export function ProjectDetailView({
           stat={`${estimateTotals.itemCount} items`}
           onClick={onViewEstimate}
         />
+        {onViewQuotes && (
+          <ActionCard
+            icon={FileSignature}
+            iconColor="text-cyan-600"
+            label="Quotes"
+            stat="Client"
+            onClick={onViewQuotes}
+          />
+        )}
         <ActionCard
           icon={DollarSign}
           iconColor="text-emerald-500"
