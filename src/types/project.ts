@@ -8,10 +8,11 @@
 
 export type ProjectType = 'residential-renovation' | 'residential-new-build' | 'commercial-renovation' | 'commercial-new-build'
 
-export type ProjectStatus = 
-  | 'estimating'      // Building estimate/bid
-  | 'in-progress'     // Active construction
-  | 'complete'        // Project finished
+export type ProjectStatus =
+  | 'estimating' // Building estimate/bid
+  | 'in-progress' // Active construction
+  | 'complete' // Project finished
+  | 'lost' // Bid not won / project not proceeding
 
 export interface Project {
   id: string

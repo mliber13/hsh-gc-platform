@@ -53,10 +53,11 @@ export type UnitType =
 
 export type ProjectType = 'residential-renovation' | 'residential-new-build' | 'commercial-renovation' | 'commercial-new-build'
 
-export type ProjectStatus = 
+export type ProjectStatus =
   | 'estimating'
   | 'in-progress'
   | 'complete'
+  | 'lost'
 
 // ----------------------------------------------------------------------------
 // Trade Categories with Display Names
@@ -366,7 +367,12 @@ export const PROJECT_STATUS: Record<ProjectStatus, {
   'complete': {
     label: 'Complete',
     color: 'green',
-    description: 'Project finished'
+    description: 'Project finished',
+  },
+  'lost': {
+    label: 'Lost',
+    color: 'gray',
+    description: 'Quote not accepted; project did not move forward',
   },
 }
 

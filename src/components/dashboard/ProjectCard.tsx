@@ -138,6 +138,7 @@ const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
   { value: 'estimating', label: 'Estimating' },
   { value: 'in-progress', label: 'In progress' },
   { value: 'complete', label: 'Complete' },
+  { value: 'lost', label: 'Lost' },
 ]
 
 function formatCurrency(amount: number): string {
