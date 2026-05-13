@@ -8,7 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "supabase:deploy": "supabase functions deploy"
+    "supabase:deploy": "supabase functions deploy",
+    "supabase:deploy:receive-sms": "supabase functions deploy receive-sms --no-verify-jwt",
+    "admin:update-user-email": "node --env-file=scripts/.env.admin.local scripts/admin-update-user-email.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.2.2",
@@ -59,5 +61,21 @@
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^13.0.0",
     "xlsx": "^0.18.5"
-  }
+  },
+  "description": "**General Contractor Estimating, Budgeting & Project Management System**",
+  "main": "postcss.config.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mliber13/hsh-gc-platform.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mliber13/hsh-gc-platform/issues"
+  },
+  "homepage": "https://github.com/mliber13/hsh-gc-platform#readme"
 }

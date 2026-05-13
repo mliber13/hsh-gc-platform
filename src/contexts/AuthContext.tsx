@@ -37,10 +37,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    // Detect password-reset link: URL is /reset-password with type=recovery in hash (read before Supabase consumes it)
+    // Detect password-reset link: /reset-password + recovery tokens in hash (or query for some flows)
     const pathname = window.location.pathname
-    const hash = window.location.hash || ''
-    if (pathname === '/reset-password' && hash.includes('type=recovery')) {
+    const hashRaw = window.location.hash.replace(/^#/, '')
+    const hashParams = new URLSearchParams(hashRaw)
+    const searchParams = new URLSearchParams(window.location.search)
+    const isRecoveryUrl =
+      hashParams.get('type') === 'recovery' ||
+      searchParams.get('type') === 'recovery' ||
+      (window.location.hash || '').includes('type=recovery')
+
+    if (pathname === '/reset-password' && isRecoveryUrl) {
       setNeedsNewPassword(true)
     }
 
@@ -52,7 +59,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     // Listen for changes on auth state (sign in, sign out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setNeedsNewPassword(true)
+      }
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)

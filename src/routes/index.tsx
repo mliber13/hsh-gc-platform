@@ -122,6 +122,8 @@ export function AppRoutes() {
 
       {/* Authed — wrapped in AuthGate + Provider, then in the sidebar shell */}
       <Route element={<AuthedLayout />}>
+        {/* Password recovery: must match resetPasswordForEmail redirectTo + stay out of AppLayout's "*" → "/" */}
+        <Route path="/reset-password" element={<PasswordRecoveryRoute />} />
         {/* Authed but full-screen (no sidebar shell): OAuth callback only */}
         <Route path="/quickbooks/callback" element={<QuickBooksCallbackRoute />} />
         <Route path="/qb-callback" element={<QuickBooksCallbackRoute />} />
@@ -179,6 +181,15 @@ export function AppRoutes() {
       </Route>
     </Routes>
   )
+}
+
+// ============================================================================
+// Password recovery (Supabase email link lands here with hash tokens)
+// ============================================================================
+
+/** Shell route only — AuthGate renders SetNewPassword when session + recovery mode. */
+function PasswordRecoveryRoute() {
+  return null
 }
 
 // ============================================================================
