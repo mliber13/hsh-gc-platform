@@ -27,6 +27,7 @@ import {
 } from '@/components/ConfirmationDot'
 import { CascadePreviewModal } from '@/components/CascadePreviewModal'
 import { cascadeSchedule } from '@/lib/scheduleDateMath'
+import { fetchCascadeDateMathOptions } from '@/services/calendarConfigService'
 import {
   classifySmsEligibility,
   computeCascadeDiff,
@@ -481,7 +482,8 @@ export function SchedulePortfolioItemModal({
           : scheduleItem,
       )
 
-      const cascadeResult = cascadeSchedule(proposedItems)
+      const mathOptions = await fetchCascadeDateMathOptions(proposedItems)
+      const cascadeResult = cascadeSchedule(proposedItems, mathOptions)
       if (cascadeResult.cycle) {
         toast.error('Could not preview schedule changes: dependency cycle detected.')
         return

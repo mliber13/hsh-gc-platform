@@ -59,6 +59,7 @@ import {
 } from 'date-fns'
 import { toLocalDate, toLocalEndOfDay, getItemColsForWeek as getItemColsForWeekUtil } from '@/lib/scheduleCalendarUtils'
 import { addWorkdays, cascadeSchedule } from '@/lib/scheduleDateMath'
+import { fetchCascadeDateMathOptions } from '@/services/calendarConfigService'
 import {
   classifySmsEligibility,
   computeCascadeDiff,
@@ -314,14 +315,18 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
     setHasUnsavedChanges(true)
   }
 
-  const handleAutoCalculateDates = () => {
+  const handleAutoCalculateDates = async () => {
     if (!confirm('Auto-calculate start dates based on predecessors? This will adjust dates for items with dependencies.')) {
       return
     }
 
-    setScheduleItems((items) => cascadeSchedule(items).items)
-    
-    setHasUnsavedChanges(true)
+    try {
+      const mathOptions = await fetchCascadeDateMathOptions(scheduleItems)
+      setScheduleItems((items) => cascadeSchedule(items, mathOptions).items)
+      setHasUnsavedChanges(true)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to load calendar settings')
+    }
   }
 
   const handleSaveSchedule = async (
@@ -500,7 +505,15 @@ export function ScheduleBuilder({ project, onBack }: ScheduleBuilderProps) {
       return
     }
 
-    const result = cascadeSchedule(scheduleItems)
+    let mathOptions
+    try {
+      mathOptions = await fetchCascadeDateMathOptions(scheduleItems)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to load holidays and unavailability')
+      return
+    }
+
+    const result = cascadeSchedule(scheduleItems, mathOptions)
     if (result.cycle) {
       toast.error('Could not preview schedule changes: dependency cycle detected.')
       return

@@ -273,6 +273,8 @@ const settingsNav: NavGroup = {
     { label: 'Plan Library', to: '/library/plans', icon: FileText },
     { label: 'SOW Templates', to: '/sow', icon: ClipboardList },
     { label: 'Contact Directory', to: '/contacts', icon: UsersRound },
+    { label: 'Holidays', to: '/settings/holidays', icon: CalendarDays },
+    { label: 'Sub Unavailability', to: '/settings/unavailability', icon: CalendarDays },
     { label: 'Feedback', to: '/feedback', icon: MessageSquare },
     { label: 'QuickBooks', to: '/quickbooks/settings', icon: Link2 },
   ],

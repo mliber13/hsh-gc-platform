@@ -92,6 +92,8 @@ import { VendorQuotePortal } from '@/components/VendorQuotePortal'
 import { PurchaseOrdersView } from '@/components/PurchaseOrdersView'
 import { ContactDirectory } from '@/components/ContactDirectory'
 import { SOWManagement } from '@/components/SOWManagement'
+import { HolidaysAdmin } from '@/components/HolidaysAdmin'
+import { SubUnavailabilityAdmin } from '@/components/SubUnavailabilityAdmin'
 import { DealWorkspace } from '@/components/DealWorkspace'
 import { DealsDashboard } from '@/components/DealsDashboard'
 import { TenantPipeline } from '@/components/TenantPipeline'
@@ -164,6 +166,8 @@ export function AppRoutes() {
           <Route path="/quickbooks/settings" element={<QuickBooksSettingsRoute />} />
 
           <Route path="/contacts" element={<ContactDirectoryRoute />} />
+          <Route path="/settings/holidays" element={<HolidaysAdminRoute />} />
+          <Route path="/settings/unavailability" element={<SubUnavailabilityAdminRoute />} />
           <Route path="/sow" element={<SOWManagementRoute />} />
 
           <Route path="/deals" element={<DealsDashboard />} />
@@ -646,6 +650,16 @@ function ContactDirectoryRoute() {
 function SOWManagementRoute() {
   const navigate = useNavigate()
   return <SOWManagement onBack={() => navigate('/')} />
+}
+
+function HolidaysAdminRoute() {
+  const navigate = useNavigate()
+  return <HolidaysAdmin onBack={() => navigate('/')} />
+}
+
+function SubUnavailabilityAdminRoute() {
+  const navigate = useNavigate()
+  return <SubUnavailabilityAdmin onBack={() => navigate('/')} />
 }
 
 // ============================================================================
