@@ -191,9 +191,9 @@ export type {
   ContactLabel,
   StandaloneContactLabel,
   ContactEntityType,
-  PartnerLabelTab,
+  PartnerCategory,
 } from './contactDirectory'
-export { STANDALONE_CONTACT_LABELS, MUNICIPALITY_CONTACT_ROLES, PARTNER_LABEL_TABS } from './contactDirectory'
+export { STANDALONE_CONTACT_LABELS, MUNICIPALITY_CONTACT_ROLES } from './contactDirectory'
 
 export type {
   PlanEstimateTemplate,

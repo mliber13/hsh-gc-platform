@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, ChevronDown, ChevronRight, Edit, Trash2, RefreshCw, Archive, ArchiveRestore } from 'lucide-react'
+import { ArrowLeft, Plus, ChevronDown, ChevronRight, Edit, Trash2, RefreshCw, Archive, ArchiveRestore, MoreHorizontal } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,9 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Contact, ContactInput, Subcontractor, Supplier, Developer, Municipality, Lender } from '@/types'
-import { STANDALONE_CONTACT_LABELS, MUNICIPALITY_CONTACT_ROLES, PARTNER_LABEL_TABS } from '@/types'
-import type { PartnerLabelTab } from '@/types'
+import type { Contact, ContactInput, Subcontractor, Supplier, Developer, Municipality, Lender, PartnerCategory } from '@/types'
+import { STANDALONE_CONTACT_LABELS, MUNICIPALITY_CONTACT_ROLES } from '@/types'
 import {
   fetchSubcontractors,
   fetchSuppliers,
@@ -57,6 +56,13 @@ import {
   deleteContact,
 } from '@/services/contactDirectoryService'
 import {
+  fetchPartnerCategories,
+  createPartnerCategory,
+  updatePartnerCategory,
+  deletePartnerCategory,
+  countStandaloneContactsForCategoryKey,
+} from '@/services/partnerCategoryService'
+import {
   getOrganizationUsers,
   getOrganizationUsersByEmail,
   updateUserRole,
@@ -74,7 +80,13 @@ interface ContactDirectoryProps {
   userProfile?: UserProfile | null
 }
 
-type PartnerTab = 'subcontractors' | 'suppliers' | 'developers' | 'municipalities' | 'lenders' | PartnerLabelTab
+const ENTITY_PARTNER_TABS = ['subcontractors', 'suppliers', 'developers', 'municipalities', 'lenders'] as const
+type EntityPartnerTab = (typeof ENTITY_PARTNER_TABS)[number]
+type PartnerTab = EntityPartnerTab | string
+
+function isEntityPartnerTab(tab: string): tab is EntityPartnerTab {
+  return (ENTITY_PARTNER_TABS as readonly string[]).includes(tab)
+}
 
 export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps) {
   usePageTitle('Contact Directory')
@@ -101,9 +113,21 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
   const [loadingContacts, setLoadingContacts] = useState(false)
   const [partnerLabelContacts, setPartnerLabelContacts] = useState<Contact[]>([])
   const [loadingPartnerLabelContacts, setLoadingPartnerLabelContacts] = useState(false)
+  const [partnerCategories, setPartnerCategories] = useState<PartnerCategory[]>([])
+  const [showArchivedCategories, setShowArchivedCategories] = useState(false)
+  const [newCategoryOpen, setNewCategoryOpen] = useState(false)
+  const [newCategoryLabel, setNewCategoryLabel] = useState('')
+  const [savingNewCategory, setSavingNewCategory] = useState(false)
+  const [manageCategoryOpen, setManageCategoryOpen] = useState(false)
+  const [managingCategory, setManagingCategory] = useState<PartnerCategory | null>(null)
+  const [manageRenameLabel, setManageRenameLabel] = useState('')
+  const [savingManageCategory, setSavingManageCategory] = useState(false)
+  const [archiveCategoryConfirmOpen, setArchiveCategoryConfirmOpen] = useState(false)
+  const [deleteCategoryConfirmOpen, setDeleteCategoryConfirmOpen] = useState(false)
+  const [categoryContactCount, setCategoryContactCount] = useState(0)
 
   const [contactFormOpen, setContactFormOpen] = useState(false)
-  const [contactFormLabel, setContactFormLabel] = useState<ContactLabel>('EMPLOYEE')
+  const [contactFormLabel, setContactFormLabel] = useState<string>('EMPLOYEE')
   const [contactFormEntity, setContactFormEntity] = useState<{
     type: 'subcontractor' | 'supplier' | 'developer' | 'municipality' | 'lender'
     id: string
@@ -264,8 +288,30 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
     }
   }, [])
 
-  const isPartnerLabelTab = (t: PartnerTab): t is PartnerLabelTab =>
-    t === 'architects' || t === 'engineers' || t === 'title_closing' || t === 'insurance'
+  const loadPartnerCategories = useCallback(async () => {
+    try {
+      const data = await fetchPartnerCategories({ includeArchived: showArchivedCategories })
+      setPartnerCategories(data)
+    } catch (e: unknown) {
+      console.error(e)
+      toast.error(e instanceof Error ? e.message : 'Failed to load partner categories')
+    }
+  }, [showArchivedCategories])
+
+  const activePartnerCategory =
+    mainTab === 'partners' && !isEntityPartnerTab(partnerTab)
+      ? (partnerCategories.find((c) => c.key === partnerTab) ?? null)
+      : null
+
+  const partnerCategoryTitle = (key: string) =>
+    partnerCategories.find((c) => c.key === key)?.label ?? key
+
+  const isPartnerCategoryKey = (key: string) => partnerCategories.some((c) => c.key === key)
+
+  useEffect(() => {
+    if (mainTab !== 'partners') return
+    void loadPartnerCategories()
+  }, [mainTab, loadPartnerCategories])
 
   useEffect(() => {
     if (mainTab !== 'partners') return
@@ -274,11 +320,21 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
     else if (partnerTab === 'developers') loadDevelopers()
     else if (partnerTab === 'municipalities') loadMunicipalities()
     else if (partnerTab === 'lenders') loadLenders()
-    else if (isPartnerLabelTab(partnerTab)) {
-      const config = PARTNER_LABEL_TABS.find((c) => c.tab === partnerTab)
-      if (config) loadPartnerLabelContacts(config.label)
+    else if (activePartnerCategory) {
+      loadPartnerLabelContacts(activePartnerCategory.key)
     }
-  }, [mainTab, partnerTab, showInactive, loadSubcontractors, loadSuppliers, loadDevelopers, loadMunicipalities, loadLenders, loadPartnerLabelContacts])
+  }, [
+    mainTab,
+    partnerTab,
+    showInactive,
+    activePartnerCategory,
+    loadSubcontractors,
+    loadSuppliers,
+    loadDevelopers,
+    loadMunicipalities,
+    loadLenders,
+    loadPartnerLabelContacts,
+  ])
 
   useEffect(() => {
     if (!expandedEntityId) return
@@ -432,26 +488,125 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
 
   const peopleContacts = mainTab === 'people' ? contacts : []
   const currentPartnerList =
-    isPartnerLabelTab(partnerTab) ? []
+    activePartnerCategory ? []
     : partnerTab === 'subcontractors' ? subcontractors
     : partnerTab === 'suppliers' ? suppliers
     : partnerTab === 'developers' ? developers
     : partnerTab === 'municipalities' ? municipalities
     : lenders
   const isLoadingPartners =
-    isPartnerLabelTab(partnerTab) ? loadingPartnerLabelContacts
+    activePartnerCategory ? loadingPartnerLabelContacts
     : partnerTab === 'subcontractors' ? loadingSubs
     : partnerTab === 'suppliers' ? loadingSuppliers
     : partnerTab === 'developers' ? loadingDevs
     : partnerTab === 'municipalities' ? loadingMunicipalities
     : loadingLenders
-  const currentPartnerLabelConfig = mainTab === 'partners' && isPartnerLabelTab(partnerTab) ? PARTNER_LABEL_TABS.find((c) => c.tab === partnerTab) : null
 
-  const openAddContact = (entity?: { type: 'subcontractor' | 'supplier' | 'developer' | 'municipality' | 'lender'; id: string; name: string }, overrideLabel?: ContactLabel) => {
+  const visiblePartnerCategories = partnerCategories.filter(
+    (c) => showArchivedCategories || !c.isArchived,
+  )
+
+  const openManageCategory = async (category: PartnerCategory) => {
+    setManagingCategory(category)
+    setManageRenameLabel(category.label)
+    setManageCategoryOpen(true)
+    try {
+      const count = await countStandaloneContactsForCategoryKey(category.key)
+      setCategoryContactCount(count)
+    } catch {
+      setCategoryContactCount(partnerLabelContacts.length)
+    }
+  }
+
+  const handleCreateCategory = async () => {
+    const label = newCategoryLabel.trim()
+    if (!label) {
+      toast.error('Category name is required')
+      return
+    }
+    setSavingNewCategory(true)
+    try {
+      const created = await createPartnerCategory({ label })
+      await loadPartnerCategories()
+      setNewCategoryOpen(false)
+      setNewCategoryLabel('')
+      setPartnerTab(created.key)
+      toast.success(`Category "${created.label}" created`)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to create category')
+    } finally {
+      setSavingNewCategory(false)
+    }
+  }
+
+  const handleRenameCategory = async () => {
+    if (!managingCategory) return
+    setSavingManageCategory(true)
+    try {
+      await updatePartnerCategory(managingCategory.id, { label: manageRenameLabel.trim() })
+      await loadPartnerCategories()
+      setManageCategoryOpen(false)
+      toast.success('Category renamed')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to rename category')
+    } finally {
+      setSavingManageCategory(false)
+    }
+  }
+
+  const handleArchiveCategory = async () => {
+    if (!managingCategory) return
+    setSavingManageCategory(true)
+    try {
+      await updatePartnerCategory(managingCategory.id, { isArchived: true })
+      await loadPartnerCategories()
+      setArchiveCategoryConfirmOpen(false)
+      setManageCategoryOpen(false)
+      if (partnerTab === managingCategory.key) setPartnerTab('subcontractors')
+      toast.success('Category archived')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to archive category')
+    } finally {
+      setSavingManageCategory(false)
+    }
+  }
+
+  const handleDeleteCategory = async () => {
+    if (!managingCategory) return
+    if (categoryContactCount > 0) return
+    setSavingManageCategory(true)
+    try {
+      await deletePartnerCategory(managingCategory.id)
+      await loadPartnerCategories()
+      setDeleteCategoryConfirmOpen(false)
+      setManageCategoryOpen(false)
+      if (partnerTab === managingCategory.key) setPartnerTab('subcontractors')
+      toast.success('Category deleted')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete category')
+    } finally {
+      setSavingManageCategory(false)
+    }
+  }
+
+  const openAddContact = (
+    entity?: { type: 'subcontractor' | 'supplier' | 'developer' | 'municipality' | 'lender'; id: string; name: string },
+    overrideLabel?: string,
+  ) => {
     setContactFormEntity(entity ?? null)
-    const entityLabel: ContactLabel = overrideLabel ?? (entity
-      ? (entity.type === 'subcontractor' ? 'SUBCONTRACTOR' : entity.type === 'supplier' ? 'SUPPLIER' : entity.type === 'developer' ? 'DEVELOPER' : entity.type === 'municipality' ? 'MUNICIPALITY' : 'LENDER')
-      : peopleLabel)
+    const entityLabel: string =
+      overrideLabel ??
+      (entity
+        ? entity.type === 'subcontractor'
+          ? 'SUBCONTRACTOR'
+          : entity.type === 'supplier'
+            ? 'SUPPLIER'
+            : entity.type === 'developer'
+              ? 'DEVELOPER'
+              : entity.type === 'municipality'
+                ? 'MUNICIPALITY'
+                : 'LENDER'
+        : peopleLabel)
     setContactFormLabel(entityLabel)
     setContactForm({ name: '', email: '', phone: '', role: '', notes: '' })
     setEditingContactId(null)
@@ -466,7 +621,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       c.municipalityId ? { type: 'municipality', id: c.municipalityId, name: '' } :
       c.lenderId ? { type: 'lender', id: c.lenderId, name: '' } : null
     )
-    setContactFormLabel(c.label as ContactLabel)
+    setContactFormLabel(c.label)
     setContactForm({
       name: c.name,
       email: c.email ?? '',
@@ -514,7 +669,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       }
       setContactFormOpen(false)
       if (mainTab === 'people') loadContacts(peopleLabel)
-      if (mainTab === 'partners' && currentPartnerLabelConfig) loadPartnerLabelContacts(currentPartnerLabelConfig.label)
+      if (mainTab === 'partners' && activePartnerCategory) loadPartnerLabelContacts(activePartnerCategory.key)
       if (expandedEntityId) {
         const key = partnerTab === 'subcontractors' ? 'subcontractorId' : partnerTab === 'suppliers' ? 'supplierId' : partnerTab === 'developers' ? 'developerId' : partnerTab === 'municipalities' ? 'municipalityId' : 'lenderId'
         loadEntityContacts(expandedEntityId, key)
@@ -531,7 +686,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
     try {
       await deleteContact(id)
       if (mainTab === 'people') loadContacts(peopleLabel)
-      if (mainTab === 'partners' && currentPartnerLabelConfig) loadPartnerLabelContacts(currentPartnerLabelConfig.label)
+      if (mainTab === 'partners' && activePartnerCategory) loadPartnerLabelContacts(activePartnerCategory.key)
       if (expandedEntityId) {
         const key = partnerTab === 'subcontractors' ? 'subcontractorId' : partnerTab === 'suppliers' ? 'supplierId' : partnerTab === 'developers' ? 'developerId' : partnerTab === 'municipalities' ? 'municipalityId' : 'lenderId'
         loadEntityContacts(expandedEntityId, key)
@@ -895,20 +1050,42 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                 >
                   Lenders
                 </button>
-                {PARTNER_LABEL_TABS.map(({ tab, title }) => (
+                {visiblePartnerCategories.map((c) => (
                   <button
-                    key={tab}
+                    key={c.key}
                     type="button"
-                    onClick={() => setPartnerTab(tab)}
-                    className={`px-3 py-1.5 text-sm rounded ${partnerTab === tab ? 'bg-muted/40 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/30'}`}
+                    onClick={() => setPartnerTab(c.key)}
+                    className={`px-3 py-1.5 text-sm rounded ${partnerTab === c.key ? 'bg-muted/40 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/30'}`}
                   >
-                    {title}
+                    {c.label}
                   </button>
                 ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-muted-foreground"
+                  onClick={() => {
+                    setNewCategoryLabel('')
+                    setNewCategoryOpen(true)
+                  }}
+                >
+                  <Plus className="mr-1 size-4" />
+                  New category
+                </Button>
               </div>
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
                 <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="h-4 w-4 rounded border-border/60" />
                 Show inactive
+              </label>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={showArchivedCategories}
+                  onChange={(e) => setShowArchivedCategories(e.target.checked)}
+                  className="h-4 w-4 rounded border-border/60"
+                />
+                Show archived categories
               </label>
               {partnerTab === 'subcontractors' && (
                 <Button size="sm" onClick={() => openAddPartner('subcontractors')}>
@@ -938,12 +1115,6 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                 <Button size="sm" onClick={openAddDeveloper}>
                   <Plus className="w-4 h-4 mr-1" />
                   Add Developer
-                </Button>
-              )}
-              {currentPartnerLabelConfig && (
-                <Button size="sm" onClick={() => openAddContact(undefined, currentPartnerLabelConfig.label)}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Contact
                 </Button>
               )}
             </>
@@ -1048,7 +1219,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>
-                  {currentPartnerLabelConfig ? currentPartnerLabelConfig.title : null}
+                  {activePartnerCategory ? activePartnerCategory.label : null}
                   {partnerTab === 'subcontractors' && 'Subcontractors'}
                   {partnerTab === 'suppliers' && 'Suppliers'}
                   {partnerTab === 'developers' && 'Developers'}
@@ -1056,18 +1227,29 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                   {partnerTab === 'lenders' && 'Lenders'}
                 </CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {currentPartnerLabelConfig ? 'Contacts for this partner type.' : 'Primary contact is on the company row. Expand a row to see and add additional contacts.'}
+                  {activePartnerCategory ? 'Contacts for this partner type.' : 'Primary contact is on the company row. Expand a row to see and add additional contacts.'}
                 </p>
               </div>
-              {currentPartnerLabelConfig && (
-                <Button size="sm" onClick={() => openAddContact(undefined, currentPartnerLabelConfig.label)}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Contact
-                </Button>
+              {activePartnerCategory && (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={() => openAddContact(undefined, activePartnerCategory.key)}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Contact
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void openManageCategory(activePartnerCategory)}
+                    title="Manage category"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </div>
               )}
             </CardHeader>
             <CardContent>
-              {currentPartnerLabelConfig ? (
+              {activePartnerCategory ? (
                 <>
                   {isLoadingPartners ? (
                     <p className="text-sm text-muted-foreground py-8">Loading...</p>
@@ -1308,8 +1490,8 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
               <DialogDescription>
                 {contactFormEntity
                   ? `Additional contact for ${contactFormEntity.name}.`
-                  : ['ARCHITECT', 'ENGINEER', 'TITLE_CLOSING', 'INSURANCE'].includes(contactFormLabel)
-                    ? `Contact for ${PARTNER_LABEL_TABS.find((c) => c.label === contactFormLabel)?.title ?? contactFormLabel}.`
+                  : isPartnerCategoryKey(contactFormLabel)
+                    ? `Contact for ${partnerCategoryTitle(contactFormLabel)}.`
                     : 'Standalone contact. Choose a label.'}
               </DialogDescription>
             </DialogHeader>
@@ -1317,9 +1499,9 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
               {!contactFormEntity && (
                 <div>
                   <Label>Label</Label>
-                  {['ARCHITECT', 'ENGINEER', 'TITLE_CLOSING', 'INSURANCE'].includes(contactFormLabel) ? (
+                  {isPartnerCategoryKey(contactFormLabel) ? (
                     <p className="text-sm text-muted-foreground py-2">
-                      {PARTNER_LABEL_TABS.find((c) => c.label === contactFormLabel)?.title ?? contactFormLabel}
+                      {partnerCategoryTitle(contactFormLabel)}
                     </p>
                   ) : (
                     <Select value={contactFormLabel} onValueChange={(v) => setContactFormLabel(v as StandaloneContactLabel)}>
@@ -1727,6 +1909,141 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                 </DialogFooter>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={newCategoryOpen} onOpenChange={setNewCategoryOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>New partner category</DialogTitle>
+              <DialogDescription>
+                Creates a new tab for label-only partner contacts (e.g. Realtors, Photographers).
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="new-category-label">Category name</Label>
+                <Input
+                  id="new-category-label"
+                  value={newCategoryLabel}
+                  onChange={(e) => setNewCategoryLabel(e.target.value)}
+                  placeholder="e.g. Realtors"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNewCategoryOpen(false)} disabled={savingNewCategory}>
+                Cancel
+              </Button>
+              <Button onClick={() => void handleCreateCategory()} disabled={savingNewCategory}>
+                {savingNewCategory ? 'Creating…' : 'Create category'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={manageCategoryOpen} onOpenChange={setManageCategoryOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Manage category</DialogTitle>
+              <DialogDescription>
+                {managingCategory
+                  ? `Key: ${managingCategory.key} · ${categoryContactCount} contact(s) in this category`
+                  : ''}
+              </DialogDescription>
+            </DialogHeader>
+            {managingCategory && (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="rename-category-label">Display name</Label>
+                  <Input
+                    id="rename-category-label"
+                    value={manageRenameLabel}
+                    onChange={(e) => setManageRenameLabel(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleRenameCategory()}
+                    disabled={savingManageCategory || !manageRenameLabel.trim()}
+                  >
+                    {savingManageCategory ? 'Saving…' : 'Save name'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setArchiveCategoryConfirmOpen(true)}
+                    disabled={savingManageCategory}
+                  >
+                    <Archive className="mr-2 size-4" />
+                    Archive category
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setDeleteCategoryConfirmOpen(true)}
+                    disabled={savingManageCategory || categoryContactCount > 0}
+                    title={
+                      categoryContactCount > 0
+                        ? 'Remove or reassign contacts before deleting'
+                        : undefined
+                    }
+                  >
+                    <Trash2 className="mr-2 size-4" />
+                    Delete category
+                  </Button>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setManageCategoryOpen(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={archiveCategoryConfirmOpen} onOpenChange={setArchiveCategoryConfirmOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Archive this category?</DialogTitle>
+              <DialogDescription>
+                The tab will be hidden. Contacts keep their data; you can still view them if you enable
+                &quot;Show archived categories&quot;.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setArchiveCategoryConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => void handleArchiveCategory()} disabled={savingManageCategory}>
+                Archive
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={deleteCategoryConfirmOpen} onOpenChange={setDeleteCategoryConfirmOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete this category?</DialogTitle>
+              <DialogDescription>
+                {managingCategory
+                  ? `Delete "${managingCategory.label}"? This cannot be undone.`
+                  : 'This cannot be undone.'}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteCategoryConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => void handleDeleteCategory()}
+                disabled={savingManageCategory}
+              >
+                Delete
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
     </div>

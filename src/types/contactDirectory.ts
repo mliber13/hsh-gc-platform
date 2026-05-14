@@ -63,15 +63,18 @@ export const STANDALONE_CONTACT_LABELS: { value: StandaloneContactLabel; label: 
   { value: 'INDEPENDENT_1099', label: "1099" },
 ]
 
-export type PartnerLabelTab = 'architects' | 'engineers' | 'title_closing' | 'insurance'
-
-/** Partner tabs that are label-only (no company entity). Shown under Partners tab. */
-export const PARTNER_LABEL_TABS: { tab: PartnerLabelTab; label: StandaloneContactLabel; title: string }[] = [
-  { tab: 'architects', label: 'ARCHITECT', title: 'Architects' },
-  { tab: 'engineers', label: 'ENGINEER', title: 'Engineers' },
-  { tab: 'title_closing', label: 'TITLE_CLOSING', title: 'Title / Closing' },
-  { tab: 'insurance', label: 'INSURANCE', title: 'Insurance' },
-]
+/** Org-scoped partner label tab (Architects, Realtors, etc.) — loaded from contact_categories. */
+export interface PartnerCategory {
+  id: string
+  organizationId: string
+  /** Matches contacts.label for standalone partner contacts */
+  key: string
+  label: string
+  sortOrder: number
+  isArchived: boolean
+  createdAt: Date
+  updatedAt: Date
+}
 
 /** Role/label options when adding a contact under a Municipality (e.g. Inspector, City Manager). Use "Other" in UI to show custom role input. */
 export const MUNICIPALITY_CONTACT_ROLES: { value: string; label: string }[] = [
