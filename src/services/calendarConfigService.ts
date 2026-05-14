@@ -91,6 +91,20 @@ export async function createSubUnavailability(input: {
   return data
 }
 
+export async function updateSubUnavailability(
+  id: string,
+  patch: { start_date?: string; end_date?: string; reason?: string | null },
+): Promise<SubUnavailability> {
+  const { data, error } = await supabase
+    .from('subcontractor_unavailability')
+    .update(patch)
+    .eq('id', id)
+    .select('id, subcontractor_id, start_date, end_date, reason, created_at')
+    .single()
+  if (error) throw error
+  return data
+}
+
 export async function deleteSubUnavailability(id: string): Promise<void> {
   const { error } = await supabase.from('subcontractor_unavailability').delete().eq('id', id)
   if (error) throw error

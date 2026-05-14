@@ -1,11 +1,16 @@
 // ============================================================================
 // Subcontractor unavailability admin (Path B — no per-sub detail page)
 // ============================================================================
+//
+// Two scopes here:
+//   - Add form (top): sub picker + dates + reason. Adds for the picked sub.
+//   - Ranges table (bottom): GLOBAL across all subs, sorted by start_date.
+//     Each row shows sub name explicitly. Edit + delete affordances per row.
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { format, parseISO } from 'date-fns'
 import { toast } from 'sonner'
-import { ArrowLeft, Trash2 } from 'lucide-react'
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -19,9 +24,17 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   createSubUnavailability,
   deleteSubUnavailability,
   fetchSubUnavailability,
+  updateSubUnavailability,
   type SubUnavailability,
 } from '@/services/calendarConfigService'
 import { fetchSubcontractors } from '@/services/partnerDirectoryService'
@@ -40,6 +53,7 @@ export function SubUnavailabilityAdmin({ onBack }: SubUnavailabilityAdminProps) 
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [reason, setReason] = useState('')
+  const [editingRow, setEditingRow] = useState<SubUnavailability | null>(null)
 
   useEffect(() => {
     void (async () => {
@@ -54,24 +68,30 @@ export function SubUnavailabilityAdmin({ onBack }: SubUnavailabilityAdminProps) 
   }, [])
 
   const loadRows = useCallback(async () => {
-    if (!selectedSubId) {
-      setRows([])
-      setLoading(false)
-      return
-    }
     setLoading(true)
     try {
-      setRows(await fetchSubUnavailability([selectedSubId]))
+      // Global: fetch all rows for the org (no subcontractor_id filter).
+      const all = await fetchSubUnavailability()
+      // Sort by start_date ascending so upcoming/recent comes first when
+      // paired with a date-from-now filter; for now show all in chronological order.
+      all.sort((a, b) => a.start_date.localeCompare(b.start_date))
+      setRows(all)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to load unavailability')
     } finally {
       setLoading(false)
     }
-  }, [selectedSubId])
+  }, [])
 
   useEffect(() => {
     void loadRows()
   }, [loadRows])
+
+  const subNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const s of subs) map.set(s.id, s.name)
+    return map
+  }, [subs])
 
   const handleAdd = async () => {
     if (!selectedSubId) {
@@ -107,7 +127,12 @@ export function SubUnavailabilityAdmin({ onBack }: SubUnavailabilityAdminProps) 
   }
 
   const handleDelete = async (row: SubUnavailability) => {
-    if (!window.confirm(`Remove unavailability ${row.start_date} to ${row.end_date}?`)) {
+    const subName = subNameById.get(row.subcontractor_id) ?? 'this sub'
+    if (
+      !window.confirm(
+        `Remove ${subName}'s unavailability ${row.start_date} to ${row.end_date}?`,
+      )
+    ) {
       return
     }
     try {
@@ -129,35 +154,28 @@ export function SubUnavailabilityAdmin({ onBack }: SubUnavailabilityAdminProps) 
     >
       <Card>
         <CardHeader>
-          <CardTitle>Subcontractor</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Select value={selectedSubId} onValueChange={setSelectedSubId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select subcontractor" />
-            </SelectTrigger>
-            <SelectContent>
-              {subs.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
           <CardTitle>Add range</CardTitle>
           <CardDescription>
-            {selectedSubName
-              ? `Blocked workdays for ${selectedSubName}`
-              : 'Select a subcontractor first'}
+            Pick a subcontractor and block off the dates they're unavailable.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="unavail-sub">Subcontractor</Label>
+              <Select value={selectedSubId} onValueChange={setSelectedSubId}>
+                <SelectTrigger id="unavail-sub">
+                  <SelectValue placeholder="Select subcontractor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subs.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="unavail-start">Start date</Label>
               <Input
@@ -187,7 +205,7 @@ export function SubUnavailabilityAdmin({ onBack }: SubUnavailabilityAdminProps) 
             </div>
           </div>
           <Button onClick={() => void handleAdd()} disabled={saving || !selectedSubId}>
-            {saving ? 'Adding…' : 'Add'}
+            {saving ? 'Adding…' : `Add for ${selectedSubName || 'sub'}`}
           </Button>
         </CardContent>
       </Card>
@@ -195,48 +213,187 @@ export function SubUnavailabilityAdmin({ onBack }: SubUnavailabilityAdminProps) 
       <Card>
         <CardHeader>
           <CardTitle>Ranges</CardTitle>
+          <CardDescription>
+            All unavailability ranges across every subcontractor, earliest first.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No unavailability ranges for this subcontractor.
+              No unavailability ranges yet. Add one above.
             </p>
           ) : (
-            <ul className="divide-y divide-border/60 rounded-md border">
-              {rows.map((row) => (
-                <li
-                  key={row.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-                >
-                  <span>
-                    <span className="font-medium tabular-nums">
-                      {format(parseISO(row.start_date), 'MMM d, yyyy')}
-                      {' — '}
-                      {format(parseISO(row.end_date), 'MMM d, yyyy')}
-                    </span>
-                    {row.reason ? (
-                      <span className="text-muted-foreground"> · {row.reason}</span>
-                    ) : null}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => void handleDelete(row)}
-                    aria-label="Delete range"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/60 text-left text-xs uppercase text-muted-foreground">
+                    <th className="py-2 pr-4 font-medium">Subcontractor</th>
+                    <th className="py-2 pr-4 font-medium">Dates</th>
+                    <th className="py-2 pr-4 font-medium">Reason</th>
+                    <th className="py-2 text-right font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {rows.map((row) => (
+                    <tr key={row.id}>
+                      <td className="py-2 pr-4 font-medium text-foreground">
+                        {subNameById.get(row.subcontractor_id) ?? '(unknown sub)'}
+                      </td>
+                      <td className="py-2 pr-4 tabular-nums">
+                        {format(parseISO(row.start_date), 'MMM d, yyyy')}
+                        {' — '}
+                        {format(parseISO(row.end_date), 'MMM d, yyyy')}
+                      </td>
+                      <td className="py-2 pr-4 text-muted-foreground">
+                        {row.reason || '—'}
+                      </td>
+                      <td className="py-2">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 text-muted-foreground hover:text-foreground"
+                            onClick={() => setEditingRow(row)}
+                            aria-label="Edit range"
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => void handleDelete(row)}
+                            aria-label="Delete range"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
+
+      <EditRangeDialog
+        row={editingRow}
+        subName={
+          editingRow
+            ? subNameById.get(editingRow.subcontractor_id) ?? '(unknown sub)'
+            : ''
+        }
+        onClose={() => setEditingRow(null)}
+        onSaved={() => {
+          setEditingRow(null)
+          void loadRows()
+        }}
+      />
     </AdminLayout>
+  )
+}
+
+function EditRangeDialog({
+  row,
+  subName,
+  onClose,
+  onSaved,
+}: {
+  row: SubUnavailability | null
+  subName: string
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  // Re-seed local state every time we open a new row
+  useEffect(() => {
+    if (!row) return
+    setStartDate(row.start_date)
+    setEndDate(row.end_date)
+    setReason(row.reason ?? '')
+  }, [row?.id])
+
+  const handleSave = async () => {
+    if (!row) return
+    if (!startDate || !endDate) {
+      toast.error('Start and end dates are required')
+      return
+    }
+    if (endDate < startDate) {
+      toast.error('End date must be on or after start date')
+      return
+    }
+    setSaving(true)
+    try {
+      await updateSubUnavailability(row.id, {
+        start_date: startDate,
+        end_date: endDate,
+        reason: reason.trim() || null,
+      })
+      toast.success('Updated')
+      onSaved()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update range')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!row} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit unavailability — {subName}</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-2 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="edit-start">Start date</Label>
+            <Input
+              id="edit-start"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-end">End date</Label>
+            <Input
+              id="edit-end"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="edit-reason">Reason (optional)</Label>
+            <Input
+              id="edit-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. Vacation"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={() => void handleSave()} disabled={saving}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -252,7 +409,7 @@ function AdminLayout({
   children: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-2xl mx-auto">
+    <div className="flex flex-col gap-6 p-6 max-w-3xl mx-auto">
       <button
         type="button"
         onClick={onBack}

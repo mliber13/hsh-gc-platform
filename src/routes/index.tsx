@@ -654,12 +654,15 @@ function SOWManagementRoute() {
 
 function HolidaysAdminRoute() {
   const navigate = useNavigate()
-  return <HolidaysAdmin onBack={() => navigate('/')} />
+  // navigate(-1) returns to wherever the user came from (their workspace's
+  // page), not always Projects Dashboard. Falls through gracefully if there's
+  // no history (direct URL load — rare for a Settings route).
+  return <HolidaysAdmin onBack={() => navigate(-1)} />
 }
 
 function SubUnavailabilityAdminRoute() {
   const navigate = useNavigate()
-  return <SubUnavailabilityAdmin onBack={() => navigate('/')} />
+  return <SubUnavailabilityAdmin onBack={() => navigate(-1)} />
 }
 
 // ============================================================================
