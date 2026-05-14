@@ -193,15 +193,37 @@ export async function getDefaultExclusionsForProjectType(
  * Roll up estimate trades by category for quote line items.
  * Uses the project's bound estimate via `estimateId` (UI model: one estimate per project;
  * DB may have multiple estimates per project — caller should pass the estimate the book is editing).
+ *
+ * Per-category amount = sum over trades in that category of:
+ *   trade.totalCost * (1 + markupPct + contingencyPct)
+ * where markupPct is trade.markupPercent (falling back to the project-level
+ * markupPercent from estimates.totals, falling back to 20%), and
+ * contingencyPct is project-level (estimates.totals.contingencyPercent, default 10%).
+ * The grand total of all category amounts equals the estimate's totalEstimated
+ * value shown in the Estimate Book (EstimateBuilder.calculateTotals).
  */
 export async function buildLineItemsFromEstimate(
   estimateId: string,
 ): Promise<Array<Pick<ClientQuoteLineItem, 'trade_category' | 'display_label' | 'amount' | 'sort_order'>>> {
-  const trades = await getTradesForEstimate_Hybrid(estimateId)
+  const [{ data: estimateRow }, trades] = await Promise.all([
+    supabase.from('estimates').select('totals').eq('id', estimateId).maybeSingle(),
+    getTradesForEstimate_Hybrid(estimateId),
+  ])
+
+  const totals = (estimateRow?.totals ?? {}) as {
+    markupPercent?: number
+    contingencyPercent?: number
+  }
+  const contingencyPct = (totals.contingencyPercent ?? 10) / 100
+
   const sums = new Map<string, number>()
   for (const t of trades) {
-    const cat = t.category
-    sums.set(cat, (sums.get(cat) ?? 0) + (t.totalCost ?? 0))
+    const base = t.totalCost ?? 0
+    // Match EstimateBuilder.calculateTotals: trade markup falls back to project markup,
+    // which falls back to 20%. `||` (not `??`) matches the existing convention.
+    const tradeMarkupPct = ((t.markupPercent || totals.markupPercent || 20) as number) / 100
+    const quoted = base * (1 + tradeMarkupPct + contingencyPct)
+    sums.set(t.category, (sums.get(t.category) ?? 0) + quoted)
   }
   const categories = [...sums.keys()].sort((a, b) => categorySortIndex(a) - categorySortIndex(b))
   return categories.map((category, idx) => {
