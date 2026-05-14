@@ -524,7 +524,7 @@ export async function generateClientQuotePDFBlob(
   project: Project,
 ): Promise<Blob> {
   const logo = await loadLogoBits()
-  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
+  const doc = new jsPDF({ unit: 'pt', format: 'letter', compress: true })
   const ctx: PdfContext = { doc, y: PAGE.marginY, page: 1 }
 
   drawHeaderBand(ctx, logo)

@@ -362,3 +362,120 @@ export async function deleteDraftQuote(id: string): Promise<void> {
   const { error } = await supabase.from('client_quotes').delete().eq('id', id)
   if (error) throw error
 }
+
+/** Upload PDF to quote-documents; first path segment must match profiles.organization_id (RLS). */
+async function uploadQuotePdfBlob(orgId: string, quoteId: string, blob: Blob): Promise<string> {
+  const path = `${orgId}/client-quotes/${quoteId}.pdf`
+  const { error } = await supabase.storage.from('quote-documents').upload(path, blob, {
+    cacheControl: '3600',
+    upsert: true,
+    contentType: 'application/pdf',
+  })
+  if (error) throw error
+  return path
+}
+
+/**
+ * Mark draft as sent: caller supplies the PDF blob (rendered in the browser).
+ * Freezes totals, sets issued/expires, stores storage path on sent_pdf_url.
+ */
+export async function markQuoteSent(quoteId: string, pdfBlob: Blob): Promise<ClientQuoteWithChildren> {
+  const existing = await getClientQuoteWithChildren(quoteId)
+  if (!existing) throw new Error('Quote not found')
+  if (existing.status !== 'draft') {
+    throw new Error('Only draft quotes can be sent')
+  }
+  const orgId = await requireUserOrgId()
+
+  const path = await uploadQuotePdfBlob(orgId, quoteId, pdfBlob)
+
+  const linesSum = existing.line_items.reduce((s, li) => s + li.amount, 0)
+  const optsSum = existing.options.reduce((s, o) => s + o.amount, 0)
+  const sentTotal = linesSum + optsSum
+
+  const issuedAt = new Date()
+  const expiresAt = new Date(issuedAt.getTime() + existing.validity_days * 86_400_000)
+
+  const { error: upErr } = await supabase
+    .from('client_quotes')
+    .update({
+      status: 'sent',
+      issued_at: issuedAt.toISOString(),
+      expires_at: expiresAt.toISOString(),
+      sent_total: sentTotal,
+      sent_pdf_url: path,
+    })
+    .eq('id', quoteId)
+  if (upErr) throw upErr
+
+  const reloaded = await getClientQuoteWithChildren(quoteId)
+  if (!reloaded) throw new Error('markQuoteSent: failed to reload')
+  return reloaded
+}
+
+export async function markQuoteAccepted(quoteId: string): Promise<ClientQuoteWithChildren> {
+  const existing = await getClientQuoteWithChildren(quoteId)
+  if (!existing) throw new Error('Quote not found')
+  if (existing.status !== 'sent') {
+    throw new Error('Only sent quotes can be marked accepted')
+  }
+
+  const { error: qErr } = await supabase
+    .from('client_quotes')
+    .update({ status: 'accepted', accepted_at: new Date().toISOString() })
+    .eq('id', quoteId)
+  if (qErr) throw qErr
+
+  const { error: pErr } = await supabase.from('projects').update({ status: 'in-progress' }).eq('id', existing.project_id)
+  if (pErr) throw pErr
+
+  const reloaded = await getClientQuoteWithChildren(quoteId)
+  if (!reloaded) throw new Error('markQuoteAccepted: failed to reload')
+  return reloaded
+}
+
+function isLiveQuoteRow(
+  q: ClientQuoteListRow,
+  excludeId: string,
+  now: number,
+): boolean {
+  if (q.id === excludeId) return false
+  if (q.status === 'draft') return true
+  if (q.status === 'sent') {
+    if (!q.expires_at) return true
+    return new Date(q.expires_at).getTime() > now
+  }
+  return false
+}
+
+export async function markQuoteDeclined(quoteId: string): Promise<{
+  quote: ClientQuoteWithChildren
+  projectMarkedLost: boolean
+}> {
+  const existing = await getClientQuoteWithChildren(quoteId)
+  if (!existing) throw new Error('Quote not found')
+  if (existing.status !== 'sent') {
+    throw new Error('Only sent quotes can be marked declined')
+  }
+
+  const { error: qErr } = await supabase
+    .from('client_quotes')
+    .update({ status: 'declined', declined_at: new Date().toISOString() })
+    .eq('id', quoteId)
+  if (qErr) throw qErr
+
+  const siblings = await listClientQuotesForProject(existing.project_id)
+  const now = Date.now()
+  const liveOthers = siblings.filter((q) => isLiveQuoteRow(q, quoteId, now))
+
+  let projectMarkedLost = false
+  if (liveOthers.length === 0) {
+    const { error: pErr } = await supabase.from('projects').update({ status: 'lost' }).eq('id', existing.project_id)
+    if (pErr) throw pErr
+    projectMarkedLost = true
+  }
+
+  const reloaded = await getClientQuoteWithChildren(quoteId)
+  if (!reloaded) throw new Error('markQuoteDeclined: failed to reload')
+  return { quote: reloaded, projectMarkedLost }
+}

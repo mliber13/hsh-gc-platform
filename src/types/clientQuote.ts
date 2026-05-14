@@ -11,6 +11,17 @@ export type ClientQuoteStatus =
   | 'expired'
   | 'superseded'
 
+/** UI + rules: sent quotes past expires_at behave as expired without a DB write. */
+export function effectiveStatus(quote: {
+  status: ClientQuoteStatus
+  expires_at: string | null
+}): ClientQuoteStatus {
+  if (quote.status === 'sent' && quote.expires_at) {
+    if (new Date(quote.expires_at).getTime() < Date.now()) return 'expired'
+  }
+  return quote.status
+}
+
 export const CLIENT_QUOTE_STATUS: Record<
   ClientQuoteStatus,
   { label: string; pillClass: string }

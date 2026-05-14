@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ChevronDown, FileSearch } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowLeft, ChevronDown, FileSearch, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Project } from '@/types'
 import { CLIENT_QUOTE_STATUS } from '@/types/clientQuote'
@@ -10,6 +11,7 @@ import {
   getClientQuoteWithChildren,
   getDefaultExclusionsForProjectType,
   getDefaultInclusionsForProjectType,
+  markQuoteSent,
   updateDraftQuote,
 } from '@/services/clientQuoteService'
 import { generateClientQuotePDFBlob } from '@/services/clientQuotePdf'
@@ -29,6 +31,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { QuoteActionsConfirmDialog } from './QuoteActionsConfirmDialog'
 
 interface ClientQuoteBuilderProps {
   project: Project
@@ -60,9 +63,11 @@ export function ClientQuoteBuilder({
   onCancel,
   onSaved,
 }: ClientQuoteBuilderProps) {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(mode === 'edit')
   const [saving, setSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
+  const [sendDialogOpen, setSendDialogOpen] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [prepared, setPrepared] = useState<PreparedFor>(emptyPrepared)
@@ -151,7 +156,7 @@ export function ClientQuoteBuilder({
           return
         }
         if (q.status !== 'draft') {
-          setLoadError('Only draft quotes can be opened in the builder.')
+          navigate(`/projects/${project.id}/quotes/${quoteId}`, { replace: true })
           return
         }
         setQuoteNumber(q.quote_number)
@@ -196,7 +201,7 @@ export function ClientQuoteBuilder({
     return () => {
       cancelled = true
     }
-  }, [mode, quoteId])
+  }, [mode, quoteId, project.id, navigate])
 
   // Auto-pull when landing from Estimate Book
   useEffect(() => {
@@ -219,6 +224,55 @@ export function ClientQuoteBuilder({
       return false
     }
     return true
+  }
+
+  /** Same rules as Save Draft plus Attn name + Mailing address for sending. */
+  const validateForSend = (): boolean => {
+    setFormError(null)
+    if (!prepared.company.trim()) {
+      setFormError('Prepared for — company name is required.')
+      return false
+    }
+    if (!prepared.attn_name.trim() || !prepared.mailing_address.trim()) {
+      setFormError('Prepared for — Attn name and Mailing address are required before sending.')
+      return false
+    }
+    const hasLineAmount = lineItems.some((li) => Math.abs(li.amount) > 0.0001)
+    const hasOptionRows = options.length > 0
+    if (!hasLineAmount && !hasOptionRows) {
+      setFormError('Add at least one line item with an amount, or add at least one option.')
+      return false
+    }
+    return true
+  }
+
+  const canMarkSend =
+    mode === 'edit' &&
+    Boolean(quoteId) &&
+    status === 'draft' &&
+    prepared.company.trim() &&
+    prepared.attn_name.trim() &&
+    prepared.mailing_address.trim() &&
+    (lineItems.some((li) => Math.abs(li.amount) > 0.0001) || options.length > 0)
+
+  const handleSendConfirmed = async () => {
+    if (!quoteId || !isOnlineMode()) {
+      toast.error('Quotes require online mode.')
+      return
+    }
+    if (!validateForSend()) return
+    try {
+      await updateDraftQuote(quoteId, buildPayload())
+      const fresh = await getClientQuoteWithChildren(quoteId)
+      if (!fresh) throw new Error('Could not reload quote after save')
+      const blob = await generateClientQuotePDFBlob(fresh, project)
+      await markQuoteSent(quoteId, blob)
+      toast.success('Quote sent — PDF saved')
+      setSendDialogOpen(false)
+      navigate(`/projects/${project.id}/quotes/${quoteId}`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Send failed')
+    }
   }
 
   const buildPayload = () => {
@@ -436,6 +490,31 @@ export function ClientQuoteBuilder({
         </Button>
         <h1 className="text-center text-xl font-semibold">{title}</h1>
         <div className="flex flex-wrap justify-end gap-2">
+          {mode === 'edit' && quoteId && status === 'draft' && (
+            <>
+              {canMarkSend ? (
+                <Button type="button" variant="default" size="sm" onClick={() => setSendDialogOpen(true)}>
+                  <Send className="mr-2 size-4" />
+                  Mark sent
+                </Button>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <Button type="button" variant="default" size="sm" disabled>
+                        <Send className="mr-2 size-4" />
+                        Mark sent
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    Complete Prepared For before sending (company, Attn name, mailing address, and at least one
+                    priced line item or option).
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </>
+          )}
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>
             Cancel
           </Button>
@@ -635,6 +714,15 @@ export function ClientQuoteBuilder({
 
       <QuoteInclusionsExclusionsEditor title="Inclusions" items={inclusions} onChange={setInclusions} />
       <QuoteInclusionsExclusionsEditor title="Exclusions" items={exclusions} onChange={setExclusions} />
+
+      <QuoteActionsConfirmDialog
+        open={sendDialogOpen}
+        mode="send"
+        quoteNumber={quoteNumber ?? 'Quote'}
+        validityDays={validityDays}
+        onCancel={() => setSendDialogOpen(false)}
+        onConfirm={handleSendConfirmed}
+      />
 
       <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t bg-background/95 py-4 backdrop-blur">
         <Button type="button" variant="outline" onClick={onCancel}>

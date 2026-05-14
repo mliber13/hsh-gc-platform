@@ -80,6 +80,7 @@ import { ScheduleBuilder } from '@/components/ScheduleBuilder'
 import { SchedulePortfolio } from '@/components/SchedulePortfolio'
 import { ProjectQuotesView } from '@/components/quotes/ProjectQuotesView'
 import { ClientQuoteBuilder } from '@/components/quotes/ClientQuoteBuilder'
+import { ClientQuoteReadOnlyView } from '@/components/quotes/ClientQuoteReadOnlyView'
 import { CreateProjectForm, ProjectFormData } from '@/components/CreateProjectForm'
 import { PlanLibrary } from '@/components/PlanLibrary'
 import { PlanEditor } from '@/components/PlanEditor'
@@ -152,6 +153,7 @@ export function AppRoutes() {
             <Route path="quotes" element={<ProjectQuotesRoute />} />
             <Route path="quotes/new" element={<ClientQuoteNewRoute />} />
             <Route path="quotes/:quoteId/edit" element={<ClientQuoteEditRoute />} />
+            <Route path="quotes/:quoteId" element={<ClientQuoteReadOnlyRoute />} />
           </Route>
 
           <Route path="/library/plans" element={<PlanLibraryRoute />} />
@@ -406,6 +408,7 @@ function ProjectQuotesRoute() {
       onBack={() => navigate(`/projects/${project.id}`)}
       onNewQuote={() => navigate(`/projects/${project.id}/quotes/new`)}
       onEditDraft={(quoteId) => navigate(`/projects/${project.id}/quotes/${quoteId}/edit`)}
+      onViewReadOnly={(quoteId) => navigate(`/projects/${project.id}/quotes/${quoteId}`)}
     />
   )
 }
@@ -422,6 +425,20 @@ function ClientQuoteNewRoute() {
       prefilledFromEstimate={prefilledFromEstimate}
       onCancel={() => navigate(`/projects/${project.id}/quotes`)}
       onSaved={() => navigate(`/projects/${project.id}/quotes`)}
+    />
+  )
+}
+
+function ClientQuoteReadOnlyRoute() {
+  const { project } = useProjectContext()
+  const { quoteId } = useParams<{ quoteId: string }>()
+  const navigate = useNavigate()
+  if (!quoteId) return null
+  return (
+    <ClientQuoteReadOnlyView
+      project={project}
+      quoteId={quoteId}
+      onBack={() => navigate(`/projects/${project.id}/quotes`)}
     />
   )
 }

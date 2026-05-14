@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, FileSignature, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Project } from '@/types'
-import { CLIENT_QUOTE_STATUS, type ClientQuoteListRow } from '@/types/clientQuote'
+import { CLIENT_QUOTE_STATUS, effectiveStatus, type ClientQuoteListRow } from '@/types/clientQuote'
 import { listClientQuotesForProject } from '@/services/clientQuoteService'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -27,9 +27,16 @@ interface ProjectQuotesViewProps {
   onBack: () => void
   onNewQuote: () => void
   onEditDraft: (quoteId: string) => void
+  onViewReadOnly: (quoteId: string) => void
 }
 
-export function ProjectQuotesView({ project, onBack, onNewQuote, onEditDraft }: ProjectQuotesViewProps) {
+export function ProjectQuotesView({
+  project,
+  onBack,
+  onNewQuote,
+  onEditDraft,
+  onViewReadOnly,
+}: ProjectQuotesViewProps) {
   const [loading, setLoading] = useState(true)
   const [quotes, setQuotes] = useState<ClientQuoteListRow[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -116,18 +123,18 @@ export function ProjectQuotesView({ project, onBack, onNewQuote, onEditDraft }: 
             </thead>
             <tbody>
               {quotes.map((q) => {
-                const pill = CLIENT_QUOTE_STATUS[q.status]
-                const clickable = q.status === 'draft'
+                const displaySt = effectiveStatus(q)
+                const pill = CLIENT_QUOTE_STATUS[displaySt]
+                const clickable = true
                 return (
                   <tr
                     key={q.id}
                     className={
-                      clickable
-                        ? 'cursor-pointer border-b transition-colors hover:bg-muted/40 last:border-0'
-                        : 'cursor-default border-b opacity-90 last:border-0'
+                      'cursor-pointer border-b transition-colors hover:bg-muted/40 last:border-0'
                     }
                     onClick={() => {
-                      if (clickable) onEditDraft(q.id)
+                      if (q.status === 'draft') onEditDraft(q.id)
+                      else onViewReadOnly(q.id)
                     }}
                   >
                     <td className="px-4 py-3 font-medium tabular-nums">{quoteNumberLabel(q)}</td>
