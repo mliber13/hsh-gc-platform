@@ -106,6 +106,31 @@ export async function createContact(input: ContactInput): Promise<Contact> {
   return toContact(data)
 }
 
+/** Standalone contacts only — single batch insert; all rows succeed or none do. */
+export async function bulkCreateContacts(inputs: ContactInput[]): Promise<Contact[]> {
+  if (inputs.length === 0) return []
+
+  const organizationId = await requireOrganizationId()
+
+  const rows = inputs.map((input) => ({
+    organization_id: organizationId,
+    label: input.label,
+    name: input.name.trim(),
+    email: input.email?.trim() || null,
+    phone: input.phone?.trim() || null,
+    role: input.role?.trim() || null,
+    notes: input.notes?.trim() || null,
+  }))
+
+  const { data, error } = await supabase.from('contacts').insert(rows).select()
+
+  if (error) {
+    console.error('Error bulk creating contacts:', error)
+    throw error
+  }
+  return (data || []).map(toContact)
+}
+
 export async function updateContact(
   id: string,
   updates: Partial<ContactInput>

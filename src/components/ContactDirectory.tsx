@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, ChevronDown, ChevronRight, Edit, Trash2, RefreshCw, Archive, ArchiveRestore, MoreHorizontal } from 'lucide-react'
+import { ArrowLeft, Plus, ChevronDown, ChevronRight, Edit, Trash2, RefreshCw, Archive, ArchiveRestore, MoreHorizontal, Upload } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -62,6 +62,7 @@ import {
   deletePartnerCategory,
   countStandaloneContactsForCategoryKey,
 } from '@/services/partnerCategoryService'
+import { ImportContactsDialog } from '@/components/ImportContactsDialog'
 import {
   getOrganizationUsers,
   getOrganizationUsersByEmail,
@@ -125,6 +126,7 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
   const [archiveCategoryConfirmOpen, setArchiveCategoryConfirmOpen] = useState(false)
   const [deleteCategoryConfirmOpen, setDeleteCategoryConfirmOpen] = useState(false)
   const [categoryContactCount, setCategoryContactCount] = useState(0)
+  const [importContactsOpen, setImportContactsOpen] = useState(false)
 
   const [contactFormOpen, setContactFormOpen] = useState(false)
   const [contactFormLabel, setContactFormLabel] = useState<string>('EMPLOYEE')
@@ -952,6 +954,45 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
 
   const labelDisplay = STANDALONE_CONTACT_LABELS.find((l) => l.value === peopleLabel)?.label ?? peopleLabel
 
+  const refreshActiveTab = useCallback(() => {
+    if (mainTab === 'people') {
+      void loadContacts(peopleLabel)
+    } else if (partnerTab === 'subcontractors') {
+      void loadSubcontractors()
+    } else if (partnerTab === 'suppliers') {
+      void loadSuppliers()
+    } else if (partnerTab === 'developers') {
+      void loadDevelopers()
+    } else if (partnerTab === 'municipalities') {
+      void loadMunicipalities()
+    } else if (partnerTab === 'lenders') {
+      void loadLenders()
+    } else if (activePartnerCategory) {
+      void loadPartnerLabelContacts(activePartnerCategory.key)
+    }
+    if (mainTab === 'partners') {
+      void loadPartnerCategories()
+    }
+  }, [
+    mainTab,
+    peopleLabel,
+    partnerTab,
+    activePartnerCategory,
+    loadContacts,
+    loadSubcontractors,
+    loadSuppliers,
+    loadDevelopers,
+    loadMunicipalities,
+    loadLenders,
+    loadPartnerLabelContacts,
+    loadPartnerCategories,
+  ])
+
+  const handleContactsImported = (count: number) => {
+    toast.success(`Imported ${count} contacts`)
+    refreshActiveTab()
+  }
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
@@ -962,17 +1003,16 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
           <ArrowLeft className="size-4" />
           Back to Dashboard
         </button>
-        <Button variant="outline" onClick={() => {
-            if (mainTab === 'people') loadContacts(peopleLabel)
-            else if (partnerTab === 'subcontractors') loadSubcontractors()
-            else if (partnerTab === 'suppliers') loadSuppliers()
-            else if (partnerTab === 'developers') loadDevelopers()
-            else if (partnerTab === 'municipalities') loadMunicipalities()
-            else loadLenders()
-          }}>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImportContactsOpen(true)}>
+            <Upload className="w-4 h-4 mr-2" />
+            Import
+          </Button>
+          <Button variant="outline" onClick={() => refreshActiveTab()}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
-        </Button>
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -2021,6 +2061,12 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <ImportContactsDialog
+          open={importContactsOpen}
+          onOpenChange={setImportContactsOpen}
+          onImported={handleContactsImported}
+        />
 
         <Dialog open={deleteCategoryConfirmOpen} onOpenChange={setDeleteCategoryConfirmOpen}>
           <DialogContent className="sm:max-w-md">
