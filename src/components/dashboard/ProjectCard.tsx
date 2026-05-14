@@ -20,6 +20,7 @@ import {
   Calendar,
   ClipboardList,
   DollarSign,
+  FileSignature,
   FileText,
   FolderOpen,
   Receipt,
@@ -31,6 +32,7 @@ import { cn } from '@/lib/utils'
 
 export type ProjectSection =
   | 'estimate'
+  | 'quotes'
   | 'actuals'
   | 'change-orders'
   | 'documents'
@@ -125,6 +127,7 @@ const SECTION_BUTTONS: {
   title: string
 }[] = [
   { section: 'estimate', label: 'Estimate', icon: BookOpen, iconColor: 'text-sky-500', title: 'Estimate book' },
+  { section: 'quotes', label: 'Quotes', icon: FileSignature, iconColor: 'text-fuchsia-500', title: 'Client quotes' },
   { section: 'actuals', label: 'Actuals', icon: DollarSign, iconColor: 'text-emerald-500', title: 'Project actuals' },
   { section: 'schedule', label: 'Schedule', icon: Calendar, iconColor: 'text-amber-500', title: 'Schedule' },
   { section: 'selection-book', label: 'Selection', icon: BookMarked, iconColor: 'text-violet-500', title: 'Selection book' },

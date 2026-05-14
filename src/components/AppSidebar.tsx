@@ -23,6 +23,7 @@ import {
   ClipboardList,
   DollarSign,
   Eye,
+  FileSignature,
   FileText,
   Kanban,
   LayoutDashboard,
@@ -103,6 +104,13 @@ function projectsNav(projectId: string | undefined): NavGroup[] {
           to: p ? `${p}/estimate` : '#',
           icon: Calculator,
           matchPath: '/projects/:projectId/estimate',
+          requiresProject: true,
+        },
+        {
+          label: 'Quotes',
+          to: p ? `${p}/quotes` : '#',
+          icon: FileSignature,
+          matchPath: '/projects/:projectId/quotes',
           requiresProject: true,
         },
         {
