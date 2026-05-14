@@ -12,11 +12,13 @@ import { Button } from '@/components/ui/button'
 
 export interface QuoteActionsConfirmDialogProps {
   open: boolean
-  mode: 'send' | 'accept' | 'decline'
+  mode: 'send' | 'accept' | 'decline' | 'revise'
   quoteNumber: string
   validityDays?: number
   /** When true, decline copy mentions the project will move to Lost. */
   isOnlyLiveQuote?: boolean
+  /** Parent revision index (R{n}); used only for mode === 'revise'. */
+  parentRevision?: number
   onConfirm: () => Promise<void>
   onCancel: () => void
 }
@@ -27,6 +29,7 @@ export function QuoteActionsConfirmDialog({
   quoteNumber,
   validityDays = 60,
   isOnlyLiveQuote,
+  parentRevision = 0,
   onConfirm,
   onCancel,
 }: QuoteActionsConfirmDialogProps) {
@@ -46,7 +49,9 @@ export function QuoteActionsConfirmDialog({
       ? `Send ${quoteNumber}?`
       : mode === 'accept'
         ? 'Mark this quote as accepted?'
-        : 'Mark this quote as declined?'
+        : mode === 'decline'
+          ? 'Mark this quote as declined?'
+          : `Create revision of ${quoteNumber} R${parentRevision}?`
 
   const body =
     mode === 'send' ? (
@@ -56,16 +61,27 @@ export function QuoteActionsConfirmDialog({
       </p>
     ) : mode === 'accept' ? (
       <p>The project will move to In Progress.</p>
-    ) : (
+    ) : mode === 'decline' ? (
       <p>
         {isOnlyLiveQuote
           ? 'If this is the only live quote on the project, the project will be moved to Lost.'
           : 'Other live quotes remain on this project; the project status will not change to Lost.'}
       </p>
+    ) : (
+      <p>
+        A new draft revision (R{parentRevision + 1}) will be created with all current contents copied. The current
+        quote will be marked superseded. You can edit the new revision before sending.
+      </p>
     )
 
   const confirmLabel =
-    mode === 'send' ? 'Send quote' : mode === 'accept' ? 'Mark accepted' : 'Mark declined'
+    mode === 'send'
+      ? 'Send quote'
+      : mode === 'accept'
+        ? 'Mark accepted'
+        : mode === 'decline'
+          ? 'Mark declined'
+          : 'Create revision'
 
   return (
     <Dialog

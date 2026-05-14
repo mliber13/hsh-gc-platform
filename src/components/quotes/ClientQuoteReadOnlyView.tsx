@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Download, PlusCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
@@ -11,6 +11,7 @@ import {
   type ClientQuoteWithChildren,
 } from '@/types/clientQuote'
 import {
+  createQuoteRevision,
   getClientQuoteWithChildren,
   listClientQuotesForProject,
   markQuoteAccepted,
@@ -20,11 +21,6 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { QuoteActionsConfirmDialog } from './QuoteActionsConfirmDialog'
 import { cn } from '@/lib/utils'
 
@@ -75,6 +71,8 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
   const [acceptOpen, setAcceptOpen] = useState(false)
   const [declineOpen, setDeclineOpen] = useState(false)
   const [declineOnlyLive, setDeclineOnlyLive] = useState(false)
+  const [reviseOpen, setReviseOpen] = useState(false)
+  const [supersederQuote, setSupersederQuote] = useState<ClientQuoteWithChildren | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -90,6 +88,12 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
       if (q.status === 'draft') {
         navigate(`/projects/${project.id}/quotes/${quoteId}/edit`, { replace: true })
         return
+      }
+      if (q.status === 'superseded' && q.superseded_by_id) {
+        const child = await getClientQuoteWithChildren(q.superseded_by_id)
+        setSupersederQuote(child)
+      } else {
+        setSupersederQuote(null)
       }
       setQuote(q)
     } catch (e) {
@@ -134,12 +138,8 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
 
   const showAccept = quote && (eff === 'sent' || eff === 'expired')
   const showDecline = quote && eff === 'sent'
-  const showRevisionPlaceholder =
-    quote &&
-    (quote.status === 'sent' ||
-      quote.status === 'declined' ||
-      quote.status === 'expired' ||
-      quote.status === 'superseded')
+  const showCreateRevision =
+    quote && (eff === 'sent' || eff === 'declined' || eff === 'expired')
 
   if (loading) {
     return (
@@ -199,18 +199,17 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
               Mark declined
             </Button>
           )}
-          {showRevisionPlaceholder && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <Button type="button" variant="outline" size="sm" disabled>
-                    <PlusCircle className="mr-2 size-4" />
-                    Create revision
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Coming in Step 5</TooltipContent>
-            </Tooltip>
+          {showCreateRevision && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={actionBusy}
+              onClick={() => setReviseOpen(true)}
+            >
+              <PlusCircle className="mr-2 size-4" />
+              Create revision
+            </Button>
           )}
         </div>
       </div>
@@ -252,9 +251,16 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
               Declined {format(new Date(quote.declined_at), 'MMM d, yyyy')}.
             </p>
           )}
-          {eff === 'superseded' && (
+          {eff === 'superseded' && quote.superseded_by_id && (
             <p className="text-sm text-muted-foreground">
-              Superseded by a newer revision. (Link will be available in Step 5.)
+              Superseded by a newer revision.{' '}
+              <Link
+                to={`/projects/${project.id}/quotes/${quote.superseded_by_id}`}
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                View current revision
+                {supersederQuote != null ? ` (R${supersederQuote.revision})` : ''}
+              </Link>
             </p>
           )}
         </CardContent>
@@ -429,6 +435,7 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
           try {
             const next = await markQuoteAccepted(quote.id)
             setQuote(next)
+            setSupersederQuote(null)
             toast.success('Quote marked accepted. Project is now In Progress.')
             setAcceptOpen(false)
           } catch (e) {
@@ -450,6 +457,7 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
           try {
             const { quote: next, projectMarkedLost } = await markQuoteDeclined(quote.id)
             setQuote(next)
+            setSupersederQuote(null)
             toast.success(
               projectMarkedLost
                 ? 'Quote declined. Project moved to Lost (no other live quotes).'
@@ -458,6 +466,27 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
             setDeclineOpen(false)
           } catch (e) {
             toast.error(e instanceof Error ? e.message : 'Failed to decline quote')
+          } finally {
+            setActionBusy(false)
+          }
+        }}
+      />
+
+      <QuoteActionsConfirmDialog
+        open={reviseOpen}
+        mode="revise"
+        quoteNumber={quote.quote_number}
+        parentRevision={quote.revision}
+        onCancel={() => setReviseOpen(false)}
+        onConfirm={async () => {
+          setActionBusy(true)
+          try {
+            const full = await createQuoteRevision(quote.id)
+            toast.success(`Revision R${full.revision} created — now editing draft.`)
+            setReviseOpen(false)
+            navigate(`/projects/${project.id}/quotes/${full.id}/edit`)
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Failed to create revision')
           } finally {
             setActionBusy(false)
           }

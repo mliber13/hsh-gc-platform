@@ -6,15 +6,16 @@ import { supabase } from '@/lib/supabase'
 import { requireUserOrgId } from '@/services/userService'
 import { getTradesForEstimate_Hybrid } from '@/services/hybridService'
 import { TRADE_CATEGORIES, type TradeCategory } from '@/types/constants'
-import type {
-  ClientQuote,
-  ClientQuoteLineItem,
-  ClientQuoteListRow,
-  ClientQuoteOption,
-  ClientQuoteStatus,
-  ClientQuoteWithChildren,
-  DraftClientQuoteInput,
-  PreparedFor,
+import {
+  effectiveStatus,
+  type ClientQuote,
+  type ClientQuoteLineItem,
+  type ClientQuoteListRow,
+  type ClientQuoteOption,
+  type ClientQuoteStatus,
+  type ClientQuoteWithChildren,
+  type DraftClientQuoteInput,
+  type PreparedFor,
 } from '@/types/clientQuote'
 
 const TRADE_CATEGORY_ORDER = Object.keys(TRADE_CATEGORIES) as TradeCategory[]
@@ -254,6 +255,21 @@ async function replaceLineItemsAndOptions(
   }
 }
 
+/**
+ * Reactivate a project whose status is 'lost' when a new live quote
+ * arrives on it (new draft or revision spawned from a declined/expired
+ * quote). Keeps the invariant: a project with any live quote should not
+ * be marked lost.
+ */
+async function reactivateProjectIfLost(projectId: string): Promise<void> {
+  const { error } = await supabase
+    .from('projects')
+    .update({ status: 'estimating' })
+    .eq('id', projectId)
+    .eq('status', 'lost')
+  if (error) throw error
+}
+
 export async function createDraftQuote(input: DraftClientQuoteInput): Promise<ClientQuoteWithChildren> {
   const orgId = await requireUserOrgId()
 
@@ -289,6 +305,8 @@ export async function createDraftQuote(input: DraftClientQuoteInput): Promise<Cl
   const quoteId = String(created!.id)
 
   await replaceLineItemsAndOptions(orgId, quoteId, line_items, options)
+
+  await reactivateProjectIfLost(input.project_id)
 
   const full = await getClientQuoteWithChildren(quoteId)
   if (!full) throw new Error('createDraftQuote: failed to load new quote')
@@ -478,4 +496,63 @@ export async function markQuoteDeclined(quoteId: string): Promise<{
   const reloaded = await getClientQuoteWithChildren(quoteId)
   if (!reloaded) throw new Error('markQuoteDeclined: failed to reload')
   return { quote: reloaded, projectMarkedLost }
+}
+
+/**
+ * Spawn a new revision from an existing quote (sent / declined / expired-derived).
+ * Copies content, marks parent superseded with superseded_by_id → new row.
+ */
+export async function createQuoteRevision(parentQuoteId: string): Promise<ClientQuoteWithChildren> {
+  const parent = await getClientQuoteWithChildren(parentQuoteId)
+  if (!parent) throw new Error('Parent quote not found')
+
+  const eff = effectiveStatus(parent)
+  const allowed = new Set<ClientQuoteStatus>(['sent', 'declined', 'expired'])
+  if (!allowed.has(eff)) {
+    throw new Error(`Cannot create a revision from a quote in status '${eff}'.`)
+  }
+
+  const orgId = await requireUserOrgId()
+  const nextRevision = parent.revision + 1
+
+  const insertRow = {
+    organization_id: orgId,
+    project_id: parent.project_id,
+    quote_number: parent.quote_number,
+    revision: nextRevision,
+    status: 'draft' as const,
+    prepared_for: parent.prepared_for,
+    project_address_override: parent.project_address_override,
+    scope_narrative: parent.scope_narrative,
+    inclusions: [...(parent.inclusions ?? [])],
+    exclusions: [...(parent.exclusions ?? [])],
+    validity_days: parent.validity_days,
+  }
+
+  const { data: created, error: insErr } = await supabase
+    .from('client_quotes')
+    .insert(insertRow)
+    .select('id')
+    .single()
+  if (insErr) throw insErr
+  const newId = String(created!.id)
+
+  await replaceLineItemsAndOptions(
+    orgId,
+    newId,
+    parent.line_items.map(stripLineIds),
+    parent.options.map(stripOptIds),
+  )
+
+  const { error: supErr } = await supabase
+    .from('client_quotes')
+    .update({ status: 'superseded', superseded_by_id: newId })
+    .eq('id', parentQuoteId)
+  if (supErr) throw supErr
+
+  await reactivateProjectIfLost(parent.project_id)
+
+  const full = await getClientQuoteWithChildren(newId)
+  if (!full) throw new Error('createQuoteRevision: failed to load new revision')
+  return full
 }
