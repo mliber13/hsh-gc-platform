@@ -325,6 +325,11 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       wasteFactor: trade.wasteFactor,
       markupPercent: trade.markupPercent || markupPercent,
       notes: trade.notes,
+      estimateStatus: trade.estimateStatus,
+      quoteVendor: trade.quoteVendor,
+      quoteDate: trade.quoteDate,
+      quoteReference: trade.quoteReference,
+      quoteFileUrl: trade.quoteFileUrl,
       isEditing: true,
     })
     setIsAddingTrade(false)
