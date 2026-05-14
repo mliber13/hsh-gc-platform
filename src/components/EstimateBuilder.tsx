@@ -248,6 +248,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           grossProfitTotal: totals.grossProfitTotal,
           totalEstimated: totals.totalEstimated,
           marginOfProfit: totals.marginOfProfit,
+          markupPercent: totals.markupPercent,
+          contingencyPercent: totals.contingencyPercent,
         },
         subtotal: totals.basePriceTotal,
         overhead: 0,
@@ -732,6 +734,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       grossProfitTotal: totals.grossProfitTotal,
       totalEstimated: totals.totalEstimated,
       marginOfProfit: totals.marginOfProfit,
+      markupPercent: totals.markupPercent,
+      contingencyPercent: totals.contingencyPercent,
     }
     const serialized = JSON.stringify({ estimateId, ...syncTotals })
     if (serialized === lastSyncedTotalsRef.current) return
@@ -747,6 +751,8 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
     totals.grossProfitTotal,
     totals.totalEstimated,
     totals.marginOfProfit,
+    totals.markupPercent,
+    totals.contingencyPercent,
   ])
 
   // ----------------------------------------------------------------------------
