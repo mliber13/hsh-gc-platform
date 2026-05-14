@@ -1,6 +1,7 @@
 # Quote Document — Target Model & Plan
 
-**Status:** v1, scoping complete (2026-05-13)
+**Status:** **v1 shipped** (2026-05-14) — client quote feature complete on `master` (Steps 1–5; commit SHAs in §13). Original scoping locked 2026-05-13.
+**v2 (idea only):** AI-assisted scope-of-work narrative in the Builder — early sketch in **§14.1** (not scoped for build).
 **Source:** Owner observed HSH's brother exporting the Estimate Builder's view-print PDF and sending it to a prospect as a quote. That PDF was built as a working/internal export, not a client-facing deliverable — gap surfaced.
 **Predecessor:** v0 (2026-05-13). Scoping pass with owner walked the ten open questions; this v1 captures the locked decisions and the structural design that fell out.
 
@@ -232,4 +233,59 @@ Sizing guess: 6 dev sessions, possibly 4 if Step 5 collapses with Step 4 and Ste
 
 ## 12. Next action
 
-This v1 is the locked scoping output. Next is the build brief for **Step 1 (schema + templates)** — a sized, executable brief in the working-pattern style (Claude supervises, Cursor implements, Mark relays). Open a dedicated chat for that, anchored on this doc.
+~~This v1 is the locked scoping output. Next is the build brief for **Step 1 (schema + templates)**~~ — **Done.** Steps 1–5 shipped (§13). For net-new work, open a v2 scoping chat anchored on **§14** (or file a brief against a specific §14 subsection).
+
+---
+
+## 13. v1 ship status (2026-05-14)
+
+All five steps shipped on master:
+
+- Step 1 — schema, RLS, templates, `next_client_quote_number()`, `lost` project status: **8a7cd72** (2026-05-13)
+- Step 2 — Quotes list view + draft builder + Estimate-side "Generate Quote" entry (Step 6 folded in): **9affdf8** (2026-05-13)
+- Step 3 — client-side jsPDF rendering + Preview button: **e04de77** (2026-05-13)
+- Step 4 — Mark Sent / Accepted / Declined transitions, PDF snapshot to Storage, read-only view for non-drafts, `effectiveStatus` expired derivation: **b8b20aa** (2026-05-14)
+- Step 5 — Create Revision flow + `superseded` linkage + `lost → estimating` reactivation when new live quote lands on a lost project: **e3b1619** (2026-05-14)
+
+PDF is client-side (jsPDF + jspdf-autotable with deflate compression). No edge function. Quote routes: `/projects/:id/quotes`, `.../new`, `.../new?from=estimate`, `.../:quoteId` (read-only for non-drafts), `.../:quoteId/edit` (drafts).
+
+Considered functionally complete for v1.
+
+---
+
+## 14. v2 ideas (captured 2026-05-14, not scoped)
+
+Caveat: these are early sketches, not locked decisions. v2 scoping pass will refine into goals/non-goals/data model the same way v1 was done.
+
+**Primary idea captured for v2:** in-app **AI-assisted scope-of-work** for the quote Builder (today PMs often round-trip through external chat). Full sketch below.
+
+### 14.1. AI-assisted Scope of Work
+
+**Premise:** PMs currently write the scope-narrative paragraph by hand, and the working pattern observed is to copy quote context out of the app, paste into ChatGPT or similar, rewrite for professional tone, paste the result back. Bringing this in-app removes the round-trip and uses the structured data the app already has (line items, project type, prepared-for company).
+
+**Sketch:**
+- Button next to the Scope Narrative field in the Builder: ✨ "Generate" / "Polish."
+- Two modes:
+  - **Generate** — produces a fresh draft from the rolled-up line items, project type, and prepared-for company. Useful when the field is empty.
+  - **Polish** — takes the PM's current draft and tightens to professional B2B tone.
+- AI receives, as context: project name + type + address, trade-category rollup with amounts (no internal cost composition), prepared-for company name (audience tone matching), inclusions + exclusions (to avoid contradictions), and a system prompt anchoring on "commercial GC bid, competing-bid context, business decision-maker audience."
+- Output: 1-3 paragraph narrative. PM accepts, edits, or regenerates.
+
+**Anchor in existing infra:**
+- Anthropic integration already deployed via `supabase/functions/deal-coach-chat/index.ts` (uses `ANTHROPIC_API_KEY` secret, model `claude-sonnet-4-5`).
+- New edge function `generate-quote-scope` follows the same pattern. Streaming response so the PM sees text appear progressively.
+
+**Open questions:**
+- Model choice — sonnet-4-5 (existing) vs. upgrading repo-wide to sonnet-4-6.
+- Prompt caching — system prompt + boilerplate per project type is a natural cache point if/when this gets used at volume.
+- Should the AI also be allowed to suggest *additions* to inclusions/exclusions, or strictly stay in the scope-narrative field? (Lean: scope-narrative only for v2.0; expand later if useful.)
+- Error / fallback behavior when the API is down — surfaces as a toast; field stays manually editable. No hard dependency.
+- Per-org disable toggle for users who don't want AI assistance? Probably overkill for v2.0; skip unless requested.
+
+**Sizing guess:** 1-2 dev sessions. Mostly edge function + a small UI control on the Builder. Templates of existing system prompts get the lift.
+
+### 14.2. (placeholder for other v2 ideas)
+
+The rest of v1 is considered clean and usable as-is. Additional v2 ideas would land here as captured.
+
+---
