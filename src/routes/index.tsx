@@ -77,6 +77,7 @@ import { ProjectDocuments } from '@/components/ProjectDocuments'
 import { SelectionBook } from '@/components/SelectionBook'
 import { SelectionSchedules } from '@/components/SelectionSchedules'
 import { ScheduleBuilder } from '@/components/ScheduleBuilder'
+import { ResourceCompare } from '@/components/ResourceCompare'
 import { SchedulePortfolio } from '@/components/SchedulePortfolio'
 import { ProjectQuotesView } from '@/components/quotes/ProjectQuotesView'
 import { ClientQuoteBuilder } from '@/components/quotes/ClientQuoteBuilder'
@@ -179,6 +180,7 @@ export function AppRoutes() {
           <Route path="/tenant-pipeline" element={<Navigate to="/tenants" replace />} />
 
           <Route path="/schedule" element={<SchedulePortfolioRoute />} />
+          <Route path="/schedule/resource" element={<ResourceCompareRoute />} />
 
           <Route path="/feedback" element={<MyFeedbackRoute />} />
           <Route path="/pre-read" element={<MeetingPreReadRoute />} />
@@ -693,6 +695,11 @@ function TenantPipelineRoute() {
 function SchedulePortfolioRoute() {
   usePageTitle('Schedule')
   return <SchedulePortfolio />
+}
+
+function ResourceCompareRoute() {
+  usePageTitle('Resource compare')
+  return <ResourceCompare />
 }
 
 // ============================================================================

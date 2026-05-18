@@ -125,3 +125,21 @@ export async function fetchPortfolioScheduleItems(
     notes: item.notes,
   }))
 }
+
+export interface ActiveSubcontractor {
+  id: string
+  name: string
+  is_internal: boolean
+}
+
+export async function fetchActiveSubcontractors(): Promise<ActiveSubcontractor[]> {
+  const { data, error } = await supabase
+    .from('subcontractors')
+    .select('id, name, is_internal')
+    .eq('is_active', true)
+    .order('is_internal', { ascending: false })
+    .order('name', { ascending: true })
+
+  if (error) throw error
+  return data ?? []
+}

@@ -37,6 +37,7 @@ import {
   Receipt,
   Settings,
   TrendingUp,
+  Users,
   UsersRound,
   Wallet,
 } from 'lucide-react'
@@ -244,6 +245,12 @@ const scheduleNav: NavGroup[] = [
     label: 'Schedule',
     items: [
       { label: 'Portfolio', to: '/schedule', icon: CalendarDays, matchPath: '/schedule' },
+      {
+        label: 'Resource',
+        to: '/schedule/resource',
+        icon: Users,
+        matchPath: '/schedule/resource',
+      },
     ],
   },
 ]
