@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QuoteActionsConfirmDialog } from './QuoteActionsConfirmDialog'
+import { buildClientQuotePdfFilename, downloadPdfBlob } from '@/services/clientQuotePdf'
 import { cn } from '@/lib/utils'
 
 function formatCurrency(amount: number): string {
@@ -126,14 +127,15 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
 
   const handleDownloadPdf = async () => {
     if (!quote?.sent_pdf_url) return
-    const { data, error: signErr } = await supabase.storage
+    const { data, error: downloadErr } = await supabase.storage
       .from('quote-documents')
-      .createSignedUrl(quote.sent_pdf_url, 3600)
-    if (signErr || !data?.signedUrl) {
-      toast.error(signErr?.message ?? 'Could not create download link')
+      .download(quote.sent_pdf_url)
+    if (downloadErr || !data) {
+      toast.error(downloadErr?.message ?? 'Could not download PDF')
       return
     }
-    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    const filename = buildClientQuotePdfFilename(project.name, quote)
+    downloadPdfBlob(data, filename)
   }
 
   const showAccept = quote && (eff === 'sent' || eff === 'expired')

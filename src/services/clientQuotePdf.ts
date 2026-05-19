@@ -516,6 +516,36 @@ function drawFooterAllPages(doc: jsPDF, quote: ClientQuoteWithChildren) {
   }
 }
 
+/** Filesystem-safe download name: "{Project Name} - {Q-2025-001}" or with revision. */
+export function buildClientQuotePdfFilename(
+  projectName: string,
+  quote: Pick<ClientQuoteWithChildren, 'quote_number' | 'revision'>,
+): string {
+  const safeProject =
+    projectName
+      .trim()
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
+      .replace(/\s+/g, ' ')
+      .slice(0, 80) || 'Project'
+  const quoteNum =
+    quote.revision > 0 ? `${quote.quote_number} R${quote.revision}` : quote.quote_number
+  const safeQuote = quoteNum.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').trim() || 'quote'
+  return `${safeProject} - ${safeQuote}.pdf`
+}
+
+/** Trigger a browser download with the given filename. */
+export function downloadPdfBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.rel = 'noopener'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 /**
  * Build a letter-size PDF blob for a client quote (preview or future frozen send).
  */

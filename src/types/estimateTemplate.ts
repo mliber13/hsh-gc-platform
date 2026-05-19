@@ -10,6 +10,8 @@ import { Trade } from './project'
 export interface PlanEstimateTemplate {
   id: string
   name: string
+  /** Stable key for seeded system templates (e.g. restaurant-structural-renovation-building-repair) */
+  slug?: string
   description?: string
   
   // Template data

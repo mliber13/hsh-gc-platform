@@ -14,7 +14,11 @@ import {
   markQuoteSent,
   updateDraftQuote,
 } from '@/services/clientQuoteService'
-import { generateClientQuotePDFBlob } from '@/services/clientQuotePdf'
+import {
+  buildClientQuotePdfFilename,
+  downloadPdfBlob,
+  generateClientQuotePDFBlob,
+} from '@/services/clientQuotePdf'
 import { getCurrentUserProfile } from '@/services/userService'
 import { isOnlineMode } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -408,11 +412,14 @@ export function ClientQuoteBuilder({
     try {
       const synthetic = await buildSyntheticQuoteForPreview()
       const blob = await generateClientQuotePDFBlob(synthetic, project)
+      const filename = buildClientQuotePdfFilename(project.name, synthetic)
       const url = URL.createObjectURL(blob)
       const win = window.open(url, '_blank', 'noopener,noreferrer')
       if (!win) {
-        toast.error('Pop-up blocked — allow pop-ups to preview the PDF.')
-        URL.revokeObjectURL(url)
+        downloadPdfBlob(blob, filename)
+        toast('Pop-up blocked — downloaded preview PDF instead.', {
+          description: filename,
+        })
         return
       }
       setTimeout(() => URL.revokeObjectURL(url), 60_000)

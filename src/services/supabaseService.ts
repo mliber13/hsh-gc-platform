@@ -2224,6 +2224,7 @@ export async function fetchEstimateTemplates(): Promise<PlanEstimateTemplate[]> 
   return data.map(template => ({
     id: template.id,
     name: template.name,
+    slug: template.slug || undefined,
     description: template.description || undefined,
     trades: template.trades || [],
     defaultMarkupPercent: template.default_markup_percent,
@@ -2283,6 +2284,7 @@ export async function createEstimateTemplateInDB(input: CreatePlanEstimateTempla
   return {
     id: data.id,
     name: data.name,
+    slug: data.slug || undefined,
     description: data.description || undefined,
     trades: data.trades || [],
     defaultMarkupPercent: data.default_markup_percent,
@@ -2331,6 +2333,7 @@ export async function updateEstimateTemplateInDB(
   return {
     id: data.id,
     name: data.name,
+    slug: data.slug || undefined,
     description: data.description || undefined,
     trades: data.trades || [],
     defaultMarkupPercent: data.default_markup_percent,
