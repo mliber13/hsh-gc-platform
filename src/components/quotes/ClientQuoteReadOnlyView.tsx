@@ -14,6 +14,7 @@ import {
   createQuoteRevision,
   getClientQuoteWithChildren,
   groupQuoteLineItemsByCategory,
+  isCategoryTotalOnlyGroup,
   listClientQuotesForProject,
   markQuoteAccepted,
   markQuoteDeclined,
@@ -345,21 +346,33 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
                   </td>
                 </tr>
               )}
-              {pricingGroups.map((group) => (
-                <Fragment key={group.category}>
-                  <tr className="border-b bg-muted/30">
-                    <td colSpan={2} className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-300">
-                      {group.categoryLabel}
+              {pricingGroups.map((group) =>
+                isCategoryTotalOnlyGroup(group) ? (
+                  <tr key={group.category} className="border-b bg-muted/30">
+                    <td className="px-3 py-2 font-medium">{group.categoryLabel}</td>
+                    <td className="px-3 py-2 text-right font-medium tabular-nums">
+                      {formatCurrency(group.subtotal)}
                     </td>
                   </tr>
-                  {group.lines.map((line, i) => (
-                    <tr key={`${group.category}-${i}`} className="border-b border-border/40 last:border-0">
-                      <td className="px-3 py-2 pl-5">{line.display_label}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(line.amount)}</td>
+                ) : (
+                  <Fragment key={group.category}>
+                    <tr className="border-b bg-muted/30">
+                      <td
+                        colSpan={2}
+                        className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-300"
+                      >
+                        {group.categoryLabel}
+                      </td>
                     </tr>
-                  ))}
-                </Fragment>
-              ))}
+                    {group.lines.map((line, i) => (
+                      <tr key={`${group.category}-${i}`} className="border-b border-border/40 last:border-0">
+                        <td className="px-3 py-2 pl-5">{line.display_label}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(line.amount)}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                ),
+              )}
             </tbody>
           </table>
           <p className="mt-3 text-right text-sm font-semibold text-sky-700 dark:text-sky-300">

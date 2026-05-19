@@ -123,6 +123,13 @@ export interface QuotePricingGroup {
   subtotal: number
 }
 
+/** Single line whose label matches the category (rollup pull from estimate). */
+export function isCategoryTotalOnlyGroup(group: QuotePricingGroup): boolean {
+  if (group.lines.length !== 1) return false
+  const label = group.lines[0].display_label.trim()
+  return label === group.categoryLabel.trim() || label === group.category
+}
+
 /** Group quote line items under trade categories (preserves sort_order within each category). */
 export function groupQuoteLineItemsByCategory(
   lineItems: Array<Pick<ClientQuoteLineItem, 'trade_category' | 'display_label' | 'amount' | 'sort_order'>>,

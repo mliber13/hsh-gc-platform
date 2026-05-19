@@ -5,7 +5,7 @@
 import { addDays, format } from 'date-fns'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { groupQuoteLineItemsByCategory } from '@/services/clientQuoteService'
+import { groupQuoteLineItemsByCategory, isCategoryTotalOnlyGroup } from '@/services/clientQuoteService'
 import type { ClientQuoteWithChildren } from '@/types/clientQuote'
 import type { Project } from '@/types'
 
@@ -320,6 +320,27 @@ function drawPricingTable(ctx: PdfContext, quote: ClientQuoteWithChildren, logo:
   const body: CellDef[][] = []
 
   for (const group of groups) {
+    if (isCategoryTotalOnlyGroup(group)) {
+      body.push([
+        {
+          content: group.categoryLabel,
+          styles: {
+            fontStyle: 'bold',
+            fillColor: [243, 244, 246],
+            textColor: TEXT_RGB,
+          },
+        },
+        {
+          content: formatCurrency(group.subtotal),
+          styles: {
+            fontStyle: 'bold',
+            halign: 'right',
+            fillColor: [243, 244, 246],
+          },
+        },
+      ])
+      continue
+    }
     body.push([
       {
         content: group.categoryLabel,

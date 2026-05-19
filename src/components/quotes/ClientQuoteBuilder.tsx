@@ -7,6 +7,7 @@ import { CLIENT_QUOTE_STATUS } from '@/types/clientQuote'
 import type { ClientQuoteWithChildren, PreparedFor } from '@/types/clientQuote'
 import {
   buildDetailedLineItemsFromEstimate,
+  buildLineItemsFromEstimate,
   createDraftQuote,
   getClientQuoteWithChildren,
   getDefaultExclusionsForProjectType,
@@ -88,6 +89,9 @@ export function ClientQuoteBuilder({
   const [status, setStatus] = useState<'draft' | string>('draft')
 
   const [estimateHint, setEstimateHint] = useState<string | null>(null)
+  const [estimatePullMode, setEstimatePullMode] = useState<'category-total' | 'line-item-breakdown'>(
+    'line-item-breakdown',
+  )
   const pulledOnceRef = useRef(false)
 
   const [showOptions, setShowOptions] = useState(false)
@@ -101,7 +105,10 @@ export function ClientQuoteBuilder({
       return
     }
     try {
-      const built = await buildDetailedLineItemsFromEstimate(project.estimate.id)
+      const built =
+        estimatePullMode === 'category-total'
+          ? await buildLineItemsFromEstimate(project.estimate.id)
+          : await buildDetailedLineItemsFromEstimate(project.estimate.id)
       setLineItems(
         built.map((b) => ({
           trade_category: b.trade_category,
@@ -110,11 +117,15 @@ export function ClientQuoteBuilder({
           sort_order: b.sort_order,
         })),
       )
-      setEstimateHint('Pulled line items from estimate (grouped by category on the PDF). Repull to refresh.')
+      setEstimateHint(
+        estimatePullMode === 'category-total'
+          ? 'Pulled category totals from estimate. Repull to refresh.'
+          : 'Pulled line items from estimate (grouped by category on the PDF). Repull to refresh.',
+      )
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to pull from estimate')
     }
-  }, [project.estimate?.id])
+  }, [project.estimate?.id, estimatePullMode])
 
   // Org + default templates (new quotes)
   useEffect(() => {
@@ -482,11 +493,6 @@ export function ClientQuoteBuilder({
   const statusPill = CLIENT_QUOTE_STATUS[status as keyof typeof CLIENT_QUOTE_STATUS] ?? CLIENT_QUOTE_STATUS.draft
 
   const pullDisabled = !hasEstimate
-  const pullButton = (
-    <Button type="button" variant="outline" size="sm" disabled={pullDisabled} onClick={() => void pullFromEstimate()}>
-      Pull from Estimate
-    </Button>
-  )
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 pb-24">
@@ -682,7 +688,33 @@ export function ClientQuoteBuilder({
       </Card>
 
       <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-end gap-4">
+          <fieldset className="space-y-1.5" disabled={pullDisabled}>
+            <legend className="text-xs font-medium text-muted-foreground">Pull format</legend>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <label className="flex cursor-pointer items-center gap-2 font-normal">
+                <input
+                  type="radio"
+                  name="estimate-pull-mode"
+                  className="size-4 accent-primary"
+                  checked={estimatePullMode === 'line-item-breakdown'}
+                  onChange={() => setEstimatePullMode('line-item-breakdown')}
+                />
+                Line item breakdown
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 font-normal">
+                <input
+                  type="radio"
+                  name="estimate-pull-mode"
+                  className="size-4 accent-primary"
+                  checked={estimatePullMode === 'category-total'}
+                  onChange={() => setEstimatePullMode('category-total')}
+                />
+                Category totals only
+              </label>
+            </div>
+          </fieldset>
+          <div className="flex flex-wrap items-center gap-2">
           {pullDisabled ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -695,13 +727,21 @@ export function ClientQuoteBuilder({
               <TooltipContent>No estimate found for this project.</TooltipContent>
             </Tooltip>
           ) : (
-            pullButton
-          )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void pullFromEstimate()}
+              >
+                Pull from Estimate
+              </Button>
+            )}
           {!pullDisabled && lineItems.length > 0 && (
             <Button type="button" variant="ghost" size="sm" onClick={() => void pullFromEstimate()}>
               Repull
             </Button>
           )}
+          </div>
         </div>
         {estimateHint && <p className="text-xs text-muted-foreground">{estimateHint}</p>}
         <QuoteLineItemsTable rows={lineItems} onChange={setLineItems} />
