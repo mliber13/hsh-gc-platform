@@ -5,6 +5,7 @@
 import { addDays, format } from 'date-fns'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { groupQuoteLineItemsByCategory } from '@/services/clientQuoteService'
 import type { ClientQuoteWithChildren } from '@/types/clientQuote'
 import type { Project } from '@/types'
 
@@ -312,18 +313,52 @@ function drawPricingTable(ctx: PdfContext, quote: ClientQuoteWithChildren, logo:
   doc.text('PRICING', PAGE.marginX, ctx.y)
   ctx.y += 14
 
-  const sorted = [...quote.line_items].sort((a, b) => a.sort_order - b.sort_order)
-  const body =
-    sorted.length > 0
-      ? sorted.map((li) => [li.display_label || li.trade_category, formatCurrency(li.amount)])
-      : [['—', formatCurrency(0)]]
-  const subtotal = sorted.reduce((s, li) => s + (Number.isFinite(li.amount) ? li.amount : 0), 0)
+  const groups = groupQuoteLineItemsByCategory(quote.line_items)
+  const grandSubtotal = groups.reduce((s, g) => s + g.subtotal, 0)
+
+  type CellDef = string | { content: string; styles?: Record<string, unknown> }
+  const body: CellDef[][] = []
+
+  for (const group of groups) {
+    body.push([
+      {
+        content: group.categoryLabel,
+        styles: {
+          fontStyle: 'bold',
+          fillColor: [243, 244, 246],
+          textColor: TEXT_RGB,
+        },
+      },
+      {
+        content: '',
+        styles: { fontStyle: 'bold', fillColor: [243, 244, 246] },
+      },
+    ])
+    for (const line of group.lines) {
+      body.push([
+        {
+          content: line.display_label,
+          styles: {
+            cellPadding: { top: 4, right: 6, bottom: 4, left: 20 },
+          },
+        },
+        {
+          content: formatCurrency(line.amount),
+          styles: { halign: 'right' },
+        },
+      ])
+    }
+  }
+
+  if (body.length === 0) {
+    body.push(['—', formatCurrency(0)])
+  }
 
   autoTable(doc, {
     startY: ctx.y,
     head: [['Trade Category', 'Amount']],
     body,
-    foot: [['Subtotal', formatCurrency(subtotal)]],
+    foot: [['Subtotal', formatCurrency(grandSubtotal)]],
     theme: 'striped',
     showHead: 'everyPage',
     headStyles: {
@@ -344,14 +379,16 @@ function drawPricingTable(ctx: PdfContext, quote: ClientQuoteWithChildren, logo:
       lineColor: LIGHT_GRAY_RGB,
       lineWidth: 0.5,
     },
-    alternateRowStyles: { fillColor: [243, 244, 246] },
+    alternateRowStyles: { fillColor: [255, 255, 255] },
     columnStyles: {
       0: { cellWidth: 'auto' },
       1: { halign: 'right', cellWidth: 100 },
     },
+    margin: { left: PAGE.marginX, right: PAGE.marginX },
   })
   const last = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
   ctx.y = (last?.finalY ?? ctx.y) + 16
+  setTextColorRgb(doc, TEXT_RGB)
 }
 
 function drawOptionsTable(ctx: PdfContext, quote: ClientQuoteWithChildren, logo: LogoBits | null) {

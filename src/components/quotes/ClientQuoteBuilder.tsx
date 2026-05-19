@@ -6,7 +6,7 @@ import type { Project } from '@/types'
 import { CLIENT_QUOTE_STATUS } from '@/types/clientQuote'
 import type { ClientQuoteWithChildren, PreparedFor } from '@/types/clientQuote'
 import {
-  buildLineItemsFromEstimate,
+  buildDetailedLineItemsFromEstimate,
   createDraftQuote,
   getClientQuoteWithChildren,
   getDefaultExclusionsForProjectType,
@@ -101,7 +101,7 @@ export function ClientQuoteBuilder({
       return
     }
     try {
-      const built = await buildLineItemsFromEstimate(project.estimate.id)
+      const built = await buildDetailedLineItemsFromEstimate(project.estimate.id)
       setLineItems(
         built.map((b) => ({
           trade_category: b.trade_category,
@@ -110,7 +110,7 @@ export function ClientQuoteBuilder({
           sort_order: b.sort_order,
         })),
       )
-      setEstimateHint('Pulled from estimate — click Repull to refresh totals.')
+      setEstimateHint('Pulled line items from estimate (grouped by category on the PDF). Repull to refresh.')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to pull from estimate')
     }

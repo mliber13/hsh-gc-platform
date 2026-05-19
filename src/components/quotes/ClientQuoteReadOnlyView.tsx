@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Download, PlusCircle } from 'lucide-react'
 import { format } from 'date-fns'
@@ -13,6 +13,7 @@ import {
 import {
   createQuoteRevision,
   getClientQuoteWithChildren,
+  groupQuoteLineItemsByCategory,
   listClientQuotesForProject,
   markQuoteAccepted,
   markQuoteDeclined,
@@ -164,9 +165,9 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
     )
   }
 
-  const sortedLines = [...quote.line_items].sort((a, b) => a.sort_order - b.sort_order)
+  const pricingGroups = groupQuoteLineItemsByCategory(quote.line_items)
   const sortedOpts = [...quote.options].sort((a, b) => a.sort_order - b.sort_order)
-  const lineSum = sortedLines.reduce((s, li) => s + li.amount, 0)
+  const lineSum = pricingGroups.reduce((s, g) => s + g.subtotal, 0)
   const optSum = sortedOpts.reduce((s, o) => s + o.amount, 0)
   const subtotal = lineSum + optSum
 
@@ -337,11 +338,27 @@ export function ClientQuoteReadOnlyView({ project, quoteId, onBack }: ClientQuot
               </tr>
             </thead>
             <tbody>
-              {sortedLines.map((li) => (
-                <tr key={li.id} className="border-b last:border-0">
-                  <td className="px-3 py-2">{li.display_label}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(li.amount)}</td>
+              {pricingGroups.length === 0 && (
+                <tr>
+                  <td colSpan={2} className="px-3 py-4 text-center text-muted-foreground">
+                    No line items.
+                  </td>
                 </tr>
+              )}
+              {pricingGroups.map((group) => (
+                <Fragment key={group.category}>
+                  <tr className="border-b bg-muted/30">
+                    <td colSpan={2} className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-300">
+                      {group.categoryLabel}
+                    </td>
+                  </tr>
+                  {group.lines.map((line, i) => (
+                    <tr key={`${group.category}-${i}`} className="border-b border-border/40 last:border-0">
+                      <td className="px-3 py-2 pl-5">{line.display_label}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(line.amount)}</td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>

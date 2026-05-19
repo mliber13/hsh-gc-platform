@@ -100,6 +100,59 @@ function categorySortIndex(category: string): number {
   return i >= 0 ? i : 999
 }
 
+type EstimateTotalsJson = {
+  markupPercent?: number
+  contingencyPercent?: number
+}
+
+/** Quoted $ for one trade — matches Estimate Book totalEstimated rollup. */
+export function quotedAmountForTrade(
+  trade: { totalCost?: number; markupPercent?: number },
+  totals: EstimateTotalsJson,
+): number {
+  const base = trade.totalCost ?? 0
+  const tradeMarkupPct = ((trade.markupPercent || totals.markupPercent || 20) as number) / 100
+  const contingencyPct = (totals.contingencyPercent ?? 10) / 100
+  return base * (1 + tradeMarkupPct + contingencyPct)
+}
+
+export interface QuotePricingGroup {
+  category: string
+  categoryLabel: string
+  lines: Array<{ display_label: string; amount: number }>
+  subtotal: number
+}
+
+/** Group quote line items under trade categories (preserves sort_order within each category). */
+export function groupQuoteLineItemsByCategory(
+  lineItems: Array<Pick<ClientQuoteLineItem, 'trade_category' | 'display_label' | 'amount' | 'sort_order'>>,
+): QuotePricingGroup[] {
+  const sorted = [...lineItems].sort((a, b) => a.sort_order - b.sort_order)
+  const order: string[] = []
+  const byCategory = new Map<string, typeof sorted>()
+  for (const li of sorted) {
+    const cat = li.trade_category || 'other'
+    if (!byCategory.has(cat)) {
+      byCategory.set(cat, [])
+      order.push(cat)
+    }
+    byCategory.get(cat)!.push(li)
+  }
+  return order
+    .sort((a, b) => categorySortIndex(a) - categorySortIndex(b))
+    .map((category) => {
+      const items = byCategory.get(category)!
+      const categoryLabel =
+        TRADE_CATEGORIES[category as TradeCategory]?.label ?? category.replace(/-/g, ' ')
+      const lines = items.map((li) => ({
+        display_label: (li.display_label || '').trim() || categoryLabel,
+        amount: li.amount,
+      }))
+      const subtotal = lines.reduce((s, l) => s + (Number.isFinite(l.amount) ? l.amount : 0), 0)
+      return { category, categoryLabel, lines, subtotal }
+    })
+}
+
 export async function listClientQuotesForProject(projectId: string): Promise<ClientQuoteListRow[]> {
   const { data, error } = await supabase
     .from('client_quotes')
@@ -210,19 +263,11 @@ export async function buildLineItemsFromEstimate(
     getTradesForEstimate_Hybrid(estimateId),
   ])
 
-  const totals = (estimateRow?.totals ?? {}) as {
-    markupPercent?: number
-    contingencyPercent?: number
-  }
-  const contingencyPct = (totals.contingencyPercent ?? 10) / 100
+  const totals = (estimateRow?.totals ?? {}) as EstimateTotalsJson
 
   const sums = new Map<string, number>()
   for (const t of trades) {
-    const base = t.totalCost ?? 0
-    // Match EstimateBuilder.calculateTotals: trade markup falls back to project markup,
-    // which falls back to 20%. `||` (not `??`) matches the existing convention.
-    const tradeMarkupPct = ((t.markupPercent || totals.markupPercent || 20) as number) / 100
-    const quoted = base * (1 + tradeMarkupPct + contingencyPct)
+    const quoted = quotedAmountForTrade(t, totals)
     sums.set(t.category, (sums.get(t.category) ?? 0) + quoted)
   }
   const categories = [...sums.keys()].sort((a, b) => categorySortIndex(a) - categorySortIndex(b))
@@ -233,6 +278,38 @@ export async function buildLineItemsFromEstimate(
       trade_category: category,
       display_label: label,
       amount: sums.get(category) ?? 0,
+      sort_order: idx,
+    }
+  })
+}
+
+/**
+ * One quote line per estimate trade, grouped by category when rendered.
+ * Grand total matches buildLineItemsFromEstimate (category rollup).
+ */
+export async function buildDetailedLineItemsFromEstimate(
+  estimateId: string,
+): Promise<Array<Pick<ClientQuoteLineItem, 'trade_category' | 'display_label' | 'amount' | 'sort_order'>>> {
+  const [{ data: estimateRow }, trades] = await Promise.all([
+    supabase.from('estimates').select('totals').eq('id', estimateId).maybeSingle(),
+    getTradesForEstimate_Hybrid(estimateId),
+  ])
+
+  const totals = (estimateRow?.totals ?? {}) as EstimateTotalsJson
+
+  const sortedTrades = [...trades].sort((a, b) => {
+    const byCat = categorySortIndex(a.category) - categorySortIndex(b.category)
+    if (byCat !== 0) return byCat
+    return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+  })
+
+  return sortedTrades.map((t, idx) => {
+    const categoryLabel =
+      TRADE_CATEGORIES[t.category as TradeCategory]?.label ?? t.category.replace(/-/g, ' ')
+    return {
+      trade_category: t.category,
+      display_label: (t.name || '').trim() || categoryLabel,
+      amount: quotedAmountForTrade(t, totals),
       sort_order: idx,
     }
   })
