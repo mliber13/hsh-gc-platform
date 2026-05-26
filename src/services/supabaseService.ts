@@ -415,9 +415,29 @@ function coerceProjectStatus(value: string): ProjectStatus {
     : 'estimating'
 }
 
-function listRowClient(client: string | null, projectId: string): Client {
-  const name = (client ?? '').trim() || '—'
-  return { id: projectId, name }
+function listRowClient(client: unknown, projectId: string): Client {
+  if (typeof client === 'string') {
+    const name = client.trim() || '—'
+    return { id: projectId, name }
+  }
+  if (client && typeof client === 'object') {
+    const c = client as Record<string, unknown>
+    const name =
+      (typeof c.name === 'string' && c.name.trim()) ||
+      (typeof c.company === 'string' && c.company.trim()) ||
+      (typeof c.email === 'string' && c.email.trim()) ||
+      (typeof c.phone === 'string' && c.phone.trim()) ||
+      '—'
+    return {
+      id: typeof c.id === 'string' && c.id.trim() ? c.id : projectId,
+      name,
+      email: typeof c.email === 'string' ? c.email : undefined,
+      phone: typeof c.phone === 'string' ? c.phone : undefined,
+      company: typeof c.company === 'string' ? c.company : undefined,
+      address: typeof c.address === 'string' ? c.address : undefined,
+    }
+  }
+  return { id: projectId, name: '—' }
 }
 
 function listRowAddress(row: {
@@ -462,7 +482,7 @@ function mapProjectListRow(row: {
   city: string | null
   state: string | null
   zip_code: string | null
-  client: string | null
+  client: unknown
   created_at: string
   updated_at: string
   app_scope?: unknown
