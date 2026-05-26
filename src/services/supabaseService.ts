@@ -440,18 +440,38 @@ function listRowClient(client: unknown, projectId: string): Client {
   return { id: projectId, name: '—' }
 }
 
+function asTrimmedString(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return ''
+}
+
 function listRowAddress(row: {
-  address: string | null
-  city: string | null
-  state: string | null
-  zip_code: string | null
+  address: unknown
+  city: unknown
+  state: unknown
+  zip_code: unknown
 }): Project['address'] | undefined {
-  if (!row.address && !row.city && !row.state && !row.zip_code) return undefined
+  const city = asTrimmedString(row.city)
+  const state = asTrimmedString(row.state)
+  const zip = asTrimmedString(row.zip_code)
+
+  let street = asTrimmedString(row.address)
+  if (!street && row.address && typeof row.address === 'object') {
+    const a = row.address as Record<string, unknown>
+    street =
+      asTrimmedString(a.street) ||
+      asTrimmedString(a.address) ||
+      asTrimmedString(a.line1) ||
+      asTrimmedString(a.formatted)
+  }
+
+  if (!street && !city && !state && !zip) return undefined
   return {
-    street: row.address ?? '',
-    city: row.city ?? '',
-    state: row.state ?? '',
-    zip: row.zip_code ?? '',
+    street,
+    city,
+    state,
+    zip,
   }
 }
 
@@ -478,10 +498,10 @@ function mapProjectListRow(row: {
   name: string
   type: string
   status: string
-  address: string | null
-  city: string | null
-  state: string | null
-  zip_code: string | null
+  address: unknown
+  city: unknown
+  state: unknown
+  zip_code: unknown
   client: unknown
   created_at: string
   updated_at: string
@@ -496,9 +516,9 @@ function mapProjectListRow(row: {
     type: coerceProjectType(row.type),
     status: coerceProjectStatus(row.status),
     address: listRowAddress(row),
-    city: row.city ?? undefined,
-    state: row.state ?? undefined,
-    zipCode: row.zip_code ?? undefined,
+    city: asTrimmedString(row.city) || undefined,
+    state: asTrimmedString(row.state) || undefined,
+    zipCode: asTrimmedString(row.zip_code) || undefined,
     client: listRowClient(row.client, row.id),
     metadata: parseListRowMetadata(row),
     createdAt: new Date(row.created_at),
