@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { ConfirmationStatus } from '@/types'
+import { isVisibleInGcApp } from './projectVisibility'
 import { requireUserOrgId } from './userService'
 
 export type PortfolioTypeFilter = 'all' | 'gc' | 'drywall'
@@ -82,7 +83,14 @@ export async function fetchPortfolioProjects(
   const { data, error } = await query
   if (error) throw error
 
-  return ((data ?? []) as ProjectRow[]).map((row) => ({
+  let rows = (data ?? []) as ProjectRow[]
+  if (typeFilter !== 'drywall') {
+    rows = rows.filter((row) =>
+      isVisibleInGcApp((row.metadata ?? {}) as Record<string, unknown>),
+    )
+  }
+
+  return rows.map((row) => ({
     id: row.id,
     name: row.name,
     type: row.type,

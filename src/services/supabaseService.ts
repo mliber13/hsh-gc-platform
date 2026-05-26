@@ -33,6 +33,7 @@ import {
   DealDocument,
   DealDocumentType,
 } from '@/types/deal'
+import { parseListRowMetadata } from './projectVisibility'
 import type { WorkPackage, CreateWorkPackageInput, UpdateWorkPackageInput } from '@/types/workPackage'
 import type {
   ProjectMilestone,
@@ -389,20 +390,147 @@ export async function updateScheduleItemQuickEdit(
   return mapScheduleItemRowToModel(data as ScheduleItemRow)
 }
 
-export async function fetchProjects(): Promise<Project[]> {
+const EMPTY_ESTIMATE = (projectId: string) => ({
+  id: '',
+  projectId,
+  version: 1,
+  trades: [],
+  subtotal: 0,
+  overhead: 0,
+  profit: 0,
+  contingency: 0,
+  totalEstimate: 0,
+})
+
+/** List query: visibility fields only — full metadata includes multi-MB legacy blobs per row. */
+const PROJECT_LIST_SELECT =
+  'id, name, type, status, address, city, state, zip_code, client, created_at, updated_at, app_scope:metadata->>app_scope, visibility:metadata->visibility, source:metadata->>source'
+
+function mapProjectListRow(row: {
+  id: string
+  name: string
+  type: string
+  status: string
+  address: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
+  client: string | null
+  created_at: string
+  updated_at: string
+  app_scope?: unknown
+  visibility?: unknown
+  source?: unknown
+}): Project {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    status: row.status,
+    address: row.address ?? undefined,
+    city: row.city ?? undefined,
+    state: row.state ?? undefined,
+    zipCode: row.zip_code ?? undefined,
+    client: row.client ?? undefined,
+    metadata: parseListRowMetadata(row),
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+    estimate: EMPTY_ESTIMATE(row.id),
+  }
+}
+
+/** Lightweight project list (no per-row estimate/schedule hydration). */
+export async function fetchProjectsForList(): Promise<Project[]> {
   if (!isOnlineMode()) return []
 
-  const { data, error } = await supabase
-    .from('projects')
-    .select('*')
-    .order('created_at', { ascending: false })
-
-  if (error) {
-    console.error('Error fetching projects:', error)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user?.id) return []
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .maybeSingle()
+  const orgId = profile?.organization_id ?? null
+  if (!orgId) {
+    console.warn('fetchProjectsForList: missing organization_id on profile')
     return []
   }
 
-  return await Promise.all(data.map(transformProject))
+  const { data, error } = await supabase
+    .from('projects')
+    .select(PROJECT_LIST_SELECT)
+    .eq('organization_id', orgId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching projects for list:', error?.code, error?.message, error)
+    return []
+  }
+
+  return (data ?? []).map((row) => mapProjectListRow(row))
+}
+
+export async function fetchProjects(): Promise<Project[]> {
+  if (!isOnlineMode()) return []
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user?.id) return []
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .maybeSingle()
+  const orgId = profile?.organization_id ?? null
+  if (!orgId) {
+    console.warn('fetchProjects: missing organization_id on profile')
+    return []
+  }
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select(`
+      id,
+      user_id,
+      name,
+      type,
+      status,
+      address,
+      city,
+      state,
+      zip_code,
+      client,
+      start_date,
+      end_date,
+      specs,
+      qb_project_id,
+      qb_project_name,
+      metadata,
+      created_at,
+      updated_at
+    `)
+    .eq('organization_id', orgId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching projects:', error?.code, error?.message, error)
+    return []
+  }
+
+  const rows = data ?? []
+  const results = await Promise.allSettled(rows.map((row) => transformProject(row)))
+  const projects: Project[] = []
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      projects.push(result.value)
+    } else {
+      console.error('Error transforming project row:', result.reason)
+    }
+  }
+  return projects
 }
 
 export async function fetchProjectById(projectId: string): Promise<Project | null> {
@@ -2551,7 +2679,7 @@ export async function fetchTradeCategoriesInDB(organizationId: string): Promise<
   const { data, error } = await supabase
     .from('trade_categories')
     .select('id, key, label, icon, sort_order, is_system, created_at, updated_at')
-    .or(`organization_id.eq.system,organization_id.eq.${organizationId}`)
+    .or(`is_system.eq.true,organization_id.eq.${organizationId}`)
     .order('sort_order', { ascending: true })
   if (error) {
     console.error('Error fetching trade categories:', error)

@@ -37,6 +37,7 @@ import { useTheme } from 'next-themes'
 import { Project, ProjectStatus } from '@/types'
 import { usePermissions } from '@/hooks/usePermissions'
 import { usePageTitle } from '@/contexts/PageTitleContext'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   getProjects_Hybrid,
   getTradesForEstimate_Hybrid,
@@ -73,8 +74,10 @@ export function ProjectsDashboard({
   onOpenProjectSection,
   onOpenQBSettings,
 }: ProjectsDashboardProps) {
+  const { session, isOnline } = useAuth()
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('newest')
@@ -122,30 +125,41 @@ export function ProjectsDashboard({
     void loadQBPending()
   }, [])
 
-  // Project list + progressive stats loading
+  // Project list + progressive stats loading (reload when auth session is ready)
   useEffect(() => {
+    if (isOnline && !session?.user) {
+      setProjects([])
+      setLoading(false)
+      return
+    }
+
     const loadProjects = async () => {
       setLoading(true)
-      const allProjects = await getProjects_Hybrid()
-      // Show projects immediately (without stats) for fast first paint
-      setProjects(
-        allProjects.map((p) => ({
-          ...p,
-          basePriceTotal: 0,
-          estimatedValue: 0,
-          actualCosts: 0,
-          tradeCount: 0,
-        })),
-      )
-      setLoading(false)
+      setLoadError(null)
+      try {
+        const allProjects = await getProjects_Hybrid()
+        // Show projects immediately (without stats) for fast first paint
+        setProjects(
+          allProjects.map((p) => ({
+            ...p,
+            basePriceTotal: 0,
+            estimatedValue: 0,
+            actualCosts: 0,
+            tradeCount: 0,
+          })),
+        )
+        setLoading(false)
 
-      // Then enhance with stats in the background
-      const projectsWithStats = await Promise.all(
-        allProjects.map(async (project) => {
-          const [trades, actuals] = await Promise.all([
-            getTradesForEstimate_Hybrid(project.estimate.id),
-            getProjectActuals_Hybrid(project.id),
-          ])
+        if (allProjects.length === 0) return
+
+        // Then enhance with stats in the background
+        const projectsWithStats = await Promise.all(
+          allProjects.map(async (project) => {
+            const estimateId = project.estimate?.id
+            const [trades, actuals] = await Promise.all([
+              estimateId ? getTradesForEstimate_Hybrid(estimateId) : Promise.resolve([]),
+              getProjectActuals_Hybrid(project.id),
+            ])
 
           const tradeCount = trades.length
           const baseFromTrades = trades.reduce(
@@ -186,10 +200,15 @@ export function ProjectsDashboard({
         }),
       )
 
-      setProjects(projectsWithStats)
+        setProjects(projectsWithStats)
+      } catch (err) {
+        console.error('ProjectsDashboard loadProjects:', err)
+        setLoadError(err instanceof Error ? err.message : 'Failed to load projects')
+        setLoading(false)
+      }
     }
     void loadProjects()
-  }, [])
+  }, [isOnline, session?.user?.id])
 
   const handleStatusChange = async (
     project: ProjectWithStats,
@@ -399,6 +418,13 @@ export function ProjectsDashboard({
               <p className="mt-4 text-sm text-muted-foreground">
                 Loading projects…
               </p>
+            </CardContent>
+          </Card>
+        ) : loadError ? (
+          <Card className="border-destructive/40 bg-card/50">
+            <CardContent className="py-12 text-center">
+              <p className="font-medium text-destructive">Could not load projects</p>
+              <p className="mt-1 text-sm text-muted-foreground">{loadError}</p>
             </CardContent>
           </Card>
         ) : filteredProjects.length === 0 ? (

@@ -22,6 +22,7 @@ import {
 } from './estimateService'
 import { getTradesForEstimate as getTradesLS } from './storage'
 import * as supabaseService from './supabaseService'
+import { isVisibleInGcApp } from './projectVisibility'
 import { Project, CreateProjectInput, UpdateProjectInput, Trade, TradeInput } from '@/types'
 import * as quoteService from './quoteService'
 import { 
@@ -45,27 +46,16 @@ import type {
 /** When true, project list includes Drywall-only projects (for admin). Default false so GC users do not see them. */
 const INCLUDE_DRYWALL_ONLY_PROJECTS = import.meta.env.VITE_INCLUDE_DRYWALL_ONLY_PROJECTS === 'true'
 
-/**
- * Drywall-only: exclude from GC list when metadata.visibility.gc === false OR metadata.app_scope === 'DRYWALL_ONLY'.
- * Used to hide legacy drywall-only jobs from GC dashboard/list by default.
- */
-function isDrywallOnlyProject(project: Project): boolean {
-  const m = project.metadata as Record<string, unknown> | undefined
-  if (!m) return false
-  const visibility = m.visibility as Record<string, unknown> | undefined
-  if (visibility && visibility.gc === false) return true
-  if (m.app_scope === 'DRYWALL_ONLY') return true
-  return false
-}
-
 function filterProjectsForGC(projects: Project[]): Project[] {
   if (INCLUDE_DRYWALL_ONLY_PROJECTS) return projects
-  return projects.filter((p) => !isDrywallOnlyProject(p))
+  return projects.filter((p) =>
+    isVisibleInGcApp(p.metadata as Record<string, unknown> | undefined),
+  )
 }
 
 export async function getProjects_Hybrid(): Promise<Project[]> {
   const raw = isOnlineMode()
-    ? await supabaseService.fetchProjects()
+    ? await supabaseService.fetchProjectsForList()
     : getAllProjects()
   return filterProjectsForGC(Array.isArray(raw) ? raw : [])
 }
