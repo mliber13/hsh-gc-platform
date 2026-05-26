@@ -11,6 +11,10 @@ import { parseISO } from 'date-fns'
 import { v4 as uuidv4 } from 'uuid'
 import {
   Project,
+  ProjectType,
+  ProjectStatus,
+  Client,
+  Estimate,
   CreateProjectInput,
   UpdateProjectInput,
   Trade,
@@ -390,7 +394,48 @@ export async function updateScheduleItemQuickEdit(
   return mapScheduleItemRowToModel(data as ScheduleItemRow)
 }
 
-const EMPTY_ESTIMATE = (projectId: string) => ({
+const PROJECT_TYPES: ProjectType[] = [
+  'residential-renovation',
+  'residential-new-build',
+  'commercial-renovation',
+  'commercial-new-build',
+]
+
+const PROJECT_STATUSES: ProjectStatus[] = ['estimating', 'in-progress', 'complete', 'lost']
+
+function coerceProjectType(value: string): ProjectType {
+  return PROJECT_TYPES.includes(value as ProjectType)
+    ? (value as ProjectType)
+    : 'residential-renovation'
+}
+
+function coerceProjectStatus(value: string): ProjectStatus {
+  return PROJECT_STATUSES.includes(value as ProjectStatus)
+    ? (value as ProjectStatus)
+    : 'estimating'
+}
+
+function listRowClient(client: string | null, projectId: string): Client {
+  const name = (client ?? '').trim() || '—'
+  return { id: projectId, name }
+}
+
+function listRowAddress(row: {
+  address: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
+}): Project['address'] | undefined {
+  if (!row.address && !row.city && !row.state && !row.zip_code) return undefined
+  return {
+    street: row.address ?? '',
+    city: row.city ?? '',
+    state: row.state ?? '',
+    zip: row.zip_code ?? '',
+  }
+}
+
+const emptyEstimate = (projectId: string, updatedAt: Date): Estimate => ({
   id: '',
   projectId,
   version: 1,
@@ -400,6 +445,8 @@ const EMPTY_ESTIMATE = (projectId: string) => ({
   profit: 0,
   contingency: 0,
   totalEstimate: 0,
+  createdAt: updatedAt,
+  updatedAt,
 })
 
 /** List query: visibility fields only — full metadata includes multi-MB legacy blobs per row. */
@@ -422,20 +469,21 @@ function mapProjectListRow(row: {
   visibility?: unknown
   source?: unknown
 }): Project {
+  const updatedAt = new Date(row.updated_at)
   return {
     id: row.id,
     name: row.name,
-    type: row.type,
-    status: row.status,
-    address: row.address ?? undefined,
+    type: coerceProjectType(row.type),
+    status: coerceProjectStatus(row.status),
+    address: listRowAddress(row),
     city: row.city ?? undefined,
     state: row.state ?? undefined,
     zipCode: row.zip_code ?? undefined,
-    client: row.client ?? undefined,
+    client: listRowClient(row.client, row.id),
     metadata: parseListRowMetadata(row),
     createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
-    estimate: EMPTY_ESTIMATE(row.id),
+    updatedAt,
+    estimate: emptyEstimate(row.id, updatedAt),
   }
 }
 
