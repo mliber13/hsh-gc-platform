@@ -22,7 +22,7 @@ import {
   type QBJobTransaction,
   type QBAccount,
 } from '@/services/quickbooksService'
-import { getProjects_Hybrid, getTradesForEstimate_Hybrid } from '@/services/hybridService'
+import { getProject_Hybrid, getProjects_Hybrid, getTradesForEstimate_Hybrid } from '@/services/hybridService'
 import { fetchSubItemsForTrade } from '@/services/supabaseService'
 import { addMaterialEntry_Hybrid, addSubcontractorEntry_Hybrid, getProjectActuals_Hybrid } from '@/services/actualsHybridService'
 import {
@@ -60,6 +60,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
+  const [projectEstimateId, setProjectEstimateId] = useState<string | null>(null)
   const [trades, setTrades] = useState<Trade[]>([])
   const [subItems, setSubItems] = useState<SubItem[]>([])
   const [selectedTxn, setSelectedTxn] = useState<QBJobTransaction | null>(null)
@@ -269,9 +270,37 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
   const formatCurrency = (n: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n)
 
-  const estimateId = projectId
-    ? (projects.find((p) => p.id === projectId)?.estimate?.id ?? preSelectedProject?.estimateId)
-    : null
+  // Resolve the project's estimate id when projectId changes.
+  // PROJECT_LIST_SELECT (supabaseService) was slimmed down and no longer
+  // returns the nested estimate object, so projects.find(...)?.estimate?.id
+  // is always undefined. Fetch the full project to get its estimate id.
+  // Falls back to preSelectedProject.estimateId when launched from Project
+  // Actuals (avoids the extra round-trip in that case).
+  useEffect(() => {
+    let cancelled = false
+    if (!projectId) {
+      setProjectEstimateId(null)
+      return
+    }
+    if (preSelectedProject?.id === projectId && preSelectedProject.estimateId) {
+      setProjectEstimateId(preSelectedProject.estimateId)
+      return
+    }
+    void getProject_Hybrid(projectId)
+      .then((p) => {
+        if (cancelled) return
+        setProjectEstimateId(p?.estimate?.id ?? null)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setProjectEstimateId(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, preSelectedProject?.id, preSelectedProject?.estimateId])
+
+  const estimateId = projectEstimateId
 
   useEffect(() => {
     if (!estimateId) {
