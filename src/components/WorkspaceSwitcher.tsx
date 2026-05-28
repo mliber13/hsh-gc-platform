@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { useActiveWorkspace, Workspace } from '@/hooks/useActiveWorkspace'
+import { usePermissions } from '@/hooks/usePermissions'
 import { cn } from '@/lib/utils'
 
 type WorkspaceMeta = {
@@ -70,8 +71,29 @@ const WORKSPACES: WorkspaceMeta[] = [
 
 export function WorkspaceSwitcher() {
   const { workspace, setWorkspace } = useActiveWorkspace()
-  const active = WORKSPACES.find((w) => w.id === workspace) ?? WORKSPACES[0]
+  const { canAccessWorkspace, loading } = usePermissions()
+  const visibleWorkspaces = WORKSPACES.filter((ws) => canAccessWorkspace(ws.id))
+  const active =
+    visibleWorkspaces.find((w) => w.id === workspace) ??
+    visibleWorkspaces[0] ??
+    WORKSPACES[0]
   const ActiveIcon = active.icon
+
+  if (loading) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        disabled
+        className="h-8 gap-2 rounded-full pl-2 pr-3 text-sm font-medium"
+      >
+        <span className="flex size-5 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground">
+          <ActiveIcon className="size-3" />
+        </span>
+        <span>{active.label}</span>
+      </Button>
+    )
+  }
 
   return (
     <DropdownMenu>
@@ -93,7 +115,7 @@ export function WorkspaceSwitcher() {
           Switch workspace
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {WORKSPACES.map((ws) => {
+        {visibleWorkspaces.map((ws) => {
           const Icon = ws.icon
           const isActive = ws.id === workspace
           return (

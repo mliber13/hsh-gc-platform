@@ -108,12 +108,22 @@ import { MeetingView } from '@/components/meeting/MeetingView'
 import { MyActionItems } from '@/components/meeting/MyActionItems'
 import { MeetingAdmin } from '@/components/meeting/MeetingAdmin'
 import { MeetingsList } from '@/components/meeting/MeetingsList'
+import { TeamPage } from '@/components/hr/TeamPage'
+import { PayrollPage } from '@/components/hr/PayrollPage'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { getCurrentWeekOf } from '@/services/meetingService'
 
 import { AppLayout } from '@/components/AppLayout'
 import { AuthedLayout } from './AuthedLayout'
 import { ProjectScope, useProjectContext } from './ProjectScope'
+import {
+  RequireCanCreateProjects,
+  RequireMeetingAdmin,
+  RequireQuickBooksAdmin,
+  RequireCanRunPayroll,
+  RequireHrTeamAccess,
+  RequireWorkspaceAccess,
+} from './RequirePermission'
 
 // ============================================================================
 // Top-level routes table
@@ -138,11 +148,32 @@ export function AppRoutes() {
 
         {/* All other authed routes render inside the sidebar shell */}
         <Route element={<AppLayout />}>
-          <Route index element={<DashboardRoute />} />
+          <Route
+            index
+            element={
+              <RequireWorkspaceAccess workspace="projects">
+                <DashboardRoute />
+              </RequireWorkspaceAccess>
+            }
+          />
           <Route path="/projects" element={<Navigate to="/" replace />} />
-          <Route path="/projects/new" element={<CreateProjectRoute />} />
+          <Route
+            path="/projects/new"
+            element={
+              <RequireCanCreateProjects>
+                <CreateProjectRoute />
+              </RequireCanCreateProjects>
+            }
+          />
 
-          <Route path="/projects/:projectId" element={<ProjectScope />}>
+          <Route
+            path="/projects/:projectId"
+            element={
+              <RequireWorkspaceAccess workspace="projects">
+                <ProjectScope />
+              </RequireWorkspaceAccess>
+            }
+          >
             <Route index element={<ProjectDetailRoute />} />
             <Route path="estimate" element={<EstimateRoute />} />
             <Route path="actuals" element={<ActualsRoute />} />
@@ -164,31 +195,139 @@ export function AppRoutes() {
           <Route path="/library/plans/:planId" element={<PlanEditorRoute />} />
           <Route path="/library/estimates" element={<EstimateLibraryRoute />} />
 
-          <Route path="/quickbooks/settings" element={<QuickBooksSettingsRoute />} />
+          <Route
+            path="/quickbooks/settings"
+            element={
+              <RequireQuickBooksAdmin>
+                <QuickBooksSettingsRoute />
+              </RequireQuickBooksAdmin>
+            }
+          />
 
           <Route path="/contacts" element={<ContactDirectoryRoute />} />
           <Route path="/settings/holidays" element={<HolidaysAdminRoute />} />
           <Route path="/settings/unavailability" element={<SubUnavailabilityAdminRoute />} />
           <Route path="/sow" element={<SOWManagementRoute />} />
 
-          <Route path="/deals" element={<DealsDashboard />} />
-          <Route path="/deals/workspace" element={<DealWorkspaceRoute />} />
-          <Route path="/deals/workspace/:dealId" element={<DealWorkspaceRoute />} />
+          <Route
+            path="/deals"
+            element={
+              <RequireWorkspaceAccess workspace="deals">
+                <DealsDashboard />
+              </RequireWorkspaceAccess>
+            }
+          />
+          <Route
+            path="/deals/workspace"
+            element={
+              <RequireWorkspaceAccess workspace="deals">
+                <DealWorkspaceRoute />
+              </RequireWorkspaceAccess>
+            }
+          />
+          <Route
+            path="/deals/workspace/:dealId"
+            element={
+              <RequireWorkspaceAccess workspace="deals">
+                <DealWorkspaceRoute />
+              </RequireWorkspaceAccess>
+            }
+          />
           <Route path="/deal-pipeline" element={<Navigate to="/deals" replace />} />
 
-          <Route path="/tenants" element={<TenantPipelineRoute />} />
+          <Route
+            path="/tenants"
+            element={
+              <RequireWorkspaceAccess workspace="tenants">
+                <TenantPipelineRoute />
+              </RequireWorkspaceAccess>
+            }
+          />
           <Route path="/tenant-pipeline" element={<Navigate to="/tenants" replace />} />
 
-          <Route path="/schedule" element={<SchedulePortfolioRoute />} />
-          <Route path="/schedule/resource" element={<ResourceCompareRoute />} />
+          <Route
+            path="/hr/team"
+            element={
+              <RequireHrTeamAccess>
+                <TeamPage />
+              </RequireHrTeamAccess>
+            }
+          />
+          <Route
+            path="/hr/payroll"
+            element={
+              <RequireCanRunPayroll>
+                <PayrollPage />
+              </RequireCanRunPayroll>
+            }
+          />
+
+          <Route
+            path="/schedule"
+            element={
+              <RequireWorkspaceAccess workspace="schedule">
+                <SchedulePortfolioRoute />
+              </RequireWorkspaceAccess>
+            }
+          />
+          <Route
+            path="/schedule/resource"
+            element={
+              <RequireWorkspaceAccess workspace="schedule">
+                <ResourceCompareRoute />
+              </RequireWorkspaceAccess>
+            }
+          />
 
           <Route path="/feedback" element={<MyFeedbackRoute />} />
-          <Route path="/pre-read" element={<MeetingPreReadRoute />} />
-          <Route path="/action-items" element={<MyActionItemsRoute />} />
-          <Route path="/meetings" element={<MeetingsListRoute />} />
-          <Route path="/admin/meeting-prompts" element={<MeetingAdminRoute />} />
-          <Route path="/meeting" element={<MeetingRedirectRoute />} />
-          <Route path="/meeting/:date" element={<MeetingViewRoute />} />
+          <Route
+            path="/pre-read"
+            element={
+              <RequireWorkspaceAccess workspace="meeting">
+                <MeetingPreReadRoute />
+              </RequireWorkspaceAccess>
+            }
+          />
+          <Route
+            path="/action-items"
+            element={
+              <RequireWorkspaceAccess workspace="meeting">
+                <MyActionItemsRoute />
+              </RequireWorkspaceAccess>
+            }
+          />
+          <Route
+            path="/meetings"
+            element={
+              <RequireWorkspaceAccess workspace="meeting">
+                <MeetingsListRoute />
+              </RequireWorkspaceAccess>
+            }
+          />
+          <Route
+            path="/admin/meeting-prompts"
+            element={
+              <RequireMeetingAdmin>
+                <MeetingAdminRoute />
+              </RequireMeetingAdmin>
+            }
+          />
+          <Route
+            path="/meeting"
+            element={
+              <RequireWorkspaceAccess workspace="meeting">
+                <MeetingRedirectRoute />
+              </RequireWorkspaceAccess>
+            }
+          />
+          <Route
+            path="/meeting/:date"
+            element={
+              <RequireWorkspaceAccess workspace="meeting">
+                <MeetingViewRoute />
+              </RequireWorkspaceAccess>
+            }
+          />
 
           {/* Catch-all → dashboard */}
           <Route path="*" element={<Navigate to="/" replace />} />

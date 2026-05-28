@@ -57,10 +57,14 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar'
 import { useActiveWorkspace, Workspace } from '@/hooks/useActiveWorkspace'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePermissions } from '@/hooks/usePermissions'
 import { Project } from '@/types'
 import { getProjects_Hybrid } from '@/services/hybridService'
-import { getCurrentUserMeetingLead } from '@/services/meetingService'
+import {
+  canSeeSettingsNavItem,
+  type RbacRole,
+  type SettingsNavKey,
+} from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 import { SidebarUserMenu } from './SidebarUserMenu'
 
@@ -93,12 +97,12 @@ type NavGroup = {
 // Per-workspace nav definitions
 // ----------------------------------------------------------------------------
 
-function projectsNav(projectId: string | undefined): NavGroup[] {
+function projectsNav(
+  projectId: string | undefined,
+  showQuickBooks: boolean,
+): NavGroup[] {
   const p = projectId ? `/projects/${projectId}` : null
-  return [
-    {
-      label: 'Modules',
-      items: [
+  const moduleItems: NavItem[] = [
         { label: 'Dashboard', to: '/', icon: LayoutDashboard, matchPath: '/' },
         {
           label: 'Estimates',
@@ -163,13 +167,19 @@ function projectsNav(projectId: string | undefined): NavGroup[] {
           matchPath: '/projects/:projectId/purchase-orders',
           requiresProject: true,
         },
-        {
-          label: 'QuickBooks',
-          to: '/quickbooks/settings',
-          icon: Receipt,
-          matchPath: '/quickbooks/settings',
-        },
-      ],
+  ]
+  if (showQuickBooks) {
+    moduleItems.push({
+      label: 'QuickBooks',
+      to: '/quickbooks/settings',
+      icon: Receipt,
+      matchPath: '/quickbooks/settings',
+    })
+  }
+  return [
+    {
+      label: 'Modules',
+      items: moduleItems,
     },
     {
       label: 'Reports',
@@ -273,18 +283,42 @@ function meetingNav(showManage: boolean): NavGroup[] {
   return [{ label: 'Meeting', items }]
 }
 
-const settingsNav: NavGroup = {
-  label: 'Settings',
-  items: [
-    { label: 'Item Library', to: '/library/estimates', icon: Library },
-    { label: 'Plan Library', to: '/library/plans', icon: FileText },
-    { label: 'SOW Templates', to: '/sow', icon: ClipboardList },
-    { label: 'Contact Directory', to: '/contacts', icon: UsersRound },
-    { label: 'Holidays', to: '/settings/holidays', icon: CalendarDays },
-    { label: 'Sub Unavailability', to: '/settings/unavailability', icon: CalendarDays },
-    { label: 'Feedback', to: '/feedback', icon: MessageSquare },
-    { label: 'QuickBooks', to: '/quickbooks/settings', icon: Link2 },
-  ],
+const SETTINGS_NAV_DEFS: {
+  key: SettingsNavKey
+  label: string
+  to: string
+  icon: typeof LayoutDashboard
+}[] = [
+  { key: 'item-library', label: 'Item Library', to: '/library/estimates', icon: Library },
+  { key: 'plan-library', label: 'Plan Library', to: '/library/plans', icon: FileText },
+  { key: 'sow', label: 'SOW Templates', to: '/sow', icon: ClipboardList },
+  { key: 'contacts', label: 'Contact Directory', to: '/contacts', icon: UsersRound },
+  { key: 'holidays', label: 'Holidays', to: '/settings/holidays', icon: CalendarDays },
+  {
+    key: 'unavailability',
+    label: 'Sub Unavailability',
+    to: '/settings/unavailability',
+    icon: CalendarDays,
+  },
+  { key: 'feedback', label: 'Feedback', to: '/feedback', icon: MessageSquare },
+  {
+    key: 'quickbooks',
+    label: 'QuickBooks',
+    to: '/quickbooks/settings',
+    icon: Link2,
+  },
+]
+
+function buildSettingsNav(
+  role: RbacRole,
+  showQuickBooks: boolean,
+): NavGroup | null {
+  const items = SETTINGS_NAV_DEFS.filter((def) => {
+    if (def.key === 'quickbooks') return showQuickBooks
+    return canSeeSettingsNavItem(role, def.key)
+  }).map(({ label, to, icon }) => ({ label, to, icon }))
+  if (items.length === 0) return null
+  return { label: 'Settings', items }
 }
 
 // ----------------------------------------------------------------------------
@@ -296,24 +330,36 @@ function navForWorkspace(
   currentProjectId: string | undefined,
   currentDealId: string | undefined,
   showMeetingManage: boolean,
+  role: RbacRole,
+  showQuickBooks: boolean,
 ): NavGroup[] {
+  const settings = buildSettingsNav(role, showQuickBooks)
+  const withSettings = (groups: NavGroup[]) =>
+    settings ? [...groups, settings] : groups
+
   switch (ws) {
     case 'projects':
-      return [...projectsNav(currentProjectId), settingsNav]
+      return withSettings(projectsNav(currentProjectId, showQuickBooks))
     case 'deals':
-      return [...dealsNav(currentDealId), settingsNav]
+      return withSettings(dealsNav(currentDealId))
     case 'tenants':
-      return [...tenantsNav, settingsNav]
+      return withSettings(tenantsNav)
     case 'meeting':
-      return [...meetingNav(showMeetingManage), settingsNav]
+      return withSettings(meetingNav(showMeetingManage))
     case 'schedule':
-      return [...scheduleNav, settingsNav]
+      return withSettings(scheduleNav)
   }
 }
 
 export function AppSidebar() {
   const { workspace } = useActiveWorkspace()
-  const { user } = useAuth()
+  const {
+    effectiveRole,
+    canManageMeetingPrompts,
+    canAccessQuickBooksAdmin,
+    canCreate,
+    canWriteWorkspace,
+  } = usePermissions()
   const projectMatch = useMatch('/projects/:projectId/*')
   const projectIndexMatch = useMatch('/projects/:projectId')
   const currentProjectId =
@@ -329,8 +375,6 @@ export function AppSidebar() {
   const [recentProjectId, setRecentProjectId] = useState<string | undefined>(
     undefined,
   )
-  const [isMeetingOperator, setIsMeetingOperator] = useState(false)
-
   useEffect(() => {
     if (workspace !== 'projects' || currentProjectId) return
     void getProjects_Hybrid().then((list) => {
@@ -340,41 +384,25 @@ export function AppSidebar() {
     })
   }, [workspace, currentProjectId])
 
-  useEffect(() => {
-    let cancelled = false
-
-    const loadOperator = async () => {
-      if (!user?.id) {
-        if (!cancelled) setIsMeetingOperator(false)
-        return
-      }
-      try {
-        const lead = await getCurrentUserMeetingLead(user.id)
-        if (!cancelled) setIsMeetingOperator(Boolean(lead?.is_meeting_operator))
-      } catch {
-        if (!cancelled) setIsMeetingOperator(false)
-      }
-    }
-
-    void loadOperator()
-    return () => {
-      cancelled = true
-    }
-  }, [user?.id])
-
   const effectiveProjectId = currentProjectId ?? recentProjectId
   const groups = navForWorkspace(
     workspace,
     effectiveProjectId,
     currentDealId,
-    isMeetingOperator,
+    canManageMeetingPrompts,
+    effectiveRole,
+    canAccessQuickBooksAdmin,
   )
 
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
         <BrandHeader />
-        <PrimaryAction workspace={workspace} />
+        <PrimaryAction
+          workspace={workspace}
+          canCreateProject={canCreate}
+          canCreateDeal={canWriteWorkspace('deals')}
+        />
       </SidebarHeader>
 
       <SidebarSeparator />
@@ -413,10 +441,18 @@ export function AppSidebar() {
 
 /** Workspace-specific primary CTA in the sidebar header (e.g. "+ New Project").
  * Hidden when the sidebar is collapsed to icon-only mode. */
-function PrimaryAction({ workspace }: { workspace: Workspace }) {
+function PrimaryAction({
+  workspace,
+  canCreateProject,
+  canCreateDeal,
+}: {
+  workspace: Workspace
+  canCreateProject: boolean
+  canCreateDeal: boolean
+}) {
   const navigate = useNavigate()
 
-  if (workspace === 'projects') {
+  if (workspace === 'projects' && canCreateProject) {
     return (
       <div className="px-1 group-data-[collapsible=icon]:hidden">
         <Button
@@ -431,7 +467,7 @@ function PrimaryAction({ workspace }: { workspace: Workspace }) {
     )
   }
 
-  if (workspace === 'deals') {
+  if (workspace === 'deals' && canCreateDeal) {
     // Sidebar nav signals "open create modal" via /deals?new=1; DealWorkspace
     // listens for the param and opens its existing modal.
     return (

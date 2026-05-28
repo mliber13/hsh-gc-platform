@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePermissions } from '@/hooks/usePermissions'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import {
   createMeetingLead,
@@ -15,7 +16,6 @@ import {
   deleteMeetingPrompt,
   getAllMeetingLeads,
   getAllPromptsForLead,
-  getCurrentUserMeetingLead,
   listAssignableMeetingLeadUsers,
   updateMeetingLead,
   updateMeetingPrompt,
@@ -58,8 +58,9 @@ function computeNextDisplayOrder(values: number[]): number {
 export function MeetingAdmin() {
   usePageTitle('Meeting Admin')
   const { user } = useAuth()
+  const { canManageMeetingPrompts, loading: permissionsLoading } = usePermissions()
   const [loading, setLoading] = useState(true)
-  const [authorized, setAuthorized] = useState(false)
+  const authorized = canManageMeetingPrompts
   const [leads, setLeads] = useState<MeetingLead[]>([])
   const [users, setUsers] = useState<AssignableUser[]>([])
   const [selectedLeadId, setSelectedLeadId] = useState<string>('')
@@ -105,18 +106,12 @@ export function MeetingAdmin() {
   }
 
   const loadAdminData = async () => {
-    if (!user?.id) {
-      setAuthorized(false)
+    if (!user?.id || !canManageMeetingPrompts) {
       setLoading(false)
       return
     }
     setLoading(true)
     try {
-      const myLead = await getCurrentUserMeetingLead(user.id)
-      const isOperator = Boolean(myLead?.is_meeting_operator)
-      setAuthorized(isOperator)
-      if (!isOperator) return
-
       const [leadRows, assignableUsers] = await Promise.all([
         getAllMeetingLeads(),
         listAssignableMeetingLeadUsers(),
@@ -144,8 +139,9 @@ export function MeetingAdmin() {
   }
 
   useEffect(() => {
+    if (permissionsLoading) return
     void loadAdminData()
-  }, [user?.id])
+  }, [user?.id, canManageMeetingPrompts, permissionsLoading])
 
   const handleSelectLead = async (leadId: string) => {
     setSelectedLeadId(leadId)
@@ -361,7 +357,7 @@ export function MeetingAdmin() {
 
   const leadToDelete = leads.find((lead) => lead.id === confirmDeleteLeadId) ?? null
 
-  if (loading) {
+  if (permissionsLoading) {
     return (
       <div className="flex flex-col gap-6 p-6">
         <Card className="border-border/60 bg-card/50">
@@ -378,6 +374,21 @@ export function MeetingAdmin() {
 
   if (!authorized) {
     return <NotAuthorized />
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <Card className="border-border/60 bg-card/50">
+          <CardContent className="py-12 text-center">
+            <div className="mx-auto inline-block size-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
+            <p className="mt-4 text-sm text-muted-foreground">
+              Loading meeting admin...
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (

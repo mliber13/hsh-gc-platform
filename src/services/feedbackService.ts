@@ -7,6 +7,7 @@
 
 import { supabase } from '@/lib/supabase'
 import type { Feedback, CreateFeedbackInput, UpdateFeedbackInput } from '@/types/feedback'
+import { isFeedbackOwner } from '@/lib/rbac'
 import { sendFeedbackNotification } from './emailService'
 import { getOrganizationUsers } from './userService'
 
@@ -57,7 +58,7 @@ export async function submitFeedback(input: CreateFeedbackInput): Promise<Feedba
       const orgUsers = await getOrganizationUsers()
       console.log('👥 Organization users:', orgUsers.length)
       
-      const admins = orgUsers.filter(u => u.role === 'admin')
+      const admins = orgUsers.filter((u) => isFeedbackOwner(u))
       console.log('👑 Admins found:', admins.length)
       
       const adminEmails = admins.map(a => a.email).filter(Boolean) as string[]
@@ -200,12 +201,12 @@ export async function updateFeedback(
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('organization_id, role')
+      .select('organization_id, role, roles')
       .eq('id', user.id)
       .single()
 
-    if (!profile?.organization_id || profile.role !== 'admin') {
-      console.error('User is not an admin')
+    if (!profile?.organization_id || !isFeedbackOwner(profile)) {
+      console.error('User is not feedback owner')
       return null
     }
 
@@ -311,12 +312,12 @@ export async function deleteFeedback(feedbackId: string): Promise<boolean> {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('organization_id, role')
+      .select('organization_id, role, roles')
       .eq('id', user.id)
       .single()
 
-    if (!profile?.organization_id || profile.role !== 'admin') {
-      console.error('User is not an admin')
+    if (!profile?.organization_id || !isFeedbackOwner(profile)) {
+      console.error('User is not feedback owner')
       return false
     }
 

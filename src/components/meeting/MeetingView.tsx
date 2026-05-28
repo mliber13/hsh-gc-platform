@@ -4,10 +4,10 @@ import { toast } from 'sonner'
 import { Trash2 } from 'lucide-react'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePermissions } from '@/hooks/usePermissions'
 import {
   createMeetingActionItem,
   deleteMeetingActionItem,
-  getCurrentUserMeetingLead,
   getMeetingActionItems,
   getMeetingViewData,
   subscribeMeetingActionItems,
@@ -53,9 +53,9 @@ function displayAnswer(value: string | null): string {
 export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
   usePageTitle('Meeting')
   const { user } = useAuth()
+  const { canManageMeetingPrompts } = usePermissions()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<MeetingViewData | null>(null)
-  const [isOperator, setIsOperator] = useState(false)
   const [actionItems, setActionItems] = useState<MeetingActionItem[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -105,25 +105,6 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
       cancelled = true
     }
   }, [meetingDate, weekOf])
-
-  useEffect(() => {
-    let cancelled = false
-    if (!user?.id) {
-      setIsOperator(false)
-      return
-    }
-    void getCurrentUserMeetingLead(user.id)
-      .then((lead) => {
-        if (!cancelled) setIsOperator(Boolean(lead?.is_meeting_operator))
-      })
-      .catch((error) => {
-        console.error('Failed to load operator status', error)
-        if (!cancelled) setIsOperator(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [user?.id])
 
   const handleToggleLiveDiscuss = async (
     leadId: string,
@@ -383,7 +364,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
                       <article key={prompt.prompt_id} className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-base font-semibold text-foreground">{prompt.question_text}</h3>
-                          {isOperator ? (
+                          {canManageMeetingPrompts ? (
                             <button
                               type="button"
                               onClick={() =>

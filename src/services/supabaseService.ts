@@ -560,6 +560,45 @@ export async function fetchProjectsForList(): Promise<Project[]> {
   return (data ?? []).map((row) => mapProjectListRow(row))
 }
 
+/** All org projects for HR payroll job picker (includes DRYWALL_ONLY). */
+export async function fetchAllOrgProjectsForPayroll(): Promise<
+  { id: string; name: string; metadata?: Record<string, unknown> }[]
+> {
+  if (!isOnlineMode()) return []
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user?.id) return []
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .maybeSingle()
+  const orgId = profile?.organization_id ?? null
+  if (!orgId) return []
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id, name, metadata')
+    .eq('organization_id', orgId)
+    .order('name', { ascending: true })
+
+  if (error) {
+    console.error('fetchAllOrgProjectsForPayroll:', error)
+    return []
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    metadata:
+      row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : undefined,
+  }))
+}
+
 export async function fetchProjects(): Promise<Project[]> {
   if (!isOnlineMode()) return []
 
@@ -1180,6 +1219,150 @@ export async function fetchEstimateByProjectId(projectId: string): Promise<any |
     createdAt: new Date(estimate.created_at),
     updatedAt: new Date(estimate.updated_at),
   }
+}
+
+export type ProjectEstimateStats = {
+  basePriceTotal: number
+  estimatedValue: number
+  tradeCount: number
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function getNumericTotal(
+  totals: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+): number | null {
+  if (!totals) return null
+  for (const key of keys) {
+    const value = toFiniteNumber(totals[key])
+    if (value != null) return value
+  }
+  return null
+}
+
+/**
+ * Fetches dashboard stats for many projects in two queries:
+ * 1) canonical estimate per project (same rule as fetchEstimateByProjectId: earliest created_at)
+ * 2) trades for those canonical estimates aggregated client-side
+ */
+export async function fetchEstimateStatsForProjects(
+  projectIds: string[],
+): Promise<Record<string, ProjectEstimateStats>> {
+  if (!isOnlineMode() || projectIds.length === 0) return {}
+
+  const uniqueIds = Array.from(new Set(projectIds.filter(Boolean)))
+  if (uniqueIds.length === 0) return {}
+
+  const empty: ProjectEstimateStats = {
+    basePriceTotal: 0,
+    estimatedValue: 0,
+    tradeCount: 0,
+  }
+  const result: Record<string, ProjectEstimateStats> = {}
+  for (const projectId of uniqueIds) result[projectId] = { ...empty }
+
+  const { data: estimateRows, error: estimateError } = await supabase
+    .from('estimates')
+    .select('id, project_id, totals, created_at')
+    .in('project_id', uniqueIds)
+    .order('created_at', { ascending: true })
+
+  if (estimateError) {
+    console.error('Error fetching estimate stats (estimates):', estimateError)
+    return result
+  }
+
+  const canonicalByProject = new Map<
+    string,
+    { estimateId: string; totals: Record<string, unknown> | null }
+  >()
+  for (const row of estimateRows ?? []) {
+    if (!canonicalByProject.has(row.project_id)) {
+      canonicalByProject.set(row.project_id, {
+        estimateId: row.id,
+        totals:
+          row.totals && typeof row.totals === 'object' && !Array.isArray(row.totals)
+            ? (row.totals as Record<string, unknown>)
+            : null,
+      })
+    }
+  }
+
+  const estimateIds = Array.from(canonicalByProject.values()).map((v) => v.estimateId)
+  const tradeAggByEstimate = new Map<
+    string,
+    { tradeCount: number; baseFromTrades: number; grossProfitTotal: number }
+  >()
+  if (estimateIds.length > 0) {
+    const { data: tradeRows, error: tradeError } = await supabase
+      .from('trades')
+      .select('estimate_id, total_cost, markup_percent')
+      .in('estimate_id', estimateIds)
+
+    if (tradeError) {
+      console.error('Error fetching estimate stats (trades):', tradeError)
+      return result
+    }
+
+    for (const trade of tradeRows ?? []) {
+      const current = tradeAggByEstimate.get(trade.estimate_id) ?? {
+        tradeCount: 0,
+        baseFromTrades: 0,
+        grossProfitTotal: 0,
+      }
+      const totalCost = toFiniteNumber(trade.total_cost) ?? 0
+      const markupRaw = toFiniteNumber(trade.markup_percent)
+      const markup = markupRaw && markupRaw !== 0 ? markupRaw : 20
+      current.tradeCount += 1
+      current.baseFromTrades += totalCost
+      current.grossProfitTotal += totalCost * (markup / 100)
+      tradeAggByEstimate.set(trade.estimate_id, current)
+    }
+  }
+
+  for (const projectId of uniqueIds) {
+    const canonical = canonicalByProject.get(projectId)
+    if (!canonical) continue
+
+    const totals = canonical.totals
+    const tradeAgg = tradeAggByEstimate.get(canonical.estimateId) ?? {
+      tradeCount: 0,
+      baseFromTrades: 0,
+      grossProfitTotal: 0,
+    }
+
+    const baseFromBook = getNumericTotal(totals, 'basePriceTotal', 'subtotal')
+    const basePriceTotal = baseFromBook != null && baseFromBook > 0
+      ? baseFromBook
+      : tradeAgg.baseFromTrades
+
+    const contingencyFromBook = getNumericTotal(totals, 'contingency')
+    const contingency = contingencyFromBook != null
+      ? contingencyFromBook
+      : basePriceTotal * 0.1
+
+    const calculatedTotal = basePriceTotal + tradeAgg.grossProfitTotal + contingency
+    const totalFromBook = getNumericTotal(totals, 'totalEstimated', 'total_estimated', 'totalEstimate')
+    const estimatedValue = totalFromBook != null && totalFromBook > 0
+      ? totalFromBook
+      : calculatedTotal
+
+    result[projectId] = {
+      basePriceTotal,
+      estimatedValue,
+      tradeCount: tradeAgg.tradeCount,
+    }
+  }
+
+  return result
 }
 
 export async function createEstimateInDB(projectId: string): Promise<any | null> {

@@ -24,7 +24,7 @@ export type Workspace = 'projects' | 'deals' | 'tenants' | 'meeting' | 'schedule
 
 const STORAGE_KEY = 'hsh:activeWorkspace'
 
-const WORKSPACE_HOME: Record<Workspace, string> = {
+export const WORKSPACE_HOME: Record<Workspace, string> = {
   projects: '/',
   deals: '/deals',
   tenants: '/tenants',

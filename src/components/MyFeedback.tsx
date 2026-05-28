@@ -31,7 +31,6 @@ import {
   Trash2,
 } from 'lucide-react'
 import { getFeedback, updateFeedback, deleteFeedback } from '@/services/feedbackService'
-import { getCurrentUserProfile } from '@/services/userService'
 import { Label } from './ui/label'
 import { Textarea } from './ui/textarea'
 import type { Feedback, FeedbackType, FeedbackStatus } from '@/types/feedback'
@@ -40,6 +39,7 @@ import {
   FEEDBACK_STATUS_LABELS,
 } from '@/types/feedback'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePermissions } from '@/hooks/usePermissions'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { onFeedbackChange } from '@/lib/feedbackEventBus'
 
@@ -50,30 +50,20 @@ interface MyFeedbackProps {
 
 export function MyFeedback({ onBack, onNewFeedback }: MyFeedbackProps) {
   const { user } = useAuth()
+  const { isAdmin } = usePermissions()
   usePageTitle('Feedback')
   const [feedback, setFeedback] = useState<Feedback[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
-  const [isAdmin, setIsAdmin] = useState(false)
   const [editingFeedback, setEditingFeedback] = useState<Feedback | null>(null)
   const [adminNotes, setAdminNotes] = useState('')
   const [selectedStatus, setSelectedStatus] = useState<FeedbackStatus>('new')
 
   useEffect(() => {
     loadFeedback()
-    loadUserProfile()
   }, [])
-
-  const loadUserProfile = async () => {
-    if (user) {
-      const profile = await getCurrentUserProfile()
-      if (profile) {
-        setIsAdmin(profile.role === 'admin')
-      }
-    }
-  }
 
   const handleUpdateStatus = async (feedbackId: string, status: FeedbackStatus) => {
     const success = await updateFeedback(feedbackId, { status })

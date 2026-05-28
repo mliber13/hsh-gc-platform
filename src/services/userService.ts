@@ -6,6 +6,13 @@
 import { supabase } from '../lib/supabase';
 
 export type UserRole = 'admin' | 'editor' | 'viewer';
+export type RbacRole =
+  | 'owner'
+  | 'office_gc'
+  | 'office_drywall'
+  | 'field_gc'
+  | 'field_drywall'
+  | 'viewer';
 
 export interface UserProfile {
   id: string;
@@ -13,9 +20,47 @@ export interface UserProfile {
   full_name: string | null;
   organization_id: string;
   role: UserRole;
+  roles?: string[];
+  is_meeting_operator?: boolean;
+  can_admin_qb?: boolean;
+  can_run_payroll?: boolean;
+  hr_person_id?: string | null;
+  hr_person_type?: string | null;
+  isMeetingOperator?: boolean;
+  canAdminQb?: boolean;
+  canRunPayroll?: boolean;
+  hrPersonId?: string | null;
+  hrPersonType?: string | null;
   is_active?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+function normalizeUserProfile(row: any): UserProfile {
+  const roles = Array.isArray(row?.roles)
+    ? row.roles.filter((v: unknown): v is string => typeof v === 'string')
+    : [];
+  const isMeetingOperator = Boolean(row?.is_meeting_operator);
+  const canAdminQb = Boolean(row?.can_admin_qb);
+  const canRunPayroll = Boolean(row?.can_run_payroll);
+  const hrPersonId =
+    typeof row?.hr_person_id === 'string' ? row.hr_person_id : row?.hr_person_id ?? null;
+  const hrPersonType =
+    typeof row?.hr_person_type === 'string' ? row.hr_person_type : row?.hr_person_type ?? null;
+  return {
+    ...row,
+    roles,
+    is_meeting_operator: isMeetingOperator,
+    can_admin_qb: canAdminQb,
+    can_run_payroll: canRunPayroll,
+    hr_person_id: hrPersonId,
+    hr_person_type: hrPersonType,
+    isMeetingOperator,
+    canAdminQb,
+    canRunPayroll,
+    hrPersonId,
+    hrPersonType,
+  } as UserProfile;
 }
 
 /**
@@ -42,7 +87,7 @@ export async function getOrganizationUsers(): Promise<UserProfile[]> {
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(normalizeUserProfile);
 }
 
 /**
@@ -87,7 +132,7 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
     return null;
   }
 
-  return data;
+  return normalizeUserProfile(data);
 }
 
 /**

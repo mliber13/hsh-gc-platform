@@ -212,6 +212,64 @@ export async function getTradesForEstimate_Hybrid(estimateId: string): Promise<T
   }
 }
 
+export type ProjectStats = {
+  basePriceTotal: number
+  estimatedValue: number
+  tradeCount: number
+}
+
+function computeProjectStatsOffline(project: Project): ProjectStats {
+  const trades = project.estimate?.id ? getTradesLS(project.estimate.id) : []
+  const tradeCount = trades.length
+  const baseFromTrades = trades.reduce((sum, trade) => sum + trade.totalCost, 0)
+  const basePriceTotal =
+    project.estimate?.totals?.basePriceTotal ??
+    (project.estimate?.subtotal != null && project.estimate.subtotal > 0
+      ? project.estimate.subtotal
+      : null) ??
+    baseFromTrades
+  const grossProfitTotal = trades.reduce((sum, trade) => {
+    const markup = trade.markupPercent || 20
+    return sum + trade.totalCost * (markup / 100)
+  }, 0)
+  const contingency =
+    project.estimate?.totals?.contingency != null
+      ? project.estimate.totals.contingency
+      : basePriceTotal * 0.1
+  const calculatedTotal = basePriceTotal + grossProfitTotal + contingency
+  const fromBook =
+    project.estimate?.totals?.totalEstimated ??
+    project.estimate?.totalEstimate
+  const estimatedValue =
+    typeof fromBook === 'number' && fromBook > 0
+      ? fromBook
+      : calculatedTotal
+  return { basePriceTotal, estimatedValue, tradeCount }
+}
+
+export async function getEstimateStatsForProjects_Hybrid(
+  projectIds: string[],
+): Promise<Map<string, ProjectStats>> {
+  const map = new Map<string, ProjectStats>()
+  const uniqueIds = Array.from(new Set(projectIds.filter(Boolean)))
+  const empty: ProjectStats = { basePriceTotal: 0, estimatedValue: 0, tradeCount: 0 }
+
+  if (isOnlineMode()) {
+    const stats = await supabaseService.fetchEstimateStatsForProjects(uniqueIds)
+    for (const projectId of uniqueIds) {
+      map.set(projectId, stats[projectId] ?? empty)
+    }
+    return map
+  }
+
+  const byId = new Map(getAllProjects().map((p) => [p.id, p]))
+  for (const projectId of uniqueIds) {
+    const project = byId.get(projectId)
+    map.set(projectId, project ? computeProjectStatsOffline(project) : empty)
+  }
+  return map
+}
+
 export async function addTrade_Hybrid(estimateId: string, input: TradeInput): Promise<Trade> {
   if (isOnlineMode()) {
     const trade = await supabaseService.createTradeInDB(estimateId, input)

@@ -39,8 +39,8 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { useAuth } from '@/contexts/AuthContext'
 import {
+  getEstimateStatsForProjects_Hybrid,
   getProjects_Hybrid,
-  getTradesForEstimate_Hybrid,
   updateProject_Hybrid,
 } from '@/services/hybridService'
 import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
@@ -87,7 +87,7 @@ export function ProjectsDashboard({
   )
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
   const statusMenuRef = useRef<HTMLDivElement>(null)
-  const { canCreate, isViewer } = usePermissions()
+  const { canCreate, isViewer, canAccessQuickBooksAdmin } = usePermissions()
   const { theme } = useTheme()
 
   // Centered title in the AppHeader
@@ -153,52 +153,30 @@ export function ProjectsDashboard({
         if (allProjects.length === 0) return
 
         // Then enhance with stats in the background
-        const projectsWithStats = await Promise.all(
-          allProjects.map(async (project) => {
-            const estimateId = project.estimate?.id
-            const [trades, actuals] = await Promise.all([
-              estimateId ? getTradesForEstimate_Hybrid(estimateId) : Promise.resolve([]),
-              getProjectActuals_Hybrid(project.id),
-            ])
+        const [estimateStatsByProjectId, actualsByProject] = await Promise.all([
+          getEstimateStatsForProjects_Hybrid(allProjects.map((p) => p.id)),
+          Promise.all(
+            allProjects.map((project) =>
+              getProjectActuals_Hybrid(project.id).catch(() => null),
+            ),
+          ),
+        ])
 
-          const tradeCount = trades.length
-          const baseFromTrades = trades.reduce(
-            (sum, trade) => sum + trade.totalCost,
-            0,
-          )
-          const basePriceTotal =
-            project.estimate?.totals?.basePriceTotal ??
-            (project.estimate?.subtotal != null && project.estimate.subtotal > 0
-              ? project.estimate.subtotal
-              : null) ??
-            baseFromTrades
-          const grossProfitTotal = trades.reduce((sum, trade) => {
-            const markup = trade.markupPercent || 20
-            return sum + trade.totalCost * (markup / 100)
-          }, 0)
-          const contingency =
-            project.estimate?.totals?.contingency != null
-              ? project.estimate.totals.contingency
-              : basePriceTotal * 0.1
-          const calculatedTotal = basePriceTotal + grossProfitTotal + contingency
-          const fromBook =
-            project.estimate?.totals?.totalEstimated ??
-            project.estimate?.totalEstimate
-          const estimatedValue =
-            typeof fromBook === 'number' && fromBook > 0
-              ? fromBook
-              : calculatedTotal
-          const actualCosts = actuals?.totalActualCost || 0
-
+        const projectsWithStats = allProjects.map((project, index) => {
+          const estimateStats = estimateStatsByProjectId.get(project.id) ?? {
+            basePriceTotal: 0,
+            estimatedValue: 0,
+            tradeCount: 0,
+          }
+          const actuals = actualsByProject[index]
           return {
             ...project,
-            basePriceTotal,
-            estimatedValue,
-            actualCosts,
-            tradeCount,
+            basePriceTotal: estimateStats.basePriceTotal,
+            estimatedValue: estimateStats.estimatedValue,
+            actualCosts: actuals?.totalActualCost || 0,
+            tradeCount: estimateStats.tradeCount,
           }
-        }),
-      )
+        })
 
         setProjects(projectsWithStats)
       } catch (err) {
@@ -307,7 +285,10 @@ export function ProjectsDashboard({
   return (
     <div className="flex flex-col gap-6 p-6">
       {/* QuickBooks pending banner (when connected + has pending) */}
-      {qbPendingCount !== null && qbPendingCount > 0 && onOpenQBSettings && (
+      {canAccessQuickBooksAdmin &&
+        qbPendingCount !== null &&
+        qbPendingCount > 0 &&
+        onOpenQBSettings && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5">
           <span className="text-sm text-emerald-700 dark:text-emerald-300">
             <strong>{qbPendingCount}</strong> pending transaction

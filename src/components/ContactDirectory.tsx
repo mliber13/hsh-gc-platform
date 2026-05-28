@@ -75,6 +75,7 @@ import type { DeveloperInput, SubcontractorInput, SupplierInput, MunicipalityInp
 import type { StandaloneContactLabel, ContactLabel } from '@/types'
 import { Shield, ShieldOff, UserPlus } from 'lucide-react'
 import { usePageTitle } from '@/contexts/PageTitleContext'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface ContactDirectoryProps {
   onBack: () => void
@@ -91,7 +92,8 @@ function isEntityPartnerTab(tab: string): tab is EntityPartnerTab {
 
 export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps) {
   usePageTitle('Contact Directory')
-  const isAdmin = userProfile?.role === 'admin'
+  const { canManageUsers } = usePermissions()
+  const isAdmin = canManageUsers
   const [mainTab, setMainTab] = useState<'people' | 'partners'>('people')
   const [peopleLabel, setPeopleLabel] = useState<StandaloneContactLabel>('EMPLOYEE')
   const [partnerTab, setPartnerTab] = useState<PartnerTab>('subcontractors')

@@ -5,11 +5,19 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session, AuthError } from '@supabase/supabase-js'
 import { supabase, isOnlineMode } from '@/lib/supabase'
+import { getCurrentUserProfile, UserProfile } from '@/services/userService'
 
 interface AuthContextType {
   user: User | null
   session: Session | null
   loading: boolean
+  /** Full profile row (legacy + Phase 1 RBAC fields). */
+  profile: UserProfile | null
+  profileLoading: boolean
+  /** RBAC role array from profiles.roles */
+  roles: string[]
+  isMeetingOperator: boolean
+  canAdminQb: boolean
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: AuthError | null }>
   signOut: () => Promise<void>
@@ -27,17 +35,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [isOnline] = useState(isOnlineMode())
-  // User landed via password-reset link; must set new password before using app
   const [needsNewPassword, setNeedsNewPassword] = useState(false)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(true)
 
   useEffect(() => {
-    // Only set up auth if we're in online mode
     if (!isOnline) {
       setLoading(false)
       return
     }
 
-    // Detect password-reset link: /reset-password + recovery tokens in hash (or query for some flows)
     const pathname = window.location.pathname
     const hashRaw = window.location.hash.replace(/^#/, '')
     const hashParams = new URLSearchParams(hashRaw)
@@ -51,14 +58,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setNeedsNewPassword(true)
     }
 
-    // Check active sessions and sets the user
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
     })
 
-    // Listen for changes on auth state (sign in, sign out, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setNeedsNewPassword(true)
@@ -71,9 +76,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [isOnline])
 
+  useEffect(() => {
+    if (!isOnline || !user) {
+      setProfile(null)
+      setProfileLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setProfileLoading(true)
+    getCurrentUserProfile()
+      .then((p) => {
+        if (!cancelled) setProfile(p)
+      })
+      .catch((error) => {
+        console.error('Error loading user profile:', error)
+        if (!cancelled) setProfile(null)
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isOnline, user?.id])
+
   const clearRecoveryMode = () => {
     setNeedsNewPassword(false)
-    // Clean URL so the recovery link is no longer in the address bar
     if (window.history.replaceState) {
       const cleanUrl = window.location.pathname.replace(/^\/reset-password\/?$/, '/') || '/'
       window.history.replaceState({}, '', cleanUrl)
@@ -99,7 +129,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     })
 
-    // Create user profile
     if (data.user && !error) {
       await supabase.from('profiles').insert({
         id: data.user.id,
@@ -113,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut()
+    setProfile(null)
   }
 
   const resetPassword = async (email: string) => {
@@ -122,10 +152,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error }
   }
 
+  const roles = profile?.roles ?? []
+  const isMeetingOperator = Boolean(
+    profile?.is_meeting_operator ?? profile?.isMeetingOperator,
+  )
+  const canAdminQb = Boolean(profile?.can_admin_qb ?? profile?.canAdminQb)
+
   const value = {
     user,
     session,
     loading,
+    profile,
+    profileLoading,
+    roles,
+    isMeetingOperator,
+    canAdminQb,
     signIn,
     signUp,
     signOut,
@@ -145,4 +186,3 @@ export function useAuth() {
   }
   return context
 }
-
