@@ -426,7 +426,20 @@ export function getCalculationDetail(
       gross,
     })
   })
-  return details
+  return sortPayrollReportEntries(details, (d) => d.name, (d) => d.personType)
+}
+
+/** W2 employees first (A–Z), then 1099 contractors (A–Z) — not one combined alphabetical list. */
+export function sortPayrollReportEntries<T>(
+  entries: T[],
+  nameOf: (e: T) => string,
+  typeOf: (e: T) => string,
+): T[] {
+  const byName = (a: T, b: T) =>
+    nameOf(a).localeCompare(nameOf(b), undefined, { sensitivity: 'base' })
+  const w2 = entries.filter((e) => typeOf(e) === 'w2').sort(byName)
+  const c1099 = entries.filter((e) => typeOf(e) !== 'w2').sort(byName)
+  return [...w2, ...c1099]
 }
 
 export function buildPayrollPeople(
@@ -451,7 +464,7 @@ export function buildPayrollPeople(
       personKey: personKey(c.id, '1099'),
     })
   }
-  return rows.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+  return sortPayrollReportEntries(rows, (r) => r.name || '', (r) => r.personType)
 }
 
 export function quoteFromProjectMetadata(metadata: unknown): Record<string, unknown> | undefined {
