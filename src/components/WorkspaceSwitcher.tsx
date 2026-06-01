@@ -14,6 +14,8 @@ import {
   CalendarRange,
   ChevronsUpDown,
   Check,
+  Clock3,
+  Hammer,
   Users,
 } from 'lucide-react'
 import {
@@ -66,6 +68,18 @@ const WORKSPACES: WorkspaceMeta[] = [
     label: 'Schedule',
     description: 'Cross-project calendar + comms',
     icon: CalendarRange,
+  },
+  {
+    id: 'hr',
+    label: 'HR',
+    description: 'Team, payroll, and time',
+    icon: Clock3,
+  },
+  {
+    id: 'drywall',
+    label: 'Drywall',
+    description: 'Quote, field, and material orders',
+    icon: Hammer,
   },
 ]
 

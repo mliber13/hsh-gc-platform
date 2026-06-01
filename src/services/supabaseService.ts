@@ -54,15 +54,6 @@ async function transformProject(row: any): Promise<Project> {
   // Fetch the estimate for this project
   let estimate = await fetchEstimateByProjectId(row.id)
   
-  if (!estimate) {
-    console.warn(`No estimate found for project ${row.id}, creating one`)
-    // Try to create an estimate if it doesn't exist
-    estimate = await createEstimateInDB(row.id)
-    if (estimate) {
-      console.log(`Created estimate ${estimate.id} for project ${row.id}`)
-    }
-  }
-  
   // Ensure we have a valid estimate with ID
   const finalEstimate = estimate || { 
     id: '', 
@@ -720,6 +711,12 @@ export async function createProjectInDB(input: CreateProjectInput): Promise<Proj
   if (error) {
     console.error('Error creating project:', error)
     return null
+  }
+
+  // Ensure project creation writes exactly one estimate row.
+  const estimate = await createEstimateInDB(data.id)
+  if (!estimate) {
+    console.warn(`createProjectInDB: estimate create returned null for project ${data.id}`)
   }
 
   return await transformProject(data)

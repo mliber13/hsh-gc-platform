@@ -46,18 +46,42 @@ import type {
 /** When true, project list includes Drywall-only projects (for admin). Default false so GC users do not see them. */
 const INCLUDE_DRYWALL_ONLY_PROJECTS = import.meta.env.VITE_INCLUDE_DRYWALL_ONLY_PROJECTS === 'true'
 
-function filterProjectsForGC(projects: Project[]): Project[] {
+function filterProjectsForGC(
+  projects: Project[],
+  gcTradeCountByProjectId?: Map<string, number>,
+): Project[] {
   if (INCLUDE_DRYWALL_ONLY_PROJECTS) return projects
-  return projects.filter((p) =>
-    isVisibleInGcApp(p.metadata as Record<string, unknown> | undefined),
-  )
+  return projects.filter((p) => {
+    const metadata = p.metadata as Record<string, unknown> | undefined
+    const gcTradeCount = gcTradeCountByProjectId?.get(p.id)
+    return isVisibleInGcApp(
+      metadata,
+      gcTradeCount !== undefined ? { gcTradeCount } : undefined,
+    )
+  })
 }
 
 export async function getProjects_Hybrid(): Promise<Project[]> {
   const raw = isOnlineMode()
     ? await supabaseService.fetchProjectsForList()
     : getAllProjects()
-  return filterProjectsForGC(Array.isArray(raw) ? raw : [])
+  let projects = Array.isArray(raw) ? raw : []
+
+  if (INCLUDE_DRYWALL_ONLY_PROJECTS || !isOnlineMode()) {
+    return filterProjectsForGC(projects)
+  }
+
+  // First pass: metadata-only (DRYWALL_ONLY, visibility.gc false)
+  projects = filterProjectsForGC(projects)
+  if (projects.length === 0) return projects
+
+  const stats = await supabaseService.fetchEstimateStatsForProjects(
+    projects.map((p) => p.id),
+  )
+  const tradeCounts = new Map(
+    Object.entries(stats).map(([id, s]) => [id, s.tradeCount]),
+  )
+  return filterProjectsForGC(projects, tradeCounts)
 }
 
 export async function getProject_Hybrid(projectId: string): Promise<Project | null> {
@@ -72,12 +96,6 @@ export async function createProject_Hybrid(input: CreateProjectInput): Promise<P
   if (isOnlineMode()) {
     const project = await supabaseService.createProjectInDB(input)
     if (!project) throw new Error('Failed to create project')
-    
-    // Also create the estimate
-    const estimate = await supabaseService.createEstimateInDB(project.id)
-    if (estimate) {
-      return { ...project, estimate }
-    }
     return project
   } else {
     return createProjectLS(input)

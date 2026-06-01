@@ -56,3 +56,60 @@ export const EMPTY_ORG_TEAM_PAYLOAD: OrgTeamPayload = {
   contractors1099: [],
   positions: [],
 }
+
+export type TimePersonType = 'w2' | '1099'
+export type TimeEntrySourceApp = 'DRYWALL' | 'GC'
+
+export interface TimeEntry {
+  id: string
+  organization_id: string
+  project_id?: string | null
+  project_name?: string | null
+  person_type: TimePersonType
+  person_id: string
+  person_name?: string | null
+  clock_in: string
+  clock_out?: string | null
+  source_app?: TimeEntrySourceApp | string | null
+  created_by?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface PunchState {
+  linked: boolean
+  hrPersonId?: string | null
+  hrPersonType?: TimePersonType | null
+  openEntry: TimeEntry | null
+}
+
+export interface TimeEntryEditDraft {
+  project_id?: string | null
+  project_name?: string | null
+  person_id?: string
+  person_type?: TimePersonType
+  person_name?: string | null
+  clock_in?: string
+  clock_out?: string | null
+}
+
+export interface TimeEntriesRangeQuery {
+  from: string
+  to: string
+  personId?: string
+  projectId?: string
+}
+
+export interface PayrollTimeImportQuery {
+  start: string
+  end: string
+}
+
+export interface PayrollTimeImportRow {
+  personId: string
+  personType: TimePersonType
+  personName: string
+  projectId: string | null
+  projectName: string
+  hours: number
+}

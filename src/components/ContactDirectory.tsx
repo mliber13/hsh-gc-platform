@@ -67,10 +67,12 @@ import {
   getOrganizationUsers,
   getOrganizationUsersByEmail,
   updateUserRole,
+  updateUserHrPersonLink,
   setUserActive,
   type UserProfile,
   type UserRole,
 } from '@/services/userService'
+import { fetchTeam } from '@/services/hrTeamService'
 import type { DeveloperInput, SubcontractorInput, SupplierInput, MunicipalityInput, LenderInput } from '@/types'
 import type { StandaloneContactLabel, ContactLabel } from '@/types'
 import { Shield, ShieldOff, UserPlus } from 'lucide-react'
@@ -85,6 +87,12 @@ interface ContactDirectoryProps {
 const ENTITY_PARTNER_TABS = ['subcontractors', 'suppliers', 'developers', 'municipalities', 'lenders'] as const
 type EntityPartnerTab = (typeof ENTITY_PARTNER_TABS)[number]
 type PartnerTab = EntityPartnerTab | string
+
+interface HrLinkCandidate {
+  id: string
+  type: 'w2' | '1099'
+  name: string
+}
 
 function isEntityPartnerTab(tab: string): tab is EntityPartnerTab {
   return (ENTITY_PARTNER_TABS as readonly string[]).includes(tab)
@@ -177,6 +185,13 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
   const [accessDialogRole, setAccessDialogRole] = useState<UserRole>('viewer')
   const [savingAccess, setSavingAccess] = useState(false)
   const [inviteInfoContact, setInviteInfoContact] = useState<Contact | null>(null)
+  const [hrLinkDialogOpen, setHrLinkDialogOpen] = useState(false)
+  const [hrLinkProfile, setHrLinkProfile] = useState<UserProfile | null>(null)
+  const [hrCandidates, setHrCandidates] = useState<HrLinkCandidate[]>([])
+  const [hrLinkSelection, setHrLinkSelection] = useState<string>('none')
+  const [savingHrLink, setSavingHrLink] = useState(false)
+  const [confirmNonOwnerLinkOpen, setConfirmNonOwnerLinkOpen] = useState(false)
+  const [pendingHrLinkSelection, setPendingHrLinkSelection] = useState<string | null>(null)
 
   const [allContactsForOrg, setAllContactsForOrg] = useState<Contact[]>([])
   const [orgUsersList, setOrgUsersList] = useState<UserProfile[]>([])
@@ -357,6 +372,21 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
     }
   }, [isAdmin])
 
+  useEffect(() => {
+    if (!isAdmin) return
+    fetchTeam()
+      .then((payload) => {
+        const employees = payload.employees.map((m) => ({ id: m.id, type: 'w2' as const, name: m.name }))
+        const contractors = payload.contractors1099.map((m) => ({
+          id: m.id,
+          type: '1099' as const,
+          name: m.name,
+        }))
+        setHrCandidates([...employees, ...contractors])
+      })
+      .catch(() => setHrCandidates([]))
+  }, [isAdmin])
+
   const usersWithoutContact = React.useMemo(() => {
     if (!isAdmin) return []
     const emailSet = new Set(
@@ -391,6 +421,62 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
 
   const openInviteInfo = (contact: Contact) => {
     setInviteInfoContact(contact)
+  }
+
+  const openHrLinkDialog = (profile: UserProfile) => {
+    setHrLinkProfile(profile)
+    const existingPersonId = profile.hr_person_id ?? profile.hrPersonId ?? null
+    const existingPersonType = profile.hr_person_type ?? profile.hrPersonType ?? null
+    setHrLinkSelection(
+      existingPersonId && existingPersonType ? `${existingPersonType}:${existingPersonId}` : 'none',
+    )
+    setHrLinkDialogOpen(true)
+  }
+
+  const isOwnerProfile = (profile: UserProfile | null) => {
+    if (!profile) return false
+    if (profile.roles?.includes('owner')) return true
+    return profile.role === 'admin'
+  }
+
+  const saveHrLink = async (selectedValue: string) => {
+    if (!hrLinkProfile) return
+    setSavingHrLink(true)
+    try {
+      const isNone = selectedValue === 'none'
+      const [selectedType, ...idParts] = selectedValue.split(':')
+      const selectedId = idParts.join(':')
+      await updateUserHrPersonLink(
+        hrLinkProfile.id,
+        isNone ? null : selectedId,
+        isNone ? null : ((selectedType === '1099' ? '1099' : 'w2') as 'w2' | '1099'),
+      )
+      const [nextMap, nextUsers] = await Promise.all([
+        getOrganizationUsersByEmail(),
+        getOrganizationUsers(),
+      ])
+      setOrgUsersByEmail(nextMap)
+      setOrgUsersList(nextUsers)
+      setHrLinkDialogOpen(false)
+      setConfirmNonOwnerLinkOpen(false)
+      setPendingHrLinkSelection(null)
+      toast.success(isNone ? 'HR link removed' : 'HR person linked')
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Failed to update HR person link')
+    } finally {
+      setSavingHrLink(false)
+    }
+  }
+
+  const handleSaveHrLink = async () => {
+    if (!hrLinkProfile) return
+    const linkingToPerson = hrLinkSelection !== 'none'
+    if (linkingToPerson && !isOwnerProfile(hrLinkProfile)) {
+      setPendingHrLinkSelection(hrLinkSelection)
+      setConfirmNonOwnerLinkOpen(true)
+      return
+    }
+    await saveHrLink(hrLinkSelection)
   }
 
   const handleSaveAccess = async () => {
@@ -1237,7 +1323,20 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                         <div className="flex gap-1 items-center">
                           {isAdmin && c.email && (
                             appUser
-                              ? <Button variant="outline" size="sm" onClick={() => openAccessDialog(c)}>Edit access</Button>
+                              ? (
+                                <div className="flex gap-1">
+                                  <Button variant="outline" size="sm" onClick={() => openAccessDialog(c)}>
+                                    Edit access
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => appUser && openHrLinkDialog(appUser)}
+                                  >
+                                    Link to HR person
+                                  </Button>
+                                </div>
+                              )
                               : <Button variant="outline" size="sm" onClick={() => openInviteInfo(c)}><UserPlus className="w-4 h-4 mr-1" />Invite to app</Button>
                           )}
                           <Button variant="ghost" size="sm" onClick={() => openEditContact(c)}>
@@ -1327,7 +1426,20 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                             <div className="flex gap-1 items-center">
                               {isAdmin && c.email && (
                                 appUser
-                                  ? <Button variant="outline" size="sm" onClick={() => openAccessDialog(c)}>Edit access</Button>
+                                  ? (
+                                    <div className="flex gap-1">
+                                      <Button variant="outline" size="sm" onClick={() => openAccessDialog(c)}>
+                                        Edit access
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => appUser && openHrLinkDialog(appUser)}
+                                      >
+                                        Link to HR person
+                                      </Button>
+                                    </div>
+                                  )
                                   : <Button variant="outline" size="sm" onClick={() => openInviteInfo(c)}><UserPlus className="w-4 h-4 mr-1" />Invite to app</Button>
                               )}
                               <Button variant="ghost" size="sm" onClick={() => openEditContact(c)}>
@@ -1499,7 +1611,20 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                                       <div className="flex gap-1">
                                         {isAdmin && c.email && (
                                           appUser
-                                            ? <Button variant="outline" size="sm" onClick={() => openAccessDialog(c)}>Edit access</Button>
+                                            ? (
+                                              <div className="flex gap-1">
+                                                <Button variant="outline" size="sm" onClick={() => openAccessDialog(c)}>
+                                                  Edit access
+                                                </Button>
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  onClick={() => appUser && openHrLinkDialog(appUser)}
+                                                >
+                                                  Link to HR person
+                                                </Button>
+                                              </div>
+                                            )
                                             : <Button variant="outline" size="sm" onClick={() => openInviteInfo(c)}><UserPlus className="w-4 h-4 mr-1" />Invite</Button>
                                         )}
                                         <Button variant="ghost" size="sm" onClick={() => openEditContact(c)}>
@@ -1818,6 +1943,75 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={hrLinkDialogOpen} onOpenChange={setHrLinkDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Link to HR person</DialogTitle>
+              <DialogDescription>
+                Select a Team record for this user. This stores `hr_person_id` and `hr_person_type`.
+              </DialogDescription>
+            </DialogHeader>
+            {hrLinkProfile && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  User: {hrLinkProfile.full_name?.trim() || hrLinkProfile.email}
+                </p>
+                <div>
+                  <Label>HR person</Label>
+                  <Select value={hrLinkSelection} onValueChange={setHrLinkSelection}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select HR person" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unlink (no HR person)</SelectItem>
+                      {hrCandidates.map((candidate) => (
+                        <SelectItem
+                          key={`${candidate.type}:${candidate.id}`}
+                          value={`${candidate.type}:${candidate.id}`}
+                        >
+                          {candidate.name} ({candidate.type === 'w2' ? 'Employee' : '1099'})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setHrLinkDialogOpen(false)} disabled={savingHrLink}>
+                Cancel
+              </Button>
+              <Button onClick={() => void handleSaveHrLink()} disabled={savingHrLink}>
+                {savingHrLink ? 'Saving...' : 'Save link'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={confirmNonOwnerLinkOpen} onOpenChange={setConfirmNonOwnerLinkOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm HR link for non-owner user</DialogTitle>
+              <DialogDescription>
+                This user will gain read-own access to their own payroll entries via the field UI when it ships in a future phase. Until then, no field UI exposes payroll data.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmNonOwnerLinkOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (pendingHrLinkSelection) void saveHrLink(pendingHrLinkSelection)
+                }}
+                disabled={savingHrLink}
+              >
+                Continue
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 

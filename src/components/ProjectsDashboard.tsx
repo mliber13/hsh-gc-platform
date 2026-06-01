@@ -43,7 +43,7 @@ import {
   getProjects_Hybrid,
   updateProject_Hybrid,
 } from '@/services/hybridService'
-import { getProjectActuals_Hybrid } from '@/services/actualsHybridService'
+import { getActualsForProjects_Hybrid } from '@/services/actualsHybridService'
 import { isQBConnected, getQBJobTransactions } from '@/services/quickbooksService'
 import {
   ProjectCard,
@@ -153,22 +153,19 @@ export function ProjectsDashboard({
         if (allProjects.length === 0) return
 
         // Then enhance with stats in the background
-        const [estimateStatsByProjectId, actualsByProject] = await Promise.all([
-          getEstimateStatsForProjects_Hybrid(allProjects.map((p) => p.id)),
-          Promise.all(
-            allProjects.map((project) =>
-              getProjectActuals_Hybrid(project.id).catch(() => null),
-            ),
-          ),
+        const projectIds = allProjects.map((p) => p.id)
+        const [estimateStatsByProjectId, actualsByProjectId] = await Promise.all([
+          getEstimateStatsForProjects_Hybrid(projectIds),
+          getActualsForProjects_Hybrid(projectIds),
         ])
 
-        const projectsWithStats = allProjects.map((project, index) => {
+        const projectsWithStats = allProjects.map((project) => {
           const estimateStats = estimateStatsByProjectId.get(project.id) ?? {
             basePriceTotal: 0,
             estimatedValue: 0,
             tradeCount: 0,
           }
-          const actuals = actualsByProject[index]
+          const actuals = actualsByProjectId.get(project.id)
           return {
             ...project,
             basePriceTotal: estimateStats.basePriceTotal,

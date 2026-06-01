@@ -110,6 +110,14 @@ import { MeetingAdmin } from '@/components/meeting/MeetingAdmin'
 import { MeetingsList } from '@/components/meeting/MeetingsList'
 import { TeamPage } from '@/components/hr/TeamPage'
 import { PayrollPage } from '@/components/hr/PayrollPage'
+import { TimeClockPage } from '@/components/hr/TimeClockPage'
+import { HrWorkspaceShell } from '@/components/hr/HrWorkspaceShell'
+import { DrywallProjectsListPage } from '@/components/drywall/DrywallProjectsListPage'
+import { DrywallProjectShell } from '@/components/drywall/DrywallProjectShell'
+import { OrderPage } from '@/components/drywall/order/OrderPage'
+import { FieldMeasurementPage } from '@/components/drywall/field/FieldMeasurementPage'
+import { QuoteStage } from '@/components/drywall/quote/QuoteStage'
+import { ProjectInfoPage } from '@/components/drywall/info/ProjectInfoPage'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { getCurrentWeekOf } from '@/services/meetingService'
 
@@ -122,6 +130,7 @@ import {
   RequireQuickBooksAdmin,
   RequireCanRunPayroll,
   RequireHrTeamAccess,
+  RequireHrTimeClockAccess,
   RequireWorkspaceAccess,
 } from './RequirePermission'
 
@@ -246,21 +255,65 @@ export function AppRoutes() {
           <Route path="/tenant-pipeline" element={<Navigate to="/tenants" replace />} />
 
           <Route
-            path="/hr/team"
+            path="/drywall"
             element={
-              <RequireHrTeamAccess>
-                <TeamPage />
-              </RequireHrTeamAccess>
+              <RequireWorkspaceAccess workspace="drywall">
+                <DrywallProjectsListPage />
+              </RequireWorkspaceAccess>
             }
           />
           <Route
-            path="/hr/payroll"
+            path="/drywall/projects/:projectId"
             element={
-              <RequireCanRunPayroll>
-                <PayrollPage />
-              </RequireCanRunPayroll>
+              <RequireWorkspaceAccess workspace="drywall">
+                <DrywallProjectShell />
+              </RequireWorkspaceAccess>
             }
-          />
+          >
+            <Route index element={<DrywallProjectIndexRedirect />} />
+            <Route path="info" element={<ProjectInfoPage />} />
+            <Route path="quote" element={<QuoteStage />} />
+            <Route path="field" element={<FieldMeasurementPage />} />
+            <Route path="order" element={<OrderPage />} />
+          </Route>
+
+          <Route
+            path="/hr"
+            element={
+              <RequireWorkspaceAccess workspace="hr">
+                <HrWorkspaceShell />
+              </RequireWorkspaceAccess>
+            }
+          >
+            <Route
+              index
+              element={<Navigate to="/hr/team" replace />}
+            />
+            <Route
+              path="team"
+              element={
+                <RequireHrTeamAccess>
+                  <TeamPage />
+                </RequireHrTeamAccess>
+              }
+            />
+            <Route
+              path="payroll"
+              element={
+                <RequireCanRunPayroll>
+                  <PayrollPage />
+                </RequireCanRunPayroll>
+              }
+            />
+            <Route
+              path="time-clock"
+              element={
+                <RequireHrTimeClockAccess>
+                  <TimeClockPage />
+                </RequireHrTimeClockAccess>
+              }
+            />
+          </Route>
 
           <Route
             path="/schedule"
@@ -883,6 +936,12 @@ function MeetingsListRoute() {
 
 function MeetingAdminRoute() {
   return <MeetingAdmin />
+}
+
+function DrywallProjectIndexRedirect() {
+  const { projectId } = useParams<{ projectId: string }>()
+  if (!projectId) return <Navigate to="/drywall" replace />
+  return <Navigate to={`/drywall/projects/${projectId}/info`} replace />
 }
 
 function MeetingRedirectRoute() {

@@ -2,13 +2,15 @@
 // Payroll math — pure functions (matches Drywall Payroll.jsx formulas)
 // ============================================================================
 
+import { addDays, endOfWeek, format, parseISO, startOfWeek, subDays } from 'date-fns'
 import type {
+  PayPeriod,
   PayrollEntry,
   PayrollHourEntry,
   PayrollPieceEntry,
 } from '@/types/payroll'
 import type { Employee, Contractor1099 } from '@/types/hr'
-import { isArchivedMember } from '@/lib/hrTeamUtils'
+import { generateHrId, isArchivedMember } from '@/lib/hrTeamUtils'
 
 /** First N hours per employee per run at 1× before OT multiplier applies. */
 export const REGULAR_HOURS_CAP = 40
@@ -462,4 +464,135 @@ export function quoteFromProjectMetadata(metadata: unknown): Record<string, unkn
     if (q && typeof q === 'object') return q as Record<string, unknown>
   }
   return undefined
+}
+
+// ============================================================================
+// Draft helpers (start-next-period, empty-state, row visibility)
+// ============================================================================
+
+export type PayrollDraftEntries = Record<string, PayrollEntry>
+
+export function getPieceEntriesFromRunEntry(e: PayrollEntry | undefined): PayrollPieceEntry[] {
+  const raw = e?.pieceEntries
+  if (Array.isArray(raw)) return raw
+  if (raw && typeof raw === 'object') {
+    return Object.values(raw as Record<string, PayrollPieceEntry>)
+  }
+  return []
+}
+
+export function entryHasNonZeroAdjustments(entry: PayrollEntry | undefined): boolean {
+  if (!entry) return false
+  for (const field of ['perDiem', 'reimbursement', 'bankedHoursUsed', 'hoursToBank'] as const) {
+    const n = parseFloat(String(entry[field] ?? ''))
+    if (!Number.isNaN(n) && n !== 0) return true
+  }
+  return false
+}
+
+export function entryHasHourOrPieceRows(entry: PayrollEntry | undefined): boolean {
+  return (
+    (entry?.hourEntries?.length ?? 0) > 0 || getPieceEntriesFromRunEntry(entry).length > 0
+  )
+}
+
+export function isPayrollDraftEmpty(entries: PayrollDraftEntries): boolean {
+  const keys = Object.keys(entries)
+  if (keys.length === 0) return true
+  return keys.every(
+    (k) => !entryHasHourOrPieceRows(entries[k]) && !entryHasNonZeroAdjustments(entries[k]),
+  )
+}
+
+export function payrollRowVisibleWhenHidingEmpty(
+  gross: number,
+  entry: PayrollEntry | undefined,
+): boolean {
+  if (gross > 0) return true
+  if (!entry) return false
+  if (entryHasNonZeroAdjustments(entry)) return true
+  return entryHasHourOrPieceRows(entry)
+}
+
+export function payrollWeekRangeContaining(date: Date): { start: string; end: string } {
+  return {
+    start: format(startOfWeek(date, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+    end: format(endOfWeek(date, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+  }
+}
+
+export function payrollThisWeekRange(): { start: string; end: string } {
+  return payrollWeekRangeContaining(new Date())
+}
+
+export function payrollLastWeekRange(): { start: string; end: string } {
+  const prevMon = subDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 7)
+  return payrollWeekRangeContaining(prevMon)
+}
+
+export function nextPeriodDateRangeFromRun(run: PayPeriod): { start: string; end: string } {
+  const lastEnd = parseISO(run.endDate)
+  const nextStart = addDays(lastEnd, 1)
+  const nextEnd = endOfWeek(nextStart, { weekStartsOn: 1 })
+  return {
+    start: format(nextStart, 'yyyy-MM-dd'),
+    end: format(nextEnd, 'yyyy-MM-dd'),
+  }
+}
+
+/**
+ * Copy last run's people + hour/piece row structure for the next pay period;
+ * zero hours, phases completed, and adjustment fields (matches Drywall start-next-period).
+ *
+ * Archived members never enter new drafts — they may still appear in historical saved runs
+ * from periods when they were active.
+ */
+export function buildDraftFromPreviousRun(
+  previousRun: PayPeriod,
+  currentPeople: PayrollRowPerson[],
+): PayrollDraftEntries {
+  const runEntriesByPid: Record<string, PayrollEntry> = {}
+  for (const e of previousRun.entries || []) {
+    runEntriesByPid[personKey(e.personId, e.personType)] = e
+  }
+
+  const loaded: PayrollDraftEntries = {}
+  for (const person of currentPeople) {
+    if (isArchivedMember(person)) continue
+    const pk = person.personKey
+    const e = runEntriesByPid[pk]
+    const pieceList = getPieceEntriesFromRunEntry(e)
+
+    loaded[pk] = {
+      personId: person.id,
+      personType: person.personType === 'w2' ? 'w2' : '1099',
+      personName: person.name,
+      hourEntries: (e?.hourEntries || []).map((he) => ({
+        ...he,
+        id: he.id || generateHrId(),
+        hours: '',
+        overtimeType: he.overtimeType || 'regular',
+      })),
+      pieceEntries: pieceList.map((pe) => {
+        const src = pe && typeof pe === 'object' ? pe : ({} as PayrollPieceEntry)
+        return {
+          id: generateHrId(),
+          jobId: src.jobId ?? '',
+          jobName: src.jobName ?? '',
+          workType: src.workType ?? src.phase ?? 'finisher',
+          totalPhases: src.totalPhases ?? 1,
+          phasesCompleted: '',
+          jobTotalSqft: src.jobTotalSqft ?? '',
+          rate: src.rate ?? '',
+          amount: 0,
+        }
+      }),
+      reimbursement: '',
+      perDiem: '',
+      bankedHoursUsed: '',
+      hoursToBank: '',
+      done: false,
+    }
+  }
+  return loaded
 }

@@ -5,6 +5,7 @@
  */
 
 import { isOnlineMode, supabase } from '@/lib/supabase'
+import type { ProjectActuals } from '@/types'
 import { createQBCheck, isQBConnected } from './quickbooksService'
 import {
   addLaborEntry as addLaborEntryLS,
@@ -202,6 +203,189 @@ export async function deleteSubcontractorEntry_Hybrid(entryId: string): Promise<
 // GET ACTUALS OPERATIONS
 // ============================================================================
 
+function computeActualsTotals(
+  laborEntries: any[],
+  materialEntries: any[],
+  subcontractorEntries: any[],
+) {
+  const totalLaborCost = laborEntries.reduce(
+    (sum: number, entry: any) => sum + entry.totalCost,
+    0,
+  )
+  const totalMaterialCost = materialEntries.reduce(
+    (sum: number, entry: any) => sum + entry.totalCost,
+    0,
+  )
+  const totalSubcontractorCost = subcontractorEntries.reduce(
+    (sum: number, entry: any) => sum + entry.totalPaid,
+    0,
+  )
+  const totalActualCost = totalLaborCost + totalMaterialCost + totalSubcontractorCost
+  return {
+    totalLaborCost,
+    totalMaterialCost,
+    totalSubcontractorCost,
+    totalActualCost,
+  }
+}
+
+function buildProjectActuals(
+  projectId: string,
+  laborEntries: any[],
+  materialEntries: any[],
+  subcontractorEntries: any[],
+): ProjectActuals {
+  const totals = computeActualsTotals(
+    laborEntries,
+    materialEntries,
+    subcontractorEntries,
+  )
+  return {
+    id: projectId + '_actuals',
+    projectId,
+    laborEntries,
+    materialEntries,
+    subcontractorEntries,
+    ...totals,
+    variance: 0,
+    variancePercentage: 0,
+    dailyLogs: [],
+    changeOrders: [],
+  }
+}
+
+function emptyProjectActuals(projectId: string): ProjectActuals {
+  return buildProjectActuals(projectId, [], [], [])
+}
+
+export async function getActualsForProjects_Hybrid(
+  projectIds: string[],
+): Promise<Map<string, ProjectActuals>> {
+  const map = new Map<string, ProjectActuals>()
+  const uniqueIds = Array.from(new Set(projectIds.filter(Boolean)))
+
+  if (uniqueIds.length === 0) return map
+
+  if (isOnlineMode()) {
+    const [laborRes, materialRes, subcontractorRes] = await Promise.all([
+      supabase
+        .from('labor_entries')
+        .select('*')
+        .in('project_id', uniqueIds)
+        .order('date', { ascending: false }),
+      supabase
+        .from('material_entries')
+        .select('*')
+        .in('project_id', uniqueIds)
+        .order('date', { ascending: false }),
+      supabase
+        .from('subcontractor_entries')
+        .select('*')
+        .in('project_id', uniqueIds)
+        .order('date', { ascending: false }),
+    ])
+
+    if (laborRes.error) {
+      throw new Error(`Error fetching labor entries: ${laborRes.error.message}`)
+    }
+    if (materialRes.error) {
+      throw new Error(`Error fetching material entries: ${materialRes.error.message}`)
+    }
+    if (subcontractorRes.error) {
+      throw new Error(
+        `Error fetching subcontractor entries: ${subcontractorRes.error.message}`,
+      )
+    }
+
+    const laborEntries = (laborRes.data ?? []).map((entry) => ({
+      id: entry.id,
+      projectId: entry.project_id,
+      tradeId: entry.trade_id,
+      date: new Date(entry.date),
+      trade: entry.category,
+      description: entry.description,
+      totalHours: entry.hours,
+      laborRate: entry.hourly_rate,
+      totalCost: entry.amount,
+      grossWages: entry.gross_wages != null ? Number(entry.gross_wages) : undefined,
+      burdenAmount: entry.burden_amount != null ? Number(entry.burden_amount) : undefined,
+      crew: [],
+      createdAt: new Date(entry.created_at),
+    }))
+    const materialEntries = (materialRes.data ?? []).map((entry) => ({
+      id: entry.id,
+      projectId: entry.project_id,
+      tradeId: entry.trade_id,
+      date: new Date(entry.date),
+      materialName: entry.description,
+      category: entry.category,
+      quantity: entry.quantity,
+      unit: 'each',
+      unitCost: entry.unit_cost,
+      totalCost: entry.amount,
+      vendor: entry.vendor,
+      invoiceNumber: entry.invoice_number,
+      createdAt: new Date(entry.created_at),
+    }))
+    const subcontractorEntries = (subcontractorRes.data ?? []).map((entry) => ({
+      id: entry.id,
+      projectId: entry.project_id,
+      tradeId: entry.trade_id,
+      subcontractor: {
+        name: entry.subcontractor_name,
+        company: entry.subcontractor_name,
+        email: '',
+        phone: '',
+      },
+      trade: entry.category,
+      scopeOfWork: entry.description,
+      contractAmount: entry.amount,
+      payments: [],
+      totalPaid: entry.amount,
+      balance: 0,
+      createdAt: new Date(entry.created_at),
+    }))
+
+    const laborByProject = new Map<string, any[]>()
+    const materialsByProject = new Map<string, any[]>()
+    const subcontractorsByProject = new Map<string, any[]>()
+
+    for (const entry of laborEntries) {
+      const existing = laborByProject.get(entry.projectId) ?? []
+      existing.push(entry)
+      laborByProject.set(entry.projectId, existing)
+    }
+    for (const entry of materialEntries) {
+      const existing = materialsByProject.get(entry.projectId) ?? []
+      existing.push(entry)
+      materialsByProject.set(entry.projectId, existing)
+    }
+    for (const entry of subcontractorEntries) {
+      const existing = subcontractorsByProject.get(entry.projectId) ?? []
+      existing.push(entry)
+      subcontractorsByProject.set(entry.projectId, existing)
+    }
+
+    for (const projectId of uniqueIds) {
+      map.set(
+        projectId,
+        buildProjectActuals(
+          projectId,
+          laborByProject.get(projectId) ?? [],
+          materialsByProject.get(projectId) ?? [],
+          subcontractorsByProject.get(projectId) ?? [],
+        ),
+      )
+    }
+    return map
+  }
+
+  for (const projectId of uniqueIds) {
+    map.set(projectId, getProjectActualsLS(projectId) ?? emptyProjectActuals(projectId))
+  }
+  return map
+}
+
 export async function getProjectActuals_Hybrid(projectId: string): Promise<any | null> {
   console.log('🔍 getProjectActuals_Hybrid called for project:', projectId)
   
@@ -222,10 +406,12 @@ export async function getProjectActuals_Hybrid(projectId: string): Promise<any |
       console.log('📡 Subcontractor entries fetched:', subcontractorEntries.length, subcontractorEntries)
       
       // Calculate totals
-      const totalLaborCost = laborEntries.reduce((sum: number, entry: any) => sum + entry.totalCost, 0)
-      const totalMaterialCost = materialEntries.reduce((sum: number, entry: any) => sum + entry.totalCost, 0)
-      const totalSubcontractorCost = subcontractorEntries.reduce((sum: number, entry: any) => sum + entry.totalPaid, 0)
-      const totalActualCost = totalLaborCost + totalMaterialCost + totalSubcontractorCost
+      const {
+        totalLaborCost,
+        totalMaterialCost,
+        totalSubcontractorCost,
+        totalActualCost,
+      } = computeActualsTotals(laborEntries, materialEntries, subcontractorEntries)
       
       console.log('💰 Calculated totals:', {
         totalLaborCost,
@@ -234,21 +420,12 @@ export async function getProjectActuals_Hybrid(projectId: string): Promise<any |
         totalActualCost
       })
       
-      const result = {
-        id: projectId + '_actuals',
+      const result = buildProjectActuals(
         projectId,
         laborEntries,
         materialEntries,
         subcontractorEntries,
-        totalLaborCost,
-        totalMaterialCost,
-        totalSubcontractorCost,
-        totalActualCost,
-        variance: 0,
-        variancePercentage: 0,
-        dailyLogs: [],
-        changeOrders: [],
-      }
+      )
       
       console.log('✅ Returning actuals result:', result)
       return result

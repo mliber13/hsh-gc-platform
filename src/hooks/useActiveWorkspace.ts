@@ -20,7 +20,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
-export type Workspace = 'projects' | 'deals' | 'tenants' | 'meeting' | 'schedule'
+export type Workspace =
+  | 'projects'
+  | 'deals'
+  | 'tenants'
+  | 'meeting'
+  | 'schedule'
+  | 'hr'
+  | 'drywall'
 
 const STORAGE_KEY = 'hsh:activeWorkspace'
 
@@ -30,6 +37,8 @@ export const WORKSPACE_HOME: Record<Workspace, string> = {
   tenants: '/tenants',
   meeting: '/meeting',
   schedule: '/schedule',
+  hr: '/hr',
+  drywall: '/drywall',
 }
 
 /** Map a pathname to a workspace, or null if it's workspace-agnostic. */
@@ -37,6 +46,8 @@ function workspaceFromPath(pathname: string): Workspace | null {
   if (pathname.startsWith('/deals')) return 'deals'
   if (pathname.startsWith('/tenants')) return 'tenants'
   if (pathname.startsWith('/schedule')) return 'schedule'
+  if (pathname.startsWith('/hr')) return 'hr'
+  if (pathname.startsWith('/drywall')) return 'drywall'
   if (
     pathname.startsWith('/meeting') ||
     pathname.startsWith('/meetings') ||
@@ -59,7 +70,9 @@ function readStoredWorkspace(): Workspace {
     raw === 'deals' ||
     raw === 'tenants' ||
     raw === 'meeting' ||
-    raw === 'schedule'
+    raw === 'schedule' ||
+    raw === 'hr' ||
+    raw === 'drywall'
   ) {
     return raw
   }

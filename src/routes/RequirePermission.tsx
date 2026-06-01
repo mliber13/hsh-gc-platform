@@ -6,7 +6,12 @@ import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { usePermissions } from '@/hooks/usePermissions'
 import { WORKSPACE_HOME, type Workspace } from '@/hooks/useActiveWorkspace'
-import { deriveEffectiveRole, isOwnerRole, type RbacRole } from '@/lib/rbac'
+import {
+  canAccessWorkspace,
+  deriveEffectiveRole,
+  isOwnerRole,
+  type RbacRole,
+} from '@/lib/rbac'
 import type { UserProfile } from '@/services/userService'
 
 function GuardLoading() {
@@ -21,8 +26,10 @@ const WORKSPACE_FALLBACK_ORDER: Workspace[] = [
   'projects',
   'schedule',
   'meeting',
+  'drywall',
   'deals',
   'tenants',
+  'hr',
 ]
 
 function firstAccessibleHome(
@@ -80,7 +87,14 @@ export function RequireCanCreateProjects({ children }: { children: ReactNode }) 
 
 /** HR Team page (Phase B) — docs/HR_PORT_PLAN.md §4 */
 export function canAccessHrTeamPage(role: RbacRole): boolean {
-  return ['owner', 'office_gc', 'office_drywall', 'viewer'].includes(role)
+  return [
+    'owner',
+    'office_gc',
+    'office_drywall',
+    'field_gc',
+    'field_drywall',
+    'viewer',
+  ].includes(role)
 }
 
 export function canWriteHrTeam(role: RbacRole): boolean {
@@ -118,6 +132,51 @@ export function RequireCanRunPayroll({ children }: { children: ReactNode }) {
   if (loading) return <GuardLoading />
   if (!canAccessHrPayrollPage(userProfile, effectiveRole)) {
     return <Navigate to={firstAccessibleHome(canAccessWorkspace)} replace />
+  }
+  return <>{children}</>
+}
+
+/** Time Clock page visibility (docs/HR_PORT_PLAN.md §4 matrix). */
+export function canAccessHrTimeClockPage(role: RbacRole): boolean {
+  return [
+    'owner',
+    'office_gc',
+    'office_drywall',
+    'field_gc',
+    'field_drywall',
+    'viewer',
+  ].includes(role)
+}
+
+export function RequireHrTimeClockAccess({ children }: { children: ReactNode }) {
+  const { loading, userProfile, canAccessWorkspace } = usePermissions()
+  if (loading) return <GuardLoading />
+  const role = deriveEffectiveRole(userProfile)
+  if (!canAccessHrTimeClockPage(role)) {
+    return <Navigate to={firstAccessibleHome(canAccessWorkspace)} replace />
+  }
+  return <>{children}</>
+}
+
+/** Drywall workspace routes — docs/DRYWALL_PORT_PLAN.md §7 + rbac WORKSPACE_ACCESS.drywall */
+export function canAccessDrywallWorkspace(role: RbacRole): boolean {
+  return canAccessWorkspace(role, 'drywall')
+}
+
+export function canWriteDrywallProject(role: RbacRole): boolean {
+  return ['owner', 'office_drywall'].includes(role)
+}
+
+/** Field measurement + photo uploads — matches drywall-field-photos storage RLS */
+export function canWriteDrywallField(role: RbacRole): boolean {
+  return ['owner', 'office_gc', 'office_drywall'].includes(role)
+}
+
+export function RequireDrywallWorkspaceAccess({ children }: { children: ReactNode }) {
+  const { loading, canAccessWorkspace: canAccessWs } = usePermissions()
+  if (loading) return <GuardLoading />
+  if (!canAccessWs('drywall')) {
+    return <Navigate to={firstAccessibleHome(canAccessWs)} replace />
   }
   return <>{children}</>
 }

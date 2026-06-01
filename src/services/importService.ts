@@ -257,7 +257,24 @@ async function importTradesToSupabase(trades: Trade[], projectId: string): Promi
     } else {
       // Create new estimate
       const estimate = await supabaseService.createEstimateInDB(projectId);
-      estimateId = estimate.id;
+      if (estimate?.id) {
+        estimateId = estimate.id;
+      } else {
+        // Tolerate duplicate-key race once UNIQUE(project_id) exists:
+        // if another writer won, re-fetch canonical estimate row.
+        const { data: existingAfterCreate, error: reFetchError } = await supabase
+          .from('estimates')
+          .select('id')
+          .eq('project_id', projectId)
+          .single();
+        if (reFetchError || !existingAfterCreate?.id) {
+          errors.push(
+            reFetchError?.message || 'Failed to resolve estimate after create attempt',
+          );
+          return { success: false, errors };
+        }
+        estimateId = existingAfterCreate.id;
+      }
     }
 
     // Import each trade

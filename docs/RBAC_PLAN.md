@@ -90,9 +90,9 @@ Legend:
 |---|---|---|---|---|---|---|---|
 | owner | admin | admin | admin | admin | admin | admin | admin |
 | office_gc | write | write | write | write | write | read | read |
-| office_drywall | read | none | none | read | mixed* | read | write |
+| office_drywall | read | none | none | read | mixed* | read | admin |
 | field_gc | none | none | none | none | read-own | read-own | none |
-| field_drywall | none | none | none | none | read-own | read-own | read |
+| field_drywall | none | none | none | none | read-own | read-own | none |
 | viewer | read | read | read | read | read | read | read |
 
 `mixed*` for `office_drywall` schedule means:
@@ -104,21 +104,25 @@ Legend:
 
 ## Decision Notes (Baked In)
 
-1. `office_gc` -> Drywall workspace is **read-only**.
-   - Drywall trade write from GC side happens through per-project GC flows (one-row-two-views model), not Drywall workspace authoring.
+1. `office_gc` -> Drywall workspace is **read-only** at the workspace matrix level.
+   - **Phase D drift (locked V1):** `canWriteDrywallField` still allows `office_gc` to save Field Measurement + photo uploads (`owner`, `office_gc`, `office_drywall`). GC Projects flows remain the path for drywall trade rows on dual-view jobs.
+   - Drywall trade write from GC side happens through per-project GC flows (one-row-two-views model), not Drywall workspace quote/order authoring.
 
-2. `office_drywall` -> Schedule is **mixed permission**.
+2. `field_drywall` / `field_gc` -> Drywall workspace **none** (hidden in switcher; routes redirect).
+   - V1 effective field access: **HR Time Clock** + own `time_entries` only — not the Drywall project list (see `docs/DRYWALL_PORT_PLAN.md` §7).
+
+3. `office_drywall` -> Schedule is **mixed permission**.
    - Write drywall trade entries on any project.
    - Read non-drywall entries.
    - Purpose: avoid drywall crew overallocation while preserving non-drywall authority boundaries.
 
-3. `field_*` -> HR is **read-own.\*** only.
+4. `field_*` -> HR is **read-own.\*** only.
    - Own time entries.
    - Own paystub.
    - Own profile.
    - No access to other users' HR/pay data.
 
-4. `viewer` is **global read-only** across office-tier workspaces in V1.
+5. `viewer` is **global read-only** across office-tier workspaces in V1.
    - No per-workspace viewer assignment in V1.
 
 5. `is_meeting_operator` is an **orthogonal capability flag**, not a role.

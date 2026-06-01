@@ -94,3 +94,4 @@ jspm_packages/
 /mcp_invoke_*.json
 /p?.json
 /p??.json
+tmp/

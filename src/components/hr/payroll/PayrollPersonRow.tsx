@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Lock, Plus, Trash2, Unlock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -11,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { generateHrId } from '@/lib/hrTeamUtils'
+import { entryHasNonZeroAdjustments } from '@/lib/payrollMath'
 import {
   PAYROLL_WORK_TYPES,
   getRateFromJob,
@@ -19,6 +21,7 @@ import {
 } from '@/lib/payrollMath'
 import type { PayrollEntry, PayrollHourEntry, PayrollPieceEntry, PayrollProjectOption } from '@/types/payroll'
 import { formatCurrency } from './payrollFormat'
+import { JobCombobox } from './JobCombobox'
 
 interface PayrollPersonRowProps {
   person: PayrollRowPerson
@@ -28,6 +31,7 @@ interface PayrollPersonRowProps {
   projects: PayrollProjectOption[]
   allPeople: PayrollRowPerson[]
   onChange: (entry: PayrollEntry) => void
+  onToggleDone: () => void
 }
 
 export function PayrollPersonRow({
@@ -38,14 +42,28 @@ export function PayrollPersonRow({
   projects,
   allPeople,
   onChange,
+  onToggleDone,
 }: PayrollPersonRowProps) {
-  const [hoursOpen, setHoursOpen] = useState(false)
-  const [pieceOpen, setPieceOpen] = useState(false)
-
-  const update = (patch: Partial<PayrollEntry>) => onChange({ ...entry, ...patch })
-
+  const personDone = Boolean(entry.done)
+  const effectiveLocked = locked || personDone
   const hourEntries = entry.hourEntries || []
   const pieceEntries = entry.pieceEntries || []
+  const hasAdjustments = entryHasNonZeroAdjustments(entry)
+
+  const [hoursOpen, setHoursOpen] = useState(() => hourEntries.length > 0)
+  const [pieceOpen, setPieceOpen] = useState(() => pieceEntries.length > 0)
+  const [adjustmentsOpen, setAdjustmentsOpen] = useState(() => hasAdjustments)
+
+  const update = (patch: Partial<PayrollEntry>) => {
+    const next = { ...entry, ...patch }
+    onChange(next)
+    if (
+      !adjustmentsOpen &&
+      entryHasNonZeroAdjustments(next)
+    ) {
+      setAdjustmentsOpen(true)
+    }
+  }
 
   const addHour = () => {
     const row: PayrollHourEntry = {
@@ -99,142 +117,79 @@ export function PayrollPersonRow({
     update({ pieceEntries: list })
   }
 
-  const setPieceJob = (idx: number, projectId: string) => {
-    const pe = pieceEntries[idx] || {}
-    const workType = pe.workType || 'finisher'
-    if (projectId === 'other') {
-      patchPiece(idx, { jobId: 'other', jobName: pe.jobName || '' })
-      return
-    }
-    const project = projects.find((p) => p.id === projectId)
-    const rateFromJob = project ? getRateFromJob(project, workType) : null
-    patchPiece(idx, {
-      jobId: project?.id || projectId,
-      jobName: project?.name || 'Unnamed',
-      rate: rateFromJob != null ? String(rateFromJob) : pe.rate,
-    })
-  }
-
   const removePiece = (idx: number) => {
     update({ pieceEntries: pieceEntries.filter((_, i) => i !== idx) })
   }
 
   return (
-    <div className="rounded-lg border bg-card p-4 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="font-medium">{person.name}</p>
-          <p className="text-xs text-muted-foreground">
-            {person.personType === 'w2' ? 'W2' : '1099'} · {person.payType || 'hourly'}
-          </p>
+    <div
+      className={cn(
+        'rounded-lg border bg-card p-4 shadow-sm transition-colors',
+        personDone && 'border-emerald-500/30 bg-emerald-500/5',
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+        <div className="flex min-w-0 items-start gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 shrink-0 p-0"
+            disabled={locked}
+            onClick={onToggleDone}
+            title={personDone ? 'Unlock — allow edits' : 'Lock — done with this person'}
+          >
+            {personDone ? (
+              <Lock className="size-4 text-emerald-600 dark:text-emerald-400" />
+            ) : (
+              <Unlock className="size-4 text-muted-foreground" />
+            )}
+          </Button>
+          <div className="min-w-0">
+            <p className="font-medium">{person.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {person.personType === 'w2' ? 'W2' : '1099'} · {person.payType || 'hourly'}
+              {personDone && (
+                <span className="ml-2 text-emerald-700 dark:text-emerald-300">· Done</span>
+              )}
+            </p>
+          </div>
         </div>
         <p className="text-lg font-semibold tabular-nums">{formatCurrency(gross)}</p>
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-        <div>
-          <Label className="text-xs">Per diem</Label>
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            disabled={locked}
-            value={entry.perDiem ?? ''}
-            onChange={(e) => update({ perDiem: e.target.value })}
-          />
-        </div>
-        <div>
-          <Label className="text-xs">Reimbursement</Label>
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            disabled={locked}
-            value={entry.reimbursement ?? ''}
-            onChange={(e) => update({ reimbursement: e.target.value })}
-          />
-        </div>
-        <div>
-          <Label className="text-xs">Banked hours used</Label>
-          <Input
-            type="number"
-            min={0}
-            step="0.25"
-            disabled={locked}
-            value={entry.bankedHoursUsed ?? ''}
-            onChange={(e) => update({ bankedHoursUsed: e.target.value })}
-          />
-        </div>
-        <div>
-          <Label className="text-xs">Hours to bank</Label>
-          <Input
-            type="number"
-            min={0}
-            step="0.25"
-            disabled={locked}
-            value={entry.hoursToBank ?? ''}
-            onChange={(e) => update({ hoursToBank: e.target.value })}
-          />
-        </div>
-      </div>
-
-      <div className="mt-5 border-t pt-4">
+      {/* Hours — primary */}
+      <section className="mt-4 rounded-lg border border-border/80 bg-muted/10 p-3">
         <button
           type="button"
-          className="flex items-center gap-1 text-sm font-medium"
+          className="flex w-full items-center gap-1 text-sm font-semibold"
           onClick={() => setHoursOpen((o) => !o)}
         >
           {hoursOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
           Hours ({hourEntries.length})
         </button>
-        {hoursOpen && (
-          <div className="mt-2 space-y-2 rounded-md bg-muted/20 p-2">
+        {hoursOpen ? (
+          <div className="mt-3 space-y-2">
             {hourEntries.map((he, idx) => (
               <div key={he.id || idx} className="grid gap-2 rounded border bg-card p-2 md:grid-cols-6">
-                <Select
-                  disabled={locked}
-                  value={he.jobId && he.jobId !== '' ? he.jobId : 'none'}
-                  onValueChange={(v) => {
-                    if (v === 'none') patchHour(idx, { jobId: '', jobName: '' })
-                    else if (v === 'other') patchHour(idx, { jobId: 'other', jobName: he.jobName || '' })
-                    else {
-                      const proj = projects.find((p) => p.id === v)
-                      patchHour(idx, { jobId: v, jobName: proj?.name || '' })
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Job" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Job —</SelectItem>
-                    <SelectItem value="other">Other (type name)</SelectItem>
-                    {projects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {he.jobId === 'other' && (
-                  <Input
-                    placeholder="Job name"
-                    disabled={locked}
-                    value={he.jobName ?? ''}
-                    onChange={(e) => patchHour(idx, { jobName: e.target.value })}
-                  />
-                )}
+                <JobCombobox
+                  jobId={he.jobId}
+                  jobName={he.jobName}
+                  projects={projects}
+                  disabled={effectiveLocked}
+                  onChange={(sel) => patchHour(idx, { jobId: sel.jobId, jobName: sel.jobName })}
+                />
                 <Input
                   type="number"
                   min={0}
                   step="0.25"
                   placeholder="Hours"
-                  disabled={locked}
+                  disabled={effectiveLocked}
                   value={he.hours ?? ''}
                   onChange={(e) => patchHour(idx, { hours: e.target.value })}
                 />
                 <Select
-                  disabled={locked}
+                  disabled={effectiveLocked}
                   value={he.overtimeType || 'regular'}
                   onValueChange={(v) => patchHour(idx, { overtimeType: v })}
                 >
@@ -252,12 +207,12 @@ export function PayrollPersonRow({
                   min={0}
                   step="0.01"
                   placeholder="Rate override"
-                  disabled={locked}
+                  disabled={effectiveLocked}
                   value={he.rateOverride ?? ''}
                   onChange={(e) => patchHour(idx, { rateOverride: e.target.value })}
                 />
                 <Select
-                  disabled={locked}
+                  disabled={effectiveLocked}
                   value={he.assignToPersonId || 'none'}
                   onValueChange={(v) => {
                     const assignee = allPeople.find((p) => p.personKey === v)
@@ -281,7 +236,7 @@ export function PayrollPersonRow({
                       ))}
                   </SelectContent>
                 </Select>
-                {!locked && (
+                {!effectiveLocked && (
                   <Button
                     type="button"
                     variant="ghost"
@@ -294,53 +249,64 @@ export function PayrollPersonRow({
                 )}
               </div>
             ))}
-            {!locked && (
+            {!effectiveLocked && (
               <Button type="button" variant="outline" size="sm" onClick={addHour}>
                 <Plus className="mr-1 size-4" />
                 Add hours row
               </Button>
             )}
           </div>
+        ) : (
+          !effectiveLocked &&
+          hourEntries.length === 0 && (
+            <Button type="button" className="mt-3 w-full sm:w-auto" onClick={addHour}>
+              <Plus className="mr-1 size-4" />
+              Add hours row
+            </Button>
+          )
         )}
-      </div>
+      </section>
 
-      <div className="mt-5 border-t pt-4">
+      {/* Piece — primary */}
+      <section className="mt-3 rounded-lg border border-border/80 bg-muted/10 p-3">
         <button
           type="button"
-          className="flex items-center gap-1 text-sm font-medium"
+          className="flex w-full items-center gap-1 text-sm font-semibold"
           onClick={() => setPieceOpen((o) => !o)}
         >
           {pieceOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
           Piece ({pieceEntries.length})
         </button>
-        {pieceOpen && (
-          <div className="mt-2 space-y-2 rounded-md bg-muted/20 p-2">
+        {pieceOpen ? (
+          <div className="mt-3 space-y-2">
             {pieceEntries.map((pe, idx) => (
               <div key={pe.id || idx} className="grid gap-2 rounded border bg-card p-2 md:grid-cols-8">
-                <Select
-                  disabled={locked}
-                  value={pe.jobId && pe.jobId !== '' ? pe.jobId : 'none'}
-                  onValueChange={(v) => {
-                    if (v === 'none') patchPiece(idx, { jobId: '', jobName: '' })
-                    else if (v === 'other') patchPiece(idx, { jobId: 'other' })
-                    else setPieceJob(idx, v)
+                <JobCombobox
+                  jobId={pe.jobId}
+                  jobName={pe.jobName}
+                  projects={projects}
+                  disabled={effectiveLocked}
+                  onChange={(sel) => {
+                    if (!sel.jobId) {
+                      patchPiece(idx, { jobId: '', jobName: '' })
+                      return
+                    }
+                    if (sel.jobId === 'other') {
+                      patchPiece(idx, { jobId: 'other', jobName: sel.jobName })
+                      return
+                    }
+                    const project = projects.find((p) => p.id === sel.jobId)
+                    const workType = pe.workType || 'finisher'
+                    const rateFromJob = project ? getRateFromJob(project, workType) : null
+                    patchPiece(idx, {
+                      jobId: sel.jobId,
+                      jobName: sel.jobName,
+                      rate: rateFromJob != null ? String(rateFromJob) : pe.rate,
+                    })
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Job" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Job —</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                    {projects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
                 <Select
-                  disabled={locked}
+                  disabled={effectiveLocked}
                   value={pe.workType || 'finisher'}
                   onValueChange={(v) => {
                     const wt = PAYROLL_WORK_TYPES.find((w) => w.value === v)
@@ -367,35 +333,35 @@ export function PayrollPersonRow({
                 <Input
                   type="number"
                   placeholder="Phases done"
-                  disabled={locked}
+                  disabled={effectiveLocked}
                   value={pe.phasesCompleted ?? ''}
                   onChange={(e) => patchPiece(idx, { phasesCompleted: e.target.value })}
                 />
                 <Input
                   type="number"
                   placeholder="Total phases"
-                  disabled={locked}
+                  disabled={effectiveLocked}
                   value={pe.totalPhases ?? ''}
                   onChange={(e) => patchPiece(idx, { totalPhases: e.target.value })}
                 />
                 <Input
                   type="number"
                   placeholder="Sqft"
-                  disabled={locked}
+                  disabled={effectiveLocked}
                   value={pe.jobTotalSqft ?? ''}
                   onChange={(e) => patchPiece(idx, { jobTotalSqft: e.target.value })}
                 />
                 <Input
                   type="number"
                   placeholder="Rate"
-                  disabled={locked}
+                  disabled={effectiveLocked}
                   value={pe.rate ?? ''}
                   onChange={(e) => patchPiece(idx, { rate: e.target.value })}
                 />
                 <span className="self-center text-right text-sm font-medium tabular-nums">
                   {formatCurrency(parseFloat(String(pe.amount)) || 0)}
                 </span>
-                {!locked && (
+                {!effectiveLocked && (
                   <Button
                     type="button"
                     variant="ghost"
@@ -408,15 +374,90 @@ export function PayrollPersonRow({
                 )}
               </div>
             ))}
-            {!locked && (
+            {!effectiveLocked && (
               <Button type="button" variant="outline" size="sm" onClick={addPiece}>
                 <Plus className="mr-1 size-4" />
                 Add piece row
               </Button>
             )}
           </div>
+        ) : (
+          !effectiveLocked &&
+          pieceEntries.length === 0 && (
+            <Button type="button" className="mt-3 w-full sm:w-auto" onClick={addPiece}>
+              <Plus className="mr-1 size-4" />
+              Add piece row
+            </Button>
+          )
         )}
-      </div>
+      </section>
+
+      {/* Adjustments — secondary */}
+      <section className="mt-3 rounded-md border border-dashed border-muted-foreground/25 bg-muted/5 px-3 py-2">
+        <button
+          type="button"
+          className="flex w-full items-center gap-1 text-xs font-medium text-muted-foreground"
+          onClick={() => setAdjustmentsOpen((o) => !o)}
+        >
+          {adjustmentsOpen ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+          Adjustments
+          {hasAdjustments && (
+            <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px]">has values</span>
+          )}
+        </button>
+        {adjustmentsOpen && (
+          <div className="mt-2 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Per diem</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                disabled={effectiveLocked}
+                className="h-8 text-sm"
+                value={entry.perDiem ?? ''}
+                onChange={(e) => update({ perDiem: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Reimbursement</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                disabled={effectiveLocked}
+                className="h-8 text-sm"
+                value={entry.reimbursement ?? ''}
+                onChange={(e) => update({ reimbursement: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Banked hours used</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.25"
+                disabled={effectiveLocked}
+                className="h-8 text-sm"
+                value={entry.bankedHoursUsed ?? ''}
+                onChange={(e) => update({ bankedHoursUsed: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Hours to bank</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.25"
+                disabled={effectiveLocked}
+                className="h-8 text-sm"
+                value={entry.hoursToBank ?? ''}
+                onChange={(e) => update({ hoursToBank: e.target.value })}
+              />
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   )
 }

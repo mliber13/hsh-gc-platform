@@ -38,14 +38,36 @@ export function parseListRowMetadata(row: {
   return fromPaths
 }
 
-/** GC Platform project list — matches SQL: not DRYWALL_ONLY and gc !== false. */
+export function isDrywallOriginMetadata(
+  metadata: ProjectMetadata | null | undefined,
+): boolean {
+  const source = metadata?.source
+  return source === 'drywall_app' || source === 'drywall_legacy'
+}
+
+export type GcVisibilityOptions = {
+  /** GC estimate trade count; when 0 on a drywall-origin project, hide from GC list (empty estimate shell). */
+  gcTradeCount?: number
+}
+
+/** GC Platform project list — not DRYWALL_ONLY, gc !== false, and not accidental dual-view. */
 export function isVisibleInGcApp(
   metadata: ProjectMetadata | null | undefined,
+  options?: GcVisibilityOptions,
 ): boolean {
   if (!metadata || Object.keys(metadata).length === 0) return true
   const vis = metadata.visibility as Record<string, unknown> | undefined
   if (visibilityFlag(vis, 'gc') === false) return false
   if (metadata.app_scope === 'DRYWALL_ONLY') return false
+  // Drywall app sets visibility.gc when any estimates row exists — including empty shells
+  // created by opening the project in GC once. Hide unless GC estimate has trades.
+  if (
+    isDrywallOriginMetadata(metadata) &&
+    options?.gcTradeCount !== undefined &&
+    options.gcTradeCount === 0
+  ) {
+    return false
+  }
   return true
 }
 
@@ -65,4 +87,72 @@ export function isVisibleInDrywallApp(
   if (visibilityFlag(vis, 'drywall') === false) return false
   if (projectType === 'drywall' && visibilityFlag(vis, 'gc') !== false) return true
   return false
+}
+
+/**
+ * Finer-grained signal: project has real drywall quote content in `metadata.legacy.quote`.
+ *
+ * Use for analytics, quote-stage gating, or "has substantive work" checks — not for the
+ * workspace list (see `belongsInDrywallWorkspace`).
+ *
+ * Returns true when quote is a non-null object with at least one substantive canonical
+ * field: sqft, non-empty breakdowns, calculations blob, or totalQuoteAmount.
+ * `version` alone (e.g. `{ version: 2 }` or default shell with empty rates) does not count.
+ */
+export function hasDrywallWorkspaceData(
+  metadata: ProjectMetadata | null | undefined,
+): boolean {
+  if (!metadata) return false
+
+  const legacy = metadata.legacy
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return false
+
+  const quote = (legacy as Record<string, unknown>).quote
+  if (!quote || typeof quote !== 'object' || Array.isArray(quote)) return false
+
+  const q = quote as Record<string, unknown>
+  if (hasPopulatedSqft(q.sqft)) return true
+  if (hasNonEmptyBreakdowns(q.breakdowns)) return true
+  if (hasPopulatedCalculations(q.calculations)) return true
+  if (hasPopulatedTotalQuoteAmount(q.totalQuoteAmount)) return true
+
+  return false
+}
+
+/**
+ * Canonical surfacing criterion for the Drywall workspace list (Phase B retrospective).
+ *
+ * A project belongs in `/drywall` when it is drywall-scoped OR has real quote content:
+ * - `metadata.app_scope === 'DRYWALL_ONLY'` (includes new in-progress projects with empty quote), OR
+ * - `hasDrywallWorkspaceData(metadata)` (dual-view rows like Goodwill Multi with quote but no DRYWALL_ONLY scope).
+ *
+ * Does not auto-promote GC-only projects that only have a drywall trade — those lack both signals.
+ */
+export function belongsInDrywallWorkspace(
+  metadata: ProjectMetadata | null | undefined,
+): boolean {
+  if (!metadata) return false
+  if (metadata.app_scope === 'DRYWALL_ONLY') return true
+  return hasDrywallWorkspaceData(metadata)
+}
+
+function hasPopulatedSqft(value: unknown): boolean {
+  if (value == null || value === '') return false
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) && n > 0
+}
+
+function hasNonEmptyBreakdowns(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0
+}
+
+function hasPopulatedCalculations(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  return Object.keys(value as Record<string, unknown>).length > 0
+}
+
+function hasPopulatedTotalQuoteAmount(value: unknown): boolean {
+  if (value == null || value === '') return false
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) && n > 0
 }

@@ -27,6 +27,8 @@ const WORKSPACE_ACCESS: Record<RbacRole, Record<Workspace, WorkspaceAccessLevel>
     tenants: 'admin',
     meeting: 'admin',
     schedule: 'admin',
+    hr: 'admin',
+    drywall: 'admin',
   },
   office_gc: {
     projects: 'write',
@@ -34,6 +36,8 @@ const WORKSPACE_ACCESS: Record<RbacRole, Record<Workspace, WorkspaceAccessLevel>
     tenants: 'write',
     meeting: 'write',
     schedule: 'write',
+    hr: 'read',
+    drywall: 'read',
   },
   office_drywall: {
     projects: 'read',
@@ -41,6 +45,8 @@ const WORKSPACE_ACCESS: Record<RbacRole, Record<Workspace, WorkspaceAccessLevel>
     tenants: 'none',
     meeting: 'read',
     schedule: 'mixed',
+    hr: 'read',
+    drywall: 'admin',
   },
   field_gc: {
     projects: 'none',
@@ -48,6 +54,8 @@ const WORKSPACE_ACCESS: Record<RbacRole, Record<Workspace, WorkspaceAccessLevel>
     tenants: 'none',
     meeting: 'none',
     schedule: 'read',
+    hr: 'read',
+    drywall: 'none',
   },
   field_drywall: {
     projects: 'none',
@@ -55,6 +63,8 @@ const WORKSPACE_ACCESS: Record<RbacRole, Record<Workspace, WorkspaceAccessLevel>
     tenants: 'none',
     meeting: 'none',
     schedule: 'read',
+    hr: 'read',
+    drywall: 'none',
   },
   viewer: {
     projects: 'read',
@@ -62,6 +72,8 @@ const WORKSPACE_ACCESS: Record<RbacRole, Record<Workspace, WorkspaceAccessLevel>
     tenants: 'read',
     meeting: 'read',
     schedule: 'read',
+    hr: 'read',
+    drywall: 'read',
   },
 }
 

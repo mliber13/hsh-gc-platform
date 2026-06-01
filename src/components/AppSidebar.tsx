@@ -20,11 +20,13 @@ import {
   Calculator,
   Calendar,
   CalendarDays,
+  Clock3,
   ClipboardList,
   DollarSign,
   Eye,
   FileSignature,
   FileText,
+  Hammer,
   Kanban,
   LayoutDashboard,
   Library,
@@ -67,6 +69,7 @@ import {
 } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 import { SidebarUserMenu } from './SidebarUserMenu'
+import { canAccessHrPayrollPage, canAccessHrTeamPage, canAccessHrTimeClockPage } from '@/routes/RequirePermission'
 
 // ----------------------------------------------------------------------------
 // Nav item types
@@ -250,6 +253,15 @@ const tenantsNav: NavGroup[] = [
   },
 ]
 
+const drywallNav: NavGroup[] = [
+  {
+    label: 'Drywall',
+    items: [
+      { label: 'Projects', to: '/drywall', icon: Hammer, matchPath: '/drywall' },
+    ],
+  },
+]
+
 const scheduleNav: NavGroup[] = [
   {
     label: 'Schedule',
@@ -264,6 +276,38 @@ const scheduleNav: NavGroup[] = [
     ],
   },
 ]
+
+function hrNav(
+  role: RbacRole,
+  canSeePayroll: boolean,
+): NavGroup[] {
+  const items: NavItem[] = []
+  if (canAccessHrTeamPage(role)) {
+    items.push({
+      label: 'Team',
+      to: '/hr/team',
+      icon: UsersRound,
+      matchPath: '/hr/team',
+    })
+  }
+  if (canSeePayroll) {
+    items.push({
+      label: 'Payroll',
+      to: '/hr/payroll',
+      icon: DollarSign,
+      matchPath: '/hr/payroll',
+    })
+  }
+  if (canAccessHrTimeClockPage(role)) {
+    items.push({
+      label: 'Time Clock',
+      to: '/hr/time-clock',
+      icon: Clock3,
+      matchPath: '/hr/time-clock',
+    })
+  }
+  return [{ label: 'HR', items }]
+}
 
 function meetingNav(showManage: boolean): NavGroup[] {
   const items: NavItem[] = [
@@ -332,6 +376,7 @@ function navForWorkspace(
   showMeetingManage: boolean,
   role: RbacRole,
   showQuickBooks: boolean,
+  canSeeHrPayroll: boolean,
 ): NavGroup[] {
   const settings = buildSettingsNav(role, showQuickBooks)
   const withSettings = (groups: NavGroup[]) =>
@@ -348,6 +393,10 @@ function navForWorkspace(
       return withSettings(meetingNav(showMeetingManage))
     case 'schedule':
       return withSettings(scheduleNav)
+    case 'hr':
+      return withSettings(hrNav(role, canSeeHrPayroll))
+    case 'drywall':
+      return withSettings(drywallNav)
   }
 }
 
@@ -355,6 +404,7 @@ export function AppSidebar() {
   const { workspace } = useActiveWorkspace()
   const {
     effectiveRole,
+    userProfile,
     canManageMeetingPrompts,
     canAccessQuickBooksAdmin,
     canCreate,
@@ -392,6 +442,7 @@ export function AppSidebar() {
     canManageMeetingPrompts,
     effectiveRole,
     canAccessQuickBooksAdmin,
+    canAccessHrPayrollPage(userProfile, effectiveRole),
   )
 
   return (
@@ -479,6 +530,22 @@ function PrimaryAction({
         >
           <Plus className="size-4" />
           New Deal
+        </Button>
+      </div>
+    )
+  }
+
+  if (workspace === 'hr') {
+    return (
+      <div className="px-1 group-data-[collapsible=icon]:hidden">
+        <Button
+          onClick={() => navigate('/hr/team')}
+          size="sm"
+          variant="outline"
+          className="w-full justify-start gap-2"
+        >
+          <Users className="size-4" />
+          HR Home
         </Button>
       </div>
     )

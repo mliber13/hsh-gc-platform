@@ -1,24 +1,28 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { format, endOfWeek, startOfWeek } from 'date-fns'
-import { Calculator, Lock } from 'lucide-react'
+import { CalendarRange, Copy, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { generateHrId } from '@/lib/hrTeamUtils'
 import {
   aggregateRunTotalGross,
   buildPayrollPeople,
   calculateGross,
-  getCalculationDetail,
   getNetPieceTotal,
+  isPayrollDraftEmpty,
+  payrollRowVisibleWhenHidingEmpty,
   type PayrollRowPerson,
 } from '@/lib/payrollMath'
 import type { PayPeriod, PayrollEntry, PayrollProjectOption } from '@/types/payroll'
 import type { Contractor1099, Employee } from '@/types/hr'
 import { PayrollPersonRow } from './PayrollPersonRow'
 import { PayrollSummaryBar } from './PayrollSummaryBar'
-import { CalculationDetailDialog } from './CalculationDetailDialog'
-import { useState } from 'react'
 
 export type DraftEntries = Record<string, PayrollEntry>
 
@@ -35,8 +39,17 @@ interface PayrollRunTabProps {
   contractors: Contractor1099[]
   projects: PayrollProjectOption[]
   onSave: () => void
+  onImportTimeClock: () => void
+  onStartNextFromLast: () => void
+  canStartNextFromLast: boolean
+  onThisWeek: () => void
+  onLastWeek: () => void
+  showManualRows: boolean
+  onBeginManualEntry: () => void
   saving: boolean
   isDirty: boolean
+  importingTimeClock: boolean
+  rowResetKey: string
 }
 
 function defaultWeekRange() {
@@ -84,13 +97,22 @@ export function PayrollRunTab({
   contractors,
   projects,
   onSave,
+  onImportTimeClock,
+  onStartNextFromLast,
+  canStartNextFromLast,
+  onThisWeek,
+  onLastWeek,
+  showManualRows,
+  onBeginManualEntry,
   saving,
   isDirty,
+  importingTimeClock,
+  rowResetKey,
 }: PayrollRunTabProps) {
-  const [calcOpen, setCalcOpen] = useState(false)
+  const [hideEmptyRows, setHideEmptyRows] = useState(false)
 
   const people = useMemo(
-    () => buildPayrollPeople(employees, contractors, true),
+    () => buildPayrollPeople(employees, contractors, false),
     [employees, contractors],
   )
 
@@ -137,24 +159,41 @@ export function PayrollRunTab({
   const c1099Total = totalGross - w2Total
   const withPay = savedEntries.filter((e) => (parseFloat(String(e.gross)) || 0) > 0).length
 
-  const calcDetails = useMemo(
-    () =>
-      getCalculationDetail(
-        { entries: savedEntries.filter((e) => (parseFloat(String(e.gross)) || 0) > 0) },
-        employees,
-        contractors,
-      ),
-    [savedEntries, employees, contractors],
-  )
+  const draftEmpty = isPayrollDraftEmpty(entries) && !showManualRows
+
+  const visibleRows = useMemo(() => {
+    const base = locked ? rows.filter((r) => r.gross > 0) : rows
+    if (!hideEmptyRows) return base
+    return base.filter((r) => payrollRowVisibleWhenHidingEmpty(r.gross, r.entry))
+  }, [rows, locked, hideEmptyRows])
 
   const setEntry = (personKey: string, entry: PayrollEntry) => {
     onEntriesChange({ ...entries, [personKey]: entry })
   }
 
+  const togglePersonDone = (personKey: string) => {
+    const current = entries[personKey]
+    if (!current) return
+    setEntry(personKey, { ...current, done: !current.done })
+  }
+
+  const startNextButton = (
+    <Button
+      type="button"
+      variant="default"
+      size="sm"
+      disabled={!canStartNextFromLast || locked}
+      onClick={onStartNextFromLast}
+    >
+      <Copy className="mr-1 size-4" />
+      Start next period from last
+    </Button>
+  )
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border bg-card p-4">
-        <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-44">
             <Label htmlFor="period-start">Period start</Label>
             <Input
@@ -175,6 +214,22 @@ export function PayrollRunTab({
               onChange={(e) => onPeriodEndChange(e.target.value)}
             />
           </div>
+          <Button type="button" variant="outline" size="sm" disabled={locked} onClick={onLastWeek}>
+            Last week
+          </Button>
+          <Button type="button" variant="outline" size="sm" disabled={locked} onClick={onThisWeek}>
+            This week
+          </Button>
+          {canStartNextFromLast ? (
+            startNextButton
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">{startNextButton}</span>
+              </TooltipTrigger>
+              <TooltipContent>No previous payroll to copy from</TooltipContent>
+            </Tooltip>
+          )}
           {editingRun?.locked && (
             <span className="flex items-center gap-1 text-sm text-amber-700">
               <Lock className="size-4" />
@@ -192,10 +247,26 @@ export function PayrollRunTab({
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-3">
-        <Button type="button" variant="outline" size="sm" onClick={() => setCalcOpen(true)}>
-          <Calculator className="mr-1 size-4" />
-          View calculations
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-border"
+              checked={hideEmptyRows}
+              onChange={(e) => setHideEmptyRows(e.target.checked)}
+            />
+            Hide empty rows
+          </label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={locked || importingTimeClock}
+            onClick={onImportTimeClock}
+          >
+            {importingTimeClock ? 'Loading import…' : 'Import from TimeClock'}
+          </Button>
+        </div>
         <Button
           type="button"
           disabled={locked || saving || !periodStart || !periodEnd}
@@ -205,12 +276,52 @@ export function PayrollRunTab({
         </Button>
       </div>
 
-      <div className="space-y-3">
-        {rows
-          .filter((r) => r.gross > 0 || !locked)
-          .map((r) => (
+      {draftEmpty ? (
+        <div className="rounded-lg border border-dashed bg-muted/20 px-6 py-10 text-center">
+          <CalendarRange className="mx-auto mb-3 size-10 text-muted-foreground/60" />
+          <p className="text-lg font-medium">Start this pay period</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+            Copy last week&apos;s jobs and row structure with hours and piece pay zeroed, or enter
+            payroll manually.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            {canStartNextFromLast ? (
+              <Button type="button" size="lg" disabled={locked} onClick={onStartNextFromLast}>
+                <Copy className="mr-2 size-4" />
+                Start next period from last
+              </Button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button type="button" size="lg" disabled>
+                      <Copy className="mr-2 size-4" />
+                      Start next period from last
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>No previous payroll to copy from</TooltipContent>
+              </Tooltip>
+            )}
+            <Button type="button" variant="outline" size="lg" disabled={locked} onClick={onBeginManualEntry}>
+              Add manually
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              disabled={locked || importingTimeClock}
+              onClick={onImportTimeClock}
+            >
+              {importingTimeClock ? 'Loading…' : 'Import from TimeClock'}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {visibleRows.map((r) => (
             <PayrollPersonRow
-              key={r.person.personKey}
+              key={`${r.person.personKey}-${rowResetKey}`}
               person={r.person as PayrollRowPerson}
               entry={r.entry}
               gross={r.gross}
@@ -218,16 +329,16 @@ export function PayrollRunTab({
               projects={projects}
               allPeople={people as PayrollRowPerson[]}
               onChange={(e) => setEntry(r.person.personKey, e)}
+              onToggleDone={() => togglePersonDone(r.person.personKey)}
             />
           ))}
-      </div>
-
-      <CalculationDetailDialog
-        open={calcOpen}
-        onOpenChange={setCalcOpen}
-        details={calcDetails}
-        title={`Calculations · ${periodStart} – ${periodEnd}`}
-      />
+          {visibleRows.length === 0 && hideEmptyRows && (
+            <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No rows with pay or adjustments. Turn off &quot;Hide empty rows&quot; to see everyone.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -241,7 +352,7 @@ export function buildRunPayloadFromDraft(
   contractors: Contractor1099[],
   existing?: PayPeriod,
 ): Omit<PayPeriod, 'id'> & { id?: string } {
-  const people = buildPayrollPeople(employees, contractors, true)
+  const people = buildPayrollPeople(employees, contractors, false)
   const runEntries: PayrollEntry[] = people.map((person) => {
     const entry =
       entries[person.personKey] || {

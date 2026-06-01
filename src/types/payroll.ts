@@ -44,6 +44,7 @@ export interface PayrollEntry {
   bankedHoursUsed?: number | string
   hoursToBank?: number | string
   gross?: number | string
+  /** Per-person workflow lock during an unlocked run — inputs disabled when true. */
   done?: boolean
   helperPayReceived?: unknown[]
 }

@@ -175,3 +175,20 @@ export async function updateUserRole(userId: string, newRole: UserRole): Promise
 
   if (error) throw error;
 }
+
+export async function updateUserHrPersonLink(
+  userId: string,
+  hrPersonId: string | null,
+  hrPersonType: 'w2' | '1099' | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      hr_person_id: hrPersonId,
+      hr_person_type: hrPersonType,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', userId)
+
+  if (error) throw error
+}
