@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { addDays, format, isBefore, parseISO, startOfDay } from 'date-fns'
 import { toast } from 'sonner'
-import { Trash2 } from 'lucide-react'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -30,10 +29,9 @@ import type {
   MeetingActionItem,
   MeetingParkingLotItem,
   MeetingViewData,
-  ParkingLotStatus,
 } from '@/types/meeting'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -52,50 +50,17 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { MeetingSlideView } from '@/components/meeting/MeetingSlideView'
+import { MeetingListView } from '@/components/meeting/MeetingListView'
+import { MeetingCaptureBar } from '@/components/meeting/MeetingCaptureBar'
+import type { ParkingRowHandlers } from '@/components/meeting/ParkingRow'
 
 interface MeetingViewProps {
   meetingDate: string
   weekOf: string
 }
 
-function displayAnswer(value: string | null): string {
-  if (!value || value.trim().length === 0) return '—'
-  return value
-}
-
-function statusPillClass(status: ParkingLotStatus): string {
-  switch (status) {
-    case 'open':
-      return 'rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground'
-    case 'discussed':
-      return 'rounded-md bg-green-500/15 px-2 py-0.5 text-xs text-green-700 dark:text-green-300'
-    case 'dropped':
-      return 'rounded-md bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground line-through'
-    case 'deferred':
-      return 'rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300'
-    case 'converted':
-      return 'rounded-md bg-blue-500/15 px-2 py-0.5 text-xs text-blue-700 dark:text-blue-300'
-    case 'sidebar':
-      return 'rounded-md bg-violet-500/15 px-2 py-0.5 text-xs text-violet-700 dark:text-violet-300'
-    case 'sidebar_resolved':
-      return 'rounded-md bg-green-500/15 px-2 py-0.5 text-xs text-green-700 dark:text-green-300'
-    default:
-      return 'rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground'
-  }
-}
-
-function statusLabel(status: ParkingLotStatus): string {
-  switch (status) {
-    case 'open': return 'Open'
-    case 'discussed': return 'Discussed'
-    case 'dropped': return 'Dropped'
-    case 'deferred': return 'Deferred'
-    case 'converted': return 'Converted'
-    case 'sidebar': return 'Sidebar'
-    case 'sidebar_resolved': return 'Sidebar resolved'
-    default: return status
-  }
-}
+type ViewMode = 'slide' | 'list'
 
 export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
   usePageTitle('Meeting')
@@ -105,6 +70,17 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
 
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<MeetingViewData | null>(null)
+
+  // View mode — default slide, persisted per user
+  const [viewMode, setViewMode] = useState<ViewMode>('slide')
+  useEffect(() => {
+    if (!user?.id) return
+    const stored = localStorage.getItem(`meeting:viewMode:${user.id}`)
+    if (stored === 'slide' || stored === 'list') setViewMode(stored)
+  }, [user?.id])
+
+  // Slide navigation
+  const [currentSlide, setCurrentSlide] = useState(0)
 
   // Action items state
   const [actionItems, setActionItems] = useState<MeetingActionItem[]>([])
@@ -142,8 +118,6 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
   const [dropReason, setDropReason] = useState('')
   const [isDroppingItem, setIsDroppingItem] = useState(false)
 
-  const statusOptions: ActionItemStatus[] = ['Open', 'In Progress', 'Done', 'Dropped']
-
   const formattedMeetingDate = useMemo(() => {
     const parsed = parseISO(meetingDate)
     if (Number.isNaN(parsed.getTime())) return meetingDate
@@ -152,7 +126,6 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
 
   useEffect(() => {
     let cancelled = false
-
     const load = async () => {
       setLoading(true)
       try {
@@ -175,12 +148,226 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
         if (!cancelled) setLoading(false)
       }
     }
-
     void load()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [meetingDate, weekOf])
+
+  useEffect(() => {
+    if (!data?.meeting_id) return undefined
+    const unsubscribe = subscribeMeetingActionItems(data.meeting_id, {
+      onInsert: (row) => {
+        setActionItems((current) => {
+          if (current.some((item) => item.id === row.id)) return current
+          return [row, ...current]
+        })
+      },
+      onUpdate: (row) => {
+        setActionItems((current) => current.map((item) => (item.id === row.id ? row : item)))
+      },
+      onDelete: (id) => {
+        setActionItems((current) => current.filter((item) => item.id !== id))
+      },
+    })
+    return () => { unsubscribe() }
+  }, [data?.meeting_id])
+
+  useEffect(() => {
+    if (!data?.meeting_id) return undefined
+    const unsubscribe = subscribeParkingLot(data.meeting_id, {
+      onInsert: (row) => {
+        setParkingItems((current) => {
+          if (current.some((item) => item.id === row.id)) return current
+          return [...current, row]
+        })
+      },
+      onUpdate: (row) => {
+        setParkingItems((current) => current.map((item) => (item.id === row.id ? row : item)))
+        setDeferredItems((current) => current.map((item) => (item.id === row.id ? row : item)))
+      },
+      onDelete: (id) => {
+        setParkingItems((current) => current.filter((item) => item.id !== id))
+        setDeferredItems((current) => current.filter((item) => item.id !== id))
+      },
+    })
+    return () => { unsubscribe() }
+  }, [data?.meeting_id])
+
+  // Slide count — used by keyboard handler
+  const slideCount = useMemo(() => {
+    if (!data) return 0
+    const leadCount = data.sections.filter((s) => s.prompts.length > 0 || s.has_submission).length
+    return leadCount + 2
+  }, [data])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement as HTMLElement | null)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea') return
+      if (document.activeElement?.getAttribute('contenteditable')) return
+      if (document.querySelector('[role="dialog"][data-state="open"]')) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault()
+        setParkTopic('')
+        setParkRaisedByLeadId('__unspecified__')
+        setIsParkItDialogOpen(true)
+      } else if (e.key === 'a' || e.key === 'A') {
+        e.preventDefault()
+        setIsAddDialogOpen(true)
+      } else if (e.key === 'ArrowLeft' && viewMode === 'slide') {
+        e.preventDefault()
+        setCurrentSlide((s) => Math.max(0, s - 1))
+      } else if (e.key === 'ArrowRight' && viewMode === 'slide') {
+        e.preventDefault()
+        setCurrentSlide((s) => Math.min(slideCount - 1, s + 1))
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [viewMode, slideCount])
+
+  const handleToggleViewMode = () => {
+    const next: ViewMode = viewMode === 'slide' ? 'list' : 'slide'
+    setViewMode(next)
+    if (user?.id) localStorage.setItem(`meeting:viewMode:${user.id}`, next)
+  }
+
+  const ownerNameByLeadId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const section of data?.sections ?? []) {
+      map.set(section.lead_id, section.display_name)
+    }
+    return map
+  }, [data?.sections])
+
+  const meetingLeads = useMemo(
+    () => (data?.sections ?? []).map((s) => ({ lead_id: s.lead_id, display_name: s.display_name })),
+    [data?.sections],
+  )
+
+  const sortedActionItems = useMemo(
+    () => [...actionItems].sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    [actionItems],
+  )
+
+  const thisMeetingParkingItems = useMemo(
+    () => parkingItems.filter((item) => item.origin_meeting_id === data?.meeting_id),
+    [parkingItems, data?.meeting_id],
+  )
+
+  const activeParkCount = useMemo(
+    () =>
+      parkingItems.filter(
+        (item) =>
+          !['discussed', 'dropped', 'converted', 'sidebar_resolved'].includes(item.status),
+      ).length,
+    [parkingItems],
+  )
+
+  const canAddActionItem = newTask.trim().length > 0 && newOwnerLeadId !== ''
+
+  const resetActionItemForm = () => {
+    setNewTask('')
+    setNewOwnerLeadId('')
+    setNewDueDate('')
+    setNewNotes('')
+    setConvertingFromParkingItemId(null)
+  }
+
+  // ── Action item handlers ──────────────────────────────────────────────────
+
+  const handleAddActionItem = async () => {
+    if (!data?.meeting_id || !canAddActionItem || isSavingActionItem) return
+    setIsSavingActionItem(true)
+    try {
+      if (convertingFromParkingItemId) {
+        const newActionItemId = await convertParkingLotToActionItem({
+          parkingItemId: convertingFromParkingItemId,
+          task: newTask.trim(),
+          ownerLeadId: newOwnerLeadId,
+          dueDate: newDueDate || null,
+          notes: newNotes.trim() || null,
+        })
+        const created = await getMeetingActionItems(data.meeting_id)
+        setActionItems(created)
+        setParkingItems((current) =>
+          current.map((item) =>
+            item.id === convertingFromParkingItemId
+              ? { ...item, status: 'converted', action_item_id: newActionItemId }
+              : item,
+          ),
+        )
+        toast.success('Converted to action item.')
+      } else {
+        const created = await createMeetingActionItem({
+          meetingId: data.meeting_id,
+          task: newTask.trim(),
+          ownerLeadId: newOwnerLeadId,
+          dueDate: newDueDate || null,
+          notes: newNotes.trim() || null,
+        })
+        setActionItems((current) =>
+          current.some((item) => item.id === created.id) ? current : [created, ...current],
+        )
+        toast.success('Action item added.')
+      }
+      setIsAddDialogOpen(false)
+      resetActionItemForm()
+    } catch (error) {
+      console.error('Failed to add action item', error)
+      toast.error('Could not add action item.')
+    } finally {
+      setIsSavingActionItem(false)
+    }
+  }
+
+  const handleStatusChange = async (id: string, nextStatus: ActionItemStatus) => {
+    const previous = actionItems.find((item) => item.id === id)
+    if (!previous || previous.status === nextStatus) return
+    setActionItems((current) =>
+      current.map((item) => (item.id === id ? { ...item, status: nextStatus } : item)),
+    )
+    try {
+      const updated = await updateMeetingActionItemStatus(id, nextStatus)
+      setActionItems((current) => current.map((item) => (item.id === id ? updated : item)))
+    } catch (error) {
+      console.error('Failed to update action item status', error)
+      setActionItems((current) =>
+        current.map((item) => (item.id === id ? { ...item, status: previous.status } : item)),
+      )
+      toast.error('Could not update action item status.')
+    }
+  }
+
+  const handleDeleteRequest = (id: string) => {
+    setDeletingItemId(id)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deletingItemId || isDeletingActionItem) return
+    const target = actionItems.find((item) => item.id === deletingItemId)
+    if (!target) {
+      setIsDeleteDialogOpen(false)
+      setDeletingItemId(null)
+      return
+    }
+    setIsDeletingActionItem(true)
+    setActionItems((current) => current.filter((item) => item.id !== deletingItemId))
+    setIsDeleteDialogOpen(false)
+    try {
+      await deleteMeetingActionItem(deletingItemId)
+    } catch (error) {
+      console.error('Failed deleting action item', error)
+      setActionItems((current) => [target, ...current])
+      toast.error('Could not delete action item.')
+    } finally {
+      setDeletingItemId(null)
+      setIsDeletingActionItem(false)
+    }
+  }
 
   const handleToggleLiveDiscuss = async (
     leadId: string,
@@ -212,209 +399,14 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
     }
   }
 
-  useEffect(() => {
-    if (!data?.meeting_id) return undefined
+  // ── Parking lot handlers ──────────────────────────────────────────────────
 
-    const unsubscribe = subscribeMeetingActionItems(data.meeting_id, {
-      onInsert: (row) => {
-        setActionItems((current) => {
-          if (current.some((item) => item.id === row.id)) return current
-          return [row, ...current]
-        })
-      },
-      onUpdate: (row) => {
-        setActionItems((current) =>
-          current.map((item) => (item.id === row.id ? row : item)),
-        )
-      },
-      onDelete: (id) => {
-        setActionItems((current) => current.filter((item) => item.id !== id))
-      },
-    })
-
-    return () => {
-      unsubscribe()
-    }
-  }, [data?.meeting_id])
-
-  useEffect(() => {
-    if (!data?.meeting_id) return undefined
-
-    const unsubscribe = subscribeParkingLot(data.meeting_id, {
-      onInsert: (row) => {
-        setParkingItems((current) => {
-          if (current.some((item) => item.id === row.id)) return current
-          return [...current, row]
-        })
-      },
-      onUpdate: (row) => {
-        setParkingItems((current) =>
-          current.map((item) => (item.id === row.id ? row : item)),
-        )
-        setDeferredItems((current) =>
-          current.map((item) => (item.id === row.id ? row : item)),
-        )
-      },
-      onDelete: (id) => {
-        setParkingItems((current) => current.filter((item) => item.id !== id))
-        setDeferredItems((current) => current.filter((item) => item.id !== id))
-      },
-    })
-
-    return () => {
-      unsubscribe()
-    }
-  }, [data?.meeting_id])
-
-  const ownerNameByLeadId = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const section of data?.sections ?? []) {
-      map.set(section.lead_id, section.display_name)
-    }
-    return map
-  }, [data?.sections])
-
-  const meetingLeads = useMemo(
-    () =>
-      (data?.sections ?? []).map((section) => ({
-        lead_id: section.lead_id,
-        display_name: section.display_name,
-      })),
-    [data?.sections],
-  )
-
-  const sortedActionItems = useMemo(
-    () =>
-      [...actionItems].sort((a, b) => b.created_at.localeCompare(a.created_at)),
-    [actionItems],
-  )
-
-  const thisMeetingParkingItems = useMemo(
-    () =>
-      parkingItems.filter(
-        (item) => item.origin_meeting_id === data?.meeting_id,
-      ),
-    [parkingItems, data?.meeting_id],
-  )
-
-  const canAddActionItem = newTask.trim().length > 0 && newOwnerLeadId !== ''
-
-  const resetActionItemForm = () => {
-    setNewTask('')
-    setNewOwnerLeadId('')
-    setNewDueDate('')
-    setNewNotes('')
-    setConvertingFromParkingItemId(null)
+  const openParkItDialog = () => {
+    setParkTopic('')
+    setParkRaisedByLeadId('__unspecified__')
+    setIsParkItDialogOpen(true)
   }
 
-  const handleAddActionItem = async () => {
-    if (!data?.meeting_id || !canAddActionItem || isSavingActionItem) return
-
-    setIsSavingActionItem(true)
-    try {
-      if (convertingFromParkingItemId) {
-        const newActionItemId = await convertParkingLotToActionItem({
-          parkingItemId: convertingFromParkingItemId,
-          task: newTask.trim(),
-          ownerLeadId: newOwnerLeadId,
-          dueDate: newDueDate || null,
-          notes: newNotes.trim() ? newNotes.trim() : null,
-        })
-        const created = await getMeetingActionItems(data.meeting_id)
-        setActionItems(created)
-        setParkingItems((current) =>
-          current.map((item) =>
-            item.id === convertingFromParkingItemId
-              ? { ...item, status: 'converted', action_item_id: newActionItemId }
-              : item,
-          ),
-        )
-        toast.success('Converted to action item.')
-      } else {
-        const created = await createMeetingActionItem({
-          meetingId: data.meeting_id,
-          task: newTask.trim(),
-          ownerLeadId: newOwnerLeadId,
-          dueDate: newDueDate || null,
-          notes: newNotes.trim() ? newNotes.trim() : null,
-        })
-        setActionItems((current) =>
-          current.some((item) => item.id === created.id)
-            ? current
-            : [created, ...current],
-        )
-        toast.success('Action item added.')
-      }
-      setIsAddDialogOpen(false)
-      resetActionItemForm()
-    } catch (error) {
-      console.error('Failed to add action item', error)
-      toast.error('Could not add action item.')
-    } finally {
-      setIsSavingActionItem(false)
-    }
-  }
-
-  const handleStatusChange = async (id: string, nextStatus: ActionItemStatus) => {
-    const previous = actionItems.find((item) => item.id === id)
-    if (!previous || previous.status === nextStatus) return
-
-    setActionItems((current) =>
-      current.map((item) => (item.id === id ? { ...item, status: nextStatus } : item)),
-    )
-    try {
-      const updated = await updateMeetingActionItemStatus(id, nextStatus)
-      setActionItems((current) =>
-        current.map((item) => (item.id === id ? updated : item)),
-      )
-    } catch (error) {
-      console.error('Failed to update action item status', error)
-      setActionItems((current) =>
-        current.map((item) =>
-          item.id === id ? { ...item, status: previous.status } : item,
-        ),
-      )
-      toast.error('Could not update action item status.')
-    }
-  }
-
-  const handleDeleteRequest = (id: string) => {
-    setDeletingItemId(id)
-    setIsDeleteDialogOpen(true)
-  }
-
-  const handleConfirmDelete = async () => {
-    if (!deletingItemId || isDeletingActionItem) return
-    const target = actionItems.find((item) => item.id === deletingItemId)
-    if (!target) {
-      setIsDeleteDialogOpen(false)
-      setDeletingItemId(null)
-      return
-    }
-
-    setIsDeletingActionItem(true)
-    setActionItems((current) => current.filter((item) => item.id !== deletingItemId))
-    setIsDeleteDialogOpen(false)
-
-    try {
-      await deleteMeetingActionItem(deletingItemId)
-    } catch (error) {
-      console.error('Failed deleting action item', error)
-      setActionItems((current) => [target, ...current])
-      toast.error('Could not delete action item.')
-    } finally {
-      setDeletingItemId(null)
-      setIsDeletingActionItem(false)
-    }
-  }
-
-  const isOverdue = (item: MeetingActionItem): boolean => {
-    if (!item.due_date) return false
-    if (!(item.status === 'Open' || item.status === 'In Progress')) return false
-    return isBefore(parseISO(item.due_date), startOfDay(new Date()))
-  }
-
-  // Parking lot handlers
   const handleParkItSave = async () => {
     if (!data?.meeting_id || !parkTopic.trim() || isSavingParkItem) return
     setIsSavingParkItem(true)
@@ -422,8 +414,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
       const created = await createParkingLotItem({
         meetingId: data.meeting_id,
         topic: parkTopic,
-        raisedByLeadId:
-          parkRaisedByLeadId === '__unspecified__' ? null : parkRaisedByLeadId,
+        raisedByLeadId: parkRaisedByLeadId === '__unspecified__' ? null : parkRaisedByLeadId,
       })
       setParkingItems((current) => {
         if (current.some((item) => item.id === created.id)) return current
@@ -444,9 +435,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
   const handleDiscuss = async (id: string) => {
     try {
       const updated = await markParkingLotDiscussed(id)
-      setParkingItems((current) =>
-        current.map((item) => (item.id === id ? updated : item)),
-      )
+      setParkingItems((current) => current.map((item) => (item.id === id ? updated : item)))
     } catch (error) {
       console.error('Failed to mark discussed', error)
       toast.error('Could not update item.')
@@ -456,10 +445,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
   const handleDefer = async (id: string) => {
     if (!data?.meeting_id) return
     try {
-      const nextTuesdayDate = format(
-        addDays(parseISO(meetingDate), 7),
-        'yyyy-MM-dd',
-      )
+      const nextTuesdayDate = format(addDays(parseISO(meetingDate), 7), 'yyyy-MM-dd')
       const toMeetingId = await ensureMeeting(nextTuesdayDate)
       const updated = await deferParkingLotItem(id, toMeetingId)
       setParkingItems((current) => current.filter((item) => item.id !== updated.id))
@@ -495,9 +481,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
         participantLeadIds: sidebarParticipants,
         note: sidebarNote.trim() || null,
       })
-      setParkingItems((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      )
+      setParkingItems((current) => current.map((item) => (item.id === updated.id ? updated : item)))
       setIsSidebarDialogOpen(false)
       setSidebarTargetItemId(null)
       toast.success('Sidebar started.')
@@ -519,13 +503,8 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
     if (!dropTargetItemId || isDroppingItem) return
     setIsDroppingItem(true)
     try {
-      const updated = await dropParkingLotItem(
-        dropTargetItemId,
-        dropReason.trim() || null,
-      )
-      setParkingItems((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      )
+      const updated = await dropParkingLotItem(dropTargetItemId, dropReason.trim() || null)
+      setParkingItems((current) => current.map((item) => (item.id === updated.id ? updated : item)))
       setIsDropDialogOpen(false)
       setDropTargetItemId(null)
       toast.success('Item dropped.')
@@ -552,152 +531,26 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
 
   const toggleSidebarParticipant = (leadId: string) => {
     setSidebarParticipants((current) =>
-      current.includes(leadId)
-        ? current.filter((id) => id !== leadId)
-        : [...current, leadId],
+      current.includes(leadId) ? current.filter((id) => id !== leadId) : [...current, leadId],
     )
   }
 
-  const renderParkingRow = (item: MeetingParkingLotItem) => {
-    const raisedByName = item.raised_by_lead_id
-      ? ownerNameByLeadId.get(item.raised_by_lead_id)
-      : null
-    const resolverName = item.sidebar_resolved_by_lead_id
-      ? ownerNameByLeadId.get(item.sidebar_resolved_by_lead_id)
-      : null
-    const participantNames = item.sidebar_participants
-      .map((pid) => ownerNameByLeadId.get(pid) ?? pid)
-      .join(', ')
-
-    return (
-      <div
-        key={item.id}
-        className="rounded-lg border border-border/60 bg-card/50 p-3 space-y-2"
-      >
-        <div className="flex flex-wrap items-start gap-2">
-          <p className="flex-1 text-sm font-medium">{item.topic}</p>
-          <span className={statusPillClass(item.status)}>{statusLabel(item.status)}</span>
-          {isOperator && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0"
-              onClick={() => void handleDeleteParkingItem(item.id)}
-            >
-              <Trash2 className="size-3.5" />
-              <span className="sr-only">Delete</span>
-            </Button>
-          )}
-        </div>
-
-        {raisedByName && (
-          <p className="text-xs text-muted-foreground">Raised by: {raisedByName}</p>
-        )}
-
-        {item.status === 'sidebar' && (
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">
-              Sidebar — {participantNames}
-            </p>
-            {item.sidebar_note && (
-              <p className="text-xs text-muted-foreground">Note: {item.sidebar_note}</p>
-            )}
-          </div>
-        )}
-
-        {item.status === 'sidebar_resolved' && (
-          <div className="space-y-0.5">
-            {resolverName && (
-              <p className="text-xs text-muted-foreground">
-                Resolved by {resolverName}
-                {item.sidebar_resolved_at
-                  ? ` · ${format(parseISO(item.sidebar_resolved_at), 'MMM d')}`
-                  : ''}
-              </p>
-            )}
-            {item.sidebar_note && (
-              <p className="text-xs text-muted-foreground">Note: {item.sidebar_note}</p>
-            )}
-          </div>
-        )}
-
-        {item.status === 'converted' && item.action_item_id && (
-          <p className="text-xs text-blue-700 dark:text-blue-300">
-            → Action item created
-          </p>
-        )}
-
-        {item.status === 'dropped' && item.drop_reason && (
-          <p className="text-xs text-muted-foreground">Reason: {item.drop_reason}</p>
-        )}
-
-        {isOperator && item.status === 'open' && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => void handleDiscuss(item.id)}
-            >
-              Discuss now
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => void handleDefer(item.id)}
-            >
-              Defer
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => handleOpenConvertDialog(item)}
-            >
-              Convert
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => handleOpenSidebarDialog(item.id)}
-            >
-              Sidebar
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => handleOpenDropDialog(item.id)}
-            >
-              Drop
-            </Button>
-          </div>
-        )}
-
-        {isOperator && item.status === 'sidebar' && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => handleOpenConvertDialog(item)}
-            >
-              Convert
-            </Button>
-          </div>
-        )}
-      </div>
-    )
+  const isOverdue = (item: MeetingActionItem): boolean => {
+    if (!item.due_date) return false
+    if (!(item.status === 'Open' || item.status === 'In Progress')) return false
+    return isBefore(parseISO(item.due_date), startOfDay(new Date()))
   }
+
+  const parkingRowHandlers: ParkingRowHandlers = {
+    onDiscuss: (id) => void handleDiscuss(id),
+    onDefer: (id) => void handleDefer(id),
+    onOpenConvertDialog: handleOpenConvertDialog,
+    onOpenSidebarDialog: handleOpenSidebarDialog,
+    onOpenDropDialog: handleOpenDropDialog,
+    onDeleteParkingItem: (id) => void handleDeleteParkingItem(id),
+  }
+
+  // ── Loading / error states ─────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -726,243 +579,59 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
     )
   }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="mx-auto w-full max-w-4xl space-y-10">
-        <Card className="border-border/60 bg-card/50">
-          <CardHeader>
-            <CardTitle className="text-2xl">Meeting — {formattedMeetingDate}</CardTitle>
-          </CardHeader>
-        </Card>
+    <div className={isOperator ? 'pb-14' : undefined}>
+      {viewMode === 'slide' ? (
+        <MeetingSlideView
+          currentSlide={currentSlide}
+          onSlideChange={setCurrentSlide}
+          onToggleViewMode={handleToggleViewMode}
+          data={data}
+          actionItems={actionItems}
+          parkingItems={parkingItems}
+          deferredItems={deferredItems}
+          thisMeetingParkingItems={thisMeetingParkingItems}
+          ownerNameByLeadId={ownerNameByLeadId}
+          isOperator={isOperator}
+          canManageMeetingPrompts={canManageMeetingPrompts}
+          formattedMeetingDate={formattedMeetingDate}
+          onToggleLiveDiscuss={(leadId, promptId, val) => void handleToggleLiveDiscuss(leadId, promptId, val)}
+          onParkItClick={openParkItDialog}
+          parkingRowHandlers={parkingRowHandlers}
+          onStatusChange={(id, status) => void handleStatusChange(id, status)}
+          onDeleteRequest={handleDeleteRequest}
+        />
+      ) : (
+        <MeetingListView
+          data={data}
+          sortedActionItems={sortedActionItems}
+          deferredItems={deferredItems}
+          thisMeetingParkingItems={thisMeetingParkingItems}
+          ownerNameByLeadId={ownerNameByLeadId}
+          meetingLeads={meetingLeads}
+          isOperator={isOperator}
+          canManageMeetingPrompts={canManageMeetingPrompts}
+          formattedMeetingDate={formattedMeetingDate}
+          onToggleLiveDiscuss={(leadId, promptId, val) => void handleToggleLiveDiscuss(leadId, promptId, val)}
+          onAddActionItemClick={() => setIsAddDialogOpen(true)}
+          onStatusChange={(id, status) => void handleStatusChange(id, status)}
+          onDeleteRequest={handleDeleteRequest}
+          onParkItClick={openParkItDialog}
+          parkingRowHandlers={parkingRowHandlers}
+          onToggleViewMode={handleToggleViewMode}
+        />
+      )}
 
-        <div className="space-y-12">
-          {data.sections.map((section) => {
-            const hasNoPrompts = section.prompts.length === 0
-            const showNotSubmitted = !section.has_submission
-
-            return (
-              <section key={section.lead_id} className="space-y-6">
-                <header className="space-y-1">
-                  <h2 className="text-2xl font-semibold">{section.display_name}</h2>
-                  <p className="text-sm text-muted-foreground">{section.area_label}</p>
-                </header>
-
-                {hasNoPrompts ? (
-                  <p className="text-base text-muted-foreground">(no prompts configured)</p>
-                ) : showNotSubmitted ? (
-                  <div className="space-y-3">
-                    <p className="text-base text-muted-foreground">
-                      — not submitted; topics for verbal review —
-                    </p>
-                    <div className="space-y-2">
-                      {section.prompts.map((prompt, index) => (
-                        <p key={prompt.prompt_id} className="text-base text-muted-foreground">
-                          {index + 1}. {prompt.question_text}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {section.prompts.map((prompt) => (
-                      <article key={prompt.prompt_id} className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-base font-semibold text-foreground">{prompt.question_text}</h3>
-                          {canManageMeetingPrompts ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void handleToggleLiveDiscuss(
-                                  section.lead_id,
-                                  prompt.prompt_id,
-                                  prompt.is_live_discuss,
-                                )
-                              }
-                              className={
-                                prompt.is_live_discuss
-                                  ? 'rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 transition-colors hover:bg-amber-500/25 dark:text-amber-300'
-                                  : 'rounded-md border border-dashed border-muted-foreground/40 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:border-amber-500/60 hover:text-amber-700 dark:hover:text-amber-300'
-                              }
-                              title={
-                                prompt.is_live_discuss
-                                  ? 'Click to unmark live discussion'
-                                  : 'Click to mark for live discussion'
-                              }
-                            >
-                              {prompt.is_live_discuss ? 'Discuss live' : 'Mark live'}
-                            </button>
-                          ) : (
-                            prompt.is_live_discuss && (
-                              <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">
-                                Discuss live
-                              </span>
-                            )
-                          )}
-                        </div>
-                        <p
-                          className={
-                            prompt.is_live_discuss
-                              ? 'text-base leading-relaxed text-amber-600 dark:text-amber-400'
-                              : displayAnswer(prompt.answer_text) === '—'
-                                ? 'text-base leading-relaxed text-muted-foreground'
-                                : 'text-base leading-relaxed text-muted-foreground'
-                          }
-                        >
-                          {displayAnswer(prompt.answer_text)}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )
-          })}
-
-          {/* Action Items section */}
-          <section className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-2xl font-semibold">Action Items</h2>
-              <Button type="button" onClick={() => setIsAddDialogOpen(true)}>
-                Add Action Item
-              </Button>
-            </div>
-
-            {sortedActionItems.length === 0 ? (
-              <p className="text-base text-muted-foreground">No action items yet.</p>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  {sortedActionItems.length} items
-                </p>
-                <div className="overflow-x-auto rounded-lg border border-border/60 bg-card/50">
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-border/60 bg-muted/30 text-left text-xs font-medium text-muted-foreground">
-                        <th className="px-3 py-2">Task</th>
-                        <th className="px-3 py-2">Owner</th>
-                        <th className="px-3 py-2">Due</th>
-                        <th className="px-3 py-2">Status</th>
-                        <th className="w-12 px-3 py-2" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedActionItems.map((item) => (
-                        <tr
-                          key={item.id}
-                          className="border-b border-border/60 last:border-b-0"
-                        >
-                          <td className="px-3 py-2 align-top">
-                            <div className="space-y-1">
-                              <p className="text-sm">{item.task}</p>
-                              {item.notes && (
-                                <p className="text-xs text-muted-foreground">
-                                  {item.notes}
-                                </p>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2 align-top text-sm">
-                            {ownerNameByLeadId.get(item.owner_lead_id) ?? 'Unknown'}
-                          </td>
-                          <td
-                            className={
-                              isOverdue(item)
-                                ? 'px-3 py-2 align-top text-sm text-destructive'
-                                : item.due_date
-                                  ? 'px-3 py-2 align-top text-sm'
-                                  : 'px-3 py-2 align-top text-sm text-muted-foreground'
-                            }
-                          >
-                            {item.due_date
-                              ? format(parseISO(item.due_date), 'MMM d')
-                              : '—'}
-                          </td>
-                          <td className="px-3 py-2 align-top">
-                            <Select
-                              value={item.status}
-                              onValueChange={(value) =>
-                                void handleStatusChange(item.id, value as ActionItemStatus)
-                              }
-                            >
-                              <SelectTrigger className="h-8 w-[150px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {statusOptions.map((status) => (
-                                  <SelectItem key={status} value={status}>
-                                    {status}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </td>
-                          <td className="px-3 py-2 align-top text-right">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleDeleteRequest(item.id)}
-                            >
-                              <Trash2 className="size-4" />
-                              <span className="sr-only">Delete action item</span>
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* Parking Lot section */}
-          <section className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-2xl font-semibold">Parking Lot</h2>
-              {isOperator && (
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setParkTopic('')
-                    setParkRaisedByLeadId('__unspecified__')
-                    setIsParkItDialogOpen(true)
-                  }}
-                >
-                  Park it
-                </Button>
-              )}
-            </div>
-
-            {deferredItems.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Deferred from prior meetings ({deferredItems.length})
-                </p>
-                <div className="space-y-2">
-                  {deferredItems.map((item) => renderParkingRow(item))}
-                </div>
-              </div>
-            )}
-
-            {thisMeetingParkingItems.length === 0 && deferredItems.length === 0 ? (
-              <p className="text-base text-muted-foreground">No parked topics yet.</p>
-            ) : thisMeetingParkingItems.length > 0 ? (
-              <div className="space-y-3">
-                {deferredItems.length > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Parked this meeting ({thisMeetingParkingItems.length})
-                  </p>
-                )}
-                <div className="space-y-2">
-                  {thisMeetingParkingItems.map((item) => renderParkingRow(item))}
-                </div>
-              </div>
-            ) : null}
-          </section>
-        </div>
-      </div>
+      {isOperator && (
+        <MeetingCaptureBar
+          activeParkCount={activeParkCount}
+          actionItemCount={actionItems.length}
+          onParkItClick={openParkItDialog}
+          onAddActionItemClick={() => setIsAddDialogOpen(true)}
+        />
+      )}
 
       {/* Add / Convert Action Item Dialog */}
       <Dialog
@@ -980,7 +649,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
             <DialogDescription>
               {convertingFromParkingItemId
                 ? 'Create an action item from this parked topic.'
-                : 'Add a task to this meeting\'s action items list.'}
+                : "Add a task to this meeting's action items list."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -989,7 +658,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
               <Input
                 id="meeting-action-item-task"
                 value={newTask}
-                onChange={(event) => setNewTask(event.target.value)}
+                onChange={(e) => setNewTask(e.target.value)}
                 placeholder="Enter task..."
               />
             </div>
@@ -1014,7 +683,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
                 id="meeting-action-item-due-date"
                 type="date"
                 value={newDueDate}
-                onChange={(event) => setNewDueDate(event.target.value)}
+                onChange={(e) => setNewDueDate(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -1022,7 +691,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
               <Textarea
                 id="meeting-action-item-notes"
                 value={newNotes}
-                onChange={(event) => setNewNotes(event.target.value)}
+                onChange={(e) => setNewNotes(e.target.value)}
                 className="min-h-[80px]"
                 placeholder="Optional notes..."
               />
@@ -1032,10 +701,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                setIsAddDialogOpen(false)
-                resetActionItemForm()
-              }}
+              onClick={() => { setIsAddDialogOpen(false); resetActionItemForm() }}
               disabled={isSavingActionItem}
             >
               Cancel
@@ -1046,12 +712,8 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
               disabled={!canAddActionItem || isSavingActionItem}
             >
               {isSavingActionItem
-                ? convertingFromParkingItemId
-                  ? 'Converting...'
-                  : 'Adding...'
-                : convertingFromParkingItemId
-                  ? 'Convert'
-                  : 'Add'}
+                ? convertingFromParkingItemId ? 'Converting...' : 'Adding...'
+                : convertingFromParkingItemId ? 'Convert' : 'Add'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1102,7 +764,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
               <Input
                 id="park-topic"
                 value={parkTopic}
-                onChange={(event) => setParkTopic(event.target.value.slice(0, 200))}
+                onChange={(e) => setParkTopic(e.target.value.slice(0, 200))}
                 placeholder="Briefly describe the topic..."
                 maxLength={200}
               />
@@ -1181,7 +843,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
               <Textarea
                 id="sidebar-note"
                 value={sidebarNote}
-                onChange={(event) => setSidebarNote(event.target.value)}
+                onChange={(e) => setSidebarNote(e.target.value)}
                 className="min-h-[80px]"
                 placeholder="Context or goal for the sidebar..."
               />
@@ -1221,7 +883,7 @@ export function MeetingView({ meetingDate, weekOf }: MeetingViewProps) {
             <Input
               id="drop-reason"
               value={dropReason}
-              onChange={(event) => setDropReason(event.target.value)}
+              onChange={(e) => setDropReason(e.target.value)}
               placeholder="Why is this being dropped?"
             />
           </div>
