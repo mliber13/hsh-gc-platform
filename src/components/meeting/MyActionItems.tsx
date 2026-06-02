@@ -13,8 +13,12 @@ import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import {
+  convertParkingLotItemAsParticipant,
+  getAllMeetingLeads,
   getCurrentUserMeetingLead,
   getMyActionItems,
+  getSidebarsForLead,
+  resolveSidebar,
   updateMeetingActionItemNotes,
   updateMeetingActionItemStatus,
 } from '@/services/meetingService'
@@ -22,9 +26,12 @@ import type {
   ActionItemStatus,
   MeetingActionItem,
   MeetingLead,
+  MeetingParkingLotItem,
 } from '@/types/meeting'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
@@ -38,6 +45,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 const statusOptions: ActionItemStatus[] = [
   'Open',
@@ -57,10 +72,21 @@ export function MyActionItems() {
   const [loading, setLoading] = useState(true)
   const [lead, setLead] = useState<MeetingLead | null>(null)
   const [items, setItems] = useState<MeetingActionItem[]>([])
+  const [sidebars, setSidebars] = useState<MeetingParkingLotItem[]>([])
+  const [leadNameById, setLeadNameById] = useState<Map<string, string>>(new Map())
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null)
   const [draftNotes, setDraftNotes] = useState('')
   const [completedOpen, setCompletedOpen] = useState(false)
   const [savingNotes, setSavingNotes] = useState(false)
+
+  // Sidebar convert dialog
+  const [isSidebarConvertDialogOpen, setIsSidebarConvertDialogOpen] = useState(false)
+  const [convertTargetSidebar, setConvertTargetSidebar] = useState<MeetingParkingLotItem | null>(null)
+  const [convertTask, setConvertTask] = useState('')
+  const [convertOwnerLeadId, setConvertOwnerLeadId] = useState('')
+  const [convertDueDate, setConvertDueDate] = useState('')
+  const [convertNotes, setConvertNotes] = useState('')
+  const [isConvertingSidebar, setIsConvertingSidebar] = useState(false)
 
   const load = useCallback(async () => {
     if (!user?.id) {
@@ -75,11 +101,18 @@ export function MyActionItems() {
 
       if (!resolvedLead) {
         setItems([])
+        setSidebars([])
         return
       }
 
-      const myItems = await getMyActionItems(resolvedLead.id)
+      const [myItems, mySidebars, allLeads] = await Promise.all([
+        getMyActionItems(resolvedLead.id),
+        getSidebarsForLead(resolvedLead.id),
+        getAllMeetingLeads(),
+      ])
       setItems(myItems)
+      setSidebars(mySidebars)
+      setLeadNameById(new Map(allLeads.filter((l) => l.is_active).map((l) => [l.id, l.display_name])))
     } catch (error) {
       console.error('Failed to load my action items', error)
       toast.error('Could not load your action items.')
@@ -139,10 +172,7 @@ export function MyActionItems() {
 
   const activeCount = activeItems.length
 
-  const handleStatusChange = async (
-    id: string,
-    nextStatus: ActionItemStatus,
-  ) => {
+  const handleStatusChange = async (id: string, nextStatus: ActionItemStatus) => {
     const previous = items.find((item) => item.id === id)
     if (!previous || previous.status === nextStatus) return
 
@@ -201,6 +231,53 @@ export function MyActionItems() {
       toast.error('Could not save notes.')
     } finally {
       setSavingNotes(false)
+    }
+  }
+
+  const handleSidebarResolve = async (item: MeetingParkingLotItem) => {
+    if (!lead) return
+    setSidebars((current) => current.filter((s) => s.id !== item.id))
+    try {
+      await resolveSidebar(item.id, lead.id)
+      toast.success('Sidebar marked as resolved.')
+    } catch (error) {
+      console.error('Failed to resolve sidebar', error)
+      setSidebars((current) => [...current, item])
+      toast.error('Could not resolve sidebar.')
+    }
+  }
+
+  const handleOpenSidebarConvert = (item: MeetingParkingLotItem) => {
+    setConvertTargetSidebar(item)
+    setConvertTask(item.topic)
+    setConvertOwnerLeadId(lead?.id ?? '')
+    setConvertDueDate('')
+    setConvertNotes(item.sidebar_note ?? '')
+    setIsSidebarConvertDialogOpen(true)
+  }
+
+  const handleSidebarConvertSave = async () => {
+    if (!convertTargetSidebar || !convertTask.trim() || !convertOwnerLeadId || isConvertingSidebar) return
+    setIsConvertingSidebar(true)
+    try {
+      await convertParkingLotItemAsParticipant({
+        parkingItem: convertTargetSidebar,
+        task: convertTask.trim(),
+        ownerLeadId: convertOwnerLeadId,
+        dueDate: convertDueDate || null,
+        notes: convertNotes.trim() || null,
+      })
+      setSidebars((current) => current.filter((s) => s.id !== convertTargetSidebar.id))
+      const myItems = await getMyActionItems(lead!.id)
+      setItems(myItems)
+      setIsSidebarConvertDialogOpen(false)
+      setConvertTargetSidebar(null)
+      toast.success('Converted to action item.')
+    } catch (error) {
+      console.error('Failed to convert sidebar', error)
+      toast.error('Could not convert sidebar.')
+    } finally {
+      setIsConvertingSidebar(false)
     }
   }
 
@@ -322,7 +399,7 @@ export function MyActionItems() {
     )
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && sidebars.length === 0) {
     return (
       <div className="flex flex-col gap-6 p-6">
         <div className="mx-auto w-full max-w-3xl space-y-2">
@@ -347,6 +424,62 @@ export function MyActionItems() {
             {lead.display_name} · {activeCount} open
           </p>
         </div>
+
+        {sidebars.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-xl font-semibold">Sidebars you're in</h2>
+            <div className="space-y-3">
+              {sidebars.map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-3 space-y-2"
+                >
+                  <p className="text-sm font-medium">{item.topic}</p>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-muted-foreground">
+                      Parked{' '}
+                      {formatDistanceToNow(parseISO(item.created_at), { addSuffix: true })}
+                    </p>
+                    {item.sidebar_note && (
+                      <p className="text-xs text-muted-foreground">
+                        Note: {item.sidebar_note}
+                      </p>
+                    )}
+                    {item.sidebar_participants.filter((pid) => pid !== lead.id).length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Other participants:{' '}
+                        {item.sidebar_participants
+                          .filter((pid) => pid !== lead.id)
+                          .map((pid) => leadNameById.get(pid) ?? '(unknown lead)')
+                          .join(', ')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => void handleSidebarResolve(item)}
+                    >
+                      Mark resolved
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => handleOpenSidebarConvert(item)}
+                    >
+                      Convert to action item
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">Active</h2>
@@ -378,6 +511,71 @@ export function MyActionItems() {
           </Collapsible>
         )}
       </div>
+
+      {/* Sidebar Convert to Action Item Dialog */}
+      <Dialog
+        open={isSidebarConvertDialogOpen}
+        onOpenChange={(open) => {
+          setIsSidebarConvertDialogOpen(open)
+          if (!open) setConvertTargetSidebar(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-xl border-border/60 bg-card">
+          <DialogHeader>
+            <DialogTitle>Convert to Action Item</DialogTitle>
+            <DialogDescription>
+              Create an action item from this sidebar topic.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="sidebar-convert-task">Task</Label>
+              <Input
+                id="sidebar-convert-task"
+                value={convertTask}
+                onChange={(event) => setConvertTask(event.target.value)}
+                placeholder="Enter task..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sidebar-convert-due-date">Due Date</Label>
+              <Input
+                id="sidebar-convert-due-date"
+                type="date"
+                value={convertDueDate}
+                onChange={(event) => setConvertDueDate(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sidebar-convert-notes">Notes</Label>
+              <Textarea
+                id="sidebar-convert-notes"
+                value={convertNotes}
+                onChange={(event) => setConvertNotes(event.target.value)}
+                className="min-h-[80px]"
+                placeholder="Optional notes..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsSidebarConvertDialogOpen(false)}
+              disabled={isConvertingSidebar}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleSidebarConvertSave()}
+              disabled={!convertTask.trim() || isConvertingSidebar}
+            >
+              {isConvertingSidebar ? 'Converting...' : 'Convert'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

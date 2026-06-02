@@ -86,3 +86,30 @@ export interface MeetingsSummaryRow {
   action_item_count: number
   open_action_item_count: number
 }
+
+export type ParkingLotStatus =
+  | 'open'
+  | 'discussed'
+  | 'dropped'
+  | 'deferred'
+  | 'converted'
+  | 'sidebar'
+  | 'sidebar_resolved'
+
+export interface MeetingParkingLotItem {
+  id: string
+  origin_meeting_id: string
+  active_meeting_id: string
+  topic: string
+  raised_by_lead_id: string | null
+  status: ParkingLotStatus
+  action_item_id: string | null
+  drop_reason: string | null
+  sidebar_participants: string[]
+  sidebar_note: string | null
+  sidebar_resolved_at: string | null
+  sidebar_resolved_by_lead_id: string | null
+  created_at: string
+  resolved_at: string | null
+  created_by: string | null
+}

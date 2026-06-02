@@ -6,6 +6,7 @@ import type {
   MeetingsSummaryRow,
   MeetingViewData,
   MeetingLead,
+  MeetingParkingLotItem,
   MeetingPrompt,
   MeetingSubmission,
   PreReadPromptState,
@@ -509,4 +510,271 @@ export async function getMeetingsList(): Promise<MeetingsSummaryRow[]> {
 
   if (error) throw error
   return (data ?? []) as MeetingsSummaryRow[]
+}
+
+const PARKING_LOT_COLS =
+  'id, origin_meeting_id, active_meeting_id, topic, raised_by_lead_id, status, action_item_id, drop_reason, sidebar_participants, sidebar_note, sidebar_resolved_at, sidebar_resolved_by_lead_id, created_at, resolved_at, created_by'
+
+export async function getParkingLotForMeeting(
+  meetingId: string,
+): Promise<MeetingParkingLotItem[]> {
+  const { data, error } = await supabase
+    .from('meeting_parking_lot_items')
+    .select(PARKING_LOT_COLS)
+    .eq('active_meeting_id', meetingId)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as MeetingParkingLotItem[]
+}
+
+export async function getDeferredFromPriorMeetings(
+  currentMeetingId: string,
+): Promise<MeetingParkingLotItem[]> {
+  const { data, error } = await supabase
+    .from('meeting_parking_lot_items')
+    .select(PARKING_LOT_COLS)
+    .eq('active_meeting_id', currentMeetingId)
+    .neq('origin_meeting_id', currentMeetingId)
+    .in('status', ['open', 'deferred'])
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as MeetingParkingLotItem[]
+}
+
+export async function getSidebarsForLead(
+  leadId: string,
+): Promise<MeetingParkingLotItem[]> {
+  const { data, error } = await supabase
+    .from('meeting_parking_lot_items')
+    .select(PARKING_LOT_COLS)
+    .contains('sidebar_participants', [leadId])
+    .eq('status', 'sidebar')
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as MeetingParkingLotItem[]
+}
+
+export async function createParkingLotItem(params: {
+  meetingId: string
+  topic: string
+  raisedByLeadId: string | null
+}): Promise<MeetingParkingLotItem> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+  if (userError) throw userError
+
+  const { data, error } = await supabase
+    .from('meeting_parking_lot_items')
+    .insert({
+      origin_meeting_id: params.meetingId,
+      active_meeting_id: params.meetingId,
+      topic: params.topic.trim(),
+      raised_by_lead_id: params.raisedByLeadId,
+      created_by: user?.id ?? null,
+    })
+    .select(PARKING_LOT_COLS)
+    .single()
+
+  if (error) throw error
+  return data as MeetingParkingLotItem
+}
+
+export async function markParkingLotDiscussed(
+  id: string,
+): Promise<MeetingParkingLotItem> {
+  const { data, error } = await supabase
+    .from('meeting_parking_lot_items')
+    .update({ status: 'discussed', resolved_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(PARKING_LOT_COLS)
+    .single()
+
+  if (error) throw error
+  return data as MeetingParkingLotItem
+}
+
+export async function dropParkingLotItem(
+  id: string,
+  reason: string | null,
+): Promise<MeetingParkingLotItem> {
+  const { data, error } = await supabase
+    .from('meeting_parking_lot_items')
+    .update({
+      status: 'dropped',
+      drop_reason: reason,
+      resolved_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select(PARKING_LOT_COLS)
+    .single()
+
+  if (error) throw error
+  return data as MeetingParkingLotItem
+}
+
+export async function deferParkingLotItem(
+  id: string,
+  toMeetingId: string,
+): Promise<MeetingParkingLotItem> {
+  const { data, error } = await supabase
+    .from('meeting_parking_lot_items')
+    .update({ status: 'deferred', active_meeting_id: toMeetingId })
+    .eq('id', id)
+    .select(PARKING_LOT_COLS)
+    .single()
+
+  if (error) throw error
+  return data as MeetingParkingLotItem
+}
+
+export async function startSidebar(params: {
+  id: string
+  participantLeadIds: string[]
+  note: string | null
+}): Promise<MeetingParkingLotItem> {
+  const { data, error } = await supabase
+    .from('meeting_parking_lot_items')
+    .update({
+      status: 'sidebar',
+      sidebar_participants: params.participantLeadIds,
+      sidebar_note: params.note,
+    })
+    .eq('id', params.id)
+    .select(PARKING_LOT_COLS)
+    .single()
+
+  if (error) throw error
+  return data as MeetingParkingLotItem
+}
+
+export async function resolveSidebar(
+  id: string,
+  byLeadId: string,
+): Promise<MeetingParkingLotItem> {
+  const now = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('meeting_parking_lot_items')
+    .update({
+      status: 'sidebar_resolved',
+      sidebar_resolved_at: now,
+      sidebar_resolved_by_lead_id: byLeadId,
+      resolved_at: now,
+    })
+    .eq('id', id)
+    .select(PARKING_LOT_COLS)
+    .single()
+
+  if (error) throw error
+  return data as MeetingParkingLotItem
+}
+
+export async function convertParkingLotToActionItem(params: {
+  parkingItemId: string
+  task: string
+  ownerLeadId: string
+  dueDate: string | null
+  notes: string | null
+}): Promise<string> {
+  const { data, error } = await supabase.rpc(
+    'convert_parking_lot_to_action_item',
+    {
+      p_parking_item_id: params.parkingItemId,
+      p_task: params.task,
+      p_owner_lead_id: params.ownerLeadId,
+      p_due_date: params.dueDate,
+      p_notes: params.notes,
+    },
+  )
+
+  if (error) throw error
+  return data as string
+}
+
+export async function convertParkingLotItemAsParticipant(params: {
+  parkingItem: MeetingParkingLotItem
+  task: string
+  ownerLeadId: string
+  dueDate: string | null
+  notes: string | null
+}): Promise<string> {
+  const actionItem = await createMeetingActionItem({
+    meetingId: params.parkingItem.active_meeting_id,
+    task: params.task,
+    ownerLeadId: params.ownerLeadId,
+    dueDate: params.dueDate,
+    notes: params.notes,
+  })
+
+  const { error } = await supabase
+    .from('meeting_parking_lot_items')
+    .update({
+      status: 'converted',
+      action_item_id: actionItem.id,
+      resolved_at: new Date().toISOString(),
+    })
+    .eq('id', params.parkingItem.id)
+
+  if (error) throw error
+  return actionItem.id
+}
+
+export async function deleteParkingLotItem(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('meeting_parking_lot_items')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
+}
+
+export function subscribeParkingLot(
+  meetingId: string,
+  handlers: {
+    onInsert: (row: MeetingParkingLotItem) => void
+    onUpdate: (row: MeetingParkingLotItem) => void
+    onDelete: (id: string) => void
+  },
+): () => void {
+  const channel = supabase
+    .channel(`parking_lot:${meetingId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'meeting_parking_lot_items',
+        filter: `active_meeting_id=eq.${meetingId}`,
+      },
+      (payload) => handlers.onInsert(payload.new as MeetingParkingLotItem),
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'meeting_parking_lot_items',
+        filter: `active_meeting_id=eq.${meetingId}`,
+      },
+      (payload) => handlers.onUpdate(payload.new as MeetingParkingLotItem),
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'meeting_parking_lot_items',
+        filter: `active_meeting_id=eq.${meetingId}`,
+      },
+      (payload) => handlers.onDelete(payload.old.id as string),
+    )
+    .subscribe()
+
+  return () => {
+    void supabase.removeChannel(channel)
+  }
 }
