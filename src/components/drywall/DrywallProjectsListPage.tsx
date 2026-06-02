@@ -1,88 +1,29 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { formatDistanceToNow } from 'date-fns'
 import { Hammer, PlusCircle, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
+import { DrywallProjectCard } from '@/components/drywall/DrywallProjectCard'
 import { ReopenProjectConfirmDialog } from '@/components/drywall/ReopenProjectConfirmDialog'
 import {
   createDrywallProject,
   DrywallProjectPermissionError,
   fetchDrywallProjects,
+  updateDrywallProjectStatus,
 } from '@/services/drywallProjectsService'
-import {
-  DRYWALL_STATUS_LABELS,
-  type DrywallProjectListItem,
-  type DrywallProjectStatus,
-} from '@/types/drywall'
-
-const STATUS_PILL: Record<
-  string,
-  { bg: string; text: string; border: string; dot: string }
-> = {
-  'project-info': {
-    bg: 'bg-sky-500/15',
-    text: 'text-sky-700 dark:text-sky-300',
-    border: 'border-sky-500/30',
-    dot: 'bg-sky-500',
-  },
-  quote: {
-    bg: 'bg-violet-500/15',
-    text: 'text-violet-700 dark:text-violet-300',
-    border: 'border-violet-500/30',
-    dot: 'bg-violet-500',
-  },
-  'field-measurement': {
-    bg: 'bg-amber-500/15',
-    text: 'text-amber-700 dark:text-amber-300',
-    border: 'border-amber-500/30',
-    dot: 'bg-amber-500',
-  },
-  order: {
-    bg: 'bg-emerald-500/15',
-    text: 'text-emerald-700 dark:text-emerald-300',
-    border: 'border-emerald-500/30',
-    dot: 'bg-emerald-500',
-  },
-  complete: {
-    bg: 'bg-slate-500/15',
-    text: 'text-slate-700 dark:text-slate-300',
-    border: 'border-slate-500/30',
-    dot: 'bg-slate-500',
-  },
-}
-
-function StatusPill({ status }: { status: string }) {
-  const key = status in STATUS_PILL ? status : 'project-info'
-  const v = STATUS_PILL[key]
-  const label =
-    (DRYWALL_STATUS_LABELS as Record<string, string>)[status] ?? status.replace(/-/g, ' ')
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium capitalize',
-        v.bg,
-        v.text,
-        v.border,
-      )}
-    >
-      <span className={cn('size-1.5 rounded-full', v.dot)} />
-      {label}
-    </span>
-  )
-}
+import type { DrywallProjectListItem, DrywallProjectStatus } from '@/types/drywall'
 
 export function DrywallProjectsListPage() {
   usePageTitle('Drywall Projects')
   const navigate = useNavigate()
   const { effectiveRole } = usePermissions()
   const canWrite = canWriteDrywallProject(effectiveRole)
+  const isViewer = !canWrite
 
   const [projects, setProjects] = useState<DrywallProjectListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -90,6 +31,9 @@ export function DrywallProjectsListPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showCompleted, setShowCompleted] = useState(false)
   const [reopenProjectId, setReopenProjectId] = useState<string | null>(null)
+  const [statusMenuProjectId, setStatusMenuProjectId] = useState<string | null>(null)
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
+  const statusMenuRef = useRef<HTMLDivElement>(null)
 
   const reloadProjects = () => {
     void fetchDrywallProjects()
@@ -120,6 +64,17 @@ export function DrywallProjectsListPage() {
     }
   }, [])
 
+  useEffect(() => {
+    if (statusMenuProjectId === null) return
+    const handleClick = (e: MouseEvent) => {
+      if (statusMenuRef.current && !statusMenuRef.current.contains(e.target as Node)) {
+        setStatusMenuProjectId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [statusMenuProjectId])
+
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
     let rows = projects
@@ -149,6 +104,37 @@ export function DrywallProjectsListPage() {
       }
     } finally {
       setCreating(false)
+    }
+  }
+
+  const handleStatusChange = async (
+    project: DrywallProjectListItem,
+    newStatus: DrywallProjectStatus,
+  ) => {
+    if (newStatus === project.status) {
+      setStatusMenuProjectId(null)
+      return
+    }
+    setUpdatingStatusId(project.id)
+    setStatusMenuProjectId(null)
+    try {
+      await updateDrywallProjectStatus(project.id, newStatus)
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === project.id
+            ? { ...p, status: newStatus, updatedAt: new Date() }
+            : p,
+        ),
+      )
+      toast.success('Status updated.')
+    } catch (e: unknown) {
+      if (e instanceof DrywallProjectPermissionError) {
+        toast.error(e.message)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Failed to update status')
+      }
+    } finally {
+      setUpdatingStatusId(null)
     }
   }
 
@@ -220,50 +206,28 @@ export function DrywallProjectsListPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3">
-          {filtered.map((project) => {
-            const isComplete = project.status === 'complete'
-            return (
-              <div
-                key={project.id}
-                className="rounded-lg border border-border bg-card/50 p-4 transition-colors hover:bg-muted/40"
-              >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/drywall/projects/${project.id}/info`)}
-                    className="text-left min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                  >
-                    <div className="space-y-1">
-                      <p className="font-medium truncate">{project.name}</p>
-                      {project.client && (
-                        <p className="text-sm text-muted-foreground truncate">{project.client}</p>
-                      )}
-                      {project.address && (
-                        <p className="text-sm text-muted-foreground truncate">{project.address}</p>
-                      )}
-                    </div>
-                  </button>
-                  <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-                    <StatusPill status={project.status as DrywallProjectStatus} />
-                    <span className="text-xs text-muted-foreground">
-                      Updated {formatDistanceToNow(project.updatedAt, { addSuffix: true })}
-                    </span>
-                    {showCompleted && isComplete && canWrite && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setReopenProjectId(project.id)}
-                      >
-                        Reopen
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+        <div ref={statusMenuRef} className="flex flex-col gap-2">
+          {filtered.map((project) => (
+            <DrywallProjectCard
+              key={project.id}
+              project={project}
+              onSelect={(p) => navigate(`/drywall/projects/${p.id}/info`)}
+              onOpenStage={(p, path) =>
+                navigate(`/drywall/projects/${p.id}/${path}`)
+              }
+              statusMenuOpen={statusMenuProjectId === project.id}
+              onToggleStatusMenu={() =>
+                setStatusMenuProjectId((prev) =>
+                  prev === project.id ? null : project.id,
+                )
+              }
+              onChangeStatus={(p, status) => void handleStatusChange(p, status)}
+              isUpdatingStatus={updatingStatusId === project.id}
+              isViewer={isViewer}
+              showReopen={showCompleted}
+              onReopen={(p) => setReopenProjectId(p.id)}
+            />
+          ))}
         </div>
       )}
 

@@ -100,6 +100,8 @@ function mapListRow(row: {
   ) {
     return null
   }
+  const { sqft, quoteTotal } = extractListQuoteStats(row.legacy_quote)
+
   return {
     id: row.id,
     name: row.name?.trim() || 'Untitled',
@@ -107,7 +109,38 @@ function mapListRow(row: {
     address: formatListAddress(row.address),
     status: row.status,
     updatedAt: new Date(row.updated_at),
+    sqft,
+    quoteTotal,
   }
+}
+
+function coerceListNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
+}
+
+/** Sqft + quote total from the list projection's legacy quote subtree (no full metadata load). */
+function extractListQuoteStats(legacyQuote: unknown): {
+  sqft: number | null
+  quoteTotal: number | null
+} {
+  if (!legacyQuote || typeof legacyQuote !== 'object' || Array.isArray(legacyQuote)) {
+    return { sqft: null, quoteTotal: null }
+  }
+  const quote = legacyQuote as Record<string, unknown>
+  const sqft = coerceListNumber(quote.sqft)
+  const calculations = quote.calculations
+  if (calculations && typeof calculations === 'object' && !Array.isArray(calculations)) {
+    const finalTotal = coerceListNumber(
+      (calculations as Record<string, unknown>).finalTotal,
+    )
+    if (finalTotal != null) return { sqft, quoteTotal: finalTotal }
+  }
+  return { sqft, quoteTotal: null }
 }
 
 function mapDetailRow(row: {
@@ -801,6 +834,21 @@ export async function markOrderStatus(
   const existing = orders.find((o) => o.id === orderId)
   if (!existing) throw new Error('Order not found')
   await saveOrder(projectId, { ...existing, status })
+}
+
+/** Update workflow stage from list card status pill (status column + legacy mirror). */
+export async function updateDrywallProjectStatus(
+  projectId: string,
+  status: DrywallProjectStatus,
+): Promise<void> {
+  if (!isOnlineMode()) {
+    throw new Error('Drywall projects require an online connection to Supabase.')
+  }
+
+  const orgId = await requireUserOrgId()
+  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const mergedLegacy = { ...prevLegacy, status }
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, status)
 }
 
 /** Mark drywall job complete (final stage — no further workflow). */

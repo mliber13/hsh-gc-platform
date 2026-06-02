@@ -34,6 +34,10 @@ export interface DrywallProjectListItem {
   address: string
   status: DrywallProjectStatus | string
   updatedAt: Date
+  /** From metadata.legacy.quote.sqft when present. */
+  sqft: number | null
+  /** From metadata.legacy.quote.calculations.finalTotal when present. */
+  quoteTotal: number | null
 }
 
 /** Full project row for detail / Project Info editing. */
