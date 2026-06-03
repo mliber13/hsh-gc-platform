@@ -249,6 +249,11 @@ export interface DrywallQuote {
   frpOcStickRate?: string | number
   frpJMoldStickRate?: string | number
   quoteStatus?: string
+  /** Duration estimator inputs (legacy quote scope). */
+  buildType?: string
+  complexity?: string
+  paperFloorsRequired?: boolean
+  beadSticks?: string | number
   [key: string]: unknown
 }
 

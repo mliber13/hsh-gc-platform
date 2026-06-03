@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   buildOrderFinancialComparison,
   resolveOrderBaselineRates,
+  type OrderLaborRateSet,
   type OrderReviewLaborRatesInput,
 } from '@/lib/drywall/orderFinancialComparison'
 import { downloadDrywallLaborRateCardPdf } from '@/lib/drywallOrderPdf'
@@ -21,6 +22,14 @@ function money(n: number): string {
 
 function rateMoney(n: number): string {
   return money(n) + '/sqft'
+}
+
+function asStoredRateRecord(r: OrderLaborRateSet | Record<string, unknown>): Record<string, unknown> {
+  return {
+    hangerRate: Number((r as OrderLaborRateSet).hangerRate),
+    finisherRate: Number((r as OrderLaborRateSet).finisherRate),
+    prepCleanRate: Number((r as OrderLaborRateSet).prepCleanRate),
+  }
 }
 
 function changeClass(change: string): string {
@@ -139,36 +148,41 @@ export function OrderFinancialCard({
         : undefined)
 
     await persistRates({
-      reviewBaselineRates: baseline,
-      reviewApprovedRates: {
+      reviewBaselineRates: baseline ? asStoredRateRecord(baseline) : undefined,
+      reviewApprovedRates: asStoredRateRecord({
         hangerRate: parseFloat(laborRates.hangerRate) || baselineRates?.hangerRate || 0,
         finisherRate: parseFloat(laborRates.finisherRate) || baselineRates?.finisherRate || 0,
         prepCleanRate: parseFloat(laborRates.prepCleanRate) || baselineRates?.prepCleanRate || 0,
-      },
+      }),
       rejectionNotes: laborRates.reviewNotes || undefined,
     })
     toast.success('Labor rates saved')
   }
 
   const handleApprove = async () => {
-    const baseline =
-      fieldTakeoff.reviewBaselineRates ??
-      (baselineRates
+    const storedBaseline = fieldTakeoff.reviewBaselineRates as Record<string, unknown> | undefined
+    const baselineSet: OrderLaborRateSet =
+      storedBaseline?.hangerRate != null
         ? {
-            hangerRate: baselineRates.hangerRate,
-            finisherRate: baselineRates.finisherRate,
-            prepCleanRate: baselineRates.prepCleanRate,
+            hangerRate: Number(storedBaseline.hangerRate),
+            finisherRate: Number(
+              storedBaseline.finisherRate ?? baselineRates?.finisherRate ?? 0,
+            ),
+            prepCleanRate: Number(
+              storedBaseline.prepCleanRate ?? baselineRates?.prepCleanRate ?? 0,
+            ),
           }
-        : resolveOrderBaselineRates(quote, fieldTakeoff))
+        : baselineRates ?? resolveOrderBaselineRates(quote, fieldTakeoff)
+
     await persistRates({
       reviewStatus: 'approved',
       approvedAt: new Date().toISOString(),
-      reviewBaselineRates: baseline,
-      reviewApprovedRates: {
-        hangerRate: parseFloat(laborRates.hangerRate) || baseline.hangerRate,
-        finisherRate: parseFloat(laborRates.finisherRate) || baseline.finisherRate,
-        prepCleanRate: parseFloat(laborRates.prepCleanRate) || baseline.prepCleanRate,
-      },
+      reviewBaselineRates: asStoredRateRecord(baselineSet),
+      reviewApprovedRates: asStoredRateRecord({
+        hangerRate: parseFloat(laborRates.hangerRate) || baselineSet.hangerRate,
+        finisherRate: parseFloat(laborRates.finisherRate) || baselineSet.finisherRate,
+        prepCleanRate: parseFloat(laborRates.prepCleanRate) || baselineSet.prepCleanRate,
+      }),
       rejectionNotes: laborRates.reviewNotes || undefined,
     })
     toast.success('Field measurement approved — order-stage labor rates saved')
