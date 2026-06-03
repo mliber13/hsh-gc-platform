@@ -3,7 +3,11 @@
  * Drywall quote calculations engine — ported from QuoteStage.jsx useMemo (formulas unchanged).
  */
 import { calcSuspendedGridTotals } from './calculations/suspendedGridCalc'
-import { LABOR_TAX_RATE, RC_CHANNEL_PIECE_LENGTH_FT } from './calculations/quantityUtils'
+import {
+  applyLaborBurden,
+  LABOR_TAX_RATE,
+  RC_CHANNEL_PIECE_LENGTH_FT,
+} from './calculations/quantityUtils'
 import { getInsulationMaterialRate, getStudRateKey } from './drywallQuoteHelpers'
 import type { DrywallQuote, DrywallQuoteCalculations } from '@/types/drywall'
 
@@ -136,10 +140,10 @@ export function buildDrywallQuoteCalculations(quote: DrywallQuote): DrywallQuote
     let finisherCost = (drywallScope !== 'hang_only') ? finishSqft * finisherRateNum : 0;
     let prepCleanCost = finishSqft * prepCleanRateNum;
     
-    // Labor costs with labor burden (payroll taxes, benefits, etc.)
-    const hangerCostWithTax = hangerCost * (1 + LABOR_TAX_RATE);
-    const finisherCostWithTax = finisherCost * (1 + LABOR_TAX_RATE);
-    const prepCleanCostWithTax = prepCleanCost * (1 + LABOR_TAX_RATE);
+    // Labor costs with optional per-trade burden (project-level toggles)
+    const hangerCostWithTax = applyLaborBurden(hangerCost, q.hangerIncludeLaborBurden);
+    const finisherCostWithTax = applyLaborBurden(finisherCost, q.finisherIncludeLaborBurden);
+    const prepCleanCostWithTax = applyLaborBurden(prepCleanCost, q.prepCleanIncludeLaborBurden);
     let totalLaborCost = hangerCostWithTax + finisherCostWithTax + prepCleanCostWithTax;
     
     // Sales tax on materials only
@@ -654,10 +658,15 @@ export function buildDrywallQuoteCalculations(quote: DrywallQuote): DrywallQuote
         const prepCleanRateNum = parseFloat(prepCleanRate) || 0;
         
         itemMaterialCost = itemFinishSqft * materialRateNum + itemExtraBoardSqft * boardOnlyMaterialRateNum;
-        const itemHangerCost = (drywallScope !== 'finish_only') ? itemHangSqft * hangerRateNum * 1.25 : 0;
-        const itemFinisherCost = (drywallScope !== 'hang_only') ? itemFinishSqft * finisherRateNum * 1.25 : 0;
-        const itemPrepCleanCost = itemFinishSqft * prepCleanRateNum * 1.25;
-        itemLaborCost = itemHangerCost + itemFinisherCost + itemPrepCleanCost;
+        const itemHangerBase =
+          drywallScope !== 'finish_only' ? itemHangSqft * hangerRateNum : 0;
+        const itemFinisherBase =
+          drywallScope !== 'hang_only' ? itemFinishSqft * finisherRateNum : 0;
+        const itemPrepCleanBase = itemFinishSqft * prepCleanRateNum;
+        itemLaborCost =
+          applyLaborBurden(itemHangerBase, q.hangerIncludeLaborBurden) +
+          applyLaborBurden(itemFinisherBase, q.finisherIncludeLaborBurden) +
+          applyLaborBurden(itemPrepCleanBase, q.prepCleanIncludeLaborBurden);
         itemSalesTax = itemMaterialCost * (taxRate / 100);
         
         const itemDirectCost = itemMaterialCost + itemSalesTax + itemLaborCost;
@@ -743,10 +752,15 @@ export function buildDrywallQuoteCalculations(quote: DrywallQuote): DrywallQuote
         const itemExtraBoardSqft = Math.max(0, itemHangSqft - itemFinishSqft);
 
         const itemMaterialCost = itemFinishSqft * materialRateNum + itemExtraBoardSqft * boardOnlyMaterialRateNum;
-        const itemHangerCost = (drywallScope !== 'finish_only') ? itemHangSqft * hangerRateNum * 1.25 : 0;
-        const itemFinisherCost = (drywallScope !== 'hang_only') ? itemFinishSqft * finisherRateNum * 1.25 : 0;
-        const itemPrepCleanCost = itemFinishSqft * prepCleanRateNum * 1.25;
-        const itemLaborCost = itemHangerCost + itemFinisherCost + itemPrepCleanCost;
+        const itemHangerBase =
+          drywallScope !== 'finish_only' ? itemHangSqft * hangerRateNum : 0;
+        const itemFinisherBase =
+          drywallScope !== 'hang_only' ? itemFinishSqft * finisherRateNum : 0;
+        const itemPrepCleanBase = itemFinishSqft * prepCleanRateNum;
+        const itemLaborCost =
+          applyLaborBurden(itemHangerBase, q.hangerIncludeLaborBurden) +
+          applyLaborBurden(itemFinisherBase, q.finisherIncludeLaborBurden) +
+          applyLaborBurden(itemPrepCleanBase, q.prepCleanIncludeLaborBurden);
         const itemSalesTax = itemMaterialCost * (taxRate / 100);
         const itemDirectCost = itemMaterialCost + itemSalesTax + itemLaborCost;
         const itemOverhead = itemDirectCost * (overheadPct / 100);
@@ -784,10 +798,15 @@ export function buildDrywallQuoteCalculations(quote: DrywallQuote): DrywallQuote
         const itemExtraBoardSqft = Math.max(0, itemHangSqft - itemFinishSqft);
 
         const itemMaterialCost = itemFinishSqft * materialRateNum + itemExtraBoardSqft * boardOnlyMaterialRateNum;
-        const itemHangerCost = (drywallScope !== 'finish_only') ? itemHangSqft * hangerRateNum * 1.25 : 0;
-        const itemFinisherCost = (drywallScope !== 'hang_only') ? itemFinishSqft * finisherRateNum * 1.25 : 0;
-        const itemPrepCleanCost = itemFinishSqft * prepCleanRateNum * 1.25;
-        const itemLaborCost = itemHangerCost + itemFinisherCost + itemPrepCleanCost;
+        const itemHangerBase =
+          drywallScope !== 'finish_only' ? itemHangSqft * hangerRateNum : 0;
+        const itemFinisherBase =
+          drywallScope !== 'hang_only' ? itemFinishSqft * finisherRateNum : 0;
+        const itemPrepCleanBase = itemFinishSqft * prepCleanRateNum;
+        const itemLaborCost =
+          applyLaborBurden(itemHangerBase, q.hangerIncludeLaborBurden) +
+          applyLaborBurden(itemFinisherBase, q.finisherIncludeLaborBurden) +
+          applyLaborBurden(itemPrepCleanBase, q.prepCleanIncludeLaborBurden);
         const itemSalesTax = itemMaterialCost * (taxRate / 100);
         const itemDirectCost = itemMaterialCost + itemSalesTax + itemLaborCost;
         const itemOverhead = itemDirectCost * (overheadPct / 100);

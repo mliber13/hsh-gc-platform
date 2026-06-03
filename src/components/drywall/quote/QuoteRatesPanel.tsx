@@ -48,6 +48,48 @@ function RateField({
   )
 }
 
+function LaborRateField({
+  label,
+  rateValue,
+  includeBurden,
+  burdenKey,
+  readOnly,
+  onRateChange,
+  onBurdenChange,
+}: {
+  label: string
+  rateValue: string | number | undefined
+  includeBurden: boolean | undefined
+  burdenKey: 'hangerIncludeLaborBurden' | 'finisherIncludeLaborBurden' | 'prepCleanIncludeLaborBurden'
+  readOnly: boolean
+  onRateChange: (v: string) => void
+  onBurdenChange: (patch: Partial<DrywallQuote>) => void
+}) {
+  const burdenOn = includeBurden !== false
+  return (
+    <div className="space-y-1.5">
+      <RateField label={label} value={rateValue} readOnly={readOnly} onChange={onRateChange} />
+      <label className="flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          disabled={readOnly}
+          checked={burdenOn}
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-input"
+          onChange={(e) => onBurdenChange({ [burdenKey]: e.target.checked })}
+        />
+        <span>
+          Include labor burden (25%)
+          {!burdenOn && (
+            <span className="block text-[11px] text-amber-600 dark:text-amber-400">
+              Off — subcontractor / 1099 (no burden on this line)
+            </span>
+          )}
+        </span>
+      </label>
+    </div>
+  )
+}
+
 export function QuoteRatesPanel({ quote, readOnly, onChange, calculations }: Props) {
   const baseSqft = parseFloat(String(quote.sqft)) || 0
   const wastePct = parseFloat(String(quote.wastePercentage)) || 0
@@ -89,23 +131,32 @@ export function QuoteRatesPanel({ quote, readOnly, onChange, calculations }: Pro
           readOnly={readOnly}
           onChange={(v) => onChange({ materialRate: v })}
         />
-        <RateField
+        <LaborRateField
           label="Hanger ($/sqft)"
-          value={quote.hangerRate}
+          rateValue={quote.hangerRate}
+          includeBurden={quote.hangerIncludeLaborBurden}
+          burdenKey="hangerIncludeLaborBurden"
           readOnly={readOnly}
-          onChange={(v) => onChange({ hangerRate: v })}
+          onRateChange={(v) => onChange({ hangerRate: v })}
+          onBurdenChange={onChange}
         />
-        <RateField
+        <LaborRateField
           label="Finisher ($/sqft)"
-          value={quote.finisherRate}
+          rateValue={quote.finisherRate}
+          includeBurden={quote.finisherIncludeLaborBurden}
+          burdenKey="finisherIncludeLaborBurden"
           readOnly={readOnly}
-          onChange={(v) => onChange({ finisherRate: v })}
+          onRateChange={(v) => onChange({ finisherRate: v })}
+          onBurdenChange={onChange}
         />
-        <RateField
+        <LaborRateField
           label="Prep / clean ($/sqft)"
-          value={quote.prepCleanRate}
+          rateValue={quote.prepCleanRate}
+          includeBurden={quote.prepCleanIncludeLaborBurden}
+          burdenKey="prepCleanIncludeLaborBurden"
           readOnly={readOnly}
-          onChange={(v) => onChange({ prepCleanRate: v })}
+          onRateChange={(v) => onChange({ prepCleanRate: v })}
+          onBurdenChange={onChange}
         />
         <div className="space-y-1">
           <RateField

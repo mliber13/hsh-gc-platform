@@ -49,3 +49,53 @@ export const ACOUSTIC_TILE_SIZES = [
 export function insulationTypeHasFace(type: string): boolean {
   return type !== 'rigidInsulation1' && type !== 'rigidInsulation2'
 }
+
+export const DRYWALL_THICKNESS_OPTIONS = ['1/4"', '3/8"', '1/2"', '5/8"'] as const
+
+export const CEILING_FINISH_OPTIONS = [
+  'Stomp Knockdown',
+  'Knockdown',
+  'Splatter',
+  'Splatter Knockdown',
+  'Level 4 Smooth',
+  'Level 5 Smooth',
+  'Other',
+] as const
+
+export const WALL_FINISH_OPTIONS = [
+  'Level 4 Smooth',
+  'Level 5 Smooth',
+  'Roll Texture Walls',
+  'Other',
+] as const
+
+export const HANG_EXCEPTION_TEMPLATES = [
+  '5/8 inch at garage firewall',
+  'Moisture resistant drywall at wet walls',
+  '5/8 inch Type X at garage ceiling',
+  '1/2 inch Type X at common walls',
+  'Moisture resistant drywall in bathrooms',
+  '5/8 inch at party walls',
+  'Soundproofing drywall in bedrooms',
+] as const
+
+export const CEILING_EXCEPTION_TEMPLATES = [
+  'Master Bedroom and Great Room are Level 5 Smooth instead of Stomp Knockdown',
+  'Bathrooms are Level 5 Smooth',
+  'Garage ceiling is Roll Texture',
+  'Kitchen is Level 5 Smooth',
+  'All bedrooms are Level 5 Smooth',
+  'Great Room is Level 5 Smooth',
+  'Entry and hallways are Level 5 Smooth',
+  'Garage Ceiling Stomp Knockdown. Small Closets Stomp Knockdown.',
+] as const
+
+export const WALL_EXCEPTION_TEMPLATES = [
+  'Garage walls and small closet walls are Roll Texture instead of Level 4 Smooth',
+  'Garage walls are Roll Texture',
+  'Closet walls are Roll Texture',
+  'Bathroom walls are Level 5 Smooth',
+  'Kitchen walls are Level 5 Smooth',
+  'All bedrooms are Level 5 Smooth',
+  'Entry and hallways are Level 5 Smooth',
+] as const

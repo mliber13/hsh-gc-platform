@@ -4,7 +4,7 @@
  * Uses the calculations object from QuoteStage and ensures TotalQuote = Subtotal + Profit
  */
 
-import { applyWaste, LABOR_TAX_RATE } from './calculations/quantityUtils'
+import { applyLaborBurden, applyWaste, LABOR_TAX_RATE } from './calculations/quantityUtils'
 import { calcRcChannelLineTotal } from './calculations/rcChannelLineTotal'
 import { normalizeQuoteToV2, quoteV2ToLegacyCompat } from './drywallQuoteSchema'
 import {
@@ -193,11 +193,15 @@ export const calculateQuoteTotals = (quoteData, calculations) => {
 
         const itemBoardOnlyRate = coerceNumber(item?.boardOnlyMaterialRate, boardOnlyMaterialRate);
         const itemMaterialCost = finishSqft * materialRate + extraBoardSqft * itemBoardOnlyRate;
-        const laborBase =
-          (drywallScope !== 'finish_only' ? hangSqft * hangerRate : 0) +
-          (drywallScope !== 'hang_only' ? finishSqft * finisherRate : 0) +
-          (finishSqft * prepCleanRate);
-        const itemLaborCostWithTax = laborBase * (1 + LABOR_TAX_RATE);
+        const hangerLaborBase =
+          drywallScope !== 'finish_only' ? hangSqft * hangerRate : 0;
+        const finisherLaborBase =
+          drywallScope !== 'hang_only' ? finishSqft * finisherRate : 0;
+        const prepCleanLaborBase = finishSqft * prepCleanRate;
+        const itemLaborCostWithTax =
+          applyLaborBurden(hangerLaborBase, q.hangerIncludeLaborBurden) +
+          applyLaborBurden(finisherLaborBase, q.finisherIncludeLaborBurden) +
+          applyLaborBurden(prepCleanLaborBase, q.prepCleanIncludeLaborBurden);
         const priced = applyPricingPipeline({
           materialCost: itemMaterialCost,
           laborCostWithTax: itemLaborCostWithTax,

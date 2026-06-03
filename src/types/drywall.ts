@@ -137,6 +137,8 @@ export interface QuoteBreakdown {
   [key: string]: unknown
 }
 
+export type QuoteOptionPricingMethod = 'fixed' | 'totalSqft' | 'specificSqft'
+
 export interface QuoteOption {
   id: string
   name?: string
@@ -146,6 +148,7 @@ export interface QuoteOption {
   sqft?: string | number
   rate?: string | number
   useTotalSqft?: boolean
+  pricingMethod?: QuoteOptionPricingMethod
 }
 
 /** Stored quote payload — flat fields + version 2. */
@@ -161,8 +164,12 @@ export interface DrywallQuote {
   boardOnlyMaterialRate?: string | number
   materialRate?: string | number
   hangerRate?: string | number
+  /** When false, hanger labor has no burden (e.g. 1099 sub). Default: include burden. */
+  hangerIncludeLaborBurden?: boolean
   finisherRate?: string | number
+  finisherIncludeLaborBurden?: boolean
   prepCleanRate?: string | number
+  prepCleanIncludeLaborBurden?: boolean
   overheadPercentage?: string | number
   profitPercentage?: string | number
   salesTaxRate?: string | number

@@ -19,6 +19,7 @@ import { deriveAddonFlagsFromData } from '@/lib/drywall/deriveAddonFlagsFromData
 import type { DrywallProject, DrywallQuote } from '@/types/drywall'
 import { QuoteBreakdownsSection } from './QuoteBreakdownsSection'
 import { QuoteOptionalAddons } from './QuoteOptionalAddons'
+import { QuoteOptionsSection } from './QuoteOptionsSection'
 import { QuoteRatesPanel } from './QuoteRatesPanel'
 import { QuoteScopeSection } from './QuoteScopeSection'
 import { QuoteTakeoffImportDialog } from './QuoteTakeoffImportDialog'
@@ -174,7 +175,7 @@ export function QuoteStage() {
 
       <input ref={fileInputRef} type="file" className="hidden" />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_minmax(300px,380px)]">
         <div className="space-y-6 min-w-0">
           <QuoteRatesPanel
             quote={quote}
@@ -188,9 +189,24 @@ export function QuoteStage() {
             onChange={(breakdowns) => patchQuote({ breakdowns })}
           />
           <QuoteOptionalAddons quote={quote} readOnly={readOnly} onChange={patchQuote} />
+          <QuoteOptionsSection
+            quote={quote}
+            readOnly={readOnly}
+            totalSqft={
+              typeof calculations.sqft === 'number' && Number.isFinite(calculations.sqft)
+                ? calculations.sqft
+                : 0
+            }
+            selectedOptionsTotal={
+              typeof calculations.selectedOptionsTotal === 'number'
+                ? calculations.selectedOptionsTotal
+                : 0
+            }
+            onChange={(options) => patchQuote({ options })}
+          />
           <QuoteScopeSection quote={quote} readOnly={readOnly} onChange={patchQuote} />
         </div>
-        <QuoteTotalsSummary calculations={calculations} totals={totals} />
+        <QuoteTotalsSummary quote={quote} calculations={calculations} totals={totals} />
       </div>
 
       <div className="flex flex-wrap gap-3 border-t pt-6">

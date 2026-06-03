@@ -16,6 +16,17 @@ export const DEFAULT_RC_CHANNEL_SPACING_IN = 24;
 /** Labor burden / payroll tax rate (25%). Applied to labor cost before overhead/profit. */
 export const LABOR_TAX_RATE = 0.25;
 
+/** Default on when unset — existing quotes keep burden applied. */
+export function includeLaborBurden(flag: unknown): boolean {
+  return flag !== false;
+}
+
+/** Apply optional labor burden to a base labor line (hanger / finisher / prep-clean). */
+export function applyLaborBurden(baseCost: number, includeBurden: unknown): number {
+  const base = Number(baseCost) || 0;
+  return includeLaborBurden(includeBurden) ? base * (1 + LABOR_TAX_RATE) : base;
+}
+
 /**
  * Apply waste percentage to a quantity.
  * Formula: qty * (1 + wastePct / 100). Used for sqft and for piece counts before ceil.

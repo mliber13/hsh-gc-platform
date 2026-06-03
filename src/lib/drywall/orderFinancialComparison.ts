@@ -1,12 +1,26 @@
 // @ts-nocheck — parity port from OrderStage.jsx financialComparison useMemo
+import { applyLaborBurden } from '@/lib/drywall/calculations/quantityUtils'
 import { calculateQuoteTotals } from '@/lib/drywall/quoteCalculations'
 import type { DrywallChangeOrder, DrywallQuote, FieldTakeoff } from '@/types/drywall'
 
-const LABOR_TAX_RATE = 0.0765
+export interface OrderReviewLaborRatesInput {
+  hangerRate: string
+  finisherRate: string
+  prepCleanRate: string
+  reviewNotes?: string
+}
+
+export interface OrderLaborRateSet {
+  hangerRate: number
+  finisherRate: number
+  prepCleanRate: number
+}
 
 export interface OrderFinancialComparison {
   originalSqft: number
   revisedSqft: number
+  varianceSqft: number
+  variancePercent: number
   originalHangerRate: number
   revisedHangerRate: number
   originalFinisherRate: number
@@ -14,70 +28,123 @@ export interface OrderFinancialComparison {
   originalPrepRate: number
   revisedPrepRate: number
   baselineTotal: number
+  baselineDirect: number
+  baselineProfit: number
+  baselineMargin: number
   adjustedTotal: number
+  adjustedDirect: number
+  adjustedProfit: number
+  adjustedMargin: number
+  baselineLaborWithTax: number
+  adjustedLaborWithTax: number
+  originalMaterialCost: number
+  revisedMaterialCost: number
+  originalHangerPay: number
+  revisedHangerPay: number
+  originalFinisherPay: number
+  revisedFinisherPay: number
+  originalPrepPay: number
+  revisedPrepPay: number
   deltaTotal: number
   deltaDirect: number
+  deltaProfit: number
+  deltaMargin: number
   deltaLaborWithTax: number
-  baselineMargin: number
-  adjustedMargin: number
+  approvedChangeOrderRevenue: number
+}
+
+function num(v: unknown, fallback = 0): number {
+  const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''))
+  return Number.isFinite(n) ? n : fallback
+}
+
+function laborWithBurdenForSqft(
+  sqft: number,
+  rates: OrderLaborRateSet,
+  quote: DrywallQuote,
+): number {
+  return (
+    applyLaborBurden(sqft * rates.hangerRate, quote.hangerIncludeLaborBurden) +
+    applyLaborBurden(sqft * rates.finisherRate, quote.finisherIncludeLaborBurden) +
+    applyLaborBurden(sqft * rates.prepCleanRate, quote.prepCleanIncludeLaborBurden)
+  )
+}
+
+function ratesFromQuoteCalc(quote: DrywallQuote): Partial<OrderLaborRateSet> {
+  const calc = quote.calculations as Record<string, unknown> | undefined
+  const calcHangSqft = num(calc?.hangSqft)
+  const calcFinishSqft = num(calc?.finishSqft)
+  return {
+    hangerRate: calcHangSqft > 0 ? num(calc?.hangerCost) / calcHangSqft : undefined,
+    finisherRate: calcFinishSqft > 0 ? num(calc?.finisherCost) / calcFinishSqft : undefined,
+    prepCleanRate: calcFinishSqft > 0 ? num(calc?.prepCleanCost) / calcFinishSqft : undefined,
+  }
+}
+
+export function resolveOrderBaselineRates(
+  quote: DrywallQuote,
+  fieldTakeoff: FieldTakeoff,
+): OrderLaborRateSet {
+  const fromCalc = ratesFromQuoteCalc(quote)
+  const stored = fieldTakeoff.reviewBaselineRates as Record<string, unknown> | undefined
+  if (stored && (stored.hangerRate != null || stored.finisherRate != null)) {
+    return {
+      hangerRate: num(stored.hangerRate, num(quote.hangerRate, fromCalc.hangerRate ?? 0.27)),
+      finisherRate: num(stored.finisherRate, num(quote.finisherRate, fromCalc.finisherRate ?? 0.27)),
+      prepCleanRate: num(stored.prepCleanRate, num(quote.prepCleanRate, fromCalc.prepCleanRate ?? 0.03)),
+    }
+  }
+  return {
+    hangerRate: num(quote.hangerRate, fromCalc.hangerRate ?? 0.27),
+    finisherRate: num(quote.finisherRate, fromCalc.finisherRate ?? 0.27),
+    prepCleanRate: num(quote.prepCleanRate, fromCalc.prepCleanRate ?? 0.03),
+  }
+}
+
+export function resolveOrderRevisedRates(
+  quote: DrywallQuote,
+  fieldTakeoff: FieldTakeoff,
+  reviewLaborRates: OrderReviewLaborRatesInput,
+): OrderLaborRateSet {
+  const baseline = resolveOrderBaselineRates(quote, fieldTakeoff)
+  const approved = fieldTakeoff.reviewApprovedRates as Record<string, unknown> | undefined
+
+  if (fieldTakeoff.reviewStatus === 'pending_review') {
+    return {
+      hangerRate: num(reviewLaborRates.hangerRate, baseline.hangerRate),
+      finisherRate: num(reviewLaborRates.finisherRate, baseline.finisherRate),
+      prepCleanRate: num(reviewLaborRates.prepCleanRate, baseline.prepCleanRate),
+    }
+  }
+
+  if (approved && approved.hangerRate != null) {
+    return {
+      hangerRate: num(approved.hangerRate, baseline.hangerRate),
+      finisherRate: num(approved.finisherRate, baseline.finisherRate),
+      prepCleanRate: num(approved.prepCleanRate, baseline.prepCleanRate),
+    }
+  }
+
+  return {
+    hangerRate: num(reviewLaborRates.hangerRate, num(quote.hangerRate, baseline.hangerRate)),
+    finisherRate: num(reviewLaborRates.finisherRate, num(quote.finisherRate, baseline.finisherRate)),
+    prepCleanRate: num(reviewLaborRates.prepCleanRate, num(quote.prepCleanRate, baseline.prepCleanRate)),
+  }
 }
 
 export function buildOrderFinancialComparison(
   quote: DrywallQuote,
   fieldTakeoff: FieldTakeoff,
   changeOrders: DrywallChangeOrder[],
-  reviewRates?: { hangerRate: string; finisherRate: string; prepCleanRate: string },
-  reviewStatus?: string | null,
+  reviewLaborRates: OrderReviewLaborRatesInput,
 ): OrderFinancialComparison {
   const fieldSqft = fieldTakeoff.totalMeasuredSqft || 0
-  const baseQuoteSqft = parseFloat(String(quote.sqft)) || 0
-  const wastePct = Math.round(parseFloat(String(quote.wastePercentage)) || 0)
+  const baseQuoteSqft = num(quote.sqft)
+  const wastePct = Math.round(num(quote.wastePercentage))
   const quoteSqft = Math.round(baseQuoteSqft * (1 + wastePct / 100))
 
-  const calc = quote.calculations as Record<string, unknown> | undefined
-  const calcHangSqft = parseFloat(String(calc?.hangSqft)) || 0
-  const calcFinishSqft = parseFloat(String(calc?.finishSqft)) || 0
-  const calcHangerRate =
-    calcHangSqft > 0 ? (parseFloat(String(calc?.hangerCost)) || 0) / calcHangSqft : 0
-  const calcFinisherRate =
-    calcFinishSqft > 0 ? (parseFloat(String(calc?.finisherCost)) || 0) / calcFinishSqft : 0
-  const calcPrepRate =
-    calcFinishSqft > 0 ? (parseFloat(String(calc?.prepCleanCost)) || 0) / calcFinishSqft : 0
-
-  const baselineRates = fieldTakeoff.reviewBaselineRates || {
-    hangerRate:
-      parseFloat(String(fieldTakeoff.reviewBaselineRates?.hangerRate)) ||
-      parseFloat(String(quote.hangerRate)) ||
-      calcHangerRate ||
-      0.27,
-    finisherRate:
-      parseFloat(String(fieldTakeoff.reviewBaselineRates?.finisherRate)) ||
-      parseFloat(String(quote.finisherRate)) ||
-      calcFinisherRate ||
-      0.27,
-    prepCleanRate:
-      parseFloat(String(fieldTakeoff.reviewBaselineRates?.prepCleanRate)) ||
-      parseFloat(String(quote.prepCleanRate)) ||
-      calcPrepRate ||
-      0.03,
-  }
-
-  const approvedRates = fieldTakeoff.reviewApprovedRates || {
-    hangerRate: parseFloat(String(quote.hangerRate)) || 0.27,
-    finisherRate: parseFloat(String(quote.finisherRate)) || 0.27,
-    prepCleanRate: parseFloat(String(quote.prepCleanRate)) || 0.03,
-  }
-
-  const revisedRates =
-    reviewStatus === 'pending_review' && reviewRates
-      ? {
-          hangerRate: parseFloat(reviewRates.hangerRate) || Number(baselineRates.hangerRate) || 0,
-          finisherRate:
-            parseFloat(reviewRates.finisherRate) || Number(baselineRates.finisherRate) || 0,
-          prepCleanRate:
-            parseFloat(reviewRates.prepCleanRate) || Number(baselineRates.prepCleanRate) || 0,
-        }
-      : approvedRates
+  const baselineRates = resolveOrderBaselineRates(quote, fieldTakeoff)
+  const revisedRates = resolveOrderRevisedRates(quote, fieldTakeoff, reviewLaborRates)
 
   const baselineQuote = {
     ...quote,
@@ -86,32 +153,24 @@ export function buildOrderFinancialComparison(
     prepCleanRate: baselineRates.prepCleanRate,
   } as DrywallQuote
 
-  const baselineTotals = calculateQuoteTotals(baselineQuote, (quote.calculations || {}) as never)
-  const overriddenQuoteTotal = parseFloat(String(quote.totalQuoteAmount)) || 0
+  const baselineTotals = calculateQuoteTotals(
+    { ...baselineQuote, version: undefined },
+    (quote.calculations || {}) as never,
+  )
+  const overriddenQuoteTotal = num(quote.totalQuoteAmount)
   const baselineTotal =
     overriddenQuoteTotal > 0 ? overriddenQuoteTotal : baselineTotals?.totalQuote || 0
   const baselineDirect = baselineTotals?.totalDirectCost || 0
   const baselineSubtotal = baselineTotals?.subtotal || 0
   const baselineProfit = baselineTotal - baselineSubtotal
   const baselineMargin = baselineTotal > 0 ? (baselineProfit / baselineTotal) * 100 : 0
-  const overheadPct = parseFloat(String(quote.overheadPercentage)) || 0
-  const profitPct = parseFloat(String(quote.profitPercentage)) || 0
+  const overheadPct = num(quote.overheadPercentage)
 
   const effectiveSqft = fieldSqft > 0 ? fieldSqft : quoteSqft
   const sqftScale = quoteSqft > 0 && effectiveSqft > 0 ? effectiveSqft / quoteSqft : 1
 
-  const baselineLaborWithTax =
-    quoteSqft *
-    (Number(baselineRates.hangerRate) +
-      Number(baselineRates.finisherRate) +
-      Number(baselineRates.prepCleanRate)) *
-    (1 + LABOR_TAX_RATE)
-  const adjustedLaborWithTax =
-    effectiveSqft *
-    (Number(revisedRates.hangerRate) +
-      Number(revisedRates.finisherRate) +
-      Number(revisedRates.prepCleanRate)) *
-    (1 + LABOR_TAX_RATE)
+  const baselineLaborWithTax = laborWithBurdenForSqft(quoteSqft, baselineRates, quote)
+  const adjustedLaborWithTax = laborWithBurdenForSqft(effectiveSqft, revisedRates, quote)
 
   const deltaLaborWithTax = adjustedLaborWithTax - baselineLaborWithTax
   const originalMaterialCost = Math.max(0, baselineDirect - baselineLaborWithTax)
@@ -119,33 +178,57 @@ export function buildOrderFinancialComparison(
   const adjustedDirect = revisedMaterialCost + adjustedLaborWithTax
   const deltaDirect = adjustedDirect - baselineDirect
   const subtotalDelta = deltaDirect * (1 + overheadPct / 100)
+
   const approvedChangeOrderRevenue = changeOrders.reduce(
     (sum, co) =>
       String(co.status || '').toLowerCase() === 'approved'
-        ? sum + (parseFloat(String(co.requestedAmount)) || 0)
+        ? sum + num(co.requestedAmount)
         : sum,
     0,
   )
+
   const adjustedSubtotal = baselineSubtotal + subtotalDelta
   const adjustedTotal = baselineTotal + approvedChangeOrderRevenue
   const adjustedProfit = adjustedTotal - adjustedSubtotal
   const adjustedMargin = adjustedTotal > 0 ? (adjustedProfit / adjustedTotal) * 100 : 0
 
+  const varianceSqft = effectiveSqft - quoteSqft
+  const variancePercent = quoteSqft > 0 ? (varianceSqft / quoteSqft) * 100 : 0
+
   return {
     originalSqft: quoteSqft,
     revisedSqft: effectiveSqft,
-    originalHangerRate: Number(baselineRates.hangerRate),
-    revisedHangerRate: Number(revisedRates.hangerRate),
-    originalFinisherRate: Number(baselineRates.finisherRate),
-    revisedFinisherRate: Number(revisedRates.finisherRate),
-    originalPrepRate: Number(baselineRates.prepCleanRate),
-    revisedPrepRate: Number(revisedRates.prepCleanRate),
+    varianceSqft,
+    variancePercent,
+    originalHangerRate: baselineRates.hangerRate,
+    revisedHangerRate: revisedRates.hangerRate,
+    originalFinisherRate: baselineRates.finisherRate,
+    revisedFinisherRate: revisedRates.finisherRate,
+    originalPrepRate: baselineRates.prepCleanRate,
+    revisedPrepRate: revisedRates.prepCleanRate,
     baselineTotal,
+    baselineDirect,
+    baselineProfit,
+    baselineMargin,
     adjustedTotal,
+    adjustedDirect,
+    adjustedProfit,
+    adjustedMargin,
+    baselineLaborWithTax,
+    adjustedLaborWithTax,
+    originalMaterialCost,
+    revisedMaterialCost,
+    originalHangerPay: quoteSqft * baselineRates.hangerRate,
+    revisedHangerPay: effectiveSqft * revisedRates.hangerRate,
+    originalFinisherPay: quoteSqft * baselineRates.finisherRate,
+    revisedFinisherPay: effectiveSqft * revisedRates.finisherRate,
+    originalPrepPay: quoteSqft * baselineRates.prepCleanRate,
+    revisedPrepPay: effectiveSqft * revisedRates.prepCleanRate,
     deltaTotal: approvedChangeOrderRevenue,
     deltaDirect,
+    deltaProfit: adjustedProfit - baselineProfit,
+    deltaMargin: adjustedMargin - baselineMargin,
     deltaLaborWithTax,
-    baselineMargin,
-    adjustedMargin,
+    approvedChangeOrderRevenue,
   }
 }

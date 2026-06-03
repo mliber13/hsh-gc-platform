@@ -6,8 +6,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
+import { extractMaterialsFromFieldTakeoff } from '@/lib/drywall/fieldMaterialsPdfData'
 import { suggestOrderItemsFromFieldTakeoff } from '@/lib/drywall/orderSuggest'
-import { downloadDrywallFieldMaterialsPdf } from '@/lib/drywallOrderPdf'
+import { buildOrderFinancialComparison } from '@/lib/drywall/orderFinancialComparison'
+import {
+  downloadDrywallFieldMaterialsPdf,
+  downloadDrywallLaborRateCardPdf,
+} from '@/lib/drywallOrderPdf'
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import { ReopenProjectConfirmDialog } from '@/components/drywall/ReopenProjectConfirmDialog'
@@ -19,6 +24,7 @@ import {
   fetchFieldTakeoff,
   fetchOrders,
   markDrywallProjectComplete,
+  saveFieldTakeoff,
   saveOrderStageSnapshot,
 } from '@/services/drywallProjectsService'
 import type { DrywallChangeOrder, DrywallOrder, DrywallProject, FieldTakeoff } from '@/types/drywall'
@@ -176,17 +182,32 @@ export function OrderPage() {
 
   const handleFieldMaterialsPdf = () => {
     if (!fieldTakeoff) return
-    const items = suggestOrderItemsFromFieldTakeoff(fieldTakeoff).map((i) => ({
-      description: i.description,
-      quantity: i.quantity,
-      unit: i.unit,
-      notes: i.notes,
-    }))
-    if (items.length === 0) {
+    const { boards, accessories } = extractMaterialsFromFieldTakeoff(fieldTakeoff)
+    if (boards.length === 0 && accessories.length === 0) {
       toast.error('Add field measurements or accessories first')
       return
     }
-    downloadDrywallFieldMaterialsPdf(projectPdfMeta, items)
+    downloadDrywallFieldMaterialsPdf(projectPdfMeta, fieldTakeoff)
+    toast.success('Order PDF downloaded')
+  }
+
+  const handleLaborRateCardPdf = () => {
+    if (!quote || !fieldTakeoff) return
+    if ((fieldTakeoff.totalMeasuredSqft || 0) <= 0) {
+      toast.error('Add field measurements before downloading the labor rate card')
+      return
+    }
+    const approved = fieldTakeoff.reviewApprovedRates as Record<string, unknown> | undefined
+    const fin = buildOrderFinancialComparison(quote, fieldTakeoff, changeOrders, {
+      hangerRate: String(approved?.hangerRate ?? quote.hangerRate ?? ''),
+      finisherRate: String(approved?.finisherRate ?? quote.finisherRate ?? ''),
+      prepCleanRate: String(approved?.prepCleanRate ?? quote.prepCleanRate ?? ''),
+      reviewNotes: String(fieldTakeoff.rejectionNotes ?? ''),
+    })
+    downloadDrywallLaborRateCardPdf(projectPdfMeta, fin, {
+      reviewNotes: String(fieldTakeoff.rejectionNotes ?? ''),
+    })
+    toast.success('Labor rate card PDF downloaded')
   }
 
   const handleMarkComplete = async () => {
@@ -237,6 +258,15 @@ export function OrderPage() {
             <FileDown className="mr-2 h-4 w-4" />
             Field materials PDF
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleLaborRateCardPdf}
+            disabled={!fieldTakeoff || !quote || (fieldTakeoff.totalMeasuredSqft || 0) <= 0}
+          >
+            <FileDown className="mr-2 h-4 w-4" />
+            Labor rate card PDF
+          </Button>
           {!readOnly && (
             <>
               <Button type="button" variant="outline" onClick={handleCreateOrder}>
@@ -262,7 +292,17 @@ export function OrderPage() {
         </p>
       )}
 
-      <OrderFinancialCard quote={quote} fieldTakeoff={fieldTakeoff} changeOrders={changeOrders} />
+      <OrderFinancialCard
+        quote={quote}
+        fieldTakeoff={fieldTakeoff}
+        changeOrders={changeOrders}
+        readOnly={readOnly}
+        projectName={projectPdfMeta.name}
+        onSaveFieldTakeoff={async (takeoff) => {
+          await saveFieldTakeoff(projectId, takeoff)
+          setFieldTakeoff(takeoff)
+        }}
+      />
 
       <Card>
         <CardHeader>
