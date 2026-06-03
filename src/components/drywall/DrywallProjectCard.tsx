@@ -1,7 +1,14 @@
+import type { MouseEvent } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { FileText, Info, Package, Ruler } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import {
+  listItemHasFieldData,
+  listItemHasOrderData,
+  listItemHasQuoteData,
+} from '@/lib/drywall/listStageSignals'
 import {
   DRYWALL_PROJECT_STATUSES,
   DRYWALL_STATUS_LABELS,
@@ -77,6 +84,8 @@ const STAGE_BUTTONS: {
   icon: typeof Info
   iconColor: string
   title: string
+  emptyTooltip: string
+  hasData: (project: DrywallProjectListItem) => boolean
 }[] = [
   {
     stage: 'project-info',
@@ -85,6 +94,8 @@ const STAGE_BUTTONS: {
     icon: Info,
     iconColor: 'text-sky-500',
     title: 'Project info',
+    emptyTooltip: '',
+    hasData: () => true,
   },
   {
     stage: 'quote',
@@ -93,6 +104,8 @@ const STAGE_BUTTONS: {
     icon: FileText,
     iconColor: 'text-violet-500',
     title: 'Quote',
+    emptyTooltip: 'Quote not started yet',
+    hasData: listItemHasQuoteData,
   },
   {
     stage: 'field-measurement',
@@ -101,6 +114,8 @@ const STAGE_BUTTONS: {
     icon: Ruler,
     iconColor: 'text-amber-500',
     title: 'Field measurement',
+    emptyTooltip: 'Field measurement not started yet',
+    hasData: listItemHasFieldData,
   },
   {
     stage: 'order',
@@ -109,6 +124,8 @@ const STAGE_BUTTONS: {
     icon: Package,
     iconColor: 'text-emerald-500',
     title: 'Order',
+    emptyTooltip: 'No orders yet',
+    hasData: listItemHasOrderData,
   },
 ]
 
@@ -137,7 +154,6 @@ function formatQuoteTotal(total: number | null): string {
 export interface DrywallProjectCardProps {
   project: DrywallProjectListItem
   onSelect: (project: DrywallProjectListItem) => void
-  onOpenStage: (project: DrywallProjectListItem, path: string) => void
   statusMenuOpen: boolean
   onToggleStatusMenu: () => void
   onChangeStatus: (project: DrywallProjectListItem, status: DrywallProjectStatus) => void
@@ -150,7 +166,6 @@ export interface DrywallProjectCardProps {
 export function DrywallProjectCard({
   project,
   onSelect,
-  onOpenStage,
   statusMenuOpen,
   onToggleStatusMenu,
   onChangeStatus,
@@ -163,9 +178,15 @@ export function DrywallProjectCard({
   const sqftTone = project.sqft != null && project.sqft > 0 ? 'default' : 'muted'
   const quoteTone = project.quoteTotal != null && project.quoteTotal > 0 ? 'default' : 'muted'
 
+  const handleCardClick = (e: MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement
+    if (target.closest('[data-quick-jump], button, a')) return
+    onSelect(project)
+  }
+
   return (
     <Card
-      onClick={() => onSelect(project)}
+      onClick={handleCardClick}
       className="group cursor-pointer overflow-hidden border-border/60 bg-card/50 transition-colors hover:bg-card"
     >
       <CardContent className="flex items-stretch p-0">
@@ -262,23 +283,41 @@ export function DrywallProjectCard({
           </div>
 
           <div
+            data-quick-jump
             className="flex flex-wrap items-center gap-1 border-t border-border/40 pt-3"
             onClick={(e) => e.stopPropagation()}
           >
-            {STAGE_BUTTONS.map(({ path, label, icon: Icon, iconColor, title }) => (
-              <Button
-                key={path}
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => onOpenStage(project, path)}
-                title={title}
-                className="h-8 gap-1.5 px-2.5 text-xs text-foreground hover:bg-muted"
-              >
-                <Icon className={cn('size-4', iconColor)} />
-                {label}
-              </Button>
-            ))}
+            {STAGE_BUTTONS.map(
+              ({ path, label, icon: Icon, iconColor, title, emptyTooltip, hasData }) => {
+                const stageHasData = hasData(project)
+                return (
+                  <Button
+                    key={path}
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5 px-2.5 text-xs hover:bg-muted"
+                  >
+                    <Link
+                      to={`/drywall/projects/${project.id}/${path}`}
+                      title={stageHasData ? title : emptyTooltip}
+                      onClick={(e) => e.stopPropagation()}
+                      className={cn(
+                        'inline-flex items-center gap-1.5',
+                        stageHasData
+                          ? 'font-medium text-foreground'
+                          : 'text-muted-foreground',
+                      )}
+                    >
+                      <Icon
+                        className={cn('size-4', stageHasData ? iconColor : 'text-muted-foreground')}
+                      />
+                      {label}
+                    </Link>
+                  </Button>
+                )
+              },
+            )}
           </div>
         </div>
       </CardContent>

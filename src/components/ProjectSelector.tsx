@@ -68,18 +68,6 @@ export function ProjectSelector() {
   const isGc = workspace === 'projects'
   const isDrywall = workspace === 'drywall'
 
-  if (isSettingsPath(location.pathname)) {
-    return null
-  }
-
-  if (isDrywall && !isDrywallProjectRoute(location.pathname)) {
-    return null
-  }
-
-  if (!isGc && !isDrywall) {
-    return null
-  }
-
   const loadGcProjects = async () => {
     if (hasLoadedGc || loading) return
     setLoading(true)
@@ -130,6 +118,19 @@ export function ProjectSelector() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDrywall, currentDrywallProjectId, hasLoadedDrywall])
+
+  // Conditional rendering — must come AFTER all hook calls (Rules of Hooks).
+  if (isSettingsPath(location.pathname)) {
+    return null
+  }
+
+  if (isDrywall && !isDrywallProjectRoute(location.pathname)) {
+    return null
+  }
+
+  if (!isGc && !isDrywall) {
+    return null
+  }
 
   const Icon = isDrywall ? Hammer : Building2
 

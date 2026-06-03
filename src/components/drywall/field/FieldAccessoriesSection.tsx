@@ -188,18 +188,20 @@ export function FieldAccessoriesSection({
               <div
                 key={acc.id}
                 className={`p-4 rounded-lg border space-y-3 ${
-                  acc.autoCalculated ? 'bg-blue-50/80 border-blue-200' : 'bg-muted/30'
+                  acc.autoCalculated
+                    ? 'border-sky-500/30 bg-sky-500/10'
+                    : 'bg-muted/30'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {acc.autoCalculated && (
-                      <span className="text-xs rounded border px-1.5 py-0.5 bg-blue-100">
+                      <span className="text-xs rounded border border-sky-500/30 bg-sky-500/15 px-1.5 py-0.5 font-medium text-sky-700 dark:text-sky-300">
                         Auto
                       </span>
                     )}
                     {acc.manuallyEdited && (
-                      <span className="text-xs rounded border px-1.5 py-0.5 bg-amber-50">
+                      <span className="text-xs rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-medium text-amber-700 dark:text-amber-300">
                         Edited
                       </span>
                     )}

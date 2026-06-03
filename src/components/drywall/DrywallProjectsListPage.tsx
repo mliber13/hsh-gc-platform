@@ -9,6 +9,7 @@ import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import { DrywallProjectCard } from '@/components/drywall/DrywallProjectCard'
+import { DrywallProjectsStatsStrip } from '@/components/drywall/DrywallProjectsStatsStrip'
 import { ReopenProjectConfirmDialog } from '@/components/drywall/ReopenProjectConfirmDialog'
 import {
   createDrywallProject,
@@ -159,6 +160,8 @@ export function DrywallProjectsListPage() {
         )}
       </div>
 
+      {!loading && projects.length > 0 && <DrywallProjectsStatsStrip projects={filtered} />}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative max-w-md flex-1">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -212,9 +215,6 @@ export function DrywallProjectsListPage() {
               key={project.id}
               project={project}
               onSelect={(p) => navigate(`/drywall/projects/${p.id}/info`)}
-              onOpenStage={(p, path) =>
-                navigate(`/drywall/projects/${p.id}/${path}`)
-              }
               statusMenuOpen={statusMenuProjectId === project.id}
               onToggleStatusMenu={() =>
                 setStatusMenuProjectId((prev) =>

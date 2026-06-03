@@ -120,12 +120,13 @@ export function hasDrywallWorkspaceData(
 }
 
 /**
- * Canonical surfacing criterion for the Drywall workspace list (Phase B retrospective).
+ * Canonical surfacing criterion when full metadata (or quote object) is available.
  *
  * A project belongs in `/drywall` when it is drywall-scoped OR has real quote content:
  * - `metadata.app_scope === 'DRYWALL_ONLY'` (includes new in-progress projects with empty quote), OR
  * - `hasDrywallWorkspaceData(metadata)` (dual-view rows like Goodwill Multi with quote but no DRYWALL_ONLY scope).
  *
+ * For the list fetch, use `belongsInDrywallWorkspaceFromListScalars` (scalar projection only).
  * Does not auto-promote GC-only projects that only have a drywall trade — those lack both signals.
  */
 export function belongsInDrywallWorkspace(
@@ -134,6 +135,34 @@ export function belongsInDrywallWorkspace(
   if (!metadata) return false
   if (metadata.app_scope === 'DRYWALL_ONLY') return true
   return hasDrywallWorkspaceData(metadata)
+}
+
+/** Scalar fields from `fetchDrywallProjects` list projection (no full quote JSONB). */
+export type DrywallListQuoteScalars = {
+  app_scope?: unknown
+  quote_sqft?: unknown
+  quote_final_total?: unknown
+  quote_total_amount?: unknown
+}
+
+/**
+ * Drywall list surfacing using narrow PostgREST scalar paths only.
+ *
+ * Approximation of `belongsInDrywallWorkspace`: `DRYWALL_ONLY` OR
+ * (sqft > 0 OR finalTotal > 0 OR totalQuoteAmount > 0).
+ *
+ * Does not inspect breakdowns or non-empty calculations objects without
+ * `finalTotal` — use `hasDrywallWorkspaceData` when the full quote is loaded.
+ */
+export function belongsInDrywallWorkspaceFromListScalars(
+  row: DrywallListQuoteScalars,
+): boolean {
+  if (row.app_scope === 'DRYWALL_ONLY') return true
+  return (
+    hasPopulatedSqft(row.quote_sqft) ||
+    hasPopulatedTotalQuoteAmount(row.quote_final_total) ||
+    hasPopulatedTotalQuoteAmount(row.quote_total_amount)
+  )
 }
 
 function hasPopulatedSqft(value: unknown): boolean {

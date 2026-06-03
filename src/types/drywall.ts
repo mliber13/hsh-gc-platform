@@ -26,7 +26,7 @@ export const DRYWALL_STATUS_LABELS: Record<DrywallProjectStatus, string> = {
   complete: 'Complete',
 }
 
-/** Minimal row for the /drywall list (hasDrywallWorkspaceData filter applied). */
+/** Minimal row for the /drywall list (narrow scalar projection + list surfacing filter). */
 export interface DrywallProjectListItem {
   id: string
   name: string
@@ -38,6 +38,14 @@ export interface DrywallProjectListItem {
   sqft: number | null
   /** From metadata.legacy.quote.calculations.finalTotal when present. */
   quoteTotal: number | null
+  /** List projection: metadata.legacy.fieldTakeoff.totalMeasuredSqft */
+  fieldMeasuredSqft: number | null
+  /** List projection: metadata.legacy.fieldTakeoff.updatedAt (activity without sqft yet). */
+  fieldTakeoffUpdated: string | null
+  /** List projection: first measurements[].id when present */
+  fieldFirstMeasurementId: string | null
+  /** List projection: first legacy.orders[].id when present */
+  orderFirstId: string | null
 }
 
 /** Full project row for detail / Project Info editing. */

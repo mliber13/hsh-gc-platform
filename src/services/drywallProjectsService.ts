@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { supabase, isOnlineMode } from '@/lib/supabase'
-import { belongsInDrywallWorkspace } from '@/services/projectVisibility'
+import { belongsInDrywallWorkspaceFromListScalars } from '@/services/projectVisibility'
 import { requireUserOrgId } from '@/services/userService'
 import { hydrateDrywallQuote } from '@/lib/drywall/createEmptyDrywallQuote'
 import { normalizeQuoteToV2, quoteV2ToLegacyCompat } from '@/lib/drywall/drywallQuoteSchema'
@@ -32,7 +32,15 @@ export class DrywallProjectPermissionError extends Error {
 }
 
 const DRYWALL_LIST_SELECT =
-  'id, name, address, client, status, updated_at, app_scope:metadata->>app_scope, legacy_quote:metadata->legacy->quote'
+  'id, name, address, client, status, updated_at, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount'
+
+type DrywallListStageScalarsRow = {
+  id: string
+  field_measured_sqft: number | null
+  field_takeoff_updated: string | null
+  field_first_measurement_id: string | null
+  order_first_id: string | null
+}
 
 const DRYWALL_DETAIL_SELECT =
   'id, name, address, client, status, type, organization_id, created_at, updated_at, metadata'
@@ -90,17 +98,40 @@ function mapListRow(row: {
   status: string
   updated_at: string
   app_scope: unknown
-  legacy_quote: unknown
-}): DrywallProjectListItem | null {
+  quote_sqft: unknown
+  quote_final_total: unknown
+  quote_total_amount: unknown
+},
+  stageScalars?: DrywallListStageScalarsRow,
+): DrywallProjectListItem | null {
   if (
-    !belongsInDrywallWorkspace({
+    !belongsInDrywallWorkspaceFromListScalars({
       app_scope: row.app_scope,
-      legacy: { quote: row.legacy_quote },
+      quote_sqft: row.quote_sqft,
+      quote_final_total: row.quote_final_total,
+      quote_total_amount: row.quote_total_amount,
     })
   ) {
     return null
   }
-  const { sqft, quoteTotal } = extractListQuoteStats(row.legacy_quote)
+  const { sqft, quoteTotal } = extractListQuoteStats({
+    quote_sqft: row.quote_sqft,
+    quote_final_total: row.quote_final_total,
+    quote_total_amount: row.quote_total_amount,
+  })
+  const fieldMeasuredSqft = coerceListNumber(stageScalars?.field_measured_sqft)
+  const fieldTakeoffUpdated = asString(stageScalars?.field_takeoff_updated) || null
+  const fieldFirstMeasurementId = asString(stageScalars?.field_first_measurement_id) || null
+  const orderFirstId = asString(stageScalars?.order_first_id) || null
+
+  const listScalars = {
+    sqft,
+    quoteTotal,
+    fieldMeasuredSqft,
+    fieldTakeoffUpdated,
+    fieldFirstMeasurementId,
+    orderFirstId,
+  }
 
   return {
     id: row.id,
@@ -109,8 +140,7 @@ function mapListRow(row: {
     address: formatListAddress(row.address),
     status: row.status,
     updatedAt: new Date(row.updated_at),
-    sqft,
-    quoteTotal,
+    ...listScalars,
   }
 }
 
@@ -123,24 +153,20 @@ function coerceListNumber(value: unknown): number | null {
   return null
 }
 
-/** Sqft + quote total from the list projection's legacy quote subtree (no full metadata load). */
-function extractListQuoteStats(legacyQuote: unknown): {
+/** Sqft + quote total from list scalar projections (no full quote JSONB). */
+function extractListQuoteStats(scalars: {
+  quote_sqft: unknown
+  quote_final_total: unknown
+  quote_total_amount: unknown
+}): {
   sqft: number | null
   quoteTotal: number | null
 } {
-  if (!legacyQuote || typeof legacyQuote !== 'object' || Array.isArray(legacyQuote)) {
-    return { sqft: null, quoteTotal: null }
-  }
-  const quote = legacyQuote as Record<string, unknown>
-  const sqft = coerceListNumber(quote.sqft)
-  const calculations = quote.calculations
-  if (calculations && typeof calculations === 'object' && !Array.isArray(calculations)) {
-    const finalTotal = coerceListNumber(
-      (calculations as Record<string, unknown>).finalTotal,
-    )
-    if (finalTotal != null) return { sqft, quoteTotal: finalTotal }
-  }
-  return { sqft, quoteTotal: null }
+  const sqft = coerceListNumber(scalars.quote_sqft)
+  const finalTotal = coerceListNumber(scalars.quote_final_total)
+  if (finalTotal != null) return { sqft, quoteTotal: finalTotal }
+  const totalAmount = coerceListNumber(scalars.quote_total_amount)
+  return { sqft, quoteTotal: totalAmount }
 }
 
 function mapDetailRow(row: {
@@ -243,7 +269,7 @@ function mergeLegacyProjectInfo(
   }
 }
 
-/** Projects in the Drywall workspace (`belongsInDrywallWorkspace`). */
+/** Projects in the Drywall workspace (`belongsInDrywallWorkspaceFromListScalars`). */
 export async function fetchDrywallProjects(): Promise<DrywallProjectListItem[]> {
   if (!isOnlineMode()) return []
 
@@ -260,9 +286,46 @@ export async function fetchDrywallProjects(): Promise<DrywallProjectListItem[]> 
     throw new Error(error.message || 'Failed to load drywall projects')
   }
 
-  return (data ?? [])
-    .map((row) => mapListRow(row as Parameters<typeof mapListRow>[0]))
+  type ListRow = {
+    id: string
+    name: string
+    address: unknown
+    client: unknown
+    status: string
+    updated_at: string
+    app_scope: unknown
+    quote_sqft: unknown
+    quote_final_total: unknown
+    quote_total_amount: unknown
+  }
+  const rows = (data ?? []) as ListRow[]
+  const stageByProjectId = await loadDrywallListStageScalars(rows.map((r) => r.id))
+
+  return rows
+    .map((row) => mapListRow(row, stageByProjectId.get(row.id)))
     .filter((row): row is DrywallProjectListItem => row != null)
+}
+
+/** Field/order scalars via SQL — PostgREST .select() does not reliably return legacy.fieldTakeoff paths. */
+async function loadDrywallListStageScalars(
+  projectIds: string[],
+): Promise<Map<string, DrywallListStageScalarsRow>> {
+  const out = new Map<string, DrywallListStageScalarsRow>()
+  if (projectIds.length === 0) return out
+
+  const { data, error } = await supabase.rpc('drywall_list_stage_scalars', {
+    project_ids: projectIds,
+  })
+
+  if (error) {
+    console.warn('fetchDrywallProjects: drywall_list_stage_scalars', error.message)
+    return out
+  }
+
+  for (const row of (data ?? []) as DrywallListStageScalarsRow[]) {
+    out.set(row.id, row)
+  }
+  return out
 }
 
 export async function fetchDrywallProjectById(projectId: string): Promise<DrywallProject | null> {
