@@ -151,9 +151,39 @@ export interface QuoteOption {
   pricingMethod?: QuoteOptionPricingMethod
 }
 
+export type DrywallQuotePaymentTerms =
+  | 'none'
+  | 'net_30'
+  | 'net_15'
+  | 'due_on_completion'
+  | 'fifty_fifty'
+  | 'progress_billing'
+
+/** Toggles for quote PDF export (saved with the quote). */
+export interface DrywallQuotePdfSettings {
+  showCostBreakdown?: boolean
+  showDurationSummary?: boolean
+  showValidityPeriod?: boolean
+  quoteValidityDays?: number
+  showTaxesSeparately?: boolean
+  paymentTerms?: DrywallQuotePaymentTerms
+  includeGcDumpster?: boolean
+  includeGcWater?: boolean
+  includeGcPower?: boolean
+  includeGcClimateControl?: boolean
+  includeTwoPointUpTrips?: boolean
+  includeSignatureLines?: boolean
+  /** @deprecated Use includeTradeCostBreakdown */
+  includeDrywallSubBreakdown?: boolean
+  /** Per-trade material / labor sell-side lines under each trade in PRICING. */
+  includeTradeCostBreakdown?: boolean
+}
+
 /** Stored quote payload — flat fields + version 2. */
 export interface DrywallQuote {
   version?: number
+  /** Customer-facing quote id — DW-YYYY-NNN (assigned on first save or PDF export). */
+  quoteNumber?: string
   sqft?: string | number
   wastePercentage?: string | number
   drywallScope?: DrywallScope | string
@@ -254,6 +284,7 @@ export interface DrywallQuote {
   complexity?: string
   paperFloorsRequired?: boolean
   beadSticks?: string | number
+  pdfSettings?: DrywallQuotePdfSettings
   [key: string]: unknown
 }
 

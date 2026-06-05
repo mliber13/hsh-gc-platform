@@ -6,6 +6,7 @@ import { supabase, isOnlineMode } from '@/lib/supabase'
 import { belongsInDrywallWorkspaceFromListScalars } from '@/services/projectVisibility'
 import { requireUserOrgId } from '@/services/userService'
 import { hydrateDrywallQuote } from '@/lib/drywall/createEmptyDrywallQuote'
+import { isValidDrywallQuoteNumber } from '@/lib/drywall/drywallQuoteNumber'
 import { normalizeQuoteToV2, quoteV2ToLegacyCompat } from '@/lib/drywall/drywallQuoteSchema'
 import { fieldTakeoffWithTotals, mergeFieldTakeoff } from '@/lib/drywall/fieldMeasurementUtils'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
@@ -564,6 +565,65 @@ async function persistLegacyMetadata(
   }
 }
 
+async function allocateNextDrywallQuoteNumber(orgId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('next_drywall_quote_number', { p_org: orgId })
+  if (error) {
+    console.error('allocateNextDrywallQuoteNumber:', error)
+    throw new Error(error.message || 'Failed to assign drywall quote number')
+  }
+  const quoteNumber = typeof data === 'string' ? data.trim() : String(data ?? '').trim()
+  if (!isValidDrywallQuoteNumber(quoteNumber)) {
+    throw new Error('Invalid drywall quote number from server')
+  }
+  return quoteNumber
+}
+
+function quoteNumberFromLegacy(prevQuote: Record<string, unknown>): string | undefined {
+  const stored = String(prevQuote.quoteNumber ?? '').trim()
+  return isValidDrywallQuoteNumber(stored) ? stored : undefined
+}
+
+async function resolveDrywallQuoteNumber(
+  orgId: string,
+  quote: DrywallQuote,
+  prevQuote: Record<string, unknown>,
+): Promise<string> {
+  const fromQuote = String(quote.quoteNumber ?? '').trim()
+  if (isValidDrywallQuoteNumber(fromQuote)) return fromQuote
+  const fromStored = quoteNumberFromLegacy(prevQuote)
+  if (fromStored) return fromStored
+  return allocateNextDrywallQuoteNumber(orgId)
+}
+
+/**
+ * Assign DW-YYYY-NNN when missing — patches only quoteNumber in metadata (safe before PDF export).
+ */
+export async function assignDrywallQuoteNumberIfMissing(projectId: string): Promise<string> {
+  if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
+
+  const orgId = await requireUserOrgId()
+  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const prevQuote =
+    prevLegacy.quote && typeof prevLegacy.quote === 'object' && !Array.isArray(prevLegacy.quote)
+      ? (prevLegacy.quote as Record<string, unknown>)
+      : {}
+
+  const existing = quoteNumberFromLegacy(prevQuote)
+  if (existing) return existing
+
+  const quoteNumber = await allocateNextDrywallQuoteNumber(orgId)
+  const mergedLegacy = {
+    ...prevLegacy,
+    quote: {
+      ...prevQuote,
+      quoteNumber,
+      version: 2,
+    },
+  }
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  return quoteNumber
+}
+
 /** Read metadata.legacy.quote; normalize to v2 flat shape for the builder. */
 export async function fetchDrywallQuote(projectId: string): Promise<DrywallQuote> {
   const project = await fetchDrywallProjectById(projectId)
@@ -591,9 +651,11 @@ export async function saveDrywallQuote(projectId: string, quote: DrywallQuote): 
       : {}
 
   const { calculations: _dropCalc, ...quoteFields } = quote
+  const quoteNumber = await resolveDrywallQuoteNumber(orgId, quote, prevQuote)
   const mergedQuote = {
     ...prevQuote,
     ...quoteFields,
+    quoteNumber,
     version: 2,
   }
 
@@ -650,12 +712,14 @@ export async function saveDrywallQuoteAndAdvance(
       : {}
 
   const { calculations: _c, ...quoteFields } = quote
+  const quoteNumber = await resolveDrywallQuoteNumber(orgId, quote, prevQuote)
   const mergedLegacy = {
     ...prevLegacy,
     status: nextStatus,
     quote: {
       ...prevQuote,
       ...quoteFields,
+      quoteNumber,
       calculations,
       version: 2,
     },

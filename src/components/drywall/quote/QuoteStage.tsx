@@ -7,7 +7,9 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import { downloadDrywallQuotePdf } from '@/lib/drywallQuotePdf'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
+import { drywallQuoteNumberLabel } from '@/lib/drywall/drywallQuoteNumber'
 import {
+  assignDrywallQuoteNumberIfMissing,
   DrywallProjectPermissionError,
   fetchDrywallProjectById,
   fetchDrywallQuote,
@@ -23,6 +25,7 @@ import { QuoteOptionsSection } from './QuoteOptionsSection'
 import { QuoteRatesPanel } from './QuoteRatesPanel'
 import { QuoteScopeSection } from './QuoteScopeSection'
 import { QuoteTakeoffImportDialog } from './QuoteTakeoffImportDialog'
+import { QuotePdfOptionsSection } from './QuotePdfOptionsSection'
 import { QuoteTotalsSummary } from './QuoteTotalsSummary'
 import { useDrywallQuoteCalculations } from './useDrywallQuoteState'
 
@@ -87,7 +90,10 @@ export function QuoteStage() {
       const payload = { ...quote, version: 2 }
       await saveDrywallQuote(projectId, payload)
       await saveDrywallQuoteCalculations(projectId, calculations)
-      setSavedSnapshot(JSON.stringify(payload))
+      const refreshed = await fetchDrywallQuote(projectId)
+      const withFlags = deriveAddonFlagsFromData(refreshed)
+      setQuote(withFlags)
+      setSavedSnapshot(JSON.stringify(withFlags))
       toast.success('Quote saved')
     } catch (e: unknown) {
       if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
@@ -97,9 +103,19 @@ export function QuoteStage() {
     }
   }
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (!project || !quote) return
-    downloadDrywallQuotePdf(project, quote, calculations)
+    try {
+      let quoteForPdf = quote
+      if (!drywallQuoteNumberLabel(quote.quoteNumber)) {
+        const quoteNumber = await assignDrywallQuoteNumberIfMissing(projectId)
+        quoteForPdf = { ...quote, quoteNumber }
+        setQuote((prev) => (prev ? { ...prev, quoteNumber } : prev))
+      }
+      await downloadDrywallQuotePdf(project, quoteForPdf, calculations)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'PDF download failed')
+    }
   }
 
   const handleContinueField = async () => {
@@ -147,6 +163,10 @@ export function QuoteStage() {
           <p className="text-muted-foreground text-sm">
             Build pricing, export PDF, then continue to field measurement. Customer approval URLs ship in Phase C.2.
           </p>
+          <p className="text-muted-foreground mt-1 text-sm tabular-nums">
+            Quote number:{' '}
+            {drywallQuoteNumberLabel(quote.quoteNumber) || 'Assigned when you save or download PDF'}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => setImportOpen(true)}>
@@ -157,7 +177,7 @@ export function QuoteStage() {
             <Upload className="mr-2 h-4 w-4" />
             Import sqft
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={handleDownloadPdf}>
+          <Button type="button" variant="outline" size="sm" onClick={() => void handleDownloadPdf()}>
             <Download className="mr-2 h-4 w-4" />
             Download PDF
           </Button>
@@ -205,6 +225,7 @@ export function QuoteStage() {
             onChange={(options) => patchQuote({ options })}
           />
           <QuoteScopeSection quote={quote} readOnly={readOnly} onChange={patchQuote} />
+          <QuotePdfOptionsSection quote={quote} readOnly={readOnly} onChange={patchQuote} />
         </div>
         <QuoteTotalsSummary quote={quote} calculations={calculations} totals={totals} />
       </div>

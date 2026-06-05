@@ -1,4 +1,5 @@
 import { DRYWALL_QUOTE_BASE_DEFAULTS } from './drywallQuoteDefaults'
+import { DEFAULT_QUOTE_PDF_SETTINGS } from './quotePdfSettings'
 import { generateQuoteId } from './drywallQuoteHelpers'
 import type { DrywallQuote, QuoteBreakdown } from '@/types/drywall'
 
@@ -129,6 +130,7 @@ export function createEmptyDrywallQuote(): DrywallQuote {
     breakdowns: [],
     options: [],
     totalQuoteAmount: '',
+    pdfSettings: { ...DEFAULT_QUOTE_PDF_SETTINGS },
   }
 }
 
@@ -160,5 +162,11 @@ export function hydrateDrywallQuote(raw: unknown): DrywallQuote {
       q.metalStudTrackRates && typeof q.metalStudTrackRates === 'object'
         ? { ...base.metalStudTrackRates, ...(q.metalStudTrackRates as Record<string, string | number>) }
         : base.metalStudTrackRates,
+    pdfSettings: {
+      ...base.pdfSettings,
+      ...(q.pdfSettings && typeof q.pdfSettings === 'object'
+        ? (q.pdfSettings as DrywallQuote['pdfSettings'])
+        : {}),
+    },
   }
 }
