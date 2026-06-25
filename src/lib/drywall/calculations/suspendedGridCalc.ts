@@ -6,6 +6,35 @@
 
 import { applyWaste, LABOR_TAX_RATE } from './quantityUtils'
 
+export function calcSuspendedGridComponentCounts(inputs) {
+  const baseSqft = parseFloat(inputs.baseSqft) || 0
+  if (baseSqft <= 0) return null
+
+  const wastePct = parseFloat(inputs.wastePct) || 0
+  const basePerimeter = parseFloat(inputs.basePerimeter) || 0
+  const calculatedBasePerimeter = basePerimeter > 0 ? basePerimeter : 4 * Math.sqrt(baseSqft)
+
+  const suspendedGridSqft = applyWaste(baseSqft, wastePct)
+  const suspendedGridPerimeter = applyWaste(calculatedBasePerimeter, wastePct)
+
+  const shiny90Count = Math.ceil(suspendedGridPerimeter / 8)
+  const mainsLinearFt = suspendedGridSqft / 4
+  const mainsCount = Math.ceil(mainsLinearFt / 12)
+  const tees4ftCount = Math.ceil((suspendedGridSqft / 16) * 2)
+  const wireLinearFt = Math.ceil(suspendedGridSqft / 5)
+  const lagsCount = Math.ceil(wireLinearFt / 8)
+
+  return {
+    suspendedGridSqft,
+    suspendedGridPerimeter,
+    shiny90Count,
+    mainsCount,
+    tees4ftCount,
+    wireLinearFt,
+    lagsCount,
+  }
+}
+
 /**
  * Compute suspended grid costs and totals.
  * @param {Object} inputs
@@ -29,24 +58,20 @@ import { applyWaste, LABOR_TAX_RATE } from './quantityUtils'
  * @returns {Object} All suspended grid values for display and aggregation
  */
 export function calcSuspendedGridTotals(inputs) {
-  const baseSqft = parseFloat(inputs.baseSqft) || 0;
-  const wastePct = parseFloat(inputs.wastePct) || 0;
-  const basePerimeter = parseFloat(inputs.basePerimeter) || 0;
-  const calculatedBasePerimeter = basePerimeter > 0 ? basePerimeter : 4 * Math.sqrt(baseSqft);
-
-  const suspendedGridSqft = applyWaste(baseSqft, wastePct);
-  const suspendedGridPerimeter = applyWaste(calculatedBasePerimeter, wastePct);
-
+  const baseSqft = parseFloat(inputs.baseSqft) || 0
+  const counts = calcSuspendedGridComponentCounts(inputs)
+  const suspendedGridSqft = counts?.suspendedGridSqft ?? 0
+  const suspendedGridPerimeter = counts?.suspendedGridPerimeter ?? 0
   const carpenterRateNum = parseFloat(inputs.carpenterRate) || 0;
-  const shiny90CountNum = parseFloat(inputs.shiny90Count) || 0;
+  const shiny90CountNum = parseFloat(inputs.shiny90Count) || counts?.shiny90Count || 0;
   const shiny90RateNum = parseFloat(inputs.shiny90Rate) || 0;
-  const mainsCountNum = parseFloat(inputs.mainsCount) || 0;
+  const mainsCountNum = parseFloat(inputs.mainsCount) || counts?.mainsCount || 0;
   const mainsRateNum = parseFloat(inputs.mainsRate) || 0;
-  const tees4ftCountNum = parseFloat(inputs.tees4ftCount) || 0;
+  const tees4ftCountNum = parseFloat(inputs.tees4ftCount) || counts?.tees4ftCount || 0;
   const tees4ftRateNum = parseFloat(inputs.tees4ftRate) || 0;
-  const wireLinearFtNum = parseFloat(inputs.wireLinearFt) || 0;
+  const wireLinearFtNum = parseFloat(inputs.wireLinearFt) || counts?.wireLinearFt || 0;
   const wireRateNum = parseFloat(inputs.wireRate) || 0;
-  const lagsCountNum = parseFloat(inputs.lagsCount) || 0;
+  const lagsCountNum = parseFloat(inputs.lagsCount) || counts?.lagsCount || 0;
   const lagsRateNum = parseFloat(inputs.lagsRate) || 0;
   const taxRatePct = parseFloat(inputs.taxRatePct) || 0;
   const overheadPct = parseFloat(inputs.overheadPct) || 0;

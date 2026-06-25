@@ -1,5 +1,4 @@
 import { Calendar, FileText, Package } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { appendScopeTemplate, ScopeTemplateChips } from '@/lib/drywall/scopeTemplateHelpers'
 import {
   CEILING_EXCEPTION_TEMPLATES,
   CEILING_FINISH_OPTIONS,
@@ -20,42 +20,6 @@ import {
   WALL_FINISH_OPTIONS,
 } from './quoteUiConstants'
 import type { DrywallQuote } from '@/types/drywall'
-
-function appendScopeTemplate(current: string, template: string): string {
-  const trimmed = current.trim()
-  if (!trimmed) return template
-  const sep = trimmed.endsWith('.') || trimmed.endsWith(',') ? ' ' : ', '
-  return trimmed + sep + template
-}
-
-function TemplateChips({
-  templates,
-  readOnly,
-  onPick,
-}: {
-  templates: readonly string[]
-  readOnly: boolean
-  onPick: (template: string) => void
-}) {
-  if (readOnly) return null
-  return (
-    <div className="mb-2 flex flex-wrap gap-1.5">
-      {templates.map((template) => (
-        <Button
-          key={template}
-          type="button"
-          variant="outline"
-          size="sm"
-          title={template}
-          className="h-7 max-w-full px-2 py-0 text-xs whitespace-normal"
-          onClick={() => onPick(template)}
-        >
-          + {template.length > 35 ? `${template.slice(0, 32)}…` : template}
-        </Button>
-      ))}
-    </div>
-  )
-}
 
 interface Props {
   quote: DrywallQuote
@@ -122,7 +86,7 @@ export function QuoteScopeSection({ quote, readOnly, onChange }: Props) {
           </div>
           <div className="space-y-2">
             <Label>Hang exceptions &amp; special requirements</Label>
-            <TemplateChips
+            <ScopeTemplateChips
               templates={HANG_EXCEPTION_TEMPLATES}
               readOnly={readOnly}
               onPick={(t) =>
@@ -188,7 +152,7 @@ export function QuoteScopeSection({ quote, readOnly, onChange }: Props) {
             </div>
             <div className="space-y-2">
               <Label>Ceiling finish exceptions</Label>
-              <TemplateChips
+              <ScopeTemplateChips
                 templates={CEILING_EXCEPTION_TEMPLATES}
                 readOnly={readOnly}
                 onPick={(t) =>
@@ -246,7 +210,7 @@ export function QuoteScopeSection({ quote, readOnly, onChange }: Props) {
             </div>
             <div className="space-y-2">
               <Label>Wall finish exceptions</Label>
-              <TemplateChips
+              <ScopeTemplateChips
                 templates={WALL_EXCEPTION_TEMPLATES}
                 readOnly={readOnly}
                 onPick={(t) =>

@@ -1,21 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import { ArrowRight, Building2, FileText, MapPin, User } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Building2, FileText, MapPin, Trash2, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import {
+  deleteDrywallProject,
   DrywallProjectPermissionError,
   fetchDrywallProjectById,
   updateDrywallProjectInfo,
 } from '@/services/drywallProjectsService'
 import type { ProjectInfoForm } from '@/types/drywall'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
+import { CommsLogPanel } from '@/components/drywall/comms/CommsLogPanel'
 
 function toForm(project: {
   name: string
@@ -46,6 +56,8 @@ export function ProjectInfoPage() {
   const [savedSnapshot, setSavedSnapshot] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -110,6 +122,25 @@ export function ProjectInfoPage() {
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (readOnly || deleting) return
+    setDeleting(true)
+    try {
+      await deleteDrywallProject(projectId)
+      toast.success('Project deleted')
+      setDeleteOpen(false)
+      navigate('/drywall', { replace: true })
+    } catch (e: unknown) {
+      if (e instanceof DrywallProjectPermissionError) {
+        toast.error(e.message)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Failed to delete project')
+      }
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -228,6 +259,64 @@ export function ProjectInfoPage() {
       {validationError && !readOnly && (
         <p className="text-sm text-amber-700 dark:text-amber-300">{validationError}</p>
       )}
+
+      <CommsLogPanel projectId={projectId} />
+
+      {!readOnly && (
+        <Card className="border-destructive/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Danger Zone
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Permanently deletes this project, its quote data, field measurements, orders, comms log,
+              and PO data. Payroll entries tagged to this project will keep their pay records but
+              their job link will be orphaned. Cannot be undone.
+            </p>
+            <Button
+              variant="destructive"
+              onClick={() => setDeleteOpen(true)}
+              disabled={deleting}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Project
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={deleteOpen} onOpenChange={(open) => !deleting && setDeleteOpen(open)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete this project?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes &quot;{form.name || 'this project'}&quot; and all of its data.
+              This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleDelete()}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting…' : 'Delete project'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

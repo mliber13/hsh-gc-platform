@@ -1,5 +1,6 @@
 import type {
   DrywallQuote,
+  DrywallQuoteV2V3,
   FieldChecklistItem,
   FieldMeasurementArea,
   FieldPhotoRef,
@@ -33,10 +34,24 @@ export function computeMeasuredSqft(measurements: FieldMeasurementArea[]): numbe
   }, 0)
 }
 
-export function quotedSqftWithWaste(quote: DrywallQuote | Record<string, unknown> | null | undefined): number {
+export function quotedSqftWithWaste(quote: DrywallQuoteV2V3 | Record<string, unknown> | null | undefined): number {
   if (!quote || typeof quote !== 'object') return 0
-  const base = parseFloat(String(quote.sqft)) || 0
-  const wastePct = Math.round(parseFloat(String(quote.wastePercentage)) || 0)
+  const q = quote as Record<string, unknown>
+
+  // v3 quote — sum drywall line items quantity × (1 + waste_pct)
+  if (q.version === 3 && Array.isArray(q.lineItems)) {
+    const total = (q.lineItems as Array<Record<string, unknown>>).reduce((sum, line) => {
+      if (line.type !== 'drywall') return sum
+      const qty = parseFloat(String(line.quantity ?? 0)) || 0
+      const waste = parseFloat(String(line.waste_pct ?? 0)) || 0
+      return sum + qty * (1 + waste / 100)
+    }, 0)
+    return Math.round(total)
+  }
+
+  // v2 quote — single project-level sqft + waste
+  const base = parseFloat(String(q.sqft)) || 0
+  const wastePct = Math.round(parseFloat(String(q.wastePercentage)) || 0)
   return Math.round(base * (1 + wastePct / 100))
 }
 

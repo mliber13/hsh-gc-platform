@@ -162,7 +162,8 @@ export function buildOrderFinancialComparison(
     overriddenQuoteTotal > 0 ? overriddenQuoteTotal : baselineTotals?.totalQuote || 0
   const baselineDirect = baselineTotals?.totalDirectCost || 0
   const baselineSubtotal = baselineTotals?.subtotal || 0
-  const baselineProfit = baselineTotal - baselineSubtotal
+  // Decision #21 — margin = (bid - direct cost) / bid. Overhead is treated as markup returned, not cost recovered.
+  const baselineProfit = baselineTotal - baselineDirect
   const baselineMargin = baselineTotal > 0 ? (baselineProfit / baselineTotal) * 100 : 0
   const overheadPct = num(quote.overheadPercentage)
 
@@ -189,7 +190,8 @@ export function buildOrderFinancialComparison(
 
   const adjustedSubtotal = baselineSubtotal + subtotalDelta
   const adjustedTotal = baselineTotal + approvedChangeOrderRevenue
-  const adjustedProfit = adjustedTotal - adjustedSubtotal
+  // Decision #21 — same formula as baseline; adjustedDirect already reflects field sqft + revised rates.
+  const adjustedProfit = adjustedTotal - adjustedDirect
   const adjustedMargin = adjustedTotal > 0 ? (adjustedProfit / adjustedTotal) * 100 : 0
 
   const varianceSqft = effectiveSqft - quoteSqft

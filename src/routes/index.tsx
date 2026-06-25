@@ -109,17 +109,27 @@ import { MyActionItems } from '@/components/meeting/MyActionItems'
 import { MeetingAdmin } from '@/components/meeting/MeetingAdmin'
 import { MeetingsList } from '@/components/meeting/MeetingsList'
 import { TeamPage } from '@/components/hr/TeamPage'
+import { CrewAccountsPage } from '@/components/hr/crew/CrewAccountsPage'
 import { PayrollPage } from '@/components/hr/PayrollPage'
 import { TimeClockPage } from '@/components/hr/TimeClockPage'
 import { HrWorkspaceShell } from '@/components/hr/HrWorkspaceShell'
 import { DrywallProjectsListPage } from '@/components/drywall/DrywallProjectsListPage'
 import { DrywallProjectShell } from '@/components/drywall/DrywallProjectShell'
+import { CloseoutStagePage } from '@/components/drywall/closeout/CloseoutStagePage'
 import { OrderPage } from '@/components/drywall/order/OrderPage'
+import { ProductionStagePage } from '@/components/drywall/production/ProductionStagePage'
 import { FieldMeasurementPage } from '@/components/drywall/field/FieldMeasurementPage'
-import { QuoteStage } from '@/components/drywall/quote/QuoteStage'
+import { DrywallScheduleEditor } from '@/components/drywall/schedule/DrywallScheduleEditor'
+import { DrywallSchedulePortfolioPage } from '@/components/drywall/schedule/portfolio/DrywallSchedulePortfolioPage'
+import { QuoteStageRoute } from '@/components/drywall/quote/QuoteStageRoute'
+import { CatalogsPage } from '@/components/drywall/settings/CatalogsPage'
 import { ProjectInfoPage } from '@/components/drywall/info/ProjectInfoPage'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { getCurrentWeekOf } from '@/services/meetingService'
+import { CrewSignupPage } from '@/routes/CrewSignupPage'
+import { CrewShell } from '@/components/crew/CrewShell'
+import { CrewProjectListPage } from '@/components/crew/CrewProjectListPage'
+import { CrewProjectDetailPage } from '@/components/crew/CrewProjectDetailPage'
 
 import { AppLayout } from '@/components/AppLayout'
 import { AuthedLayout } from './AuthedLayout'
@@ -130,8 +140,11 @@ import {
   RequireQuickBooksAdmin,
   RequireCanRunPayroll,
   RequireHrTeamAccess,
+  RequireHrCrewAccountsAccess,
   RequireHrTimeClockAccess,
+  RequireDrywallCatalogsAccess,
   RequireWorkspaceAccess,
+  RequireCrewWorkspaceAccess,
 } from './RequirePermission'
 
 // ============================================================================
@@ -146,6 +159,7 @@ export function AppRoutes() {
       <Route path="/quote/:token" element={<VendorQuotePortal />} />
       <Route path="/privacy" element={<PublicPrivacy />} />
       <Route path="/terms" element={<PublicTerms />} />
+      <Route path="/crew-signup" element={<CrewSignupPage />} />
 
       {/* Authed — wrapped in AuthGate + Provider, then in the sidebar shell */}
       <Route element={<AuthedLayout />}>
@@ -154,6 +168,18 @@ export function AppRoutes() {
         {/* Authed but full-screen (no sidebar shell): OAuth callback only */}
         <Route path="/quickbooks/callback" element={<QuickBooksCallbackRoute />} />
         <Route path="/qb-callback" element={<QuickBooksCallbackRoute />} />
+
+        <Route
+          path="/crew"
+          element={
+            <RequireCrewWorkspaceAccess>
+              <CrewShell />
+            </RequireCrewWorkspaceAccess>
+          }
+        >
+          <Route index element={<CrewProjectListPage />} />
+          <Route path="projects/:projectId" element={<CrewProjectDetailPage />} />
+        </Route>
 
         {/* All other authed routes render inside the sidebar shell */}
         <Route element={<AppLayout />}>
@@ -263,6 +289,22 @@ export function AppRoutes() {
             }
           />
           <Route
+            path="/drywall/schedule"
+            element={
+              <RequireWorkspaceAccess workspace="drywall">
+                <DrywallSchedulePortfolioPage />
+              </RequireWorkspaceAccess>
+            }
+          />
+          <Route
+            path="/drywall/settings/catalogs"
+            element={
+              <RequireDrywallCatalogsAccess>
+                <CatalogsPage />
+              </RequireDrywallCatalogsAccess>
+            }
+          />
+          <Route
             path="/drywall/projects/:projectId"
             element={
               <RequireWorkspaceAccess workspace="drywall">
@@ -272,9 +314,12 @@ export function AppRoutes() {
           >
             <Route index element={<DrywallProjectIndexRedirect />} />
             <Route path="info" element={<ProjectInfoPage />} />
-            <Route path="quote" element={<QuoteStage />} />
+            <Route path="quote" element={<QuoteStageRoute />} />
             <Route path="field" element={<FieldMeasurementPage />} />
+            <Route path="schedule" element={<DrywallScheduleEditor />} />
             <Route path="order" element={<OrderPage />} />
+            <Route path="production" element={<ProductionStagePage />} />
+            <Route path="closeout" element={<CloseoutStagePage />} />
           </Route>
 
           <Route
@@ -295,6 +340,14 @@ export function AppRoutes() {
                 <RequireHrTeamAccess>
                   <TeamPage />
                 </RequireHrTeamAccess>
+              }
+            />
+            <Route
+              path="crew"
+              element={
+                <RequireHrCrewAccountsAccess>
+                  <CrewAccountsPage />
+                </RequireHrCrewAccountsAccess>
               }
             />
             <Route

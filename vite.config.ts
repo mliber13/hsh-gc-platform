@@ -49,7 +49,7 @@ export default defineConfig(({ mode }) => {
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           // Allow main chunk > 2 MiB (default limit) so Vercel build succeeds
-          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
           // Clean up old caches on update
           cleanupOutdatedCaches: true,
           // Skip waiting and claim clients immediately
@@ -95,7 +95,7 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
     },
     test: {
-      include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      include: ['src/**/*.{test,spec}.{ts,tsx}', 'scripts/**/*.test.ts'],
       environment: 'node',
     },
   }

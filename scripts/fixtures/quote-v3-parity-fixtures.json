@@ -1,0 +1,279 @@
+{
+  "projects": [
+    {
+      "id": "7e737db3-fe91-417e-aa3d-7cc9e30ec03c",
+      "name": "Hartville - Irwin",
+      "v2Quote": {
+        "version": 2,
+        "sqft": 4180,
+        "wastePercentage": 3,
+        "materialRate": 0.66,
+        "boardOnlyMaterialRate": 0.66,
+        "hangerRate": 0.35,
+        "finisherRate": 0.6,
+        "prepCleanRate": 0.03,
+        "overheadPercentage": 10,
+        "profitPercentage": 30,
+        "salesTaxRate": 7.25,
+        "drywallScope": "hang_and_finish",
+        "hangLayers": 1,
+        "finishLayers": 1,
+        "breakdowns": [],
+        "options": [],
+        "wallFinish": "Level 4 Smooth",
+        "ceilingFinish": "Level 4 Smooth",
+        "wallThickness": "1/2\"",
+        "hangerIncludeLaborBurden": true,
+        "finisherIncludeLaborBurden": true,
+        "prepCleanIncludeLaborBurden": true
+      }
+    },
+    {
+      "id": "329fe519-1439-4f0a-b67a-dfc76a88f5a6",
+      "name": "Stangl",
+      "v2Quote": {
+        "version": 2,
+        "sqft": 7304.74,
+        "wastePercentage": 10,
+        "materialRate": 0.66,
+        "boardOnlyMaterialRate": 0.66,
+        "hangerRate": 0.3,
+        "finisherRate": 0.35,
+        "prepCleanRate": 0.03,
+        "overheadPercentage": 10,
+        "profitPercentage": 30,
+        "salesTaxRate": 8,
+        "drywallScope": "hang_and_finish",
+        "hangLayers": 1,
+        "finishLayers": 1,
+        "wallFinish": "Level 4 Smooth",
+        "ceilingFinish": "Level 4 Smooth",
+        "breakdowns": [
+          {
+            "id": "b1",
+            "sqft": "800.5",
+            "description": "Basement Office & Bathroom"
+          },
+          {
+            "id": "b2",
+            "sqft": "1302.39",
+            "description": "(2) Large Basement Rooms"
+          },
+          {
+            "id": "b3",
+            "sqft": "3584.91",
+            "description": "1st Floor Remainder"
+          },
+          {
+            "id": "b4",
+            "sqft": "633.05",
+            "description": "1st Floor Family Room"
+          },
+          {
+            "id": "b5",
+            "sqft": "984.04",
+            "description": "1st Floor Addition"
+          }
+        ],
+        "options": [],
+        "hangerIncludeLaborBurden": true,
+        "finisherIncludeLaborBurden": true,
+        "prepCleanIncludeLaborBurden": true
+      }
+    },
+    {
+      "id": "5cb42769-e43c-44e4-83f2-f193e9511384",
+      "name": "McCamon",
+      "v2Quote": {
+        "version": 2,
+        "sqft": 6092.95,
+        "wastePercentage": 10,
+        "materialRate": 0.66,
+        "boardOnlyMaterialRate": 0.66,
+        "hangerRate": 0.35,
+        "finisherRate": 0.45,
+        "prepCleanRate": 0.03,
+        "overheadPercentage": 10,
+        "profitPercentage": 30,
+        "salesTaxRate": 7.25,
+        "drywallScope": "hang_and_finish",
+        "hangLayers": 1,
+        "finishLayers": 1,
+        "breakdowns": [],
+        "options": [],
+        "wallFinish": "Level 4 Smooth",
+        "ceilingFinish": "Level 5 Smooth",
+        "wallThickness": "1/2\"",
+        "hangerIncludeLaborBurden": true,
+        "finisherIncludeLaborBurden": true,
+        "prepCleanIncludeLaborBurden": true
+      }
+    },
+    {
+      "id": "0b73bc7d-947a-4c3c-bf3f-14a2f33cbd8c",
+      "name": "Kent - Murphy",
+      "v2Quote": {
+        "version": 2,
+        "sqft": 9888,
+        "wastePercentage": 0,
+        "materialRate": 0.66,
+        "boardOnlyMaterialRate": 0.66,
+        "hangerRate": 0.28,
+        "finisherRate": 0.28,
+        "prepCleanRate": 0.03,
+        "overheadPercentage": 0.82155,
+        "profitPercentage": 20,
+        "salesTaxRate": 0,
+        "drywallScope": "hang_and_finish",
+        "hangLayers": 1,
+        "finishLayers": 1,
+        "breakdowns": [],
+        "options": [],
+        "wallFinish": "Level 4 Smooth",
+        "ceilingFinish": "Stomp Knockdown",
+        "wallThickness": "1/2\"",
+        "hangerIncludeLaborBurden": true,
+        "finisherIncludeLaborBurden": true,
+        "prepCleanIncludeLaborBurden": true
+      }
+    }
+  ],
+  "catalogsPayload": {
+    "boards": [
+      {
+        "id": "5_8_type_x",
+        "display_name": "5/8\" Type X",
+        "material_rate": 0.455,
+        "hanger_rate": 0,
+        "default_waste_pct": 10
+      },
+      {
+        "id": "1_2_regular",
+        "display_name": "1/2\" Regular",
+        "material_rate": 0.43,
+        "hanger_rate": 0,
+        "default_waste_pct": 10
+      },
+      {
+        "id": "1_2_mr",
+        "display_name": "1/2\" Moisture-Resistant",
+        "material_rate": 0.63,
+        "hanger_rate": 0,
+        "default_waste_pct": 10
+      },
+      {
+        "id": "1_2_type_x",
+        "display_name": "1/2\" Type X",
+        "material_rate": 0,
+        "hanger_rate": 0,
+        "default_waste_pct": 10
+      }
+    ],
+    "finish_scopes": [
+      {
+        "id": "level_4",
+        "display_name": "Level 4",
+        "finisher_rate": 0.32,
+        "payroll_piece_key": "level_4",
+        "accessories_applied": {
+          "joint_compound": true,
+          "tape": true,
+          "screws": true,
+          "corner_bead": true
+        },
+        "applies_to_locations": [
+          "wall",
+          "ceiling"
+        ]
+      },
+      {
+        "id": "level_5",
+        "display_name": "Level 5",
+        "finisher_rate": 0.4,
+        "payroll_piece_key": "level_5",
+        "accessories_applied": {
+          "joint_compound": true,
+          "tape": true,
+          "screws": true,
+          "corner_bead": true
+        },
+        "applies_to_locations": [
+          "wall",
+          "ceiling"
+        ]
+      },
+      {
+        "id": "stomp_knockdown",
+        "display_name": "Stomp Knockdown",
+        "finisher_rate": 0.28,
+        "payroll_piece_key": "stomp_knockdown",
+        "accessories_applied": {
+          "joint_compound": true,
+          "tape": true,
+          "screws": true,
+          "corner_bead": true
+        },
+        "applies_to_locations": [
+          "wall",
+          "ceiling"
+        ]
+      }
+    ],
+    "accessories": [
+      {
+        "id": "joint_compound_all_purpose",
+        "display_name": "All Purpose Joint Compound (5 gal bucket)",
+        "category": "joint_compound",
+        "unit": "bucket",
+        "material_rate": 22,
+        "sqft_per_unit": 960
+      },
+      {
+        "id": "joint_compound_lite_weight",
+        "display_name": "Lite Weight Joint Compound (5 gal bucket)",
+        "category": "joint_compound",
+        "unit": "bucket",
+        "material_rate": 20,
+        "sqft_per_unit": 600
+      },
+      {
+        "id": "joint_compound_easy_sand_90",
+        "display_name": "Easy Sand 90 (bag)",
+        "category": "joint_compound",
+        "unit": "bag",
+        "material_rate": 12,
+        "sqft_per_unit": 5000
+      },
+      {
+        "id": "tape_paper_500ft",
+        "display_name": "500' Paper Tape (roll)",
+        "category": "tape",
+        "unit": "roll",
+        "material_rate": 8,
+        "sqft_per_unit": 1400
+      },
+      {
+        "id": "tape_mesh_300ft",
+        "display_name": "300' Mesh Tape (roll)",
+        "category": "tape",
+        "unit": "roll",
+        "material_rate": 8,
+        "sqft_per_unit": 15000
+      },
+      {
+        "id": "screws_1_25_coarse",
+        "display_name": "Drywall Screws 1-1/4\" Coarse (box ~5,000)",
+        "category": "screws",
+        "unit": "box",
+        "material_rate": 35,
+        "sqft_per_unit": 5760
+      }
+    ],
+    "rc_channel": [],
+    "suspended_grid": [],
+    "insulation": [],
+    "acoustic": [],
+    "metal_stud": [],
+    "frp": []
+  }
+}

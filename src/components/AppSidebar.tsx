@@ -20,6 +20,7 @@ import {
   Calculator,
   Calendar,
   CalendarDays,
+  CalendarRange,
   Clock3,
   ClipboardList,
   DollarSign,
@@ -69,7 +70,7 @@ import {
 } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 import { SidebarUserMenu } from './SidebarUserMenu'
-import { canAccessHrPayrollPage, canAccessHrTeamPage, canAccessHrTimeClockPage } from '@/routes/RequirePermission'
+import { canAccessHrCrewAccountsPage, canAccessHrPayrollPage, canAccessHrTeamPage, canAccessHrTimeClockPage, canEditDrywallCatalogs } from '@/routes/RequirePermission'
 
 // ----------------------------------------------------------------------------
 // Nav item types
@@ -253,14 +254,26 @@ const tenantsNav: NavGroup[] = [
   },
 ]
 
-const drywallNav: NavGroup[] = [
-  {
-    label: 'Drywall',
-    items: [
-      { label: 'Projects', to: '/drywall', icon: Hammer, matchPath: '/drywall' },
-    ],
-  },
-]
+function drywallNav(role: RbacRole): NavGroup[] {
+  const items: NavItem[] = [
+    { label: 'Projects', to: '/drywall', icon: Hammer, matchPath: '/drywall' },
+    {
+      label: 'Schedule',
+      to: '/drywall/schedule',
+      icon: CalendarRange,
+      matchPath: '/drywall/schedule',
+    },
+  ]
+  if (canEditDrywallCatalogs(role)) {
+    items.push({
+      label: 'Catalogs',
+      to: '/drywall/settings/catalogs',
+      icon: Library,
+      matchPath: '/drywall/settings/catalogs',
+    })
+  }
+  return [{ label: 'Drywall', items }]
+}
 
 const scheduleNav: NavGroup[] = [
   {
@@ -288,6 +301,14 @@ function hrNav(
       to: '/hr/team',
       icon: UsersRound,
       matchPath: '/hr/team',
+    })
+  }
+  if (canAccessHrCrewAccountsPage(role)) {
+    items.push({
+      label: 'Crew accounts',
+      to: '/hr/crew',
+      icon: Link2,
+      matchPath: '/hr/crew',
     })
   }
   if (canSeePayroll) {
@@ -396,7 +417,7 @@ function navForWorkspace(
     case 'hr':
       return withSettings(hrNav(role, canSeeHrPayroll))
     case 'drywall':
-      return withSettings(drywallNav)
+      return withSettings(drywallNav(role))
   }
 }
 
@@ -657,7 +678,8 @@ function NavLinkItem({
             item.to === '/' ||
             item.to === '/deals' ||
             item.to === '/tenants' ||
-            item.to === '/schedule'
+            item.to === '/schedule' ||
+            item.to === '/drywall'
           }
           className={({ isActive }) => cn(isActive && activeClass)}
         >

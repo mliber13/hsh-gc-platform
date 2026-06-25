@@ -1,8 +1,9 @@
 import type { DrywallProjectListItem, DrywallProjectStatus } from '@/types/drywall'
+import { isDrywallProjectClosed, normalizeDrywallProjectStatus } from '@/types/drywall'
 import { cn } from '@/lib/utils'
 
 const STAGE_CHIPS: {
-  status: DrywallProjectStatus
+  status: Exclude<DrywallProjectStatus, 'complete'>
   label: string
   chipClass: string
 }[] = [
@@ -11,9 +12,14 @@ const STAGE_CHIPS: {
   {
     status: 'field-measurement',
     label: 'Field',
-    chipClass: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    chipClass: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
   },
-  { status: 'order', label: 'Order', chipClass: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+  { status: 'order', label: 'Order', chipClass: 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200' },
+  {
+    status: 'production',
+    label: 'Prod',
+    chipClass: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  },
 ]
 
 function formatPipelineCurrency(amount: number): string {
@@ -25,19 +31,22 @@ function formatPipelineCurrency(amount: number): string {
 }
 
 export function computeDrywallListStats(projects: DrywallProjectListItem[]) {
-  const active = projects.filter((p) => p.status !== 'complete')
+  const active = projects.filter((p) => !isDrywallProjectClosed(p.status))
   const quotePipeline = active.reduce((sum, p) => sum + (p.quoteTotal ?? 0), 0)
   const byStage: Record<string, number> = {
     'project-info': 0,
     quote: 0,
     'field-measurement': 0,
     order: 0,
+    production: 0,
+    'production-complete': 0,
   }
   for (const p of active) {
-    const key = p.status in byStage ? p.status : 'project-info'
-    byStage[key] += 1
+    const key = normalizeDrywallProjectStatus(p.status)
+    if (key in byStage) byStage[key] += 1
+    else byStage['project-info'] += 1
   }
-  const completedCount = projects.filter((p) => p.status === 'complete').length
+  const completedCount = projects.filter((p) => isDrywallProjectClosed(p.status)).length
   return {
     quotePipeline,
     activeCount: active.length,

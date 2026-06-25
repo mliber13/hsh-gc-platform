@@ -8,19 +8,31 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
-import { computeMeasuredSqft, quotedSqftWithWaste } from '@/lib/drywall/fieldMeasurementUtils'
+import { BelowFloorMarginDialog } from '@/components/drywall/margin/BelowFloorMarginDialog'
+import { computeMeasuredSqft, fieldTakeoffWithTotals, quotedSqftWithWaste } from '@/lib/drywall/fieldMeasurementUtils'
+import {
+  computePoEstimatedCost,
+  evaluateMarginVsFloor,
+  type MarginFloorEvaluation,
+} from '@/lib/drywall/marginFloor'
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallField } from '@/routes/RequirePermission'
+import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import {
   DrywallProjectPermissionError,
   fetchDrywallProjectById,
-  fetchDrywallQuote,
+  fetchDrywallQuoteV2V3,
   fetchFieldTakeoff,
+  getIntakeSourceFromLegacy,
+  getQuoteOutcomeFromLegacy,
+  recordBelowFloorApproval,
   saveFieldTakeoff,
   saveFieldTakeoffAndAdvance,
   updateDrywallProjectInfo,
 } from '@/services/drywallProjectsService'
-import type { DrywallQuote, FieldTakeoff } from '@/types/drywall'
+import { isDrywallQuoteV3 } from '@/types/drywall'
+import { v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
+import type { DrywallQuote, DrywallQuoteV2V3, FieldTakeoff } from '@/types/drywall'
 import { FieldAccessoriesSection } from './FieldAccessoriesSection'
 import { FieldMeasurementsSection } from './FieldMeasurementsSection'
 import { FieldPhotosSection } from './FieldPhotosSection'
@@ -42,16 +54,22 @@ export function FieldMeasurementPage() {
     notes: '',
   })
   const [savedAddress, setSavedAddress] = useState('')
-  const [quote, setQuote] = useState<DrywallQuote | null>(null)
+  const [quote, setQuote] = useState<DrywallQuoteV2V3 | null>(null)
   const [takeoff, setTakeoff] = useState<FieldTakeoff | null>(null)
   const [savedSnapshot, setSavedSnapshot] = useState('')
+  const [intakeSource, setIntakeSource] = useState<'po' | 'quote' | null>(null)
+  const [poBidTotal, setPoBidTotal] = useState<number | null>(null)
+  const [belowFloorOpen, setBelowFloorOpen] = useState(false)
+  const [belowFloorReason, setBelowFloorReason] = useState('')
+  const [marginEval, setMarginEval] = useState<MarginFloorEvaluation | null>(null)
+  const [checkingMargin, setCheckingMargin] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const [project, q, t] = await Promise.all([
         fetchDrywallProjectById(projectId),
-        fetchDrywallQuote(projectId),
+        fetchDrywallQuoteV2V3(projectId),
         fetchFieldTakeoff(projectId),
       ])
       if (!project) {
@@ -70,6 +88,9 @@ export function FieldMeasurementPage() {
       setQuote(q)
       setTakeoff(t)
       setSavedSnapshot(JSON.stringify(t))
+      setIntakeSource(getIntakeSourceFromLegacy(project.legacy))
+      const { bidSnapshot } = getQuoteOutcomeFromLegacy(project.legacy)
+      setPoBidTotal(bidSnapshot?.total ?? null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load field measurement')
     } finally {
@@ -82,6 +103,14 @@ export function FieldMeasurementPage() {
   }, [load])
 
   const quoteSqft = useMemo(() => quotedSqftWithWaste(quote), [quote])
+  /** v2-shape projection of the quote for legacy components (FieldAccessoriesSection). */
+  const legacyQuote = useMemo<DrywallQuote | null>(() => {
+    if (!quote) return null
+    if (isDrywallQuoteV3(quote)) {
+      return v2QuoteFromV3Snapshot(quote.legacyV2Snapshot)
+    }
+    return quote
+  }, [quote])
   const measuredSqft = useMemo(
     () => (takeoff ? computeMeasuredSqft(takeoff.measurements) : 0),
     [takeoff],
@@ -132,6 +161,13 @@ export function FieldMeasurementPage() {
     }
   }
 
+  const advanceToOrder = async () => {
+    if (!takeoff) return
+    await saveFieldTakeoffAndAdvance(projectId, takeoff)
+    toast.success('Advanced to Order')
+    navigate(`/drywall/projects/${projectId}/order`)
+  }
+
   const handleContinueOrder = async () => {
     if (!takeoff || readOnly) return
     if (!canContinue) {
@@ -142,13 +178,62 @@ export function FieldMeasurementPage() {
       toast.error('Save your changes before continuing to order.')
       return
     }
+
+    if (intakeSource === 'po') {
+      setCheckingMargin(true)
+      try {
+        const catalogs = await fetchOrgDrywallCatalogs()
+        const fieldSqft = fieldTakeoffWithTotals(takeoff).totalMeasuredSqft ?? measuredSqft
+        const bidTotal = poBidTotal ?? 0
+        const estimatedCost = computePoEstimatedCost(fieldSqft, catalogs.poEstimatedCostPerSqft)
+        const evaluation = evaluateMarginVsFloor(
+          bidTotal,
+          estimatedCost,
+          catalogs.marginFloorTarget,
+        )
+        if (evaluation.belowFloor) {
+          setMarginEval(evaluation)
+          setBelowFloorReason('')
+          setBelowFloorOpen(true)
+          return
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Failed to evaluate margin')
+        return
+      } finally {
+        setCheckingMargin(false)
+      }
+    }
+
     setSaving(true)
     try {
-      await saveFieldTakeoffAndAdvance(projectId, takeoff)
-      toast.success('Advanced to Order')
-      navigate(`/drywall/projects/${projectId}/order`)
+      await advanceToOrder()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not advance stage')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleBelowFloorContinue = async () => {
+    if (!takeoff || !marginEval || !belowFloorReason.trim()) return
+    setSaving(true)
+    try {
+      await recordBelowFloorApproval(projectId, {
+        trigger: 'field_measurement_to_order',
+        marginAtApproval: marginEval.marginPct ?? 0,
+        bidTotal: marginEval.bidTotal,
+        estimatedCost: marginEval.estimatedCost,
+        floorTarget: marginEval.floorTarget,
+        reason: belowFloorReason.trim(),
+      })
+      await advanceToOrder()
+      setBelowFloorOpen(false)
+      setBelowFloorReason('')
+      setMarginEval(null)
+    } catch (e) {
+      if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
+      else toast.error(e instanceof Error ? e.message : 'Could not advance stage')
     } finally {
       setSaving(false)
     }
@@ -202,10 +287,10 @@ export function FieldMeasurementPage() {
               </Button>
               <Button
                 type="button"
-                disabled={!canContinue || saving}
+                disabled={!canContinue || saving || checkingMargin}
                 onClick={() => void handleContinueOrder()}
               >
-                Continue to order
+                {checkingMargin ? 'Checking margin…' : 'Continue to order'}
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </>
@@ -308,7 +393,7 @@ export function FieldMeasurementPage() {
           <FieldAccessoriesSection
             takeoff={takeoff}
             measuredSqft={measuredSqft}
-            quote={quote}
+            quote={legacyQuote}
             readOnly={readOnly}
             onChange={setTakeoffField}
           />
@@ -353,6 +438,23 @@ export function FieldMeasurementPage() {
       {isDirty && !readOnly && (
         <p className="text-sm text-amber-700">You have unsaved changes.</p>
       )}
+
+      <BelowFloorMarginDialog
+        open={belowFloorOpen}
+        onOpenChange={(open) => {
+          setBelowFloorOpen(open)
+          if (!open) {
+            setBelowFloorReason('')
+            setMarginEval(null)
+          }
+        }}
+        evaluation={marginEval}
+        variant="field_measurement_to_order"
+        reason={belowFloorReason}
+        onReasonChange={setBelowFloorReason}
+        busy={saving}
+        onConfirm={() => void handleBelowFloorContinue()}
+      />
     </div>
   )
 }

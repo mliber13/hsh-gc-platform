@@ -15,7 +15,9 @@ import {
   canWriteWorkspace as rbacCanWriteWorkspace,
   canAccessQuickBooksAdmin as rbacCanAccessQuickBooksAdmin,
   canManageMeetingPrompts as rbacCanManageMeetingPrompts,
+  canAccessCrewWorkspace as rbacCanAccessCrewWorkspace,
   deriveEffectiveRole,
+  isCrewRole,
   isOwnerRole,
 } from '@/lib/rbac'
 
@@ -57,12 +59,14 @@ export function usePermissions() {
   const isMeetingOperator = rbacCanManageMeetingPrompts(userProfile, effectiveRole)
   const canAdminQb = rbacCanAccessQuickBooksAdmin(userProfile, effectiveRole)
 
+  const isCrew = isCrewRole(effectiveRole)
   const isAdmin = isOwner
-  const isEditor = ['owner', 'office_gc', 'office_drywall'].includes(effectiveRole)
+  const isEditor =
+    !isCrew && ['owner', 'office_gc', 'office_drywall'].includes(effectiveRole)
   const isViewer = effectiveRole === 'viewer'
-  const canCreate = ['owner', 'office_gc'].includes(effectiveRole)
-  const canEdit = ['owner', 'office_gc', 'office_drywall'].includes(effectiveRole)
-  const canDelete = ['owner', 'office_gc'].includes(effectiveRole)
+  const canCreate = !isCrew && ['owner', 'office_gc'].includes(effectiveRole)
+  const canEdit = !isCrew && ['owner', 'office_gc', 'office_drywall'].includes(effectiveRole)
+  const canDelete = !isCrew && ['owner', 'office_gc'].includes(effectiveRole)
   const canManageUsers = isOwner
   const canInviteUsers = isOwner
 
@@ -85,6 +89,8 @@ export function usePermissions() {
   const canRunPayroll =
     isOwner || Boolean(userProfile?.can_run_payroll ?? userProfile?.canRunPayroll)
 
+  const canAccessCrewWorkspace = () => rbacCanAccessCrewWorkspace(effectiveRole)
+
   return {
     userProfile,
     profile: userProfile,
@@ -92,6 +98,7 @@ export function usePermissions() {
     effectiveRole,
     loading,
     isOwner,
+    isCrew,
     isAdmin,
     isEditor,
     isViewer,
@@ -109,5 +116,6 @@ export function usePermissions() {
     canAccessQuickBooksAdmin,
     canManageMeetingPrompts,
     canRunPayroll,
+    canAccessCrewWorkspace,
   }
 }

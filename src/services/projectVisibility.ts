@@ -115,6 +115,7 @@ export function hasDrywallWorkspaceData(
   if (hasNonEmptyBreakdowns(q.breakdowns)) return true
   if (hasPopulatedCalculations(q.calculations)) return true
   if (hasPopulatedTotalQuoteAmount(q.totalQuoteAmount)) return true
+  if (q.version === 3 && hasNonEmptyLineItems(q.lineItems)) return true
 
   return false
 }
@@ -143,26 +144,61 @@ export type DrywallListQuoteScalars = {
   quote_sqft?: unknown
   quote_final_total?: unknown
   quote_total_amount?: unknown
+  quote_version?: unknown
+  quote_line_items?: unknown
+}
+
+/** Field/order signals from `drywall_list_stage_scalars` RPC. */
+export type DrywallListStageScalars = {
+  field_measured_sqft?: unknown
+  field_first_measurement_id?: unknown
+  order_first_id?: unknown
+}
+
+function hasDrywallListStageData(stage?: DrywallListStageScalars): boolean {
+  if (!stage) return false
+  if (hasPopulatedSqft(stage.field_measured_sqft)) return true
+  const measurementId =
+    typeof stage.field_first_measurement_id === 'string'
+      ? stage.field_first_measurement_id.trim()
+      : ''
+  if (measurementId) return true
+  const orderId =
+    typeof stage.order_first_id === 'string' ? stage.order_first_id.trim() : ''
+  return Boolean(orderId)
 }
 
 /**
  * Drywall list surfacing using narrow PostgREST scalar paths only.
  *
  * Approximation of `belongsInDrywallWorkspace`: `DRYWALL_ONLY` OR
- * (sqft > 0 OR finalTotal > 0 OR totalQuoteAmount > 0).
+ * (sqft > 0 OR finalTotal > 0 OR totalQuoteAmount > 0 OR v3 line items) OR
+ * field/order stage data (projects that progressed past quote without quote scalars).
  *
  * Does not inspect breakdowns or non-empty calculations objects without
  * `finalTotal` — use `hasDrywallWorkspaceData` when the full quote is loaded.
  */
 export function belongsInDrywallWorkspaceFromListScalars(
   row: DrywallListQuoteScalars,
+  stage?: DrywallListStageScalars,
 ): boolean {
   if (row.app_scope === 'DRYWALL_ONLY') return true
+  if (hasDrywallListStageData(stage)) return true
+  if (
+    String(row.quote_version ?? '') === '3' &&
+    hasNonEmptyLineItems(row.quote_line_items)
+  ) {
+    return true
+  }
   return (
     hasPopulatedSqft(row.quote_sqft) ||
     hasPopulatedTotalQuoteAmount(row.quote_final_total) ||
     hasPopulatedTotalQuoteAmount(row.quote_total_amount)
   )
+}
+
+function hasNonEmptyLineItems(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0
 }
 
 function hasPopulatedSqft(value: unknown): boolean {

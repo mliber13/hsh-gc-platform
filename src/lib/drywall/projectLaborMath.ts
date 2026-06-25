@@ -1,0 +1,365 @@
+// ============================================================================
+// Drywall project labor — pure aggregation (D.1.3)
+// ============================================================================
+
+import { parseISO } from 'date-fns'
+import {
+  isComponentLaborKey,
+  isDrywallHangerKey,
+  isFinishScopePieceKey,
+  isLegacyPayrollWorkType,
+  resolvePieceEntryKey,
+} from '@/lib/drywall/payrollPieceKeys'
+import {
+  calculateHourlyPayWithOvertimeCap,
+  calculateHoursTotal,
+  getHelperDeductionForJob,
+  getRateForHourEntry,
+  personKey,
+  recalcPieceEntryAmount,
+} from '@/lib/payrollMath'
+import type { PayrollPersonType } from '@/types/payroll'
+import type { PayrollEntry, PayrollHourEntry, PayrollPieceEntry } from '@/types/payroll'
+import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
+
+export interface PayPeriodForLabor {
+  id: string
+  startDate: string
+  endDate: string
+  locked: boolean
+  completedAt: string | null
+  entries: PayrollEntry[]
+}
+
+export interface DrywallProjectLaborEntryFlat {
+  payPeriodId: string
+  periodStart: string
+  periodEnd: string
+  periodLocked: boolean
+  periodCompletedAt: string | null
+  personId: string
+  personType: PayrollPersonType | string
+  personName?: string
+  source: 'hour' | 'piece'
+  pieceKey?: string
+  workType?: string
+  hours?: number
+  overtimeType?: string
+  pieces?: number
+  amount: number
+  category: 'hanger' | 'finisher' | 'components' | 'legacy' | 'hourly' | 'other'
+}
+
+export interface DrywallProjectLaborSummary {
+  totalCost: number
+  totalHours: number
+  totalOvertimeHours: number
+  totalPieces: number
+  byCategory: Record<DrywallProjectLaborEntryFlat['category'], number>
+  byPayPeriod: Array<{
+    payPeriodId: string
+    periodStart: string
+    periodEnd: string
+    locked: boolean
+    cost: number
+  }>
+  entries: DrywallProjectLaborEntryFlat[]
+}
+
+export type ProfileRatesByPersonKey = Record<string, number>
+
+function emptyByCategory(): Record<DrywallProjectLaborEntryFlat['category'], number> {
+  return {
+    hanger: 0,
+    finisher: 0,
+    components: 0,
+    legacy: 0,
+    hourly: 0,
+    other: 0,
+  }
+}
+
+function num(v: unknown): number {
+  const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
+function entryMatchesProject(jobId: string | undefined, projectId: string): boolean {
+  const id = String(jobId ?? '').trim()
+  if (!id || id === 'unassigned') return false
+  return id === projectId
+}
+
+function periodEndMs(periodEnd: string): number {
+  const iso = periodEnd.length === 10 ? `${periodEnd}T23:59:59.999` : periodEnd
+  const parsed = parseISO(iso)
+  return parsed.getTime()
+}
+
+function timestampMs(ts?: string | null): number | null {
+  if (!ts) return null
+  const n = Date.parse(ts)
+  return Number.isFinite(n) ? n : null
+}
+
+export function classifyLaborCategory(
+  source: 'hour' | 'piece',
+  catalogs: OrgDrywallCatalogs | null,
+  pieceKey?: string,
+  workType?: string,
+): DrywallProjectLaborEntryFlat['category'] {
+  if (source === 'hour') return 'hourly'
+  const key = resolvePieceEntryKey({ piece_key: pieceKey, workType })
+  if (isDrywallHangerKey(key)) return 'hanger'
+  if (catalogs && isFinishScopePieceKey(key, catalogs.finish_scopes)) return 'finisher'
+  if (isComponentLaborKey(key)) return 'components'
+  if (isLegacyPayrollWorkType(key)) return 'legacy'
+  return 'other'
+}
+
+function scaleForBankedHours(entry: PayrollEntry, amount: number): number {
+  const hoursTotal = calculateHoursTotal(entry.hourEntries, entry.hours)
+  const hoursToBank = num(entry.hoursToBank)
+  if (hoursTotal > 0 && hoursToBank > 0) {
+    const paidHours = Math.max(0, hoursTotal - hoursToBank)
+    return amount * (paidHours / hoursTotal)
+  }
+  return amount
+}
+
+function pieceEntryRawAmount(pe: PayrollPieceEntry): number {
+  const stored = num(pe.amount)
+  if (stored > 0) return stored
+  return recalcPieceEntryAmount(pe)
+}
+
+function pieceEntryPieces(pe: PayrollPieceEntry): number {
+  const total = Math.max(1, num(pe.totalPhases) || 1)
+  const done = num(pe.phasesCompleted)
+  const sqft = num(pe.jobTotalSqft)
+  return (done / total) * sqft
+}
+
+function pieceEntryNetAmount(
+  pe: PayrollPieceEntry,
+  entry: PayrollEntry,
+  allEntries: Record<string, PayrollEntry>,
+  pk: string,
+): number {
+  const jobId = pe.jobId || ''
+  const jobName = pe.jobName || ''
+  const jobPieces = (entry.pieceEntries || []).filter(
+    (p) => p.jobId === pe.jobId && (p.jobName || '') === (pe.jobName || ''),
+  )
+  const jobRawTotal = jobPieces.reduce((sum, p) => sum + pieceEntryRawAmount(p), 0)
+  const raw = pieceEntryRawAmount(pe)
+  if (jobRawTotal <= 0 || raw <= 0) return 0
+  const deduction = getHelperDeductionForJob(allEntries, pk, jobId, jobName)
+  const netJob = Math.max(0, jobRawTotal - deduction)
+  return (raw / jobRawTotal) * netJob
+}
+
+function hourEntryPay(
+  he: PayrollHourEntry,
+  hourIndex: number,
+  entry: PayrollEntry,
+  profileRate: number,
+): number {
+  const { entryPayments } = calculateHourlyPayWithOvertimeCap(entry, profileRate)
+  const payment = entryPayments[hourIndex]
+  if (payment) {
+    return scaleForBankedHours(entry, payment.pay ?? 0)
+  }
+  const hrs = num(he.hours)
+  const rate = getRateForHourEntry(he, profileRate)
+  const mult = he.overtimeType === '1.5' ? 1.5 : he.overtimeType === '2' ? 2 : 1
+  return scaleForBankedHours(entry, hrs * rate * mult)
+}
+
+function buildRunEntriesMap(entries: PayrollEntry[]): Record<string, PayrollEntry> {
+  const out: Record<string, PayrollEntry> = {}
+  for (const e of entries) {
+    out[personKey(e.personId, e.personType)] = e
+  }
+  return out
+}
+
+export function extractProjectLaborEntries(
+  periods: PayPeriodForLabor[],
+  projectId: string,
+  catalogs: OrgDrywallCatalogs | null,
+  profileRates: ProfileRatesByPersonKey = {},
+): DrywallProjectLaborEntryFlat[] {
+  const flat: DrywallProjectLaborEntryFlat[] = []
+
+  for (const period of periods) {
+    const allEntries = buildRunEntriesMap(period.entries)
+
+    for (const entry of period.entries) {
+      const pk = personKey(entry.personId, entry.personType)
+      const profileRate = profileRates[pk] ?? 0
+
+      const hourEntries = entry.hourEntries || []
+      hourEntries.forEach((he, idx) => {
+        if (!entryMatchesProject(he.jobId, projectId)) return
+        const hours = num(he.hours)
+        if (hours <= 0) return
+        const amount = hourEntryPay(he, idx, entry, profileRate)
+        if (amount <= 0) return
+
+        flat.push({
+          payPeriodId: period.id,
+          periodStart: period.startDate,
+          periodEnd: period.endDate,
+          periodLocked: period.locked,
+          periodCompletedAt: period.completedAt,
+          personId: entry.personId,
+          personType: entry.personType,
+          personName: entry.personName,
+          source: 'hour',
+          hours,
+          overtimeType: he.overtimeType || 'regular',
+          amount,
+          category: classifyLaborCategory('hour', catalogs),
+        })
+      })
+
+      for (const pe of entry.pieceEntries || []) {
+        if (!entryMatchesProject(pe.jobId, projectId)) continue
+        const amount = pieceEntryNetAmount(pe, entry, allEntries, pk)
+        if (amount <= 0) continue
+        const pieces = pieceEntryPieces(pe)
+        const pieceKey = pe.piece_key
+        const workType = pe.workType
+
+        flat.push({
+          payPeriodId: period.id,
+          periodStart: period.startDate,
+          periodEnd: period.endDate,
+          periodLocked: period.locked,
+          periodCompletedAt: period.completedAt,
+          personId: entry.personId,
+          personType: entry.personType,
+          personName: entry.personName,
+          source: 'piece',
+          pieceKey,
+          workType,
+          pieces,
+          amount,
+          category: classifyLaborCategory('piece', catalogs, pieceKey, workType),
+        })
+      }
+    }
+  }
+
+  return flat
+}
+
+export function summarizeProjectLabor(
+  entries: DrywallProjectLaborEntryFlat[],
+): DrywallProjectLaborSummary {
+  const byCategory = emptyByCategory()
+  let totalCost = 0
+  let totalHours = 0
+  let totalOvertimeHours = 0
+  let totalPieces = 0
+
+  const periodMap = new Map<
+    string,
+    { periodStart: string; periodEnd: string; locked: boolean; cost: number }
+  >()
+
+  for (const e of entries) {
+    totalCost += e.amount
+    byCategory[e.category] += e.amount
+
+    if (e.source === 'hour') {
+      const hrs = num(e.hours)
+      totalHours += hrs
+      if (e.overtimeType && e.overtimeType !== 'regular') {
+        totalOvertimeHours += hrs
+      }
+    } else {
+      totalPieces += num(e.pieces)
+    }
+
+    const prev = periodMap.get(e.payPeriodId) ?? {
+      periodStart: e.periodStart,
+      periodEnd: e.periodEnd,
+      locked: e.periodLocked,
+      cost: 0,
+    }
+    prev.cost += e.amount
+    periodMap.set(e.payPeriodId, prev)
+  }
+
+  const byPayPeriod = [...periodMap.entries()]
+    .map(([payPeriodId, row]) => ({
+      payPeriodId,
+      periodStart: row.periodStart,
+      periodEnd: row.periodEnd,
+      locked: row.locked,
+      cost: row.cost,
+    }))
+    .sort((a, b) => a.periodStart.localeCompare(b.periodStart))
+
+  return {
+    totalCost,
+    totalHours,
+    totalOvertimeHours,
+    totalPieces,
+    byCategory,
+    byPayPeriod,
+    entries,
+  }
+}
+
+export function splitLaborByProductionWindow(
+  entries: DrywallProjectLaborEntryFlat[],
+  timestamps: {
+    productionStartedAt?: string | null
+    productionCompletedAt?: string | null
+    closedAt?: string | null
+  },
+): {
+  preProduction: DrywallProjectLaborEntryFlat[]
+  duringProduction: DrywallProjectLaborEntryFlat[]
+  afterProduction: DrywallProjectLaborEntryFlat[]
+  unbounded: DrywallProjectLaborEntryFlat[]
+} {
+  const preProduction: DrywallProjectLaborEntryFlat[] = []
+  const duringProduction: DrywallProjectLaborEntryFlat[] = []
+  const afterProduction: DrywallProjectLaborEntryFlat[] = []
+  const unbounded: DrywallProjectLaborEntryFlat[] = []
+
+  const startedMs = timestampMs(timestamps.productionStartedAt)
+  if (startedMs == null) {
+    return { preProduction, duringProduction, afterProduction, unbounded: [...entries] }
+  }
+
+  const completedMs = timestampMs(timestamps.productionCompletedAt)
+  const closedMs = timestampMs(timestamps.closedAt) ?? Date.now()
+
+  for (const entry of entries) {
+    const endMs = periodEndMs(entry.periodEnd)
+
+    if (endMs <= startedMs) {
+      preProduction.push(entry)
+      continue
+    }
+
+    if (completedMs == null || endMs <= completedMs) {
+      duringProduction.push(entry)
+      continue
+    }
+
+    if (endMs <= closedMs) {
+      afterProduction.push(entry)
+      continue
+    }
+
+    unbounded.push(entry)
+  }
+
+  return { preProduction, duringProduction, afterProduction, unbounded }
+}

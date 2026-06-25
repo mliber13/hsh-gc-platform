@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '../lib/supabase';
+import type { CrewProfileLink } from '@/types/crew';
 
 export type UserRole = 'admin' | 'editor' | 'viewer';
 export type RbacRole =
@@ -12,7 +13,8 @@ export type RbacRole =
   | 'office_drywall'
   | 'field_gc'
   | 'field_drywall'
-  | 'viewer';
+  | 'viewer'
+  | 'crew';
 
 export interface UserProfile {
   id: string;
@@ -31,6 +33,10 @@ export interface UserProfile {
   canRunPayroll?: boolean;
   hrPersonId?: string | null;
   hrPersonType?: string | null;
+  linked_employee_id?: string | null;
+  linked_contractor_id?: string | null;
+  linkedEmployeeId?: string | null;
+  linkedContractorId?: string | null;
   is_active?: boolean;
   created_at: string;
   updated_at: string;
@@ -47,6 +53,14 @@ function normalizeUserProfile(row: any): UserProfile {
     typeof row?.hr_person_id === 'string' ? row.hr_person_id : row?.hr_person_id ?? null;
   const hrPersonType =
     typeof row?.hr_person_type === 'string' ? row.hr_person_type : row?.hr_person_type ?? null;
+  const linkedEmployeeId =
+    typeof row?.linked_employee_id === 'string'
+      ? row.linked_employee_id
+      : row?.linked_employee_id ?? null;
+  const linkedContractorId =
+    typeof row?.linked_contractor_id === 'string'
+      ? row.linked_contractor_id
+      : row?.linked_contractor_id ?? null;
   return {
     ...row,
     roles,
@@ -55,11 +69,15 @@ function normalizeUserProfile(row: any): UserProfile {
     can_run_payroll: canRunPayroll,
     hr_person_id: hrPersonId,
     hr_person_type: hrPersonType,
+    linked_employee_id: linkedEmployeeId,
+    linked_contractor_id: linkedContractorId,
     isMeetingOperator,
     canAdminQb,
     canRunPayroll,
     hrPersonId,
     hrPersonType,
+    linkedEmployeeId,
+    linkedContractorId,
   } as UserProfile;
 }
 
@@ -191,4 +209,52 @@ export async function updateUserHrPersonLink(
     .eq('id', userId)
 
   if (error) throw error
+}
+
+/**
+ * Crew-role profiles linked to org_team members (D.6.1 admin surface).
+ */
+export async function fetchCrewProfileLinks(): Promise<CrewProfileLink[]> {
+  const { fetchTeam } = await import('./hrTeamService')
+  const organizationId = await requireUserOrgId()
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, linked_employee_id, linked_contractor_id, roles, updated_at')
+    .eq('organization_id', organizationId)
+    .contains('roles', ['crew'])
+
+  if (error) throw error
+
+  const team = await fetchTeam()
+  const employeeNameById = new Map(team.employees.map((e) => [e.id, e.name]))
+  const contractorNameById = new Map(team.contractors1099.map((c) => [c.id, c.name]))
+
+  const links: CrewProfileLink[] = []
+  for (const row of data ?? []) {
+    const employeeId =
+      typeof row.linked_employee_id === 'string' ? row.linked_employee_id : null
+    const contractorId =
+      typeof row.linked_contractor_id === 'string' ? row.linked_contractor_id : null
+    if (employeeId) {
+      links.push({
+        userId: row.id,
+        personType: 'employee',
+        personId: employeeId,
+        personName: employeeNameById.get(employeeId) ?? 'Employee',
+        email: row.email ?? '',
+        updatedAt: row.updated_at ?? new Date().toISOString(),
+      })
+    } else if (contractorId) {
+      links.push({
+        userId: row.id,
+        personType: 'contractor',
+        personId: contractorId,
+        personName: contractorNameById.get(contractorId) ?? 'Contractor',
+        email: row.email ?? '',
+        updatedAt: row.updated_at ?? new Date().toISOString(),
+      })
+    }
+  }
+  return links
 }

@@ -11,7 +11,10 @@ import {
 } from '@/lib/drywall/listStageSignals'
 import {
   DRYWALL_PROJECT_STATUSES,
+  DRYWALL_STATUS_BADGE_LABELS,
   DRYWALL_STATUS_LABELS,
+  isDrywallProjectClosed,
+  normalizeDrywallProjectStatus,
   type DrywallProjectListItem,
   type DrywallProjectStatus,
 } from '@/types/drywall'
@@ -46,20 +49,44 @@ const STATUS_VISUAL: Record<string, StatusVisual> = {
     label: DRYWALL_STATUS_LABELS.quote,
   },
   'field-measurement': {
+    bg: 'bg-rose-500/15',
+    text: 'text-rose-700 dark:text-rose-300',
+    border: 'border-rose-500/30',
+    dot: 'bg-rose-500',
+    rail: 'bg-rose-500',
+    label: DRYWALL_STATUS_LABELS['field-measurement'],
+  },
+  order: {
     bg: 'bg-amber-500/15',
     text: 'text-amber-700 dark:text-amber-300',
     border: 'border-amber-500/30',
     dot: 'bg-amber-500',
     rail: 'bg-amber-500',
-    label: DRYWALL_STATUS_LABELS['field-measurement'],
+    label: DRYWALL_STATUS_LABELS.order,
   },
-  order: {
+  production: {
     bg: 'bg-emerald-500/15',
     text: 'text-emerald-700 dark:text-emerald-300',
     border: 'border-emerald-500/30',
     dot: 'bg-emerald-500',
     rail: 'bg-emerald-500',
-    label: DRYWALL_STATUS_LABELS.order,
+    label: DRYWALL_STATUS_LABELS.production,
+  },
+  'production-complete': {
+    bg: 'bg-emerald-600/15',
+    text: 'text-emerald-800 dark:text-emerald-200',
+    border: 'border-emerald-600/30',
+    dot: 'bg-emerald-600',
+    rail: 'bg-emerald-600',
+    label: DRYWALL_STATUS_LABELS['production-complete'],
+  },
+  closed: {
+    bg: 'bg-slate-500/15',
+    text: 'text-slate-700 dark:text-slate-300',
+    border: 'border-slate-500/30',
+    dot: 'bg-slate-500',
+    rail: 'bg-slate-500',
+    label: DRYWALL_STATUS_BADGE_LABELS.closed,
   },
   complete: {
     bg: 'bg-slate-500/15',
@@ -67,7 +94,7 @@ const STATUS_VISUAL: Record<string, StatusVisual> = {
     border: 'border-slate-500/30',
     dot: 'bg-slate-500',
     rail: 'bg-slate-500',
-    label: DRYWALL_STATUS_LABELS.complete,
+    label: DRYWALL_STATUS_BADGE_LABELS.closed,
   },
 }
 
@@ -112,7 +139,7 @@ const STAGE_BUTTONS: {
     path: 'field',
     label: 'Field',
     icon: Ruler,
-    iconColor: 'text-amber-500',
+    iconColor: 'text-rose-500',
     title: 'Field measurement',
     emptyTooltip: 'Field measurement not started yet',
     hasData: listItemHasFieldData,
@@ -122,7 +149,7 @@ const STAGE_BUTTONS: {
     path: 'order',
     label: 'Order',
     icon: Package,
-    iconColor: 'text-emerald-500',
+    iconColor: 'text-amber-500',
     title: 'Order',
     emptyTooltip: 'No orders yet',
     hasData: listItemHasOrderData,
@@ -130,7 +157,8 @@ const STAGE_BUTTONS: {
 ]
 
 function statusVisual(status: string): StatusVisual {
-  return STATUS_VISUAL[status] ?? STATUS_VISUAL['project-info']
+  const key = normalizeDrywallProjectStatus(status)
+  return STATUS_VISUAL[key] ?? STATUS_VISUAL['project-info']
 }
 
 function formatCurrency(amount: number): string {
@@ -266,7 +294,7 @@ export function DrywallProjectCard({
                   tone={quoteTone}
                 />
               </div>
-              {showReopen && project.status === 'complete' && onReopen && !isViewer && (
+              {showReopen && isDrywallProjectClosed(project.status) && onReopen && !isViewer && (
                 <Button
                   type="button"
                   variant="outline"

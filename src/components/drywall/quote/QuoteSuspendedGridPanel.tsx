@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { calcSuspendedGridComponentCounts } from '@/lib/drywall/calculations/suspendedGridCalc'
 import type { DrywallQuote } from '@/types/drywall'
 import { NumField, SectionDivider } from './quoteFormPrimitives'
 
@@ -8,6 +10,44 @@ interface Props {
 }
 
 export function QuoteSuspendedGridPanel({ quote, readOnly, onChange }: Props) {
+  useEffect(() => {
+    if (readOnly) return
+
+    const baseSqft = parseFloat(String(quote.suspendedGridSqft)) || 0
+    if (baseSqft <= 0) return
+
+    const counts = calcSuspendedGridComponentCounts({
+      baseSqft,
+      basePerimeter: quote.suspendedGridPerimeter,
+      wastePct: quote.suspendedGridWastePercentage,
+    })
+    if (!counts) return
+
+    const patch: Partial<DrywallQuote> = {
+      shiny90Count: String(counts.shiny90Count),
+      mainsCount: String(counts.mainsCount),
+      tees4ftCount: String(counts.tees4ftCount),
+      wireLinearFt: String(counts.wireLinearFt),
+      lagsCount: String(counts.lagsCount),
+    }
+
+    const unchanged =
+      String(quote.shiny90Count ?? '') === patch.shiny90Count &&
+      String(quote.mainsCount ?? '') === patch.mainsCount &&
+      String(quote.tees4ftCount ?? '') === patch.tees4ftCount &&
+      String(quote.wireLinearFt ?? '') === patch.wireLinearFt &&
+      String(quote.lagsCount ?? '') === patch.lagsCount
+
+    if (unchanged) return
+    onChange(patch)
+  }, [
+    readOnly,
+    onChange,
+    quote.suspendedGridSqft,
+    quote.suspendedGridPerimeter,
+    quote.suspendedGridWastePercentage,
+  ])
+
   const shiny90Cost =
     (parseFloat(String(quote.shiny90Count)) || 0) * (parseFloat(String(quote.shiny90Rate)) || 0)
   const mainsCost =

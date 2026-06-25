@@ -15,6 +15,7 @@ const RBAC_ROLES: readonly RbacRole[] = [
   'field_gc',
   'field_drywall',
   'viewer',
+  'crew',
 ] as const
 
 export type WorkspaceAccessLevel = 'none' | 'read' | 'write' | 'admin' | 'mixed'
@@ -74,6 +75,16 @@ const WORKSPACE_ACCESS: Record<RbacRole, Record<Workspace, WorkspaceAccessLevel>
     schedule: 'read',
     hr: 'read',
     drywall: 'read',
+  },
+  crew: {
+    // Crew is locked to /crew only — every operator workspace must redirect them home.
+    projects: 'none',
+    deals: 'none',
+    tenants: 'none',
+    meeting: 'none',
+    schedule: 'none',
+    hr: 'none',
+    drywall: 'none',
   },
 }
 
@@ -169,6 +180,20 @@ export type SettingsNavKey =
   | 'unavailability'
   | 'feedback'
   | 'quickbooks'
+
+/** Crew mobile workspace — crew role; operators may preview in D.6.2+. */
+export function canAccessCrewWorkspace(role: RbacRole): boolean {
+  return (
+    role === 'crew' ||
+    role === 'owner' ||
+    role === 'office_gc' ||
+    role === 'office_drywall'
+  )
+}
+
+export function isCrewRole(role: RbacRole): boolean {
+  return role === 'crew'
+}
 
 export function canSeeSettingsNavItem(role: RbacRole, key: SettingsNavKey): boolean {
   switch (key) {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Lock, Plus, Trash2, Unlock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -7,11 +7,22 @@ import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
 import { generateHrId } from '@/lib/hrTeamUtils'
+import {
+  buildPayrollPieceTypeOptions,
+  defaultPhasesForPieceKey,
+  defaultRateForPieceKey,
+  isLegacyPayrollWorkType,
+  labelForPieceKey,
+  resolvePieceEntryKey,
+  type PayrollPieceTypeOption,
+} from '@/lib/drywall/payrollPieceKeys'
 import { entryHasNonZeroAdjustments } from '@/lib/payrollMath'
 import {
   PAYROLL_WORK_TYPES,
@@ -19,7 +30,14 @@ import {
   recalcPieceEntryAmount,
   type PayrollRowPerson,
 } from '@/lib/payrollMath'
-import type { PayrollEntry, PayrollHourEntry, PayrollPieceEntry, PayrollProjectOption } from '@/types/payroll'
+import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
+import type {
+  PayrollEntry,
+  PayrollHourEntry,
+  PayrollPieceCatalogSource,
+  PayrollPieceEntry,
+  PayrollProjectOption,
+} from '@/types/payroll'
 import { formatCurrency } from './payrollFormat'
 import { JobCombobox } from './JobCombobox'
 
@@ -30,8 +48,48 @@ interface PayrollPersonRowProps {
   locked: boolean
   projects: PayrollProjectOption[]
   allPeople: PayrollRowPerson[]
+  drywallCatalogs: OrgDrywallCatalogs | null
   onChange: (entry: PayrollEntry) => void
   onToggleDone: () => void
+}
+
+function resolvePieceRate(
+  pieceKey: string,
+  catalogSource: PayrollPieceCatalogSource | undefined,
+  project: PayrollProjectOption | undefined,
+  catalogs: OrgDrywallCatalogs | null,
+): number | null {
+  const source =
+    catalogSource ??
+    (isLegacyPayrollWorkType(pieceKey) ? 'legacy' : catalogs ? 'v3_drywall' : 'legacy')
+
+  if (source === 'v3_drywall' && catalogs) {
+    return defaultRateForPieceKey(pieceKey, catalogs)
+  }
+
+  return project ? getRateFromJob(project, pieceKey) : null
+}
+
+function pieceTypePatchForSelection(
+  pieceKey: string,
+  option: PayrollPieceTypeOption | undefined,
+  catalogs: OrgDrywallCatalogs | null,
+  project: PayrollProjectOption | undefined,
+  currentRate: PayrollPieceEntry['rate'],
+): Partial<PayrollPieceEntry> {
+  const catalogSource = option?.catalogSource ?? 'legacy'
+  const rate = resolvePieceRate(pieceKey, catalogSource, project, catalogs)
+  const defaultPhases =
+    option?.defaultPhases ??
+    (catalogs ? defaultPhasesForPieceKey(pieceKey, catalogs) : 1)
+
+  return {
+    piece_key: catalogSource === 'v3_drywall' ? pieceKey : undefined,
+    workType: pieceKey,
+    catalog_source: catalogSource,
+    totalPhases: defaultPhases,
+    rate: rate != null ? String(rate) : catalogSource === 'v3_drywall' ? '' : currentRate,
+  }
 }
 
 export function PayrollPersonRow({
@@ -41,6 +99,7 @@ export function PayrollPersonRow({
   locked,
   projects,
   allPeople,
+  drywallCatalogs,
   onChange,
   onToggleDone,
 }: PayrollPersonRowProps) {
@@ -49,6 +108,31 @@ export function PayrollPersonRow({
   const hourEntries = entry.hourEntries || []
   const pieceEntries = entry.pieceEntries || []
   const hasAdjustments = entryHasNonZeroAdjustments(entry)
+
+  const pieceTypeOptions = useMemo(
+    () => (drywallCatalogs ? buildPayrollPieceTypeOptions(drywallCatalogs) : []),
+    [drywallCatalogs],
+  )
+
+  const pieceTypeOptionByValue = useMemo(() => {
+    const map = new Map<string, PayrollPieceTypeOption>()
+    for (const option of pieceTypeOptions) {
+      map.set(option.value, option)
+    }
+    return map
+  }, [pieceTypeOptions])
+
+  const legacyPieceTypeOptions = useMemo(
+    () =>
+      PAYROLL_WORK_TYPES.map((wt) => ({
+        value: wt.value,
+        label: wt.label,
+        group: 'legacy' as const,
+        catalogSource: 'legacy' as const,
+        defaultPhases: wt.defaultPhases,
+      })),
+    [],
+  )
 
   const [hoursOpen, setHoursOpen] = useState(() => hourEntries.length > 0)
   const [pieceOpen, setPieceOpen] = useState(() => pieceEntries.length > 0)
@@ -105,13 +189,25 @@ export function PayrollPersonRow({
   const patchPiece = (idx: number, patch: Partial<PayrollPieceEntry>) => {
     const list = [...pieceEntries]
     let next = { ...list[idx], ...patch }
-    const recalcFields = ['totalPhases', 'phasesCompleted', 'jobTotalSqft', 'rate', 'workType']
+    const recalcFields = [
+      'totalPhases',
+      'phasesCompleted',
+      'jobTotalSqft',
+      'rate',
+      'workType',
+      'piece_key',
+    ]
     if (Object.keys(patch).some((k) => recalcFields.includes(k))) {
       next = { ...next, amount: recalcPieceEntryAmount(next) }
     }
-    if (patch.workType) {
-      const wt = PAYROLL_WORK_TYPES.find((w) => w.value === patch.workType)
-      if (wt) next.totalPhases = wt.defaultPhases
+    if (patch.workType || patch.piece_key) {
+      const key = resolvePieceEntryKey(next)
+      const opt = pieceTypeOptionByValue.get(key)
+      if (opt) next.totalPhases = opt.defaultPhases
+      else {
+        const wt = PAYROLL_WORK_TYPES.find((w) => w.value === key)
+        if (wt) next.totalPhases = wt.defaultPhases
+      }
     }
     list[idx] = next
     update({ pieceEntries: list })
@@ -279,7 +375,15 @@ export function PayrollPersonRow({
         </button>
         {pieceOpen ? (
           <div className="mt-3 space-y-2">
-            {pieceEntries.map((pe, idx) => (
+            {pieceEntries.map((pe, idx) => {
+              const pieceKey = resolvePieceEntryKey(pe)
+              const knownOption = pieceTypeOptionByValue.get(pieceKey)
+              const orphanLabel =
+                !knownOption && pieceKey
+                  ? labelForPieceKey(pieceKey, drywallCatalogs)
+                  : null
+
+              return (
               <div key={pe.id || idx} className="grid gap-2 rounded border bg-card p-2 md:grid-cols-8">
                 <JobCombobox
                   jobId={pe.jobId}
@@ -296,38 +400,79 @@ export function PayrollPersonRow({
                       return
                     }
                     const project = projects.find((p) => p.id === sel.jobId)
-                    const workType = pe.workType || 'finisher'
-                    const rateFromJob = project ? getRateFromJob(project, workType) : null
+                    const key = resolvePieceEntryKey(pe)
+                    const rate = resolvePieceRate(
+                      key,
+                      pe.catalog_source,
+                      project,
+                      drywallCatalogs,
+                    )
                     patchPiece(idx, {
                       jobId: sel.jobId,
                       jobName: sel.jobName,
-                      rate: rateFromJob != null ? String(rateFromJob) : pe.rate,
+                      rate: rate != null ? String(rate) : pe.rate,
                     })
                   }}
                 />
                 <Select
                   disabled={effectiveLocked}
-                  value={pe.workType || 'finisher'}
+                  value={pieceKey}
                   onValueChange={(v) => {
-                    const wt = PAYROLL_WORK_TYPES.find((w) => w.value === v)
+                    const opt = pieceTypeOptionByValue.get(v)
                     const proj = projects.find((p) => p.id === pe.jobId)
-                    const rate = proj ? getRateFromJob(proj, v) : null
-                    patchPiece(idx, {
-                      workType: v,
-                      totalPhases: wt?.defaultPhases ?? 1,
-                      rate: rate != null ? String(rate) : pe.rate,
-                    })
+                    patchPiece(
+                      idx,
+                      pieceTypePatchForSelection(v, opt, drywallCatalogs, proj, pe.rate),
+                    )
                   }}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PAYROLL_WORK_TYPES.map((w) => (
-                      <SelectItem key={w.value} value={w.value}>
-                        {w.label}
-                      </SelectItem>
-                    ))}
+                    {pieceTypeOptions.length > 0 ? (
+                      <>
+                        <SelectGroup>
+                          <SelectLabel>Drywall</SelectLabel>
+                          {pieceTypeOptions
+                            .filter((o) => o.group === 'drywall')
+                            .map((o) => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                          <SelectLabel>Component labor</SelectLabel>
+                          {pieceTypeOptions
+                            .filter((o) => o.group === 'component')
+                            .map((o) => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                          <SelectLabel>Legacy (v2)</SelectLabel>
+                          {pieceTypeOptions
+                            .filter((o) => o.group === 'legacy')
+                            .map((o) => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                        </SelectGroup>
+                      </>
+                    ) : (
+                      legacyPieceTypeOptions.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))
+                    )}
+                    {orphanLabel && (
+                      <SelectItem value={pieceKey}>{orphanLabel}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 <Input
@@ -373,7 +518,7 @@ export function PayrollPersonRow({
                   </Button>
                 )}
               </div>
-            ))}
+            )})}
             {!effectiveLocked && (
               <Button type="button" variant="outline" size="sm" onClick={addPiece}>
                 <Plus className="mr-1 size-4" />

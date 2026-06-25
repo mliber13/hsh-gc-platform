@@ -4,7 +4,9 @@ import jsPDF from 'jspdf'
 import {
   extractMaterialsFromFieldTakeoff,
   formatAccessoryLineDescription,
-  formatBoardLineDescription,
+  formatBoardLineDescriptionInGroup,
+  groupBoardsForMaterialsPdf,
+  type FieldMaterialsAreaGroup,
 } from '@/lib/drywall/fieldMaterialsPdfData'
 import { orderPdfFilename } from '@/lib/drywall/orderPdfFilename'
 import type { DrywallProject, FieldTakeoff } from '@/types/drywall'
@@ -97,22 +99,29 @@ export function downloadDrywallFieldMaterialsPdf(
     description: string,
     qty: string,
     unit: string,
-    variant: 'item' | 'area' = 'item',
+    variant: 'item' | 'area' | 'group' = 'item',
   ) => {
-    const wrapped = doc.splitTextToSize(String(description || ''), descWidth)
+    const indent =
+      variant === 'area' ? 0 : variant === 'group' ? 4 : 8
+    const rowDescX = col.desc + indent
+    const rowDescWidth = descWidth - indent
+    const wrapped = doc.splitTextToSize(String(description || ''), rowDescWidth)
     const height = Math.max(rowHeight, wrapped.length * 3.9 + 3)
     ensureSpace(height)
     const textY = y + height / 2 + 1.2
     if (variant === 'area') {
       doc.setFillColor(246, 247, 249)
       doc.rect(col.left, y, col.right - col.left, height, 'F')
+    } else if (variant === 'group') {
+      doc.setFillColor(250, 251, 252)
+      doc.rect(col.left, y, col.right - col.left, height, 'F')
     }
     doc.setDrawColor(235, 235, 235)
     doc.line(col.left, y + height, col.right, y + height)
-    doc.setFont('helvetica', variant === 'area' ? 'bold' : 'normal')
-    doc.setFontSize(tableFontSize)
-    doc.setTextColor(30, 30, 30)
-    doc.text(wrapped, col.desc, textY - (wrapped.length - 1) * 1.95)
+    doc.setFont('helvetica', variant === 'item' ? 'normal' : 'bold')
+    doc.setFontSize(variant === 'group' ? 8 : tableFontSize)
+    doc.setTextColor(variant === 'group' ? 70 : 30, variant === 'group' ? 70 : 30, variant === 'group' ? 70 : 30)
+    doc.text(wrapped, rowDescX, textY - (wrapped.length - 1) * 1.95)
     doc.text(String(qty ?? ''), col.qty, textY, { align: 'right' })
     doc.text(String(unit ?? ''), col.unit, textY, { align: 'right' })
     y += height
@@ -120,28 +129,138 @@ export function downloadDrywallFieldMaterialsPdf(
 
   drawHeader()
 
+  const columnGap = 6
+  const columnWidth = (col.right - col.left - columnGap) / 2
+  const leftColumnX = col.left
+  const rightColumnX = col.left + columnWidth + columnGap
+
+  const measureBoardRowHeight = (
+    description: string,
+    descWidth: number,
+    variant: 'item' | 'group' = 'item',
+  ) => {
+    const wrapped = doc.splitTextToSize(String(description || ''), descWidth)
+    return Math.max(rowHeight, wrapped.length * 3.9 + 3)
+  }
+
+  const measureBoardAreaGroupHeight = (areaGroup: FieldMaterialsAreaGroup) => {
+    const localDescWidth = columnWidth - 28
+    let h = rowHeight * 2
+    for (const twGroup of areaGroup.thicknessWidthGroups) {
+      h += measureBoardRowHeight(twGroup.label, localDescWidth - 4, 'group')
+      for (const board of twGroup.boards) {
+        h += measureBoardRowHeight(
+          formatBoardLineDescriptionInGroup(board),
+          localDescWidth - 8,
+        )
+      }
+    }
+    return h + 3
+  }
+
+  const drawBoardAreaGroup = (x: number, groupY: number, areaGroup: FieldMaterialsAreaGroup) => {
+    let localY = groupY
+    const localCols = {
+      left: x,
+      right: x + columnWidth,
+      desc: x + 2.5,
+      qty: x + columnWidth - 12,
+      unit: x + columnWidth - 2.5,
+    }
+    const localDescWidth = localCols.qty - localCols.desc - 4
+
+    doc.setFillColor(246, 247, 249)
+    doc.rect(localCols.left, localY, columnWidth, rowHeight, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(28, 28, 28)
+    doc.text(areaGroup.area, localCols.desc, localY + rowHeight / 2 + 1.3)
+    localY += rowHeight
+
+    doc.setDrawColor(210, 210, 210)
+    doc.setFillColor(250, 250, 250)
+    doc.rect(localCols.left, localY, columnWidth, rowHeight, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(90, 90, 90)
+    const headerY = localY + rowHeight / 2 + 1.3
+    doc.text('Description', localCols.desc, headerY)
+    doc.text('Qty', localCols.qty, headerY, { align: 'right' })
+    doc.text('Unit', localCols.unit, headerY, { align: 'right' })
+    doc.line(localCols.left, localY + rowHeight, localCols.right, localY + rowHeight)
+    localY += rowHeight
+
+    const drawLocalRow = (
+      description: string,
+      qty: string,
+      unit: string,
+      variant: 'item' | 'group',
+    ) => {
+      const indent = variant === 'group' ? 2 : 5
+      const rowDescX = localCols.desc + indent
+      const rowDescWidth = localDescWidth - indent
+      const wrapped = doc.splitTextToSize(String(description || ''), rowDescWidth)
+      const h = Math.max(rowHeight, wrapped.length * 3.9 + 3)
+      const textY = localY + h / 2 + 1.2
+      if (variant === 'group') {
+        doc.setFillColor(250, 251, 252)
+        doc.rect(localCols.left, localY, columnWidth, h, 'F')
+      }
+      doc.setDrawColor(235, 235, 235)
+      doc.line(localCols.left, localY + h, localCols.right, localY + h)
+      doc.setFont('helvetica', variant === 'group' ? 'bold' : 'normal')
+      doc.setFontSize(variant === 'group' ? 7.5 : 8)
+      doc.setTextColor(variant === 'group' ? 70 : 45, variant === 'group' ? 70 : 45, variant === 'group' ? 70 : 45)
+      doc.text(wrapped, rowDescX, textY - (wrapped.length - 1) * 1.95)
+      doc.text(String(qty ?? ''), localCols.qty, textY, { align: 'right' })
+      doc.text(String(unit ?? ''), localCols.unit, textY, { align: 'right' })
+      localY += h
+    }
+
+    for (const twGroup of areaGroup.thicknessWidthGroups) {
+      drawLocalRow(twGroup.label, '', '', 'group')
+      for (const board of twGroup.boards) {
+        drawLocalRow(
+          formatBoardLineDescriptionInGroup(board),
+          (board.quantity || 0).toLocaleString(),
+          'pcs',
+          'item',
+        )
+      }
+    }
+
+    return localY + 2
+  }
+
   drawSectionTitle('Boards by Area')
-  drawTableHeader()
   if (boards.length === 0) {
+    drawTableHeader()
     drawRow('No board items', '', '')
   } else {
-    const boardsByArea = new Map<string, typeof boards>()
-    boards.forEach((board) => {
-      const area = board.area || 'Unassigned'
-      if (!boardsByArea.has(area)) boardsByArea.set(area, [])
-      boardsByArea.get(area)!.push(board)
-    })
+    const areaGroups = groupBoardsForMaterialsPdf(boards)
+    let cursorY = y
 
-    boardsByArea.forEach((areaBoards, areaName) => {
-      drawRow(areaName, '', '', 'area')
-      areaBoards.forEach((b) => {
-        drawRow(
-          formatBoardLineDescription(b),
-          (b.quantity || 0).toLocaleString(),
-          'pcs',
-        )
-      })
-    })
+    for (let i = 0; i < areaGroups.length; i += 2) {
+      const leftGroup = areaGroups[i]
+      const rightGroup = areaGroups[i + 1] ?? null
+      const leftHeight = measureBoardAreaGroupHeight(leftGroup)
+      const rightHeight = rightGroup ? measureBoardAreaGroupHeight(rightGroup) : 0
+      const blockHeight = Math.max(leftHeight, rightHeight)
+
+      if (cursorY + blockHeight > pageH - margin) {
+        doc.addPage()
+        drawHeader()
+        cursorY = y
+      }
+
+      drawBoardAreaGroup(leftColumnX, cursorY, leftGroup)
+      if (rightGroup) {
+        drawBoardAreaGroup(rightColumnX, cursorY, rightGroup)
+      }
+      cursorY += blockHeight
+    }
+
+    y = cursorY
   }
 
   y += 8
@@ -163,10 +282,10 @@ export function downloadDrywallFieldMaterialsPdf(
       return a.localeCompare(b)
     })
 
-    const gap = 6
-    const colWidth = (col.right - col.left - gap) / 2
-    const leftColX = col.left
-    const rightColX = col.left + colWidth + gap
+    const gap = columnGap
+    const colWidth = columnWidth
+    const leftColX = leftColumnX
+    const rightColX = rightColumnX
 
     const measureAccessoryGroupHeight = ([, items]: [string, typeof accessories]) => {
       let h = rowHeight * 2

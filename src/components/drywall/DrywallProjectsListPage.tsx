@@ -1,15 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Hammer, PlusCircle, Search } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Hammer, PlusCircle, Search, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import { DrywallProjectCard } from '@/components/drywall/DrywallProjectCard'
 import { DrywallProjectsStatsStrip } from '@/components/drywall/DrywallProjectsStatsStrip'
+import { PoIntakeDialog } from '@/components/drywall/intake/PoIntakeDialog'
 import { ReopenProjectConfirmDialog } from '@/components/drywall/ReopenProjectConfirmDialog'
 import {
   createDrywallProject,
@@ -18,10 +32,16 @@ import {
   updateDrywallProjectStatus,
 } from '@/services/drywallProjectsService'
 import type { DrywallProjectListItem, DrywallProjectStatus } from '@/types/drywall'
+import {
+  DRYWALL_LIST_STATUS_FILTER_OPTIONS,
+  isDrywallProjectClosed,
+  normalizeDrywallProjectStatus,
+} from '@/types/drywall'
 
 export function DrywallProjectsListPage() {
   usePageTitle('Drywall Projects')
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { effectiveRole } = usePermissions()
   const canWrite = canWriteDrywallProject(effectiveRole)
   const isViewer = !canWrite
@@ -29,12 +49,25 @@ export function DrywallProjectsListPage() {
   const [projects, setProjects] = useState<DrywallProjectListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [poIntakeOpen, setPoIntakeOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [showCompleted, setShowCompleted] = useState(false)
   const [reopenProjectId, setReopenProjectId] = useState<string | null>(null)
   const [statusMenuProjectId, setStatusMenuProjectId] = useState<string | null>(null)
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
   const statusMenuRef = useRef<HTMLDivElement>(null)
+
+  const statusFilter =
+    (searchParams.get('status') as (typeof DRYWALL_LIST_STATUS_FILTER_OPTIONS)[number]['value']) ??
+    'active'
+
+  const setStatusFilter = (value: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (value === 'active') next.delete('status')
+      else next.set('status', value)
+      return next
+    })
+  }
 
   const reloadProjects = () => {
     void fetchDrywallProjects()
@@ -79,8 +112,12 @@ export function DrywallProjectsListPage() {
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
     let rows = projects
-    if (!showCompleted) {
-      rows = rows.filter((p) => p.status !== 'complete')
+    if (statusFilter === 'active') {
+      rows = rows.filter((p) => !isDrywallProjectClosed(p.status))
+    } else if (statusFilter !== 'all') {
+      rows = rows.filter(
+        (p) => normalizeDrywallProjectStatus(p.status) === statusFilter,
+      )
     }
     if (!q) return rows
     return rows.filter(
@@ -89,7 +126,7 @@ export function DrywallProjectsListPage() {
         p.client.toLowerCase().includes(q) ||
         p.address.toLowerCase().includes(q),
     )
-  }, [projects, searchQuery, showCompleted])
+  }, [projects, searchQuery, statusFilter])
 
   const handleCreate = async () => {
     if (!canWrite) return
@@ -153,10 +190,23 @@ export function DrywallProjectsListPage() {
           </p>
         </div>
         {canWrite && (
-          <Button onClick={() => void handleCreate()} disabled={creating} className="shrink-0">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            {creating ? 'Creating…' : 'New Drywall Project'}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button disabled={creating} className="shrink-0">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                {creating ? 'Creating…' : 'New Drywall Project'}
+                <ChevronDown className="ml-1 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => void handleCreate()}>
+                New from scratch
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPoIntakeOpen(true)}>
+                Create from PO
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
 
@@ -173,15 +223,18 @@ export function DrywallProjectsListPage() {
             className="pl-9 bg-card/50"
           />
         </div>
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer shrink-0">
-          <input
-            type="checkbox"
-            className="rounded border-border"
-            checked={showCompleted}
-            onChange={(e) => setShowCompleted(e.target.checked)}
-          />
-          Show completed projects
-        </label>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-[200px] bg-card/50">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            {DRYWALL_LIST_STATUS_FILTER_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
@@ -224,7 +277,7 @@ export function DrywallProjectsListPage() {
               onChangeStatus={(p, status) => void handleStatusChange(p, status)}
               isUpdatingStatus={updatingStatusId === project.id}
               isViewer={isViewer}
-              showReopen={showCompleted}
+              showReopen={isDrywallProjectClosed(project.status)}
               onReopen={(p) => setReopenProjectId(p.id)}
             />
           ))}
@@ -238,6 +291,12 @@ export function DrywallProjectsListPage() {
         }}
         projectId={reopenProjectId ?? ''}
         onReopened={reloadProjects}
+      />
+
+      <PoIntakeDialog
+        open={poIntakeOpen}
+        onOpenChange={setPoIntakeOpen}
+        onCreated={(id) => navigate(`/drywall/projects/${id}/info`)}
       />
     </div>
   )

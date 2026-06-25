@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { format, endOfWeek, startOfWeek } from 'date-fns'
 import { CalendarRange, Copy, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,8 @@ import {
   payrollRowVisibleWhenHidingEmpty,
   type PayrollRowPerson,
 } from '@/lib/payrollMath'
+import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
+import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type { PayPeriod, PayrollEntry, PayrollProjectOption } from '@/types/payroll'
 import type { Contractor1099, Employee } from '@/types/hr'
 import { PayrollPersonRow } from './PayrollPersonRow'
@@ -110,6 +112,7 @@ export function PayrollRunTab({
   rowResetKey,
 }: PayrollRunTabProps) {
   const [hideEmptyRows, setHideEmptyRows] = useState(false)
+  const [drywallCatalogs, setDrywallCatalogs] = useState<OrgDrywallCatalogs | null>(null)
 
   const people = useMemo(
     () => buildPayrollPeople(employees, contractors, false),
@@ -160,6 +163,21 @@ export function PayrollRunTab({
   const withPay = savedEntries.filter((e) => (parseFloat(String(e.gross)) || 0) > 0).length
 
   const draftEmpty = isPayrollDraftEmpty(entries) && !showManualRows
+
+  useEffect(() => {
+    if (draftEmpty) return
+    let cancelled = false
+    fetchOrgDrywallCatalogs()
+      .then((catalogs) => {
+        if (!cancelled) setDrywallCatalogs(catalogs)
+      })
+      .catch((err) => {
+        console.error('PayrollRunTab: failed to load drywall catalogs', err)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [draftEmpty])
 
   const visibleRows = useMemo(() => {
     const base = locked ? rows.filter((r) => r.gross > 0) : rows
@@ -328,6 +346,7 @@ export function PayrollRunTab({
               locked={locked}
               projects={projects}
               allPeople={people as PayrollRowPerson[]}
+              drywallCatalogs={drywallCatalogs}
               onChange={(e) => setEntry(r.person.personKey, e)}
               onToggleDone={() => togglePersonDone(r.person.personKey)}
             />

@@ -11,6 +11,15 @@ export interface ScheduleDateMathOptions {
   workdays?: ReadonlyArray<0 | 1 | 2 | 3 | 4 | 5 | 6>
   holidays?: ReadonlyArray<string>
   unavailability?: ReadonlyArray<UnavailabilityWindow>
+  /**
+   * How predecessor lag is interpreted in cascadeSchedule:
+   *   'sequential' (default) — `lag` = work days AFTER predecessor end, with +1 implicit gap.
+   *                            Matches existing GC ScheduleBuilder behavior.
+   *   'parallel-zero'         — `lag=0` means same start day as predecessor (parallel work).
+   *                            `lag>=1` means N work days after predecessor end (no implicit gap).
+   *                            Drywall uses this so lag=0 = same-day Stock+Scaffold/Prep pattern.
+   */
+  lagSemantic?: 'sequential' | 'parallel-zero'
 }
 
 export interface CascadeChange {
@@ -218,14 +227,19 @@ export function cascadeSchedule(
       const predecessorCandidates = relevantPredecessors.map((predecessor) => {
         const predecessorItem = computed.get(predecessor.predecessorId) as ScheduleItem
         const lag = Number.isFinite(predecessor.lagDays) ? predecessor.lagDays : 0
+        const parallelZero = options?.lagSemantic === 'parallel-zero'
+        const candidateStart =
+          parallelZero && lag === 0
+            ? new Date(predecessorItem.endDate)
+            : addWorkdays(
+                predecessorItem.endDate,
+                parallelZero ? lag : lag + 1,
+                options,
+                original.assignedCompanyId ?? undefined,
+              )
         return {
           predecessorId: predecessor.predecessorId,
-          candidateStart: addWorkdays(
-            predecessorItem.endDate,
-            lag + 1,
-            options,
-            original.assignedCompanyId ?? undefined,
-          ),
+          candidateStart,
         }
       })
 

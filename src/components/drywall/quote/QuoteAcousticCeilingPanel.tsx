@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { Label } from '@/components/ui/label'
+import { calcAcousticCeilingGridCounts } from '@/lib/drywall/calculations/acousticCeilingGridCalc'
 import {
   Select,
   SelectContent,
@@ -16,7 +18,53 @@ interface Props {
   onChange: (patch: Partial<DrywallQuote>) => void
 }
 
+function strField(v: unknown): string {
+  return v === '' || v == null ? '' : String(v)
+}
+
 export function QuoteAcousticCeilingPanel({ quote, readOnly, onChange }: Props) {
+  useEffect(() => {
+    if (readOnly) return
+
+    const baseSqft = parseFloat(strField(quote.acousticCeilingSqft)) || 0
+    if (baseSqft <= 0) return
+
+    const counts = calcAcousticCeilingGridCounts({
+      baseSqft,
+      perimeter: parseFloat(strField(quote.acousticCeilingPerimeter)) || 0,
+      wastePct: parseFloat(strField(quote.acousticCeilingWastePercentage)) || 0,
+      tileSize: quote.acousticCeilingTileSize || '2x4',
+    })
+    if (!counts) return
+
+    const patch: Partial<DrywallQuote> = {
+      acousticWallAngleCount: String(counts.wallAngleCount),
+      acousticMainsCount: String(counts.mainsCount),
+      acousticTees4ftCount: String(counts.tees4ftCount),
+      acousticTees2ftCount: String(counts.tees2ftCount),
+      acousticWireLinearFt: counts.wireLinearFt,
+      acousticLagsCount: String(counts.lagsCount),
+    }
+
+    const unchanged =
+      strField(quote.acousticWallAngleCount) === patch.acousticWallAngleCount &&
+      strField(quote.acousticMainsCount) === patch.acousticMainsCount &&
+      strField(quote.acousticTees4ftCount) === patch.acousticTees4ftCount &&
+      strField(quote.acousticTees2ftCount) === patch.acousticTees2ftCount &&
+      strField(quote.acousticWireLinearFt) === patch.acousticWireLinearFt &&
+      strField(quote.acousticLagsCount) === patch.acousticLagsCount
+
+    if (unchanged) return
+    onChange(patch)
+  }, [
+    readOnly,
+    onChange,
+    quote.acousticCeilingSqft,
+    quote.acousticCeilingPerimeter,
+    quote.acousticCeilingWastePercentage,
+    quote.acousticCeilingTileSize,
+  ])
+
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">

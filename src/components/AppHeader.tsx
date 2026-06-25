@@ -19,6 +19,7 @@ import { usePageTitleValue } from '@/contexts/PageTitleContext'
 import { ProjectSelector } from './ProjectSelector'
 import { DealSelector } from './DealSelector'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
+import { CommsNotificationBell } from '@/components/comms/CommsNotificationBell'
 
 /** Pathname → human title fallback for pages that haven't called usePageTitle yet. */
 function fallbackTitleFromPath(pathname: string): string {
@@ -67,6 +68,7 @@ export function AppHeader() {
 
       {/* Right: workspace switcher */}
       <div className="ml-auto flex items-center gap-2">
+        <CommsNotificationBell scope="operator" />
         <WorkspaceSwitcher />
       </div>
     </header>

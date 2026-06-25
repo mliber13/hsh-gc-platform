@@ -41,6 +41,7 @@ import {
   updateScheduleItemQuickEdit,
 } from '@/services/supabaseService'
 import { persistCascadeChanges } from '@/services/smsService'
+import { AssignedPersonsPicker } from '@/components/schedule/AssignedPersonsPicker'
 import type { CommunicationLogEntry } from '@/types/communicationLog'
 import type { ConfirmationStatus, ScheduleItem } from '@/types'
 import type { PortfolioItem } from '@/services/scheduleService'
@@ -65,6 +66,7 @@ type RefreshedPortfolioItemRow = {
   confirmation_notes: string | null
   status: PortfolioItem['status'] | null
   assigned_company_id: string | null
+  assigned_persons?: string[] | null
   notes: string | null
   subcontractors?: { name: string | null } | Array<{ name: string | null }> | null
 }
@@ -136,6 +138,7 @@ function syncPortfolioItem(
     status: updated.status,
     assigned_company_id: updated.assignedCompanyId ?? null,
     assigned_company_name: assignedCompanyName,
+    assigned_persons: updated.assignedPersons ?? [],
     notes: updated.notes ?? null,
   }
 }
@@ -158,6 +161,7 @@ function portfolioItemFromRow(row: RefreshedPortfolioItemRow): PortfolioItem {
     status: row.status ?? 'not-started',
     assigned_company_id: row.assigned_company_id,
     assigned_company_name: joinedOne(row.subcontractors)?.name ?? null,
+    assigned_persons: row.assigned_persons ?? [],
     notes: row.notes,
   }
 }
@@ -429,6 +433,28 @@ export function SchedulePortfolioItemModal({
     }
   }
 
+  const handleSaveAssignedPersons = async (personIds: string[]) => {
+    const previous = localItem
+    const optimistic = {
+      ...previous,
+      assigned_persons: personIds,
+    }
+    setLocalItem(optimistic)
+    onItemUpdated(toParentUpdate(optimistic))
+
+    try {
+      const updated = await updateScheduleItemQuickEdit(previous.id, {
+        assigned_persons: personIds,
+      })
+      applySyncedItem(previous, updated)
+    } catch (error) {
+      setLocalItem(previous)
+      onItemUpdated(toParentUpdate(previous))
+      console.error('Could not update assigned persons', error)
+      toast.error('Could not update assigned persons.')
+    }
+  }
+
   const handleSaveTextField = async (
     field: 'confirmation_notes' | 'notes',
     rawValue: string,
@@ -568,7 +594,7 @@ export function SchedulePortfolioItemModal({
       const ids = cascadePreviewRows.map((row) => row.item_id)
       const { data: refreshedRows, error } = await supabase
         .from('schedule_items')
-        .select('id, project_id, schedule_id, name, start_date, end_date, confirmation_status, confirmation_notes, status, assigned_company_id, notes, subcontractors:assigned_company_id(name)')
+        .select('id, project_id, schedule_id, name, start_date, end_date, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, notes, subcontractors:assigned_company_id(name)')
         .in('id', ids)
       if (error) throw error
 
@@ -687,6 +713,11 @@ export function SchedulePortfolioItemModal({
                 </SelectContent>
               </Select>
             </div>
+
+            <AssignedPersonsPicker
+              value={localItem.assigned_persons ?? []}
+              onChange={(ids) => void handleSaveAssignedPersons(ids)}
+            />
           </section>
 
           <section className="space-y-2">

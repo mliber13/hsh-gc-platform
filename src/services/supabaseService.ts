@@ -118,6 +118,7 @@ type ScheduleItemRow = {
   confirmation_last_responded_at: string | null
   confirmation_notes: string | null
   assigned_to: string[] | null
+  assigned_persons: string[] | null
   assigned_company_id: string | null
   notes: string | null
 }
@@ -134,6 +135,7 @@ export type ScheduleItemQuickPatch = {
   start_date?: string
   end_date?: string
   assigned_company_id?: string | null
+  assigned_persons?: string[]
   notes?: string | null
 }
 
@@ -200,6 +202,7 @@ function mapScheduleItemRowToModel(row: ScheduleItemRow): ScheduleItem {
     confirmation_last_responded_at: row.confirmation_last_responded_at ?? null,
     confirmation_notes: row.confirmation_notes ?? null,
     assignedTo: row.assigned_to ?? [],
+    assignedPersons: row.assigned_persons ?? [],
     assignedCompanyId: row.assigned_company_id ?? null,
     notes: row.notes ?? undefined,
   }
@@ -234,6 +237,7 @@ function mapScheduleItemModelToRowInput(
     confirmation_last_responded_at: item.confirmation_last_responded_at ?? null,
     confirmation_notes: item.confirmation_notes ?? null,
     assigned_to: item.assignedTo ?? [],
+    assigned_persons: item.assignedPersons ?? [],
     assigned_company_id: item.assignedCompanyId ?? null,
     notes: item.notes ?? null,
   }

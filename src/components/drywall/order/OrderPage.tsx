@@ -16,18 +16,27 @@ import {
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import { ReopenProjectConfirmDialog } from '@/components/drywall/ReopenProjectConfirmDialog'
+import { projectV3QuoteToV2Shape } from '@/lib/drywall/projectV3QuoteToV2Shape'
 import {
   DrywallProjectPermissionError,
   fetchChangeOrders,
   fetchDrywallProjectById,
-  fetchDrywallQuote,
+  fetchDrywallQuoteV2V3,
   fetchFieldTakeoff,
   fetchOrders,
   markDrywallProjectComplete,
   saveFieldTakeoff,
   saveOrderStageSnapshot,
 } from '@/services/drywallProjectsService'
-import type { DrywallChangeOrder, DrywallOrder, DrywallProject, FieldTakeoff } from '@/types/drywall'
+import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
+import type {
+  DrywallChangeOrder,
+  DrywallOrder,
+  DrywallProject,
+  DrywallQuote,
+  FieldTakeoff,
+} from '@/types/drywall'
+import { isDrywallProjectClosed, isDrywallQuoteV3 } from '@/types/drywall'
 import { ChangeOrdersSection } from './ChangeOrdersSection'
 import { OrderEditorDialog } from './OrderEditorDialog'
 import { OrderFinancialCard } from './OrderFinancialCard'
@@ -56,7 +65,7 @@ export function OrderPage() {
   const [completing, setCompleting] = useState(false)
   const [project, setProject] = useState<DrywallProject | null>(null)
   const [fieldTakeoff, setFieldTakeoff] = useState<FieldTakeoff | null>(null)
-  const [quote, setQuote] = useState<Awaited<ReturnType<typeof fetchDrywallQuote>> | null>(null)
+  const [quote, setQuote] = useState<DrywallQuote | null>(null)
   const [orders, setOrders] = useState<DrywallOrder[]>([])
   const [changeOrders, setChangeOrders] = useState<DrywallChangeOrder[]>([])
   const [savedSnapshot, setSavedSnapshot] = useState('')
@@ -66,17 +75,21 @@ export function OrderPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, q, t, o, co] = await Promise.all([
+      const [p, qRaw, t, o, co, catalogs] = await Promise.all([
         fetchDrywallProjectById(projectId),
-        fetchDrywallQuote(projectId),
+        fetchDrywallQuoteV2V3(projectId),
         fetchFieldTakeoff(projectId),
         fetchOrders(projectId),
         fetchChangeOrders(projectId),
+        fetchOrgDrywallCatalogs(),
       ])
       if (!p) {
         toast.error('Project not found')
         return
       }
+      const q = isDrywallQuoteV3(qRaw)
+        ? projectV3QuoteToV2Shape(qRaw, catalogs)
+        : qRaw
       setProject(p)
       setProjectName(p.name)
       setQuote(q)
@@ -236,7 +249,9 @@ export function OrderPage() {
     )
   }
 
-  const isComplete = project?.status === 'complete' || project?.legacy?.status === 'complete'
+  const isComplete =
+    isDrywallProjectClosed(project?.status) ||
+    isDrywallProjectClosed(String(project?.legacy?.status ?? ''))
 
   return (
     <div className="space-y-6">

@@ -45,6 +45,7 @@ type ScheduleItemLookupRow = {
   confirmation_notes: string | null
   status: PortfolioItem['status'] | null
   assigned_company_id: string | null
+  assigned_persons?: string[] | null
   notes: string | null
   subcontractors?: { name: string | null } | Array<{ name: string | null }> | null
 }
@@ -88,6 +89,7 @@ function toPortfolioItem(row: ScheduleItemLookupRow): PortfolioItem {
     status: row.status ?? 'not-started',
     assigned_company_id: row.assigned_company_id,
     assigned_company_name: assignedCompanyName(row.subcontractors),
+    assigned_persons: row.assigned_persons ?? [],
     notes: row.notes,
   }
 }
@@ -310,7 +312,7 @@ export function SchedulePortfolio() {
       const { data, error } = await supabase
         .from('schedule_items')
         .select(
-          'id, project_id, schedule_id, name, start_date, end_date, confirmation_status, confirmation_notes, status, assigned_company_id, notes, subcontractors:assigned_company_id(name)',
+          'id, project_id, schedule_id, name, start_date, end_date, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, notes, subcontractors:assigned_company_id(name)',
         )
         .eq('id', entry.schedule_item_id)
         .single()

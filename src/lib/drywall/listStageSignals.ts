@@ -1,4 +1,5 @@
 import type { DrywallProjectListItem, DrywallProjectStatus } from '@/types/drywall'
+import { isDrywallProjectClosed, normalizeDrywallProjectStatus } from '@/types/drywall'
 
 /** Quote stage: substantive sqft or total from list scalar projection. */
 export function listItemHasQuoteData(
@@ -8,10 +9,13 @@ export function listItemHasQuoteData(
 }
 
 function statusAtOrPastField(status: string): boolean {
+  const s = normalizeDrywallProjectStatus(status)
   return (
-    status === 'field-measurement' ||
-    status === 'order' ||
-    status === 'complete'
+    s === 'field-measurement' ||
+    s === 'order' ||
+    s === 'production' ||
+    s === 'production-complete' ||
+    s === 'closed'
   )
 }
 

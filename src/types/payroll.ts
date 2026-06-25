@@ -18,11 +18,18 @@ export interface PayrollHourEntry {
   helperPayReceived?: unknown[]
 }
 
+/** Whether piece_key came from v3 drywall catalogs or legacy v2 quote work types. */
+export type PayrollPieceCatalogSource = 'legacy' | 'v3_drywall'
+
 export interface PayrollPieceEntry {
   id?: string
   jobId?: string
   jobName?: string
+  /** v3 catalog piece key (finish scope id, drywall_hanging, rc_channel_labor, …). */
+  piece_key?: string
+  /** legacy v2 work type — still used when catalog_source is legacy or for older saved entries. */
   workType?: string
+  catalog_source?: PayrollPieceCatalogSource
   phase?: string
   totalPhases?: number | string
   phasesCompleted?: number | string

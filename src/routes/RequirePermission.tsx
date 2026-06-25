@@ -8,6 +8,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { WORKSPACE_HOME, type Workspace } from '@/hooks/useActiveWorkspace'
 import {
   canAccessWorkspace,
+  canAccessCrewWorkspace,
   deriveEffectiveRole,
   isOwnerRole,
   type RbacRole,
@@ -34,7 +35,9 @@ const WORKSPACE_FALLBACK_ORDER: Workspace[] = [
 
 function firstAccessibleHome(
   canAccessWorkspace: (ws: Workspace) => boolean,
+  role?: RbacRole | null,
 ): string {
+  if (role === 'crew') return '/crew'
   for (const ws of WORKSPACE_FALLBACK_ORDER) {
     if (canAccessWorkspace(ws)) return WORKSPACE_HOME[ws]
   }
@@ -48,39 +51,39 @@ export function RequireWorkspaceAccess({
   workspace: Workspace
   children: ReactNode
 }) {
-  const { loading, canAccessWorkspace } = usePermissions()
+  const { loading, canAccessWorkspace, effectiveRole } = usePermissions()
   if (loading) return <GuardLoading />
   if (!canAccessWorkspace(workspace)) {
-    return <Navigate to={firstAccessibleHome(canAccessWorkspace)} replace />
+    return <Navigate to={firstAccessibleHome(canAccessWorkspace, effectiveRole)} replace />
   }
   return <>{children}</>
 }
 
 export function RequireQuickBooksAdmin({ children }: { children: ReactNode }) {
-  const { loading, canAccessQuickBooksAdmin, canAccessWorkspace } =
+  const { loading, canAccessQuickBooksAdmin, canAccessWorkspace, effectiveRole } =
     usePermissions()
   if (loading) return <GuardLoading />
   if (!canAccessQuickBooksAdmin) {
-    return <Navigate to={firstAccessibleHome(canAccessWorkspace)} replace />
+    return <Navigate to={firstAccessibleHome(canAccessWorkspace, effectiveRole)} replace />
   }
   return <>{children}</>
 }
 
 export function RequireMeetingAdmin({ children }: { children: ReactNode }) {
-  const { loading, canManageMeetingPrompts, canAccessWorkspace } =
+  const { loading, canManageMeetingPrompts, canAccessWorkspace, effectiveRole } =
     usePermissions()
   if (loading) return <GuardLoading />
   if (!canManageMeetingPrompts) {
-    return <Navigate to={firstAccessibleHome(canAccessWorkspace)} replace />
+    return <Navigate to={firstAccessibleHome(canAccessWorkspace, effectiveRole)} replace />
   }
   return <>{children}</>
 }
 
 export function RequireCanCreateProjects({ children }: { children: ReactNode }) {
-  const { loading, canCreate, canAccessWorkspace } = usePermissions()
+  const { loading, canCreate, canAccessWorkspace, effectiveRole } = usePermissions()
   if (loading) return <GuardLoading />
   if (!canCreate) {
-    return <Navigate to={firstAccessibleHome(canAccessWorkspace)} replace />
+    return <Navigate to={firstAccessibleHome(canAccessWorkspace, effectiveRole)} replace />
   }
   return <>{children}</>
 }
@@ -97,6 +100,11 @@ export function canAccessHrTeamPage(role: RbacRole): boolean {
   ].includes(role)
 }
 
+/** Crew Accounts admin — operators who can provision crew logins (D.6.1) */
+export function canAccessHrCrewAccountsPage(role: RbacRole): boolean {
+  return canWriteHrTeam(role)
+}
+
 export function canWriteHrTeam(role: RbacRole): boolean {
   return ['owner', 'office_gc', 'office_drywall'].includes(role)
 }
@@ -106,7 +114,17 @@ export function RequireHrTeamAccess({ children }: { children: ReactNode }) {
   if (loading) return <GuardLoading />
   const role = deriveEffectiveRole(userProfile)
   if (!canAccessHrTeamPage(role)) {
-    return <Navigate to={firstAccessibleHome(canAccessWorkspace)} replace />
+    return <Navigate to={firstAccessibleHome(canAccessWorkspace, role)} replace />
+  }
+  return <>{children}</>
+}
+
+export function RequireHrCrewAccountsAccess({ children }: { children: ReactNode }) {
+  const { loading, userProfile, canAccessWorkspace } = usePermissions()
+  if (loading) return <GuardLoading />
+  const role = deriveEffectiveRole(userProfile)
+  if (!canAccessHrCrewAccountsPage(role)) {
+    return <Navigate to={firstAccessibleHome(canAccessWorkspace, role)} replace />
   }
   return <>{children}</>
 }
@@ -131,7 +149,7 @@ export function RequireCanRunPayroll({ children }: { children: ReactNode }) {
   const { loading, userProfile, canAccessWorkspace, effectiveRole } = usePermissions()
   if (loading) return <GuardLoading />
   if (!canAccessHrPayrollPage(userProfile, effectiveRole)) {
-    return <Navigate to={firstAccessibleHome(canAccessWorkspace)} replace />
+    return <Navigate to={firstAccessibleHome(canAccessWorkspace, effectiveRole)} replace />
   }
   return <>{children}</>
 }
@@ -153,7 +171,7 @@ export function RequireHrTimeClockAccess({ children }: { children: ReactNode }) 
   if (loading) return <GuardLoading />
   const role = deriveEffectiveRole(userProfile)
   if (!canAccessHrTimeClockPage(role)) {
-    return <Navigate to={firstAccessibleHome(canAccessWorkspace)} replace />
+    return <Navigate to={firstAccessibleHome(canAccessWorkspace, role)} replace />
   }
   return <>{children}</>
 }
@@ -172,11 +190,39 @@ export function canWriteDrywallField(role: RbacRole): boolean {
   return ['owner', 'office_gc', 'office_drywall'].includes(role)
 }
 
-export function RequireDrywallWorkspaceAccess({ children }: { children: ReactNode }) {
-  const { loading, canAccessWorkspace: canAccessWs } = usePermissions()
+/** Drywall org catalogs — owner + office_drywall write (Phase Q.A) */
+export function canEditDrywallCatalogs(role: RbacRole): boolean {
+  return ['owner', 'office_drywall'].includes(role)
+}
+
+export function canReadDrywallCatalogs(role: RbacRole): boolean {
+  return canAccessDrywallWorkspace(role)
+}
+
+export function RequireCrewWorkspaceAccess({ children }: { children: ReactNode }) {
+  const { loading, userProfile, canAccessWorkspace } = usePermissions()
+  if (loading) return <GuardLoading />
+  const role = deriveEffectiveRole(userProfile)
+  if (!canAccessCrewWorkspace(role)) {
+    return <Navigate to={firstAccessibleHome(canAccessWorkspace, role)} replace />
+  }
+  return <>{children}</>
+}
+
+export function RequireDrywallCatalogsAccess({ children }: { children: ReactNode }) {
+  const { loading, canAccessWorkspace: canAccessWs, effectiveRole } = usePermissions()
   if (loading) return <GuardLoading />
   if (!canAccessWs('drywall')) {
-    return <Navigate to={firstAccessibleHome(canAccessWs)} replace />
+    return <Navigate to={firstAccessibleHome(canAccessWs, effectiveRole)} replace />
+  }
+  return <>{children}</>
+}
+
+export function RequireDrywallWorkspaceAccess({ children }: { children: ReactNode }) {
+  const { loading, canAccessWorkspace: canAccessWs, effectiveRole } = usePermissions()
+  if (loading) return <GuardLoading />
+  if (!canAccessWs('drywall')) {
+    return <Navigate to={firstAccessibleHome(canAccessWs, effectiveRole)} replace />
   }
   return <>{children}</>
 }

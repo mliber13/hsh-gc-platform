@@ -1,0 +1,126 @@
+{
+  "version": 3,
+  "quoteNumber": "DW-2026-008",
+  "prep_clean_rate": 0.03,
+  "overhead_pct": 10,
+  "profit_pct": 30,
+  "sales_tax_pct": 8,
+  "hanger_include_labor_burden": true,
+  "finisher_include_labor_burden": true,
+  "prep_clean_include_labor_burden": true,
+  "lineItems": [
+    {
+      "id": "q_1780941877517_130l9fx",
+      "type": "drywall",
+      "location": "Basement Office & Bathroom",
+      "quantity": 800.5,
+      "waste_pct": 10,
+      "catalog_id": "1_2_regular",
+      "finish_scope_id": "level_4",
+      "custom_hanger_rate": 0.3,
+      "custom_finisher_rate": 0.35,
+      "custom_material_rate": 0.66,
+      "accessories_in_material_rate": true
+    },
+    {
+      "id": "q_1780941877517_9bsc7x1",
+      "type": "drywall",
+      "location": "(2) Large Basement Rooms",
+      "quantity": 1302.39,
+      "waste_pct": 10,
+      "catalog_id": "1_2_regular",
+      "finish_scope_id": "level_4",
+      "custom_hanger_rate": 0.3,
+      "custom_finisher_rate": 0.35,
+      "custom_material_rate": 0.66,
+      "accessories_in_material_rate": true
+    },
+    {
+      "id": "q_1780941877517_k68k6wa",
+      "type": "drywall",
+      "location": "1st Floor Remainder",
+      "quantity": 3584.91,
+      "waste_pct": 10,
+      "catalog_id": "1_2_regular",
+      "finish_scope_id": "level_4",
+      "custom_hanger_rate": 0.3,
+      "custom_finisher_rate": 0.35,
+      "custom_material_rate": 0.66,
+      "accessories_in_material_rate": true
+    },
+    {
+      "id": "q_1780941877517_k8mf72m",
+      "type": "drywall",
+      "location": "1st Floor Family Room",
+      "quantity": 633.05,
+      "waste_pct": 10,
+      "catalog_id": "1_2_regular",
+      "finish_scope_id": "level_4",
+      "custom_hanger_rate": 0.3,
+      "custom_finisher_rate": 0.35,
+      "custom_material_rate": 0.66,
+      "accessories_in_material_rate": true
+    },
+    {
+      "id": "q_1780941877517_vigzpr6",
+      "type": "drywall",
+      "location": "1st Floor Addition",
+      "quantity": 984.04,
+      "waste_pct": 10,
+      "catalog_id": "1_2_regular",
+      "finish_scope_id": "level_4",
+      "custom_hanger_rate": 0.3,
+      "custom_finisher_rate": 0.35,
+      "custom_material_rate": 0.66,
+      "accessories_in_material_rate": true
+    }
+  ],
+  "alternates": [],
+  "legacyV2Snapshot": {
+    "version": 2,
+    "sqft": 7304.74,
+    "wastePercentage": 10,
+    "materialRate": 0.66,
+    "boardOnlyMaterialRate": 0.66,
+    "hangerRate": 0.3,
+    "finisherRate": 0.35,
+    "prepCleanRate": 0.03,
+    "overheadPercentage": 10,
+    "profitPercentage": 30,
+    "salesTaxRate": 8,
+    "drywallScope": "hang_and_finish",
+    "hangLayers": 1,
+    "finishLayers": 1,
+    "breakdowns": [
+      {
+        "id": "mkr2iesb3snua30wcm",
+        "sqft": "800.5",
+        "description": "Basement Office & Bathroom"
+      },
+      {
+        "id": "mkr2islt9ceniuysvva",
+        "sqft": "1302.39",
+        "description": "(2) Large Basement Rooms"
+      },
+      {
+        "id": "mkr2j0z3l903425ee7",
+        "sqft": "3584.91",
+        "description": "1st Floor Remainder"
+      },
+      {
+        "id": "mkr2j7asyjx10y9auaf",
+        "sqft": "633.05",
+        "description": "1st Floor Family Room"
+      },
+      {
+        "id": "mkr2jgeibvc3g1csevf",
+        "sqft": "984.04",
+        "description": "1st Floor Addition"
+      }
+    ],
+    "options": [],
+    "hangerIncludeLaborBurden": true,
+    "finisherIncludeLaborBurden": true,
+    "prepCleanIncludeLaborBurden": true
+  }
+}

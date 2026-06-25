@@ -170,3 +170,37 @@ export function hydrateDrywallQuote(raw: unknown): DrywallQuote {
     },
   }
 }
+
+/** True when a hydrated v2 quote has user-entered content (not an empty new-project shell). */
+export function hasRealDrywallV2QuoteData(quote: DrywallQuote): boolean {
+  const positive = (value: unknown): boolean => {
+    if (value == null || value === '') return false
+    const n = typeof value === 'string' ? parseFloat(value) : Number(value)
+    return Number.isFinite(n) && n > 0
+  }
+
+  if ((quote.breakdowns ?? []).some((b) => positive(b.sqft))) return true
+  if (positive(quote.sqft)) return true
+  if (positive(quote.totalQuoteAmount)) return true
+
+  const calc = quote.calculations
+  if (calc && typeof calc === 'object') {
+    if (positive(calc.finalTotal)) return true
+    if (positive(calc.calculatedTotal)) return true
+  }
+
+  if (quote.includeSuspendedGrid && positive(quote.suspendedGridSqft)) return true
+  if (
+    quote.includeRcChannel &&
+    (positive(quote.rcChannelCeilingSqft) || (quote.rcChannelWallEntries?.length ?? 0) > 0)
+  ) {
+    return true
+  }
+  if (quote.includeInsulation && (quote.insulationEntries?.length ?? 0) > 0) return true
+  if (quote.includeAcousticCeiling && positive(quote.acousticCeilingSqft)) return true
+  if (quote.includeMetalStudFraming && (quote.metalStudEntries?.length ?? 0) > 0) return true
+  if (quote.includeFRP && positive(quote.frpSqft)) return true
+  if ((quote.options?.length ?? 0) > 0) return true
+
+  return false
+}

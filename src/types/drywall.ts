@@ -2,28 +2,166 @@
 // Drywall workspace types — mirrors metadata.legacy shape (JSONB retention locked)
 // ============================================================================
 
-/** Four workflow stages stored in projects.status for drywall-origin rows. */
+/** Workflow stages stored in projects.status for drywall-origin rows. */
 export type DrywallProjectStatus =
   | 'project-info'
   | 'quote'
   | 'field-measurement'
   | 'order'
+  | 'production'
+  | 'production-complete'
+  | 'closed'
+  /** @deprecated Legacy DB value — normalized to `closed` on read. */
   | 'complete'
 
-export const DRYWALL_PROJECT_STATUSES: DrywallProjectStatus[] = [
+export const DRYWALL_PROJECT_STATUSES: Array<Exclude<DrywallProjectStatus, 'complete'>> = [
   'project-info',
   'quote',
   'field-measurement',
   'order',
-  'complete',
+  'production',
+  'production-complete',
+  'closed',
 ]
 
-export const DRYWALL_STATUS_LABELS: Record<DrywallProjectStatus, string> = {
+export const DRYWALL_STATUS_LABELS: Record<Exclude<DrywallProjectStatus, 'complete'>, string> = {
   'project-info': 'Project Info',
   quote: 'Quote',
   'field-measurement': 'Field Measurement',
   order: 'Order',
-  complete: 'Complete',
+  production: 'Production',
+  'production-complete': 'Production Complete',
+  closed: 'Closed',
+}
+
+/** Short labels for list filter + header badge. */
+export const DRYWALL_STATUS_BADGE_LABELS: Record<
+  Exclude<DrywallProjectStatus, 'complete'>,
+  string
+> = {
+  'project-info': 'Setup',
+  quote: 'Quote',
+  'field-measurement': 'Field',
+  order: 'Order',
+  production: 'Production',
+  'production-complete': 'Production Complete',
+  closed: 'Closed',
+}
+
+export const DRYWALL_LIST_STATUS_FILTER_OPTIONS: {
+  value: 'all' | 'active' | Exclude<DrywallProjectStatus, 'complete'>
+  label: string
+}[] = [
+  { value: 'active', label: 'All Active' },
+  { value: 'all', label: 'All (incl. closed)' },
+  { value: 'project-info', label: 'Setup' },
+  { value: 'quote', label: 'Quote' },
+  { value: 'field-measurement', label: 'Field' },
+  { value: 'order', label: 'Order' },
+  { value: 'production', label: 'Production' },
+  { value: 'production-complete', label: 'Production Complete' },
+  { value: 'closed', label: 'Closed' },
+]
+
+export type DrywallStageRouteKey =
+  | 'info'
+  | 'quote'
+  | 'field'
+  | 'schedule'
+  | 'order'
+  | 'production'
+  | 'closeout'
+
+/** Maps legacy `complete` → `closed` on read; does not write back to DB. */
+export function normalizeDrywallProjectStatus(
+  status: string | null | undefined,
+): Exclude<DrywallProjectStatus, 'complete'> {
+  const s = (status ?? 'project-info').trim()
+  if (s === 'complete') return 'closed'
+  if ((DRYWALL_PROJECT_STATUSES as readonly string[]).includes(s)) {
+    return s as Exclude<DrywallProjectStatus, 'complete'>
+  }
+  return 'project-info'
+}
+
+export function isDrywallProjectClosed(status: string | null | undefined): boolean {
+  const s = (status ?? '').trim()
+  return s === 'closed' || s === 'complete'
+}
+
+export function drywallStatusBadgeLabel(status: string | null | undefined): string {
+  return DRYWALL_STATUS_BADGE_LABELS[normalizeDrywallProjectStatus(status)]
+}
+
+// ============================================================================
+// metadata.legacy foundations (D.1.1 — hydrated with defaults when missing)
+// ============================================================================
+
+export type DrywallIntakeSource = 'quote' | 'po'
+
+export interface BelowFloorApproval {
+  approvedAt: string
+  approvedBy: string
+  approvedByName?: string
+  trigger: 'quote_send' | 'field_measurement_to_order'
+  marginAtApproval: number
+  bidTotal: number
+  estimatedCost: number
+  floorTarget: number
+  reason: string
+}
+
+export type CommsLogAuthorRole = 'operator' | 'crew' | 'sub'
+
+export interface DrywallCommsLogEntry {
+  id: string
+  at: string
+  author: string
+  authorUserId?: string
+  authorRole?: CommsLogAuthorRole
+  body: string
+}
+
+export interface ProductionTimestamps {
+  productionStartedAt?: string
+  productionCompletedAt?: string
+  closedAt?: string
+}
+
+export type DrywallQuoteOutcome = 'drafted' | 'sent' | 'approved' | 'lost'
+
+export interface QuoteOutcomeTimestamps {
+  sentAt?: string
+  approvedAt?: string
+  lostAt?: string
+}
+
+export interface BidSnapshotPayload {
+  routineSubtotal: number
+  cleanupTotal: number
+  overhead: number
+  profit: number
+  salesTax: number
+  bidTotal: number
+  lineItems: Array<{
+    id: string
+    type: string
+    description: string
+    location?: string
+    computed_line_total: number
+  }>
+  alternates: Array<{
+    id: string
+    name: string
+    totalAdd: number
+    selected: boolean
+  }>
+}
+
+export interface BidSnapshot {
+  total: number
+  at: string
+  payload: BidSnapshotPayload
 }
 
 /** Minimal row for the /drywall list (narrow scalar projection + list surfacing filter). */
@@ -76,6 +214,24 @@ export interface ProjectInfoForm {
 
 export interface CreateDrywallProjectInput {
   name?: string
+}
+
+export interface DrywallPoData {
+  poReference: string
+  customerSqft: number
+  agreedUnitRate: number
+  scopeText: string
+  expectedStartDate?: string
+  customerContact?: string
+  intakeAt: string
+  lastEditedAt?: string
+}
+
+export interface CreateDrywallProjectFromPoInput {
+  name: string
+  client: string
+  address?: string
+  poData: Omit<DrywallPoData, 'intakeAt' | 'lastEditedAt'>
 }
 
 // ============================================================================
@@ -184,6 +340,12 @@ export interface DrywallQuote {
   version?: number
   /** Customer-facing quote id — DW-YYYY-NNN (assigned on first save or PDF export). */
   quoteNumber?: string
+  /** Quote outcome discriminator — default `drafted` when missing (D.1.2). */
+  outcome?: DrywallQuoteOutcome
+  outcomeTimestamps?: QuoteOutcomeTimestamps
+  bidSnapshot?: BidSnapshot
+  /** Free-text reason when outcome is `lost` — cleared on unlock. */
+  outcomeReason?: string
   sqft?: string | number
   wastePercentage?: string | number
   drywallScope?: DrywallScope | string
@@ -299,6 +461,140 @@ export interface DrywallQuoteTotals {
   total?: number
   finalTotal?: number
   [key: string]: unknown
+}
+
+// ============================================================================
+// Drywall quote v3 — unified line-item model (Phase Q.B)
+// ============================================================================
+
+export type DrywallQuoteVersion = 2 | 3
+
+export type QuoteLineItemType =
+  | 'drywall'
+  | 'rc_channel'
+  | 'suspended_grid'
+  | 'insulation'
+  | 'acoustic'
+  | 'metal_stud'
+  | 'frp'
+
+export interface QuoteLineItem {
+  id: string
+  type: QuoteLineItemType
+  description: string
+  location: string
+  quantity: number
+  catalog_id: string
+  finish_scope_id?: string
+  custom_material_rate?: number
+  /** Finisher pay override ($/sqft); default from finish scope catalog. */
+  custom_finisher_rate?: number
+  /** Hanger pay override ($/sqft); default from board catalog. */
+  custom_hanger_rate?: number
+  /** Component trade labor override; unit matches catalog (sqft, lf, piece, each). */
+  custom_labor_rate?: number
+  /** Applies when material and/or hanger/finisher rates are overridden on a drywall line. */
+  override_reason?: string
+  waste_pct?: number
+  /** Per-line accessory toggles (firetape no-compound, corner bead LF, etc.). */
+  accessoryOverrides?: {
+    joint_compound?: boolean
+    tape?: boolean
+    screws?: boolean
+    corner_bead?: boolean
+    /** Manual corner bead linear feet for accessory cost. */
+    corner_bead_lf?: number
+    /** Firetape product that needs no joint compound. */
+    no_joint_compound?: boolean
+  }
+  /**
+   * v2 materialRate blends board + accessories; suppress explicit accessory costs on
+   * converted lines until Mark decomposes to catalog board rate + accessories (Q.C.4).
+   */
+  accessories_in_material_rate?: boolean
+  computed_material_total?: number
+  computed_labor_total?: number
+  computed_accessories_total?: number
+  computed_line_total?: number
+  notes?: string
+}
+
+export interface QuoteAlternate {
+  id: string
+  name: string
+  description: string
+  lineItems: QuoteLineItem[]
+  totalAdd?: number
+  selected?: boolean
+}
+
+/** Customer-facing PDF options on v3 quotes (Q.D). */
+export interface DrywallQuoteV3PdfSettings {
+  /** v2-compatible toggles: taxes, payment terms, GC assumptions, signatures, etc. */
+  document_options?: DrywallQuotePdfSettings
+  /** Free-form note appended to TERMS & CONDITIONS. */
+  notes_for_customer?: string
+  /** @deprecated Prefer document_options — kept for quotes converted before document_options existed. */
+  payment_terms?: string
+  /** @deprecated Prefer document_options.quoteValidityDays */
+  validity_days?: number
+  /** @deprecated Prefer document_options.includeSignatureLines */
+  signature_lines?: boolean
+}
+
+export interface DrywallQuoteV3 {
+  version: 3
+  /** Customer-facing quote id — carried from v2 on convert. */
+  quoteNumber?: string
+  outcome?: DrywallQuoteOutcome
+  outcomeTimestamps?: QuoteOutcomeTimestamps
+  bidSnapshot?: BidSnapshot
+  outcomeReason?: string
+  scope_of_work?: string
+  /** Hang specifications */
+  ceiling_thickness?: string
+  wall_thickness?: string
+  hang_exceptions?: string
+  /** Finish specifications */
+  ceiling_finish?: string
+  ceiling_finish_other?: string
+  ceiling_exceptions?: string
+  wall_finish?: string
+  wall_finish_other?: string
+  wall_exceptions?: string
+  /** Duration estimator inputs */
+  build_type?: string
+  complexity?: string
+  paper_floors_required?: boolean
+  bead_sticks?: string | number
+  /** Custom scope override — replaces structured scope on PDF when true */
+  use_custom_scope_of_work?: boolean
+  custom_scope_of_work?: string
+  /** Project-level prep/clean labor rate per drywall sqft (no waste). */
+  prep_clean_rate: number
+  /** Project-level hanger pay per drywall sqft (before waste). */
+  project_hanger_rate?: number
+  /** Project-level finisher pay per drywall sqft (before waste). */
+  project_finisher_rate?: number
+  overhead_pct: number
+  profit_pct: number
+  sales_tax_pct: number
+  /** v2 labor burden toggles — default on when unset (matches v2 includeLaborBurden). */
+  hanger_include_labor_burden?: boolean
+  finisher_include_labor_burden?: boolean
+  prep_clean_include_labor_burden?: boolean
+  lineItems: QuoteLineItem[]
+  alternates: QuoteAlternate[]
+  legacyV2Snapshot?: unknown
+  pdf_settings?: DrywallQuoteV3PdfSettings
+  notes?: string
+  updatedAt: string
+}
+
+export type DrywallQuoteV2V3 = DrywallQuote | DrywallQuoteV3
+
+export function isDrywallQuoteV3(quote: DrywallQuoteV2V3): quote is DrywallQuoteV3 {
+  return quote.version === 3
 }
 
 export interface UpdateDrywallProjectInfoPatch extends ProjectInfoForm {

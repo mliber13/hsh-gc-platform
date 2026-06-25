@@ -30,6 +30,7 @@ import {
   buildQuotePdfTermsLines,
   resolveQuotePdfSettings,
 } from '@/lib/drywall/quotePdfSettings'
+import { quoteScopeBlocksFromV2, type ScopePdfBlock } from '@/lib/drywall/structuredScopePdf'
 import type { DrywallProject, DrywallQuote, DrywallQuoteCalculations } from '@/types/drywall'
 
 const COMPANY_NAME = 'HSH Drywall'
@@ -80,8 +81,6 @@ const toNum = (v: unknown): number => parseFloat(String(v ?? 0)) || 0
 const round2 = (n: number) => Math.round(n * 100) / 100
 
 type TradeSummaryLine = { label: string; amount: number }
-
-type ScopeBlock = { heading?: string; lines: string[]; plain?: boolean }
 
 type PdfCtx = {
   doc: jsPDF
@@ -215,9 +214,14 @@ function drawPreparedForAndProject(
 }
 
 /** GC-style section title — red, no underline */
-function drawSectionTitle(ctx: PdfCtx, title: string, opts?: { skipTopGap?: boolean }) {
+function drawSectionTitle(
+  ctx: PdfCtx,
+  title: string,
+  opts?: { skipTopGap?: boolean; keepWithNext?: number },
+) {
   if (!opts?.skipTopGap) ctx.y += SP.sectionTop
-  ensureRoom(ctx, 32)
+  const keepWith = opts?.keepWithNext ?? 0
+  ensureRoom(ctx, 32 + keepWith)
   ctx.doc.setFont('helvetica', 'bold')
   ctx.doc.setFontSize(SECTION_TITLE_SIZE)
   setTextRgb(ctx.doc, DW_RED)
@@ -225,15 +229,26 @@ function drawSectionTitle(ctx: PdfCtx, title: string, opts?: { skipTopGap?: bool
   ctx.y += 16
 }
 
-function drawScopeBlock(ctx: PdfCtx, block: ScopeBlock) {
+function drawWrappedLines(ctx: PdfCtx, wrapped: string | string[], x: number, lineStep: number) {
+  const lines = Array.isArray(wrapped) ? wrapped : [wrapped]
+  for (const line of lines) {
+    ensureRoom(ctx, lineStep + 2)
+    ctx.doc.text(line, x, ctx.y)
+    ctx.y += lineStep
+  }
+}
+
+function drawScopeBlock(ctx: PdfCtx, block: ScopePdfBlock) {
   if (block.plain) {
     ctx.y += SP.addonBlockTop
   } else if (block.heading) {
     ctx.y += SP.subsectionTop
   }
 
+  const lineStep = block.plain ? SP.addonLine : SP.specLine
+
   if (block.heading) {
-    ensureRoom(ctx, 20)
+    ensureRoom(ctx, 20 + lineStep)
     ctx.doc.setFont('helvetica', 'bold')
     ctx.doc.setFontSize(SUBSECTION_SIZE)
     setTextRgb(ctx.doc, DW_BLUE)
@@ -246,14 +261,11 @@ function drawScopeBlock(ctx: PdfCtx, block: ScopeBlock) {
   setTextRgb(ctx.doc, DW_TEXT)
 
   const textIndent = block.plain ? SP.specIndent : SP.specIndent + SP.bulletIndent
-  const lineStep = block.plain ? SP.addonLine : SP.specLine
 
   for (const raw of block.lines) {
     const prefix = block.plain ? '' : '• '
     const wrapped = ctx.doc.splitTextToSize(`${prefix}${raw}`, ctx.maxW - textIndent - 4)
-    ensureRoom(ctx, wrapped.length * lineStep + 2)
-    ctx.doc.text(wrapped, ctx.margin + textIndent, ctx.y)
-    ctx.y += wrapped.length * lineStep
+    drawWrappedLines(ctx, wrapped, ctx.margin + textIndent, lineStep)
     if (block.plain) ctx.y += 4
   }
 }
@@ -396,58 +408,8 @@ function textOrBlank(value: unknown): string {
   return String(value ?? '').trim()
 }
 
-function quoteScopeBlocks(quote: DrywallQuote): ScopeBlock[] {
-  if (quote.useCustomScopeOfWork && textOrBlank(quote.customScopeOfWork)) {
-    return [{ lines: [String(quote.customScopeOfWork)] }]
-  }
-
-  const blocks: ScopeBlock[] = []
-  const scope = String(quote.drywallScope || 'hang_and_finish')
-  blocks.push({
-    lines: [
-      `Drywall: ${
-        scope === 'hang_only'
-          ? 'Hang only. Finish not included.'
-          : scope === 'finish_only'
-            ? 'Finish only. Hang not included.'
-            : 'Hang and finish included.'
-      }`,
-    ],
-  })
-
-  const hangLines: string[] = []
-  if (textOrBlank(quote.ceilingThickness)) hangLines.push(`Ceiling Thickness: ${quote.ceilingThickness}`)
-  if (textOrBlank(quote.wallThickness)) hangLines.push(`Wall Thickness: ${quote.wallThickness}`)
-  if (textOrBlank(quote.hangExceptions)) hangLines.push(`Exceptions: ${quote.hangExceptions}`)
-  if (hangLines.length) blocks.push({ heading: 'Hang Specifications:', lines: hangLines })
-
-  const finishLines: string[] = []
-  const ceilingFinish = textOrBlank(quote.ceilingFinishOther || quote.ceilingFinish)
-  const wallFinish = textOrBlank(quote.wallFinishOther || quote.wallFinish)
-  if (ceilingFinish) finishLines.push(`Ceiling Finish: ${ceilingFinish}`)
-  if (wallFinish) finishLines.push(`Wall Finish: ${wallFinish}`)
-  const finishExceptions = textOrBlank(quote.ceilingExceptions || quote.wallExceptions)
-  if (finishExceptions) finishLines.push(`Exceptions: ${finishExceptions}`)
-  if (finishLines.length) blocks.push({ heading: 'Finish Specifications:', lines: finishLines })
-
-  const addonLines: string[] = []
-  if (quote.includeSuspendedGrid) {
-    addonLines.push('Suspended Drywall Grid Ceiling: Material and labor per plans and specs.')
-  }
-  if (quote.includeRcChannel) addonLines.push('RC Channel: Labor and material per plans and specs.')
-  if (quote.includeMetalStudFraming) {
-    addonLines.push('Metal Stud Framing: Labor and material per plans and specs.')
-  }
-  if (quote.includeAcousticCeiling) {
-    addonLines.push('Acoustic Ceiling Tile & Grid: Labor and material per plans and specs.')
-  }
-  if (quote.includeFRP) addonLines.push('FRP: Labor and material per plans and specs.')
-  if (addonLines.length) blocks.push({ lines: addonLines, plain: true })
-
-  const notes = textOrBlank(quote.scopeOfWork)
-  if (notes) blocks.push({ heading: 'Additional Notes:', lines: [notes] })
-
-  return blocks
+function quoteScopeBlocks(quote: DrywallQuote): ScopePdfBlock[] {
+  return quoteScopeBlocksFromV2(quote)
 }
 
 function durationSummaryForQuote(quote: DrywallQuote, calculations: DrywallQuoteCalculations) {
@@ -517,7 +479,7 @@ function drawPricingTable(
   },
 ) {
   ensureRoom(ctx, 80)
-  drawSectionTitle(ctx, 'PRICING', { skipTopGap: true })
+  drawSectionTitle(ctx, 'PRICING')
   ctx.y += 2
 
   const body: TableCell[][] = []
@@ -538,14 +500,14 @@ function drawPricingTable(
     }
   }
 
-  /** Trade sell prices already include sales tax — no separate subtotal/tax rows. */
-  const skipSubtotalRows = opts.showTradeBreakdown && opts.tradeLines.length > 0
-
-  if (!skipSubtotalRows) {
-    if (opts.showTaxesSeparately && opts.salesTax > 0) {
-      body.push(['Subtotal (before tax):', formatCurrency(opts.subtotalBeforeTax)])
-      body.push(['Sales Tax:', formatCurrency(opts.salesTax)])
-    } else {
+  // Legacy QuotePDF: subtotal + sales tax always follow trade lines when that option is on.
+  if (opts.showTaxesSeparately && opts.salesTax > 0) {
+    body.push(['Subtotal (before tax):', formatCurrency(opts.subtotalBeforeTax)])
+    body.push(['Sales Tax:', formatCurrency(opts.salesTax)])
+  } else {
+    /** Trade sell prices already include sales tax — skip combined subtotal when trades are itemized. */
+    const skipCombinedSubtotal = opts.showTradeBreakdown && opts.tradeLines.length > 0
+    if (!skipCombinedSubtotal) {
       body.push(['Subtotal:', formatCurrency(opts.subtotalBeforeTax + opts.salesTax)])
     }
   }
@@ -796,7 +758,7 @@ export async function downloadDrywallQuotePdf(
   drawMetadataBar(ctx, quoteNumber, validUntil)
   drawPreparedForAndProject(ctx, project)
 
-  drawSectionTitle(ctx, 'SCOPE OF WORK', { skipTopGap: true })
+  drawSectionTitle(ctx, 'SCOPE OF WORK', { skipTopGap: true, keepWithNext: 48 })
   ctx.y += 4
   for (const block of quoteScopeBlocks(quote)) {
     drawScopeBlock(ctx, block)
@@ -846,11 +808,6 @@ export async function downloadDrywallQuotePdf(
     totals.totalQuote ||
     toNum(calculations.finalTotal) ||
     toNum(calculations.subtotalAfterProfit) + selectedOptionsTotal
-
-  if (breakdowns.length > 0 || options.length > 0) {
-    ctx.doc.addPage()
-    ctx.y = ctx.marginY
-  }
 
   drawPricingTable(ctx, {
     quote,
