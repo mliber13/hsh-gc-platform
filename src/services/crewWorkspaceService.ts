@@ -438,7 +438,22 @@ function resolveTotalSqft(
   return null
 }
 
-async function resolveLaborRates(legacy: Record<string, unknown>): Promise<{
+function readOrderApprovedLaborRates(field: FieldTakeoff | null): {
+  hangerRate: number | null
+  finisherRate: number | null
+  prepCleanRate: number | null
+} | null {
+  const approved = field?.reviewApprovedRates as Record<string, unknown> | undefined
+  // Order stage always persists all three rates together (see OrderFinancialCard.handleSaveRates).
+  if (!approved || approved.hangerRate == null) return null
+  return {
+    hangerRate: num(approved.hangerRate),
+    finisherRate: num(approved.finisherRate),
+    prepCleanRate: num(approved.prepCleanRate),
+  }
+}
+
+async function resolveQuoteCatalogLaborRates(legacy: Record<string, unknown>): Promise<{
   hangerRate: number | null
   finisherRate: number | null
   prepCleanRate: number | null
@@ -496,6 +511,37 @@ async function resolveLaborRates(legacy: Record<string, unknown>): Promise<{
     prepCleanRate: num(DRYWALL_QUOTE_BASE_DEFAULTS.prepCleanRate),
     rateSource: 'catalog_default',
   }
+}
+
+async function resolveLaborRates(
+  legacy: Record<string, unknown>,
+  field: FieldTakeoff | null,
+): Promise<{
+  hangerRate: number | null
+  finisherRate: number | null
+  prepCleanRate: number | null
+  rateSource: CrewLaborRateSource
+}> {
+  const approved = readOrderApprovedLaborRates(field)
+  if (approved) {
+    const fallback = await resolveQuoteCatalogLaborRates(legacy)
+    return {
+      hangerRate:
+        approved.hangerRate != null && approved.hangerRate > 0
+          ? approved.hangerRate
+          : fallback.hangerRate,
+      finisherRate:
+        approved.finisherRate != null && approved.finisherRate > 0
+          ? approved.finisherRate
+          : fallback.finisherRate,
+      prepCleanRate:
+        approved.prepCleanRate != null && approved.prepCleanRate > 0
+          ? approved.prepCleanRate
+          : fallback.prepCleanRate,
+      rateSource: 'order_approved',
+    }
+  }
+  return resolveQuoteCatalogLaborRates(legacy)
 }
 
 function resolveBreakdowns(
@@ -656,7 +702,7 @@ async function mapProjectDetail(
   const field = parseFieldTakeoff(legacy)
   const catalogs = v3QuoteFromLegacy(legacy) ? await fetchOrgDrywallCatalogs() : null
   const totalSqft = resolveTotalSqft(legacy, intakeSource, po)
-  const laborRates = await resolveLaborRates(legacy)
+  const laborRates = await resolveLaborRates(legacy, field)
 
   return {
     projectId: project.id,
@@ -692,6 +738,8 @@ async function mapProjectDetail(
 
 export function crewRateSourceLabel(source: CrewLaborRateSource): string {
   switch (source) {
+    case 'order_approved':
+      return 'order labor rates'
     case 'v3_override':
       return 'project override'
     case 'v2_legacy':

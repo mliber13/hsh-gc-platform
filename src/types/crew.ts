@@ -42,7 +42,11 @@ export interface CrewProjectScheduleEntry {
   notes: string | null
 }
 
-export type CrewLaborRateSource = 'v3_override' | 'v2_legacy' | 'catalog_default'
+export type CrewLaborRateSource =
+  | 'order_approved'
+  | 'v3_override'
+  | 'v2_legacy'
+  | 'catalog_default'
 
 export interface CrewMaterial {
   id: string
