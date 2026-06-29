@@ -29,7 +29,7 @@ import {
   shouldShowThreadType,
 } from '@/lib/drywall/fieldAccessoryUi'
 import type { DrywallQuote, FieldAccessoryEntry, FieldTakeoff } from '@/types/drywall'
-import type { SetFieldTakeoff } from './fieldTakeoffState'
+import type { SetFieldTakeoff } from '../fieldTakeoffState'
 
 interface Props {
   takeoff: FieldTakeoff
@@ -37,6 +37,8 @@ interface Props {
   quote: DrywallQuote | null
   readOnly: boolean
   onChange: SetFieldTakeoff
+  /** Crew measurer V1 — manual entry only; operator keeps auto-calc. */
+  disableAutoCalc?: boolean
 }
 
 export function FieldAccessoriesSection({
@@ -45,6 +47,7 @@ export function FieldAccessoriesSection({
   quote,
   readOnly,
   onChange,
+  disableAutoCalc = false,
 }: Props) {
   const cornerBeadQty = useMemo(
     () => totalManualCornerBeadQuantity(takeoff.accessories),
@@ -54,7 +57,7 @@ export function FieldAccessoriesSection({
   const quoteInput = useMemo(() => quoteInputFromDrywallQuote(quote), [quote])
 
   useEffect(() => {
-    if (readOnly) return
+    if (readOnly || disableAutoCalc) return
 
     if (measuredSqft <= 0) {
       onChange((prev) => {
@@ -71,7 +74,7 @@ export function FieldAccessoriesSection({
       if (JSON.stringify(merged) === JSON.stringify(prev.accessories)) return prev
       return { ...prev, accessories: merged }
     })
-  }, [measuredSqft, cornerBeadQty, quoteInput, readOnly, onChange])
+  }, [measuredSqft, cornerBeadQty, quoteInput, readOnly, onChange, disableAutoCalc])
 
   const handleAddAccessory = () => {
     onChange((prev) => ({
@@ -161,8 +164,9 @@ export function FieldAccessoriesSection({
           Accessories & materials
         </CardTitle>
         <CardDescription>
-          Auto-calculated from measured sqft and ceiling finish. Add corner bead manually; quantities
-          recalculate when measurements change.
+          {disableAutoCalc
+            ? 'Add accessories manually. The office can auto-calculate during review.'
+            : 'Auto-calculated from measured sqft and ceiling finish. Add corner bead manually; quantities recalculate when measurements change.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -178,9 +182,11 @@ export function FieldAccessoriesSection({
 
         {takeoff.accessories.length === 0 ? (
           <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-6 text-center">
-            {measuredSqft > 0
-              ? 'Add measurements to see auto-calculated accessories, or add manual items.'
-              : 'Add measurements first, or add manual accessories.'}
+            {disableAutoCalc
+              ? 'No accessories yet. Tap Add manual to enter items.'
+              : measuredSqft > 0
+                ? 'Add measurements to see auto-calculated accessories, or add manual items.'
+                : 'Add measurements first, or add manual accessories.'}
           </p>
         ) : (
           <div className="space-y-3">

@@ -20,7 +20,9 @@ export function CrewShell() {
   const { signOut, profile } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const onDetail = /^\/crew\/projects\//.test(location.pathname)
+  const onMeasure = /^\/crew\/projects\/[^/]+\/measure$/.test(location.pathname)
+  const onDetail = /^\/crew\/projects\//.test(location.pathname) && !onMeasure
+  const headerTitle = onMeasure ? 'Measure' : onDetail ? 'Job detail' : 'My jobs'
 
   return (
     <PageTitleProvider>
@@ -33,9 +35,7 @@ export function CrewShell() {
               onClick={() => navigate('/crew')}
             >
               <img src={hshLogo} alt="HSH" className="h-8 w-auto shrink-0" />
-              <span className="truncate text-sm font-semibold">
-                {onDetail ? 'Job detail' : 'My jobs'}
-              </span>
+              <span className="truncate text-sm font-semibold">{headerTitle}</span>
             </button>
             <div className="flex items-center gap-1">
               <CommsNotificationBell scope="crew" />

@@ -19,6 +19,8 @@ import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { drywallStatusLabel, drywallStatusPillClass } from '@/lib/drywall/crewStatusStyles'
+import { isMeasurerSpecialty } from '@/lib/drywall/crewSpecialty'
+import { phaseForScheduleItem } from '@/components/drywall/schedule/scheduleItemStatusStyles'
 import {
   CrewWorkspacePermissionError,
   fetchCrewProjectDetail,
@@ -199,6 +201,11 @@ export function CrewProjectDetailPage() {
     detail.fieldNotes?.contactPhone?.trim() ||
     null
 
+  const showStartMeasure =
+    !isPreview &&
+    isMeasurerSpecialty(detail.specialty) &&
+    detail.scheduleEntries.some((entry) => phaseForScheduleItem(entry) === 'measure')
+
   return (
     <div
       className="space-y-4 pb-10"
@@ -269,6 +276,27 @@ export function CrewProjectDetailPage() {
         ) : null}
       </div>
 
+      {showStartMeasure ? (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <p className="font-semibold">Field measurement assigned</p>
+              <p className="text-sm text-muted-foreground">
+                Capture sqft, photos, and notes for office review.
+              </p>
+            </div>
+            <Button
+              type="button"
+              className="shrink-0"
+              onClick={() => navigate(`/crew/projects/${projectId}/measure`)}
+            >
+              <Ruler className="mr-2 size-4" />
+              Start measure
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -277,7 +305,11 @@ export function CrewProjectDetailPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!isPreview && detail.specialty === 'unknown' ? (
+          {!isPreview && isMeasurerSpecialty(detail.specialty) ? (
+            <p className="text-sm text-muted-foreground">
+              Field measurer — pay tracked separately
+            </p>
+          ) : !isPreview && detail.specialty === 'unknown' ? (
             <p className="text-sm text-muted-foreground">
               Contact office to set your role before pay rates can be shown.
             </p>

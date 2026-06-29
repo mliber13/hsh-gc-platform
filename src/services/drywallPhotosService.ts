@@ -4,13 +4,14 @@
 
 import { supabase, isOnlineMode } from '@/lib/supabase'
 import { generateFieldId, normalizeFieldPhotoRef } from '@/lib/drywall/fieldMeasurementUtils'
-import { requireUserOrgId } from '@/services/userService'
+import { saveFieldTakeoffAsMeasurer } from '@/services/crewWorkspaceService'
+import { requireUserOrgId, getCurrentUserProfile } from '@/services/userService'
 import {
   DrywallProjectPermissionError,
   fetchFieldTakeoff,
   saveFieldTakeoff,
 } from '@/services/drywallProjectsService'
-import type { FieldPhotoRef } from '@/types/drywall'
+import type { FieldPhotoRef, FieldTakeoff } from '@/types/drywall'
 
 const BUCKET = 'drywall-field-photos'
 const DEFAULT_SIGNED_EXPIRY = 3600
@@ -49,6 +50,22 @@ async function assertProjectInOrg(projectId: string, orgId: string): Promise<voi
 
   if (error) throw new DrywallPhotoError(error.message || 'Could not verify project.')
   if (!data) throw new DrywallPhotoError('Project not found in your organization.')
+}
+
+/** Crew measurers persist photo refs via SECURITY DEFINER RPC; operators use direct merge. */
+async function persistFieldTakeoffPhotos(projectId: string, takeoff: FieldTakeoff): Promise<void> {
+  const profile = await getCurrentUserProfile()
+  const roles = profile?.roles ?? []
+  const isCrewOnly =
+    roles.includes('crew') &&
+    !roles.some((r) => r === 'owner' || r === 'office_gc' || r === 'office_drywall')
+
+  if (isCrewOnly) {
+    await saveFieldTakeoffAsMeasurer(projectId, takeoff)
+    return
+  }
+
+  await saveFieldTakeoff(projectId, takeoff)
 }
 
 /** Upload image; append ref to metadata.legacy.fieldTakeoff.photos (atomic). */
@@ -93,7 +110,7 @@ export async function uploadFieldPhoto(
   try {
     const takeoff = await fetchFieldTakeoff(projectId)
     const photos = [...(takeoff.photos ?? []), ref]
-    await saveFieldTakeoff(projectId, { ...takeoff, photos })
+    await persistFieldTakeoffPhotos(projectId, { ...takeoff, photos })
     return ref
   } catch (e) {
     try {
@@ -145,7 +162,7 @@ export async function deleteFieldPhoto(projectId: string, storagePath: string): 
   const photos = (takeoff.photos ?? []).filter(
     (p) => p.storagePath !== storagePath && p.id !== storagePath,
   )
-  await saveFieldTakeoff(projectId, { ...takeoff, photos })
+  await persistFieldTakeoffPhotos(projectId, { ...takeoff, photos })
 }
 
 export { DrywallProjectPermissionError }

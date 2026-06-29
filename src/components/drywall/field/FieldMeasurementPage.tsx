@@ -3,10 +3,6 @@ import { useNavigate, useOutletContext } from 'react-router-dom'
 import { ArrowRight, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
 import { BelowFloorMarginDialog } from '@/components/drywall/margin/BelowFloorMarginDialog'
 import { computeMeasuredSqft, fieldTakeoffWithTotals, quotedSqftWithWaste } from '@/lib/drywall/fieldMeasurementUtils'
@@ -16,7 +12,7 @@ import {
   type MarginFloorEvaluation,
 } from '@/lib/drywall/marginFloor'
 import { usePermissions } from '@/hooks/usePermissions'
-import { canWriteDrywallField } from '@/routes/RequirePermission'
+import { canReviewDrywallFieldTakeoff, canWriteDrywallField } from '@/routes/RequirePermission'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import {
   DrywallProjectPermissionError,
@@ -33,10 +29,15 @@ import {
 import { isDrywallQuoteV3 } from '@/types/drywall'
 import { v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
 import type { DrywallQuote, DrywallQuoteV2V3, FieldTakeoff } from '@/types/drywall'
-import { FieldAccessoriesSection } from './FieldAccessoriesSection'
-import { FieldMeasurementsSection } from './FieldMeasurementsSection'
-import { FieldPhotosSection } from './FieldPhotosSection'
+import {
+  FieldAccessoriesSection,
+  FieldChecklistSection,
+  FieldMeasurementsSection,
+  FieldPhotosSection,
+  FieldProjectSiteSection,
+} from './inputs'
 import { FieldVarianceSummary } from './FieldVarianceSummary'
+import { FieldTakeoffReviewBanner } from './FieldTakeoffReviewBanner'
 import type { SetFieldTakeoff } from './fieldTakeoffState'
 
 export function FieldMeasurementPage() {
@@ -44,9 +45,11 @@ export function FieldMeasurementPage() {
   const navigate = useNavigate()
   const { effectiveRole } = usePermissions()
   const readOnly = !canWriteDrywallField(effectiveRole)
+  const canReview = canReviewDrywallFieldTakeoff(effectiveRole)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [reviewBusy, setReviewBusy] = useState(false)
   const [projectAddress, setProjectAddress] = useState('')
   const [projectInfo, setProjectInfo] = useState({
     name: '',
@@ -260,6 +263,49 @@ export function FieldMeasurementPage() {
     })
   }
 
+  const persistReviewUpdate = async (patch: Partial<FieldTakeoff>, toastMessage: string) => {
+    if (!takeoff || !canReview) return
+    setReviewBusy(true)
+    try {
+      const updated = fieldTakeoffWithTotals({ ...takeoff, ...patch })
+      await saveFieldTakeoff(projectId, updated)
+      setTakeoff(updated)
+      setSavedSnapshot(JSON.stringify(updated))
+      toast.success(toastMessage)
+    } catch (e) {
+      if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
+      else toast.error(e instanceof Error ? e.message : 'Review action failed')
+    } finally {
+      setReviewBusy(false)
+    }
+  }
+
+  const handleApproveTakeoff = async () => {
+    const now = new Date().toISOString()
+    await persistReviewUpdate(
+      {
+        reviewStatus: 'approved',
+        approvedAt: now,
+        rejectedAt: null,
+        rejectionNotes: null,
+      },
+      'Measurements approved',
+    )
+  }
+
+  const handleRejectTakeoff = async (notes: string) => {
+    const now = new Date().toISOString()
+    await persistReviewUpdate(
+      {
+        reviewStatus: 'rejected',
+        rejectedAt: now,
+        rejectionNotes: notes,
+        approvedAt: null,
+      },
+      'Sent back to measurer for changes',
+    )
+  }
+
   if (loading || !takeoff) {
     return <p className="text-muted-foreground p-6">Loading field measurement…</p>
   }
@@ -298,6 +344,14 @@ export function FieldMeasurementPage() {
         </div>
       </div>
 
+      <FieldTakeoffReviewBanner
+        takeoff={takeoff}
+        canReview={canReview}
+        busy={reviewBusy || saving}
+        onApprove={handleApproveTakeoff}
+        onReject={handleRejectTakeoff}
+      />
+
       <div className="flex flex-wrap gap-3">
         <div className="rounded-lg border px-4 py-2">
           <p className="text-xs uppercase text-muted-foreground">Quoted sqft</p>
@@ -311,77 +365,13 @@ export function FieldMeasurementPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Project & site</CardTitle>
-          <CardDescription>Job address and field visit contacts.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Job address *</Label>
-            <Input
-              value={projectAddress}
-              disabled={readOnly}
-              placeholder="Job site address"
-              onChange={(e) => setProjectAddress(e.target.value)}
-            />
-          </div>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Site contact</Label>
-              <Input
-                value={takeoff.siteContact ?? ''}
-                disabled={readOnly}
-                onChange={(e) => patchTakeoff({ siteContact: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Contact phone</Label>
-              <Input
-                value={takeoff.contactPhone ?? ''}
-                disabled={readOnly}
-                onChange={(e) => patchTakeoff({ contactPhone: e.target.value })}
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Meeting location</Label>
-            <Input
-              value={takeoff.meetingLocation ?? ''}
-              disabled={readOnly}
-              onChange={(e) => patchTakeoff({ meetingLocation: e.target.value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Access notes</Label>
-            <Textarea
-              rows={3}
-              value={takeoff.accessNotes ?? ''}
-              disabled={readOnly}
-              onChange={(e) => patchTakeoff({ accessNotes: e.target.value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Field notes</Label>
-            <Textarea
-              rows={3}
-              value={takeoff.notes ?? ''}
-              disabled={readOnly}
-              onChange={(e) => patchTakeoff({ notes: e.target.value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Variance notes</Label>
-            <Textarea
-              rows={2}
-              value={takeoff.varianceNotes ?? ''}
-              disabled={readOnly}
-              placeholder="Explain differences from the quote…"
-              onChange={(e) => patchTakeoff({ varianceNotes: e.target.value })}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <FieldProjectSiteSection
+        projectAddress={projectAddress}
+        onProjectAddressChange={setProjectAddress}
+        takeoff={takeoff}
+        onPatchTakeoff={patchTakeoff}
+        readOnly={readOnly}
+      />
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -406,32 +396,11 @@ export function FieldMeasurementPage() {
         <div className="space-y-6">
           <FieldVarianceSummary quoteSqft={quoteSqft} measuredSqft={measuredSqft} />
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Field checklist</CardTitle>
-              <CardDescription>
-                {takeoff.checklist.filter((c) => c.completed).length} of{' '}
-                {takeoff.checklist.length} complete
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {takeoff.checklist.map((item) => (
-                <label
-                  key={item.id}
-                  className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={item.completed}
-                    disabled={readOnly}
-                    onChange={() => toggleChecklist(item.id)}
-                  />
-                  <span className="text-sm">{item.label}</span>
-                </label>
-              ))}
-            </CardContent>
-          </Card>
+          <FieldChecklistSection
+            takeoff={takeoff}
+            readOnly={readOnly}
+            onToggleItem={toggleChecklist}
+          />
         </div>
       </div>
 

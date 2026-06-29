@@ -20,10 +20,18 @@ import { hydrateDrywallQuoteV3 } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { getCurrentUserProfile, requireUserOrgId } from '@/services/userService'
 import {
   specialtyFromPositionName,
+  isMeasurerSpecialty,
   type CrewSpecialty,
 } from '@/lib/drywall/crewSpecialty'
+import { crewMeasureWorkflowStatus } from '@/lib/drywall/crewMeasureStatus'
+import {
+  fieldTakeoffWithTotals,
+  mergeFieldTakeoff,
+} from '@/lib/drywall/fieldMeasurementUtils'
+import { phaseForScheduleItem } from '@/components/drywall/schedule/scheduleItemStatusStyles'
 import type {
   CrewLaborRateSource,
+  CrewMeasurePageContext,
   CrewProjectDetail,
   CrewProjectListItem,
   CrewProjectScheduleEntry,
@@ -185,6 +193,7 @@ export async function fetchCrewProjectList(): Promise<CrewProjectListItem[]> {
 
   const profile = await getCurrentUserProfile()
   const personId = resolvePersonId(profile)
+  const specialty = await resolveCrewSpecialty(personId)
   const scheduleRows = await fetchAssignedScheduleRows(personId)
   if (scheduleRows.length === 0) return []
 
@@ -212,6 +221,16 @@ export async function fetchCrewProjectList(): Promise<CrewProjectListItem[]> {
     const personItems = byProject.get(row.id) ?? []
     if (personItems.length === 0) continue
 
+    const hasMeasureAssignment = personItems.some(scheduleRowHasMeasurePhase)
+    let measureWorkflowStatus: CrewProjectListItem['measureWorkflowStatus'] = null
+    if (isMeasurerSpecialty(specialty) && hasMeasureAssignment) {
+      const legacy =
+        row.metadata?.legacy && typeof row.metadata.legacy === 'object'
+          ? (row.metadata.legacy as Record<string, unknown>)
+          : {}
+      measureWorkflowStatus = crewMeasureWorkflowStatus(parseFieldTakeoff(legacy))
+    }
+
     items.push({
       projectId: row.id,
       projectName: row.name?.trim() || 'Untitled',
@@ -220,6 +239,7 @@ export async function fetchCrewProjectList(): Promise<CrewProjectListItem[]> {
       status: normalizeDrywallProjectStatus(row.status),
       nextScheduledDate: nextScheduledDate(personItems),
       scheduleEntryCount: personItems.length,
+      measureWorkflowStatus,
     })
   }
 
@@ -360,6 +380,8 @@ function resolveMaterials(
   specialty: CrewSpecialty,
   preview: boolean,
 ): CrewProjectDetail['materials'] {
+  // Measurers don't handle materials on site.
+  if (!preview && specialty === 'measurer') return []
   if (!field?.accessories?.length) return []
   // Unknown specialty + not preview → no materials (we don't know who they are).
   if (!preview && specialty === 'unknown') return []
@@ -618,6 +640,10 @@ function computeEstimatedTotalPay(
   specialty: CrewSpecialty,
   options?: { preview?: boolean },
 ): CrewProjectDetail['estimatedTotalPay'] {
+  if (!options?.preview && specialty === 'measurer') {
+    return { hanger: null, finisher: null }
+  }
+
   const sqft = totalSqft != null && totalSqft > 0 ? totalSqft : null
   const preview = options?.preview === true
 
@@ -668,6 +694,86 @@ export async function fetchCrewProjectDetail(projectId: string): Promise<CrewPro
   }
 
   return mapProjectDetail(project, scheduleRows, { specialty })
+}
+
+function scheduleRowHasMeasurePhase(row: ScheduleRow): boolean {
+  return (
+    phaseForScheduleItem({
+      name: row.name,
+      type: row.type === 'office' ? 'office' : 'field',
+    }) === 'measure'
+  )
+}
+
+function resolveFieldTakeoffFromProject(project: DrywallProject): FieldTakeoff {
+  const legacy = project.legacy
+  const prepared =
+    legacy.fieldMeasurementPrep &&
+    typeof legacy.fieldMeasurementPrep === 'object' &&
+    !Array.isArray(legacy.fieldMeasurementPrep)
+      ? (legacy.fieldMeasurementPrep as Record<string, unknown>)
+      : {}
+  const raw = parseFieldTakeoff(legacy)
+  return fieldTakeoffWithTotals(mergeFieldTakeoff(raw, prepared))
+}
+
+function buildCrewMeasurePageContext(
+  project: DrywallProject,
+  scheduleRows: ScheduleRow[],
+  specialty: CrewSpecialty,
+): CrewMeasurePageContext {
+  const fieldTakeoff = resolveFieldTakeoffFromProject(project)
+  return {
+    projectId: project.id,
+    projectName: project.name?.trim() || 'Untitled',
+    specialty,
+    workflowStatus: crewMeasureWorkflowStatus(fieldTakeoff),
+    hasMeasureAssignment: scheduleRows.some(scheduleRowHasMeasurePhase),
+    fieldTakeoff,
+    projectAddress: project.address?.trim() ?? '',
+  }
+}
+
+export async function fetchCrewMeasurePage(projectId: string): Promise<CrewMeasurePageContext> {
+  if (!isOnlineMode()) {
+    throw new Error('Crew workspace requires an online connection.')
+  }
+
+  const profile = await getCurrentUserProfile()
+  const personId = resolvePersonId(profile)
+  const scheduleRows = (await fetchAssignedScheduleRows(personId)).filter(
+    (r) => r.project_id === projectId,
+  )
+
+  if (scheduleRows.length === 0) {
+    throw new CrewWorkspacePermissionError()
+  }
+
+  const specialty = await resolveCrewSpecialty(personId)
+  const project = await fetchDrywallProjectById(projectId)
+  if (!project) {
+    throw new CrewWorkspacePermissionError()
+  }
+
+  return buildCrewMeasurePageContext(project, scheduleRows, specialty)
+}
+
+/** Operators previewing /crew measure flow without a linked person id. */
+export async function fetchCrewMeasurePageForPreview(
+  projectId: string,
+): Promise<CrewMeasurePageContext> {
+  const project = await fetchDrywallProjectById(projectId)
+  if (!project) throw new Error('Project not found')
+
+  const orgId = await requireUserOrgId()
+  const { data } = await supabase
+    .from('schedule_items')
+    .select('id, project_id, name, type, start_date, end_date, status, notes')
+    .eq('organization_id', orgId)
+    .eq('project_id', projectId)
+    .order('start_date', { ascending: true })
+
+  return buildCrewMeasurePageContext(project, (data ?? []) as ScheduleRow[], 'measurer')
 }
 
 /** Operators previewing /crew without a linked person id still see project detail. */
@@ -733,6 +839,41 @@ async function mapProjectDetail(
     scheduleEntries: scheduleRows.map(mapScheduleEntry),
     breakdowns: resolveBreakdowns(legacy, catalogs),
     intakeSource,
+  }
+}
+
+export class CrewFieldTakeoffSaveError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CrewFieldTakeoffSaveError'
+  }
+}
+
+/** Crew measurer save — SECURITY DEFINER RPC (no direct projects UPDATE). */
+export async function saveFieldTakeoffAsMeasurer(
+  projectId: string,
+  takeoff: FieldTakeoff,
+): Promise<void> {
+  if (!isOnlineMode()) {
+    throw new Error('Crew measure requires an online connection.')
+  }
+
+  const withTotals = fieldTakeoffWithTotals(takeoff)
+  const { error } = await supabase.rpc('save_field_takeoff_as_measurer', {
+    p_project_id: projectId,
+    p_takeoff: withTotals,
+  })
+
+  if (error) {
+    const msg = error.message ?? 'Failed to save measurements'
+    if (
+      msg.includes('not authorized') ||
+      msg.includes('not authenticated') ||
+      msg.includes('locked for review')
+    ) {
+      throw new CrewWorkspacePermissionError(msg)
+    }
+    throw new CrewFieldTakeoffSaveError(msg)
   }
 }
 

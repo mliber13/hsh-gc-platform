@@ -14,6 +14,10 @@ import {
 } from '@/services/crewWorkspaceService'
 import type { CrewProjectListItem } from '@/types/crew'
 import { drywallStatusLabel, drywallStatusPillClass } from '@/lib/drywall/crewStatusStyles'
+import {
+  crewMeasureStatusLabel,
+  crewMeasureStatusPillClass,
+} from '@/lib/drywall/crewMeasureStatus'
 
 export function CrewProjectListPage() {
   usePageTitle('My jobs')
@@ -121,9 +125,16 @@ export function CrewProjectListPage() {
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <h3 className="text-base font-semibold leading-snug">{item.projectName}</h3>
-                  <span className={drywallStatusPillClass(item.status)}>
-                    {drywallStatusLabel(item.status)}
-                  </span>
+                  <div className="flex flex-wrap items-start justify-end gap-2">
+                    {item.measureWorkflowStatus ? (
+                      <span className={crewMeasureStatusPillClass(item.measureWorkflowStatus)}>
+                        Measure: {crewMeasureStatusLabel(item.measureWorkflowStatus)}
+                      </span>
+                    ) : null}
+                    <span className={drywallStatusPillClass(item.status)}>
+                      {drywallStatusLabel(item.status)}
+                    </span>
+                  </div>
                 </div>
                 {item.client ? (
                   <p className="text-sm text-muted-foreground">{item.client}</p>

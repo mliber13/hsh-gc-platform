@@ -190,6 +190,11 @@ export function canWriteDrywallField(role: RbacRole): boolean {
   return ['owner', 'office_gc', 'office_drywall'].includes(role)
 }
 
+/** Approve/reject crew field takeoff submissions — owner + office_drywall only */
+export function canReviewDrywallFieldTakeoff(role: RbacRole): boolean {
+  return ['owner', 'office_drywall'].includes(role)
+}
+
 /** Drywall org catalogs — owner + office_drywall write (Phase Q.A) */
 export function canEditDrywallCatalogs(role: RbacRole): boolean {
   return ['owner', 'office_drywall'].includes(role)

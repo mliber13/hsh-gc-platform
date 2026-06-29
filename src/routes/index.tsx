@@ -130,6 +130,7 @@ import { CrewSignupPage } from '@/routes/CrewSignupPage'
 import { CrewShell } from '@/components/crew/CrewShell'
 import { CrewProjectListPage } from '@/components/crew/CrewProjectListPage'
 import { CrewProjectDetailPage } from '@/components/crew/CrewProjectDetailPage'
+import { CrewMeasurePage } from '@/components/crew/CrewMeasurePage'
 
 import { AppLayout } from '@/components/AppLayout'
 import { AuthedLayout } from './AuthedLayout'
@@ -179,6 +180,7 @@ export function AppRoutes() {
         >
           <Route index element={<CrewProjectListPage />} />
           <Route path="projects/:projectId" element={<CrewProjectDetailPage />} />
+          <Route path="projects/:projectId/measure" element={<CrewMeasurePage />} />
         </Route>
 
         {/* All other authed routes render inside the sidebar shell */}

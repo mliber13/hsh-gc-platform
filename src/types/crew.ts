@@ -22,6 +22,14 @@ export interface CrewProfileLink {
 
 export type CrewAccountStatus = 'none' | 'invite_pending' | 'linked'
 
+import type { CrewSpecialty } from '@/lib/drywall/crewSpecialty'
+import type { FieldTakeoff } from '@/types/drywall'
+
+export type { CrewSpecialty } from '@/lib/drywall/crewSpecialty'
+
+export type CrewMeasureWorkflowStatus =
+  import('@/lib/drywall/crewMeasureStatus').CrewMeasureWorkflowStatus
+
 export interface CrewProjectListItem {
   projectId: string
   projectName: string
@@ -30,6 +38,8 @@ export interface CrewProjectListItem {
   status: string
   nextScheduledDate: string | null
   scheduleEntryCount: number
+  /** Measurer workflow pill — only when assigned to a Measure schedule item. */
+  measureWorkflowStatus?: CrewMeasureWorkflowStatus | null
 }
 
 export interface CrewProjectScheduleEntry {
@@ -74,9 +84,17 @@ export interface CrewStructuredScope {
   additionalNotes: string | null
 }
 
-import type { CrewSpecialty } from '@/lib/drywall/crewSpecialty'
-
-export type { CrewSpecialty } from '@/lib/drywall/crewSpecialty'
+export interface CrewMeasurePageContext {
+  projectId: string
+  projectName: string
+  specialty: CrewSpecialty
+  workflowStatus: CrewMeasureWorkflowStatus
+  /** Assigned schedule item whose name matches measure phase. */
+  hasMeasureAssignment: boolean
+  /** Normalized field takeoff from metadata.legacy.fieldTakeoff. */
+  fieldTakeoff: FieldTakeoff
+  projectAddress: string
+}
 
 export interface CrewProjectDetail {
   projectId: string

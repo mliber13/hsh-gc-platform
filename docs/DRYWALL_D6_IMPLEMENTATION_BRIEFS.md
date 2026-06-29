@@ -1471,3 +1471,151 @@ Plus the import at the top.
 - **Tailwind purge of dynamic classes**: `bg-${color}-500` patterns get purged unless added to `tailwind.config.ts` safelist or referenced statically. Verify in dev before declaring done. If purge causes issues, switch to a literal palette map (e.g. `{indigo: 'bg-indigo-500', ...}`).
 - **packLanes extraction**: Move from `DrywallScheduleCalendar.tsx` to `src/lib/drywall/scheduleLanes.ts` so both calendars share it. Update D.6.5 import in same PR.
 - **Performance**: For a workshop with 20+ active projects each with 6+ schedule items, expect ~120-200 items per month. Lane packing is O(n²) worst case but n is small.
+
+---
+
+## D.6.8 — Field measurer crew workflow
+
+**Goal:** Dedicated field measurer (e.g. Dave when assigned to measure rather than finish) opens an assigned project in `/crew`, captures the full field takeoff on mobile (per-area sqft, board log, accessories, photos, notes, checklist), and submits for office review. Office's existing review/approve flow on `FieldMeasurementPage` handles the rest.
+
+**Decisions confirmed 2026-06-26 evening:**
+- **Role detection**: position name substring `"measure"` → measurer specialty. No new role tag, no capability flag. Same pattern as hanger/finisher.
+- **Inputs**: full operator parity — sqft, board log, accessories, photos, notes, contact updates, checklist, sign-off.
+- **Assignment**: existing schedule item flow — operator creates a "Measure" schedule item, assigns the measurer, they see it in `/crew` and tap to open the measure page.
+- **Sign-off**: submit for office review (matches existing `submitForReview` on operator side). Measurer can keep editing until approved.
+- **Page**: new mobile-first crew variant at `/crew/projects/:projectId/measure`. Operator page stays untouched. Shared subcomponents where the reuse is clean.
+- **Visibility**: no pricing — measurer sees scope/areas/finish levels but never rates/totals.
+- **Device**: mobile primary, tablet OK (responsive).
+
+### Phase plan
+
+Five phases. Each is independently shippable.
+
+#### Phase 1 — Specialty + role detection (small, ~30 min)
+
+Files to modify:
+- `src/lib/drywall/crewSpecialty.ts` — add `'measurer'` to `CrewSpecialty` union. Substring match: `"measure"` → `'measurer'`. Order matters: check measurer BEFORE hanger/finisher (since "measure" doesn't conflict with hang/finish substrings, order is forgiving but explicit is safer).
+- `src/services/crewWorkspaceService.ts`:
+  - `resolveMaterials` — measurer sees no materials (they're not handling them). Return `[]`.
+  - `computeEstimatedTotalPay` — measurer sees no pay. Return `{ hanger: null, finisher: null }`.
+  - `resolveStructuredScope` — measurer DOES see scope (need it to measure correctly). Already works since v3 fields are populated.
+- `src/components/crew/CrewProjectDetailPage.tsx`:
+  - Pay rate card — for measurer specialty, show a small "Field measurer — pay tracked separately" hint instead of any rate row. Cleanup row hidden.
+  - When the project has an assigned Measure schedule item AND user is measurer, surface a prominent "Start measure" action (e.g. button or banner) linking to `/crew/projects/:id/measure`.
+
+#### Phase 2 — Crew measure page scaffold (~1 hr)
+
+Files to create:
+- `src/components/crew/CrewMeasurePage.tsx` — new page component
+- Route registration in `src/routes/index.tsx`: `<Route path="projects/:projectId/measure" element={<CrewMeasurePage />} />` nested under the existing `/crew` route (so it gets `CrewShell` for free)
+
+Behavior:
+- Page title: "Measure — {projectName}"
+- Header: back to project detail, refresh button, status pill (Not started / In progress / Pending review / Approved / Rejected)
+- Empty/loading states
+- Pull-to-refresh (reuse `usePullToRefresh`)
+- Permission guard: only crew with measurer specialty (or `'both'` if a hanger/finisher also measures) can open. Others get redirected to project detail.
+
+#### Phase 3 — Field measurement inputs (the big chunk, ~3-4 hr)
+
+This is the meat. Mobile-first variants of every operator-side input section.
+
+**Extract shared subcomponents** from `src/components/drywall/field/FieldMeasurementPage.tsx` into reusable inputs that both pages consume. New location: `src/components/drywall/field/inputs/` (or similar).
+
+Sections, in display order:
+
+1. **Field notes inputs** — Site contact, phone, meeting location, access notes, hazards, notes. Already shown read-only on crew detail; now editable. Each field a simple `<Input>` or `<Textarea>`.
+2. **Per-area measurements** — `FieldMeasurementArea[]`: location name + sqft per row. Add/remove rows. Running total displayed.
+3. **Board log** — `FieldMeasurementBoard[]`: cascading dropdowns (type → thickness → width → length) + count per area. This is detail-heavy. Make rows collapsible by default; expand to edit.
+4. **Photos** — `FieldPhotosSection` (already exists for operator). Mobile flow: tap camera → native capture → upload. Tap photo → enlarge. Tap delete → remove (with confirm). Reuses existing Supabase Storage bucket. Note: needs RLS migration (see Phase 5).
+5. **Accessories** — `FieldAccessoryEntry[]`. Defer the auto-calc to office for V1 — measurer enters manually (or operator fills in during review). Reuses `FIELD_MATERIAL_OPTIONS` for categories + subtypes. Same cascading dropdowns as operator.
+6. **Checklist** — `FieldChecklistItem[]` — tap to toggle complete. Mark uses these to confirm "did I take measurements of every wall in this room" type questions.
+
+State management:
+- Use the same state shape (`FieldTakeoff`) as operator page.
+- Local state mirrors server; explicit "Save" button to push (no auto-save during typing — too risky on flaky mobile signal).
+- Dirty indicator + "unsaved changes" guard on back-nav.
+
+Write persistence:
+- Crew has no UPDATE permission on `projects` table (correct — they're not operators).
+- New SECURITY DEFINER RPC: `save_field_takeoff_as_measurer(p_project_id uuid, p_takeoff jsonb)` — validates the caller is a crew measurer assigned to this project's measure schedule item, then merges `p_takeoff` into `metadata.legacy.fieldTakeoff` on the project row.
+- Same pattern as `append_drywall_comms_log_entry` from D.6.3.
+- Migration file: `supabase/migrations/2026XXXXXXXXXX_save_field_takeoff_as_measurer.sql`.
+
+#### Phase 4 — Sign-off + review submission (~1 hr)
+
+Footer bar at the bottom of the measure page (sticky on mobile):
+- **Save** button — pushes current state via the RPC.
+- **Submit for review** button — sets `fieldTakeoff.reviewStatus = 'pending_review'`, `submittedForReviewAt = now()`. Disabled until at least one area is measured. Confirmation modal: "Submit measurements for office review? You'll get notified when it's approved or sent back."
+- Once submitted, the form goes read-only with an amber "Pending office review" banner. Measurer can NOT re-edit until office rejects (which restores edit mode).
+- Once approved, form is permanently read-only with a green "Approved" banner.
+
+Status awareness in `/crew` project list page:
+- Each list card shows the measurer's status for that project (Not started / In progress / Pending review / Approved / Rejected) — small status pill next to the existing schedule date.
+
+#### Phase 5 — Storage RLS for measurer photo writes
+
+Currently `user_can_access_drywall_photos(_, true)` (write) is gated to `owner | office_gc | office_drywall`. Add `crew` to that list — same pattern as the read migration we just shipped for D.6.6a.
+
+Migration file: `supabase/migrations/2026XXXXXXXXXX_crew_can_write_drywall_photos.sql`.
+
+Same security note as the read migration: this grants crew write on **all drywall photos in their org**. Tighter scoping (only photos for projects they have a measure schedule item on) is possible but adds expense to a hot storage path. For V1, org-wide write is acceptable.
+
+### Files to create
+
+| Path | What |
+|---|---|
+| `src/components/crew/CrewMeasurePage.tsx` | New crew measure page |
+| `src/components/drywall/field/inputs/` (directory) | Shared input subcomponents extracted from operator page |
+| `supabase/migrations/...save_field_takeoff_as_measurer.sql` | SECURITY DEFINER RPC for crew takeoff writes |
+| `supabase/migrations/...crew_can_write_drywall_photos.sql` | Storage write permission for crew |
+
+### Files to modify
+
+| Path | What |
+|---|---|
+| `src/lib/drywall/crewSpecialty.ts` | Add `'measurer'` to enum + substring match |
+| `src/services/crewWorkspaceService.ts` | Measurer-specific resolveMaterials / pay / structuredScope behavior |
+| `src/components/crew/CrewProjectDetailPage.tsx` | Pay rate card variant for measurer; "Start measure" action |
+| `src/components/crew/CrewProjectListPage.tsx` | Status pill on each card for measurer projects |
+| `src/routes/index.tsx` | Register `/crew/projects/:id/measure` route |
+| `src/components/drywall/field/FieldMeasurementPage.tsx` | Refactor to consume shared subcomponents (no behavior change) |
+
+### Acceptance criteria
+
+1. Type-check passes.
+2. Crew with position "Field Measurer" or similar resolves to `specialty: 'measurer'`.
+3. Pay rate card shows no rates + "Field measurer" hint when specialty is measurer.
+4. Materials card hidden for measurer.
+5. Crew detail page shows a prominent "Start measure" action when a Measure schedule item is assigned.
+6. `/crew/projects/:id/measure` route renders the new page; gated to measurer specialty (or both).
+7. All operator-side field inputs editable on mobile: per-area sqft, board log, accessories, photos, field notes, checklist.
+8. Photo upload from mobile camera works (writes to Supabase Storage via SECURITY DEFINER permission).
+9. Save persists via RPC; reload shows persisted state.
+10. Submit for review flips status to `pending_review`; form goes read-only.
+11. Operator side: existing `FieldMeasurementPage` shows the submitted takeoff for review; approve/reject flow already works.
+12. Reject restores edit mode for measurer.
+13. Approve locks the form for measurer permanently (status: 'approved').
+14. List page status pill reflects current review status on each card.
+15. Crew of non-measurer specialty (hanger/finisher) cannot open the measure page (404 or redirect).
+16. Operator role still has full access to operator-side FieldMeasurementPage; behavior unchanged.
+
+### Out of scope (defer)
+
+- Auto-calc accessories on the crew side (office handles during review)
+- Floor-plan tap-to-measure UI (V1 = text entries)
+- Offline mode (V1 = requires connectivity)
+- Real-time push notification to operator when submitted (V1 = polling-based; operator sees status flip on their FieldMeasurementPage load)
+- Multi-measurer collaboration (only one measurer per project per V1)
+
+### Estimated effort
+
+**5-7 sessions total.** Phase 1 = 30 min, Phase 2 = 1 hr, Phase 3 = 3-4 hr (biggest), Phase 4 = 1 hr, Phase 5 = 15 min (migration only). Bulk of work is Phase 3 — extracting + mobile-styling the field input subcomponents.
+
+### Risks / notes
+
+- **Field inputs are rich.** Per-area + per-board cascading dropdowns + accessories + photos is a lot of mobile UI surface. Plan to ship Phase 3 across multiple sessions or stage it (sqft first, then photos, then boards, then accessories).
+- **Save semantics on flaky signal.** Mobile crews often have spotty connectivity. Explicit Save button (not auto-save) prevents partial writes. Local state retained until save succeeds; show error toast on failure.
+- **RPC validation surface.** `save_field_takeoff_as_measurer` needs to verify the caller is (a) crew with measurer specialty AND (b) assigned to a measure schedule item on this project. Get this right or you leak takeoff write access broadly.
+- **Operator-side variance calc** depends on quote context. Crew measure page doesn't load that. Operator sees variance when reviewing — that's already implemented on `FieldMeasurementPage`.
+- **Photo storage growth.** Each measure generates 5-20 photos average. Bucket size will grow. Defer storage cleanup policy to post-launch.

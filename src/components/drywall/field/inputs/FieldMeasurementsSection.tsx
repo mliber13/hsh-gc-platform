@@ -21,7 +21,7 @@ import {
 } from '@/lib/drywall/fieldBoardSpecs'
 import { computeMeasuredSqft, generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import type { FieldMeasurementArea, FieldMeasurementBoard, FieldTakeoff } from '@/types/drywall'
-import type { SetFieldTakeoff } from './fieldTakeoffState'
+import type { SetFieldTakeoff } from '../fieldTakeoffState'
 
 interface FieldMeasurementsSectionProps {
   takeoff: FieldTakeoff
