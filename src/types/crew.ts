@@ -44,6 +44,19 @@ export interface CrewProjectScheduleEntry {
 
 export type CrewLaborRateSource = 'v3_override' | 'v2_legacy' | 'catalog_default'
 
+export interface CrewMaterial {
+  id: string
+  /** Category name e.g. "Corner Bead", "Fasteners", "Joint Compound". */
+  type: string
+  subtype: string | null
+  quantity: string
+  unit: string
+  /** Length for bead types (e.g. "10ft"). */
+  length: string | null
+  /** Thread type for screw fasteners (e.g. "Coarse"). */
+  threadType: string | null
+}
+
 export interface CrewStructuredScope {
   useCustom: boolean
   customText: string | null
@@ -73,6 +86,10 @@ export interface CrewProjectDetail {
   totalSqft: number | null
   /** Total bead sticks on the job — operator's count typically excludes tearaway. */
   beadSticks: number | null
+  /** Materials list filtered by user's specialty (hanger sees install hardware, finisher sees all). */
+  materials: CrewMaterial[]
+  /** Field photos uploaded during measurement — surface to crew for site context. */
+  photos: { id: string; storagePath: string | null; url: string | null; label: string | null }[]
   specialty: CrewSpecialty
   laborRates: {
     hangerRate: number | null

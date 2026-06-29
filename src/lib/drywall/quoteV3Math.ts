@@ -3,10 +3,11 @@ import type { DrywallQuoteV3, QuoteAlternate, QuoteLineItem, QuoteLineItemType }
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import {
   getEffectiveComponentLaborRate,
+  getEffectiveFinisherRate,
+  getEffectiveHangerRate,
   getLineCatalogLabel,
   getLineMaterialRate,
   getLineUnit,
-  resolveBoard,
   resolveFinishScope,
 } from './quoteV3CatalogResolve'
 import {
@@ -149,16 +150,16 @@ export function computeLineItem(
   if (line.type === 'drywall') {
     const finishScope = resolveFinishScope(line, catalogs)
     const effectiveSqft = qty * wasteMult
-    const hangerRate =
-      line.custom_hanger_rate ??
-      (laborBurden?.projectHangerRate != null
-        ? laborBurden.projectHangerRate
-        : resolveBoard(line, catalogs)?.hanger_rate ?? 0)
-    const finisherRate =
-      line.custom_finisher_rate ??
-      (laborBurden?.projectFinisherRate != null
-        ? laborBurden.projectFinisherRate
-        : finishScope?.finisher_rate ?? 0)
+    const hangerRate = getEffectiveHangerRate(
+      line,
+      catalogs,
+      laborBurden?.projectHangerRate,
+    )
+    const finisherRate = getEffectiveFinisherRate(
+      line,
+      catalogs,
+      laborBurden?.projectFinisherRate,
+    )
     hangerLaborTotal = applyLaborBurden(
       effectiveSqft * hangerRate,
       laborBurden?.hangerIncludeLaborBurden,

@@ -1,5 +1,6 @@
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type { QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
+import { V3_LINE_MIGRATION_OVERRIDE_REASON } from './convertQuoteV2ToV3'
 
 export const QUOTE_LINE_TYPE_LABELS: Record<QuoteLineItemType, string> = {
   drywall: 'Drywall',
@@ -90,12 +91,8 @@ export function getCatalogDefaultHangerRate(
   return resolveBoard(line, catalogs)?.hanger_rate ?? 0
 }
 
-/** @deprecated Use getCatalogDefaultFinisherRate */
-export function getCatalogDefaultLaborRate(
-  line: QuoteLineItem,
-  catalogs: OrgDrywallCatalogs,
-): number {
-  return getCatalogDefaultFinisherRate(line, catalogs)
+function isV2MigrationLaborShadow(line: QuoteLineItem): boolean {
+  return line.override_reason === V3_LINE_MIGRATION_OVERRIDE_REASON
 }
 
 export function getEffectiveHangerRate(
@@ -104,8 +101,11 @@ export function getEffectiveHangerRate(
   projectRate?: number,
 ): number {
   if (line.type !== 'drywall') return 0
-  if (line.custom_hanger_rate != null) return line.custom_hanger_rate
+  if (line.custom_hanger_rate != null && !isV2MigrationLaborShadow(line)) {
+    return line.custom_hanger_rate
+  }
   if (projectRate != null) return projectRate
+  if (line.custom_hanger_rate != null) return line.custom_hanger_rate
   return getCatalogDefaultHangerRate(line, catalogs)
 }
 
@@ -115,8 +115,11 @@ export function getEffectiveFinisherRate(
   projectRate?: number,
 ): number {
   if (line.type !== 'drywall') return 0
-  if (line.custom_finisher_rate != null) return line.custom_finisher_rate
+  if (line.custom_finisher_rate != null && !isV2MigrationLaborShadow(line)) {
+    return line.custom_finisher_rate
+  }
   if (projectRate != null) return projectRate
+  if (line.custom_finisher_rate != null) return line.custom_finisher_rate
   return getCatalogDefaultFinisherRate(line, catalogs)
 }
 

@@ -4,6 +4,7 @@ import { CalendarDays, ChevronRight, MapPin, RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
+import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { isCrewRole } from '@/lib/rbac'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -29,13 +30,14 @@ export function CrewProjectListPage() {
       const data = await fetchCrewProjectList()
       setItems(data)
     } catch (e) {
-      setError(
-        e instanceof CrewProfileNotLinkedError
-          ? e.message
-          : e instanceof Error
-            ? e.message
-            : 'Failed to load jobs',
-      )
+      // CrewProfileNotLinkedError is the only user-facing error we surface verbatim;
+      // anything else gets a generic message so crew don't see Supabase/RLS internals.
+      if (e instanceof CrewProfileNotLinkedError) {
+        setError(e.message)
+      } else {
+        console.error('fetchCrewProjectList failed:', e)
+        setError('Could not load your jobs. Try again or contact the office.')
+      }
       setItems([])
     } finally {
       setLoading(false)
@@ -45,6 +47,8 @@ export function CrewProjectListPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const { pullDistance, refreshing } = usePullToRefresh(load)
 
   if (loading) {
     return (
@@ -87,7 +91,17 @@ export function CrewProjectListPage() {
   }
 
   return (
-    <div className="space-y-3 pb-8">
+    <div className="space-y-3 pb-8" style={{ transform: `translateY(${pullDistance}px)`, transition: pullDistance === 0 ? 'transform 200ms' : 'none' }}>
+      {pullDistance > 0 || refreshing ? (
+        <div
+          className="pointer-events-none fixed left-0 right-0 top-14 flex justify-center"
+          style={{ opacity: Math.min(1, pullDistance / 70) }}
+        >
+          <div className="rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground shadow">
+            {refreshing ? 'Refreshing…' : pullDistance >= 70 ? 'Release to refresh' : 'Pull to refresh'}
+          </div>
+        </div>
+      ) : null}
       <p className="text-sm text-muted-foreground">
         {items.length} job{items.length === 1 ? '' : 's'} assigned to you
       </p>

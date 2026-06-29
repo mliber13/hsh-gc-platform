@@ -12,8 +12,10 @@ import { generateQuoteId } from './drywallQuoteHelpers'
 import { mapV2PdfSettingsToV3 } from './quoteV3PdfSettings'
 import { formatQuoteMoney } from './quoteV3Math'
 
-const MIGRATION_OVERRIDE =
+export const V3_LINE_MIGRATION_OVERRIDE_REASON =
   'Migrated from v2; review hanger + finisher rates and catalog picks before finalizing.'
+
+const MIGRATION_OVERRIDE = V3_LINE_MIGRATION_OVERRIDE_REASON
 const MIGRATION_NOTES =
   'Auto-created from v2 conversion. Review board, finish, and rates before saving.'
 
@@ -328,8 +330,10 @@ function buildMigratedDrywallLine(
     catalog_id: guessBoardCatalogId(v2),
     finish_scope_id: guessFinishScopeId(v2),
     custom_material_rate: overrides?.materialRate ?? resolveMaterialRate(v2, breakdown),
-    custom_hanger_rate: overrides?.hangerRate ?? hangerRateFromV2(v2),
-    custom_finisher_rate: overrides?.finisherRate ?? finisherRateFromV2(v2),
+    custom_hanger_rate:
+      overrides?.hangerRate !== undefined ? overrides.hangerRate : undefined,
+    custom_finisher_rate:
+      overrides?.finisherRate !== undefined ? overrides.finisherRate : undefined,
     override_reason: overrides?.skipOverrideReason ? undefined : MIGRATION_OVERRIDE,
     waste_pct: wastePct,
     accessories_in_material_rate: true,

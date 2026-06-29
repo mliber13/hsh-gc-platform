@@ -117,7 +117,9 @@ export async function getSignedPhotoUrl(
 ): Promise<string> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, expiresIn)
   if (error || !data?.signedUrl) {
-    console.error('getSignedPhotoUrl:', error)
+    // Warn (not error) — "Object not found" is the expected return for users without
+    // storage RLS access; the caller's UI handles a null/error result gracefully.
+    console.warn('getSignedPhotoUrl:', error)
     throw new DrywallPhotoError(storagePermissionMessage(error ?? { message: 'Signed URL failed' }))
   }
   return data.signedUrl

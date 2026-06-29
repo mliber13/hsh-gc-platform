@@ -341,6 +341,52 @@ function resolveStructuredScope(
   return null
 }
 
+/** Categories the hanger handles (installation hardware). */
+const HANGER_MATERIAL_CATEGORIES = new Set<string>([
+  'Corner Bead',
+  'Adhesives',
+  'Fasteners',
+  'Metal Studs',
+  'Metal Track',
+  'Acoustic Ceiling',
+  'Suspended Drywall Grid',
+])
+
+/** Categories the finisher does NOT need to see (hanger-only hardware). */
+const FINISHER_HIDE_CATEGORIES = new Set<string>(['Adhesives', 'Fasteners'])
+
+function resolveMaterials(
+  field: FieldTakeoff | null,
+  specialty: CrewSpecialty,
+  preview: boolean,
+): CrewProjectDetail['materials'] {
+  if (!field?.accessories?.length) return []
+  // Unknown specialty + not preview → no materials (we don't know who they are).
+  if (!preview && specialty === 'unknown') return []
+
+  return field.accessories
+    .filter((acc) => {
+      const type = acc.type?.trim()
+      if (!type) return false
+      const qtyNum = Number(acc.quantity)
+      // Skip empty/zero rows — operator may have added a blank row.
+      if (!Number.isFinite(qtyNum) || qtyNum <= 0) return false
+      if (preview || specialty === 'both') return true
+      if (specialty === 'hanger') return HANGER_MATERIAL_CATEGORIES.has(type)
+      if (specialty === 'finisher') return !FINISHER_HIDE_CATEGORIES.has(type)
+      return false
+    })
+    .map((acc) => ({
+      id: acc.id,
+      type: acc.type ?? '',
+      subtype: acc.subtype?.trim() || null,
+      quantity: String(acc.quantity ?? ''),
+      unit: acc.unit?.trim() || 'pcs',
+      length: acc.length?.trim() || null,
+      threadType: acc.threadType?.trim() || null,
+    }))
+}
+
 function resolveBeadSticks(legacy: Record<string, unknown>): number | null {
   // v3 stores under bead_sticks; v2 stores under beadSticks. Operator's count excludes tearaway.
   const v3 = v3QuoteFromLegacy(legacy)
@@ -622,6 +668,13 @@ async function mapProjectDetail(
     structuredScope: resolveStructuredScope(legacy),
     totalSqft,
     beadSticks: resolveBeadSticks(legacy),
+    materials: resolveMaterials(field, context.specialty, context.preview === true),
+    photos: (field?.photos ?? []).map((p) => ({
+      id: p.id,
+      storagePath: p.storagePath?.trim() || null,
+      url: p.url?.trim() || null,
+      label: p.label?.trim() || null,
+    })),
     specialty: context.specialty,
     laborRates,
     estimatedTotalPay: computeEstimatedTotalPay(

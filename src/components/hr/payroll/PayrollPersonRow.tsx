@@ -27,6 +27,7 @@ import { entryHasNonZeroAdjustments } from '@/lib/payrollMath'
 import {
   PAYROLL_WORK_TYPES,
   getRateFromJob,
+  getSqftFromJob,
   recalcPieceEntryAmount,
   type PayrollRowPerson,
 } from '@/lib/payrollMath'
@@ -45,6 +46,9 @@ interface PayrollPersonRowProps {
   person: PayrollRowPerson
   entry: PayrollEntry
   gross: number
+  totalHours: number
+  hourlyPay: number
+  piecePay: number
   locked: boolean
   projects: PayrollProjectOption[]
   allPeople: PayrollRowPerson[]
@@ -96,6 +100,9 @@ export function PayrollPersonRow({
   person,
   entry,
   gross,
+  totalHours,
+  hourlyPay,
+  piecePay,
   locked,
   projects,
   allPeople,
@@ -224,8 +231,8 @@ export function PayrollPersonRow({
         personDone && 'border-emerald-500/30 bg-emerald-500/5',
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
-        <div className="flex min-w-0 items-start gap-2">
+      <div className="flex flex-wrap items-center gap-3 border-b pb-3">
+        <div className="flex min-w-0 flex-1 items-start gap-2">
           <Button
             type="button"
             size="sm"
@@ -251,7 +258,27 @@ export function PayrollPersonRow({
             </p>
           </div>
         </div>
-        <p className="text-lg font-semibold tabular-nums">{formatCurrency(gross)}</p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          <span title="Total hours entered">
+            <span className="font-medium text-foreground tabular-nums">
+              {totalHours.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+            </span>{' '}
+            hrs
+          </span>
+          <span title="Hourly pay (before piece and adjustments)">
+            Hourly{' '}
+            <span className="font-medium text-foreground tabular-nums">
+              {formatCurrency(hourlyPay)}
+            </span>
+          </span>
+          <span title="Net piece pay (after helper deductions)">
+            Piece{' '}
+            <span className="font-medium text-foreground tabular-nums">
+              {formatCurrency(piecePay)}
+            </span>
+          </span>
+        </div>
+        <p className="shrink-0 text-lg font-semibold tabular-nums">{formatCurrency(gross)}</p>
       </div>
 
       {/* Hours — primary */}
@@ -407,10 +434,12 @@ export function PayrollPersonRow({
                       project,
                       drywallCatalogs,
                     )
+                    const sqft = project ? getSqftFromJob(project) : null
                     patchPiece(idx, {
                       jobId: sel.jobId,
                       jobName: sel.jobName,
                       rate: rate != null ? String(rate) : pe.rate,
+                      jobTotalSqft: sqft != null ? String(sqft) : pe.jobTotalSqft,
                     })
                   }}
                 />

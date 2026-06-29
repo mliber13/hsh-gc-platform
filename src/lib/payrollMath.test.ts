@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildDraftFromPreviousRun,
   entryHasNonZeroAdjustments,
+  fieldMeasuredSqftFromProjectMetadata,
+  getSqftFromJob,
   isPayrollDraftEmpty,
   nextPeriodDateRangeFromRun,
   payrollLastWeekRange,
@@ -130,5 +132,36 @@ describe('payroll week ranges', () => {
     expect(w.start <= w.end).toBe(true)
     const last = payrollLastWeekRange()
     expect(last.end < w.start || last.start < w.start).toBe(true)
+  })
+})
+
+describe('fieldMeasuredSqftFromProjectMetadata', () => {
+  it('reads totalMeasuredSqft from legacy fieldTakeoff', () => {
+    expect(
+      fieldMeasuredSqftFromProjectMetadata({
+        legacy: { fieldTakeoff: { totalMeasuredSqft: 12500.5 } },
+      }),
+    ).toBe(12500.5)
+  })
+
+  it('returns null when field measurement is missing or zero', () => {
+    expect(fieldMeasuredSqftFromProjectMetadata({ legacy: { fieldTakeoff: {} } })).toBeNull()
+    expect(
+      fieldMeasuredSqftFromProjectMetadata({
+        legacy: { fieldTakeoff: { totalMeasuredSqft: 0 } },
+      }),
+    ).toBeNull()
+    expect(fieldMeasuredSqftFromProjectMetadata(null)).toBeNull()
+  })
+})
+
+describe('getSqftFromJob', () => {
+  it('returns fieldMeasuredSqft when populated', () => {
+    expect(getSqftFromJob({ fieldMeasuredSqft: 8400 })).toBe(8400)
+  })
+
+  it('returns null when sqft is missing', () => {
+    expect(getSqftFromJob({ fieldMeasuredSqft: null })).toBeNull()
+    expect(getSqftFromJob(null)).toBeNull()
   })
 })

@@ -19,9 +19,18 @@ import type { DrywallCommsLogEntry } from '@/types/drywall'
 interface CrewCommsPanelProps {
   projectId: string
   readOnly?: boolean
+  /** Text to pre-fill into the message box when prefillToken changes. */
+  prefillText?: string
+  /** Bump this to (re-)apply prefillText — lets the same text re-prefill if user clicks again. */
+  prefillToken?: number
 }
 
-export function CrewCommsPanel({ projectId, readOnly = false }: CrewCommsPanelProps) {
+export function CrewCommsPanel({
+  projectId,
+  readOnly = false,
+  prefillText,
+  prefillToken,
+}: CrewCommsPanelProps) {
   const { user } = useAuth()
   const [entries, setEntries] = useState<DrywallCommsLogEntry[]>([])
   const [body, setBody] = useState('')
@@ -60,6 +69,12 @@ export function CrewCommsPanel({ projectId, readOnly = false }: CrewCommsPanelPr
       }
     })
   }, [user?.email])
+
+  // Pre-fill the textarea when parent passes a new prefillToken (e.g. "request more materials").
+  useEffect(() => {
+    if (prefillToken == null || !prefillText) return
+    setBody(prefillText)
+  }, [prefillToken, prefillText])
 
   const handleSend = async () => {
     if (readOnly || !body.trim()) return

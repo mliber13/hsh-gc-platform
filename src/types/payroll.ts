@@ -77,4 +77,6 @@ export interface PayrollProjectOption {
   id: string
   name: string
   quote?: Record<string, unknown>
+  /** Field measurement total sqft (metadata.legacy.fieldTakeoff.totalMeasuredSqft). */
+  fieldMeasuredSqft?: number | null
 }

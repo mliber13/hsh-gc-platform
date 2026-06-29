@@ -243,6 +243,22 @@ export function calculateHourlyBase(
   return calculateHourlyPayWithOvertimeCap(entry, profileRate).hourlyBase
 }
 
+/** Hourly wages included in gross (after hours-to-bank reduction). Salary → 0. */
+export function calculateHourlyPayComponent(
+  person: PayrollPersonProfile,
+  entry: PayrollEntry | undefined,
+): number {
+  if (person.payType === 'salary') return 0
+  let hourlyBase = calculateHourlyBase(entry, person.hourlyRate)
+  const hoursTotal = calculateHoursTotal(entry?.hourEntries, entry?.hours)
+  const hoursToBank = parseFloat(String(entry?.hoursToBank)) || 0
+  if (hoursTotal > 0 && hoursToBank > 0) {
+    const paidHours = Math.max(0, hoursTotal - hoursToBank)
+    hourlyBase = hourlyBase * (paidHours / hoursTotal)
+  }
+  return hourlyBase
+}
+
 export function calculateGross(
   person: PayrollPersonProfile,
   entry: PayrollEntry | undefined,
@@ -255,14 +271,7 @@ export function calculateGross(
   if (person.payType === 'salary') {
     base = parseFloat(String(person.salaryAmount)) || 0
   } else {
-    let hourlyBase = calculateHourlyBase(entry, person.hourlyRate)
-    const hoursTotal = calculateHoursTotal(entry?.hourEntries, entry?.hours)
-    const hoursToBank = parseFloat(String(entry?.hoursToBank)) || 0
-    if (hoursTotal > 0 && hoursToBank > 0) {
-      const paidHours = Math.max(0, hoursTotal - hoursToBank)
-      hourlyBase = hourlyBase * (paidHours / hoursTotal)
-    }
-    base = hourlyBase
+    base = calculateHourlyPayComponent(person, entry)
   }
   const draw = parseFloat(String(person.ownersDraw)) || 0
   const gas = parseFloat(String(person.gasAllowance)) || 0
@@ -477,6 +486,29 @@ export function quoteFromProjectMetadata(metadata: unknown): Record<string, unkn
     if (q && typeof q === 'object') return q as Record<string, unknown>
   }
   return undefined
+}
+
+/** Field measurement total sqft from metadata.legacy.fieldTakeoff.totalMeasuredSqft */
+export function fieldMeasuredSqftFromProjectMetadata(metadata: unknown): number | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
+  const meta = metadata as Record<string, unknown>
+  const legacy = meta.legacy
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null
+  const takeoff = (legacy as Record<string, unknown>).fieldTakeoff
+  if (!takeoff || typeof takeoff !== 'object' || Array.isArray(takeoff)) return null
+  const val = (takeoff as Record<string, unknown>).totalMeasuredSqft
+  if (val == null || val === '') return null
+  const n = parseFloat(String(val))
+  if (Number.isNaN(n) || n <= 0) return null
+  return n
+}
+
+export function getSqftFromJob(
+  project: { fieldMeasuredSqft?: number | null } | null | undefined,
+): number | null {
+  const n = project?.fieldMeasuredSqft
+  if (n == null || n <= 0) return null
+  return n
 }
 
 // ============================================================================

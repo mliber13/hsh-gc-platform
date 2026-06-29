@@ -14,6 +14,8 @@ import {
   aggregateRunTotalGross,
   buildPayrollPeople,
   calculateGross,
+  calculateHourlyPayComponent,
+  calculateHoursTotal,
   getNetPieceTotal,
   isPayrollDraftEmpty,
   payrollRowVisibleWhenHidingEmpty,
@@ -133,7 +135,9 @@ export function PayrollRunTab({
       const is1099 = person.personType === '1099'
       const gross = calculateGross(person, entry, is1099, entries, person.personKey)
       const netPiece = getNetPieceTotal(entry.pieceEntries, entries, person.personKey)
-      return { person, entry, gross, netPiece }
+      const totalHours = calculateHoursTotal(entry.hourEntries, entry.hours)
+      const hourlyPay = calculateHourlyPayComponent(person, entry)
+      return { person, entry, gross, netPiece, totalHours, hourlyPay }
     })
   }, [people, entries])
 
@@ -343,6 +347,9 @@ export function PayrollRunTab({
               person={r.person as PayrollRowPerson}
               entry={r.entry}
               gross={r.gross}
+              totalHours={r.totalHours}
+              hourlyPay={r.hourlyPay}
+              piecePay={r.netPiece}
               locked={locked}
               projects={projects}
               allPeople={people as PayrollRowPerson[]}

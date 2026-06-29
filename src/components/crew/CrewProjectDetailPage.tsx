@@ -3,9 +3,11 @@ import { format, parseISO } from 'date-fns'
 import {
   ArrowLeft,
   Calendar,
+  Camera,
   DollarSign,
   FileText,
   MapPin,
+  Package,
   Phone,
   RefreshCw,
   Ruler,
@@ -13,6 +15,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
+import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { drywallStatusLabel, drywallStatusPillClass } from '@/lib/drywall/crewStatusStyles'
@@ -21,6 +24,7 @@ import {
   fetchCrewProjectDetail,
   fetchCrewProjectDetailForPreview,
 } from '@/services/crewWorkspaceService'
+import { getSignedPhotoUrl } from '@/services/drywallPhotosService'
 import type { CrewProjectDetail } from '@/types/crew'
 import { isCrewRole } from '@/lib/rbac'
 import { CrewCommsPanel } from '@/components/crew/CrewCommsPanel'
@@ -49,6 +53,50 @@ function isStubDescription(desc: string | null | undefined): boolean {
   return STUB_DESCRIPTION_PATTERNS.some((p) => p.test(trimmed))
 }
 
+function CrewPhotoThumb({
+  photo,
+}: {
+  photo: { id: string; storagePath: string | null; url: string | null; label: string | null }
+}) {
+  const [src, setSrc] = useState<string | null>(photo.url)
+  useEffect(() => {
+    let cancelled = false
+    if (photo.url) {
+      setSrc(photo.url)
+      return
+    }
+    if (photo.storagePath) {
+      void getSignedPhotoUrl(photo.storagePath)
+        .then((u) => {
+          if (!cancelled) setSrc(u)
+        })
+        .catch(() => {
+          if (!cancelled) setSrc(null)
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [photo.url, photo.storagePath])
+
+  if (!src) {
+    return (
+      <div className="aspect-square rounded-md bg-muted flex items-center justify-center">
+        <Camera className="size-5 text-muted-foreground/40" />
+      </div>
+    )
+  }
+  return (
+    <a href={src} target="_blank" rel="noopener noreferrer" className="block">
+      <img
+        src={src}
+        alt={photo.label ?? 'Field photo'}
+        className="aspect-square w-full rounded-md object-cover"
+      />
+    </a>
+  )
+}
+
 function breakdownMetaLine(row: CrewProjectDetail['breakdowns'][number]): string {
   const parts: string[] = []
   if (row.location?.trim()) parts.push(row.location.trim())
@@ -61,6 +109,20 @@ function telHref(phone: string): string {
   return `tel:${phone.replace(/[^\d+]/g, '')}`
 }
 
+function mapsHref(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+}
+
+function isTodayInRange(startISO: string, endISO: string): boolean {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const start = parseISO(startISO)
+  start.setHours(0, 0, 0, 0)
+  const end = parseISO(endISO)
+  end.setHours(0, 0, 0, 0)
+  return today >= start && today <= end
+}
+
 export function CrewProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
@@ -69,6 +131,9 @@ export function CrewProjectDetailPage() {
   const [detail, setDetail] = useState<CrewProjectDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Prefill plumbing for Materials → comms request flow
+  const [prefillText, setPrefillText] = useState<string>('')
+  const [prefillToken, setPrefillToken] = useState<number>(0)
 
   usePageTitle(detail?.projectName ?? 'Job detail')
 
@@ -85,7 +150,8 @@ export function CrewProjectDetailPage() {
       if (e instanceof CrewWorkspacePermissionError) {
         setError('You are not assigned to this job.')
       } else {
-        setError(e instanceof Error ? e.message : 'Failed to load job')
+        console.error('fetchCrewProjectDetail failed:', e)
+        setError('Could not load this job. Try again or contact the office.')
       }
       setDetail(null)
     } finally {
@@ -96,6 +162,8 @@ export function CrewProjectDetailPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const { pullDistance, refreshing: pullRefreshing } = usePullToRefresh(load)
 
   if (!projectId) {
     return null
@@ -132,11 +200,42 @@ export function CrewProjectDetailPage() {
     null
 
   return (
-    <div className="space-y-4 pb-10">
-      <Button variant="ghost" size="sm" className="-ml-2" onClick={() => navigate('/crew')}>
-        <ArrowLeft className="mr-2 size-4" />
-        All jobs
-      </Button>
+    <div
+      className="space-y-4 pb-10"
+      style={{
+        transform: `translateY(${pullDistance}px)`,
+        transition: pullDistance === 0 ? 'transform 200ms' : 'none',
+      }}
+    >
+      {pullDistance > 0 || pullRefreshing ? (
+        <div
+          className="pointer-events-none fixed left-0 right-0 top-14 flex justify-center"
+          style={{ opacity: Math.min(1, pullDistance / 70) }}
+        >
+          <div className="rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground shadow">
+            {pullRefreshing
+              ? 'Refreshing…'
+              : pullDistance >= 70
+                ? 'Release to refresh'
+                : 'Pull to refresh'}
+          </div>
+        </div>
+      ) : null}
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="ghost" size="sm" className="-ml-2" onClick={() => navigate('/crew')}>
+          <ArrowLeft className="mr-2 size-4" />
+          All jobs
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void load()}
+          disabled={loading}
+          aria-label="Refresh"
+        >
+          <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -149,10 +248,15 @@ export function CrewProjectDetailPage() {
           <p className="text-lg font-semibold text-foreground">{detail.client}</p>
         ) : null}
         {detail.address ? (
-          <p className="flex items-start gap-2 text-base font-medium text-foreground">
+          <a
+            href={mapsHref(detail.address)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-start gap-2 text-base font-medium text-foreground hover:text-primary"
+          >
             <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             {detail.address}
-          </p>
+          </a>
         ) : null}
         {contactPhone ? (
           <a
@@ -273,6 +377,7 @@ export function CrewProjectDetailPage() {
           </CardContent>
         </Card>
       ) : null}
+
 
       {(() => {
         const scope = detail.structuredScope
@@ -403,6 +508,89 @@ export function CrewProjectDetailPage() {
         </Card>
       ) : null}
 
+      {detail.photos.length > 0 ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Camera className="size-4" />
+              Field photos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-2">
+              {detail.photos.map((photo) => (
+                <CrewPhotoThumb key={photo.id} photo={photo} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {detail.materials.length > 0 ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Package className="size-4" />
+              Materials
+            </CardTitle>
+            {!isPreview ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPrefillText(
+                    'Hi office — running short on the following material(s) at this job:\n\n- ',
+                  )
+                  setPrefillToken((t) => t + 1)
+                  // Scroll the comms panel into view so they can type the rest.
+                  setTimeout(() => {
+                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+                  }, 50)
+                }}
+              >
+                Request more
+              </Button>
+            ) : null}
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(() => {
+              const byType = new Map<string, typeof detail.materials>()
+              for (const m of detail.materials) {
+                const existing = byType.get(m.type) ?? []
+                existing.push(m)
+                byType.set(m.type, existing)
+              }
+              return [...byType.entries()].map(([type, rows]) => (
+                <div key={type} className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">{type}</p>
+                  {rows.map((row) => {
+                    const baseName = row.subtype ?? row.type
+                    const displayName = row.length ? `${row.length} ${baseName}` : baseName
+                    return (
+                      <div
+                        key={row.id}
+                        className="flex items-baseline justify-between gap-3 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{displayName}</p>
+                          {row.threadType ? (
+                            <p className="text-xs text-muted-foreground">{row.threadType}</p>
+                          ) : null}
+                        </div>
+                        <p className="shrink-0 tabular-nums font-medium">
+                          {row.quantity} {row.unit}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))
+            })()}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {detail.scheduleEntries.length > 0 ? (
         <Card>
           <CardHeader className="pb-2">
@@ -412,30 +600,47 @@ export function CrewProjectDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {detail.scheduleEntries.map((entry) => (
-              <div key={entry.id} className="rounded-lg border p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium">{entry.name}</p>
-                  <span
-                    className={
-                      entry.type === 'field'
-                        ? 'rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-700 dark:text-rose-300'
-                        : 'rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-700 dark:text-sky-300'
-                    }
-                  >
-                    {entry.type}
-                  </span>
+            {detail.scheduleEntries.map((entry) => {
+              const isToday = isTodayInRange(entry.startDate, entry.endDate)
+              return (
+                <div
+                  key={entry.id}
+                  className={
+                    isToday
+                      ? 'rounded-lg border-2 border-primary bg-primary/5 p-3'
+                      : 'rounded-lg border p-3'
+                  }
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium">{entry.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      {isToday ? (
+                        <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase text-primary-foreground">
+                          Today
+                        </span>
+                      ) : null}
+                      <span
+                        className={
+                          entry.type === 'field'
+                            ? 'rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-700 dark:text-rose-300'
+                            : 'rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-700 dark:text-sky-300'
+                        }
+                      >
+                        {entry.type}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {format(parseISO(entry.startDate), 'EEE MMM d')}
+                    {' – '}
+                    {format(parseISO(entry.endDate), 'EEE MMM d')}
+                  </p>
+                  {entry.notes ? (
+                    <p className="mt-2 text-sm whitespace-pre-wrap">{entry.notes}</p>
+                  ) : null}
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {format(parseISO(entry.startDate), 'EEE MMM d')}
-                  {' – '}
-                  {format(parseISO(entry.endDate), 'EEE MMM d')}
-                </p>
-                {entry.notes ? (
-                  <p className="mt-2 text-sm whitespace-pre-wrap">{entry.notes}</p>
-                ) : null}
-              </div>
-            ))}
+              )
+            })}
           </CardContent>
         </Card>
       ) : null}
@@ -471,7 +676,12 @@ export function CrewProjectDetailPage() {
         )
       })()}
 
-      <CrewCommsPanel projectId={projectId} readOnly={isPreview} />
+      <CrewCommsPanel
+        projectId={projectId}
+        readOnly={isPreview}
+        prefillText={prefillText}
+        prefillToken={prefillToken}
+      />
     </div>
   )
 }
