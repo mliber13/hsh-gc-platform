@@ -11,6 +11,26 @@ import { getCurrentUserProfile, requireUserOrgId } from '@/services/userService'
 import { isCrewRole, deriveEffectiveRole } from '@/lib/rbac'
 import type { CommsUnreadEntry, CommsUnreadSummary } from '@/types/crew'
 
+export type ProjectCrewReadState = {
+  userId: string
+  userName: string
+  lastReadAt: string
+}
+
+const OFFICE_READER_ROLES = new Set(['owner', 'office_gc', 'office_drywall'])
+
+/** Crew-only account — same rule as drywallPhotosService persistFieldTakeoffPhotos. */
+function isCrewOnlyProfile(roles: string[] | undefined | null): boolean {
+  const r = roles ?? []
+  return r.includes('crew') && !r.some((role) => OFFICE_READER_ROLES.has(role))
+}
+
+function readerDisplayName(fullName: unknown, email: unknown): string {
+  if (typeof fullName === 'string' && fullName.trim()) return fullName.trim()
+  if (typeof email === 'string' && email.trim()) return email.trim()
+  return 'Crew'
+}
+
 const EPOCH = new Date(0).toISOString()
 
 type ProjectCommsRow = {
@@ -88,6 +108,72 @@ export async function markProjectCommsRead(projectId: string): Promise<void> {
   )
 
   if (error) throw new Error(error.message || 'Failed to mark comms as read')
+}
+
+/** Crew read receipts for operator comms panel — excludes current user and office roles. */
+export async function fetchProjectCrewReadState(
+  projectId: string,
+): Promise<ProjectCrewReadState[]> {
+  if (!isOnlineMode()) return []
+
+  const orgId = await requireUserOrgId()
+  const { data: userData } = await supabase.auth.getUser()
+  const currentUserId = userData.user?.id
+  if (!currentUserId) return []
+
+  const { data: readRows, error } = await supabase
+    .from('comms_read_state')
+    .select('user_id, last_read_at')
+    .eq('organization_id', orgId)
+    .eq('project_id', projectId)
+
+  if (error) throw new Error(error.message || 'Failed to load comms read state')
+
+  const rows = (readRows ?? []).filter(
+    (row): row is { user_id: string; last_read_at: string } =>
+      typeof row.user_id === 'string' &&
+      row.user_id !== currentUserId &&
+      typeof row.last_read_at === 'string',
+  )
+
+  if (rows.length === 0) return []
+
+  const userIds = [...new Set(rows.map((row) => row.user_id))]
+
+  const { data: profileRows, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, roles')
+    .eq('organization_id', orgId)
+    .in('id', userIds)
+
+  if (profileError) throw new Error(profileError.message || 'Failed to load reader profiles')
+
+  const profileById = new Map(
+    (profileRows ?? []).map((profile) => [profile.id as string, profile]),
+  )
+
+  const result: ProjectCrewReadState[] = []
+
+  for (const row of rows) {
+    const profile = profileById.get(row.user_id)
+    if (!profile) continue
+    const roles = Array.isArray(profile.roles)
+      ? profile.roles.filter((v): v is string => typeof v === 'string')
+      : []
+    if (!isCrewOnlyProfile(roles)) continue
+
+    result.push({
+      userId: row.user_id,
+      userName: readerDisplayName(profile.full_name, profile.email),
+      lastReadAt: row.last_read_at,
+    })
+  }
+
+  result.sort(
+    (a, b) => new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime(),
+  )
+
+  return result
 }
 
 export async function fetchCommsUnreadSummary(options?: {

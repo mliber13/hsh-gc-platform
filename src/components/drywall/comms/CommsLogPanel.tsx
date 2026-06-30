@@ -1,15 +1,29 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { MessageSquarePlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { CommsRoleBadge } from '@/components/comms/CommsRoleBadge'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePermissions } from '@/hooks/usePermissions'
+import {
+  formatCommsReadReceiptLabel,
+  formatCommsReadReceiptTooltip,
+  readersForCommsEntry,
+} from '@/lib/drywall/commsReadReceiptDisplay'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
-import { markProjectCommsRead } from '@/services/commsReadStateService'
+import {
+  fetchProjectCrewReadState,
+  markProjectCommsRead,
+  type ProjectCrewReadState,
+} from '@/services/commsReadStateService'
 import {
   addCommsLogEntry,
   DrywallProjectPermissionError,
@@ -18,8 +32,39 @@ import {
 import { getCurrentUserProfile } from '@/services/userService'
 import type { DrywallCommsLogEntry } from '@/types/drywall'
 
+const COMMS_REFRESH_MS = 60_000
+
 interface CommsLogPanelProps {
   projectId: string
+}
+
+function CommsReadReceipt({
+  entryAt,
+  crewReadState,
+}: {
+  entryAt: string
+  crewReadState: ProjectCrewReadState[]
+}) {
+  const readers = useMemo(
+    () => readersForCommsEntry(entryAt, crewReadState),
+    [entryAt, crewReadState],
+  )
+  const label = formatCommsReadReceiptLabel(readers)
+
+  if (!label) return null
+
+  const tooltip = formatCommsReadReceiptTooltip(readers)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <p className="mt-2 text-xs text-muted-foreground cursor-default">{label}</p>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="max-w-xs whitespace-pre-line text-xs">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
@@ -28,25 +73,37 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
   const readOnly = !canWriteDrywallProject(effectiveRole)
 
   const [entries, setEntries] = useState<DrywallCommsLogEntry[]>([])
+  const [crewReadState, setCrewReadState] = useState<ProjectCrewReadState[]>([])
   const [body, setBody] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [authorName, setAuthorName] = useState('Unknown')
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const rows = await fetchDrywallCommsLog(projectId)
-      setEntries(rows)
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Failed to load comms log')
-    } finally {
-      setLoading(false)
-    }
-  }, [projectId])
+  const load = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!options?.silent) setLoading(true)
+      try {
+        const [rows, readers] = await Promise.all([
+          fetchDrywallCommsLog(projectId),
+          fetchProjectCrewReadState(projectId),
+        ])
+        setEntries(rows)
+        setCrewReadState(readers)
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : 'Failed to load comms log')
+      } finally {
+        if (!options?.silent) setLoading(false)
+      }
+    },
+    [projectId],
+  )
 
   useEffect(() => {
     void load()
+    const intervalId = window.setInterval(() => {
+      void load({ silent: true })
+    }, COMMS_REFRESH_MS)
+    return () => window.clearInterval(intervalId)
   }, [load])
 
   useEffect(() => {
@@ -140,6 +197,7 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
                   </time>
                 </p>
                 <p className="mt-2 text-sm whitespace-pre-wrap">{entry.body}</p>
+                <CommsReadReceipt entryAt={entry.at} crewReadState={crewReadState} />
               </li>
             ))}
           </ul>
