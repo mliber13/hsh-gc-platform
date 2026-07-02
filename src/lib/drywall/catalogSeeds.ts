@@ -9,6 +9,7 @@ import {
   DEFAULT_MARGIN_FLOOR_TARGET,
   DEFAULT_PO_ESTIMATED_COST_PER_SQFT,
 } from '@/lib/drywall/marginFloor'
+import { DEFAULT_DASHBOARD_TARGETS } from '@/lib/drywall/dashboardTargets'
 
 const ALL_ACCESSORIES: AccessoryAppliedMap = {
   joint_compound: true,
@@ -184,5 +185,6 @@ export function createDefaultDrywallCatalogSeeds(): OrgDrywallCatalogs {
     frp: [],
     marginFloorTarget: DEFAULT_MARGIN_FLOOR_TARGET,
     poEstimatedCostPerSqft: DEFAULT_PO_ESTIMATED_COST_PER_SQFT,
+    dashboardTargets: DEFAULT_DASHBOARD_TARGETS,
   }
 }

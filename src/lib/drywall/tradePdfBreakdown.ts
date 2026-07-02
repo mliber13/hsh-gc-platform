@@ -178,7 +178,7 @@ export function getTradeCostSubLines(
     case 'FRP:':
       return matLabSubLines(
         toNum(calculations.frpMaterialCost) + toNum(calculations.frpSalesTax),
-        0,
+        toNum(calculations.frpLaborCost),
         toNum(calculations.frpTotalDirectCost),
         tradeAmount,
       )

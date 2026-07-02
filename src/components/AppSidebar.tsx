@@ -258,6 +258,12 @@ function drywallNav(role: RbacRole): NavGroup[] {
   const items: NavItem[] = [
     { label: 'Projects', to: '/drywall', icon: Hammer, matchPath: '/drywall' },
     {
+      label: 'Dashboard',
+      to: '/drywall/dashboard',
+      icon: BarChart3,
+      matchPath: '/drywall/dashboard',
+    },
+    {
       label: 'Schedule',
       to: '/drywall/schedule',
       icon: CalendarRange,

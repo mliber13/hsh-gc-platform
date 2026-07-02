@@ -23,6 +23,7 @@ interface BelowFloorMarginDialogProps {
   onReasonChange: (value: string) => void
   busy: boolean
   onConfirm: () => void
+  children?: React.ReactNode
 }
 
 export function BelowFloorMarginDialog({
@@ -34,6 +35,7 @@ export function BelowFloorMarginDialog({
   onReasonChange,
   busy,
   onConfirm,
+  children,
 }: BelowFloorMarginDialogProps) {
   const title =
     variant === 'quote_send' ? 'Send below target margin?' : 'Continue below target margin?'
@@ -75,6 +77,7 @@ export function BelowFloorMarginDialog({
           rows={3}
           disabled={busy}
         />
+        {children}
         <DialogFooter className="gap-2 sm:gap-0">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel

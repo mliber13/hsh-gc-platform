@@ -7,6 +7,7 @@ import {
   type PayPeriodForLabor,
 } from './projectLaborMath'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
+import { DEFAULT_DASHBOARD_TARGETS } from '@/lib/drywall/dashboardTargets'
 
 const emptyCatalogs: OrgDrywallCatalogs = {
   boards: [],
@@ -34,6 +35,7 @@ const emptyCatalogs: OrgDrywallCatalogs = {
   frp: [],
   marginFloorTarget: 0.3,
   poEstimatedCostPerSqft: 2.5,
+  dashboardTargets: DEFAULT_DASHBOARD_TARGETS,
 }
 
 describe('classifyLaborCategory', () => {

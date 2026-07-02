@@ -9,6 +9,7 @@ import { hydrateDrywallQuote } from '@/lib/drywall/createEmptyDrywallQuote'
 import { hydrateDrywallQuoteV3, prepareDrywallQuoteV3ForSave } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { buildV3FromV2, v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
 import { buildBidSnapshotForQuote } from '@/lib/drywall/bidSnapshot'
+import { deriveDrywallScopeRevenue } from '@/lib/drywall/drywallScopeRevenue'
 import { buildPoBidSnapshot, DEFAULT_PO_SCOPE_TEXT } from '@/lib/drywall/poBidSnapshot'
 import { buildDrywallQuoteCalculations } from '@/lib/drywall/buildDrywallQuoteCalculations'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
@@ -60,7 +61,7 @@ export class DrywallProjectPermissionError extends Error {
 }
 
 const DRYWALL_LIST_SELECT =
-  'id, name, address, client, status, updated_at, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_line_items:metadata->legacy->quote->lineItems'
+  'id, name, address, client, status, updated_at, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_line_items:metadata->legacy->quote->lineItems, quote_outcome:metadata->legacy->quote->>outcome, quote_approved_at:metadata->legacy->quote->outcomeTimestamps->>approvedAt, quote_sent_at:metadata->legacy->quote->outcomeTimestamps->>sentAt, quote_lost_at:metadata->legacy->quote->outcomeTimestamps->>lostAt, quote_overhead_amt:metadata->legacy->quote->calculations->>overheadAmount, quote_profit_amt:metadata->legacy->quote->calculations->>profitAmount, quote_bid_snapshot:metadata->legacy->quote->bidSnapshot'
 
 type DrywallListStageScalarsRow = {
   id: string
@@ -131,6 +132,13 @@ function mapListRow(row: {
   quote_total_amount: unknown
   quote_version?: unknown
   quote_line_items?: unknown
+  quote_outcome?: unknown
+  quote_approved_at?: unknown
+  quote_sent_at?: unknown
+  quote_lost_at?: unknown
+  quote_overhead_amt?: unknown
+  quote_profit_amt?: unknown
+  quote_bid_snapshot?: unknown
 },
   stageScalars?: DrywallListStageScalarsRow,
 ): DrywallProjectListItem | null {
@@ -178,6 +186,13 @@ function mapListRow(row: {
     status: normalizeDrywallProjectStatus(row.status),
     updatedAt: new Date(row.updated_at),
     ...listScalars,
+    quoteOutcome: row.quote_outcome ? normalizeQuoteOutcome(row.quote_outcome) : null,
+    quoteApprovedAt: asString(row.quote_approved_at) || null,
+    quoteSentAt: asString(row.quote_sent_at) || null,
+    quoteLostAt: asString(row.quote_lost_at) || null,
+    quoteOverheadAmount: coerceListNumber(row.quote_overhead_amt),
+    quoteProfitAmount: coerceListNumber(row.quote_profit_amt),
+    drywallScopeRevenue: deriveDrywallScopeRevenue(parseBidSnapshot(row.quote_bid_snapshot)),
   }
 }
 
@@ -836,6 +851,7 @@ export async function revertQuoteToV2(projectId: string): Promise<DrywallQuote> 
       ...v2,
       calculations,
       version: 2,
+      preferV2QuoteEditor: true,
     },
   }
 
@@ -1499,7 +1515,7 @@ async function persistQuoteOutcomePatch(
   await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, projectStatus)
 }
 
-export async function markQuoteSent(projectId: string): Promise<void> {
+export async function markQuoteSent(projectId: string, effectiveDate?: string): Promise<void> {
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
   const orgId = await requireUserOrgId()
@@ -1513,19 +1529,20 @@ export async function markQuoteSent(projectId: string): Promise<void> {
   const quote = await fetchDrywallQuoteV2V3(projectId)
   const catalogs = isDrywallQuoteV3(quote) ? await fetchOrgDrywallCatalogs() : null
   const now = new Date().toISOString()
+  const sentAt = effectiveDate ?? now
   const bidSnapshot = await buildBidSnapshotForQuote(quote, catalogs, now)
 
   await persistQuoteOutcomePatch(projectId, {
     outcome: 'sent',
     outcomeTimestamps: {
       ...parseQuoteOutcomeTimestamps(prevQuote.outcomeTimestamps),
-      sentAt: now,
+      sentAt,
     },
     bidSnapshot,
   })
 }
 
-export async function markQuoteApproved(projectId: string): Promise<void> {
+export async function markQuoteApproved(projectId: string, effectiveDate?: string): Promise<void> {
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
   const orgId = await requireUserOrgId()
@@ -1537,6 +1554,7 @@ export async function markQuoteApproved(projectId: string): Promise<void> {
   }
 
   const now = new Date().toISOString()
+  const approvedAt = effectiveDate ?? now
   const projectStatus = normalizeDrywallProjectStatus(rawStatus)
   const advanceStatus = projectStatus === 'quote' ? ('field-measurement' as const) : undefined
 
@@ -1546,14 +1564,18 @@ export async function markQuoteApproved(projectId: string): Promise<void> {
       outcome: 'approved',
       outcomeTimestamps: {
         ...parseQuoteOutcomeTimestamps(prevQuote.outcomeTimestamps),
-        approvedAt: now,
+        approvedAt,
       },
     },
     advanceStatus,
   )
 }
 
-export async function markQuoteLost(projectId: string, reason?: string): Promise<void> {
+export async function markQuoteLost(
+  projectId: string,
+  reason?: string,
+  effectiveDate?: string,
+): Promise<void> {
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
   const orgId = await requireUserOrgId()
@@ -1565,6 +1587,7 @@ export async function markQuoteLost(projectId: string, reason?: string): Promise
   }
 
   const now = new Date().toISOString()
+  const lostAt = effectiveDate ?? now
   const trimmedReason = reason?.trim()
 
   await persistQuoteOutcomePatch(
@@ -1573,7 +1596,7 @@ export async function markQuoteLost(projectId: string, reason?: string): Promise
       outcome: 'lost',
       outcomeTimestamps: {
         ...parseQuoteOutcomeTimestamps(prevQuote.outcomeTimestamps),
-        lostAt: now,
+        lostAt,
       },
       ...(trimmedReason ? { outcomeReason: trimmedReason } : {}),
     },

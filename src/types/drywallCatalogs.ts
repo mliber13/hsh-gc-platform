@@ -1,5 +1,7 @@
 // Org drywall quote catalogs — stored in org_drywall_catalogs.payload (Phase Q.A)
 
+import type { DashboardTargets } from '@/lib/drywall/dashboardTargets'
+
 export type AccessoryAppliedMap = {
   joint_compound: boolean
   tape: boolean
@@ -158,9 +160,11 @@ export interface OrgDrywallCatalogs {
   marginFloorTarget: number
   /** D.4 — PO estimated all-in cost per sqft. Stored on org_drywall_catalogs row. */
   poEstimatedCostPerSqft: number
+  /** KPI dashboard targets. Stored on org_drywall_catalogs row, not JSONB payload. */
+  dashboardTargets: DashboardTargets
 }
 
 export type DrywallCatalogKey = Exclude<
   keyof OrgDrywallCatalogs,
-  'marginFloorTarget' | 'poEstimatedCostPerSqft'
+  'marginFloorTarget' | 'poEstimatedCostPerSqft' | 'dashboardTargets'
 >

@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import { toast } from 'sonner'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
 import { PoSummaryCard } from '@/components/drywall/quote/PoSummaryCard'
-import { hasRealDrywallV2QuoteData } from '@/lib/drywall/createEmptyDrywallQuote'
+import { shouldUseV2QuoteStage } from '@/lib/drywall/createEmptyDrywallQuote'
 import {
   convertQuoteToV3,
   fetchDrywallProjectById,
@@ -46,7 +46,7 @@ export function QuoteStageRoute() {
         return
       }
 
-      if (hasRealDrywallV2QuoteData(quote)) {
+      if (shouldUseV2QuoteStage(quote)) {
         setIsV3(false)
         return
       }

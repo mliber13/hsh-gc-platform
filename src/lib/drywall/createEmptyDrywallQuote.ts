@@ -111,6 +111,7 @@ export function createEmptyDrywallQuote(): DrywallQuote {
     frpIcStickRate: d.frpIcStickRate,
     frpOcStickRate: d.frpOcStickRate,
     frpJMoldStickRate: d.frpJMoldStickRate,
+    frpLaborRate: d.frpLaborRate,
     useCustomScopeOfWork: false,
     scopeOfWork: '',
     customScopeOfWork: '',
@@ -203,4 +204,10 @@ export function hasRealDrywallV2QuoteData(quote: DrywallQuote): boolean {
   if ((quote.options?.length ?? 0) > 0) return true
 
   return false
+}
+
+/** Whether QuoteStageRoute should render the v2 editor (not auto-upgrade to v3). */
+export function shouldUseV2QuoteStage(quote: DrywallQuote): boolean {
+  if (hasRealDrywallV2QuoteData(quote)) return true
+  return quote.preferV2QuoteEditor === true
 }

@@ -30,6 +30,8 @@ import {
 
 } from '@/lib/drywall/marginFloor'
 
+import { parseDashboardTargets } from '@/lib/drywall/dashboardTargets'
+import type { DashboardTargets } from '@/lib/drywall/dashboardTargets'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 
 import { requireUserOrgId } from './userService'
@@ -94,6 +96,8 @@ function mergeMarginTargets(
 
     po_estimated_cost_per_sqft?: unknown
 
+    dashboard_targets?: unknown
+
   } | null,
 
 ): OrgDrywallCatalogs {
@@ -105,6 +109,8 @@ function mergeMarginTargets(
     marginFloorTarget: num(row?.margin_floor_target, DEFAULT_MARGIN_FLOOR_TARGET),
 
     poEstimatedCostPerSqft: num(row?.po_estimated_cost_per_sqft, DEFAULT_PO_ESTIMATED_COST_PER_SQFT),
+
+    dashboardTargets: parseDashboardTargets(row?.dashboard_targets),
 
   }
 
@@ -204,7 +210,7 @@ export async function fetchOrgDrywallCatalogs(): Promise<OrgDrywallCatalogs> {
 
     .from('org_drywall_catalogs')
 
-    .select('payload, margin_floor_target, po_estimated_cost_per_sqft')
+    .select('payload, margin_floor_target, po_estimated_cost_per_sqft, dashboard_targets')
 
     .eq('organization_id', organizationId)
 
@@ -383,6 +389,74 @@ export async function updateDrywallMarginTargets(
     if (isRlsOrPermissionError(error)) throw new DrywallCatalogPermissionError()
 
     throw new Error(error.message || 'Failed to update margin targets')
+
+  }
+
+}
+
+
+
+export async function updateDrywallDashboardTargets(targets: DashboardTargets): Promise<void> {
+
+  if (!isOnlineMode()) {
+
+    throw new Error('Drywall catalogs require an online connection to Supabase.')
+
+  }
+
+
+
+  const organizationId = await requireUserOrgId()
+
+  const now = new Date().toISOString()
+
+  const parsed = parseDashboardTargets(targets)
+
+
+
+  const { data: existing } = await supabase
+
+    .from('org_drywall_catalogs')
+
+    .select('organization_id')
+
+    .eq('organization_id', organizationId)
+
+    .maybeSingle()
+
+
+
+  if (!existing) {
+
+    await seedDrywallCatalogs(organizationId)
+
+  }
+
+
+
+  const { error } = await supabase
+
+    .from('org_drywall_catalogs')
+
+    .update({
+
+      dashboard_targets: parsed,
+
+      updated_at: now,
+
+    })
+
+    .eq('organization_id', organizationId)
+
+
+
+  if (error) {
+
+    console.error('updateDrywallDashboardTargets:', error)
+
+    if (isRlsOrPermissionError(error)) throw new DrywallCatalogPermissionError()
+
+    throw new Error(error.message || 'Failed to update dashboard targets')
 
   }
 

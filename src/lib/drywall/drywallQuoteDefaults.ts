@@ -84,6 +84,7 @@ export const DRYWALL_QUOTE_BASE_DEFAULTS = {
   frpIcStickRate: 0,
   frpOcStickRate: 0,
   frpJMoldStickRate: 0,
+  frpLaborRate: 0,
   drywallScope: 'hang_and_finish' as const,
   hangLayers: '1',
   finishLayers: '1',

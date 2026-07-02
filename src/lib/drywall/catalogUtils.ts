@@ -3,6 +3,7 @@ import {
   DEFAULT_MARGIN_FLOOR_TARGET,
   DEFAULT_PO_ESTIMATED_COST_PER_SQFT,
 } from './marginFloor'
+import { DEFAULT_DASHBOARD_TARGETS } from './dashboardTargets'
 import type {
   AccessoryAppliedMap,
   AccessoryCatalogEntry,
@@ -206,6 +207,7 @@ export function parseOrgDrywallCatalogs(raw: unknown): OrgDrywallCatalogs {
     ),
     marginFloorTarget: DEFAULT_MARGIN_FLOOR_TARGET,
     poEstimatedCostPerSqft: DEFAULT_PO_ESTIMATED_COST_PER_SQFT,
+    dashboardTargets: DEFAULT_DASHBOARD_TARGETS,
   }
 }
 
@@ -213,6 +215,7 @@ export function catalogsPayloadOnly(catalogs: OrgDrywallCatalogs): Record<string
   const {
     marginFloorTarget: _m,
     poEstimatedCostPerSqft: _p,
+    dashboardTargets: _d,
     ...rest
   } = catalogs
   return { ...rest }

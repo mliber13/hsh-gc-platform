@@ -184,6 +184,20 @@ export interface DrywallProjectListItem {
   fieldFirstMeasurementId: string | null
   /** List projection: first legacy.orders[].id when present */
   orderFirstId: string | null
+  /** List projection: metadata.legacy.quote.outcome */
+  quoteOutcome: DrywallQuoteOutcome | null
+  /** List projection: metadata.legacy.quote.outcomeTimestamps.approvedAt */
+  quoteApprovedAt: string | null
+  /** List projection: metadata.legacy.quote.outcomeTimestamps.sentAt */
+  quoteSentAt: string | null
+  /** List projection: metadata.legacy.quote.outcomeTimestamps.lostAt */
+  quoteLostAt: string | null
+  /** List projection: metadata.legacy.quote.calculations.overheadAmount */
+  quoteOverheadAmount: number | null
+  /** List projection: metadata.legacy.quote.calculations.profitAmount */
+  quoteProfitAmount: number | null
+  /** Drywall-only sell revenue from bid snapshot (proportional OH&P), or null. */
+  drywallScopeRevenue: number | null
 }
 
 /** Full project row for detail / Project Info editing. */
@@ -338,6 +352,8 @@ export interface DrywallQuotePdfSettings {
 /** Stored quote payload — flat fields + version 2. */
 export interface DrywallQuote {
   version?: number
+  /** When true, quote stage stays on v2 even if sqft/breakdowns are still empty (e.g. after revert from v3). */
+  preferV2QuoteEditor?: boolean
   /** Customer-facing quote id — DW-YYYY-NNN (assigned on first save or PDF export). */
   quoteNumber?: string
   /** Quote outcome discriminator — default `drafted` when missing (D.1.2). */
@@ -440,6 +456,8 @@ export interface DrywallQuote {
   frpIcStickRate?: string | number
   frpOcStickRate?: string | number
   frpJMoldStickRate?: string | number
+  /** Install labor — $/sqft of FRP field. */
+  frpLaborRate?: string | number
   quoteStatus?: string
   /** Duration estimator inputs (legacy quote scope). */
   buildType?: string

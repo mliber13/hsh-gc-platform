@@ -347,6 +347,11 @@ export function QuoteTotalsSummary({ quote, calculations, totals }: Props) {
             {includeFRP && calcNum(c, 'frpTotalDirectCost') > 0 && (
               <>
                 <SummaryRow label="FRP" value="" bold className="pt-2 border-t" />
+                <SummaryRow label="Labor" value={fmt(calcNum(c, 'frpLaborCostBase'))} />
+                <SummaryRow
+                  label="Labor taxes"
+                  value={fmt(calcNum(c, 'frpLaborCost') - calcNum(c, 'frpLaborCostBase'))}
+                />
                 <SummaryRow label="Material" value={fmt(calcNum(c, 'frpMaterialCost'))} />
                 <SummaryRow label="Material taxes" value={fmt(calcNum(c, 'frpSalesTax'))} />
                 <SummaryRow

@@ -446,16 +446,20 @@ export function CrewProjectDetailPage() {
           )
         }
 
-        const hangThickness = [
-          scope.hangCeilingThickness ? `Ceiling ${scope.hangCeilingThickness}` : null,
-          scope.hangWallThickness ? `Wall ${scope.hangWallThickness}` : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')
+        const showHangScope =
+          isPreview || detail.specialty === 'hanger' || detail.specialty === 'both'
+
+        const hangThickness = showHangScope
+          ? [
+              scope.hangCeilingThickness ? `Ceiling ${scope.hangCeilingThickness}` : null,
+              scope.hangWallThickness ? `Wall ${scope.hangWallThickness}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')
+          : ''
 
         const hasAny =
-          hangThickness ||
-          scope.hangExceptions ||
+          (showHangScope && (hangThickness || scope.hangExceptions)) ||
           scope.ceilingFinish ||
           scope.ceilingExceptions ||
           scope.wallFinish ||
@@ -480,8 +484,12 @@ export function CrewProjectDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <Row label="Drywall thickness" value={hangThickness || null} />
-              <Row label="Hang exceptions" value={scope.hangExceptions} />
+              {showHangScope ? (
+                <>
+                  <Row label="Drywall thickness" value={hangThickness || null} />
+                  <Row label="Hang exceptions" value={scope.hangExceptions} />
+                </>
+              ) : null}
               <Row label="Ceiling finish" value={scope.ceilingFinish} />
               <Row label="Ceiling exceptions" value={scope.ceilingExceptions} />
               <Row label="Wall finish" value={scope.wallFinish} />

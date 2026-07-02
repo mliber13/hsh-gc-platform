@@ -239,7 +239,9 @@ function buildComponentStarterLines(v2: DrywallQuote): QuoteLineItem[] {
           location: 'FRP',
           quantity: sqft,
           custom_material_rate: parseNum(v2.frpSheetRate) > 0 ? parseNum(v2.frpSheetRate) : undefined,
-          description: 'Migrated FRP — material only (v2 had no FRP labor rate)',
+          custom_labor_rate:
+            parseNum(v2.frpLaborRate) > 0 ? parseNum(v2.frpLaborRate) : undefined,
+          description: 'Migrated FRP',
         }),
       )
     }

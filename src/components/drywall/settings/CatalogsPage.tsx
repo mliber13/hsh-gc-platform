@@ -24,6 +24,7 @@ import {
 import { AccessoriesTab } from './catalogs/AccessoriesTab'
 import { FinishScopesTab } from './catalogs/FinishScopesTab'
 import { TargetsTab } from './catalogs/TargetsTab'
+import { DashboardTargetsTab } from './catalogs/DashboardTargetsTab'
 
 export function CatalogsPage() {
   usePageTitle('Drywall — Catalogs')
@@ -139,7 +140,8 @@ export function CatalogsPage() {
           <TabsTrigger value="acoustic">Acoustic ({catalogs.acoustic.length})</TabsTrigger>
           <TabsTrigger value="metal">Metal Stud ({catalogs.metal_stud.length})</TabsTrigger>
           <TabsTrigger value="frp">FRP ({catalogs.frp.length})</TabsTrigger>
-          <TabsTrigger value="targets">Targets</TabsTrigger>
+          <TabsTrigger value="targets">Margin Targets</TabsTrigger>
+          <TabsTrigger value="dashboard-targets">Dashboard Targets</TabsTrigger>
         </TabsList>
 
         <TabsContent value="boards">
@@ -175,6 +177,15 @@ export function CatalogsPage() {
                     }
                   : prev,
               )
+            }}
+          />
+        </TabsContent>
+        <TabsContent value="dashboard-targets">
+          <DashboardTargetsTab
+            catalogs={catalogs}
+            readOnly={readOnly}
+            onSaved={(dashboardTargets) => {
+              setCatalogs((prev) => (prev ? { ...prev, dashboardTargets } : prev))
             }}
           />
         </TabsContent>

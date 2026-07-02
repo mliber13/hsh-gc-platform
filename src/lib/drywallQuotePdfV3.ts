@@ -27,6 +27,7 @@ import { formatQuoteMoney } from '@/lib/drywall/quoteV3Math'
 import {
   buildQuoteV3PdfAlternateBlocks,
   buildQuoteV3PdfLineRows,
+  groupPdfRowsByLocationForDisplay,
   groupPdfRowsByTrade,
   sanitizePdfFilenamePart,
   type QuoteV3PdfLineRow,
@@ -284,7 +285,8 @@ function drawLocationLineTotalTable(
   rows: QuoteV3PdfLineRow[],
   opts: { footLabel: string; footTotal: number },
 ) {
-  const body = rows.map((r) => [r.location, formatQuoteMoney(r.sellTotal)])
+  const displayRows = groupPdfRowsByLocationForDisplay(rows)
+  const body = displayRows.map((r) => [r.location, formatQuoteMoney(r.sellTotal)])
 
   autoTable(ctx.doc, {
     startY: ctx.y,

@@ -100,6 +100,7 @@ export function buildDrywallQuoteCalculations(quote: DrywallQuote): DrywallQuote
   const frpIcStickRate = str(q.frpIcStickRate)
   const frpOcStickRate = str(q.frpOcStickRate)
   const frpJMoldStickRate = str(q.frpJMoldStickRate)
+  const frpLaborRate = str(q.frpLaborRate)
   const overheadPercentage = str(q.overheadPercentage)
   const profitPercentage = str(q.profitPercentage)
   const salesTaxRate = str(q.salesTaxRate)
@@ -379,9 +380,11 @@ export function buildDrywallQuoteCalculations(quote: DrywallQuote): DrywallQuote
     let metalStudProfit = 0;
     let metalStudTotal = 0;
     
-    // FRP (optional add-on): material only (sheets, adhesive, division, IC, OC, J-Mold sticks) with waste
+    // FRP (optional add-on): material + install labor with waste on material quantities
     let frpMaterialCost = 0;
     let frpSalesTax = 0;
+    let frpLaborCost = 0;
+    let frpLaborCostBase = 0;
     let frpTotalDirectCost = 0;
     let frpOverhead = 0;
     let frpSubtotalBeforeProfit = 0;
@@ -417,12 +420,16 @@ export function buildDrywallQuoteCalculations(quote: DrywallQuote): DrywallQuote
       const jMoldSticks = Math.ceil(jMoldSticksBase * mult);
       frpMaterialCost = sheetsWithWaste * sheetRate + adhesiveBuckets * adhesiveRate + divisionSticks * divisionRate + icSticks * icRate + ocSticks * ocRate + jMoldSticks * jMoldRate;
       frpSalesTax = frpMaterialCost * (taxRate / 100);
-      frpTotalDirectCost = frpMaterialCost + frpSalesTax;
+      const frpLaborRateNum = parseFloat(frpLaborRate) || 0;
+      frpLaborCostBase = sf > 0 && frpLaborRateNum > 0 ? sf * frpLaborRateNum : 0;
+      frpLaborCost = frpLaborCostBase * (1 + LABOR_TAX_RATE);
+      frpTotalDirectCost = frpMaterialCost + frpSalesTax + frpLaborCost;
       frpOverhead = frpTotalDirectCost * (overheadPct / 100);
       frpSubtotalBeforeProfit = frpTotalDirectCost + frpOverhead;
       frpProfit = frpSubtotalBeforeProfit * (profitPct / 100);
       frpTotal = frpSubtotalBeforeProfit + frpProfit;
       totalDirectCost += frpTotalDirectCost;
+      totalLaborCost += frpLaborCost;
     }
     
     if (includeMetalStudFraming && metalStudEntries.length > 0) {
@@ -1072,6 +1079,9 @@ export function buildDrywallQuoteCalculations(quote: DrywallQuote): DrywallQuote
       includeFRP,
       frpMaterialCost,
       frpSalesTax,
+      frpLaborCostBase,
+      frpLaborCost,
+      frpLaborTax: frpLaborCost - frpLaborCostBase,
       frpTotalDirectCost,
       frpOverhead,
       frpSubtotalBeforeProfit,

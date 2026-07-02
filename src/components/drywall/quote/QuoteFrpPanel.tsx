@@ -60,6 +60,16 @@ export function QuoteFrpPanel({ quote, readOnly, onChange }: Props) {
           onChange={(v) => onChange({ frpExposedEdgesLf: v })}
         />
       </div>
+      <SectionDivider title="Labor" />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <NumField
+          label="Install labor ($/sqft)"
+          value={quote.frpLaborRate}
+          readOnly={readOnly}
+          hint="Applied to square footage above"
+          onChange={(v) => onChange({ frpLaborRate: v })}
+        />
+      </div>
       <SectionDivider title="Cost per unit" />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <NumField label="Sheets" value={quote.frpSheetRate} readOnly={readOnly} onChange={(v) => onChange({ frpSheetRate: v })} />

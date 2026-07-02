@@ -11,6 +11,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Tooltip,
   TooltipContent,
@@ -64,6 +66,56 @@ function formatOutcomeDate(iso: string | undefined): string {
   }
 }
 
+function effectiveDateToIso(d: string): string | undefined {
+  if (!d) return undefined
+  const [y, m, day] = d.split('-').map(Number)
+  if (!y || !m || !day) return undefined
+  return new Date(y, m - 1, day, 12, 0, 0).toISOString()
+}
+
+function isoToDateInputValue(iso: string | undefined): string | undefined {
+  if (!iso) return undefined
+  try {
+    return format(new Date(iso), 'yyyy-MM-dd')
+  } catch {
+    return undefined
+  }
+}
+
+function OutcomeEffectiveDateField({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  disabled,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  min?: string
+  max: string
+  disabled?: boolean
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={`outcome-date-${label}`}>{label}</Label>
+      <Input
+        id={`outcome-date-${label}`}
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <p className="text-xs text-muted-foreground">
+        Defaults to today — set the real date for historical accuracy.
+      </p>
+    </div>
+  )
+}
+
 function outcomeBadgeClass(outcome: DrywallQuoteOutcome): string {
   switch (outcome) {
     case 'sent':
@@ -94,6 +146,7 @@ export function QuoteOutcomeBar({
   const [dialog, setDialog] = useState<DialogKind>(null)
   const [lostReason, setLostReason] = useState('')
   const [belowFloorReason, setBelowFloorReason] = useState('')
+  const [effectiveDate, setEffectiveDate] = useState('')
   const [marginEval, setMarginEval] = useState<MarginFloorEvaluation | null>(null)
 
   const reload = useCallback(async () => {
@@ -116,10 +169,23 @@ export function QuoteOutcomeBar({
     void reload()
   }, [reload])
 
+  useEffect(() => {
+    if (
+      dialog === 'sent' ||
+      dialog === 'sent-below-floor' ||
+      dialog === 'approved' ||
+      dialog === 'lost'
+    ) {
+      setEffectiveDate(format(new Date(), 'yyyy-MM-dd'))
+    }
+  }, [dialog])
+
   if (!canWrite) return null
   if (loading || !meta) return null
 
   const { outcome, outcomeTimestamps, bidSnapshot, outcomeReason } = meta
+  const todayDateMax = format(new Date(), 'yyyy-MM-dd')
+  const sentAtDateMin = isoToDateInputValue(outcomeTimestamps.sentAt)
   const money = (n: number | null | undefined) =>
     n != null && Number.isFinite(n) ? formatQuoteMoney(n) : '—'
 
@@ -132,6 +198,7 @@ export function QuoteOutcomeBar({
       setDialog(null)
       setLostReason('')
       setBelowFloorReason('')
+      setEffectiveDate('')
       setMarginEval(null)
       toast.success('Quote outcome updated')
     } catch (e: unknown) {
@@ -175,11 +242,12 @@ export function QuoteOutcomeBar({
         floorTarget: marginEval.floorTarget,
         reason: belowFloorReason.trim(),
       })
-      await markQuoteSent(projectId)
+      await markQuoteSent(projectId, effectiveDateToIso(effectiveDate))
       await reload()
       await onOutcomeChange()
       setDialog(null)
       setBelowFloorReason('')
+      setEffectiveDate('')
       setMarginEval(null)
       toast.success('Quote marked sent (below floor approval recorded)')
     } catch (e: unknown) {
@@ -315,11 +383,24 @@ export function QuoteOutcomeBar({
               the variance baseline. You can unlock for revision later if needed.
             </DialogDescription>
           </DialogHeader>
+          <OutcomeEffectiveDateField
+            label="Date sent"
+            value={effectiveDate}
+            onChange={setEffectiveDate}
+            max={todayDateMax}
+            disabled={busy}
+          />
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => setDialog(null)} disabled={busy}>
               Cancel
             </Button>
-            <Button type="button" onClick={() => void runAction(() => markQuoteSent(projectId))} disabled={busy}>
+            <Button
+              type="button"
+              onClick={() =>
+                void runAction(() => markQuoteSent(projectId, effectiveDateToIso(effectiveDate)))
+              }
+              disabled={busy}
+            >
               {busy ? 'Saving…' : 'Mark Sent'}
             </Button>
           </DialogFooter>
@@ -341,7 +422,15 @@ export function QuoteOutcomeBar({
         onReasonChange={setBelowFloorReason}
         busy={busy}
         onConfirm={() => void handleBelowFloorSend()}
-      />
+      >
+        <OutcomeEffectiveDateField
+          label="Date sent"
+          value={effectiveDate}
+          onChange={setEffectiveDate}
+          max={todayDateMax}
+          disabled={busy}
+        />
+      </BelowFloorMarginDialog>
 
       <Dialog open={dialog === 'approved'} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent className="max-w-md">
@@ -352,13 +441,25 @@ export function QuoteOutcomeBar({
               already.
             </DialogDescription>
           </DialogHeader>
+          <OutcomeEffectiveDateField
+            label="Date approved"
+            value={effectiveDate}
+            onChange={setEffectiveDate}
+            min={sentAtDateMin}
+            max={todayDateMax}
+            disabled={busy}
+          />
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => setDialog(null)} disabled={busy}>
               Cancel
             </Button>
             <Button
               type="button"
-              onClick={() => void runAction(() => markQuoteApproved(projectId))}
+              onClick={() =>
+                void runAction(() =>
+                  markQuoteApproved(projectId, effectiveDateToIso(effectiveDate)),
+                )
+              }
               disabled={busy}
             >
               {busy ? 'Saving…' : 'Mark Approved'}
@@ -382,6 +483,14 @@ export function QuoteOutcomeBar({
             rows={3}
             disabled={busy}
           />
+          <OutcomeEffectiveDateField
+            label="Date lost"
+            value={effectiveDate}
+            onChange={setEffectiveDate}
+            min={sentAtDateMin}
+            max={todayDateMax}
+            disabled={busy}
+          />
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => setDialog(null)} disabled={busy}>
               Cancel
@@ -390,7 +499,13 @@ export function QuoteOutcomeBar({
               type="button"
               variant="destructive"
               onClick={() =>
-                void runAction(() => markQuoteLost(projectId, lostReason.trim() || undefined))
+                void runAction(() =>
+                  markQuoteLost(
+                    projectId,
+                    lostReason.trim() || undefined,
+                    effectiveDateToIso(effectiveDate),
+                  ),
+                )
               }
               disabled={busy}
             >

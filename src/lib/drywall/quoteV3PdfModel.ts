@@ -110,6 +110,10 @@ function laborBurdenFromQuote(quote: DrywallQuoteV3): QuoteV3LaborBurdenOptions 
 
     prepCleanIncludeLaborBurden: quote.prep_clean_include_labor_burden,
 
+    projectHangerRate: quote.project_hanger_rate,
+
+    projectFinisherRate: quote.project_finisher_rate,
+
   }
 
 }
@@ -306,7 +310,8 @@ export function buildQuoteV3PdfAlternateBlocks(
 
   return quote.alternates.map((alt, idx) => {
 
-    const totalAdd = totals.alternates[idx]?.totalAdd ?? 0
+    const totalAdd =
+      totals.alternates.find((a) => a.id === alt.id)?.totalAdd ?? 0
 
     const altDirect = lineDirectCostsFromLines(alt.lineItems, catalogs, laborBurden)
 
@@ -351,6 +356,108 @@ export function buildQuoteV3PdfAlternateBlocks(
     return { alternate: alt, totalAdd, rows }
 
   })
+
+}
+
+
+
+function pdfLocationKey(location: string): string {
+
+  return location.trim().toLowerCase() || '—'
+
+}
+
+
+
+/** Collapse line rows for customer PDF location table: one total when all lines share a location; per-location subtotals when not. */
+
+export function groupPdfRowsByLocationForDisplay(
+
+  rows: QuoteV3PdfLineRow[],
+
+): QuoteV3PdfLineRow[] {
+
+  if (rows.length <= 1) return rows
+
+
+
+  const byLocation = new Map<string, { location: string; sellTotal: number }>()
+
+  for (const row of rows) {
+
+    const key = pdfLocationKey(row.location)
+
+    const existing = byLocation.get(key)
+
+    if (existing) {
+
+      existing.sellTotal = round2(existing.sellTotal + row.sellTotal)
+
+    } else {
+
+      byLocation.set(key, {
+
+        location: row.location?.trim() || '—',
+
+        sellTotal: row.sellTotal,
+
+      })
+
+    }
+
+  }
+
+
+
+  if (byLocation.size === 1) {
+
+    const only = [...byLocation.values()][0]
+
+    return [
+
+      {
+
+        ...rows[0],
+
+        location: only.location,
+
+        sellTotal: only.sellTotal,
+
+      },
+
+    ]
+
+  }
+
+
+
+  const seen = new Set<string>()
+
+  const grouped: QuoteV3PdfLineRow[] = []
+
+  for (const row of rows) {
+
+    const key = pdfLocationKey(row.location)
+
+    if (seen.has(key)) continue
+
+    seen.add(key)
+
+    const agg = byLocation.get(key)!
+
+    grouped.push({
+
+      ...row,
+
+      location: agg.location,
+
+      sellTotal: agg.sellTotal,
+
+    })
+
+  }
+
+  return grouped
 
 }
 
