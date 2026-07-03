@@ -22,13 +22,20 @@ import {
   type DrywallLaborWindow,
 } from '@/services/drywallLaborService'
 import {
+  computeEstimatedMaterial,
+  emptyEstimatedMaterialBreakdown,
+  type EstimatedMaterialBreakdown,
+} from '@/lib/drywall/estimatedMaterial'
+import {
   fetchDrywallProjectById,
+  fetchDrywallQuoteV2V3,
   getProductionTimestampsFromLegacy,
   getQuoteOutcomeFromLegacy,
 } from '@/services/drywallProjectsService'
+import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import { requireUserOrgId } from '@/services/userService'
 import type { BidSnapshot, ProductionTimestamps } from '@/types/drywall'
-import { isDrywallProjectClosed, normalizeDrywallProjectStatus } from '@/types/drywall'
+import { isDrywallProjectClosed, isDrywallQuoteV3, normalizeDrywallProjectStatus } from '@/types/drywall'
 
 export type { DrywallProjectCostSummary, MaterialEntryFlat, SubEntryFlat } from '@/lib/drywall/projectCostMath'
 
@@ -38,6 +45,8 @@ export interface DrywallProjectAssessment {
   currentCost: DrywallProjectCostSummary
   bidSnapshot: BidSnapshot | null
   margin: MarginVsBidResult
+  billedToDate: number
+  estimatedMaterial: EstimatedMaterialBreakdown
   productionComplete: DrywallProjectCostSummary | null
   final: DrywallProjectCostSummary | null
   afterProductionCost: number | null
@@ -61,6 +70,19 @@ function toIsoDate(raw: unknown): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+function qbMaterialDescription(row: {
+  vendor_name: string | null
+  qb_job_name: string | null
+  doc_number: string | null
+}): string {
+  const vendor = row.vendor_name?.trim() || null
+  const docNumber = row.doc_number?.trim() || null
+  if (docNumber) {
+    return `${vendor ?? 'QB'} #${docNumber}`
+  }
+  return vendor ?? row.qb_job_name?.trim() ?? 'QuickBooks material'
+}
+
 export async function fetchDrywallProjectMaterialEntries(
   projectId: string,
 ): Promise<MaterialEntryFlat[]> {
@@ -70,23 +92,43 @@ export async function fetchDrywallProjectMaterialEntries(
 
   await requireUserOrgId()
 
-  const { data, error } = await supabase
-    .from('material_entries')
-    .select('id, date, description, vendor, amount')
-    .eq('project_id', projectId)
-    .order('date', { ascending: false })
+  const [materialResult, qbMaterialResult] = await Promise.all([
+    supabase
+      .from('material_entries')
+      .select('id, date, description, vendor, amount')
+      .eq('project_id', projectId)
+      .order('date', { ascending: false }),
+    supabase
+      .from('drywall_qb_materials')
+      .select('id, txn_date, qb_job_name, vendor_name, doc_number, amount')
+      .eq('matched_project_id', projectId)
+      .eq('review_status', 'accepted'),
+  ])
 
-  if (error) {
-    throw new Error(`Failed to fetch material entries: ${error.message}`)
+  if (materialResult.error) {
+    throw new Error(`Failed to fetch material entries: ${materialResult.error.message}`)
+  }
+  if (qbMaterialResult.error) {
+    throw new Error(`Failed to fetch QuickBooks materials: ${qbMaterialResult.error.message}`)
   }
 
-  return (data ?? []).map((row) => ({
+  const fromEntries: MaterialEntryFlat[] = (materialResult.data ?? []).map((row) => ({
     id: String(row.id),
     date: toIsoDate(row.date),
     description: String(row.description ?? ''),
     vendor: row.vendor != null ? String(row.vendor) : null,
     amount: num(row.amount),
   }))
+
+  const fromQb: MaterialEntryFlat[] = (qbMaterialResult.data ?? []).map((row) => ({
+    id: String(row.id),
+    date: toIsoDate(row.txn_date),
+    description: qbMaterialDescription(row),
+    vendor: row.vendor_name != null ? String(row.vendor_name) : null,
+    amount: num(row.amount),
+  }))
+
+  return [...fromEntries, ...fromQb].sort((a, b) => b.date.localeCompare(a.date))
 }
 
 export async function fetchDrywallProjectSubEntries(projectId: string): Promise<SubEntryFlat[]> {
@@ -182,6 +224,32 @@ export async function fetchDrywallProjectCostSummary(
   return combineProjectCost(labor, materialSub.material, materialSub.sub)
 }
 
+async function fetchDrywallProjectBilledToDate(projectId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('drywall_qb_invoices')
+    .select('total_amt')
+    .eq('matched_project_id', projectId)
+    .eq('review_status', 'accepted')
+
+  if (error) {
+    throw new Error(`Failed to fetch QuickBooks billings: ${error.message}`)
+  }
+
+  return (data ?? []).reduce((sum, row) => sum + num(row.total_amt), 0)
+}
+
+async function fetchEstimatedMaterialForProject(
+  projectId: string,
+): Promise<EstimatedMaterialBreakdown> {
+  try {
+    const quote = await fetchDrywallQuoteV2V3(projectId)
+    const catalogs = isDrywallQuoteV3(quote) ? await fetchOrgDrywallCatalogs() : null
+    return computeEstimatedMaterial(quote, catalogs)
+  } catch {
+    return emptyEstimatedMaterialBreakdown()
+  }
+}
+
 export async function fetchDrywallProjectAssessment(
   projectId: string,
 ): Promise<DrywallProjectAssessment> {
@@ -204,15 +272,18 @@ export async function fetchDrywallProjectAssessment(
   const hasProductionStart = Boolean(timestamps.productionStartedAt)
   const hasProductionComplete = Boolean(timestamps.productionCompletedAt)
 
-  const [currentCost, productionComplete, afterProductionSummary] = await Promise.all([
-    fetchDrywallProjectCostSummary(projectId, { window: 'all' }),
-    hasProductionStart
-      ? fetchDrywallProjectCostSummary(projectId, { window: 'production' })
-      : Promise.resolve(null),
-    hasProductionComplete
-      ? fetchDrywallProjectCostSummary(projectId, { window: 'after-production' })
-      : Promise.resolve(null),
-  ])
+  const [currentCost, productionComplete, afterProductionSummary, billedToDate, estimatedMaterial] =
+    await Promise.all([
+      fetchDrywallProjectCostSummary(projectId, { window: 'all' }),
+      hasProductionStart
+        ? fetchDrywallProjectCostSummary(projectId, { window: 'production' })
+        : Promise.resolve(null),
+      hasProductionComplete
+        ? fetchDrywallProjectCostSummary(projectId, { window: 'after-production' })
+        : Promise.resolve(null),
+      fetchDrywallProjectBilledToDate(projectId),
+      fetchEstimatedMaterialForProject(projectId),
+    ])
 
   const margin = computeMarginVsBid(currentCost, bidSnapshot)
   const currentCrew = computeCurrentCrew(currentCost.labor.summary)
@@ -221,6 +292,8 @@ export async function fetchDrywallProjectAssessment(
     currentCost,
     bidSnapshot,
     margin,
+    billedToDate,
+    estimatedMaterial,
     productionComplete,
     final: closed ? currentCost : null,
     afterProductionCost: afterProductionSummary?.totalCost ?? null,

@@ -355,11 +355,28 @@ serve(async (req) => {
 
   let debug = false
   let includeUnassigned = false
+  let projectScope: 'gc' | 'drywall' = 'gc'
+  let sinceDate = '2024-01-01'
+  let extraJobNames: string[] = []
   try {
     if (req.method === 'POST') {
       const body = await req.json().catch(() => ({}))
       debug = body?.debug === true
       includeUnassigned = body?.includeUnassigned === true
+      if (body?.projectScope === 'drywall') {
+        projectScope = 'drywall'
+      } else {
+        projectScope = 'gc'
+      }
+      if (typeof body?.sinceDate === 'string' && body.sinceDate.trim()) {
+        sinceDate = body.sinceDate.trim()
+      }
+      if (Array.isArray(body?.extraJobNames)) {
+        extraJobNames = body.extraJobNames
+          .filter((name: unknown) => typeof name === 'string')
+          .map((name: string) => name.trim().toLowerCase())
+          .filter(Boolean)
+      }
     }
   } catch (_) {}
 
@@ -527,7 +544,7 @@ serve(async (req) => {
 
     const out: JobTransaction[] = []
     const excluded: Array<{ reason: string; txnType: string; txnId: string; docNumber?: string; vendor?: string; amount?: number; date?: string }> = []
-    const startDate = '2024-01-01' // configurable later via body
+    const startDate = sinceDate
 
     const pushLineLevel = (
       entityType: string,
@@ -664,8 +681,8 @@ serve(async (req) => {
       () => -1
     )
 
-    // Only keep transactions for jobs that exist in the GC app (exclude Drywall-only projects)
-    const { data: projectRows } = await supabaseClient.from('projects').select('name, qb_project_id, metadata')
+    // Only keep transactions for jobs that exist in the app project list.
+    const { data: projectRows } = await supabaseClient.from('projects').select('name, qb_project_id, metadata, type')
     const isGCVisible = (r: { metadata?: { app_scope?: string; visibility?: { gc?: boolean } } | null }) => {
       const m = r.metadata
       if (!m) return true
@@ -673,47 +690,100 @@ serve(async (req) => {
       if (m.visibility && (m.visibility as { gc?: boolean }).gc === false) return false
       return true
     }
-    const gcProjects = (projectRows ?? []).filter(isGCVisible)
+    const hasPopulatedSqft = (v: unknown): boolean => {
+      const n = Number(v)
+      return Number.isFinite(n) && n > 0
+    }
+    const hasDrywallWorkspaceData = (m: Record<string, unknown>): boolean => {
+      const legacy = m.legacy
+      if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return false
+      const quote = (legacy as Record<string, unknown>).quote
+      if (!quote || typeof quote !== 'object' || Array.isArray(quote)) return false
+      const q = quote as Record<string, unknown>
+      if (hasPopulatedSqft(q.sqft)) return true
+      const total = Number(q.totalQuoteAmount)
+      if (Number.isFinite(total) && total > 0) return true
+      const finalTotal = Number((q.calculations as Record<string, unknown> | undefined)?.finalTotal)
+      if (Number.isFinite(finalTotal) && finalTotal > 0) return true
+      const lineItems = q.lineItems
+      if (q.version === 3 && Array.isArray(lineItems) && lineItems.length > 0) return true
+      return false
+    }
+    const isDrywallVisible = (r: { metadata?: Record<string, unknown> | null; type?: string | null }) => {
+      const m = r.metadata
+      if (!m || (typeof m === 'object' && Object.keys(m).length === 0)) {
+        return r.type === 'drywall'
+      }
+      const vis = m.visibility as Record<string, unknown> | undefined
+      if (vis?.drywall === true || vis?.drywall === 'true') return true
+      if (m.app_scope === 'DRYWALL_ONLY') return true
+      const source = m.source
+      if (source === 'drywall_app' || source === 'drywall_legacy') return true
+      if (vis?.drywall === false || vis?.drywall === 'false') return false
+      if (r.type === 'drywall' && vis?.gc !== false) return true
+      return hasDrywallWorkspaceData(m)
+    }
+    const scopedProjects =
+      projectScope === 'drywall'
+        ? (projectRows ?? []).filter(isDrywallVisible)
+        : (projectRows ?? []).filter(isGCVisible)
     const allowedQbProjectIds = new Set(
-      gcProjects.map((r: { qb_project_id?: string | null }) => r.qb_project_id).filter(Boolean).map(String)
+      scopedProjects.map((r: { qb_project_id?: string | null }) => r.qb_project_id).filter(Boolean).map(String)
     )
     const allowedProjectNames = new Set(
-      gcProjects.map((r: { name?: string | null }) => (r.name ?? '').trim().toLowerCase()).filter(Boolean)
+      scopedProjects.map((r: { name?: string | null }) => (r.name ?? '').trim().toLowerCase()).filter(Boolean)
     )
-    // By default only transactions that match a GC project. If includeUnassigned=true, also include those with no job in QB.
+    for (const name of extraJobNames) {
+      allowedProjectNames.add(name)
+    }
+    const hasExtraJobNames = extraJobNames.length > 0
+    // By default only transactions that match a scoped project. If includeUnassigned=true, also include those with no job in QB.
     const outFiltered =
       allowedQbProjectIds.size > 0
-        ? out.filter((t) => (t.qbProjectId != null && allowedQbProjectIds.has(t.qbProjectId)) || (includeUnassigned && t.qbProjectId == null))
+        ? out.filter((t) => {
+            if (t.qbProjectId != null && allowedQbProjectIds.has(t.qbProjectId)) return true
+            if (hasExtraJobNames) {
+              const jobName = (t.qbProjectName ?? '').trim().toLowerCase()
+              if (jobName.length > 0 && allowedProjectNames.has(jobName)) return true
+            }
+            return includeUnassigned && t.qbProjectId == null
+          })
         : out.filter((t) => {
             const jobName = (t.qbProjectName ?? '').trim().toLowerCase()
             return (jobName.length > 0 && allowedProjectNames.has(jobName)) || (includeUnassigned && jobName.length === 0)
           })
 
-    // Filter out already-imported: dedupe by QBO identity (txnType + txnId + lineId).
-    // Legacy: rows with null qb_line_id count as "whole transaction imported" so we don't re-show them.
-    const { data: materialRows } = await supabaseClient
-      .from('material_entries')
-      .select('qb_transaction_id, qb_transaction_type, qb_line_id')
-      .not('qb_transaction_id', 'is', null)
-    const { data: subRows } = await supabaseClient
-      .from('subcontractor_entries')
-      .select('qb_transaction_id, qb_transaction_type, qb_line_id')
-      .not('qb_transaction_id', 'is', null)
-    const importedSet = new Set<string>()
-    const legacyImportedTxns = new Set<string>() // txnType:txnId for rows with null qb_line_id
-    for (const r of [...(materialRows || []), ...(subRows || [])]) {
-      if (r.qb_transaction_id && r.qb_transaction_type) {
-        const lineId = r.qb_line_id != null ? String(r.qb_line_id) : ''
-        importedSet.add(`${r.qb_transaction_type}:${r.qb_transaction_id}:${lineId}`)
-        if (r.qb_line_id == null) legacyImportedTxns.add(`${r.qb_transaction_type}:${r.qb_transaction_id}`)
+    let pending: JobTransaction[]
+    if (projectScope === 'drywall') {
+      // Drywall materials sync stores all scoped rows for review — do not hide GC-imported lines.
+      pending = [...outFiltered]
+    } else {
+      // Filter out already-imported: dedupe by QBO identity (txnType + txnId + lineId).
+      // Legacy: rows with null qb_line_id count as "whole transaction imported" so we don't re-show them.
+      const { data: materialRows } = await supabaseClient
+        .from('material_entries')
+        .select('qb_transaction_id, qb_transaction_type, qb_line_id')
+        .not('qb_transaction_id', 'is', null)
+      const { data: subRows } = await supabaseClient
+        .from('subcontractor_entries')
+        .select('qb_transaction_id, qb_transaction_type, qb_line_id')
+        .not('qb_transaction_id', 'is', null)
+      const importedSet = new Set<string>()
+      const legacyImportedTxns = new Set<string>() // txnType:txnId for rows with null qb_line_id
+      for (const r of [...(materialRows || []), ...(subRows || [])]) {
+        if (r.qb_transaction_id && r.qb_transaction_type) {
+          const lineId = r.qb_line_id != null ? String(r.qb_line_id) : ''
+          importedSet.add(`${r.qb_transaction_type}:${r.qb_transaction_id}:${lineId}`)
+          if (r.qb_line_id == null) legacyImportedTxns.add(`${r.qb_transaction_type}:${r.qb_transaction_id}`)
+        }
       }
+      pending = outFiltered.filter((t) => {
+        const fullKey = `${t.qbTransactionType}:${t.qbTransactionId}:${t.qbLineId ?? ''}`
+        if (importedSet.has(fullKey)) return false
+        if (legacyImportedTxns.has(`${t.qbTransactionType}:${t.qbTransactionId}`)) return false
+        return true
+      })
     }
-    const pending = outFiltered.filter((t) => {
-      const fullKey = `${t.qbTransactionType}:${t.qbTransactionId}:${t.qbLineId ?? ''}`
-      if (importedSet.has(fullKey)) return false
-      if (legacyImportedTxns.has(`${t.qbTransactionType}:${t.qbTransactionId}`)) return false
-      return true
-    })
 
     // Sort by date desc
     pending.sort((a, b) => (b.txnDate || '').localeCompare(a.txnDate || ''))

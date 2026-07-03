@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { format } from 'date-fns'
-import { Calculator, Hammer, RefreshCw, TrendingUp } from 'lucide-react'
+import { Calculator, Hammer, Package, RefreshCw, TrendingUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOutletContext } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   AfterProductionCostTile,
+  EstimatedVsActualMaterialTile,
   FinalTotalCostTile,
   MarginVsBidTile,
 } from '@/components/drywall/cost/ProjectCostTiles'
@@ -183,6 +184,22 @@ export function CloseoutStagePage() {
           finalTotal={finalTotal}
         />
       </div>
+
+      <EstimatedVsActualMaterialTile
+        icon={Package}
+        estimated={
+          assessment?.estimatedMaterial ?? {
+            components: [],
+            salesTax: 0,
+            totalPreTax: 0,
+            totalWithTax: 0,
+          }
+        }
+        actual={
+          assessment?.final?.material ??
+          assessment?.currentCost.material ?? { totalCost: 0, entries: [] }
+        }
+      />
 
       {!readOnly && status === 'production-complete' && (
         <Button onClick={() => void handleClose()} disabled={busy}>

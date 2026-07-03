@@ -37,7 +37,7 @@ export interface SyncDrywallQbInvoicesResult {
   unmatchedNames: string[]
 }
 
-function normalizeName(name: string): string {
+export function normalizeName(name: string): string {
   return name.trim().toLowerCase()
 }
 
@@ -143,6 +143,27 @@ export async function setDrywallQbInvoiceStatus(
   if (!data) {
     throw new Error('Invoice not found or update was not permitted')
   }
+}
+
+export async function fetchAcceptedOffSystemInvoiceJobNames(): Promise<string[]> {
+  const orgId = await requireUserOrgId()
+  const { data, error } = await supabase
+    .from('drywall_qb_invoices')
+    .select('qb_job_name')
+    .eq('organization_id', orgId)
+    .eq('review_status', 'accepted')
+    .is('matched_project_id', null)
+
+  if (error) {
+    throw new Error(error.message || 'Failed to load off-system invoice jobs')
+  }
+
+  const names = new Set<string>()
+  for (const row of data ?? []) {
+    const name = row.qb_job_name?.trim()
+    if (name) names.add(name)
+  }
+  return Array.from(names).sort((a, b) => a.localeCompare(b))
 }
 
 export async function syncDrywallQbInvoices(

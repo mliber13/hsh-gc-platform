@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { format } from 'date-fns'
-import { Hammer, RefreshCw, TrendingUp, Users } from 'lucide-react'
+import { Hammer, Package, RefreshCw, TrendingUp, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOutletContext } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   CurrentCrewTile,
+  EstimatedVsActualMaterialTile,
   MarginVsBidTile,
   RunningCostTile,
 } from '@/components/drywall/cost/ProjectCostTiles'
@@ -226,12 +227,26 @@ export function ProductionStagePage() {
           margin={assessment?.margin ?? { marginPct: null, marginUsd: null, marginColor: 'neutral' }}
           bidTotal={assessment?.bidSnapshot?.total ?? null}
           costTotal={cost?.totalCost ?? 0}
+          billedToDate={assessment?.billedToDate}
         />
         <CurrentCrewTile
           icon={Users}
           crew={assessment?.currentCrew ?? { names: [], total: 0 }}
         />
       </div>
+
+      <EstimatedVsActualMaterialTile
+        icon={Package}
+        estimated={
+          assessment?.estimatedMaterial ?? {
+            components: [],
+            salesTax: 0,
+            totalPreTax: 0,
+            totalWithTax: 0,
+          }
+        }
+        actual={cost?.material ?? { totalCost: 0, entries: [] }}
+      />
 
       {!readOnly && status === 'production' && (
         <Button onClick={() => void handleComplete()} disabled={busy}>
