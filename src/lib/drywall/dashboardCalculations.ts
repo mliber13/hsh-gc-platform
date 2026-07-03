@@ -1,5 +1,15 @@
-import { addDays, differenceInCalendarDays, endOfYear, parseISO, startOfYear } from 'date-fns'
-import { specialtyFromPositionName } from '@/lib/drywall/crewSpecialty'
+import {
+  addDays,
+  differenceInCalendarDays,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfYear,
+  isWeekend,
+  parseISO,
+  startOfMonth,
+  startOfYear,
+} from 'date-fns'
+import { finisherCapacityTier, specialtyFromPositionName } from '@/lib/drywall/crewSpecialty'
 import type { DashboardTargets } from '@/lib/drywall/dashboardTargets'
 import { isArchivedMember } from '@/lib/hrTeamUtils'
 import type { CrossProjectScheduleItem } from '@/services/drywallScheduleAggregateService'
@@ -60,32 +70,66 @@ export function deriveRevenueGoals(targets: DashboardTargets): DerivedRevenueGoa
 export interface CrewCounts {
   activeHangers: number
   activeFinishers: number
+  productionFinishers: number
+  apprenticeFinishers: number
+  pointupFinishers: number
   hangerCrews: number
   subbedHangerCrews: number
   w2Hangers: number
 }
 
+function tallyFinisherMember(
+  positionName: string | undefined,
+  specialty: ReturnType<typeof specialtyFromPositionName>,
+  tallies: Pick<
+    CrewCounts,
+    'productionFinishers' | 'apprenticeFinishers' | 'pointupFinishers' | 'activeFinishers'
+  >,
+): void {
+  const tier = finisherCapacityTier(positionName)
+  if (tier === 'pointup') {
+    tallies.pointupFinishers += 1
+    return
+  }
+  if (specialty !== 'finisher' && specialty !== 'both') return
+
+  if (tier === 'apprentice') {
+    tallies.apprenticeFinishers += 1
+    tallies.activeFinishers += 1
+  } else {
+    tallies.productionFinishers += 1
+    tallies.activeFinishers += 1
+  }
+}
+
 export function countActiveCrew(team: OrgTeamPayload, hangersPerCrew: number): CrewCounts {
   const positionNameById = new Map(team.positions.map((p) => [p.id, p.name]))
+  const positionNameOf = (m: { positionId?: string | null }) =>
+    m.positionId ? positionNameById.get(m.positionId) : undefined
   const specialtyOf = (m: { positionId?: string | null }) =>
-    specialtyFromPositionName(m.positionId ? positionNameById.get(m.positionId) : undefined)
+    specialtyFromPositionName(positionNameOf(m))
 
   const employees = team.employees.filter((m) => !isArchivedMember(m))
   const contractors = team.contractors1099.filter((m) => !isArchivedMember(m))
 
   let w2Hangers = 0
   let subbedHangerCrews = 0
-  let activeFinishers = 0
+  const finisherTallies = {
+    productionFinishers: 0,
+    apprenticeFinishers: 0,
+    pointupFinishers: 0,
+    activeFinishers: 0,
+  }
 
   for (const m of employees) {
     const s = specialtyOf(m)
     if (s === 'hanger' || s === 'both') w2Hangers += 1
-    if (s === 'finisher' || s === 'both') activeFinishers += 1
+    tallyFinisherMember(positionNameOf(m), s, finisherTallies)
   }
   for (const m of contractors) {
     const s = specialtyOf(m)
     if (s === 'hanger' || s === 'both') subbedHangerCrews += 1
-    if (s === 'finisher' || s === 'both') activeFinishers += 1
+    tallyFinisherMember(positionNameOf(m), s, finisherTallies)
   }
 
   const perCrew = Math.max(1, hangersPerCrew)
@@ -93,7 +137,10 @@ export function countActiveCrew(team: OrgTeamPayload, hangersPerCrew: number): C
 
   return {
     activeHangers: w2Hangers + subbedHangerCrews,
-    activeFinishers,
+    activeFinishers: finisherTallies.activeFinishers,
+    productionFinishers: finisherTallies.productionFinishers,
+    apprenticeFinishers: finisherTallies.apprenticeFinishers,
+    pointupFinishers: finisherTallies.pointupFinishers,
     hangerCrews,
     subbedHangerCrews,
     w2Hangers,
@@ -145,7 +192,8 @@ export function computeCapacityMetrics(
   const hangerSqftMo =
     crew.hangerCrews * capacity.hangerCrewSqftPerDay * workingDaysPerMonth
   const finisherSqftMo =
-    crew.activeFinishers * capacity.finisherSqftPerDay * workingDaysPerMonth
+    crew.productionFinishers * capacity.finisherSqftPerDay * workingDaysPerMonth +
+    crew.apprenticeFinishers * capacity.finisherApprenticeSqftPerDay * workingDaysPerMonth
   const throughputSqft = Math.min(hangerSqftMo, finisherSqftMo)
   const revPerSqft = revenuePerSqft ?? 0
   const monthlyCapacity = throughputSqft * revPerSqft
@@ -218,9 +266,41 @@ export function computeManpowerMetrics(crew: CrewCounts, targets: DashboardTarge
   }
 }
 
+/** Accepted QB invoice rows fed into dashboard metrics (QB.2). */
+export interface DashboardQbInvoiceInput {
+  totalAmt: number
+  balance: number
+  txnDate: string | null
+  matchedProjectId: string | null
+}
+
+export interface QbRevenueMetrics {
+  billingsYtd: number
+  billingsThisMonth: number
+  ar: number
+  hasBillings: boolean
+  invoiceCount: number
+}
+
+export interface RevenuePaceMetrics {
+  monthlyGoal: number
+  billingsThisMonth: number
+  pctOfGoal: number
+  workDaysRemaining: number
+  projectedEom: number
+  variance: number
+  ar: number
+  hasBillings: boolean
+  status: KpiStatus
+}
+
 export interface NorthStarMetrics {
   annualGoal: number
+  awardedInSystem: number
+  awardedBaseline: number
   awardedYtd: number
+  billingsYtd: number
+  paceSource: 'billings' | 'awarded'
   currentPace: number
   pctOfRequired: number
   revenueGap: number
@@ -254,12 +334,100 @@ function isBacklogProject(project: DrywallProjectListItem): boolean {
   return (DASHBOARD_BACKLOG_STATUSES as readonly string[]).includes(status)
 }
 
+function parseTxnDate(iso: string | null | undefined): Date | null {
+  if (!iso) return null
+  try {
+    const d = parseISO(iso)
+    return Number.isNaN(d.getTime()) ? null : d
+  } catch {
+    return null
+  }
+}
+
+/** Count Mon–Fri days in [start, end] inclusive (weekends excluded). */
+function countWorkDays(start: Date, end: Date): number {
+  if (end < start) return 0
+  return eachDayOfInterval({ start, end }).filter((d) => !isWeekend(d)).length
+}
+
+export function computeQbRevenueMetrics(
+  qbInvoices: DashboardQbInvoiceInput[],
+  now = new Date(),
+): QbRevenueMetrics {
+  const year = now.getFullYear()
+  let billingsYtd = 0
+  let billingsThisMonth = 0
+  let ar = 0
+
+  for (const inv of qbInvoices) {
+    ar += inv.balance
+    const txn = parseTxnDate(inv.txnDate)
+    if (!txn) continue
+    if (txn.getFullYear() === year) {
+      billingsYtd += inv.totalAmt
+    }
+    if (isInCurrentCalendarMonth(txn, now)) {
+      billingsThisMonth += inv.totalAmt
+    }
+  }
+
+  return {
+    billingsYtd,
+    billingsThisMonth,
+    ar,
+    hasBillings: billingsYtd > 0,
+    invoiceCount: qbInvoices.length,
+  }
+}
+
+export function computeRevenuePaceMetrics(
+  qbRevenue: QbRevenueMetrics,
+  monthlyGoal: number,
+  now = new Date(),
+): RevenuePaceMetrics {
+  if (!qbRevenue.hasBillings) {
+    return {
+      monthlyGoal,
+      billingsThisMonth: 0,
+      pctOfGoal: 0,
+      workDaysRemaining: 0,
+      projectedEom: 0,
+      variance: -monthlyGoal,
+      ar: qbRevenue.ar,
+      hasBillings: false,
+      status: 'red',
+    }
+  }
+
+  const monthStart = startOfMonth(now)
+  const monthEnd = endOfMonth(now)
+  const workDaysInMonth = countWorkDays(monthStart, monthEnd)
+  const workDaysElapsed = Math.max(1, countWorkDays(monthStart, now))
+  const workDaysRemaining = Math.max(0, workDaysInMonth - workDaysElapsed)
+  const projectedEom = (qbRevenue.billingsThisMonth / workDaysElapsed) * workDaysInMonth
+  const pctOfGoal = monthlyGoal > 0 ? qbRevenue.billingsThisMonth / monthlyGoal : 0
+  const variance = projectedEom - monthlyGoal
+
+  return {
+    monthlyGoal,
+    billingsThisMonth: qbRevenue.billingsThisMonth,
+    pctOfGoal,
+    workDaysRemaining,
+    projectedEom,
+    variance,
+    ar: qbRevenue.ar,
+    hasBillings: true,
+    status: paceStatus(pctOfGoal),
+  }
+}
+
 export function computeNorthStarMetrics(
   projects: DrywallProjectListItem[],
   targets: DashboardTargets,
   capacity: CapacityMetrics,
   manpower: ManpowerMetrics,
   backlog: BacklogMetrics,
+  qbRevenue: QbRevenueMetrics,
   now = new Date(),
 ): NorthStarMetrics {
   const year = now.getFullYear()
@@ -268,12 +436,21 @@ export function computeNorthStarMetrics(
   const daysElapsed = Math.max(1, differenceInCalendarDays(now, yearStart) + 1)
   const daysInYear = differenceInCalendarDays(yearEnd, yearStart) + 1
 
-  const awardedYtd = projects
+  const awardedInSystem = projects
     .filter((p) => isApprovedInCalendarYear(p, year))
     .reduce((sum, p) => sum + (p.quoteTotal ?? 0), 0)
 
+  const baselineApplies =
+    targets.offSystemAwardedYtdYear == null || targets.offSystemAwardedYtdYear === year
+  const awardedBaseline = baselineApplies ? Math.max(0, targets.offSystemAwardedYtd || 0) : 0
+
+  const awardedYtd = awardedInSystem + awardedBaseline
+  const billingsYtd = qbRevenue.billingsYtd
+  const paceSource: 'billings' | 'awarded' = qbRevenue.hasBillings ? 'billings' : 'awarded'
+  const paceNumerator = paceSource === 'billings' ? billingsYtd : awardedYtd
+
   const annualGoal = targets.annualRevenueGoal
-  const currentPace = awardedYtd / (daysElapsed / daysInYear)
+  const currentPace = paceNumerator / (daysElapsed / daysInYear)
   const pctOfRequired = annualGoal > 0 ? currentPace / annualGoal : 0
   const revenueGap = currentPace - annualGoal
 
@@ -315,7 +492,11 @@ export function computeNorthStarMetrics(
 
   return {
     annualGoal,
+    awardedInSystem,
+    awardedBaseline,
     awardedYtd,
+    billingsYtd,
+    paceSource,
     currentPace,
     pctOfRequired,
     revenueGap,
@@ -514,6 +695,8 @@ export interface DashboardMetrics {
   manpower: ManpowerMetrics
   backlog: BacklogMetrics
   estimating: EstimatingMetrics
+  qbRevenue: QbRevenueMetrics
+  revenuePace: RevenuePaceMetrics
   northStar: NorthStarMetrics
 }
 
@@ -522,6 +705,7 @@ export function computeDashboardMetrics(
   scheduleItems: CrossProjectScheduleItem[],
   team: OrgTeamPayload,
   targets: DashboardTargets,
+  qbInvoices: DashboardQbInvoiceInput[] = [],
   now = new Date(),
 ): DashboardMetrics {
   const revenueGoals = deriveRevenueGoals(targets)
@@ -531,7 +715,17 @@ export function computeDashboardMetrics(
   const manpower = computeManpowerMetrics(crew, targets)
   const backlog = computeBacklogMetrics(projects, scheduleItems, targets, capacity, now)
   const estimating = computeEstimatingMetrics(projects, now)
-  const northStar = computeNorthStarMetrics(projects, targets, capacity, manpower, backlog, now)
+  const qbRevenue = computeQbRevenueMetrics(qbInvoices, now)
+  const revenuePace = computeRevenuePaceMetrics(qbRevenue, revenueGoals.monthly, now)
+  const northStar = computeNorthStarMetrics(
+    projects,
+    targets,
+    capacity,
+    manpower,
+    backlog,
+    qbRevenue,
+    now,
+  )
 
   return {
     revenueGoals,
@@ -541,6 +735,8 @@ export function computeDashboardMetrics(
     manpower,
     backlog,
     estimating,
+    qbRevenue,
+    revenuePace,
     northStar,
   }
 }

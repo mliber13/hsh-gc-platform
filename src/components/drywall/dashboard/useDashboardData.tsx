@@ -7,10 +7,12 @@ import {
 import { DEFAULT_DASHBOARD_TARGETS } from '@/lib/drywall/dashboardTargets'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import { fetchDrywallProjects } from '@/services/drywallProjectsService'
+import { fetchDrywallQbInvoices } from '@/services/drywallQbRevenueService'
 import { fetchCrossProjectScheduleItems } from '@/services/drywallScheduleAggregateService'
 import { fetchTeam } from '@/services/hrTeamService'
 import type { DrywallProjectListItem } from '@/types/drywall'
 import type { DashboardTargets } from '@/lib/drywall/dashboardTargets'
+import type { DashboardQbInvoiceInput } from '@/lib/drywall/dashboardCalculations'
 import type { CrossProjectScheduleItem } from '@/services/drywallScheduleAggregateService'
 import type { OrgTeamPayload } from '@/types/hr'
 
@@ -40,6 +42,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   const [scheduleItems, setScheduleItems] = useState<CrossProjectScheduleItem[]>([])
   const [team, setTeam] = useState<OrgTeamPayload>({ employees: [], contractors1099: [], positions: [] })
   const [targets, setTargets] = useState<DashboardTargets>(DEFAULT_DASHBOARD_TARGETS)
+  const [qbInvoices, setQbInvoices] = useState<DashboardQbInvoiceInput[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,16 +50,27 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     setLoading(true)
     setError(null)
     try {
-      const [projectRows, scheduleRows, teamPayload, catalogs] = await Promise.all([
+      const [projectRows, scheduleRows, teamPayload, catalogs, qbRows] = await Promise.all([
         fetchDrywallProjects(),
         fetchCrossProjectScheduleItems(),
         fetchTeam(),
         fetchOrgDrywallCatalogs(),
+        fetchDrywallQbInvoices().catch(() => []),
       ])
       setProjects(projectRows)
       setScheduleItems(scheduleRows)
       setTeam(teamPayload)
       setTargets(catalogs.dashboardTargets)
+      setQbInvoices(
+        qbRows
+          .filter((row) => row.reviewStatus === 'accepted')
+          .map((row) => ({
+            totalAmt: row.totalAmt,
+            balance: row.balance,
+            txnDate: row.txnDate,
+            matchedProjectId: row.matchedProjectId,
+          })),
+      )
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to load dashboard data'
       setError(message)
@@ -71,8 +85,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   }, [load])
 
   const metrics = useMemo(
-    () => computeDashboardMetrics(projects, scheduleItems, team, targets),
-    [projects, scheduleItems, team, targets],
+    () => computeDashboardMetrics(projects, scheduleItems, team, targets, qbInvoices),
+    [projects, scheduleItems, team, targets, qbInvoices],
   )
 
   const value: DashboardDataState = useMemo(

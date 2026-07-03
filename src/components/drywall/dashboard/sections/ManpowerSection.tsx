@@ -2,6 +2,15 @@ import { useDashboardData } from '../useDashboardData'
 import { BigStat } from '../ui/BigStat'
 import { KpiCard } from '../ui/KpiCard'
 import { StatusPill } from '../ui/StatusPill'
+import type { CrewCounts } from '@/lib/drywall/dashboardCalculations'
+
+function formatFinisherTierCaption(crew: CrewCounts): string {
+  const parts: string[] = []
+  if (crew.productionFinishers > 0) parts.push(`${crew.productionFinishers} production`)
+  if (crew.apprenticeFinishers > 0) parts.push(`${crew.apprenticeFinishers} apprentice`)
+  if (crew.pointupFinishers > 0) parts.push(`${crew.pointupFinishers} point-up (support)`)
+  return parts.join(' · ')
+}
 
 export function ManpowerSection() {
   const { metrics, targets } = useDashboardData()
@@ -37,6 +46,10 @@ export function ManpowerSection() {
               {row.label === 'Hanger Crews' ? (
                 <p className="mt-1 text-xs text-muted-foreground">
                   {crew.subbedHangerCrews} subbed + {inHouseCrews} in-house
+                </p>
+              ) : row.label === 'Finishers' ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatFinisherTierCaption(crew)}
                 </p>
               ) : null}
             </div>

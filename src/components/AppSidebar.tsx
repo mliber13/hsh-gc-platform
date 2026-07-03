@@ -70,7 +70,7 @@ import {
 } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 import { SidebarUserMenu } from './SidebarUserMenu'
-import { canAccessHrCrewAccountsPage, canAccessHrPayrollPage, canAccessHrTeamPage, canAccessHrTimeClockPage, canEditDrywallCatalogs } from '@/routes/RequirePermission'
+import { canAccessHrCrewAccountsPage, canAccessHrPayrollPage, canAccessHrTeamPage, canAccessHrTimeClockPage, canAccessDrywallQuickBooks, canEditDrywallCatalogs } from '@/routes/RequirePermission'
 
 // ----------------------------------------------------------------------------
 // Nav item types
@@ -254,7 +254,7 @@ const tenantsNav: NavGroup[] = [
   },
 ]
 
-function drywallNav(role: RbacRole): NavGroup[] {
+function drywallNav(role: RbacRole, canAccessQuickBooksAdmin: boolean): NavGroup[] {
   const items: NavItem[] = [
     { label: 'Projects', to: '/drywall', icon: Hammer, matchPath: '/drywall' },
     {
@@ -276,6 +276,14 @@ function drywallNav(role: RbacRole): NavGroup[] {
       to: '/drywall/settings/catalogs',
       icon: Library,
       matchPath: '/drywall/settings/catalogs',
+    })
+  }
+  if (canAccessDrywallQuickBooks(role, canAccessQuickBooksAdmin)) {
+    items.push({
+      label: 'QuickBooks',
+      to: '/drywall/settings/quickbooks',
+      icon: Receipt,
+      matchPath: '/drywall/settings/quickbooks',
     })
   }
   return [{ label: 'Drywall', items }]
@@ -423,7 +431,7 @@ function navForWorkspace(
     case 'hr':
       return withSettings(hrNav(role, canSeeHrPayroll))
     case 'drywall':
-      return withSettings(drywallNav(role))
+      return withSettings(drywallNav(role, showQuickBooks))
   }
 }
 

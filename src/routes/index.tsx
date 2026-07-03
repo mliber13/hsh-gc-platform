@@ -124,6 +124,7 @@ import { DrywallSchedulePortfolioPage } from '@/components/drywall/schedule/port
 import { DashboardPage } from '@/components/drywall/dashboard/DashboardPage'
 import { QuoteStageRoute } from '@/components/drywall/quote/QuoteStageRoute'
 import { CatalogsPage } from '@/components/drywall/settings/CatalogsPage'
+import { DrywallQuickBooksPage } from '@/components/drywall/settings/DrywallQuickBooksPage'
 import { ProjectInfoPage } from '@/components/drywall/info/ProjectInfoPage'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { getCurrentWeekOf } from '@/services/meetingService'
@@ -145,6 +146,7 @@ import {
   RequireHrCrewAccountsAccess,
   RequireHrTimeClockAccess,
   RequireDrywallCatalogsAccess,
+  RequireDrywallQuickBooksAccess,
   RequireWorkspaceAccess,
   RequireCrewWorkspaceAccess,
 } from './RequirePermission'
@@ -313,6 +315,14 @@ export function AppRoutes() {
               <RequireDrywallCatalogsAccess>
                 <CatalogsPage />
               </RequireDrywallCatalogsAccess>
+            }
+          />
+          <Route
+            path="/drywall/settings/quickbooks"
+            element={
+              <RequireDrywallQuickBooksAccess>
+                <DrywallQuickBooksPage />
+              </RequireDrywallQuickBooksAccess>
             }
           />
           <Route

@@ -24,22 +24,46 @@ export function DashboardTargetsTab({ catalogs, readOnly, onSaved }: Props) {
   const [workingDaysPerMonth, setWorkingDaysPerMonth] = useState(String(t.workingDaysPerMonth))
   const [hangerCrewSqftPerDay, setHangerCrewSqftPerDay] = useState(String(t.capacity.hangerCrewSqftPerDay))
   const [finisherSqftPerDay, setFinisherSqftPerDay] = useState(String(t.capacity.finisherSqftPerDay))
+  const [finisherApprenticeSqftPerDay, setFinisherApprenticeSqftPerDay] = useState(
+    String(t.capacity.finisherApprenticeSqftPerDay),
+  )
   const [hangersPerCrew, setHangersPerCrew] = useState(String(t.capacity.hangersPerCrew))
   const [revenuePerSqftOverride, setRevenuePerSqftOverride] = useState(
     t.capacity.revenuePerSqftOverride != null ? String(t.capacity.revenuePerSqftOverride) : '',
   )
   const [finishers, setFinishers] = useState(String(t.manpowerTargets.finishers))
   const [hangerCrews, setHangerCrews] = useState(String(t.manpowerTargets.hangerCrews))
+  const [offSystemAwardedYtd, setOffSystemAwardedYtd] = useState(String(t.offSystemAwardedYtd))
+  const [offSystemAwardedYtdYear, setOffSystemAwardedYtdYear] = useState(
+    t.offSystemAwardedYtdYear != null ? String(t.offSystemAwardedYtdYear) : '',
+  )
   const [saving, setSaving] = useState(false)
+
+  const handleOffSystemAmountChange = (value: string) => {
+    setOffSystemAwardedYtd(value)
+    const amount = parseFloat(value)
+    if (
+      value.trim() !== '' &&
+      Number.isFinite(amount) &&
+      amount > 0 &&
+      offSystemAwardedYtdYear.trim() === ''
+    ) {
+      setOffSystemAwardedYtdYear(String(new Date().getFullYear()))
+    }
+  }
 
   const handleSave = async () => {
     const parsed: DashboardTargets = {
       annualRevenueGoal: parseFloat(annualRevenueGoal),
       backlogGoal: parseFloat(backlogGoal),
       workingDaysPerMonth: parseFloat(workingDaysPerMonth),
+      offSystemAwardedYtd: parseFloat(offSystemAwardedYtd) || 0,
+      offSystemAwardedYtdYear:
+        offSystemAwardedYtdYear.trim() === '' ? null : parseInt(offSystemAwardedYtdYear, 10),
       capacity: {
         hangerCrewSqftPerDay: parseFloat(hangerCrewSqftPerDay),
         finisherSqftPerDay: parseFloat(finisherSqftPerDay),
+        finisherApprenticeSqftPerDay: parseFloat(finisherApprenticeSqftPerDay),
         hangersPerCrew: parseFloat(hangersPerCrew),
         revenuePerSqftOverride:
           revenuePerSqftOverride.trim() === '' ? null : parseFloat(revenuePerSqftOverride),
@@ -154,6 +178,23 @@ export function DashboardTargetsTab({ catalogs, readOnly, onSaved }: Props) {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="finisher-apprentice-sqft">
+                Apprentice/helper finisher rate (sqft/day)
+              </Label>
+              <Input
+                id="finisher-apprentice-sqft"
+                type="number"
+                min={0}
+                value={finisherApprenticeSqftPerDay}
+                disabled={readOnly}
+                onChange={(e) => setFinisherApprenticeSqftPerDay(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Reduced finishing rate for helpers who assist rather than run their own jobs.
+                Point-up specialists are excluded from capacity entirely.
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="hangers-per-crew">Hangers per crew</Label>
               <Input
                 id="hangers-per-crew"
@@ -178,6 +219,41 @@ export function DashboardTargetsTab({ catalogs, readOnly, onSaved }: Props) {
               />
             </div>
           </div>
+        </div>
+
+        <div>
+          <h3 className="mb-3 text-sm font-medium">Awarded outside HSH (this year)</h3>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="off-system-awarded">Awarded revenue ($)</Label>
+              <Input
+                id="off-system-awarded"
+                type="number"
+                min={0}
+                value={offSystemAwardedYtd}
+                disabled={readOnly}
+                onChange={(e) => handleOffSystemAmountChange(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="off-system-year">Calendar year</Label>
+              <Input
+                id="off-system-year"
+                type="number"
+                min={2000}
+                max={2100}
+                placeholder={String(new Date().getFullYear())}
+                value={offSystemAwardedYtdYear}
+                disabled={readOnly}
+                onChange={(e) => setOffSystemAwardedYtdYear(e.target.value)}
+              />
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            One-time figure for revenue awarded this year on jobs not tracked as HSH quotes (e.g.
+            done in Buildertrend). Used for North Star pace only when no QuickBooks billings are
+            synced. Reset to 0 each January.
+          </p>
         </div>
 
         <div>

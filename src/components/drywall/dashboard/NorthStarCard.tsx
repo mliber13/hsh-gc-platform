@@ -24,7 +24,28 @@ export function NorthStarCard() {
         <BigStat
           label="Current Pace"
           value={formatDashboardCurrency(northStar.currentPace)}
-          sublabel={`${formatDashboardCurrency(northStar.awardedYtd)} awarded YTD`}
+          sublabel={
+            <span>
+              {northStar.paceSource === 'billings' ? (
+                <>
+                  {formatDashboardCurrency(northStar.billingsYtd)} billings YTD
+                  <span className="block text-muted-foreground/80">
+                    Pace from QuickBooks billings
+                  </span>
+                </>
+              ) : (
+                <>
+                  {formatDashboardCurrency(northStar.awardedYtd)} awarded YTD
+                  {northStar.awardedBaseline > 0 ? (
+                    <span className="block text-muted-foreground/80">
+                      incl. {formatDashboardCurrency(northStar.awardedBaseline)} booked outside HSH
+                    </span>
+                  ) : null}
+                  <span className="block text-muted-foreground/80">Pace from awarded quotes</span>
+                </>
+              )}
+            </span>
+          }
         />
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

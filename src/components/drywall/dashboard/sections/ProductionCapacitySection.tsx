@@ -1,6 +1,6 @@
 import {
   formatDashboardCurrency,
-  formatDashboardPercent,
+  type CrewCounts,
 } from '@/lib/drywall/dashboardCalculations'
 import {
   Tooltip,
@@ -23,9 +23,63 @@ function formatRevenuePerSqft(amount: number): string {
   }).format(amount)
 }
 
+function formatSqftMo(value: number): string {
+  return `${Math.round(value).toLocaleString()} sqft/mo`
+}
+
+function formatFinisherComposition(crew: CrewCounts): string {
+  const parts: string[] = []
+  if (crew.productionFinishers > 0) parts.push(`${crew.productionFinishers} production`)
+  if (crew.apprenticeFinishers > 0) parts.push(`${crew.apprenticeFinishers} apprentice`)
+  if (parts.length === 0) {
+    return `${crew.activeFinishers} finisher${crew.activeFinishers === 1 ? '' : 's'}`
+  }
+  return parts.join(' + ')
+}
+
+function StageCapacityRow({
+  label,
+  sqftMo,
+  resourceLabel,
+  isBottleneck,
+  isFaster,
+  slack,
+}: {
+  label: string
+  sqftMo: number
+  resourceLabel: string
+  isBottleneck: boolean
+  isFaster: boolean
+  slack: number
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
+      <span className="font-medium text-foreground">{label}</span>
+      <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+        <span className="tabular-nums">
+          {formatSqftMo(sqftMo)} · {resourceLabel}
+        </span>
+        {isBottleneck ? (
+          <span className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-200">
+            Bottleneck
+          </span>
+        ) : null}
+        {isFaster ? (
+          <span className="text-xs">
+            {slack === 0 ? 'balanced' : `${formatSqftMo(slack)} idle`}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 export function ProductionCapacitySection() {
   const { metrics } = useDashboardData()
-  const { capacity } = metrics
+  const { capacity, crew } = metrics
+
+  const hangingIsBottleneck = capacity.bottleneck === 'hanging'
+  const slack = Math.abs(capacity.hangerSqftMo - capacity.finisherSqftMo)
 
   const bottleneckLabel =
     capacity.bottleneck === 'hanging'
@@ -78,6 +132,25 @@ export function ProductionCapacitySection() {
               'No revenue/sqft data — approve quotes with bid snapshots and sqft'
             )
           }
+        />
+      </div>
+
+      <div className="space-y-3 rounded-lg border bg-muted/20 px-4 py-3">
+        <StageCapacityRow
+          label="Hanging"
+          sqftMo={capacity.hangerSqftMo}
+          resourceLabel={`${capacity.hangerCrews} crew${capacity.hangerCrews === 1 ? '' : 's'}`}
+          isBottleneck={hangingIsBottleneck}
+          isFaster={!hangingIsBottleneck}
+          slack={slack}
+        />
+        <StageCapacityRow
+          label="Finishing"
+          sqftMo={capacity.finisherSqftMo}
+          resourceLabel={formatFinisherComposition(crew)}
+          isBottleneck={!hangingIsBottleneck}
+          isFaster={hangingIsBottleneck}
+          slack={slack}
         />
       </div>
 

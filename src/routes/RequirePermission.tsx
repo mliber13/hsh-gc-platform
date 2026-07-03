@@ -200,6 +200,26 @@ export function canEditDrywallCatalogs(role: RbacRole): boolean {
   return ['owner', 'office_drywall'].includes(role)
 }
 
+export function canAccessDrywallQuickBooks(
+  role: RbacRole,
+  canAccessQuickBooksAdmin: boolean,
+): boolean {
+  return canAccessQuickBooksAdmin || canEditDrywallCatalogs(role)
+}
+
+export function RequireDrywallQuickBooksAccess({ children }: { children: ReactNode }) {
+  const { loading, canAccessWorkspace: canAccessWs, effectiveRole, canAccessQuickBooksAdmin } =
+    usePermissions()
+  if (loading) return <GuardLoading />
+  if (!canAccessWs('drywall')) {
+    return <Navigate to={firstAccessibleHome(canAccessWs, effectiveRole)} replace />
+  }
+  if (!canAccessDrywallQuickBooks(effectiveRole, canAccessQuickBooksAdmin)) {
+    return <Navigate to={firstAccessibleHome(canAccessWs, effectiveRole)} replace />
+  }
+  return <>{children}</>
+}
+
 export function canReadDrywallCatalogs(role: RbacRole): boolean {
   return canAccessDrywallWorkspace(role)
 }

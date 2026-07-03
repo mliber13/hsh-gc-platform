@@ -1,6 +1,7 @@
 export interface DashboardCapacityTargets {
   hangerCrewSqftPerDay: number
   finisherSqftPerDay: number
+  finisherApprenticeSqftPerDay: number
   hangersPerCrew: number
   revenuePerSqftOverride: number | null
 }
@@ -14,6 +15,10 @@ export interface DashboardTargets {
   annualRevenueGoal: number
   backlogGoal: number
   workingDaysPerMonth: number
+  /** $ awarded this calendar year on jobs not tracked as HSH quotes. */
+  offSystemAwardedYtd: number
+  /** Calendar year offSystemAwardedYtd applies to; null = current year. */
+  offSystemAwardedYtdYear: number | null
   capacity: DashboardCapacityTargets
   manpowerTargets: DashboardManpowerTargets
 }
@@ -22,9 +27,12 @@ export const DEFAULT_DASHBOARD_TARGETS: DashboardTargets = {
   annualRevenueGoal: 6_500_000,
   backlogGoal: 1_250_000,
   workingDaysPerMonth: 21,
+  offSystemAwardedYtd: 0,
+  offSystemAwardedYtdYear: null,
   capacity: {
     hangerCrewSqftPerDay: 4800,
     finisherSqftPerDay: 2400,
+    finisherApprenticeSqftPerDay: 1200,
     hangersPerCrew: 3,
     revenuePerSqftOverride: null,
   },
@@ -64,9 +72,15 @@ export function parseDashboardTargets(raw: unknown): DashboardTargets {
     annualRevenueGoal: toNum(o.annualRevenueGoal, d.annualRevenueGoal),
     backlogGoal: toNum(o.backlogGoal, d.backlogGoal),
     workingDaysPerMonth: toNum(o.workingDaysPerMonth, d.workingDaysPerMonth),
+    offSystemAwardedYtd: toNum(o.offSystemAwardedYtd, d.offSystemAwardedYtd),
+    offSystemAwardedYtdYear: toNullableNum(o.offSystemAwardedYtdYear),
     capacity: {
       hangerCrewSqftPerDay: toNum(cap.hangerCrewSqftPerDay, d.capacity.hangerCrewSqftPerDay),
       finisherSqftPerDay: toNum(cap.finisherSqftPerDay, d.capacity.finisherSqftPerDay),
+      finisherApprenticeSqftPerDay: toNum(
+        cap.finisherApprenticeSqftPerDay,
+        d.capacity.finisherApprenticeSqftPerDay,
+      ),
       hangersPerCrew: toNum(cap.hangersPerCrew, d.capacity.hangersPerCrew),
       revenuePerSqftOverride: toNullableNum(cap.revenuePerSqftOverride),
     },

@@ -1,5 +1,17 @@
 export type CrewSpecialty = 'measurer' | 'hanger' | 'finisher' | 'both' | 'unknown'
 
+export type FinisherTier = 'production' | 'apprentice' | 'pointup' | null
+
+/** Finisher throughput tier from HR position name (independent of specialtyFromPositionName). */
+export function finisherCapacityTier(name: string | null | undefined): FinisherTier {
+  if (!name) return null
+  const n = name.toLowerCase()
+  if (n.includes('point')) return 'pointup'
+  if (!n.includes('finish')) return null
+  if (/(apprentice|helper|assist|junior)/.test(n)) return 'apprentice'
+  return 'production'
+}
+
 /** Position name substring match — same pattern as hanger/finisher. */
 export function specialtyFromPositionName(name: string | null | undefined): CrewSpecialty {
   if (!name) return 'unknown'
