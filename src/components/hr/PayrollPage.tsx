@@ -72,6 +72,8 @@ import {
 
 import { PayrollHistoryTab } from './payroll/PayrollHistoryTab'
 
+import { LaborAssignmentAudit } from './payroll/LaborAssignmentAudit'
+
 import { TimeClockImportDialog } from './payroll/TimeClockImportDialog'
 
 import { CalculationDetailDialog } from './payroll/CalculationDetailDialog'
@@ -794,11 +796,13 @@ export function PayrollPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
 
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-xl grid-cols-3">
 
           <TabsTrigger value="run">Run payroll</TabsTrigger>
 
           <TabsTrigger value="history">Past payrolls ({runs.length})</TabsTrigger>
+
+          <TabsTrigger value="labor-audit">Labor audit</TabsTrigger>
 
         </TabsList>
 
@@ -927,6 +931,12 @@ export function PayrollPage() {
             onDuplicate={handleDuplicateRun}
 
           />
+
+        </TabsContent>
+
+        <TabsContent value="labor-audit" className="mt-0">
+
+          <LaborAssignmentAudit />
 
         </TabsContent>
 
