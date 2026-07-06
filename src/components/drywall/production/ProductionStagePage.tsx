@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   CurrentCrewTile,
+  EstimatedVsActualLaborTile,
   EstimatedVsActualMaterialTile,
   MarginVsBidTile,
   RunningCostTile,
 } from '@/components/drywall/cost/ProjectCostTiles'
+import { emptyEstimatedLaborBreakdown } from '@/lib/drywall/estimatedLabor'
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
@@ -221,6 +223,7 @@ export function ProductionStagePage() {
           labor={cost?.labor.totalCost ?? 0}
           material={cost?.material.totalCost ?? 0}
           sub={cost?.sub.totalCost ?? 0}
+          w2BurdenCost={cost?.labor.summary.w2BurdenCost}
         />
         <MarginVsBidTile
           icon={TrendingUp}
@@ -246,6 +249,31 @@ export function ProductionStagePage() {
           }
         }
         actual={cost?.material ?? { totalCost: 0, entries: [] }}
+      />
+
+      <EstimatedVsActualLaborTile
+        icon={Hammer}
+        estimated={assessment?.estimatedLabor ?? emptyEstimatedLaborBreakdown()}
+        actual={
+          cost?.labor.summary ?? {
+            totalCost: 0,
+            totalHours: 0,
+            totalOvertimeHours: 0,
+            totalPieces: 0,
+            w2BurdenCost: 0,
+            byCategory: {
+              hanger: 0,
+              finisher: 0,
+              components: 0,
+              prepClean: 0,
+              legacy: 0,
+              hourly: 0,
+              other: 0,
+            },
+            byPayPeriod: [],
+            entries: [],
+          }
+        }
       />
 
       {!readOnly && status === 'production' && (

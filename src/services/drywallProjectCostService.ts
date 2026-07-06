@@ -27,6 +27,11 @@ import {
   type EstimatedMaterialBreakdown,
 } from '@/lib/drywall/estimatedMaterial'
 import {
+  computeEstimatedLabor,
+  emptyEstimatedLaborBreakdown,
+  type EstimatedLaborBreakdown,
+} from '@/lib/drywall/estimatedLabor'
+import {
   fetchDrywallProjectById,
   fetchDrywallQuoteV2V3,
   getProductionTimestampsFromLegacy,
@@ -47,6 +52,7 @@ export interface DrywallProjectAssessment {
   margin: MarginVsBidResult
   billedToDate: number
   estimatedMaterial: EstimatedMaterialBreakdown
+  estimatedLabor: EstimatedLaborBreakdown
   productionComplete: DrywallProjectCostSummary | null
   final: DrywallProjectCostSummary | null
   afterProductionCost: number | null
@@ -238,15 +244,31 @@ async function fetchDrywallProjectBilledToDate(projectId: string): Promise<numbe
   return (data ?? []).reduce((sum, row) => sum + num(row.total_amt), 0)
 }
 
-async function fetchEstimatedMaterialForProject(
-  projectId: string,
-): Promise<EstimatedMaterialBreakdown> {
+async function fetchEstimatedCostBreakdownsForProject(projectId: string): Promise<{
+  estimatedMaterial: EstimatedMaterialBreakdown
+  estimatedLabor: EstimatedLaborBreakdown
+}> {
   try {
     const quote = await fetchDrywallQuoteV2V3(projectId)
     const catalogs = isDrywallQuoteV3(quote) ? await fetchOrgDrywallCatalogs() : null
-    return computeEstimatedMaterial(quote, catalogs)
+    let estimatedMaterial = emptyEstimatedMaterialBreakdown()
+    let estimatedLabor = emptyEstimatedLaborBreakdown()
+    try {
+      estimatedMaterial = computeEstimatedMaterial(quote, catalogs)
+    } catch {
+      estimatedMaterial = emptyEstimatedMaterialBreakdown()
+    }
+    try {
+      estimatedLabor = computeEstimatedLabor(quote, catalogs)
+    } catch {
+      estimatedLabor = emptyEstimatedLaborBreakdown()
+    }
+    return { estimatedMaterial, estimatedLabor }
   } catch {
-    return emptyEstimatedMaterialBreakdown()
+    return {
+      estimatedMaterial: emptyEstimatedMaterialBreakdown(),
+      estimatedLabor: emptyEstimatedLaborBreakdown(),
+    }
   }
 }
 
@@ -272,7 +294,7 @@ export async function fetchDrywallProjectAssessment(
   const hasProductionStart = Boolean(timestamps.productionStartedAt)
   const hasProductionComplete = Boolean(timestamps.productionCompletedAt)
 
-  const [currentCost, productionComplete, afterProductionSummary, billedToDate, estimatedMaterial] =
+  const [currentCost, productionComplete, afterProductionSummary, billedToDate, estimates] =
     await Promise.all([
       fetchDrywallProjectCostSummary(projectId, { window: 'all' }),
       hasProductionStart
@@ -282,7 +304,7 @@ export async function fetchDrywallProjectAssessment(
         ? fetchDrywallProjectCostSummary(projectId, { window: 'after-production' })
         : Promise.resolve(null),
       fetchDrywallProjectBilledToDate(projectId),
-      fetchEstimatedMaterialForProject(projectId),
+      fetchEstimatedCostBreakdownsForProject(projectId),
     ])
 
   const margin = computeMarginVsBid(currentCost, bidSnapshot)
@@ -293,7 +315,8 @@ export async function fetchDrywallProjectAssessment(
     bidSnapshot,
     margin,
     billedToDate,
-    estimatedMaterial,
+    estimatedMaterial: estimates.estimatedMaterial,
+    estimatedLabor: estimates.estimatedLabor,
     productionComplete,
     final: closed ? currentCost : null,
     afterProductionCost: afterProductionSummary?.totalCost ?? null,

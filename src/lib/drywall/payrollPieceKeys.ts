@@ -13,6 +13,16 @@ import { PAYROLL_WORK_TYPES } from '@/lib/payrollMath'
 import type { FinishScopeCatalogEntry, OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type { PayrollPieceCatalogSource } from '@/types/payroll'
 
+/** Payroll labor buckets used when aggregating project labor costs. */
+export type DrywallLaborCategory =
+  | 'hanger'
+  | 'finisher'
+  | 'components'
+  | 'prepClean'
+  | 'legacy'
+  | 'hourly'
+  | 'other'
+
 export const DRYWALL_HANGER_PIECE_KEY = 'drywall_hanging' as const
 
 export const COMPONENT_LABOR_PIECE_KEYS = {
@@ -54,6 +64,30 @@ const COMPONENT_CATALOG_KEY_BY_PIECE_KEY: Record<
 }
 
 const COMPONENT_LABOR_PIECE_KEY_SET = new Set<string>(Object.values(COMPONENT_LABOR_PIECE_KEYS))
+
+/** v2 payroll workType → modern labor category (before generic legacy fallback). */
+export const LEGACY_WORKTYPE_CATEGORY: Record<string, DrywallLaborCategory> = {
+  hang: 'hanger',
+  finisher: 'finisher',
+  carpenter: 'components',
+  rcChannel: 'components',
+  prepClean: 'prepClean',
+}
+
+/** Map legacy component work types to estimate component keys for est-vs-actual. */
+const LEGACY_COMPONENT_ESTIMATE_KEY: Record<string, ComponentLaborPieceKey> = {
+  rcChannel: COMPONENT_LABOR_PIECE_KEYS.rc_channel,
+  carpenter: COMPONENT_LABOR_PIECE_KEYS.suspended_grid,
+}
+
+export function legacyWorkTypeCategory(key: string): DrywallLaborCategory | undefined {
+  return LEGACY_WORKTYPE_CATEGORY[key]
+}
+
+/** Normalize piece/workType key to estimate component key (modern keys pass through). */
+export function componentEstimateKeyFromPieceKey(key: string): string {
+  return LEGACY_COMPONENT_ESTIMATE_KEY[key] ?? key
+}
 
 export type PayrollPieceTypeOptionGroup = 'drywall' | 'component' | 'legacy'
 

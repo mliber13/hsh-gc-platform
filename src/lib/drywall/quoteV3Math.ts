@@ -363,7 +363,7 @@ function sumDrywallSqftWithWaste(lines: QuoteLineItem[]): number {
   }, 0)
 }
 
-function computeCleanupTotal(
+export function computeCleanupTotal(
   lines: QuoteLineItem[],
   prepCleanRate: number,
   laborBurden?: QuoteV3LaborBurdenOptions,

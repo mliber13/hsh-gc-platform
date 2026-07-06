@@ -3,12 +3,15 @@
 // ============================================================================
 
 import { parseISO } from 'date-fns'
+import { LABOR_TAX_RATE } from '@/lib/drywall/calculations/quantityUtils'
 import {
   isComponentLaborKey,
   isDrywallHangerKey,
   isFinishScopePieceKey,
   isLegacyPayrollWorkType,
+  legacyWorkTypeCategory,
   resolvePieceEntryKey,
+  type DrywallLaborCategory,
 } from '@/lib/drywall/payrollPieceKeys'
 import {
   calculateHourlyPayWithOvertimeCap,
@@ -47,7 +50,7 @@ export interface DrywallProjectLaborEntryFlat {
   overtimeType?: string
   pieces?: number
   amount: number
-  category: 'hanger' | 'finisher' | 'components' | 'legacy' | 'hourly' | 'other'
+  category: DrywallLaborCategory
 }
 
 export interface DrywallProjectLaborSummary {
@@ -55,6 +58,8 @@ export interface DrywallProjectLaborSummary {
   totalHours: number
   totalOvertimeHours: number
   totalPieces: number
+  /** Sum of 25% W2 burden added to payroll amounts (1099 excluded). */
+  w2BurdenCost: number
   byCategory: Record<DrywallProjectLaborEntryFlat['category'], number>
   byPayPeriod: Array<{
     payPeriodId: string
@@ -68,11 +73,12 @@ export interface DrywallProjectLaborSummary {
 
 export type ProfileRatesByPersonKey = Record<string, number>
 
-function emptyByCategory(): Record<DrywallProjectLaborEntryFlat['category'], number> {
+function emptyByCategory(): Record<DrywallLaborCategory, number> {
   return {
     hanger: 0,
     finisher: 0,
     components: 0,
+    prepClean: 0,
     legacy: 0,
     hourly: 0,
     other: 0,
@@ -82,6 +88,17 @@ function emptyByCategory(): Record<DrywallProjectLaborEntryFlat['category'], num
 function num(v: unknown): number {
   const n = typeof v === 'string' ? parseFloat(v) : Number(v)
   return Number.isFinite(n) ? n : 0
+}
+
+function applyW2LaborBurden(
+  amount: number,
+  personType: PayrollPersonType | string,
+): { burdened: number; burdenAdded: number } {
+  if (personType === 'w2') {
+    const burdened = amount * (1 + LABOR_TAX_RATE)
+    return { burdened, burdenAdded: burdened - amount }
+  }
+  return { burdened: amount, burdenAdded: 0 }
 }
 
 function entryMatchesProject(jobId: string | undefined, projectId: string): boolean {
@@ -107,12 +124,14 @@ export function classifyLaborCategory(
   catalogs: OrgDrywallCatalogs | null,
   pieceKey?: string,
   workType?: string,
-): DrywallProjectLaborEntryFlat['category'] {
+): DrywallLaborCategory {
   if (source === 'hour') return 'hourly'
   const key = resolvePieceEntryKey({ piece_key: pieceKey, workType })
   if (isDrywallHangerKey(key)) return 'hanger'
   if (catalogs && isFinishScopePieceKey(key, catalogs.finish_scopes)) return 'finisher'
   if (isComponentLaborKey(key)) return 'components'
+  const mapped = legacyWorkTypeCategory(key)
+  if (mapped) return mapped
   if (isLegacyPayrollWorkType(key)) return 'legacy'
   return 'other'
 }
@@ -263,15 +282,23 @@ export function summarizeProjectLabor(
   let totalHours = 0
   let totalOvertimeHours = 0
   let totalPieces = 0
+  let w2BurdenCost = 0
 
   const periodMap = new Map<
     string,
     { periodStart: string; periodEnd: string; locked: boolean; cost: number }
   >()
 
+  const burdenedEntries: DrywallProjectLaborEntryFlat[] = []
+
   for (const e of entries) {
-    totalCost += e.amount
-    byCategory[e.category] += e.amount
+    const { burdened, burdenAdded } = applyW2LaborBurden(e.amount, e.personType)
+    w2BurdenCost += burdenAdded
+    const entry = burdened === e.amount ? e : { ...e, amount: burdened }
+    burdenedEntries.push(entry)
+
+    totalCost += burdened
+    byCategory[e.category] += burdened
 
     if (e.source === 'hour') {
       const hrs = num(e.hours)
@@ -289,7 +316,7 @@ export function summarizeProjectLabor(
       locked: e.periodLocked,
       cost: 0,
     }
-    prev.cost += e.amount
+    prev.cost += burdened
     periodMap.set(e.payPeriodId, prev)
   }
 
@@ -308,9 +335,10 @@ export function summarizeProjectLabor(
     totalHours,
     totalOvertimeHours,
     totalPieces,
+    w2BurdenCost,
     byCategory,
     byPayPeriod,
-    entries,
+    entries: burdenedEntries,
   }
 }
 

@@ -16,10 +16,12 @@ const emptyLaborSummary = (): DrywallProjectLaborSummary => ({
   totalHours: 0,
   totalOvertimeHours: 0,
   totalPieces: 0,
+  w2BurdenCost: 0,
   byCategory: {
     hanger: 0,
     finisher: 0,
     components: 0,
+    prepClean: 0,
     legacy: 0,
     hourly: 0,
     other: 0,

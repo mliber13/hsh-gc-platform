@@ -1,7 +1,16 @@
 import type { LucideIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency } from '@/components/hr/payroll/payrollFormat'
+import {
+  componentLaborLabel,
+  type EstimatedLaborBreakdown,
+} from '@/lib/drywall/estimatedLabor'
+import {
+  componentEstimateKeyFromPieceKey,
+  resolvePieceEntryKey,
+} from '@/lib/drywall/payrollPieceKeys'
 import type { EstimatedMaterialBreakdown } from '@/lib/drywall/estimatedMaterial'
+import type { DrywallProjectLaborSummary } from '@/lib/drywall/projectLaborMath'
 import type { MarginVsBidResult, MaterialEntryFlat } from '@/lib/drywall/projectCostMath'
 import { cn } from '@/lib/utils'
 
@@ -50,20 +59,27 @@ export function RunningCostTile({
   material,
   sub,
   total,
+  w2BurdenCost,
 }: {
   icon: LucideIcon
   labor: number
   material: number
   sub: number
   total: number
+  w2BurdenCost?: number
 }) {
+  const laborPart =
+    w2BurdenCost != null && w2BurdenCost > 0
+      ? `Labor: ${formatCurrency(labor)} (incl. ${formatCurrency(w2BurdenCost)} W2 burden)`
+      : `Labor: ${formatCurrency(labor)}`
+
   return (
     <CostTileShell
       title="Running Cost"
       icon={icon}
       value={formatCurrency(total)}
       caption="Labor + Material + Sub"
-      subline={`Labor: ${formatCurrency(labor)} · Material: ${formatCurrency(material)} · Sub: ${formatCurrency(sub)}`}
+      subline={`${laborPart} · Material: ${formatCurrency(material)} · Sub: ${formatCurrency(sub)}`}
     />
   )
 }
@@ -344,6 +360,268 @@ export function EstimatedVsActualMaterialTile({
               </p>
             )}
           </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function varianceClass(variance: number): string {
+  if (variance > 0.005) return 'text-amber-700 dark:text-amber-300'
+  if (variance < -0.005) return 'text-emerald-700 dark:text-emerald-300'
+  return ''
+}
+
+function formatVariance(variance: number): string {
+  return `${variance >= 0 ? '+' : ''}${formatCurrency(variance)}`
+}
+
+function LaborCompareRow({
+  label,
+  estimated,
+  actual,
+  actualDisplay,
+  note,
+  indent,
+}: {
+  label: string
+  estimated: number | null
+  actual: number | null
+  actualDisplay?: string
+  note?: string
+  indent?: boolean
+}) {
+  const est = estimated ?? 0
+  const act = actual ?? 0
+  const hasBoth = estimated != null && actual != null
+  const variance = hasBoth ? act - est : null
+
+  return (
+    <li
+      className={cn(
+        'grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 tabular-nums',
+        indent && 'pl-3 text-muted-foreground',
+      )}
+    >
+      <span className={cn('min-w-0', !indent && 'text-foreground')}>
+        {label}
+        {note ? (
+          <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">{note}</span>
+        ) : null}
+      </span>
+      <span className="text-right">
+        {estimated == null ? '—' : formatCurrency(estimated)}
+      </span>
+      <span className="text-right">
+        {actualDisplay ?? (actual == null ? '—' : formatCurrency(actual))}
+      </span>
+      <span className={cn('text-right', variance != null && varianceClass(variance))}>
+        {variance == null ? '—' : formatVariance(variance)}
+      </span>
+    </li>
+  )
+}
+
+export function EstimatedVsActualLaborTile({
+  icon: Icon,
+  estimated,
+  actual,
+}: {
+  icon: LucideIcon
+  estimated: EstimatedLaborBreakdown
+  actual: DrywallProjectLaborSummary
+}) {
+  const estimatedTotal = estimated.total
+  const actualTotal = actual.totalCost
+  const variance = actualTotal - estimatedTotal
+  const variancePct = estimatedTotal > 0 ? (variance / estimatedTotal) * 100 : null
+  const hasEstimate =
+    estimatedTotal > 0 ||
+    estimated.hanger > 0 ||
+    estimated.finisher > 0 ||
+    estimated.prepClean > 0 ||
+    estimated.components.length > 0
+  const isOver = variance > 0.005
+  const isUnder = variance < -0.005
+
+  const actualByComponent = new Map<string, number>()
+  for (const entry of actual.entries) {
+    if (entry.category !== 'components') continue
+    const rawKey = resolvePieceEntryKey({ piece_key: entry.pieceKey, workType: entry.workType })
+    if (!rawKey) continue
+    const key = componentEstimateKeyFromPieceKey(rawKey)
+    actualByComponent.set(key, (actualByComponent.get(key) ?? 0) + entry.amount)
+  }
+
+  const componentKeys = new Set<string>([
+    ...estimated.components.map((c) => c.key),
+    ...actualByComponent.keys(),
+  ])
+  const componentRows = Array.from(componentKeys)
+    .map((key) => ({
+      key,
+      label: componentLaborLabel(key),
+      estimated: estimated.components.find((c) => c.key === key)?.amount ?? 0,
+      actual: actualByComponent.get(key) ?? 0,
+    }))
+    .filter((row) => row.estimated > 0 || row.actual > 0)
+    .sort((a, b) => Math.max(b.estimated, b.actual) - Math.max(a.estimated, a.actual))
+
+  const unmappedRows: Array<{ key: string; label: string; amount: number }> = [
+    { key: 'legacy', label: 'Legacy', amount: actual.byCategory.legacy ?? 0 },
+    { key: 'hourly', label: 'Hourly', amount: actual.byCategory.hourly ?? 0 },
+    { key: 'other', label: 'Other', amount: actual.byCategory.other ?? 0 },
+  ].filter((row) => row.amount > 0)
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+          Estimated vs Actual Labor
+          {hasEstimate ? (
+            <span
+              className={cn(
+                'ml-auto inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                isOver
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200'
+                  : isUnder
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                    : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+              )}
+            >
+              {isOver ? 'Over estimate' : isUnder ? 'Under estimate' : 'On estimate'}
+            </span>
+          ) : null}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground">Incl. labor burden (25% on W2 actuals).</p>
+
+        {hasEstimate ? (
+          <div className="flex flex-wrap items-end justify-between gap-4 rounded-lg border bg-muted/20 px-4 py-3 text-sm">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Estimated base labor
+              </p>
+              <p className="text-lg font-semibold tabular-nums">{formatCurrency(estimatedTotal)}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Actual</p>
+              <p className="text-lg font-semibold tabular-nums">{formatCurrency(actualTotal)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Variance</p>
+              <p className={cn('text-lg font-semibold tabular-nums', varianceClass(variance))}>
+                {formatVariance(variance)}
+                {variancePct != null
+                  ? ` (${variancePct >= 0 ? '+' : ''}${variancePct.toFixed(1)}%)`
+                  : ''}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No quote labor estimate — complete the quote to compare against payroll labor.
+          </p>
+        )}
+
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            By trade
+          </p>
+          <div className="rounded-lg border px-3 py-2 text-sm">
+            <div className="mb-2 grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <span>Line</span>
+              <span className="text-right">Est.</span>
+              <span className="text-right">Actual</span>
+              <span className="text-right">Var.</span>
+            </div>
+            <ul className="space-y-1.5">
+              <LaborCompareRow
+                label="Hanger"
+                estimated={estimated.hanger}
+                actual={actual.byCategory.hanger ?? 0}
+              />
+              <LaborCompareRow
+                label="Finisher"
+                estimated={estimated.finisher}
+                actual={actual.byCategory.finisher ?? 0}
+              />
+              <LaborCompareRow
+                label="Prep / Clean"
+                estimated={estimated.prepClean}
+                actual={actual.byCategory.prepClean ?? 0}
+              />
+              {(estimated.componentsTotal > 0 || componentRows.length > 0) && (
+                <>
+                  <LaborCompareRow
+                    label="Components"
+                    estimated={estimated.componentsTotal}
+                    actual={actual.byCategory.components ?? 0}
+                  />
+                  {componentRows.map((row) => (
+                    <LaborCompareRow
+                      key={row.key}
+                      label={row.label}
+                      estimated={row.estimated}
+                      actual={row.actual}
+                      indent
+                    />
+                  ))}
+                </>
+              )}
+            </ul>
+            <div className="mt-2 grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 border-t pt-2 font-medium tabular-nums">
+              <span>Mapped total</span>
+              <span className="text-right">
+                {formatCurrency(
+                  estimated.hanger +
+                    estimated.finisher +
+                    estimated.prepClean +
+                    estimated.componentsTotal,
+                )}
+              </span>
+              <span className="text-right">
+                {formatCurrency(
+                  (actual.byCategory.hanger ?? 0) +
+                    (actual.byCategory.finisher ?? 0) +
+                    (actual.byCategory.prepClean ?? 0) +
+                    (actual.byCategory.components ?? 0),
+                )}
+              </span>
+              <span className="text-right">—</span>
+            </div>
+          </div>
+        </div>
+
+        {unmappedRows.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Unmapped actual (no estimate line)
+            </p>
+            <div className="rounded-lg border px-3 py-2 text-sm">
+              <ul className="space-y-1.5">
+                {unmappedRows.map((row) => (
+                  <li key={row.key} className="flex justify-between gap-3 tabular-nums">
+                    <span className="text-muted-foreground">{row.label}</span>
+                    <span>{formatCurrency(row.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-2 flex justify-between gap-3 border-t pt-2 font-medium tabular-nums">
+                <span>Unmapped total</span>
+                <span>
+                  {formatCurrency(unmappedRows.reduce((sum, row) => sum + row.amount, 0))}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="flex justify-between gap-3 border-t pt-3 text-sm font-medium tabular-nums">
+          <span>Total (actual)</span>
+          <span>{formatCurrency(actualTotal)}</span>
         </div>
       </CardContent>
     </Card>

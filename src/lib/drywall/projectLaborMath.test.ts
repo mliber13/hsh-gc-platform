@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { LABOR_TAX_RATE } from '@/lib/drywall/calculations/quantityUtils'
 import {
   classifyLaborCategory,
   extractProjectLaborEntries,
@@ -44,8 +45,17 @@ describe('classifyLaborCategory', () => {
     expect(classifyLaborCategory('piece', emptyCatalogs, 'drywall_hanging')).toBe('hanger')
     expect(classifyLaborCategory('piece', emptyCatalogs, 'level_4')).toBe('finisher')
     expect(classifyLaborCategory('piece', emptyCatalogs, 'rc_channel_labor')).toBe('components')
-    expect(classifyLaborCategory('piece', emptyCatalogs, undefined, 'finisher')).toBe('legacy')
+    expect(classifyLaborCategory('piece', emptyCatalogs, undefined, 'other')).toBe('legacy')
     expect(classifyLaborCategory('piece', emptyCatalogs, 'unknown_key')).toBe('other')
+  })
+
+  it('maps legacy payroll work types to trade categories', () => {
+    expect(classifyLaborCategory('piece', emptyCatalogs, undefined, 'hang')).toBe('hanger')
+    expect(classifyLaborCategory('piece', emptyCatalogs, undefined, 'finisher')).toBe('finisher')
+    expect(classifyLaborCategory('piece', emptyCatalogs, undefined, 'carpenter')).toBe('components')
+    expect(classifyLaborCategory('piece', emptyCatalogs, undefined, 'rcChannel')).toBe('components')
+    expect(classifyLaborCategory('piece', emptyCatalogs, undefined, 'prepClean')).toBe('prepClean')
+    expect(classifyLaborCategory('piece', emptyCatalogs, 'bogus_piece_key')).toBe('other')
   })
 })
 
@@ -129,12 +139,16 @@ describe('extractProjectLaborEntries', () => {
     expect(flat.some((e) => e.category === 'finisher')).toBe(true)
   })
 
-  it('summarizes totals and groups by pay period', () => {
+  it('summarizes totals and groups by pay period with W2 burden on actuals', () => {
     const flat = extractProjectLaborEntries(periods, projectId, emptyCatalogs, {
       'w2-emp-1': 25,
     })
     const summary = summarizeProjectLabor(flat)
-    expect(summary.totalCost).toBeCloseTo(200 + 500 + 160, 2)
+    const w2Hour = 200 * (1 + LABOR_TAX_RATE)
+    const w2Piece = 500 * (1 + LABOR_TAX_RATE)
+    const subPiece = 160
+    expect(summary.totalCost).toBeCloseTo(w2Hour + w2Piece + subPiece, 2)
+    expect(summary.w2BurdenCost).toBeCloseTo((w2Hour - 200) + (w2Piece - 500), 2)
     expect(summary.totalHours).toBe(8)
     expect(summary.totalOvertimeHours).toBe(0)
     expect(summary.totalPieces).toBeCloseTo(1000 + 400, 2)
@@ -142,6 +156,11 @@ describe('extractProjectLaborEntries', () => {
     expect(summary.byPayPeriod[0].cost).toBe(summary.totalCost)
     const categorySum = Object.values(summary.byCategory).reduce((a, b) => a + b, 0)
     expect(categorySum).toBeCloseTo(summary.totalCost, 2)
+    expect(summary.entries.find((e) => e.personType === 'w2' && e.source === 'hour')?.amount).toBeCloseTo(
+      w2Hour,
+      2,
+    )
+    expect(summary.entries.find((e) => e.personType === '1099')?.amount).toBe(subPiece)
   })
 })
 
