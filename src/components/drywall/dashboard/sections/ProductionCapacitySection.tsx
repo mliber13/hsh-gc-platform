@@ -92,10 +92,11 @@ export function ProductionCapacitySection() {
       description="Monthly throughput based on crew bottleneck model"
       headerRight={<StatusPill status={capacity.status} />}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <BigStat label="Monthly Capacity" value={formatDashboardCurrency(capacity.monthlyCapacity)} />
-        <BigStat label="Weekly Capacity" value={formatDashboardCurrency(capacity.weeklyCapacity)} />
-      </div>
+      <BigStat
+        label="Monthly Capacity"
+        value={formatDashboardCurrency(capacity.monthlyCapacity)}
+        sublabel={`Weekly ${formatDashboardCurrency(capacity.weeklyCapacity)}`}
+      />
 
       <ProgressBar
         label="% of Required Monthly"
@@ -104,7 +105,7 @@ export function ProductionCapacitySection() {
         status={capacity.status}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
         <BigStat
           label="Capacity Gap"
           value={formatDashboardCurrency(capacity.capacityGap)}
@@ -119,23 +120,22 @@ export function ProductionCapacitySection() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="cursor-help underline decoration-dotted underline-offset-2">
-                      @ {formatRevenuePerSqft(capacity.revenuePerSqft)}/sqft (drywall, blended)
+                      @ {formatRevenuePerSqft(capacity.revenuePerSqft)}/sqft
                     </span>
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
-                    Weighted avg drywall revenue per board sqft across approved quotes. Override in
-                    Dashboard Targets.
+                    Weighted avg drywall revenue per board sqft across approved quotes.
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ) : (
-              'No revenue/sqft data — approve quotes with bid snapshots and sqft'
+              'No revenue/sqft data'
             )
           }
         />
       </div>
 
-      <div className="space-y-3 rounded-lg border bg-muted/20 px-4 py-3">
+      <div className="mt-auto space-y-2 rounded-lg border bg-muted/20 px-3 py-2.5">
         <StageCapacityRow
           label="Hanging"
           sqftMo={capacity.hangerSqftMo}
@@ -154,7 +154,7 @@ export function ProductionCapacitySection() {
         />
       </div>
 
-      <p className="text-sm text-muted-foreground">{bottleneckLabel}</p>
+      <p className="text-xs text-muted-foreground">{bottleneckLabel}</p>
       {capacity.monthlyCapacity === 0 && (
         <p className="text-xs text-amber-700 dark:text-amber-300">
           Zero crew or missing revenue/sqft — capacity cannot be computed yet.

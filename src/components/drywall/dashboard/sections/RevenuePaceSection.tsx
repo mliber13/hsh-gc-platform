@@ -39,13 +39,11 @@ export function RevenuePaceSection() {
       description="Monthly billings vs goal from QuickBooks"
       headerRight={<StatusPill status={rp.status} />}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <BigStat
-          label="Current Month Billings"
-          value={formatDashboardCurrency(rp.billingsThisMonth)}
-        />
-        <BigStat label="Monthly Goal" value={formatDashboardCurrency(rp.monthlyGoal)} />
-      </div>
+      <BigStat
+        label="Current Month Billings"
+        value={formatDashboardCurrency(rp.billingsThisMonth)}
+        sublabel={`Goal ${formatDashboardCurrency(rp.monthlyGoal)}`}
+      />
 
       <ProgressBar
         label="% of Monthly Goal"
@@ -54,7 +52,7 @@ export function RevenuePaceSection() {
         status={rp.status}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
         <BigStat
           label="Projected EOM"
           value={formatDashboardCurrency(rp.projectedEom)}
@@ -67,13 +65,13 @@ export function RevenuePaceSection() {
         />
       </div>
 
-      <div className="rounded-lg border bg-muted/30 px-4 py-3">
+      <div className="mt-auto rounded-lg border bg-muted/30 px-3 py-2.5">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Accounts Receivable
         </p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums">{formatDashboardCurrency(rp.ar)}</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Open balance on included QB invoices · {formatDashboardPercent(rp.pctOfGoal)} of goal MTD
+        <p className="mt-0.5 text-xl font-semibold tabular-nums">{formatDashboardCurrency(rp.ar)}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Open QB balance · {formatDashboardPercent(rp.pctOfGoal)} of goal MTD
         </p>
       </div>
     </KpiCard>

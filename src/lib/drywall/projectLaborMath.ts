@@ -101,10 +101,20 @@ function applyW2LaborBurden(
   return { burdened: amount, burdenAdded: 0 }
 }
 
-function entryMatchesProject(jobId: string | undefined, projectId: string): boolean {
+function isAssignablePayrollJobId(jobId: string | undefined): jobId is string {
   const id = String(jobId ?? '').trim()
-  if (!id || id === 'unassigned') return false
-  return id === projectId
+  return Boolean(id) && id !== 'unassigned'
+}
+
+function appendLaborToProjectMap(
+  byProject: Map<string, DrywallProjectLaborEntryFlat[]>,
+  jobId: string | undefined,
+  entry: DrywallProjectLaborEntryFlat,
+): void {
+  if (!isAssignablePayrollJobId(jobId)) return
+  const list = byProject.get(jobId) ?? []
+  list.push(entry)
+  byProject.set(jobId, list)
 }
 
 function periodEndMs(periodEnd: string): number {
@@ -203,13 +213,12 @@ function buildRunEntriesMap(entries: PayrollEntry[]): Record<string, PayrollEntr
   return out
 }
 
-export function extractProjectLaborEntries(
+export function extractAllProjectLaborEntries(
   periods: PayPeriodForLabor[],
-  projectId: string,
   catalogs: OrgDrywallCatalogs | null,
   profileRates: ProfileRatesByPersonKey = {},
-): DrywallProjectLaborEntryFlat[] {
-  const flat: DrywallProjectLaborEntryFlat[] = []
+): Map<string, DrywallProjectLaborEntryFlat[]> {
+  const byProject = new Map<string, DrywallProjectLaborEntryFlat[]>()
 
   for (const period of periods) {
     const allEntries = buildRunEntriesMap(period.entries)
@@ -220,13 +229,12 @@ export function extractProjectLaborEntries(
 
       const hourEntries = entry.hourEntries || []
       hourEntries.forEach((he, idx) => {
-        if (!entryMatchesProject(he.jobId, projectId)) return
         const hours = num(he.hours)
         if (hours <= 0) return
         const amount = hourEntryPay(he, idx, entry, profileRate)
         if (amount <= 0) return
 
-        flat.push({
+        appendLaborToProjectMap(byProject, he.jobId, {
           payPeriodId: period.id,
           periodStart: period.startDate,
           periodEnd: period.endDate,
@@ -244,14 +252,13 @@ export function extractProjectLaborEntries(
       })
 
       for (const pe of entry.pieceEntries || []) {
-        if (!entryMatchesProject(pe.jobId, projectId)) continue
         const amount = pieceEntryNetAmount(pe, entry, allEntries, pk)
         if (amount <= 0) continue
         const pieces = pieceEntryPieces(pe)
         const pieceKey = pe.piece_key
         const workType = pe.workType
 
-        flat.push({
+        appendLaborToProjectMap(byProject, pe.jobId, {
           payPeriodId: period.id,
           periodStart: period.startDate,
           periodEnd: period.endDate,
@@ -271,7 +278,16 @@ export function extractProjectLaborEntries(
     }
   }
 
-  return flat
+  return byProject
+}
+
+export function extractProjectLaborEntries(
+  periods: PayPeriodForLabor[],
+  projectId: string,
+  catalogs: OrgDrywallCatalogs | null,
+  profileRates: ProfileRatesByPersonKey = {},
+): DrywallProjectLaborEntryFlat[] {
+  return extractAllProjectLaborEntries(periods, catalogs, profileRates).get(projectId) ?? []
 }
 
 export function summarizeProjectLabor(

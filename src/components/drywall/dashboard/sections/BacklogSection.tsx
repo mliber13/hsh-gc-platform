@@ -1,7 +1,6 @@
 import { format, parseISO } from 'date-fns'
 import {
   formatDashboardCurrency,
-  formatDashboardPercent,
 } from '@/lib/drywall/dashboardCalculations'
 import { useDashboardData } from '../useDashboardData'
 import { BigStat } from '../ui/BigStat'
@@ -27,10 +26,11 @@ export function BacklogSection() {
       description="Approved work in pipeline vs goal"
       headerRight={<StatusPill status={backlog.status} />}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <BigStat label="Current Backlog" value={formatDashboardCurrency(backlog.currentBacklog)} />
-        <BigStat label="Goal Backlog" value={formatDashboardCurrency(backlog.goalBacklog)} />
-      </div>
+      <BigStat
+        label="Current Backlog"
+        value={formatDashboardCurrency(backlog.currentBacklog)}
+        sublabel={`Goal ${formatDashboardCurrency(backlog.goalBacklog)}`}
+      />
 
       <ProgressBar
         label="% of Goal"
@@ -49,9 +49,9 @@ export function BacklogSection() {
         sublabel="At current monthly capacity"
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <p className="text-sm font-medium">
+      <div className="mt-auto grid gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">
             Upcoming Starts ({backlog.upcomingStarts.length})
           </p>
           {backlog.upcomingStarts.length === 0 ? (
@@ -69,8 +69,8 @@ export function BacklogSection() {
             </ul>
           )}
         </div>
-        <div className="space-y-2">
-          <p className="text-sm font-medium">
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">
             Upcoming Completions ({backlog.upcomingCompletions.length})
           </p>
           {backlog.upcomingCompletions.length === 0 ? (
@@ -89,10 +89,6 @@ export function BacklogSection() {
           )}
         </div>
       </div>
-
-      <p className="text-xs text-muted-foreground">
-        Backlog at {formatDashboardPercent(backlog.pctOfGoal)} of goal
-      </p>
     </KpiCard>
   )
 }

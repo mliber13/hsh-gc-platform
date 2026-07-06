@@ -137,6 +137,112 @@ export async function fetchDrywallProjectMaterialEntries(
   return [...fromEntries, ...fromQb].sort((a, b) => b.date.localeCompare(a.date))
 }
 
+function appendToProjectMap<T>(
+  map: Map<string, T[]>,
+  projectId: string | null | undefined,
+  entry: T,
+): void {
+  const id = String(projectId ?? '').trim()
+  if (!id) return
+  const list = map.get(id) ?? []
+  list.push(entry)
+  map.set(id, list)
+}
+
+export async function fetchAllDrywallMaterialByProject(): Promise<
+  Map<string, MaterialEntryFlat[]>
+> {
+  if (!isOnlineMode()) {
+    throw new Error('Drywall project cost requires an online connection to Supabase.')
+  }
+
+  const organizationId = await requireUserOrgId()
+
+  const [materialResult, qbMaterialResult] = await Promise.all([
+    supabase
+      .from('material_entries')
+      .select('id, project_id, date, description, vendor, amount')
+      .eq('organization_id', organizationId),
+    supabase
+      .from('drywall_qb_materials')
+      .select('id, matched_project_id, txn_date, qb_job_name, vendor_name, doc_number, amount')
+      .eq('review_status', 'accepted')
+      .not('matched_project_id', 'is', null),
+  ])
+
+  if (materialResult.error) {
+    throw new Error(`Failed to fetch material entries: ${materialResult.error.message}`)
+  }
+  if (qbMaterialResult.error) {
+    throw new Error(`Failed to fetch QuickBooks materials: ${qbMaterialResult.error.message}`)
+  }
+
+  const byProject = new Map<string, MaterialEntryFlat[]>()
+
+  for (const row of materialResult.data ?? []) {
+    appendToProjectMap(byProject, row.project_id, {
+      id: String(row.id),
+      date: toIsoDate(row.date),
+      description: String(row.description ?? ''),
+      vendor: row.vendor != null ? String(row.vendor) : null,
+      amount: num(row.amount),
+    })
+  }
+
+  for (const row of qbMaterialResult.data ?? []) {
+    appendToProjectMap(byProject, row.matched_project_id, {
+      id: String(row.id),
+      date: toIsoDate(row.txn_date),
+      description: qbMaterialDescription(row),
+      vendor: row.vendor_name != null ? String(row.vendor_name) : null,
+      amount: num(row.amount),
+    })
+  }
+
+  for (const [projectId, entries] of byProject) {
+    entries.sort((a, b) => b.date.localeCompare(a.date))
+    byProject.set(projectId, entries)
+  }
+
+  return byProject
+}
+
+export async function fetchAllDrywallSubByProject(): Promise<Map<string, SubEntryFlat[]>> {
+  if (!isOnlineMode()) {
+    throw new Error('Drywall project cost requires an online connection to Supabase.')
+  }
+
+  const organizationId = await requireUserOrgId()
+
+  const { data, error } = await supabase
+    .from('subcontractor_entries')
+    .select('id, project_id, date, subcontractor_name, description, amount')
+    .eq('organization_id', organizationId)
+
+  if (error) {
+    throw new Error(`Failed to fetch subcontractor entries: ${error.message}`)
+  }
+
+  const byProject = new Map<string, SubEntryFlat[]>()
+
+  for (const row of data ?? []) {
+    appendToProjectMap(byProject, row.project_id, {
+      id: String(row.id),
+      date: toIsoDate(row.date),
+      subcontractorName: String(row.subcontractor_name ?? ''),
+      description: String(row.description ?? ''),
+      amount: num(row.amount),
+    })
+  }
+
+  for (const [projectId, entries] of byProject) {
+    entries.sort((a, b) => b.date.localeCompare(a.date))
+    byProject.set(projectId, entries)
+  }
+
+  return byProject
+}
+
 export async function fetchDrywallProjectSubEntries(projectId: string): Promise<SubEntryFlat[]> {
   if (!isOnlineMode()) {
     throw new Error('Drywall project cost requires an online connection to Supabase.')

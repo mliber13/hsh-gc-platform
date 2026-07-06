@@ -50,6 +50,10 @@ function buildProfileRatesByPersonKey(): Promise<ProfileRatesByPersonKey> {
   })
 }
 
+export async function buildPayrollProfileRatesForLabor(): Promise<ProfileRatesByPersonKey> {
+  return buildProfileRatesByPersonKey()
+}
+
 export async function fetchPayPeriodsForDrywallLabor(): Promise<PayPeriodForLabor[]> {
   if (!isOnlineMode()) {
     throw new Error('Drywall labor summary requires an online connection to Supabase.')

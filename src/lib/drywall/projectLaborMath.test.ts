@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { LABOR_TAX_RATE } from '@/lib/drywall/calculations/quantityUtils'
 import {
   classifyLaborCategory,
+  extractAllProjectLaborEntries,
   extractProjectLaborEntries,
   splitLaborByProductionWindow,
   summarizeProjectLabor,
@@ -161,6 +162,73 @@ describe('extractProjectLaborEntries', () => {
       2,
     )
     expect(summary.entries.find((e) => e.personType === '1099')?.amount).toBe(subPiece)
+  })
+})
+
+describe('extractAllProjectLaborEntries', () => {
+  const projectA = 'proj-a'
+  const projectB = 'proj-b'
+  const periods: PayPeriodForLabor[] = [
+    {
+      id: 'pp-1',
+      startDate: '2026-05-12',
+      endDate: '2026-05-18',
+      locked: true,
+      completedAt: null,
+      entries: [
+        {
+          personId: 'emp-1',
+          personType: 'w2',
+          hourEntries: [
+            {
+              id: 'h1',
+              jobId: projectA,
+              jobName: 'Site A',
+              hours: 8,
+              overtimeType: 'regular',
+            },
+            {
+              id: 'h2',
+              jobId: '',
+              jobName: 'Unassigned',
+              hours: 4,
+              overtimeType: 'regular',
+            },
+            {
+              id: 'h3',
+              jobId: 'unassigned',
+              jobName: 'Unassigned',
+              hours: 2,
+              overtimeType: 'regular',
+            },
+          ],
+          pieceEntries: [
+            {
+              id: 'p1',
+              jobId: projectB,
+              jobName: 'Site B',
+              piece_key: 'drywall_hanging',
+              totalPhases: 1,
+              phasesCompleted: 1,
+              jobTotalSqft: 500,
+              rate: 0.5,
+              amount: 250,
+            },
+          ],
+        },
+      ],
+    },
+  ]
+
+  it('buckets labor entries by jobId and skips unassigned rows', () => {
+    const byProject = extractAllProjectLaborEntries(periods, emptyCatalogs, { 'w2-emp-1': 25 })
+    expect(byProject.get(projectA)).toHaveLength(1)
+    expect(byProject.get(projectB)).toHaveLength(1)
+    expect(byProject.get('')).toBeUndefined()
+    expect(byProject.get('unassigned')).toBeUndefined()
+    expect(extractProjectLaborEntries(periods, projectA, emptyCatalogs, { 'w2-emp-1': 25 })).toEqual(
+      byProject.get(projectA) ?? [],
+    )
   })
 })
 
