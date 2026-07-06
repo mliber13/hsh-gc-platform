@@ -936,7 +936,7 @@ export function PayrollPage() {
 
         <TabsContent value="labor-audit" className="mt-0">
 
-          <LaborAssignmentAudit />
+          <LaborAssignmentAudit readOnly={!allowed} />
 
         </TabsContent>
 

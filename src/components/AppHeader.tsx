@@ -40,6 +40,7 @@ function fallbackTitleFromPath(pathname: string): string {
   if (pathname.startsWith('/meeting')) return 'Meeting'
   if (pathname.startsWith('/deals')) return 'Deals'
   if (pathname.startsWith('/tenants')) return 'Tenants'
+  if (pathname.startsWith('/drywall/dashboard')) return 'KPI Hub'
   return ''
 }
 

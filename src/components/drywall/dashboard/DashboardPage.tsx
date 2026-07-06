@@ -84,7 +84,7 @@ function DashboardContent() {
 }
 
 export function DashboardPage() {
-  usePageTitle('Drywall — Dashboard')
+  usePageTitle('KPI Hub')
 
   return (
     <DashboardDataProvider>
@@ -93,7 +93,7 @@ export function DashboardPage() {
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
               <LayoutDashboard className="h-7 w-7 text-primary" />
-              KPI Dashboard
+              KPI Hub
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Operational pulse — pace, capacity, crew, and execution at a glance.
