@@ -1,6 +1,5 @@
 import {
   formatDashboardCurrency,
-  formatDashboardPercent,
 } from '@/lib/drywall/dashboardCalculations'
 import type { LaborPerformanceTradeRow } from '@/services/drywallDivisionAggregateService'
 import { cn } from '@/lib/utils'
@@ -30,7 +29,7 @@ function efficiencyPillStatus(
 
 export function LaborPerformanceSection() {
   const { laborPerformance, loading, error } = useDivisionExecution()
-  const { totalEstLabor, totalActualLabor, overallEfficiencyPct, tradeRows, unmappedActual } =
+  const { jobCount, totalEstLabor, totalActualLabor, overallEfficiencyPct, tradeRows, unmappedActual } =
     laborPerformance
 
   if (loading) {
@@ -49,7 +48,7 @@ export function LaborPerformanceSection() {
     )
   }
 
-  const hasData = totalEstLabor > 0 || totalActualLabor > 0
+  const hasData = jobCount > 0 && (totalEstLabor > 0 || totalActualLabor > 0)
   const overallPill = efficiencyPillStatus(
     overallEfficiencyPct == null
       ? 'neutral'
@@ -75,10 +74,14 @@ export function LaborPerformanceSection() {
     >
       {!hasData ? (
         <p className="text-sm text-muted-foreground">
-          No labor data in scope yet for in-production or recently completed jobs.
+          No labor data from completed jobs yet.
         </p>
       ) : (
         <>
+          <p className="text-sm text-muted-foreground">
+            {jobCount} completed {jobCount === 1 ? 'job' : 'jobs'}
+          </p>
+
           <div className="grid gap-4 sm:grid-cols-3">
             <BigStat
               label="Estimated labor"

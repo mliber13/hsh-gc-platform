@@ -113,6 +113,7 @@ export interface LaborPerformanceTradeRow {
 }
 
 export interface DivisionLaborPerformance {
+  jobCount: number
   totalEstLabor: number
   totalActualLabor: number
   overallEfficiencyPct: number | null
@@ -335,7 +336,7 @@ export function computeLaborEfficiencyPct(estimated: number, actual: number): nu
 export function aggregateDivisionLaborPerformance(
   jobs: DivisionExecutionJob[],
 ): DivisionLaborPerformance {
-  const scoped = jobs.filter((job) => job.inProgress || isDivisionJobCompleted(job.status))
+  const scoped = jobs.filter((job) => isDivisionJobCompleted(job.status))
 
   let totalEstLabor = 0
   let totalActualLabor = 0
@@ -383,6 +384,7 @@ export function aggregateDivisionLaborPerformance(
   })
 
   return {
+    jobCount: scoped.length,
     totalEstLabor,
     totalActualLabor,
     overallEfficiencyPct: computeLaborEfficiencyPct(totalEstLabor, totalActualLabor),

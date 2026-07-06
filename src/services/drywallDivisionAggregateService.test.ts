@@ -232,7 +232,7 @@ describe('buildDivisionExecutionJob', () => {
 })
 
 describe('aggregateDivisionLaborPerformance', () => {
-  it('aggregates trade rows and computes efficiency as est ÷ actual × 100', () => {
+  it('aggregates completed jobs only and computes efficiency as est ÷ actual × 100', () => {
     const jobs = [
       buildDivisionExecutionJob({
         projectId: 'a',
@@ -293,10 +293,35 @@ describe('aggregateDivisionLaborPerformance', () => {
         estLabor: 8_000,
         estLaborByTrade: { hanger: 5_000, finisher: 3_000, components: 0, prepClean: 0 },
       }),
+      buildDivisionExecutionJob({
+        projectId: 'running',
+        projectName: 'In Production',
+        status: 'production',
+        bidSnapshot: bidSnapshot(10_000),
+        laborEntries: [
+          {
+            payPeriodId: 'pp-1',
+            periodStart: '2026-05-01',
+            periodEnd: '2026-05-07',
+            periodLocked: false,
+            periodCompletedAt: null,
+            personId: 'c-4',
+            personType: '1099',
+            source: 'piece',
+            amount: 1_000,
+            category: 'finisher',
+          },
+        ],
+        materialEntries: [],
+        subEntries: [],
+        estLabor: 50_000,
+        estLaborByTrade: { hanger: 0, finisher: 50_000, components: 0, prepClean: 0 },
+      }),
     ]
 
     const perf = aggregateDivisionLaborPerformance(jobs)
 
+    expect(perf.jobCount).toBe(2)
     expect(perf.totalEstLabor).toBe(18_000)
     expect(perf.totalActualLabor).toBe(10_500)
     expect(perf.overallEfficiencyPct).toBeCloseTo((18_000 / 10_500) * 100, 5)
