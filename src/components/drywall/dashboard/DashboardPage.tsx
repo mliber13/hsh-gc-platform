@@ -11,6 +11,7 @@ import {
   sectionsForGroup,
 } from './sections/registry'
 import { DashboardDataProvider, useDashboardData } from './useDashboardData'
+import { DivisionExecutionProvider, useDivisionExecution } from './useDivisionExecution'
 
 function DashboardContent() {
   const { loading, error, refresh } = useDashboardData()
@@ -88,31 +89,43 @@ export function DashboardPage() {
 
   return (
     <DashboardDataProvider>
-      <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-              <LayoutDashboard className="h-7 w-7 text-primary" />
-              KPI Hub
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Operational pulse — pace, capacity, crew, and execution at a glance.
-            </p>
+      <DivisionExecutionProvider>
+        <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+                <LayoutDashboard className="h-7 w-7 text-primary" />
+                KPI Hub
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Operational pulse — pace, capacity, crew, and execution at a glance.
+              </p>
+            </div>
+            <DashboardRefreshButton />
           </div>
-          <DashboardRefreshButton />
+          <DashboardContent />
         </div>
-        <DashboardContent />
-      </div>
+      </DivisionExecutionProvider>
     </DashboardDataProvider>
   )
 }
 
 function DashboardRefreshButton() {
   const { loading, refresh } = useDashboardData()
+  const { loading: executionLoading, refresh: refreshExecution } = useDivisionExecution()
+  const busy = loading || executionLoading
   return (
-    <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
-      <RefreshCw className={loading ? 'mr-2 h-4 w-4 animate-spin' : 'mr-2 h-4 w-4'} />
-      Refresh
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        refresh()
+        refreshExecution()
+      }}
+      disabled={busy}
+    >
+      <RefreshCw className={busy ? 'mr-2 h-4 w-4 animate-spin' : 'mr-2 h-4 w-4'} />
+      Sync
     </Button>
   )
 }

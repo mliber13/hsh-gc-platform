@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,15 +6,15 @@ import {
   formatDashboardCurrency,
   formatDashboardPercent,
 } from '@/lib/drywall/dashboardCalculations'
-import {
-  fetchDivisionMarginRollUp,
-  type DivisionExecutionRollUp,
-  type DivisionMarginJob,
+import type {
+  DivisionExecutionRollUp,
+  DivisionMarginJob,
 } from '@/services/drywallDivisionAggregateService'
 import { cn } from '@/lib/utils'
 import { BigStat } from '../ui/BigStat'
 import { KpiCard } from '../ui/KpiCard'
 import { StatusPill } from '../ui/StatusPill'
+import { useDivisionExecution } from '../useDivisionExecution'
 
 const TOP_JOBS_DEFAULT = 5
 
@@ -160,31 +160,8 @@ function DivisionJobsTable({
 }
 
 export function DivisionMarginSection() {
-  const [rollUp, setRollUp] = useState<DivisionExecutionRollUp | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { marginRollUp: data, loading, error } = useDivisionExecution()
   const [showAllJobs, setShowAllJobs] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    fetchDivisionMarginRollUp()
-      .then((data) => {
-        if (!cancelled) setRollUp(data)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load division margins')
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   if (loading) {
     return (
@@ -208,7 +185,6 @@ export function DivisionMarginSection() {
     )
   }
 
-  const data = rollUp!
   const aggregatePill = marginPillStatus(data.aggregateMarginColor)
 
   if (data.jobs.length === 0) {

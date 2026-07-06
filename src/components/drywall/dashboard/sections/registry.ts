@@ -1,6 +1,8 @@
 import type { ComponentType } from 'react'
 import { BacklogSection } from './BacklogSection'
 import { DivisionMarginSection } from './DivisionMarginSection'
+import { EstimatingAccuracySection } from './EstimatingAccuracySection'
+import { LaborPerformanceSection } from './LaborPerformanceSection'
 import { EstimatingSection } from './EstimatingSection'
 import { ManpowerSection } from './ManpowerSection'
 import { ProductionCapacitySection } from './ProductionCapacitySection'
@@ -84,6 +86,22 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'execution',
     span: 'full',
     component: DivisionMarginSection,
+  },
+  {
+    id: 'labor-performance',
+    title: 'Labor Performance',
+    order: 2,
+    group: 'execution',
+    span: 'full',
+    component: LaborPerformanceSection,
+  },
+  {
+    id: 'estimating-accuracy',
+    title: 'Estimating Accuracy',
+    order: 3,
+    group: 'execution',
+    span: 'full',
+    component: EstimatingAccuracySection,
   },
 ]
 
