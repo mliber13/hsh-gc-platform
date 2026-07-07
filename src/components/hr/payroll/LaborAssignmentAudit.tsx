@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ClipboardList, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,7 @@ import {
   clearLaborEntryOffSystem,
   countNameMatchSuggestions,
   fetchDrywallLaborAudit,
+  fetchLaborAuditPayPeriods,
   fetchOffSystemLaborEntries,
   markLaborEntriesOffSystem,
   markLaborEntryOffSystem,
@@ -46,7 +47,10 @@ import { fetchDrywallProjects } from '@/services/drywallProjectsService'
 import { cn } from '@/lib/utils'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type { DrywallProjectListItem } from '@/types/drywall'
+import type { PayPeriod } from '@/types/payroll'
 import { formatCurrency } from './payrollFormat'
+
+const ROWS_PER_PAGE = 50
 
 const JOB_PROBLEMS: MislabeledLaborProblem[] = [
   'no_job',
@@ -131,7 +135,29 @@ function formatBatchToast(result: LaborAuditBatchResult, verb: string): string {
   return parts.join(' · ')
 }
 
-function AuditTable({
+function ShowMoreRows({
+  total,
+  visible,
+  onShowMore,
+}: {
+  total: number
+  visible: number
+  onShowMore: () => void
+}) {
+  const remaining = total - visible
+  if (remaining <= 0) return null
+
+  const nextCount = Math.min(ROWS_PER_PAGE, remaining)
+  return (
+    <div className="flex justify-center pt-2">
+      <Button type="button" variant="outline" size="sm" onClick={onShowMore}>
+        Show {nextCount} more ({remaining} remaining)
+      </Button>
+    </div>
+  )
+}
+
+const AuditTable = memo(function AuditTable({
   rows,
   projects,
   catalogs,
@@ -375,9 +401,10 @@ function AuditTable({
       </table>
     </div>
   )
-}
+})
 
 export function LaborAssignmentAudit({ readOnly = false }: Props) {
+  const periodsRef = useRef<PayPeriod[]>([])
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<MislabeledLaborEntry[]>([])
   const [offSystemRows, setOffSystemRows] = useState<MislabeledLaborEntry[]>([])
@@ -390,16 +417,21 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
   const [offSystemOpen, setOffSystemOpen] = useState(false)
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set())
   const [bulkProjectId, setBulkProjectId] = useState('')
+  const [jobVisibleLimit, setJobVisibleLimit] = useState(ROWS_PER_PAGE)
+  const [typeVisibleLimit, setTypeVisibleLimit] = useState(ROWS_PER_PAGE)
+  const [offSystemVisibleLimit, setOffSystemVisibleLimit] = useState(ROWS_PER_PAGE)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [auditRows, offSystem, drywallProjects, orgCatalogs] = await Promise.all([
+      const [auditRows, offSystem, drywallProjects, orgCatalogs, periods] = await Promise.all([
         fetchDrywallLaborAudit({ scope }),
         fetchOffSystemLaborEntries(),
         fetchDrywallProjects(),
         fetchOrgDrywallCatalogs().catch(() => null),
+        fetchLaborAuditPayPeriods(),
       ])
+      periodsRef.current = periods
       setRows(auditRows)
       setOffSystemRows(offSystem)
       setProjects(drywallProjects)
@@ -407,6 +439,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to load labor audit'
       toast.error(message)
+      periodsRef.current = []
       setRows([])
       setOffSystemRows([])
     } finally {
@@ -417,7 +450,16 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
   useEffect(() => {
     void load()
     setSelectedKeys(new Set())
+    setJobVisibleLimit(ROWS_PER_PAGE)
+    setTypeVisibleLimit(ROWS_PER_PAGE)
+    setOffSystemVisibleLimit(ROWS_PER_PAGE)
   }, [load])
+
+  useEffect(() => {
+    setJobVisibleLimit(ROWS_PER_PAGE)
+    setTypeVisibleLimit(ROWS_PER_PAGE)
+    setOffSystemVisibleLimit(ROWS_PER_PAGE)
+  }, [filter])
 
   const jobRows = useMemo(
     () => rows.filter((row) => JOB_PROBLEMS.includes(row.problem)),
@@ -448,6 +490,21 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     return offSystemRows.filter((row) => matchesFilter(row, filterQuery))
   }, [offSystemRows, filterQuery])
 
+  const visibleJobRows = useMemo(
+    () => filteredJobRows.slice(0, jobVisibleLimit),
+    [filteredJobRows, jobVisibleLimit],
+  )
+
+  const visibleTypeRows = useMemo(
+    () => filteredTypeRows.slice(0, typeVisibleLimit),
+    [filteredTypeRows, typeVisibleLimit],
+  )
+
+  const visibleOffSystemRows = useMemo(
+    () => filteredOffSystemRows.slice(0, offSystemVisibleLimit),
+    [filteredOffSystemRows, offSystemVisibleLimit],
+  )
+
   const removeRows = (targetRows: MislabeledLaborEntry[]) => {
     const keys = new Set(targetRows.map(rowKey))
     setRows((prev) => prev.filter((r) => !keys.has(rowKey(r))))
@@ -468,8 +525,8 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
   )
 
   const allShownSelected =
-    filteredJobRows.length > 0 &&
-    filteredJobRows.every((row) => selectedKeys.has(rowKey(row)))
+    visibleJobRows.length > 0 &&
+    visibleJobRows.every((row) => selectedKeys.has(rowKey(row)))
 
   const toggleSelectRow = (row: MislabeledLaborEntry) => {
     const key = rowKey(row)
@@ -485,9 +542,9 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     setSelectedKeys((prev) => {
       const next = new Set(prev)
       if (allShownSelected) {
-        for (const row of filteredJobRows) next.delete(rowKey(row))
+        for (const row of visibleJobRows) next.delete(rowKey(row))
       } else {
-        for (const row of filteredJobRows) next.add(rowKey(row))
+        for (const row of visibleJobRows) next.add(rowKey(row))
       }
       return next
     })
@@ -520,7 +577,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     setReassigningKey(key)
     removeRow(row)
     try {
-      await reassignLaborEntryJob(row, project.id, project.name)
+      await reassignLaborEntryJob(row, project.id, project.name, periodsRef.current)
       toast.success(`Assigned to ${project.name}`)
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Reassignment failed'
@@ -541,7 +598,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     setReassigningKey(key)
     optimisticOffSystem([row])
     try {
-      await markLaborEntryOffSystem(row)
+      await markLaborEntryOffSystem(row, periodsRef.current)
       toast.success('Marked off-system')
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to mark off-system'
@@ -558,7 +615,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     setBulkAssigning(true)
     optimisticOffSystem(batch)
     try {
-      const result = await markLaborEntriesOffSystem(batch)
+      const result = await markLaborEntriesOffSystem(batch, periodsRef.current)
       toast.success(formatBatchToast(result, 'Marked'))
       if (result.failed > 0) void load()
     } catch (e) {
@@ -578,7 +635,12 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     setBulkAssigning(true)
     removeRows(batch)
     try {
-      const result = await assignLaborEntriesToProject(batch, project.id, project.name)
+      const result = await assignLaborEntriesToProject(
+        batch,
+        project.id,
+        project.name,
+        periodsRef.current,
+      )
       toast.success(formatBatchToast(result, 'Assigned'))
       if (result.failed > 0) void load()
     } catch (e) {
@@ -603,7 +665,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     setOffSystemRows((prev) => prev.filter((r) => rowKey(r) !== key))
     setRows((prev) => [...prev, restored])
     try {
-      await clearLaborEntryOffSystem(row)
+      await clearLaborEntryOffSystem(row, periodsRef.current)
       toast.success('Returned to unassigned')
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to un-mark'
@@ -623,11 +685,15 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     setReassigningKey(key)
     removeRow(row)
     try {
-      await retagLaborEntryType(row, {
-        piece_key: opt.catalogSource === 'v3_drywall' ? opt.value : undefined,
-        workType: opt.value,
-        catalog_source: opt.catalogSource,
-      })
+      await retagLaborEntryType(
+        row,
+        {
+          piece_key: opt.catalogSource === 'v3_drywall' ? opt.value : undefined,
+          workType: opt.value,
+          catalog_source: opt.catalogSource,
+        },
+        periodsRef.current,
+      )
       toast.success('Type updated')
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Type update failed'
@@ -647,7 +713,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     setBulkAssigning(true)
     removeRows(candidates)
     try {
-      const result = await autoAssignNameMatches(candidates)
+      const result = await autoAssignNameMatches(candidates, periodsRef.current)
       const parts = [`Assigned ${result.assigned}`]
       if (result.skippedLocked > 0) {
         parts.push(`skipped ${result.skippedLocked} locked`)
@@ -816,7 +882,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
           ) : null}
 
           <AuditTable
-            rows={filteredJobRows}
+            rows={visibleJobRows}
             projects={projects}
             catalogs={catalogs}
             readOnly={readOnly}
@@ -833,6 +899,11 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
             allShownSelected={allShownSelected}
             onToggleSelectAllShown={toggleSelectAllShown}
           />
+          <ShowMoreRows
+            total={filteredJobRows.length}
+            visible={visibleJobRows.length}
+            onShowMore={() => setJobVisibleLimit((n) => n + ROWS_PER_PAGE)}
+          />
           {jobRows.length > 0 && filteredJobRows.length === 0 ? (
             <p className="text-center text-sm text-muted-foreground">No job rows match your filter.</p>
           ) : null}
@@ -848,7 +919,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
             </p>
           </div>
           <AuditTable
-            rows={filteredTypeRows}
+            rows={visibleTypeRows}
             projects={projects}
             catalogs={catalogs}
             readOnly={readOnly}
@@ -859,6 +930,11 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
             onRetagType={readOnly ? undefined : (row, value) => void handleRetagType(row, value)}
             showJobActions={false}
             showTypeActions
+          />
+          <ShowMoreRows
+            total={filteredTypeRows.length}
+            visible={visibleTypeRows.length}
+            onShowMore={() => setTypeVisibleLimit((n) => n + ROWS_PER_PAGE)}
           />
           {typeRows.length > 0 && filteredTypeRows.length === 0 ? (
             <p className="text-center text-sm text-muted-foreground">No type rows match your filter.</p>
@@ -889,7 +965,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOffSystemRows.map((row) => {
+                  {visibleOffSystemRows.map((row) => {
                     const key = rowKey(row)
                     const busy = reassigningKey === key
                     return (
@@ -917,6 +993,11 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
                 </tbody>
               </table>
             </div>
+            <ShowMoreRows
+              total={filteredOffSystemRows.length}
+              visible={visibleOffSystemRows.length}
+              onShowMore={() => setOffSystemVisibleLimit((n) => n + ROWS_PER_PAGE)}
+            />
           </CollapsibleContent>
         </Collapsible>
       ) : null}

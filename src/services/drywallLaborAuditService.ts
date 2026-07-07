@@ -579,73 +579,77 @@ function applyTypeRetag(
   return 'ok'
 }
 
-async function persistPayPeriodChange(period: PayPeriod, periods: PayPeriod[]): Promise<void> {
-  const previous = periods.find((p) => p.id === period.id) ?? null
+async function persistPayPeriodChange(
+  period: PayPeriod,
+  periods: PayPeriod[],
+  previousPeriod?: PayPeriod | null,
+): Promise<void> {
+  const previous = previousPeriod ?? periods.find((p) => p.id === period.id) ?? null
+  const now = new Date().toISOString()
   try {
     await savePayPeriod(period, previous)
   } catch (e) {
     if (e instanceof HrPayrollPermissionError) throw e
     throw e
   }
+  const idx = periods.findIndex((p) => p.id === period.id)
+  if (idx >= 0) {
+    periods[idx] = { ...period, updated_at: now }
+  }
+}
+
+function clonePayPeriod(period: PayPeriod): PayPeriod {
+  return structuredClone(period)
+}
+
+export async function fetchLaborAuditPayPeriods(): Promise<PayPeriod[]> {
+  if (!isOnlineMode()) {
+    throw new Error('Labor audit requires an online connection to Supabase.')
+  }
+  await requireUserOrgId()
+  return fetchPayPeriods()
 }
 
 export async function reassignLaborEntryJob(
   row: MislabeledLaborEntry,
   projectId: string,
   projectName: string,
+  periods: PayPeriod[],
 ): Promise<void> {
-  if (!isOnlineMode()) {
-    throw new Error('Labor reassignment requires an online connection to Supabase.')
+  const result = await batchedApplyToRows(
+    [row],
+    (period, entry) => applyRowReassignment(period, entry, projectId, projectName),
+    periods,
+  )
+  if (result.done > 0) return
+  if (result.skippedLocked > 0) {
+    throw new Error('Pay period is locked. Unlock the period to make changes.')
   }
-
-  await requireUserOrgId()
-
-  const periods = await fetchPayPeriods()
-  const period = periods.find((p) => p.id === row.payPeriodId)
-  if (!period) {
-    throw new Error('Pay period not found. Refresh and try again.')
-  }
-
-  const result = applyRowReassignment(period, row, projectId, projectName)
-  if (result === 'not_found') {
-    throw new Error('Person row not found in pay period. Refresh and try again.')
-  }
-  if (result === 'stale') {
-    throw new Error('Entry changed since audit loaded. Refresh and try again.')
-  }
-
-  await persistPayPeriodChange(period, periods)
+  throw new Error('Entry changed since audit loaded. Refresh and try again.')
 }
 
 export async function retagLaborEntryType(
   row: MislabeledLaborEntry,
   patch: LaborTypeRetagPatch,
+  periods: PayPeriod[],
 ): Promise<void> {
-  if (!isOnlineMode()) {
-    throw new Error('Labor retag requires an online connection to Supabase.')
+  const result = await batchedApplyToRows(
+    [row],
+    (period, entry) => applyTypeRetag(period, entry, patch),
+    periods,
+  )
+  if (result.done > 0) return
+  if (result.skippedLocked > 0) {
+    throw new Error('Pay period is locked. Unlock the period to make changes.')
   }
-
-  await requireUserOrgId()
-
-  const periods = await fetchPayPeriods()
-  const period = periods.find((p) => p.id === row.payPeriodId)
-  if (!period) {
-    throw new Error('Pay period not found. Refresh and try again.')
-  }
-
-  const result = applyTypeRetag(period, row, patch)
-  if (result === 'not_found') {
-    throw new Error('Piece entry not found in pay period. Refresh and try again.')
-  }
-  if (result === 'stale') {
-    throw new Error('Entry changed since audit loaded. Refresh and try again.')
-  }
-
-  await persistPayPeriodChange(period, periods)
+  throw new Error('Entry changed since audit loaded. Refresh and try again.')
 }
 
-export async function markLaborEntryOffSystem(row: MislabeledLaborEntry): Promise<void> {
-  const result = await markLaborEntriesOffSystem([row])
+export async function markLaborEntryOffSystem(
+  row: MislabeledLaborEntry,
+  periods: PayPeriod[],
+): Promise<void> {
+  const result = await markLaborEntriesOffSystem([row], periods)
   if (result.done === 0) {
     if (result.skippedLocked > 0) {
       throw new Error('Pay period is locked. Unlock the period to make changes.')
@@ -654,13 +658,17 @@ export async function markLaborEntryOffSystem(row: MislabeledLaborEntry): Promis
   }
 }
 
-export async function clearLaborEntryOffSystem(row: MislabeledLaborEntry): Promise<void> {
-  return reassignLaborEntryJob(row, '', '')
+export async function clearLaborEntryOffSystem(
+  row: MislabeledLaborEntry,
+  periods: PayPeriod[],
+): Promise<void> {
+  return reassignLaborEntryJob(row, '', '', periods)
 }
 
 async function batchedApplyToRows(
   rows: MislabeledLaborEntry[],
   applyOne: (period: PayPeriod, row: MislabeledLaborEntry) => ApplyReassignmentResult,
+  periods: PayPeriod[],
 ): Promise<LaborAuditBatchResult> {
   if (!isOnlineMode()) {
     throw new Error('Labor reassignment requires an online connection to Supabase.')
@@ -692,21 +700,23 @@ async function batchedApplyToRows(
     byPeriod.set(row.payPeriodId, list)
   }
 
-  const periods = await fetchPayPeriods()
   const periodById = new Map(periods.map((period) => [period.id, period]))
 
   for (const [periodId, periodRows] of byPeriod) {
-    const period = periodById.get(periodId)
-    if (!period) {
+    const cached = periodById.get(periodId)
+    if (!cached) {
       failed += periodRows.length
       continue
     }
+
+    const previous = clonePayPeriod(cached)
+    const working = clonePayPeriod(cached)
 
     let periodDone = 0
     let periodFailed = 0
 
     for (const row of periodRows) {
-      const result = applyOne(period, row)
+      const result = applyOne(working, row)
       if (result === 'ok') periodDone += 1
       else periodFailed += 1
     }
@@ -717,7 +727,7 @@ async function batchedApplyToRows(
     }
 
     try {
-      await persistPayPeriodChange(period, periods)
+      await persistPayPeriodChange(working, periods, previous)
       done += periodDone
       failed += periodFailed
     } catch (e) {
@@ -731,9 +741,11 @@ async function batchedApplyToRows(
 
 export async function markLaborEntriesOffSystem(
   rows: MislabeledLaborEntry[],
+  periods: PayPeriod[],
 ): Promise<LaborAuditBatchResult> {
   return batchedApplyToRows(rows, (period, row) =>
     applyRowReassignment(period, row, OFF_SYSTEM_JOB_ID, OFF_SYSTEM_JOB_NAME),
+    periods,
   )
 }
 
@@ -741,20 +753,24 @@ export async function assignLaborEntriesToProject(
   rows: MislabeledLaborEntry[],
   projectId: string,
   projectName: string,
+  periods: PayPeriod[],
 ): Promise<LaborAuditBatchResult> {
   return batchedApplyToRows(rows, (period, row) =>
     applyRowReassignment(period, row, projectId, projectName),
+    periods,
   )
 }
 
 export async function autoAssignNameMatches(
   rows: MislabeledLaborEntry[],
+  periods: PayPeriod[],
 ): Promise<AutoAssignNameMatchesResult> {
   const eligible = rows.filter(
     (row) => row.suggestedProjectId && row.problem !== 'unknown_type',
   )
   const result = await batchedApplyToRows(eligible, (period, row) =>
     applyRowReassignment(period, row, row.suggestedProjectId!, row.suggestedProjectName!),
+    periods,
   )
   return {
     assigned: result.done,

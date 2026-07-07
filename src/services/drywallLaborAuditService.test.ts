@@ -246,17 +246,23 @@ describe('retagLaborEntryType', () => {
     ])
 
     mockFetchPayPeriodsForDrywallLabor.mockResolvedValue([period])
-    mockFetchPayPeriods.mockResolvedValue([period])
+    const periods = [structuredClone(period)]
 
     const auditRows = await fetchDrywallLaborAudit({ scope: 'signal' })
     const row = auditRows.find((r) => r.problem === 'unknown_type')
     expect(row).toBeDefined()
 
-    await retagLaborEntryType(row!, {
-      piece_key: 'drywall_hanging',
-      workType: 'drywall_hanging',
-      catalog_source: 'v3_drywall',
-    })
+    await retagLaborEntryType(
+      row!,
+      {
+        piece_key: 'drywall_hanging',
+        workType: 'drywall_hanging',
+        catalog_source: 'v3_drywall',
+      },
+      periods,
+    )
+
+    expect(mockFetchPayPeriods).not.toHaveBeenCalled()
 
     const saved = mockSavePayPeriod.mock.calls[0][0] as PayPeriod
     const pe = saved.entries[0].pieceEntries![0]
@@ -301,6 +307,7 @@ describe('markLaborEntryOffSystem', () => {
     ])
 
     mockFetchPayPeriods.mockResolvedValue([period])
+    const periods = [structuredClone(period)]
 
     const row: MislabeledLaborEntry = {
       payPeriodId: PERIOD_ID,
@@ -319,7 +326,9 @@ describe('markLaborEntryOffSystem', () => {
       problem: 'no_job',
     }
 
-    await markLaborEntryOffSystem(row)
+    await markLaborEntryOffSystem(row, periods)
+
+    expect(mockFetchPayPeriods).not.toHaveBeenCalled()
 
     const saved = mockSavePayPeriod.mock.calls[0][0] as PayPeriod
     const pe = saved.entries[0].pieceEntries![0]
@@ -360,14 +369,13 @@ describe('markLaborEntryOffSystem', () => {
     ])
 
     mockFetchPayPeriodsForDrywallLabor.mockResolvedValue([period])
-    mockFetchPayPeriods.mockResolvedValue([period])
+    const periods = [structuredClone(period)]
 
     const before = await fetchDrywallLaborAudit({ scope: 'signal' })
     expect(before.length).toBeGreaterThan(0)
 
-    await markLaborEntryOffSystem(before[0])
-    period.entries[0].pieceEntries![0].jobId = 'off-system'
-    period.entries[0].pieceEntries![0].jobName = 'Off-system / Pre-app'
+    await markLaborEntryOffSystem(before[0], periods)
+    mockFetchPayPeriodsForDrywallLabor.mockResolvedValue([structuredClone(periods[0])])
 
     const after = await fetchDrywallLaborAudit({ scope: 'signal' })
     expect(after).toHaveLength(0)
@@ -422,14 +430,15 @@ describe('markLaborEntriesOffSystem', () => {
     ])
 
     mockFetchPayPeriods.mockResolvedValue([period])
+    const periods = [structuredClone(period)]
 
     const rows = Array.from({ length: 10 }, (_, i) => jobProblemRow(i, 'p0'))
-    const result = await markLaborEntriesOffSystem(rows)
+    const result = await markLaborEntriesOffSystem(rows, periods)
 
     expect(result.done).toBe(10)
     expect(result.skippedLocked).toBe(0)
     expect(result.failed).toBe(0)
-    expect(mockFetchPayPeriods).toHaveBeenCalledTimes(1)
+    expect(mockFetchPayPeriods).not.toHaveBeenCalled()
     expect(mockSavePayPeriod).toHaveBeenCalledTimes(1)
 
     const saved = mockSavePayPeriod.mock.calls[0][0] as PayPeriod
@@ -476,8 +485,9 @@ describe('markLaborEntriesOffSystem', () => {
     ])
 
     mockFetchPayPeriods.mockResolvedValue([period])
+    const periods = [structuredClone(period)]
 
-    const result = await markLaborEntriesOffSystem(rows)
+    const result = await markLaborEntriesOffSystem(rows, periods)
     expect(result.done).toBe(1)
     expect(result.skippedLocked).toBe(1)
     expect(mockSavePayPeriod).toHaveBeenCalledTimes(1)
@@ -524,6 +534,7 @@ describe('assignLaborEntriesToProject', () => {
     ])
 
     mockFetchPayPeriods.mockResolvedValue([period])
+    const periods = [structuredClone(period)]
 
     const rows: MislabeledLaborEntry[] = [
       {
@@ -560,8 +571,14 @@ describe('assignLaborEntriesToProject', () => {
       },
     ]
 
-    const result = await assignLaborEntriesToProject(rows, DRYWALL_PROJECT_ID, 'Drywall Job')
+    const result = await assignLaborEntriesToProject(
+      rows,
+      DRYWALL_PROJECT_ID,
+      'Drywall Job',
+      periods,
+    )
     expect(result.done).toBe(2)
+    expect(mockFetchPayPeriods).not.toHaveBeenCalled()
     expect(mockSavePayPeriod).toHaveBeenCalledTimes(1)
 
     const saved = mockSavePayPeriod.mock.calls[0][0] as PayPeriod
