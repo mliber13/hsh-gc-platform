@@ -23,7 +23,6 @@ import {
   resolvePieceEntryKey,
   type PayrollPieceTypeOption,
 } from '@/lib/drywall/payrollPieceKeys'
-import { entryHasNonZeroAdjustments } from '@/lib/payrollMath'
 import {
   PAYROLL_WORK_TYPES,
   getRateFromJob,
@@ -114,7 +113,6 @@ export function PayrollPersonRow({
   const effectiveLocked = locked || personDone
   const hourEntries = entry.hourEntries || []
   const pieceEntries = entry.pieceEntries || []
-  const hasAdjustments = entryHasNonZeroAdjustments(entry)
 
   const pieceTypeOptions = useMemo(
     () => (drywallCatalogs ? buildPayrollPieceTypeOptions(drywallCatalogs) : []),
@@ -143,17 +141,18 @@ export function PayrollPersonRow({
 
   const [hoursOpen, setHoursOpen] = useState(() => hourEntries.length > 0)
   const [pieceOpen, setPieceOpen] = useState(() => pieceEntries.length > 0)
-  const [adjustmentsOpen, setAdjustmentsOpen] = useState(() => hasAdjustments)
+
+  const fuelAllowance = parseFloat(String(person.gasAllowance)) || 0
+  const bankedHoursBalance = parseFloat(String(person.bankedHours)) || 0
+  const bankedHoursUsed = parseFloat(String(entry.bankedHoursUsed)) || 0
+  const hoursToBank = parseFloat(String(entry.hoursToBank)) || 0
+  const bankedPayout =
+    bankedHoursUsed * (parseFloat(String(person.hourlyRate)) || 0)
+  const showFuelReimbursement = fuelAllowance > 0
 
   const update = (patch: Partial<PayrollEntry>) => {
     const next = { ...entry, ...patch }
     onChange(next)
-    if (
-      !adjustmentsOpen &&
-      entryHasNonZeroAdjustments(next)
-    ) {
-      setAdjustmentsOpen(true)
-    }
   }
 
   const addHour = () => {
@@ -566,71 +565,93 @@ export function PayrollPersonRow({
         )}
       </section>
 
-      {/* Adjustments — secondary */}
-      <section className="mt-3 rounded-md border border-dashed border-muted-foreground/25 bg-muted/5 px-3 py-2">
-        <button
-          type="button"
-          className="flex w-full items-center gap-1 text-xs font-medium text-muted-foreground"
-          onClick={() => setAdjustmentsOpen((o) => !o)}
-        >
-          {adjustmentsOpen ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-          Adjustments
-          {hasAdjustments && (
-            <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px]">has values</span>
-          )}
-        </button>
-        {adjustmentsOpen && (
-          <div className="mt-2 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-            <div>
-              <Label className="text-[11px] text-muted-foreground">Per diem</Label>
+      {/* Adjustments */}
+      <section className="mt-3 rounded-lg border border-border/80 bg-muted/10 p-3">
+        <p className="text-sm font-semibold">Adjustments</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          <div>
+            <Label className="text-[11px] text-muted-foreground">Per diem</Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              disabled={effectiveLocked}
+              className="h-8 text-sm"
+              value={entry.perDiem ?? ''}
+              onChange={(e) => update({ perDiem: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label className="text-[11px] text-muted-foreground">Reimbursement</Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              disabled={effectiveLocked}
+              className="h-8 text-sm"
+              value={entry.reimbursement ?? ''}
+              onChange={(e) => update({ reimbursement: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label className="text-[11px] text-muted-foreground">
+              Banked hours used
+              {bankedHoursBalance > 0 && (
+                <span className="ml-1 font-normal">(bal. {bankedHoursBalance})</span>
+              )}
+            </Label>
+            <div className="flex items-center gap-2">
               <Input
                 type="number"
                 min={0}
-                step="0.01"
-                disabled={effectiveLocked}
-                className="h-8 text-sm"
-                value={entry.perDiem ?? ''}
-                onChange={(e) => update({ perDiem: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label className="text-[11px] text-muted-foreground">Reimbursement</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                disabled={effectiveLocked}
-                className="h-8 text-sm"
-                value={entry.reimbursement ?? ''}
-                onChange={(e) => update({ reimbursement: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label className="text-[11px] text-muted-foreground">Banked hours used</Label>
-              <Input
-                type="number"
-                min={0}
+                max={bankedHoursBalance > 0 ? bankedHoursBalance : undefined}
                 step="0.25"
                 disabled={effectiveLocked}
                 className="h-8 text-sm"
                 value={entry.bankedHoursUsed ?? ''}
                 onChange={(e) => update({ bankedHoursUsed: e.target.value })}
               />
-            </div>
-            <div>
-              <Label className="text-[11px] text-muted-foreground">Hours to bank</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.25"
-                disabled={effectiveLocked}
-                className="h-8 text-sm"
-                value={entry.hoursToBank ?? ''}
-                onChange={(e) => update({ hoursToBank: e.target.value })}
-              />
+              {bankedPayout > 0 && (
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                  {formatCurrency(bankedPayout)}
+                </span>
+              )}
             </div>
           </div>
-        )}
+          <div>
+            <Label className="text-[11px] text-muted-foreground">
+              Hours to bank
+              {totalHours > 0 && (
+                <span className="ml-1 font-normal">
+                  (paid {(totalHours - hoursToBank).toFixed(1)} hrs)
+                </span>
+              )}
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              max={totalHours > 0 ? totalHours : undefined}
+              step="0.25"
+              disabled={effectiveLocked}
+              className="h-8 text-sm"
+              value={entry.hoursToBank ?? ''}
+              onChange={(e) => update({ hoursToBank: e.target.value })}
+            />
+          </div>
+          {showFuelReimbursement && (
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Fuel reimbursement</Label>
+              <Input
+                type="text"
+                readOnly
+                disabled
+                className="h-8 bg-muted/40 text-sm tabular-nums"
+                value={formatCurrency(fuelAllowance)}
+              />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">From team profile</p>
+            </div>
+          )}
+        </div>
       </section>
     </div>
   )
