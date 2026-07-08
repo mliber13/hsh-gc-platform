@@ -13,6 +13,7 @@ import { finisherCapacityTier, specialtyFromPositionName } from '@/lib/drywall/c
 import type { DashboardTargets } from '@/lib/drywall/dashboardTargets'
 import { isArchivedMember } from '@/lib/hrTeamUtils'
 import type { CrossProjectScheduleItem } from '@/services/drywallScheduleAggregateService'
+import type { DivisionExecutionJob } from '@/services/drywallDivisionAggregateService'
 import type { DrywallProjectListItem, DrywallProjectStatus } from '@/types/drywall'
 import { normalizeDrywallProjectStatus } from '@/types/drywall'
 import type { OrgTeamPayload } from '@/types/hr'
@@ -738,5 +739,214 @@ export function computeDashboardMetrics(
     qbRevenue,
     revenuePace,
     northStar,
+  }
+}
+
+export interface FinancialsPeriod {
+  revenue: number
+  cogsMaterial: number
+  cogsLabor: number
+  cogsSub: number
+  cogsTotal: number
+  grossProfit: number
+  grossMarginPct: number | null
+  jobCount: number
+  excludedNoRevenue: number
+}
+
+export interface ArAgingBucket {
+  label: string
+  amount: number
+  count: number
+}
+
+export interface FinancialsMetrics {
+  ytd: FinancialsPeriod
+  mtd: FinancialsPeriod
+  arTotal: number
+  arAging: ArAgingBucket[]
+  arAgingComplete: boolean
+  monthlyTrend: Array<{
+    month: string
+    monthIndex: number
+    revenue: number
+    grossProfit: number
+    grossMarginPct: number | null
+  }>
+  status: KpiStatus
+}
+
+const MONTH_LABELS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const
+
+function emptyFinancialsPeriod(): FinancialsPeriod {
+  return {
+    revenue: 0,
+    cogsMaterial: 0,
+    cogsLabor: 0,
+    cogsSub: 0,
+    cogsTotal: 0,
+    grossProfit: 0,
+    grossMarginPct: null,
+    jobCount: 0,
+    excludedNoRevenue: 0,
+  }
+}
+
+function finalizeFinancialsPeriod(period: FinancialsPeriod): FinancialsPeriod {
+  period.cogsTotal = period.cogsMaterial + period.cogsLabor + period.cogsSub
+  period.grossMarginPct = period.revenue > 0 ? period.grossProfit / period.revenue : null
+  return period
+}
+
+function financialsStatus(grossMarginPct: number | null, jobCount: number): KpiStatus {
+  if (jobCount === 0) return 'green'
+  if (grossMarginPct == null) return 'red'
+  if (grossMarginPct >= 0.3) return 'green'
+  if (grossMarginPct >= 0.25) return 'yellow'
+  return 'red'
+}
+
+function parseCompletedAt(iso: string | null): Date | null {
+  if (!iso) return null
+  try {
+    const d = parseISO(iso)
+    return Number.isNaN(d.getTime()) ? null : d
+  } catch {
+    return null
+  }
+}
+
+function accumulateJobRevenue(
+  period: FinancialsPeriod,
+  job: DivisionExecutionJob,
+  revenue: number,
+): void {
+  period.jobCount += 1
+  period.revenue += revenue
+  period.cogsMaterial += job.actualMaterial
+  period.cogsLabor += job.actualLabor
+  period.cogsSub += job.actualSub
+  period.grossProfit += revenue - job.totalActual
+}
+
+function jobRevenue(
+  job: DivisionExecutionJob,
+  billingsByProject: Map<string, number>,
+): number {
+  const billed = billingsByProject.get(job.projectId) ?? 0
+  return billed > 0 ? billed : (job.bid ?? 0)
+}
+
+export function computeFinancialsMetrics(
+  jobs: DivisionExecutionJob[],
+  qbInvoices: DashboardQbInvoiceInput[],
+  now = new Date(),
+): FinancialsMetrics {
+  const year = now.getFullYear()
+  const currentMonthIndex = now.getMonth()
+
+  const billingsByProject = new Map<string, number>()
+  for (const inv of qbInvoices) {
+    if (!inv.matchedProjectId) continue
+    billingsByProject.set(
+      inv.matchedProjectId,
+      (billingsByProject.get(inv.matchedProjectId) ?? 0) + inv.totalAmt,
+    )
+  }
+
+  const ytd = emptyFinancialsPeriod()
+  const mtd = emptyFinancialsPeriod()
+  const monthBuckets = Array.from({ length: currentMonthIndex + 1 }, (_, monthIndex) => ({
+    month: MONTH_LABELS[monthIndex],
+    monthIndex,
+    revenue: 0,
+    grossProfit: 0,
+    grossMarginPct: null as number | null,
+  }))
+
+  const completedJobs = jobs.filter((job) => job.completedAt && !job.inProgress)
+
+  for (const job of completedJobs) {
+    const completedAt = parseCompletedAt(job.completedAt)
+    if (!completedAt) continue
+
+    const revenue = jobRevenue(job, billingsByProject)
+    const inYtd = completedAt.getFullYear() === year
+    const inMtd =
+      completedAt.getFullYear() === year && completedAt.getMonth() === currentMonthIndex
+
+    if (!inYtd) continue
+
+    if (revenue <= 0) {
+      ytd.excludedNoRevenue += 1
+      if (inMtd) mtd.excludedNoRevenue += 1
+      continue
+    }
+
+    accumulateJobRevenue(ytd, job, revenue)
+    if (inMtd) {
+      accumulateJobRevenue(mtd, job, revenue)
+    }
+
+    const monthIndex = completedAt.getMonth()
+    if (monthIndex <= currentMonthIndex) {
+      const bucket = monthBuckets[monthIndex]
+      bucket.revenue += revenue
+      bucket.grossProfit += revenue - job.totalActual
+      bucket.grossMarginPct =
+        bucket.revenue > 0 ? bucket.grossProfit / bucket.revenue : null
+    }
+  }
+
+  finalizeFinancialsPeriod(ytd)
+  finalizeFinancialsPeriod(mtd)
+
+  const openInvoices = qbInvoices.filter((inv) => inv.balance > 0)
+  const arTotal = openInvoices.reduce((sum, inv) => sum + inv.balance, 0)
+
+  const arAging: ArAgingBucket[] = [
+    { label: '0–30 days', amount: 0, count: 0 },
+    { label: '31–60 days', amount: 0, count: 0 },
+    { label: '61–90 days', amount: 0, count: 0 },
+    { label: '90+ days', amount: 0, count: 0 },
+  ]
+
+  let arAgingComplete = true
+  for (const inv of openInvoices) {
+    const txn = parseTxnDate(inv.txnDate)
+    if (!txn) {
+      arAgingComplete = false
+      continue
+    }
+    const days = differenceInCalendarDays(now, txn)
+    let bucketIndex = 3
+    if (days <= 30) bucketIndex = 0
+    else if (days <= 60) bucketIndex = 1
+    else if (days <= 90) bucketIndex = 2
+    arAging[bucketIndex].amount += inv.balance
+    arAging[bucketIndex].count += 1
+  }
+
+  return {
+    ytd,
+    mtd,
+    arTotal,
+    arAging,
+    arAgingComplete,
+    monthlyTrend: monthBuckets,
+    status: financialsStatus(ytd.grossMarginPct, ytd.jobCount),
   }
 }

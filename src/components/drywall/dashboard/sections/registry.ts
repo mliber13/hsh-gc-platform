@@ -2,13 +2,14 @@ import type { ComponentType } from 'react'
 import { BacklogSection } from './BacklogSection'
 import { DivisionMarginSection } from './DivisionMarginSection'
 import { EstimatingAccuracySection } from './EstimatingAccuracySection'
+import { FinancialsSection } from './FinancialsSection'
 import { LaborPerformanceSection } from './LaborPerformanceSection'
 import { EstimatingSection } from './EstimatingSection'
 import { ManpowerSection } from './ManpowerSection'
 import { ProductionCapacitySection } from './ProductionCapacitySection'
 import { RevenuePaceSection } from './RevenuePaceSection'
 
-export type DashboardSectionGroup = 'sales' | 'capacity' | 'execution'
+export type DashboardSectionGroup = 'sales' | 'capacity' | 'execution' | 'financials'
 export type DashboardSectionSpan = 'compact' | 'wide' | 'full'
 
 export interface DashboardSectionDef {
@@ -20,12 +21,18 @@ export interface DashboardSectionDef {
   component: ComponentType
 }
 
-export const DASHBOARD_GROUP_ORDER: DashboardSectionGroup[] = ['sales', 'capacity', 'execution']
+export const DASHBOARD_GROUP_ORDER: DashboardSectionGroup[] = [
+  'sales',
+  'capacity',
+  'execution',
+  'financials',
+]
 
 export const DASHBOARD_GROUP_LABELS: Record<DashboardSectionGroup, string> = {
   sales: 'Sales & Pace',
   capacity: 'Capacity & Crew',
   execution: 'Execution',
+  financials: 'Financials',
 }
 
 export const DASHBOARD_SECTION_SPAN_CLASS: Record<DashboardSectionSpan, string> = {
@@ -102,6 +109,14 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'execution',
     span: 'full',
     component: EstimatingAccuracySection,
+  },
+  {
+    id: 'financials',
+    title: 'Financials',
+    order: 1,
+    group: 'financials',
+    span: 'full',
+    component: FinancialsSection,
   },
 ]
 

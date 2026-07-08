@@ -22,6 +22,7 @@ export interface DashboardDataState {
   team: OrgTeamPayload
   targets: DashboardTargets
   metrics: DashboardMetrics
+  qbInvoices: DashboardQbInvoiceInput[]
   loading: boolean
   error: string | null
   refresh: () => void
@@ -96,11 +97,12 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       team,
       targets,
       metrics,
+      qbInvoices,
       loading,
       error,
       refresh: () => void load(),
     }),
-    [projects, scheduleItems, team, targets, metrics, loading, error, load],
+    [projects, scheduleItems, team, targets, metrics, qbInvoices, loading, error, load],
   )
 
   return <DashboardDataContext.Provider value={value}>{children}</DashboardDataContext.Provider>
