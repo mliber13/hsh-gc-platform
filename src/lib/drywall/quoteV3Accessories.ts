@@ -193,11 +193,54 @@ function pushItem(
   byCategory[entry.category].push(row)
 }
 
-function cornerBeadPiecesFromLine(line: QuoteLineItem): number {
-  const lf = line.accessoryOverrides?.corner_bead_lf ?? 0
-  if (lf <= 0) return 0
-  // v2 field uses manual pcs; 10 LF/stick is a common stick length for add-on compound math.
-  return Math.ceil(lf / 10)
+export const CORNER_BEAD_LF_PER_STICK = 10
+
+export function allocateQuoteBeadSticksAcrossLines(
+  lines: QuoteLineItem[],
+  quoteBeadSticks: number | string | null | undefined,
+): Map<string, number> {
+  const totalSticks = Math.max(0, Number(quoteBeadSticks) || 0)
+  const out = new Map<string, number>()
+  if (totalSticks <= 0) return out
+
+  const eligible = lines.filter(
+    (l) => l.type === 'drywall' && (l.quantity || 0) > 0 && !l.accessories_in_material_rate,
+  )
+  if (eligible.length === 0) return out
+
+  const weights = eligible.map((l) => {
+    const wastePct = l.waste_pct ?? 10
+    return (l.quantity || 0) * (1 + wastePct / 100)
+  })
+  const totalWeight = weights.reduce((a, b) => a + b, 0)
+  if (totalWeight <= 0) return out
+
+  let remaining = totalSticks
+  for (let i = 0; i < eligible.length; i++) {
+    const line = eligible[i]
+    let sticks: number
+    if (i === eligible.length - 1) {
+      sticks = remaining
+    } else {
+      sticks = Math.floor((totalSticks * weights[i]) / totalWeight)
+      remaining -= sticks
+    }
+    if (sticks > 0) out.set(line.id, sticks)
+  }
+  return out
+}
+
+function cornerBeadPiecesForLine(line: QuoteLineItem, allocatedSticks = 0): number {
+  const lfOverride = line.accessoryOverrides?.corner_bead_lf ?? 0
+  const fromLf = lfOverride > 0 ? Math.ceil(lfOverride / CORNER_BEAD_LF_PER_STICK) : 0
+  return Math.max(fromLf, Math.max(0, allocatedSticks))
+}
+
+function cornerBeadLfForLine(line: QuoteLineItem, allocatedSticks = 0): number {
+  const lfOverride = line.accessoryOverrides?.corner_bead_lf ?? 0
+  if (lfOverride > 0) return lfOverride
+  if (allocatedSticks > 0) return allocatedSticks * CORNER_BEAD_LF_PER_STICK
+  return 0
 }
 
 /**
@@ -208,6 +251,7 @@ export function computeLineAccessories(
   line: QuoteLineItem,
   finishScope: FinishScopeCatalogEntry | null | undefined,
   accessoryCatalog: AccessoryCatalogEntry[],
+  allocatedBeadSticks = 0,
 ): LineAccessoryResult {
   if (line.type !== 'drywall' || !finishScope) return emptyLineResult()
   if (line.accessories_in_material_rate) return emptyLineResult()
@@ -221,7 +265,7 @@ export function computeLineAccessories(
   const items: AccessoryComputation[] = []
   const catalog = catalogById(accessoryCatalog)
   const finishId = finishScope.id
-  const cornerBeadQty = cornerBeadPiecesFromLine(line)
+  const cornerBeadQty = cornerBeadPiecesForLine(line, allocatedBeadSticks)
 
   if (flags.joint_compound) {
     pushItem(
@@ -256,7 +300,7 @@ export function computeLineAccessories(
   }
 
   if (flags.corner_bead) {
-    const lf = line.accessoryOverrides?.corner_bead_lf ?? 0
+    const lf = cornerBeadLfForLine(line, allocatedBeadSticks)
     if (lf > 0) {
       pushItem(items, byCategory, catalog.get('corner_bead_metal'), lf)
     }
@@ -288,20 +332,29 @@ export function computeQuoteAccessoryRollup(
   const byLine: Record<string, number> = {}
   const allItems: AccessoryComputation[] = []
   const accessoryCatalog = catalogs.accessories ?? []
+  const routineBeadAllocation = allocateQuoteBeadSticksAcrossLines(
+    quote.lineItems,
+    quote.bead_sticks,
+  )
 
-  const processLines = (lines: QuoteLineItem[]) => {
+  const processLines = (lines: QuoteLineItem[], beadAllocation: Map<string, number>) => {
     for (const line of lines) {
       if (line.type !== 'drywall') continue
       const finishScope = resolveFinishScope(line, catalogs)
-      const result = computeLineAccessories(line, finishScope, accessoryCatalog)
+      const result = computeLineAccessories(
+        line,
+        finishScope,
+        accessoryCatalog,
+        beadAllocation.get(line.id) ?? 0,
+      )
       byLine[line.id] = result.totalCost
       allItems.push(...result.items)
     }
   }
 
-  processLines(quote.lineItems)
+  processLines(quote.lineItems, routineBeadAllocation)
   for (const alt of quote.alternates) {
-    processLines(alt.lineItems)
+    processLines(alt.lineItems, new Map())
   }
 
   return {

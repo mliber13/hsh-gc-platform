@@ -11,6 +11,7 @@ import {
   resolveFinishScope,
 } from './quoteV3CatalogResolve'
 import {
+  allocateQuoteBeadSticksAcrossLines,
   computeLineAccessories,
   computeQuoteAccessoryRollup,
   type AccessoryCategoryMap,
@@ -117,6 +118,8 @@ export interface QuoteV3LaborBurdenOptions {
   prepCleanIncludeLaborBurden?: boolean
   projectHangerRate?: number
   projectFinisherRate?: number
+  /** Bead sticks allocated to this line from quote.bead_sticks (quote-level scope field). */
+  allocatedBeadSticks?: number
 }
 
 export function computeLineItem(
@@ -169,7 +172,12 @@ export function computeLineItem(
       laborBurden?.finisherIncludeLaborBurden,
     )
     laborTotal = hangerLaborTotal + finisherLaborTotal
-    accessories = computeLineAccessories(line, finishScope, catalogs.accessories ?? [])
+    accessories = computeLineAccessories(
+      line,
+      finishScope,
+      catalogs.accessories ?? [],
+      laborBurden?.allocatedBeadSticks ?? 0,
+    )
     accessoriesTotal = accessories.totalCost
   } else {
     const laborRate = getEffectiveComponentLaborRate(line, catalogs)
@@ -289,6 +297,7 @@ export function lineDirectCostsFromLines(
   lines: QuoteLineItem[],
   catalogs: OrgDrywallCatalogs,
   laborBurden?: QuoteV3LaborBurdenOptions,
+  quoteBeadSticks?: number | string | null,
 ): QuoteV3LineDirectCosts & { accessoryByCategory: AccessoryCategoryMap } {
   let materialSubtotal = 0
   let hangerLaborSubtotal = 0
@@ -303,8 +312,12 @@ export function lineDirectCostsFromLines(
     corner_bead: [],
     other: [],
   }
+  const beadAllocation = allocateQuoteBeadSticksAcrossLines(lines, quoteBeadSticks)
   for (const line of lines) {
-    const computed = computeLineItem(line, catalogs, laborBurden)
+    const computed = computeLineItem(line, catalogs, {
+      ...laborBurden,
+      allocatedBeadSticks: beadAllocation.get(line.id) ?? 0,
+    })
     materialSubtotal += computed.materialTotal
     if (line.type === 'drywall') {
       hangerLaborSubtotal += computed.hangerLaborTotal
@@ -336,8 +349,9 @@ export function linesSubtotalFromLines(
   lines: QuoteLineItem[],
   catalogs: OrgDrywallCatalogs,
   laborBurden?: QuoteV3LaborBurdenOptions,
+  quoteBeadSticks?: number | string | null,
 ): number {
-  const direct = lineDirectCostsFromLines(lines, catalogs, laborBurden)
+  const direct = lineDirectCostsFromLines(lines, catalogs, laborBurden, quoteBeadSticks)
   return (
     direct.materialSubtotal +
     direct.hangerLaborSubtotal +
@@ -388,7 +402,12 @@ export function computeQuoteV3Totals(
 ): QuoteV3TotalsSummary {
   const prepCleanRate = quote.prep_clean_rate ?? DEFAULT_PREP_CLEAN_RATE
   const laborBurden = laborBurdenFromQuote(quote)
-  const directCosts = lineDirectCostsFromLines(quote.lineItems, catalogs, laborBurden)
+  const directCosts = lineDirectCostsFromLines(
+    quote.lineItems,
+    catalogs,
+    laborBurden,
+    quote.bead_sticks,
+  )
   const linesSubtotal =
     directCosts.materialSubtotal +
     directCosts.hangerLaborSubtotal +

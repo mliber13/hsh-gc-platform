@@ -16,6 +16,7 @@ import {
   componentLaborRateHeaderForType,
   componentLaborRateColumnTitle,
 } from '@/lib/drywall/quoteV3CatalogResolve'
+import { allocateQuoteBeadSticksAcrossLines } from '@/lib/drywall/quoteV3Accessories'
 import { computeLineItem, formatQuoteMoney, type QuoteV3LaborBurdenOptions } from '@/lib/drywall/quoteV3Math'
 import { TRADE_SECTION_THEMES } from '@/lib/drywall/quoteV3TradeTheme'
 import { cn } from '@/lib/utils'
@@ -60,6 +61,7 @@ type Props = {
   compact?: boolean
   projectHangerRate?: number
   projectFinisherRate?: number
+  quoteBeadSticks?: string | number | null
   onChange: (lines: QuoteLineItem[]) => void
 }
 
@@ -79,6 +81,7 @@ export function LineItemsTable({
   compact,
   projectHangerRate,
   projectFinisherRate,
+  quoteBeadSticks,
   onChange,
 }: Props) {
   const [editLine, setEditLine] = useState<QuoteLineItem | null>(null)
@@ -92,9 +95,14 @@ export function LineItemsTable({
     [projectFinisherRate, projectHangerRate],
   )
 
+  const beadAllocation = useMemo(
+    () => allocateQuoteBeadSticksAcrossLines(lines, quoteBeadSticks),
+    [lines, quoteBeadSticks],
+  )
+
   const typeSections = useMemo(
-    () => groupByTypeThenLocation(lines, catalogs, lineComputeOptions),
-    [lines, catalogs, lineComputeOptions],
+    () => groupByTypeThenLocation(lines, catalogs, lineComputeOptions, beadAllocation),
+    [lines, catalogs, lineComputeOptions, beadAllocation],
   )
 
   const patchLine = (id: string, patch: Partial<QuoteLineItem>) => {
@@ -138,6 +146,7 @@ export function LineItemsTable({
             readOnly={readOnly}
             compact={compact}
             lineComputeOptions={lineComputeOptions}
+            beadAllocation={beadAllocation}
             onPatch={patchLine}
             onDelete={deleteLine}
             onEdit={openEdit}
@@ -174,12 +183,24 @@ export function LineItemsTable({
   )
 }
 
+function lineComputeOptionsFor(
+  line: QuoteLineItem,
+  base: QuoteV3LaborBurdenOptions,
+  beadAllocation: Map<string, number>,
+): QuoteV3LaborBurdenOptions {
+  return {
+    ...base,
+    allocatedBeadSticks: beadAllocation.get(line.id) ?? 0,
+  }
+}
+
 function TypeSectionTable({
   section,
   catalogs,
   readOnly,
   compact,
   lineComputeOptions,
+  beadAllocation,
   onPatch,
   onDelete,
   onEdit,
@@ -189,6 +210,7 @@ function TypeSectionTable({
   readOnly: boolean
   compact?: boolean
   lineComputeOptions: QuoteV3LaborBurdenOptions
+  beadAllocation: Map<string, number>
   onPatch: (id: string, patch: Partial<QuoteLineItem>) => void
   onDelete: (id: string) => void
   onEdit: (line: QuoteLineItem) => void
@@ -284,7 +306,13 @@ function TypeSectionTable({
               normalizeLocationLabel(line.location) !==
                 normalizeLocationLabel(orderedLines[index - 1]?.location)
             const runSubtotal = showLocationHeader
-              ? contiguousLocationRunSubtotal(orderedLines, index, catalogs, lineComputeOptions)
+              ? contiguousLocationRunSubtotal(
+                  orderedLines,
+                  index,
+                  catalogs,
+                  lineComputeOptions,
+                  beadAllocation,
+                )
               : 0
             const headerLabel = normalizeLocationLabel(line.location)
 
@@ -316,6 +344,7 @@ function TypeSectionTable({
                   isDrywall={isDrywall}
                   catalogLabel={catalogLabel}
                   lineComputeOptions={lineComputeOptions}
+                  beadAllocation={beadAllocation}
                   onPatch={onPatch}
                   onDelete={onDelete}
                   onEdit={onEdit}
@@ -349,6 +378,7 @@ function LineRow({
   isDrywall,
   catalogLabel,
   lineComputeOptions,
+  beadAllocation,
   onPatch,
   onDelete,
   onEdit,
@@ -360,11 +390,16 @@ function LineRow({
   isDrywall: boolean
   catalogLabel: string
   lineComputeOptions: QuoteV3LaborBurdenOptions
+  beadAllocation: Map<string, number>
   onPatch: (id: string, patch: Partial<QuoteLineItem>) => void
   onDelete: (id: string) => void
   onEdit: (line: QuoteLineItem) => void
 }) {
-  const computed = computeLineItem(line, catalogs, lineComputeOptions)
+  const computed = computeLineItem(
+    line,
+    catalogs,
+    lineComputeOptionsFor(line, lineComputeOptions, beadAllocation),
+  )
   const catalogOptions = catalogOptionsForLineType(line.type, catalogs)
   const unitLabel = computed.unit
 
@@ -554,12 +589,17 @@ function contiguousLocationRunSubtotal(
   startIndex: number,
   catalogs: OrgDrywallCatalogs,
   lineComputeOptions: QuoteV3LaborBurdenOptions,
+  beadAllocation: Map<string, number>,
 ): number {
   const loc = normalizeLocationLabel(orderedLines[startIndex]?.location)
   let sum = 0
   for (let i = startIndex; i < orderedLines.length; i++) {
     if (normalizeLocationLabel(orderedLines[i].location) !== loc) break
-    sum += computeLineItem(orderedLines[i], catalogs, lineComputeOptions).lineTotal
+    sum += computeLineItem(
+      orderedLines[i],
+      catalogs,
+      lineComputeOptionsFor(orderedLines[i], lineComputeOptions, beadAllocation),
+    ).lineTotal
   }
   return sum
 }
@@ -568,6 +608,7 @@ function groupByTypeThenLocation(
   lines: QuoteLineItem[],
   catalogs: OrgDrywallCatalogs,
   lineComputeOptions: QuoteV3LaborBurdenOptions,
+  beadAllocation: Map<string, number>,
 ): TypeSection[] {
   const byType = new Map<QuoteLineItemType, QuoteLineItem[]>()
   for (const line of lines) {
@@ -579,7 +620,10 @@ function groupByTypeThenLocation(
   return LINE_TYPES.filter((type) => (byType.get(type)?.length ?? 0) > 0).map((type) => {
     const typeLines = byType.get(type) ?? []
     const sectionSubtotal = typeLines.reduce(
-      (s, l) => s + computeLineItem(l, catalogs, lineComputeOptions).lineTotal,
+      (s, l) =>
+        s +
+        computeLineItem(l, catalogs, lineComputeOptionsFor(l, lineComputeOptions, beadAllocation))
+          .lineTotal,
       0,
     )
     return {

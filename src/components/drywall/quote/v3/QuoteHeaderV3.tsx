@@ -10,6 +10,9 @@ type Props = {
 }
 
 export function QuoteHeaderV3({ project, quoteNumber, totals }: Props) {
+  const pricePerSqft =
+    totals.totalSqftWithWaste > 0 ? totals.routine.total / totals.totalSqftWithWaste : null
+
   return (
     <div className="rounded-lg border bg-muted/30 px-4 py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -38,6 +41,12 @@ export function QuoteHeaderV3({ project, quoteNumber, totals }: Props) {
         <span>
           Base price: <strong>{formatQuoteMoney(totals.routine.total)}</strong>
         </span>
+        {pricePerSqft != null ? (
+          <span>
+            Price per sqft:{' '}
+            <strong>{formatQuoteMoney(pricePerSqft)}/sqft</strong>
+          </span>
+        ) : null}
       </div>
     </div>
   )

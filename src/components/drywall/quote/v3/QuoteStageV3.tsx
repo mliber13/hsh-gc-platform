@@ -300,6 +300,7 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
                 readOnly={readOnly}
                 projectHangerRate={quote.project_hanger_rate}
                 projectFinisherRate={quote.project_finisher_rate}
+                quoteBeadSticks={quote.bead_sticks}
                 onChange={(lineItems) => patchQuote({ lineItems })}
               />
             </CardContent>

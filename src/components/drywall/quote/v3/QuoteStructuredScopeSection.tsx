@@ -47,18 +47,18 @@ export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChang
 
   return (
     <div className="space-y-6">
-      {/* Row 1 — Hang | Ceiling | Wall (3-col at lg+) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {/* Row 1 — Hang | Ceiling | Wall | Duration (4-col at lg+) */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Hang specifications */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Package className="h-4 w-4 text-primary" />
+        <Card className="min-w-0">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Package className="h-4 w-4 shrink-0 text-primary" />
               Hang specifications
             </CardTitle>
             <CardDescription className="text-xs">Drywall thickness for walls and ceilings</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             <div className="space-y-2">
               <Label>Ceiling thickness</Label>
               <Select
@@ -119,15 +119,15 @@ export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChang
         </Card>
 
         {/* Ceiling finish */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <FileText className="h-4 w-4 text-primary" />
+        <Card className="min-w-0">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <FileText className="h-4 w-4 shrink-0 text-primary" />
               Ceiling finish
             </CardTitle>
             <CardDescription className="text-xs">Texture and finish level</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             <div className="space-y-2">
               <Label>Primary ceiling finish</Label>
               <Select
@@ -180,15 +180,15 @@ export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChang
         </Card>
 
         {/* Wall finish */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <FileText className="h-4 w-4 text-primary" />
+        <Card className="min-w-0">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <FileText className="h-4 w-4 shrink-0 text-primary" />
               Wall finish
             </CardTitle>
             <CardDescription className="text-xs">Texture and finish level</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             <div className="space-y-2">
               <Label>Primary wall finish</Label>
               <Select
@@ -239,10 +239,77 @@ export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChang
             </div>
           </CardContent>
         </Card>
+
+        {/* Duration inputs */}
+        <Card className="min-w-0">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Calendar className="h-4 w-4 shrink-0 text-primary" />
+              Duration inputs
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Feeds duration summary. Finish level from ceiling/wall.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <Label className="text-xs">Build type</Label>
+              <Select
+                disabled={readOnly}
+                value={String(quote.build_type || 'new_build')}
+                onValueChange={(v) => onChange({ build_type: v })}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new_build">New build</SelectItem>
+                  <SelectItem value="renovation">Renovation</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Complexity</Label>
+              <Select
+                disabled={readOnly}
+                value={String(quote.complexity || 'normal')}
+                onValueChange={(v) => onChange({ complexity: v })}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="complex">Complex</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Bead sticks</Label>
+              <Input
+                type="number"
+                min={0}
+                disabled={readOnly}
+                className="h-9"
+                value={quote.bead_sticks ?? ''}
+                onChange={(e) => onChange({ bead_sticks: e.target.value })}
+              />
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                disabled={readOnly}
+                checked={Boolean(quote.paper_floors_required)}
+                onChange={(e) => onChange({ paper_floors_required: e.target.checked })}
+                className="h-4 w-4 shrink-0 rounded border-input"
+              />
+              Paper floors required
+            </label>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Row 2 — Scope notes + Duration side-by-side at lg+ */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* Row 2 — Scope notes */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Scope notes</CardTitle>
@@ -297,77 +364,6 @@ export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChang
           )}
         </CardContent>
       </Card>
-
-      {/* Duration inputs — sibling of Scope notes in row 2 */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Calendar className="h-4 w-4 text-primary" />
-            Duration inputs
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Feeds the drywall duration summary. Finish level comes from ceiling/wall above.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Build type</Label>
-              <Select
-                disabled={readOnly}
-                value={String(quote.build_type || 'new_build')}
-                onValueChange={(v) => onChange({ build_type: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new_build">New build</SelectItem>
-                  <SelectItem value="renovation">Renovation</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Complexity</Label>
-              <Select
-                disabled={readOnly}
-                value={String(quote.complexity || 'normal')}
-                onValueChange={(v) => onChange({ complexity: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="complex">Complex</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Bead sticks (count)</Label>
-              <Input
-                type="number"
-                min={0}
-                disabled={readOnly}
-                className="max-w-[140px]"
-                value={quote.bead_sticks ?? ''}
-                onChange={(e) => onChange({ bead_sticks: e.target.value })}
-              />
-            </div>
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                disabled={readOnly}
-                checked={Boolean(quote.paper_floors_required)}
-                onChange={(e) => onChange({ paper_floors_required: e.target.checked })}
-                className="h-4 w-4 rounded border-input"
-              />
-              Paper floors required
-            </label>
-          </div>
-        </CardContent>
-      </Card>
-      </div>
     </div>
   )
 }
