@@ -161,6 +161,7 @@ describe('computeCurrentCrew', () => {
           hours: 8,
           amount: 100,
           category: 'hourly',
+          entryIndex: 0,
         },
         {
           payPeriodId: 'pp-new',
@@ -175,6 +176,7 @@ describe('computeCurrentCrew', () => {
           hours: 8,
           amount: 100,
           category: 'hourly',
+          entryIndex: 0,
         },
         {
           payPeriodId: 'pp-new',
@@ -188,6 +190,7 @@ describe('computeCurrentCrew', () => {
           source: 'piece',
           amount: 100,
           category: 'hanger',
+          entryIndex: 0,
         },
         {
           payPeriodId: 'pp-new',
@@ -202,6 +205,7 @@ describe('computeCurrentCrew', () => {
           hours: 4,
           amount: 50,
           category: 'hourly',
+          entryIndex: 0,
         },
       ],
     }

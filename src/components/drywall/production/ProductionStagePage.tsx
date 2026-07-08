@@ -274,6 +274,7 @@ export function ProductionStagePage() {
             entries: [],
           }
         }
+        onDataChanged={() => void refreshAssessment()}
       />
 
       {!readOnly && status === 'production' && (

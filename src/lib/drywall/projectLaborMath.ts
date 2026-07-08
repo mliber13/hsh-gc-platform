@@ -51,6 +51,10 @@ export interface DrywallProjectLaborEntryFlat {
   pieces?: number
   amount: number
   category: DrywallLaborCategory
+  /** Index within the person's hourEntries or pieceEntries array (payroll write path). */
+  entryIndex: number
+  jobId?: string
+  jobName?: string
 }
 
 export interface DrywallProjectLaborSummary {
@@ -217,6 +221,7 @@ export function extractAllProjectLaborEntries(
   periods: PayPeriodForLabor[],
   catalogs: OrgDrywallCatalogs | null,
   profileRates: ProfileRatesByPersonKey = {},
+  specialtyByPersonKey: Map<string, DrywallLaborCategory> = new Map(),
 ): Map<string, DrywallProjectLaborEntryFlat[]> {
   const byProject = new Map<string, DrywallProjectLaborEntryFlat[]>()
 
@@ -247,13 +252,16 @@ export function extractAllProjectLaborEntries(
           hours,
           overtimeType: he.overtimeType || 'regular',
           amount,
-          category: classifyLaborCategory('hour', catalogs),
+          category: specialtyByPersonKey.get(pk) ?? classifyLaborCategory('hour', catalogs),
+          entryIndex: idx,
+          jobId: he.jobId,
+          jobName: he.jobName,
         })
       })
 
-      for (const pe of entry.pieceEntries || []) {
+      ;(entry.pieceEntries || []).forEach((pe, idx) => {
         const amount = pieceEntryNetAmount(pe, entry, allEntries, pk)
-        if (amount <= 0) continue
+        if (amount <= 0) return
         const pieces = pieceEntryPieces(pe)
         const pieceKey = pe.piece_key
         const workType = pe.workType
@@ -273,8 +281,11 @@ export function extractAllProjectLaborEntries(
           pieces,
           amount,
           category: classifyLaborCategory('piece', catalogs, pieceKey, workType),
+          entryIndex: idx,
+          jobId: pe.jobId,
+          jobName: pe.jobName,
         })
-      }
+      })
     }
   }
 
@@ -286,8 +297,11 @@ export function extractProjectLaborEntries(
   projectId: string,
   catalogs: OrgDrywallCatalogs | null,
   profileRates: ProfileRatesByPersonKey = {},
+  specialtyByPersonKey: Map<string, DrywallLaborCategory> = new Map(),
 ): DrywallProjectLaborEntryFlat[] {
-  return extractAllProjectLaborEntries(periods, catalogs, profileRates).get(projectId) ?? []
+  return extractAllProjectLaborEntries(periods, catalogs, profileRates, specialtyByPersonKey).get(
+    projectId,
+  ) ?? []
 }
 
 export function summarizeProjectLabor(

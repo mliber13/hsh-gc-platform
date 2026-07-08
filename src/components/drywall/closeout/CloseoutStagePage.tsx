@@ -226,6 +226,7 @@ export function CloseoutStagePage() {
             entries: [],
           }
         }
+        onDataChanged={() => void refreshAssessment()}
       />
 
       {!readOnly && status === 'production-complete' && (

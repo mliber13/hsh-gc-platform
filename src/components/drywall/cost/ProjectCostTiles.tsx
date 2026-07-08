@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency } from '@/components/hr/payroll/payrollFormat'
@@ -8,11 +9,16 @@ import {
 import {
   componentEstimateKeyFromPieceKey,
   resolvePieceEntryKey,
+  type DrywallLaborCategory,
 } from '@/lib/drywall/payrollPieceKeys'
 import type { EstimatedMaterialBreakdown } from '@/lib/drywall/estimatedMaterial'
-import type { DrywallProjectLaborSummary } from '@/lib/drywall/projectLaborMath'
+import type {
+  DrywallProjectLaborEntryFlat,
+  DrywallProjectLaborSummary,
+} from '@/lib/drywall/projectLaborMath'
 import type { MarginVsBidResult, MaterialEntryFlat } from '@/lib/drywall/projectCostMath'
 import { cn } from '@/lib/utils'
+import { LaborBreakdownModal } from './LaborBreakdownModal'
 
 const MARGIN_COLOR_CLASS: Record<MarginVsBidResult['marginColor'], string> = {
   green: 'text-emerald-600 dark:text-emerald-400',
@@ -383,6 +389,7 @@ function LaborCompareRow({
   actualDisplay,
   note,
   indent,
+  onActualClick,
 }: {
   label: string
   estimated: number | null
@@ -390,11 +397,14 @@ function LaborCompareRow({
   actualDisplay?: string
   note?: string
   indent?: boolean
+  onActualClick?: () => void
 }) {
   const est = estimated ?? 0
   const act = actual ?? 0
   const hasBoth = estimated != null && actual != null
   const variance = hasBoth ? act - est : null
+  const actualText = actualDisplay ?? (actual == null ? '—' : formatCurrency(actual))
+  const actualClickable = onActualClick != null && actual != null && actual > 0
 
   return (
     <li
@@ -413,7 +423,17 @@ function LaborCompareRow({
         {estimated == null ? '—' : formatCurrency(estimated)}
       </span>
       <span className="text-right">
-        {actualDisplay ?? (actual == null ? '—' : formatCurrency(actual))}
+        {actualClickable ? (
+          <button
+            type="button"
+            onClick={onActualClick}
+            className="cursor-pointer underline-offset-2 hover:underline"
+          >
+            {actualText}
+          </button>
+        ) : (
+          actualText
+        )}
       </span>
       <span className={cn('text-right', variance != null && varianceClass(variance))}>
         {variance == null ? '—' : formatVariance(variance)}
@@ -422,15 +442,69 @@ function LaborCompareRow({
   )
 }
 
+function entriesForCategory(
+  entries: DrywallProjectLaborEntryFlat[],
+  category: DrywallProjectLaborEntryFlat['category'],
+): DrywallProjectLaborEntryFlat[] {
+  return entries.filter((e) => e.category === category)
+}
+
+function entriesForComponentKey(
+  entries: DrywallProjectLaborEntryFlat[],
+  componentKey: string,
+): DrywallProjectLaborEntryFlat[] {
+  return entries.filter((e) => {
+    if (e.category !== 'components') return false
+    const rawKey = resolvePieceEntryKey({ piece_key: e.pieceKey, workType: e.workType })
+    return componentEstimateKeyFromPieceKey(rawKey) === componentKey
+  })
+}
+
+function entriesForUnmapped(entries: DrywallProjectLaborEntryFlat[]): DrywallProjectLaborEntryFlat[] {
+  return entries.filter((e) => e.category === 'legacy' || e.category === 'hourly' || e.category === 'other')
+}
+
+type DrillFilter =
+  | { kind: 'category'; category: DrywallLaborCategory }
+  | { kind: 'component'; pieceKey: string }
+  | { kind: 'unmapped' }
+
+function entriesForDrill(
+  entries: DrywallProjectLaborEntryFlat[],
+  filter: DrillFilter,
+): DrywallProjectLaborEntryFlat[] {
+  switch (filter.kind) {
+    case 'category':
+      return entriesForCategory(entries, filter.category)
+    case 'component':
+      return entriesForComponentKey(entries, filter.pieceKey)
+    case 'unmapped':
+      return entriesForUnmapped(entries)
+  }
+}
+
 export function EstimatedVsActualLaborTile({
   icon: Icon,
   estimated,
   actual,
+  onDataChanged,
 }: {
   icon: LucideIcon
   estimated: EstimatedLaborBreakdown
   actual: DrywallProjectLaborSummary
+  onDataChanged?: () => void
 }) {
+  const [drill, setDrill] = useState<{
+    title: string
+    filter: DrillFilter
+  } | null>(null)
+
+  const openDrill = (title: string, filter: DrillFilter) => {
+    setDrill({ title, filter })
+  }
+
+  const drillEntries = drill ? entriesForDrill(actual.entries, drill.filter) : []
+
   const estimatedTotal = estimated.total
   const actualTotal = actual.totalCost
   const variance = actualTotal - estimatedTotal
@@ -473,7 +547,19 @@ export function EstimatedVsActualLaborTile({
     { key: 'other', label: 'Other', amount: actual.byCategory.other ?? 0 },
   ].filter((row) => row.amount > 0)
 
+  const unmappedTotal = unmappedRows.reduce((sum, row) => sum + row.amount, 0)
+
   return (
+    <>
+      <LaborBreakdownModal
+        open={drill != null}
+        onOpenChange={(open) => {
+          if (!open) setDrill(null)
+        }}
+        title={drill?.title ?? ''}
+        entries={drillEntries}
+        onDataChanged={onDataChanged}
+      />
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold">
@@ -542,16 +628,23 @@ export function EstimatedVsActualLaborTile({
                 label="Hanger"
                 estimated={estimated.hanger}
                 actual={actual.byCategory.hanger ?? 0}
+                onActualClick={() => openDrill('Hanger — actual', { kind: 'category', category: 'hanger' })}
               />
               <LaborCompareRow
                 label="Finisher"
                 estimated={estimated.finisher}
                 actual={actual.byCategory.finisher ?? 0}
+                onActualClick={() =>
+                  openDrill('Finisher — actual', { kind: 'category', category: 'finisher' })
+                }
               />
               <LaborCompareRow
                 label="Prep / Clean"
                 estimated={estimated.prepClean}
                 actual={actual.byCategory.prepClean ?? 0}
+                onActualClick={() =>
+                  openDrill('Prep / Clean — actual', { kind: 'category', category: 'prepClean' })
+                }
               />
               {(estimated.componentsTotal > 0 || componentRows.length > 0) && (
                 <>
@@ -559,6 +652,9 @@ export function EstimatedVsActualLaborTile({
                     label="Components"
                     estimated={estimated.componentsTotal}
                     actual={actual.byCategory.components ?? 0}
+                    onActualClick={() =>
+                      openDrill('Components — actual', { kind: 'category', category: 'components' })
+                    }
                   />
                   {componentRows.map((row) => (
                     <LaborCompareRow
@@ -567,6 +663,12 @@ export function EstimatedVsActualLaborTile({
                       estimated={row.estimated}
                       actual={row.actual}
                       indent
+                      onActualClick={() =>
+                        openDrill(`Components · ${row.label}`, {
+                          kind: 'component',
+                          pieceKey: row.key,
+                        })
+                      }
                     />
                   ))}
                 </>
@@ -605,15 +707,38 @@ export function EstimatedVsActualLaborTile({
                 {unmappedRows.map((row) => (
                   <li key={row.key} className="flex justify-between gap-3 tabular-nums">
                     <span className="text-muted-foreground">{row.label}</span>
-                    <span>{formatCurrency(row.amount)}</span>
+                    {row.amount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openDrill(`${row.label} — actual`, {
+                            kind: 'category',
+                            category: row.key as DrywallLaborCategory,
+                          })
+                        }
+                        className="cursor-pointer underline-offset-2 hover:underline"
+                      >
+                        {formatCurrency(row.amount)}
+                      </button>
+                    ) : (
+                      <span>{formatCurrency(row.amount)}</span>
+                    )}
                   </li>
                 ))}
               </ul>
               <div className="mt-2 flex justify-between gap-3 border-t pt-2 font-medium tabular-nums">
                 <span>Unmapped total</span>
-                <span>
-                  {formatCurrency(unmappedRows.reduce((sum, row) => sum + row.amount, 0))}
-                </span>
+                {unmappedTotal > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => openDrill('Unmapped labor', { kind: 'unmapped' })}
+                    className="cursor-pointer underline-offset-2 hover:underline"
+                  >
+                    {formatCurrency(unmappedTotal)}
+                  </button>
+                ) : (
+                  <span>{formatCurrency(unmappedTotal)}</span>
+                )}
               </div>
             </div>
           </div>
@@ -625,5 +750,6 @@ export function EstimatedVsActualLaborTile({
         </div>
       </CardContent>
     </Card>
+    </>
   )
 }

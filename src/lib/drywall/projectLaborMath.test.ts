@@ -135,9 +135,40 @@ describe('extractProjectLaborEntries', () => {
     expect(flat).toHaveLength(3)
     expect(flat.filter((e) => e.source === 'hour')).toHaveLength(1)
     expect(flat.find((e) => e.source === 'hour')?.amount).toBe(200)
+    expect(flat.find((e) => e.source === 'hour')?.entryIndex).toBe(0)
+    expect(flat.find((e) => e.source === 'hour')?.jobId).toBe(projectId)
     expect(flat.find((e) => e.personType === '1099')).toBeDefined()
     expect(flat.some((e) => e.category === 'hanger')).toBe(true)
     expect(flat.some((e) => e.category === 'finisher')).toBe(true)
+    const hanger = flat.find((e) => e.category === 'hanger')
+    expect(hanger?.entryIndex).toBe(0)
+    expect(hanger?.jobId).toBe(projectId)
+    expect(hanger?.jobName).toBe('Site A')
+  })
+
+  it('attributes hourly labor to hanger/finisher when specialty map overrides', () => {
+    const specialtyMap = new Map<string, 'hanger'>([['w2-emp-1', 'hanger']])
+    const flatWithSpecialty = extractProjectLaborEntries(
+      periods,
+      projectId,
+      emptyCatalogs,
+      { 'w2-emp-1': 25 },
+      specialtyMap,
+    )
+    const hourWithSpecialty = flatWithSpecialty.find((e) => e.source === 'hour')
+    expect(hourWithSpecialty?.category).toBe('hanger')
+
+    const summaryWithSpecialty = summarizeProjectLabor(flatWithSpecialty)
+    const w2HourBurdened = 200 * (1 + LABOR_TAX_RATE)
+    expect(summaryWithSpecialty.byCategory.hourly).toBeCloseTo(0, 2)
+    expect(summaryWithSpecialty.byCategory.hanger).toBeCloseTo(w2HourBurdened + 500 * (1 + LABOR_TAX_RATE), 2)
+
+    const flatDefault = extractProjectLaborEntries(periods, projectId, emptyCatalogs, {
+      'w2-emp-1': 25,
+    })
+    expect(flatDefault.find((e) => e.source === 'hour')?.category).toBe('hourly')
+    const summaryDefault = summarizeProjectLabor(flatDefault)
+    expect(summaryDefault.byCategory.hourly).toBeCloseTo(w2HourBurdened, 2)
   })
 
   it('summarizes totals and groups by pay period with W2 burden on actuals', () => {
@@ -246,6 +277,7 @@ describe('splitLaborByProductionWindow', () => {
       hours: 8,
       amount: 100,
       category: 'hourly' as const,
+      entryIndex: 0,
     },
     {
       payPeriodId: 'b',
@@ -259,6 +291,7 @@ describe('splitLaborByProductionWindow', () => {
       hours: 8,
       amount: 200,
       category: 'hourly' as const,
+      entryIndex: 0,
     },
     {
       payPeriodId: 'c',
@@ -272,6 +305,7 @@ describe('splitLaborByProductionWindow', () => {
       hours: 8,
       amount: 300,
       category: 'hourly' as const,
+      entryIndex: 0,
     },
   ]
 

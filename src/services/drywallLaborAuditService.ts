@@ -88,7 +88,7 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
-function normalizeJobId(jobId: string | undefined | null): string {
+export function normalizeJobId(jobId: string | undefined | null): string {
   return String(jobId ?? '').trim()
 }
 

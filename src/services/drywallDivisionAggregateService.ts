@@ -39,6 +39,7 @@ import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import {
   buildPayrollProfileRatesForLabor,
+  buildSpecialtyByPersonKeyForLabor,
   fetchPayPeriodsForDrywallLabor,
 } from '@/services/drywallLaborService'
 import {
@@ -729,15 +730,22 @@ export async function fetchDivisionExecution(now = new Date()): Promise<Division
     return { jobs: [], computedAt }
   }
 
-  const [periods, materialByProject, subByProject, catalogs, profileRates] = await Promise.all([
-    fetchPayPeriodsForDrywallLabor(),
-    fetchAllDrywallMaterialByProject().catch(() => new Map<string, MaterialEntryFlat[]>()),
-    fetchAllDrywallSubByProject().catch(() => new Map<string, SubEntryFlat[]>()),
-    fetchOrgDrywallCatalogs().catch(() => null),
-    buildPayrollProfileRatesForLabor().catch(() => ({})),
-  ])
+  const [periods, materialByProject, subByProject, catalogs, profileRates, specialtyByPersonKey] =
+    await Promise.all([
+      fetchPayPeriodsForDrywallLabor(),
+      fetchAllDrywallMaterialByProject().catch(() => new Map<string, MaterialEntryFlat[]>()),
+      fetchAllDrywallSubByProject().catch(() => new Map<string, SubEntryFlat[]>()),
+      fetchOrgDrywallCatalogs().catch(() => null),
+      buildPayrollProfileRatesForLabor().catch(() => ({})),
+      buildSpecialtyByPersonKeyForLabor().catch(() => new Map<string, DrywallLaborCategory>()),
+    ])
 
-  const laborBuckets = extractAllProjectLaborEntries(periods, catalogs, profileRates)
+  const laborBuckets = extractAllProjectLaborEntries(
+    periods,
+    catalogs,
+    profileRates,
+    specialtyByPersonKey,
+  )
 
   const jobs = activeJobs.map((row) => {
     const estimates = estimateCostsForQuote(row.quote, catalogs)

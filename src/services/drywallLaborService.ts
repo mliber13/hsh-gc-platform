@@ -11,6 +11,8 @@ import {
   type PayPeriodForLabor,
   type ProfileRatesByPersonKey,
 } from '@/lib/drywall/projectLaborMath'
+import { specialtyFromPositionName } from '@/lib/drywall/crewSpecialty'
+import type { DrywallLaborCategory } from '@/lib/drywall/payrollPieceKeys'
 import { personKey } from '@/lib/payrollMath'
 import { fetchPayPeriods } from '@/services/hrPayrollService'
 import { fetchTeam } from '@/services/hrTeamService'
@@ -54,6 +56,25 @@ export async function buildPayrollProfileRatesForLabor(): Promise<ProfileRatesBy
   return buildProfileRatesByPersonKey()
 }
 
+export async function buildSpecialtyByPersonKeyForLabor(): Promise<Map<string, DrywallLaborCategory>> {
+  const team = await fetchTeam()
+  const out = new Map<string, DrywallLaborCategory>()
+  const posNameById = new Map(team.positions.map((p) => [p.id, p.name]))
+  const toCategory = (name: string | null | undefined): DrywallLaborCategory | null => {
+    const s = specialtyFromPositionName(name)
+    return s === 'hanger' ? 'hanger' : s === 'finisher' ? 'finisher' : null
+  }
+  for (const emp of team.employees) {
+    const cat = toCategory(emp.positionId ? posNameById.get(emp.positionId) : undefined)
+    if (cat) out.set(personKey(emp.id, 'w2'), cat)
+  }
+  for (const c of team.contractors1099) {
+    const cat = toCategory(c.positionId ? posNameById.get(c.positionId) : undefined)
+    if (cat) out.set(personKey(c.id, '1099'), cat)
+  }
+  return out
+}
+
 export async function fetchPayPeriodsForDrywallLabor(): Promise<PayPeriodForLabor[]> {
   if (!isOnlineMode()) {
     throw new Error('Drywall labor summary requires an online connection to Supabase.')
@@ -76,13 +97,20 @@ export async function fetchDrywallProjectLaborSummary(
 
   await requireUserOrgId()
 
-  const [periods, catalogs, profileRates] = await Promise.all([
+  const [periods, catalogs, profileRates, specialtyByPersonKey] = await Promise.all([
     fetchPayPeriodsForDrywallLabor(),
     fetchOrgDrywallCatalogs().catch(() => null),
     buildProfileRatesByPersonKey().catch(() => ({} as ProfileRatesByPersonKey)),
+    buildSpecialtyByPersonKeyForLabor().catch(() => new Map<string, DrywallLaborCategory>()),
   ])
 
-  let entries = extractProjectLaborEntries(periods, projectId, catalogs, profileRates)
+  let entries = extractProjectLaborEntries(
+    periods,
+    projectId,
+    catalogs,
+    profileRates,
+    specialtyByPersonKey,
+  )
 
   const window = options?.window ?? 'all'
   if (window !== 'all') {
