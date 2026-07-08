@@ -500,7 +500,11 @@ function renderDrywallQuoteV3Pdf(input: QuoteV3PdfInput, logo: DrywallPdfLogo | 
   const pdfSettings = resolveQuoteV3PdfSettings(input.quote.pdf_settings)
   const documentOptions = pdfSettings.documentOptions
   const totals = computeQuoteV3Totals(input.quote, input.catalogs)
-  const lineRows = buildQuoteV3PdfLineRows(input.quote, input.catalogs)
+  const lineRows = buildQuoteV3PdfLineRows(
+    input.quote,
+    input.catalogs,
+    documentOptions.showTaxesSeparately,
+  )
   const tradeGroups = groupPdfRowsByTrade(lineRows)
   const quoteNumber = drywallQuoteNumberLabel(input.quote.quoteNumber) || 'DW-DRAFT'
   const validUntil =

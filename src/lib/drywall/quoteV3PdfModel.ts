@@ -110,6 +110,8 @@ function laborBurdenFromQuote(quote: DrywallQuoteV3): QuoteV3LaborBurdenOptions 
 
     prepCleanIncludeLaborBurden: quote.prep_clean_include_labor_burden,
 
+    componentIncludeLaborBurden: quote.component_include_labor_burden ?? true,
+
     projectHangerRate: quote.project_hanger_rate,
 
     projectFinisherRate: quote.project_finisher_rate,
@@ -158,6 +160,8 @@ function allocateLineSellTotals(params: {
 
   totalDrywallWasteSqft?: number
 
+  taxShownSeparately?: boolean
+
 }): QuoteV3PdfLineRow[] {
 
   const {
@@ -178,6 +182,8 @@ function allocateLineSellTotals(params: {
 
     totalDrywallWasteSqft = 0,
 
+    taxShownSeparately = false,
+
   } = params
 
 
@@ -194,19 +200,29 @@ function allocateLineSellTotals(params: {
 
     }
 
-    const taxableMaterial =
+    if (!taxShownSeparately) {
 
-      line.type === 'drywall'
+      const taxableMaterial =
 
-        ? computed.materialTotal + computed.accessoriesTotal
+        line.type === 'drywall'
 
-        : computed.materialTotal
+          ? computed.materialTotal + computed.accessoriesTotal
 
-    weight += taxableMaterial * (salesTaxPct / 100)
+          : computed.materialTotal
+
+      weight += taxableMaterial * (salesTaxPct / 100)
+
+    }
 
     return { line, weight }
 
   })
+
+
+
+  const weightSum = weighted.reduce((sum, row) => sum + row.weight, 0)
+
+  const denom = taxShownSeparately ? weightSum : markupBase
 
 
 
@@ -216,7 +232,7 @@ function allocateLineSellTotals(params: {
 
     let sellTotal = 0
 
-    if (markupBase > 0 && totalSell > 0) {
+    if (denom > 0 && totalSell > 0) {
 
       if (idx === weighted.length - 1) {
 
@@ -224,7 +240,7 @@ function allocateLineSellTotals(params: {
 
       } else {
 
-        sellTotal = round2(totalSell * (weight / markupBase))
+        sellTotal = round2(totalSell * (weight / denom))
 
         allocated += sellTotal
 
@@ -258,6 +274,8 @@ export function buildQuoteV3PdfLineRows(
 
   catalogs: OrgDrywallCatalogs,
 
+  taxShownSeparately = false,
+
 ): QuoteV3PdfLineRow[] {
 
   const laborBurden = laborBurdenFromQuote(quote)
@@ -265,6 +283,12 @@ export function buildQuoteV3PdfLineRows(
   const totals = computeQuoteV3Totals(quote, catalogs)
 
   const routine = totals.routine
+
+  const totalSell = taxShownSeparately
+
+    ? routine.total - routine.salesTaxAmount
+
+    : routine.total
 
 
 
@@ -276,7 +300,7 @@ export function buildQuoteV3PdfLineRows(
 
     laborBurden,
 
-    totalSell: routine.total,
+    totalSell,
 
     markupBase: routine.markupBase,
 
@@ -285,6 +309,8 @@ export function buildQuoteV3PdfLineRows(
     cleanupTotal: routine.cleanupTotal,
 
     totalDrywallWasteSqft: routine.cleanupDrywallSqft,
+
+    taxShownSeparately,
 
   })
 
@@ -350,6 +376,8 @@ export function buildQuoteV3PdfAlternateBlocks(
       markupBase: marked.markupBase,
 
       salesTaxPct: quote.sales_tax_pct ?? 0,
+
+      taxShownSeparately: false,
 
     })
 

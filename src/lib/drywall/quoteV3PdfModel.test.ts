@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { groupPdfRowsByLocationForDisplay, buildQuoteV3PdfAlternateBlocks, type QuoteV3PdfLineRow } from './quoteV3PdfModel'
+import {
+  groupPdfRowsByLocationForDisplay,
+  buildQuoteV3PdfAlternateBlocks,
+  buildQuoteV3PdfLineRows,
+  type QuoteV3PdfLineRow,
+} from './quoteV3PdfModel'
 import { computeQuoteV3Totals } from './quoteV3Math'
 import { createEmptyDrywallQuoteV3 } from './createEmptyDrywallQuoteV3'
 import { createDefaultDrywallCatalogSeeds } from './catalogSeeds'
@@ -160,5 +165,72 @@ describe('buildQuoteV3PdfAlternateBlocks', () => {
     expect(blocks[0].rows.every((r) => r.sellTotal > 0)).toBe(true)
     const rowSum = blocks[0].rows.reduce((s, r) => s + r.sellTotal, 0)
     expect(rowSum).toBeCloseTo(blocks[0].totalAdd, 2)
+  })
+})
+
+describe('buildQuoteV3PdfLineRows tax allocation', () => {
+  function quoteWithDrywallAndRc() {
+    const catalogs = createDefaultDrywallCatalogSeeds()
+    catalogs.rc_channel = [
+      {
+        id: 'rc-1',
+        display_name: 'RC 12ft',
+        size: '1-1/2',
+        material_rate_per_piece: 10,
+        labor_rate: 2,
+        default_piece_length_ft: 12,
+      },
+    ]
+    const quote = createEmptyDrywallQuoteV3()
+    quote.overhead_pct = 10
+    quote.profit_pct = 20
+    quote.sales_tax_pct = 7
+    quote.project_hanger_rate = 0.2
+    quote.project_finisher_rate = 0.3
+    quote.lineItems = [
+      {
+        id: 'dw-1',
+        type: 'drywall',
+        description: 'Walls',
+        location: 'Main',
+        quantity: 1000,
+        catalog_id: '1_2_type_x',
+        finish_scope_id: 'level_4',
+        custom_material_rate: 0.5,
+        waste_pct: 10,
+      },
+      {
+        id: 'rc-1',
+        type: 'rc_channel',
+        description: 'RC ceiling',
+        location: 'Main',
+        quantity: 500,
+        catalog_id: 'rc-1',
+        rc_surface: 'ceiling',
+        rc_spacing_in: 24,
+      },
+    ]
+    return { catalogs, quote }
+  }
+
+  it('with taxShownSeparately=true, line sellTotals sum to pre-tax subtotal', () => {
+    const { catalogs, quote } = quoteWithDrywallAndRc()
+    const routine = computeQuoteV3Totals(quote, catalogs).routine
+    const preTax = routine.total - routine.salesTaxAmount
+    expect(routine.salesTaxAmount).toBeGreaterThan(0)
+
+    const rows = buildQuoteV3PdfLineRows(quote, catalogs, true)
+    const sum = rows.reduce((s, r) => s + r.sellTotal, 0)
+    expect(sum).toBeCloseTo(preTax, 2)
+    expect(preTax + routine.salesTaxAmount).toBeCloseTo(routine.total, 2)
+  })
+
+  it('with taxShownSeparately=false, line sellTotals sum to grand total', () => {
+    const { catalogs, quote } = quoteWithDrywallAndRc()
+    const routine = computeQuoteV3Totals(quote, catalogs).routine
+
+    const rows = buildQuoteV3PdfLineRows(quote, catalogs, false)
+    const sum = rows.reduce((s, r) => s + r.sellTotal, 0)
+    expect(sum).toBeCloseTo(routine.total, 2)
   })
 })
