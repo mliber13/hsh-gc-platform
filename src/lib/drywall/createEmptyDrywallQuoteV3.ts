@@ -14,6 +14,7 @@ export function createEmptyDrywallQuoteV3(): DrywallQuoteV3 {
     overhead_pct: d.overheadPercentage,
     profit_pct: d.profitPercentage,
     sales_tax_pct: d.salesTaxRate,
+    component_include_labor_burden: true,
     lineItems: [],
     alternates: [],
     notes: '',
@@ -64,6 +65,7 @@ export function hydrateDrywallQuoteV3(raw: unknown): DrywallQuoteV3 {
     hanger_include_labor_burden: optionalBool(q.hanger_include_labor_burden),
     finisher_include_labor_burden: optionalBool(q.finisher_include_labor_burden),
     prep_clean_include_labor_burden: optionalBool(q.prep_clean_include_labor_burden),
+    component_include_labor_burden: optionalBool(q.component_include_labor_burden) ?? true,
     lineItems: Array.isArray(q.lineItems)
       ? (q.lineItems as QuoteLineItem[]).map((raw) =>
           migrateLegacyLaborFields(hydrateLineItem(raw), raw, q.legacyV2Snapshot),
@@ -277,6 +279,9 @@ function hydrateLineItem(raw: QuoteLineItem): QuoteLineItem {
       raw.custom_finisher_rate != null ? num(raw.custom_finisher_rate) : undefined,
     custom_labor_rate:
       raw.custom_labor_rate != null ? num(raw.custom_labor_rate) : undefined,
+    rc_surface: raw.rc_surface === 'ceiling' ? 'ceiling' : raw.rc_surface === 'wall' ? 'wall' : undefined,
+    rc_wall_height: raw.rc_wall_height != null ? num(raw.rc_wall_height) : undefined,
+    rc_spacing_in: raw.rc_spacing_in != null ? num(raw.rc_spacing_in) : undefined,
     override_reason: raw.override_reason,
     waste_pct: raw.waste_pct != null ? num(raw.waste_pct, 10) : undefined,
     accessoryOverrides: hydrateAccessoryOverrides(raw.accessoryOverrides),
@@ -344,6 +349,9 @@ export function createQuoteLineItem(
     catalog_id: '',
     finish_scope_id: undefined,
     waste_pct: type === 'drywall' ? 10 : undefined,
+    rc_surface: type === 'rc_channel' ? 'wall' : undefined,
+    rc_spacing_in: type === 'rc_channel' ? 24 : undefined,
+    accessoryOverrides: type === 'rc_channel' ? { screws: true } : undefined,
   }
 }
 

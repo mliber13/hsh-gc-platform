@@ -511,6 +511,9 @@ export interface QuoteLineItem {
   custom_hanger_rate?: number
   /** Component trade labor override; unit matches catalog (sqft, lf, piece, each). */
   custom_labor_rate?: number
+  rc_surface?: 'wall' | 'ceiling'
+  rc_wall_height?: number
+  rc_spacing_in?: number
   /** Applies when material and/or hanger/finisher rates are overridden on a drywall line. */
   override_reason?: string
   waste_pct?: number
@@ -601,6 +604,7 @@ export interface DrywallQuoteV3 {
   hanger_include_labor_burden?: boolean
   finisher_include_labor_burden?: boolean
   prep_clean_include_labor_burden?: boolean
+  component_include_labor_burden?: boolean
   lineItems: QuoteLineItem[]
   alternates: QuoteAlternate[]
   legacyV2Snapshot?: unknown

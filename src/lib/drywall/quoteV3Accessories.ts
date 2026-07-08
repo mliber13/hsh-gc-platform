@@ -194,6 +194,7 @@ function pushItem(
 }
 
 export const CORNER_BEAD_LF_PER_STICK = 10
+export const RC_CHANNEL_LF_PER_SCREW_BOX = 4800
 
 export function allocateQuoteBeadSticksAcrossLines(
   lines: QuoteLineItem[],
@@ -310,6 +311,40 @@ export function computeLineAccessories(
   return { byCategory, totalCost, items }
 }
 
+export function computeRcChannelScrews(
+  channelLf: number,
+  accessoryCatalog: AccessoryCatalogEntry[],
+  opts?: { screwsEnabled?: boolean; accessoriesInMaterialRate?: boolean },
+): { screwsTotal: number; accessories: LineAccessoryResult } {
+  const accessories = emptyLineResult()
+  if (channelLf <= 0) return { screwsTotal: 0, accessories }
+  if (opts?.accessoriesInMaterialRate) return { screwsTotal: 0, accessories }
+  if (opts?.screwsEnabled === false) return { screwsTotal: 0, accessories }
+
+  const byId = catalogById(accessoryCatalog)
+  const screwEntry = byId.get('screws_1_25_fine') ?? byId.get('screws_1_25_coarse')
+  if (!screwEntry) return { screwsTotal: 0, accessories }
+  const screwBoxes = Math.ceil(channelLf / RC_CHANNEL_LF_PER_SCREW_BOX)
+  pushItem(accessories.items, accessories.byCategory, screwEntry, screwBoxes)
+  accessories.totalCost = accessories.items.reduce((sum, i) => sum + i.cost, 0)
+  return { screwsTotal: accessories.totalCost, accessories }
+}
+
+function rcChannelLfFromLine(line: QuoteLineItem): number {
+  const spacingIn = line.rc_spacing_in && line.rc_spacing_in > 0 ? line.rc_spacing_in : 24
+  const spacingFt = spacingIn / 12
+  const surface = line.rc_surface === 'ceiling' ? 'ceiling' : 'wall'
+  let channelLf = 0
+  if (surface === 'ceiling') {
+    channelLf = (line.quantity || 0) / spacingFt
+  } else {
+    const wallHeight = line.rc_wall_height && line.rc_wall_height > 0 ? line.rc_wall_height : 0
+    const rows = wallHeight > 0 ? Math.ceil(wallHeight / spacingFt) : 1
+    channelLf = (line.quantity || 0) * rows
+  }
+  return (channelLf * (100 + (line.waste_pct ?? 10))) / 100
+}
+
 function mergeCategoryMaps(target: AccessoryCategoryMap, source: AccessoryCategoryMap): void {
   for (const cat of Object.keys(target) as AccessoryCategory[]) {
     target[cat].push(...source[cat])
@@ -339,14 +374,24 @@ export function computeQuoteAccessoryRollup(
 
   const processLines = (lines: QuoteLineItem[], beadAllocation: Map<string, number>) => {
     for (const line of lines) {
-      if (line.type !== 'drywall') continue
-      const finishScope = resolveFinishScope(line, catalogs)
-      const result = computeLineAccessories(
-        line,
-        finishScope,
-        accessoryCatalog,
-        beadAllocation.get(line.id) ?? 0,
-      )
+      let result = emptyLineResult()
+      if (line.type === 'drywall') {
+        const finishScope = resolveFinishScope(line, catalogs)
+        result = computeLineAccessories(
+          line,
+          finishScope,
+          accessoryCatalog,
+          beadAllocation.get(line.id) ?? 0,
+        )
+      } else if (line.type === 'rc_channel') {
+        const lf = rcChannelLfFromLine(line)
+        result = computeRcChannelScrews(lf, accessoryCatalog, {
+          screwsEnabled: line.accessoryOverrides?.screws ?? true,
+          accessoriesInMaterialRate: line.accessories_in_material_rate,
+        }).accessories
+      } else {
+        continue
+      }
       byLine[line.id] = result.totalCost
       allItems.push(...result.items)
     }

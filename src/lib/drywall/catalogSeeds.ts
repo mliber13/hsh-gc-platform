@@ -159,6 +159,15 @@ export function createDefaultDrywallCatalogSeeds(): OrgDrywallCatalogs {
         'v2 screwRate 5,760 sqft/box.',
       ),
       accessory(
+        'screws_1_25_fine',
+        'Screws 1-1/4" Fine Thread (box ~5,000)',
+        'screws',
+        'box',
+        35,
+        0,
+        'RC channel fastener; 4800 LF/box.',
+      ),
+      accessory(
         'corner_bead_metal',
         'Metal Corner Bead',
         'corner_bead',

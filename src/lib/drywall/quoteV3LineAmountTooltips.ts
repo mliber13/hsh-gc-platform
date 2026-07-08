@@ -93,7 +93,7 @@ export function lineTotalAmountTooltip(computed: QuoteV3LineComputed): string | 
 }
 
 export function showsMaterialWasteHint(line: QuoteLineItem): boolean {
-  if (line.type !== 'drywall') return false
+  if (line.type !== 'drywall' && line.type !== 'rc_channel') return false
   const wastePct = line.waste_pct ?? 10
   return wastePct > 0
 }

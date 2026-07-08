@@ -216,7 +216,7 @@ function TypeSectionTable({
   onEdit: (line: QuoteLineItem) => void
 }) {
   const { isDrywall, catalogLabel, orderedLines, type } = section
-  const colSpan = isDrywall ? 12 : 10
+  const colSpan = 12
   const matRateHeader = materialRateHeaderForType(type)
   const laborRateHeader = componentLaborRateHeaderForType(type)
   const theme = TRADE_SECTION_THEMES[type]
@@ -245,7 +245,7 @@ function TypeSectionTable({
       </div>
       <table
         className={`w-full table-fixed text-sm ${compact ? 'text-xs' : ''}`}
-        style={{ minWidth: isDrywall ? 1252 : 1020 }}
+        style={{ minWidth: isDrywall ? 1210 : 1170 }}
       >
         <colgroup>
           <col style={{ width: 110 }} />
@@ -256,12 +256,13 @@ function TypeSectionTable({
           ) : (
             <col style={{ width: 82 }} />
           )}
-          <col />
+          {!isDrywall && <col style={{ width: 190 }} />}
+          <col style={{ width: isDrywall ? 180 : 164 }} />
           <col style={{ width: 118 }} />
           {isDrywall && <col style={{ width: 64 }} />}
           <col style={{ width: 96 }} />
           <col style={{ width: 96 }} />
-          {isDrywall && <col style={{ width: 96 }} />}
+          <col style={{ width: 96 }} />
           <col style={{ width: 96 }} />
           <col style={{ width: 52 }} />
         </colgroup>
@@ -285,6 +286,7 @@ function TypeSectionTable({
                 {laborRateHeader}
               </th>
             )}
+            {!isDrywall && <th className="px-1.5 py-2 font-medium">Setup</th>}
             <th className="px-1.5 py-2 font-medium">Description</th>
             <th className="px-1.5 py-2 text-center font-medium">Qty</th>
             {isDrywall && (
@@ -292,9 +294,7 @@ function TypeSectionTable({
             )}
             <th className="px-1.5 py-2 font-medium text-right">Material $</th>
             <th className="px-1.5 py-2 font-medium text-right">Labor $</th>
-            {isDrywall && (
-              <th className="px-1.5 py-2 font-medium text-right">Accessories $</th>
-            )}
+            <th className="px-1.5 py-2 font-medium text-right">Accessories $</th>
             <th className="px-1.5 py-2 font-medium text-right">Total</th>
             <th className="px-1.5 py-2" />
           </tr>
@@ -401,9 +401,15 @@ function LineRow({
     lineComputeOptionsFor(line, lineComputeOptions, beadAllocation),
   )
   const catalogOptions = catalogOptionsForLineType(line.type, catalogs)
-  const unitLabel = computed.unit
+  const unitLabel =
+    line.type === 'rc_channel'
+      ? line.rc_surface === 'ceiling'
+        ? 'Ceiling area (sqft)'
+        : 'Wall length (LF)'
+      : computed.unit
 
   const patch = (p: Partial<QuoteLineItem>) => onPatch(line.id, p)
+  const rcSurface = line.rc_surface === 'ceiling' ? 'ceiling' : 'wall'
 
   return (
     <tr className="border-b last:border-0 hover:bg-muted/10">
@@ -489,6 +495,77 @@ function LineRow({
           />
         </td>
       )}
+      {!isDrywall && (
+        <td className="px-1.5 py-1">
+          {line.type === 'rc_channel' ? (
+            readOnly ? (
+              <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                <span>{rcSurface === 'ceiling' ? 'Ceiling' : 'Wall'}</span>
+                <span>·</span>
+                <span>sp {line.rc_spacing_in ?? 24}"</span>
+                {rcSurface === 'wall' && line.rc_wall_height != null ? (
+                  <>
+                    <span>·</span>
+                    <span>ht {line.rc_wall_height}ft</span>
+                  </>
+                ) : null}
+                <span>·</span>
+                <span>w {line.waste_pct ?? 10}%</span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-1">
+                <select
+                  className={`h-7 rounded-md border border-input bg-background px-1 text-xs ${compact ? 'text-[11px]' : ''}`}
+                  value={rcSurface}
+                  onChange={(e) =>
+                    patch({ rc_surface: e.target.value === 'ceiling' ? 'ceiling' : 'wall' })
+                  }
+                >
+                  <option value="wall">Wall</option>
+                  <option value="ceiling">Ceiling</option>
+                </select>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  className={`h-7 w-[52px] px-1 text-xs ${compact ? 'text-[11px]' : ''}`}
+                  placeholder="sp"
+                  title="Spacing (in.)"
+                  value={line.rc_spacing_in ?? 24}
+                  onChange={(e) => patch({ rc_spacing_in: parseFloat(e.target.value) || 24 })}
+                />
+                {rcSurface === 'wall' && (
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    className={`h-7 w-[52px] px-1 text-xs ${compact ? 'text-[11px]' : ''}`}
+                    placeholder="ht"
+                    title="Wall height (ft)"
+                    value={line.rc_wall_height ?? ''}
+                    onChange={(e) =>
+                      patch({
+                        rc_wall_height:
+                          e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
+                      })
+                    }
+                  />
+                )}
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  className={`h-7 w-[48px] px-1 text-right text-xs tabular-nums ${compact ? 'text-[11px]' : ''}`}
+                  title="Waste %"
+                  value={line.waste_pct ?? 10}
+                  onChange={(e) => patch({ waste_pct: parseFloat(e.target.value) || 0 })}
+                />
+                <span className="text-[10px] text-muted-foreground">%</span>
+              </div>
+            )
+          ) : null}
+        </td>
+      )}
       <td className="px-1.5 py-1">
         {readOnly ? (
           <span className="truncate block" title={line.description}>
@@ -540,15 +617,13 @@ function LineRow({
         tooltip={laborAmountTooltip(line, catalogs, computed)}
         showWasteHint={showsMaterialWasteHint(line)}
       />
-      {isDrywall && (
-        <td className="px-1.5 py-1 text-right">
-          <AccessoryBreakdownPopover
-            total={computed.accessoriesTotal}
-            items={computed.accessories.items}
-            showWasteHint={showsMaterialWasteHint(line)}
-          />
-        </td>
-      )}
+      <td className="px-1.5 py-1 text-right">
+        <AccessoryBreakdownPopover
+          total={computed.accessoriesTotal}
+          items={computed.accessories.items}
+          showWasteHint={showsMaterialWasteHint(line)}
+        />
+      </td>
       <CurrencyAmountCell
         value={computed.lineTotal}
         variant="total"

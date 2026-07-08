@@ -13,6 +13,7 @@ import {
 import {
   allocateQuoteBeadSticksAcrossLines,
   computeLineAccessories,
+  computeRcChannelScrews,
   computeQuoteAccessoryRollup,
   type AccessoryCategoryMap,
   type LineAccessoryResult,
@@ -116,29 +117,18 @@ export interface QuoteV3LaborBurdenOptions {
   hangerIncludeLaborBurden?: boolean
   finisherIncludeLaborBurden?: boolean
   prepCleanIncludeLaborBurden?: boolean
+  componentIncludeLaborBurden?: boolean
   projectHangerRate?: number
   projectFinisherRate?: number
   /** Bead sticks allocated to this line from quote.bead_sticks (quote-level scope field). */
   allocatedBeadSticks?: number
 }
 
-export function computeLineItem(
-  line: QuoteLineItem,
-  catalogs: OrgDrywallCatalogs,
-  laborBurden?: QuoteV3LaborBurdenOptions,
-): QuoteV3LineComputed {
-  const qty = line.quantity || 0
-  const wastePct = line.waste_pct ?? 10
-  const wasteMult = line.type === 'drywall' ? 1 + wastePct / 100 : 1
+const RC_DEFAULT_SPACING_IN = 24
+const RC_DEFAULT_PIECE_LENGTH_FT = 12
 
-  const materialRate = getLineMaterialRate(line, catalogs)
-  const materialTotal = qty * materialRate * wasteMult
-
-  let hangerLaborTotal = 0
-  let finisherLaborTotal = 0
-  let laborTotal = 0
-  let accessoriesTotal = 0
-  let accessories: LineAccessoryResult = {
+function emptyAccessories(): LineAccessoryResult {
+  return {
     byCategory: {
       joint_compound: [],
       tape: [],
@@ -149,6 +139,24 @@ export function computeLineItem(
     totalCost: 0,
     items: [],
   }
+}
+
+export function computeLineItem(
+  line: QuoteLineItem,
+  catalogs: OrgDrywallCatalogs,
+  laborBurden?: QuoteV3LaborBurdenOptions,
+): QuoteV3LineComputed {
+  const qty = line.quantity || 0
+  const wastePct = line.waste_pct ?? 10
+  const wasteMult = line.type === 'drywall' ? 1 + wastePct / 100 : 1
+  const materialRate = getLineMaterialRate(line, catalogs)
+  let materialTotal = qty * materialRate * wasteMult
+
+  let hangerLaborTotal = 0
+  let finisherLaborTotal = 0
+  let laborTotal = 0
+  let accessoriesTotal = 0
+  let accessories: LineAccessoryResult = emptyAccessories()
 
   if (line.type === 'drywall') {
     const finishScope = resolveFinishScope(line, catalogs)
@@ -179,9 +187,37 @@ export function computeLineItem(
       laborBurden?.allocatedBeadSticks ?? 0,
     )
     accessoriesTotal = accessories.totalCost
+  } else if (line.type === 'rc_channel') {
+    const spacingIn = line.rc_spacing_in && line.rc_spacing_in > 0 ? line.rc_spacing_in : RC_DEFAULT_SPACING_IN
+    const spacingFt = spacingIn / 12
+    const surface = line.rc_surface === 'ceiling' ? 'ceiling' : 'wall'
+    const wallHeight = line.rc_wall_height && line.rc_wall_height > 0 ? line.rc_wall_height : 0
+    const rows = surface === 'wall' ? (wallHeight > 0 ? Math.ceil(wallHeight / spacingFt) : 1) : 0
+    const channelLf = surface === 'ceiling' ? qty / spacingFt : qty * rows
+    const rcWastePct = line.waste_pct ?? 10
+    const channelLfWasted = (channelLf * (100 + rcWastePct)) / 100
+    const pieceLenFt =
+      catalogs.rc_channel.find((e) => e.id === line.catalog_id)?.default_piece_length_ft ||
+      RC_DEFAULT_PIECE_LENGTH_FT
+    const pieces = Math.ceil(channelLfWasted / pieceLenFt)
+    materialTotal = pieces * materialRate
+    const laborRate = getEffectiveComponentLaborRate(line, catalogs)
+    laborTotal = applyLaborBurden(
+      channelLfWasted * laborRate,
+      laborBurden?.componentIncludeLaborBurden ?? true,
+    )
+    const rcScrews = computeRcChannelScrews(channelLfWasted, catalogs.accessories ?? [], {
+      screwsEnabled: line.accessoryOverrides?.screws ?? true,
+      accessoriesInMaterialRate: line.accessories_in_material_rate,
+    })
+    accessories = rcScrews.accessories
+    accessoriesTotal = rcScrews.screwsTotal
   } else {
     const laborRate = getEffectiveComponentLaborRate(line, catalogs)
-    laborTotal = qty * laborRate
+    laborTotal = applyLaborBurden(
+      qty * laborRate,
+      laborBurden?.componentIncludeLaborBurden ?? true,
+    )
   }
 
   return {
@@ -322,7 +358,6 @@ export function lineDirectCostsFromLines(
     if (line.type === 'drywall') {
       hangerLaborSubtotal += computed.hangerLaborTotal
       finisherLaborSubtotal += computed.finisherLaborTotal
-      accessoriesSubtotal += computed.accessoriesTotal
     } else {
       componentLaborSubtotal += computed.laborTotal
       const tradeKey = componentLaborTradeKey(line.type)
@@ -330,6 +365,7 @@ export function lineDirectCostsFromLines(
         componentLaborByTrade[tradeKey] += computed.laborTotal
       }
     }
+    accessoriesSubtotal += computed.accessoriesTotal
     for (const cat of Object.keys(accessoryByCategory) as Array<keyof AccessoryCategoryMap>) {
       accessoryByCategory[cat].push(...computed.accessories.byCategory[cat])
     }
@@ -391,6 +427,7 @@ function laborBurdenFromQuote(quote: DrywallQuoteV3): QuoteV3LaborBurdenOptions 
     hangerIncludeLaborBurden: quote.hanger_include_labor_burden,
     finisherIncludeLaborBurden: quote.finisher_include_labor_burden,
     prepCleanIncludeLaborBurden: quote.prep_clean_include_labor_burden,
+    componentIncludeLaborBurden: quote.component_include_labor_burden ?? true,
     projectHangerRate: quote.project_hanger_rate,
     projectFinisherRate: quote.project_finisher_rate,
   }

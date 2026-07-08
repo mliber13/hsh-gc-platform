@@ -118,6 +118,32 @@ function mergeMarginTargets(
 
 
 
+/** Append seed accessories missing from a loaded org catalog (add-only, never overwrite). */
+
+export function ensureSeedAccessories(catalogs: OrgDrywallCatalogs): OrgDrywallCatalogs {
+
+  const seeds = createDefaultDrywallCatalogSeeds().accessories ?? []
+
+  const existing = catalogs.accessories ?? []
+
+  const existingIds = new Set(existing.map((a) => a.id))
+
+  const missing = seeds.filter((seed) => !existingIds.has(seed.id))
+
+  if (missing.length === 0) return catalogs
+
+  return {
+
+    ...catalogs,
+
+    accessories: [...existing, ...missing],
+
+  }
+
+}
+
+
+
 /** Idempotent — inserts default seeds when no row exists for the org. */
 
 export async function seedDrywallCatalogs(
@@ -250,7 +276,9 @@ export async function fetchOrgDrywallCatalogs(): Promise<OrgDrywallCatalogs> {
 
 
 
-  return mergeMarginTargets(parseOrgDrywallCatalogs(data.payload), data)
+  return ensureSeedAccessories(
+    mergeMarginTargets(parseOrgDrywallCatalogs(data.payload), data),
+  )
 
 }
 

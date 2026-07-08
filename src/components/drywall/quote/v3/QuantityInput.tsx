@@ -70,7 +70,9 @@ export function QuantityInput({ value, unit, readOnly, compact, onChange }: Prop
           if (e.key === 'Enter') e.currentTarget.blur()
         }}
       />
-      <span className="text-muted-foreground w-[26px] shrink-0 text-[10px]">{unit}</span>
+      <span className="text-muted-foreground shrink-0 whitespace-nowrap text-[10px]" title={unit}>
+        {unit}
+      </span>
     </div>
   )
 }

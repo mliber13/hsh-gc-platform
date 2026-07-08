@@ -277,6 +277,7 @@ export function getLineUnit(line: QuoteLineItem, catalogs: OrgDrywallCatalogs): 
     case 'insulation':
       return 'sqft'
     case 'rc_channel':
+      return line.rc_surface === 'ceiling' ? 'sqft' : 'lf'
     case 'metal_stud':
       return 'lf'
     case 'suspended_grid': {

@@ -122,7 +122,10 @@ export function QuoteTotalsSidebar({ quote, totals, catalogs, readOnly, onChange
                 indent
                 inclBurden={includeLaborBurden(quote.finisher_include_labor_burden)}
               />
-              <ComponentLaborRows byTrade={routine.componentLaborByTrade} />
+              <ComponentLaborRows
+                byTrade={routine.componentLaborByTrade}
+                inclBurden={includeLaborBurden(quote.component_include_labor_burden)}
+              />
               {routine.accessoriesSubtotal > 0 && (
                 <AccessorySubtotalRow
                   value={routine.accessoriesSubtotal}
@@ -364,12 +367,18 @@ const COMPONENT_LABOR_LABELS: Array<{
   { key: 'frp_labor', label: 'FRP Labor' },
 ]
 
-function ComponentLaborRows({ byTrade }: { byTrade: QuoteV3ComponentLaborByTrade }) {
+function ComponentLaborRows({
+  byTrade,
+  inclBurden,
+}: {
+  byTrade: QuoteV3ComponentLaborByTrade
+  inclBurden?: boolean
+}) {
   return (
     <>
       {COMPONENT_LABOR_LABELS.map(({ key, label }) =>
         byTrade[key] > 0 ? (
-          <Row key={key} label={label} value={byTrade[key]} muted indent />
+          <Row key={key} label={label} value={byTrade[key]} muted indent inclBurden={inclBurden} />
         ) : null,
       )}
     </>
