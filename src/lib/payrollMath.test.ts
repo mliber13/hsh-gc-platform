@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildDraftFromPreviousRun,
+  buildPayrollPeople,
   entryHasNonZeroAdjustments,
   fieldMeasuredSqftFromProjectMetadata,
   getSqftFromJob,
@@ -8,8 +9,64 @@ import {
   nextPeriodDateRangeFromRun,
   payrollLastWeekRange,
   payrollThisWeekRange,
+  personKey,
+  splitGrossByDivisions,
 } from './payrollMath'
 import type { PayPeriod } from '@/types/payroll'
+import type { Contractor1099, Employee } from '@/types/hr'
+
+describe('buildPayrollPeople', () => {
+  const active: Employee = { id: 'a1', name: 'Active', status: 'active' }
+  const archived: Employee = { id: 'a2', name: 'Archived', status: 'archived' }
+
+  it('excludes archived unless retainedPersonKeys includes them', () => {
+    const without = buildPayrollPeople([active, archived], [], false)
+    expect(without.map((p) => p.id)).toEqual(['a1'])
+
+    const retained = buildPayrollPeople(
+      [active, archived],
+      [],
+      false,
+      new Set([personKey('a2', 'w2')]),
+    )
+    expect(retained.map((p) => p.id)).toEqual(['a1', 'a2'])
+  })
+
+  it('includes all archived when includeArchived is true', () => {
+    const all = buildPayrollPeople([active, archived], [], true)
+    expect(all.map((p) => p.id)).toEqual(['a1', 'a2'])
+  })
+})
+
+describe('splitGrossByDivisions', () => {
+  it('splits gross by provided percentages when total is 100%', () => {
+    const split = splitGrossByDivisions(1000, [
+      { division: 'hsh_drywall', pct: 65 },
+      { division: 'hsh_contractor', pct: 15 },
+      { division: '3d_printing', pct: 20 },
+    ])
+    expect(split).toEqual({
+      hsh_drywall: 650,
+      hsh_contractor: 150,
+      '3d_printing': 200,
+    })
+  })
+
+  it('adds unallocated remainder when percentages are under 100%', () => {
+    const split = splitGrossByDivisions(1000, [
+      { division: 'hsh_drywall', pct: 70 },
+      { division: 'hsh_contractor', pct: 20 },
+    ])
+    expect(split.hsh_drywall).toBe(700)
+    expect(split.hsh_contractor).toBe(200)
+    expect(split.__unallocated).toBe(100)
+  })
+
+  it('returns empty object when allocations are empty', () => {
+    expect(splitGrossByDivisions(1000, [])).toEqual({})
+    expect(splitGrossByDivisions(1000)).toEqual({})
+  })
+})
 
 describe('buildDraftFromPreviousRun', () => {
   const people = [

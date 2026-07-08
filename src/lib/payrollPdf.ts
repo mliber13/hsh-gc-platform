@@ -13,8 +13,10 @@ import {
   getToolDeductionThisWeek,
   jobsMatch,
   personKey,
+  splitGrossByDivisions,
   sortPayrollReportEntries,
 } from '@/lib/payrollMath'
+import { DIVISIONS, divisionLabel, UNALLOCATED_KEY } from '@/lib/divisions'
 
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', {
@@ -42,10 +44,10 @@ export function exportPayrollRunPdf(
   const rowH = 6
   let y = m
 
-  const personById = (id: string, type: string) => {
-    if (type === 'w2') return employees.find((p) => p.id === id)
-    return contractors.find((p) => p.id === id)
-  }
+  const personLookup = new Map<string, Employee | Contractor1099>()
+  for (const e of employees) personLookup.set(personKey(e.id, 'w2'), e)
+  for (const c of contractors) personLookup.set(personKey(c.id, '1099'), c)
+  const personById = (id: string, type: string) => personLookup.get(personKey(id, type))
 
   const reportEntries = sortPayrollReportEntries(
     entriesWithPay(run.entries),
@@ -332,6 +334,83 @@ export function exportPayrollRunPdf(
     doc.text(formatCurrency(sumW2), jobCols.w2, y)
     doc.text(formatCurrency(sum1099), jobCols.c1099, y)
     doc.text(formatCurrency(sumW2 + sum1099), jobCols.total, y)
+    y += 14
+  }
+
+  const byDivision = new Map<string, { w2: number; c1099: number }>()
+  for (const e of reportEntries) {
+    const gross = parseFloat(String(e.gross)) || 0
+    if (gross <= 0) continue
+    const person = personById(e.personId, e.personType)
+    const allocations = person?.divisionAllocations
+    if (!allocations || allocations.length === 0) continue
+    const split = splitGrossByDivisions(gross, allocations)
+    for (const [divisionKey, amount] of Object.entries(split)) {
+      if (!(amount > 0)) continue
+      const row = byDivision.get(divisionKey) || { w2: 0, c1099: 0 }
+      if (e.personType === 'w2') row.w2 += amount
+      else row.c1099 += amount
+      byDivision.set(divisionKey, row)
+    }
+  }
+
+  if (byDivision.size > 0) {
+    const divisionOrder = [...DIVISIONS.map((d) => d.code), UNALLOCATED_KEY]
+    const sortedDivisionKeys = [...byDivision.keys()].sort((a, b) => {
+      const ai = divisionOrder.indexOf(a)
+      const bi = divisionOrder.indexOf(b)
+      if (ai >= 0 && bi >= 0) return ai - bi
+      if (ai >= 0) return -1
+      if (bi >= 0) return 1
+      return divisionLabel(a).localeCompare(divisionLabel(b), undefined, { sensitivity: 'base' })
+    })
+
+    checkPage(25 + sortedDivisionKeys.length * rowH)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.text('By Division — salary allocation (for QuickBooks)', m, y)
+    y += 8
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    const divisionCols = { name: m, w2: m + 95, c1099: m + 130, total: m + 165 }
+    doc.text('Division', divisionCols.name, y)
+    doc.text('W2', divisionCols.w2, y)
+    doc.text('1099', divisionCols.c1099, y)
+    doc.text('Total', divisionCols.total, y)
+    y += 5
+    doc.setDrawColor(200, 200, 200)
+    doc.line(m, y, pageW - m, y)
+    y += 6
+
+    let sumW2 = 0
+    let sum1099 = 0
+    sortedDivisionKeys.forEach((divisionKey, idx) => {
+      checkPage(rowH)
+      const v = byDivision.get(divisionKey)!
+      const total = (v.w2 || 0) + (v.c1099 || 0)
+      if (idx % 2 === 1) {
+        doc.setFillColor(245, 245, 245)
+        doc.rect(m, y - 4, pageW - 2 * m, rowH, 'F')
+      }
+      doc.text(divisionLabel(divisionKey), divisionCols.name, y)
+      doc.text(formatCurrency(v.w2 || 0), divisionCols.w2, y)
+      doc.text(formatCurrency(v.c1099 || 0), divisionCols.c1099, y)
+      doc.text(formatCurrency(total), divisionCols.total, y)
+      sumW2 += v.w2 || 0
+      sum1099 += v.c1099 || 0
+      y += rowH
+    })
+
+    checkPage(12)
+    y += 2
+    doc.setFont('helvetica', 'bold')
+    doc.setDrawColor(200, 200, 200)
+    doc.line(m, y, pageW - m, y)
+    y += 6
+    doc.text('By Division Total', divisionCols.name, y)
+    doc.text(formatCurrency(sumW2), divisionCols.w2, y)
+    doc.text(formatCurrency(sum1099), divisionCols.c1099, y)
+    doc.text(formatCurrency(sumW2 + sum1099), divisionCols.total, y)
     y += 14
   }
 

@@ -33,6 +33,7 @@ export type PayrollPersonProfile = Pick<
   | 'salaryAmount'
   | 'ownersDraw'
   | 'gasAllowance'
+  | 'bankedHours'
   | 'toolRepayments'
   | 'status'
 >
@@ -287,6 +288,25 @@ export function calculateGross(
   )
 }
 
+export function splitGrossByDivisions(
+  gross: number,
+  allocations?: Array<{ division: string; pct: number }>,
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  if (!Array.isArray(allocations) || allocations.length === 0) return out
+  let sumPct = 0
+  for (const a of allocations) {
+    const pct = Number(a.pct) || 0
+    if (pct <= 0 || !a.division) continue
+    out[a.division] = (out[a.division] || 0) + gross * (pct / 100)
+    sumPct += pct
+  }
+  if (gross > 0 && sumPct < 100) {
+    out.__unallocated = (out.__unallocated || 0) + gross * ((100 - sumPct) / 100)
+  }
+  return out
+}
+
 export function recalcPieceEntryAmount(pe: PayrollPieceEntry): number {
   const total = Math.max(1, parseFloat(String(pe.totalPhases)) || 1)
   const done = parseFloat(String(pe.phasesCompleted)) || 0
@@ -455,22 +475,25 @@ export function buildPayrollPeople(
   employees: Employee[],
   contractors: Contractor1099[],
   includeArchived = false,
+  retainedPersonKeys: Set<string> = new Set(),
 ): PayrollRowPerson[] {
   const rows: PayrollRowPerson[] = []
   for (const e of employees) {
-    if (!includeArchived && isArchivedMember(e)) continue
+    const pk = personKey(e.id, 'w2')
+    if (!includeArchived && isArchivedMember(e) && !retainedPersonKeys.has(pk)) continue
     rows.push({
       ...e,
       personType: 'w2',
-      personKey: personKey(e.id, 'w2'),
+      personKey: pk,
     })
   }
   for (const c of contractors) {
-    if (!includeArchived && isArchivedMember(c)) continue
+    const pk = personKey(c.id, '1099')
+    if (!includeArchived && isArchivedMember(c) && !retainedPersonKeys.has(pk)) continue
     rows.push({
       ...c,
       personType: '1099',
-      personKey: personKey(c.id, '1099'),
+      personKey: pk,
     })
   }
   return sortPayrollReportEntries(rows, (r) => r.name || '', (r) => r.personType)

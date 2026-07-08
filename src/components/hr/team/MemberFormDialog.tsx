@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select'
 import type { Contractor1099, Employee, JobPosition, MemberStatus } from '@/types/hr'
 import { formatPayType, generateHrId, normalizeMemberStatus } from '@/lib/hrTeamUtils'
+import { DIVISIONS, type DivisionCode } from '@/lib/divisions'
 
 export type MemberKind = 'employee' | 'contractor'
 
@@ -41,7 +42,18 @@ type FormState = {
   payType: string
   hourlyRate: string
   salaryAmount: string
+  gasAllowance: string
+  bankedHours: string
+  divisionPcts: Record<DivisionCode, string>
   status: MemberStatus
+}
+
+function emptyDivisionPcts(): Record<DivisionCode, string> {
+  return {
+    hsh_contractor: '',
+    hsh_drywall: '',
+    '3d_printing': '',
+  }
 }
 
 function emptyForm(): FormState {
@@ -55,6 +67,9 @@ function emptyForm(): FormState {
     payType: 'hourly',
     hourlyRate: '',
     salaryAmount: '',
+    gasAllowance: '',
+    bankedHours: '',
+    divisionPcts: emptyDivisionPcts(),
     status: 'active',
   }
 }
@@ -65,6 +80,11 @@ function memberToForm(
 ): FormState {
   if (!member) return emptyForm()
   const normalized = normalizeMemberStatus(member)
+  const divisionPcts = emptyDivisionPcts()
+  for (const a of member.divisionAllocations ?? []) {
+    const code = a.division as DivisionCode
+    if (code in divisionPcts) divisionPcts[code] = String(a.pct ?? '')
+  }
   return {
     name: member.name ?? '',
     company: kind === 'contractor' ? (member as Contractor1099).company ?? '' : '',
@@ -75,6 +95,9 @@ function memberToForm(
     payType: formatPayType(member.payType),
     hourlyRate: member.hourlyRate != null ? String(member.hourlyRate) : '',
     salaryAmount: member.salaryAmount != null ? String(member.salaryAmount) : '',
+    gasAllowance: member.gasAllowance != null ? String(member.gasAllowance) : '',
+    bankedHours: member.bankedHours != null ? String(member.bankedHours) : '',
+    divisionPcts,
     status: normalized.status,
   }
 }
@@ -94,13 +117,22 @@ export function MemberFormDialog({
     if (open) setForm(memberToForm(member, kind))
   }, [open, member, kind])
 
+  const divisionTotal = DIVISIONS.reduce(
+    (sum, d) => sum + (parseFloat(form.divisionPcts[d.code]) || 0),
+    0,
+  )
+
   const title =
     kind === 'employee'
       ? member
-        ? 'Edit employee'
+        ? readOnly
+          ? 'View employee'
+          : 'Edit employee'
         : 'Add employee'
       : member
-        ? 'Edit contractor'
+        ? readOnly
+          ? 'View contractor'
+          : 'Edit contractor'
         : 'Add contractor'
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -123,8 +155,12 @@ export function MemberFormDialog({
       status: form.status,
       toolRepayments: member?.toolRepayments ?? [],
       ownersDraw: member?.ownersDraw ?? null,
-      gasAllowance: member?.gasAllowance ?? null,
-      bankedHours: member?.bankedHours ?? null,
+      gasAllowance: form.gasAllowance ? Number(form.gasAllowance) : 0,
+      bankedHours: form.bankedHours ? Number(form.bankedHours) : 0,
+      divisionAllocations: DIVISIONS.map((d) => ({
+        division: d.code,
+        pct: parseFloat(form.divisionPcts[d.code]) || 0,
+      })).filter((a) => a.pct > 0),
       pieceRate: member?.pieceRate ?? null,
     }
 
@@ -292,6 +328,80 @@ export function MemberFormDialog({
                   />
                 </div>
               )}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="member-fuel">Fuel reimbursement ($/week)</Label>
+                  <Input
+                    id="member-fuel"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0.00"
+                    value={form.gasAllowance}
+                    onChange={(e) => setForm({ ...form, gasAllowance: e.target.value })}
+                    disabled={readOnly}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Added to gross each payroll period when set.
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="member-banked-hours">Banked hours balance</Label>
+                  <Input
+                    id="member-banked-hours"
+                    type="number"
+                    min={0}
+                    step="0.25"
+                    placeholder="0"
+                    value={form.bankedHours}
+                    onChange={(e) => setForm({ ...form, bankedHours: e.target.value })}
+                    disabled={readOnly}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Hours available to pay out on payroll; updated when hours are banked or used.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2 rounded-md border bg-background/60 p-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Division allocation (%)
+                  </Label>
+                  <span
+                    className={`text-xs ${divisionTotal === 100 ? 'text-muted-foreground' : 'text-amber-600'}`}
+                  >
+                    Total: {divisionTotal.toFixed(2).replace(/\.00$/, '')}%{' '}
+                    {divisionTotal === 100 ? '' : '(should total 100%)'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {DIVISIONS.map((d) => (
+                    <div key={d.code} className="grid gap-1.5">
+                      <Label htmlFor={`division-${d.code}`} className="text-xs">
+                        {d.label}
+                      </Label>
+                      <Input
+                        id={`division-${d.code}`}
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.01"
+                        value={form.divisionPcts[d.code]}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            divisionPcts: {
+                              ...form.divisionPcts,
+                              [d.code]: e.target.value,
+                            },
+                          })
+                        }
+                        disabled={readOnly}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 

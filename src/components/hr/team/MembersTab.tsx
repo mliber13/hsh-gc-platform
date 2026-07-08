@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Archive, Pencil, Plus, Search, Trash2, UserPlus } from 'lucide-react'
+import { Archive, Eye, Pencil, Plus, Search, Trash2, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -12,6 +12,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Contractor1099, Employee, JobPosition } from '@/types/hr'
 import { getPositionName, isArchivedMember } from '@/lib/hrTeamUtils'
+import { divisionLabel } from '@/lib/divisions'
+import { formatCurrency } from '@/components/hr/payroll/payrollFormat'
 import type { MemberKind } from './MemberFormDialog'
 
 type MembersTabProps = {
@@ -76,6 +78,16 @@ export function MembersTab({
     list.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
     return list
   }, [members, search, statusFilter, positionFilter, kind])
+
+  const divisionSummary = (member: Employee | Contractor1099): string => {
+    const allocations = (member.divisionAllocations ?? [])
+      .filter((a) => (Number(a.pct) || 0) > 0 && a.division)
+      .sort((a, b) => (Number(b.pct) || 0) - (Number(a.pct) || 0))
+    if (allocations.length === 0) return ''
+    return allocations
+      .map((a) => `${divisionLabel(a.division)} ${Number(a.pct)}%`)
+      .join(' · ')
+  }
 
   return (
     <Card>
@@ -152,16 +164,28 @@ export function MembersTab({
                   <th className="px-4 py-3 font-medium">Position</th>
                   <th className="px-4 py-3 font-medium">Phone</th>
                   <th className="px-4 py-3 font-medium">Email</th>
+                  <th className="px-4 py-3 font-medium text-right">Fuel / wk</th>
+                  <th className="px-4 py-3 font-medium text-right">Banked hrs</th>
                   <th className="px-4 py-3 font-medium">Status</th>
-                  {!readOnly && <th className="px-4 py-3 font-medium text-right">Actions</th>}
+                  <th className="px-4 py-3 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((m) => {
                   const archived = isArchivedMember(m)
+                  const fuelPerWeek = parseFloat(String(m.gasAllowance)) || 0
+                  const bankedHours = parseFloat(String(m.bankedHours)) || 0
+                  const divisions = divisionSummary(m)
                   return (
                     <tr key={m.id} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">{m.name}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <div>{m.name}</div>
+                        {divisions ? (
+                          <div className="text-xs font-normal text-muted-foreground">
+                            {divisions}
+                          </div>
+                        ) : null}
+                      </td>
                       {kind === 'contractor' && (
                         <td className="px-4 py-3 text-muted-foreground">
                           {(m as Contractor1099).company || '—'}
@@ -170,6 +194,12 @@ export function MembersTab({
                       <td className="px-4 py-3">{getPositionName(positions, m.positionId)}</td>
                       <td className="px-4 py-3 text-muted-foreground">{m.phone || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">{m.email || '—'}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                        {fuelPerWeek > 0 ? formatCurrency(fuelPerWeek) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                        {bankedHours.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                      </td>
                       <td className="px-4 py-3">
                         <span
                           className={
@@ -181,51 +211,57 @@ export function MembersTab({
                           {archived ? 'Archived' : 'Active'}
                         </span>
                       </td>
-                      {!readOnly && (
-                        <td className="px-4 py-3">
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => onEdit(m)}
-                              title="Edit"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            {archived ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => onRestore(m.id)}
-                                title="Restore"
-                              >
-                                <Archive className="h-4 w-4" />
-                              </Button>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onEdit(m)}
+                            title={readOnly ? 'View' : 'Edit'}
+                          >
+                            {readOnly ? (
+                              <Eye className="h-4 w-4" />
                             ) : (
+                              <Pencil className="h-4 w-4" />
+                            )}
+                          </Button>
+                          {!readOnly && (
+                            <>
+                              {archived ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => onRestore(m.id)}
+                                  title="Restore"
+                                >
+                                  <Archive className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => onArchive(m.id)}
+                                  title="Archive"
+                                >
+                                  <Archive className="h-4 w-4" />
+                                </Button>
+                              )}
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => onArchive(m.id)}
-                                title="Archive"
+                                onClick={() => onRemove(m.id)}
+                                title="Remove from roster"
                               >
-                                <Archive className="h-4 w-4" />
+                                <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>
-                            )}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => onRemove(m.id)}
-                              title="Remove from roster"
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </td>
-                      )}
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   )
                 })}

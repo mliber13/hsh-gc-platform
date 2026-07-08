@@ -19,6 +19,7 @@ import {
   getNetPieceTotal,
   isPayrollDraftEmpty,
   payrollRowVisibleWhenHidingEmpty,
+  personKey,
   type PayrollRowPerson,
 } from '@/lib/payrollMath'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
@@ -116,9 +117,15 @@ export function PayrollRunTab({
   const [hideEmptyRows, setHideEmptyRows] = useState(false)
   const [drywallCatalogs, setDrywallCatalogs] = useState<OrgDrywallCatalogs | null>(null)
 
+  const retainedPersonKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const k of Object.keys(entries)) keys.add(k)
+    return keys
+  }, [entries])
+
   const people = useMemo(
-    () => buildPayrollPeople(employees, contractors, false),
-    [employees, contractors],
+    () => buildPayrollPeople(employees, contractors, false, retainedPersonKeys),
+    [employees, contractors, retainedPersonKeys],
   )
 
   const rows = useMemo(() => {
@@ -378,7 +385,13 @@ export function buildRunPayloadFromDraft(
   contractors: Contractor1099[],
   existing?: PayPeriod,
 ): Omit<PayPeriod, 'id'> & { id?: string } {
-  const people = buildPayrollPeople(employees, contractors, false)
+  const retainedPersonKeys = new Set<string>()
+  for (const k of Object.keys(entries)) retainedPersonKeys.add(k)
+  for (const prev of existing?.entries ?? []) {
+    retainedPersonKeys.add(personKey(prev.personId, prev.personType))
+  }
+
+  const people = buildPayrollPeople(employees, contractors, false, retainedPersonKeys)
   const runEntries: PayrollEntry[] = people.map((person) => {
     const entry =
       entries[person.personKey] || {
@@ -411,6 +424,13 @@ export function buildRunPayloadFromDraft(
       done: entry.done ?? false,
     }
   })
+
+  const emitted = new Set(runEntries.map((e) => personKey(e.personId, e.personType)))
+  for (const prev of existing?.entries ?? []) {
+    const k = personKey(prev.personId, prev.personType)
+    if (!emitted.has(k)) runEntries.push(prev)
+  }
+
   const totalGross = aggregateRunTotalGross(runEntries)
   return {
     ...(existing || {}),

@@ -16,6 +16,11 @@ export interface ToolRepayment {
   description?: string
 }
 
+export interface DivisionAllocation {
+  division: string
+  pct: number
+}
+
 export interface TeamMemberBase {
   id: string
   name: string
@@ -30,6 +35,7 @@ export interface TeamMemberBase {
   ownersDraw?: number | string | null
   gasAllowance?: number | string | null
   bankedHours?: number | string | null
+  divisionAllocations?: DivisionAllocation[]
   status?: MemberStatus | string | null
   toolRepayments?: ToolRepayment[]
 }
