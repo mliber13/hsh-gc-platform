@@ -2,15 +2,11 @@ import { Fragment, useMemo } from 'react'
 import {
   addDays,
   eachDayOfInterval,
-  endOfMonth,
-  endOfWeek,
   format,
   isSameMonth,
   isToday,
   isWeekend,
   isWithinInterval,
-  startOfMonth,
-  startOfWeek,
 } from 'date-fns'
 import { Card, CardContent } from '@/components/ui/card'
 import { getItemColsForWeek, toLocalDate } from '@/lib/scheduleCalendarUtils'
@@ -22,14 +18,21 @@ import {
   phaseForScheduleItem,
   SCHEDULE_PHASE_LEFT_BORDER_CLASS,
 } from '@/components/drywall/schedule/scheduleItemStatusStyles'
+import {
+  filterPortfolioItemsInRange,
+  type PortfolioViewWindow,
+} from './portfolioScheduleRange'
 
-const WEEK_STARTS_ON = 0 as const
 const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 export const PORTFOLIO_MAX_VISIBLE_LANES = 5
 
 type Props = {
   items: CrossProjectScheduleItem[]
-  month: Date
+  rangeStart: Date
+  rangeEnd: Date
+  viewWindow: PortfolioViewWindow
+  referenceMonth: Date
+  rangeLabel: string
   onItemClick: (item: CrossProjectScheduleItem) => void
 }
 
@@ -46,27 +49,16 @@ function buildTooltip(item: CrossProjectScheduleItem): string {
   return `${item.projectName}\n${item.name}\n${formatItemDates(item)}\n${assigned}`
 }
 
-export function filterPortfolioItemsInMonth(
-  items: CrossProjectScheduleItem[],
-  month: Date,
-): CrossProjectScheduleItem[] {
-  const monthStart = startOfMonth(month)
-  const monthEnd = endOfMonth(month)
-  return items.filter((item) => {
-    const start = toLocalDate(item.startDate)
-    const end = toLocalDate(item.endDate)
-    return (
-      isWithinInterval(start, { start: monthStart, end: monthEnd }) ||
-      isWithinInterval(end, { start: monthStart, end: monthEnd }) ||
-      (start <= monthStart && end >= monthEnd)
-    )
-  })
-}
-
-export function DrywallPortfolioCalendar({ items, month, onItemClick }: Props) {
-  const calendarStart = startOfWeek(startOfMonth(month), { weekStartsOn: WEEK_STARTS_ON })
-  const calendarEnd = endOfWeek(endOfMonth(month), { weekStartsOn: WEEK_STARTS_ON })
-  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd })
+export function DrywallPortfolioCalendar({
+  items,
+  rangeStart,
+  rangeEnd,
+  viewWindow,
+  referenceMonth,
+  rangeLabel,
+  onItemClick,
+}: Props) {
+  const calendarDays = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
   const weekRows = useMemo(
     () =>
       Array.from({ length: Math.ceil(calendarDays.length / 7) }, (_, i) =>
@@ -75,10 +67,15 @@ export function DrywallPortfolioCalendar({ items, month, onItemClick }: Props) {
     [calendarDays],
   )
 
-  const itemsInMonth = useMemo(
-    () => filterPortfolioItemsInMonth(items, month),
-    [items, month],
+  const itemsInRange = useMemo(
+    () => filterPortfolioItemsInRange(items, rangeStart, rangeEnd),
+    [items, rangeStart, rangeEnd],
   )
+
+  const isPrimaryDay = (day: Date) => {
+    if (viewWindow === 'month') return isSameMonth(day, referenceMonth)
+    return isWithinInterval(day, { start: rangeStart, end: rangeEnd })
+  }
 
   return (
     <Card>
@@ -96,11 +93,11 @@ export function DrywallPortfolioCalendar({ items, month, onItemClick }: Props) {
               ))}
 
               {weekRows.map((row, weekIdx) => {
-                const itemsForWeek = itemsInMonth
+                const itemsForWeek = itemsInRange
                   .map((item) => ({
                     item,
                     cols: getItemColsForWeek(
-                      calendarStart,
+                      rangeStart,
                       { startDate: item.startDate, endDate: item.endDate },
                       weekIdx,
                     ),
@@ -109,6 +106,7 @@ export function DrywallPortfolioCalendar({ items, month, onItemClick }: Props) {
 
                 const lanes = packLanes(itemsForWeek)
                 const visibleLanes = lanes.slice(0, PORTFOLIO_MAX_VISIBLE_LANES)
+                const laneCount = visibleLanes.length
                 const overflowCount = lanes
                   .slice(PORTFOLIO_MAX_VISIBLE_LANES)
                   .reduce((sum, lane) => sum + lane.length, 0)
@@ -120,12 +118,12 @@ export function DrywallPortfolioCalendar({ items, month, onItemClick }: Props) {
                         key={day.toISOString()}
                         className={cn(
                           'border-b border-r border-border/60 px-1.5 py-0.5 last:border-r-0',
-                          !isSameMonth(day, month) && 'bg-muted/20',
-                          isSameMonth(day, month) && isWeekend(day) && 'bg-muted/35',
-                          isSameMonth(day, month) && !isWeekend(day) && 'bg-card',
+                          !isPrimaryDay(day) && 'bg-muted/20',
+                          isPrimaryDay(day) && isWeekend(day) && 'bg-muted/35',
+                          isPrimaryDay(day) && !isWeekend(day) && 'bg-card',
                         )}
                       >
-                        {isSameMonth(day, month) && isToday(day) ? (
+                        {isPrimaryDay(day) && isToday(day) ? (
                           <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
                             {format(day, 'd')}
                           </div>
@@ -133,7 +131,7 @@ export function DrywallPortfolioCalendar({ items, month, onItemClick }: Props) {
                           <div
                             className={cn(
                               'text-[11px] font-medium leading-5',
-                              !isSameMonth(day, month)
+                              !isPrimaryDay(day)
                                 ? 'text-muted-foreground/60'
                                 : 'text-muted-foreground',
                             )}
@@ -144,9 +142,9 @@ export function DrywallPortfolioCalendar({ items, month, onItemClick }: Props) {
                       </div>
                     ))}
 
-                    {Array.from({ length: PORTFOLIO_MAX_VISIBLE_LANES }).map((_, laneIdx) => {
+                    {Array.from({ length: laneCount }).map((_, laneIdx) => {
                       const laneItems = visibleLanes[laneIdx] ?? []
-                      const weekStart = addDays(calendarStart, weekIdx * 7)
+                      const weekStart = addDays(rangeStart, weekIdx * 7)
                       const weekEnd = addDays(weekStart, 6)
 
                       return (
@@ -222,8 +220,13 @@ export function DrywallPortfolioCalendar({ items, month, onItemClick }: Props) {
                                         ‹
                                       </span>
                                     )}
-                                    <span className="truncate text-xs font-medium">
-                                      {item.projectName} · {item.name}
+                                    <span className="flex min-w-0 flex-col leading-tight">
+                                      <span className="truncate text-xs font-medium">
+                                        {item.name}
+                                      </span>
+                                      <span className="truncate text-[10px] opacity-70">
+                                        {item.projectName}
+                                      </span>
                                     </span>
                                     {continuesToNext && (
                                       <span className="text-[10px] opacity-70" aria-hidden>
@@ -256,12 +259,15 @@ export function DrywallPortfolioCalendar({ items, month, onItemClick }: Props) {
           </div>
         </div>
 
-        {itemsInMonth.length === 0 && (
+        {itemsInRange.length === 0 && (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            No drywall schedule items for {format(month, 'MMMM yyyy')}.
+            No drywall schedule items for {rangeLabel}.
           </p>
         )}
       </CardContent>
     </Card>
   )
 }
+
+// Re-export for tests or callers that still import from this module.
+export { filterPortfolioItemsInRange } from './portfolioScheduleRange'
