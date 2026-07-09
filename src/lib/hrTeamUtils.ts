@@ -9,6 +9,7 @@ import type {
   MemberStatus,
   OrgTeamPayload,
   PayType,
+  SalaryHistoryEntry,
 } from '@/types/hr'
 import { EMPTY_ORG_TEAM_PAYLOAD } from '@/types/hr'
 
@@ -153,6 +154,26 @@ export function payTypeLabel(payType?: string | null): string {
 export function formatPayType(payType?: PayType | string | null): PayType {
   if (payType === 'salary' || payType === 'piece') return payType
   return 'hourly'
+}
+
+/**
+ * The salary in effect for a pay period. Chooses the latest salaryHistory entry whose
+ * effectiveDate <= the period's start date; if the period predates all history, uses the
+ * earliest entry; if there's no history at all, falls back to the flat salaryAmount.
+ */
+export function resolveEffectiveSalary(
+  person: { salaryAmount?: number | string | null; salaryHistory?: SalaryHistoryEntry[] | null },
+  periodStartDate: string,
+): number {
+  const valid = (Array.isArray(person.salaryHistory) ? person.salaryHistory : [])
+    .filter((h) => h && h.effectiveDate && Number.isFinite(Number(h.salaryAmount)))
+    .sort((a, b) => String(a.effectiveDate).localeCompare(String(b.effectiveDate)))
+  if (valid.length) {
+    const applicable = valid.filter((h) => String(h.effectiveDate) <= String(periodStartDate))
+    const chosen = applicable.length ? applicable[applicable.length - 1] : valid[0]
+    return Number(chosen.salaryAmount) || 0
+  }
+  return Number(person.salaryAmount) || 0
 }
 
 export { EMPTY_ORG_TEAM_PAYLOAD }

@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { Contractor1099, Employee, JobPosition, MemberStatus } from '@/types/hr'
-import { formatPayType, generateHrId, normalizeMemberStatus } from '@/lib/hrTeamUtils'
+import { formatPayType, generateHrId, normalizeMemberStatus, resolveEffectiveSalary } from '@/lib/hrTeamUtils'
 import { DIVISIONS, type DivisionCode } from '@/lib/divisions'
 
 export type MemberKind = 'employee' | 'contractor'
@@ -42,6 +42,7 @@ type FormState = {
   payType: string
   hourlyRate: string
   salaryAmount: string
+  salaryHistory: { effectiveDate: string; salaryAmount: string }[]
   gasAllowance: string
   bankedHours: string
   divisionPcts: Record<DivisionCode, string>
@@ -67,6 +68,7 @@ function emptyForm(): FormState {
     payType: 'hourly',
     hourlyRate: '',
     salaryAmount: '',
+    salaryHistory: [],
     gasAllowance: '',
     bankedHours: '',
     divisionPcts: emptyDivisionPcts(),
@@ -85,6 +87,19 @@ function memberToForm(
     const code = a.division as DivisionCode
     if (code in divisionPcts) divisionPcts[code] = String(a.pct ?? '')
   }
+  const salaryHistory = member.salaryHistory?.length
+    ? member.salaryHistory.map((h) => ({
+        effectiveDate: h.effectiveDate ?? '',
+        salaryAmount: h.salaryAmount != null ? String(h.salaryAmount) : '',
+      }))
+    : member.salaryAmount != null
+      ? [
+          {
+            effectiveDate: member.startDate ?? '2000-01-01',
+            salaryAmount: String(member.salaryAmount),
+          },
+        ]
+      : []
   return {
     name: member.name ?? '',
     company: kind === 'contractor' ? (member as Contractor1099).company ?? '' : '',
@@ -95,6 +110,7 @@ function memberToForm(
     payType: formatPayType(member.payType),
     hourlyRate: member.hourlyRate != null ? String(member.hourlyRate) : '',
     salaryAmount: member.salaryAmount != null ? String(member.salaryAmount) : '',
+    salaryHistory,
     gasAllowance: member.gasAllowance != null ? String(member.gasAllowance) : '',
     bankedHours: member.bankedHours != null ? String(member.bankedHours) : '',
     divisionPcts,
@@ -141,6 +157,14 @@ export function MemberFormDialog({
     const name = form.name.trim()
     if (!name) return
 
+    const salaryHistory = form.salaryHistory
+      .filter((r) => r.effectiveDate && r.salaryAmount !== '')
+      .map((r) => ({
+        effectiveDate: r.effectiveDate,
+        salaryAmount: Number(r.salaryAmount),
+      }))
+    const today = new Date().toISOString().slice(0, 10)
+
     const base: Employee | Contractor1099 = {
       ...(member ?? { id: generateHrId() }),
       id: member?.id ?? generateHrId(),
@@ -151,7 +175,12 @@ export function MemberFormDialog({
       positionId: form.positionId || null,
       payType: formatPayType(form.payType),
       hourlyRate: form.hourlyRate ? Number(form.hourlyRate) : null,
-      salaryAmount: form.salaryAmount ? Number(form.salaryAmount) : null,
+      salaryHistory: salaryHistory.length ? salaryHistory : null,
+      salaryAmount: salaryHistory.length
+        ? resolveEffectiveSalary({ salaryHistory }, today)
+        : form.salaryAmount
+          ? Number(form.salaryAmount)
+          : null,
       status: form.status,
       toolRepayments: member?.toolRepayments ?? [],
       ownersDraw: member?.ownersDraw ?? null,
@@ -316,16 +345,81 @@ export function MemberFormDialog({
                 </div>
               ) : (
                 <div className="grid gap-2">
-                  <Label htmlFor="member-salary">Salary amount ($)</Label>
-                  <Input
-                    id="member-salary"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={form.salaryAmount}
-                    onChange={(e) => setForm({ ...form, salaryAmount: e.target.value })}
-                    disabled={readOnly}
-                  />
+                  <Label>Salary</Label>
+                  <div className="space-y-2">
+                    {form.salaryHistory.map((row, index) => (
+                      <div key={index} className="flex flex-wrap items-end gap-2">
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs text-muted-foreground">Effective date</Label>
+                          <Input
+                            type="date"
+                            value={row.effectiveDate}
+                            onChange={(e) => {
+                              const next = [...form.salaryHistory]
+                              next[index] = { ...next[index], effectiveDate: e.target.value }
+                              setForm({ ...form, salaryHistory: next })
+                            }}
+                            disabled={readOnly}
+                            className="w-[11rem]"
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs text-muted-foreground">Weekly amount ($)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={row.salaryAmount}
+                            onChange={(e) => {
+                              const next = [...form.salaryHistory]
+                              next[index] = { ...next[index], salaryAmount: e.target.value }
+                              setForm({ ...form, salaryHistory: next })
+                            }}
+                            disabled={readOnly}
+                            className="w-[8rem]"
+                          />
+                        </div>
+                        {!readOnly && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 px-2 text-muted-foreground"
+                            onClick={() =>
+                              setForm({
+                                ...form,
+                                salaryHistory: form.salaryHistory.filter((_, i) => i !== index),
+                              })
+                            }
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {!readOnly && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          salaryHistory: [
+                            ...form.salaryHistory,
+                            { effectiveDate: '', salaryAmount: '' },
+                          ],
+                        })
+                      }
+                    >
+                      Add salary change
+                    </Button>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    Each row is the weekly salary effective from that date. The most recent applies
+                    going forward; older rows keep past payrolls correct.
+                  </p>
                 </div>
               )}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

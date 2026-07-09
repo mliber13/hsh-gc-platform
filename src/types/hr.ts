@@ -21,6 +21,11 @@ export interface DivisionAllocation {
   pct: number
 }
 
+export interface SalaryHistoryEntry {
+  effectiveDate: string // 'YYYY-MM-DD' — applies to pay periods whose startDate >= this
+  salaryAmount: number
+}
+
 export interface TeamMemberBase {
   id: string
   name: string
@@ -31,6 +36,7 @@ export interface TeamMemberBase {
   payType?: PayType | string | null
   hourlyRate?: number | string | null
   salaryAmount?: number | string | null
+  salaryHistory?: SalaryHistoryEntry[] | null
   pieceRate?: number | string | null
   ownersDraw?: number | string | null
   gasAllowance?: number | string | null

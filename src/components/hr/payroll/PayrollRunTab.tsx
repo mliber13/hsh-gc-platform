@@ -9,7 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { generateHrId, isArchivedMember } from '@/lib/hrTeamUtils'
+import { generateHrId, isArchivedMember, resolveEffectiveSalary } from '@/lib/hrTeamUtils'
 import {
   aggregateRunTotalGross,
   buildPayrollPeople,
@@ -46,6 +46,21 @@ function resolvePayrollGross(
     if (entry && Number.isFinite(stored)) return stored
   }
   return calculateGross(person, entry, is1099, allEntries, pk)
+}
+
+// Salaried people compute gross from the salary that was in effect during the period,
+// not their current roster salary (prevents retroactive rewrites of old periods).
+function personForPeriod<
+  T extends {
+    payType?: string | null
+    salaryAmount?: number | string | null
+    salaryHistory?: import('@/types/hr').SalaryHistoryEntry[] | null
+  },
+>(person: T, periodStart: string): T {
+  if (person.payType === 'salary') {
+    return { ...person, salaryAmount: resolveEffectiveSalary(person, periodStart) }
+  }
+  return person
 }
 
 interface PayrollRunTabProps {
@@ -157,13 +172,19 @@ export function PayrollRunTab({
           pieceEntries: [],
         } as PayrollEntry)
       const is1099 = person.personType === '1099'
-      const gross = resolvePayrollGross(person, entry, is1099, entries, person.personKey)
+      const gross = resolvePayrollGross(
+        personForPeriod(person, periodStart),
+        entry,
+        is1099,
+        entries,
+        person.personKey,
+      )
       const netPiece = getNetPieceTotal(entry.pieceEntries, entries, person.personKey)
       const totalHours = calculateHoursTotal(entry.hourEntries, entry.hours)
       const hourlyPay = calculateHourlyPayComponent(person, entry)
       return { person, entry, gross, netPiece, totalHours, hourlyPay }
     })
-  }, [people, entries])
+  }, [people, entries, periodStart])
 
   const savedEntries = useMemo((): PayrollEntry[] => {
     return rows.map((r) => ({
@@ -419,7 +440,13 @@ export function buildRunPayloadFromDraft(
         pieceEntries: [],
       }
     const is1099 = person.personType === '1099'
-    const gross = resolvePayrollGross(person, entry, is1099, entries, person.personKey)
+    const gross = resolvePayrollGross(
+      personForPeriod(person, periodStart),
+      entry,
+      is1099,
+      entries,
+      person.personKey,
+    )
     const netPiece = getNetPieceTotal(entry.pieceEntries, entries, person.personKey)
     const hoursTotal = (entry.hourEntries || []).reduce(
       (s, h) => s + (parseFloat(String(h.hours)) || 0),
