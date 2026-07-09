@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import type { Contractor1099, Employee, OrgTeamPayload } from '@/types/hr'
 import { fetchTeam, HrTeamPermissionError, saveTeam } from '@/services/hrTeamService'
+import { getPersonIdsWithPayrollHistory } from '@/services/hrPayrollService'
 import { isArchivedMember, normalizeMemberStatus } from '@/lib/hrTeamUtils'
 import { MembersTab } from './team/MembersTab'
 import { PositionsTab } from './team/PositionsTab'
@@ -26,6 +27,7 @@ export function TeamPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogKind, setDialogKind] = useState<MemberKind>('employee')
   const [editingMember, setEditingMember] = useState<Employee | Contractor1099 | null>(null)
+  const [personIdsWithHistory, setPersonIdsWithHistory] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -45,6 +47,20 @@ export function TeamPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    let cancelled = false
+    void getPersonIdsWithPayrollHistory()
+      .then((ids) => {
+        if (!cancelled) setPersonIdsWithHistory(ids)
+      })
+      .catch((e) => {
+        console.warn('getPersonIdsWithPayrollHistory:', e)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const isDirty = useMemo(() => {
     if (!payload) return false
@@ -94,6 +110,24 @@ export function TeamPage() {
   const updateContractors = (updater: (list: Contractor1099[]) => Contractor1099[]) => {
     if (!payload) return
     setPayload({ ...payload, contractors1099: updater(payload.contractors1099) })
+  }
+
+  const guardedRemove = (
+    id: string,
+    archive: () => void,
+    remove: () => void,
+  ) => {
+    if (personIdsWithHistory.has(id)) {
+      if (
+        window.confirm(
+          'This person has payroll history. Deleting would orphan their past pay. Archive them instead? (OK = archive, Cancel = keep unchanged)',
+        )
+      ) {
+        archive()
+      }
+      return
+    }
+    remove()
   }
 
   const handleSave = async () => {
@@ -186,7 +220,18 @@ export function TeamPage() {
                 ),
               )
             }
-            onRemove={(id) => updateEmployees((list) => list.filter((e) => e.id !== id))}
+            onRemove={(id) =>
+              guardedRemove(
+                id,
+                () =>
+                  updateEmployees((list) =>
+                    list.map((e) =>
+                      e.id === id ? normalizeMemberStatus({ ...e, status: 'archived' }) : e,
+                    ),
+                  ),
+                () => updateEmployees((list) => list.filter((e) => e.id !== id)),
+              )
+            }
           />
         </TabsContent>
 
@@ -215,7 +260,16 @@ export function TeamPage() {
               )
             }
             onRemove={(id) =>
-              updateContractors((list) => list.filter((c) => c.id !== id))
+              guardedRemove(
+                id,
+                () =>
+                  updateContractors((list) =>
+                    list.map((c) =>
+                      c.id === id ? normalizeMemberStatus({ ...c, status: 'archived' }) : c,
+                    ),
+                  ),
+                () => updateContractors((list) => list.filter((c) => c.id !== id)),
+              )
             }
           />
         </TabsContent>

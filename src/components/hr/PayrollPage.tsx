@@ -346,7 +346,7 @@ export function PayrollPage() {
 
     if (!mostRecentRun) return
 
-    const people = buildPayrollPeople(employees, contractors, true)
+    const people = buildPayrollPeople(employees, contractors, false)
 
     const draft = buildDraftFromPreviousRun(mostRecentRun, people)
 

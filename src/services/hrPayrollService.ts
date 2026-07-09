@@ -72,6 +72,18 @@ export async function fetchPayPeriods(): Promise<PayPeriod[]> {
   return (data ?? []).map(mapPayPeriodRow)
 }
 
+/** Set of personIds that appear in ANY pay_period's entries — deleting these would orphan pay history. */
+export async function getPersonIdsWithPayrollHistory(): Promise<Set<string>> {
+  const periods = await fetchPayPeriods()
+  const ids = new Set<string>()
+  for (const p of periods) {
+    for (const e of p.entries || []) {
+      if (e.personId) ids.add(String(e.personId))
+    }
+  }
+  return ids
+}
+
 export async function fetchMyPaystubs(): Promise<MyPaystub[]> {
   if (!isOnlineMode()) return []
 
