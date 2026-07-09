@@ -78,3 +78,9 @@ export function toggleSetMembership<T>(current: Set<T>, value: T): Set<T> {
   else next.add(value)
   return next
 }
+
+export function maxLanesForWindow(viewWindow: PortfolioViewWindow): number {
+  if (viewWindow === 'week') return 9
+  if (viewWindow === 'twoWeek') return 6
+  return 4 // month
+}

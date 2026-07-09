@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarRange, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { projectColorClass } from '@/lib/drywall/projectColor'
 import { cn } from '@/lib/utils'
@@ -64,7 +65,6 @@ export function DrywallSchedulePortfolioPage() {
   const [excludedProjectIds, setExcludedProjectIds] = useState<Set<string>>(() => new Set())
   const [selectedPersonIds, setSelectedPersonIds] = useState<Set<string>>(() => new Set())
   const [selectedPhases, setSelectedPhases] = useState<Set<SchedulePhase>>(() => new Set())
-  const [filtersOpen, setFiltersOpen] = useState(true)
 
   const { rangeStart, rangeEnd, referenceMonth } = useMemo(
     () => computePortfolioRange(anchorDate, viewWindow),
@@ -286,6 +286,171 @@ export function DrywallSchedulePortfolioPage() {
             </button>
           </div>
 
+          {legendProjects.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs">
+                  Projects ▾
+                  {excludedProjectIds.size > 0 && (
+                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                      {excludedProjectIds.size}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Projects
+                  </span>
+                  {excludedProjectIds.size > 0 && (
+                    <button
+                      type="button"
+                      className="text-xs text-primary underline-offset-2 hover:underline"
+                      onClick={() => setExcludedProjectIds(new Set())}
+                    >
+                      Show all
+                    </button>
+                  )}
+                </div>
+                <div className="flex max-h-72 flex-wrap gap-1.5 overflow-y-auto">
+                  {legendProjects.map((project) => {
+                    const colors = projectColorClass(project.id)
+                    const included = !excludedProjectIds.has(project.id)
+                    return (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => toggleProject(project.id)}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+                          included
+                            ? 'border-border bg-card text-foreground'
+                            : 'border-border/60 bg-muted/40 text-muted-foreground opacity-60',
+                        )}
+                      >
+                        <span
+                          className={cn('size-2.5 shrink-0 rounded-sm border', colors.bg, colors.border)}
+                          aria-hidden
+                        />
+                        <span className="max-w-[12rem] truncate font-medium">{project.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+
+          {personOptions.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs">
+                  People ▾
+                  {selectedPersonIds.size > 0 && (
+                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                      {selectedPersonIds.size}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    People
+                  </span>
+                  {selectedPersonIds.size > 0 && (
+                    <button
+                      type="button"
+                      className="text-xs text-primary underline-offset-2 hover:underline"
+                      onClick={() => setSelectedPersonIds(new Set())}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {personOptions.map((person) => {
+                    const active =
+                      selectedPersonIds.size === 0 || selectedPersonIds.has(person.id)
+                    return (
+                      <button
+                        key={person.id}
+                        type="button"
+                        onClick={() =>
+                          setSelectedPersonIds((current) =>
+                            toggleSetMembership(current, person.id),
+                          )
+                        }
+                        className={cn(
+                          'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                          active
+                            ? 'border-border bg-card text-foreground'
+                            : 'border-border/60 bg-muted/40 text-muted-foreground opacity-60',
+                        )}
+                      >
+                        {person.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+
+          {phaseOptions.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs">
+                  Phase ▾
+                  {selectedPhases.size > 0 && (
+                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                      {selectedPhases.size}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Phase
+                  </span>
+                  {selectedPhases.size > 0 && (
+                    <button
+                      type="button"
+                      className="text-xs text-primary underline-offset-2 hover:underline"
+                      onClick={() => setSelectedPhases(new Set())}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {phaseOptions.map((phase) => {
+                    const active = selectedPhases.size === 0 || selectedPhases.has(phase)
+                    return (
+                      <button
+                        key={phase}
+                        type="button"
+                        onClick={() =>
+                          setSelectedPhases((current) => toggleSetMembership(current, phase))
+                        }
+                        className={cn(
+                          'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                          active
+                            ? 'border-border bg-card text-foreground'
+                            : 'border-border/60 bg-muted/40 text-muted-foreground opacity-60',
+                        )}
+                      >
+                        {SCHEDULE_PHASE_LABELS[phase]}
+                      </button>
+                    )
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+
           <div className="flex items-center gap-1">
             <Button
               type="button"
@@ -324,112 +489,6 @@ export function DrywallSchedulePortfolioPage() {
           </Button>
         </div>
       </div>
-
-      {(legendProjects.length > 0 || personOptions.length > 0 || phaseOptions.length > 0) && (
-        <div className="rounded-lg border border-border/60 bg-muted/10">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
-            onClick={() => setFiltersOpen((open) => !open)}
-          >
-            <span>Filters</span>
-            <span>{filtersOpen ? '−' : '+'}</span>
-          </button>
-          {filtersOpen && (
-            <div className="space-y-2 border-t border-border/60 px-3 pb-3 pt-2">
-              {legendProjects.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Projects
-                  </span>
-                  {legendProjects.map((project) => {
-                    const colors = projectColorClass(project.id)
-                    const included = !excludedProjectIds.has(project.id)
-                    return (
-                      <button
-                        key={project.id}
-                        type="button"
-                        onClick={() => toggleProject(project.id)}
-                        className={cn(
-                          'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition-colors',
-                          included
-                            ? 'border-border bg-card text-foreground'
-                            : 'border-border/60 bg-muted/40 text-muted-foreground opacity-60',
-                        )}
-                      >
-                        <span
-                          className={cn('size-2.5 shrink-0 rounded-sm border', colors.bg, colors.border)}
-                          aria-hidden
-                        />
-                        <span className="max-w-[12rem] truncate font-medium">{project.name}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-
-              {personOptions.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    People
-                  </span>
-                  {personOptions.map((person) => {
-                    const active =
-                      selectedPersonIds.size === 0 || selectedPersonIds.has(person.id)
-                    return (
-                      <button
-                        key={person.id}
-                        type="button"
-                        onClick={() =>
-                          setSelectedPersonIds((current) =>
-                            toggleSetMembership(current, person.id),
-                          )
-                        }
-                        className={cn(
-                          'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
-                          active
-                            ? 'border-border bg-card text-foreground'
-                            : 'border-border/60 bg-muted/40 text-muted-foreground opacity-60',
-                        )}
-                      >
-                        {person.name}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-
-              {phaseOptions.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Phase
-                  </span>
-                  {phaseOptions.map((phase) => {
-                    const active = selectedPhases.size === 0 || selectedPhases.has(phase)
-                    return (
-                      <button
-                        key={phase}
-                        type="button"
-                        onClick={() =>
-                          setSelectedPhases((current) => toggleSetMembership(current, phase))
-                        }
-                        className={cn(
-                          'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
-                          active
-                            ? 'border-border bg-card text-foreground'
-                            : 'border-border/60 bg-muted/40 text-muted-foreground opacity-60',
-                        )}
-                      >
-                        {SCHEDULE_PHASE_LABELS[phase]}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       {displayMode === 'list' ? (
         <DrywallPortfolioList

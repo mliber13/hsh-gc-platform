@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   addDays,
   eachDayOfInterval,
@@ -8,6 +8,7 @@ import {
   isWeekend,
   isWithinInterval,
 } from 'date-fns'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { getItemColsForWeek, toLocalDate } from '@/lib/scheduleCalendarUtils'
 import { packLanes } from '@/lib/drywall/scheduleLanes'
@@ -20,11 +21,11 @@ import {
 } from '@/components/drywall/schedule/scheduleItemStatusStyles'
 import {
   filterPortfolioItemsInRange,
+  maxLanesForWindow,
   type PortfolioViewWindow,
 } from './portfolioScheduleRange'
 
 const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-export const PORTFOLIO_MAX_VISIBLE_LANES = 5
 
 type Props = {
   items: CrossProjectScheduleItem[]
@@ -58,6 +59,14 @@ export function DrywallPortfolioCalendar({
   rangeLabel,
   onItemClick,
 }: Props) {
+  const [expandAll, setExpandAll] = useState(false)
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(() => new Set())
+
+  useEffect(() => {
+    setExpandAll(false)
+    setExpandedWeeks(new Set())
+  }, [rangeStart, viewWindow])
+
   const calendarDays = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
   const weekRows = useMemo(
     () =>
@@ -77,9 +86,37 @@ export function DrywallPortfolioCalendar({
     return isWithinInterval(day, { start: rangeStart, end: rangeEnd })
   }
 
+  const expandWeek = (weekIdx: number) => {
+    setExpandedWeeks((current) => {
+      const next = new Set(current)
+      next.add(weekIdx)
+      return next
+    })
+  }
+
+  const collapseWeek = (weekIdx: number) => {
+    setExpandedWeeks((current) => {
+      const next = new Set(current)
+      next.delete(weekIdx)
+      return next
+    })
+  }
+
   return (
     <Card>
       <CardContent className="p-4">
+        <div className="mb-3 flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => setExpandAll((value) => !value)}
+          >
+            {expandAll ? 'Collapse all' : 'Expand all'}
+          </Button>
+        </div>
+
         <div className="overflow-x-auto">
           <div className="min-w-[720px]">
             <div className="grid grid-cols-7 overflow-hidden rounded-lg border border-border/60">
@@ -105,11 +142,15 @@ export function DrywallPortfolioCalendar({
                   .filter(({ cols }) => cols.length > 0)
 
                 const lanes = packLanes(itemsForWeek)
-                const visibleLanes = lanes.slice(0, PORTFOLIO_MAX_VISIBLE_LANES)
+                const maxLanes = maxLanesForWindow(viewWindow)
+                const expanded = expandAll || expandedWeeks.has(weekIdx)
+                const cap = expanded ? lanes.length : maxLanes
+                const visibleLanes = lanes.slice(0, cap)
                 const laneCount = visibleLanes.length
                 const overflowCount = lanes
-                  .slice(PORTFOLIO_MAX_VISIBLE_LANES)
+                  .slice(cap)
                   .reduce((sum, lane) => sum + lane.length, 0)
+                const weekExpandedIndividually = !expandAll && expandedWeeks.has(weekIdx)
 
                 return (
                   <Fragment key={`week-${weekIdx}`}>
@@ -163,15 +204,11 @@ export function DrywallPortfolioCalendar({
                             const { item, cols } = entry
                             const start = toLocalDate(item.startDate)
                             const end = toLocalDate(item.endDate)
-                            const isStartWeek = isWithinInterval(start, {
-                              start: weekStart,
-                              end: weekEnd,
-                            })
                             const continuesFromPrior = start < weekStart
                             const continuesToNext = end > weekEnd
                             const isLeftEdge = col === 0 || !cols.includes(col - 1)
                             const isRightEdge = col === 6 || !cols.includes(col + 1)
-                            const showLabel = isStartWeek && col === cols[0]
+                            const showLabel = col === cols[0]
 
                             const projectColors = projectColorClass(item.projectId)
                             const phase = phaseForScheduleItem(item)
@@ -216,28 +253,19 @@ export function DrywallPortfolioCalendar({
                                 {showLabel && (
                                   <span className="flex min-w-0 items-center gap-1">
                                     {continuesFromPrior && (
-                                      <span className="text-[10px] opacity-70" aria-hidden>
+                                      <span className="shrink-0 text-[10px] opacity-70" aria-hidden>
                                         ‹
                                       </span>
                                     )}
-                                    <span className="flex min-w-0 flex-col leading-tight">
-                                      <span className="truncate text-xs font-medium">
-                                        {item.name}
-                                      </span>
-                                      <span className="truncate text-[10px] opacity-70">
-                                        {item.projectName}
-                                      </span>
+                                    <span className="min-w-0 truncate text-xs">
+                                      <span className="font-medium">{item.name}</span>{' '}
+                                      <span className="opacity-75">({item.projectName})</span>
                                     </span>
                                     {continuesToNext && (
-                                      <span className="text-[10px] opacity-70" aria-hidden>
+                                      <span className="shrink-0 text-[10px] opacity-70" aria-hidden>
                                         ›
                                       </span>
                                     )}
-                                  </span>
-                                )}
-                                {!showLabel && continuesFromPrior && col === cols[0] && (
-                                  <span className="text-[10px] opacity-60" aria-hidden>
-                                    ‹ cont.
                                   </span>
                                 )}
                               </div>
@@ -247,9 +275,27 @@ export function DrywallPortfolioCalendar({
                       )
                     })}
 
-                    {overflowCount > 0 && (
-                      <div className="col-span-7 border-b border-border/60 bg-muted/10 px-2 py-1 text-xs text-muted-foreground">
-                        +{overflowCount} more this week
+                    {!expandAll && weekExpandedIndividually && (
+                      <div className="col-span-7 border-b border-border/60 bg-muted/10 px-2 py-1 text-right">
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                          onClick={() => collapseWeek(weekIdx)}
+                        >
+                          Show less
+                        </button>
+                      </div>
+                    )}
+
+                    {!expandAll && !weekExpandedIndividually && overflowCount > 0 && (
+                      <div className="col-span-7 border-b border-border/60 bg-muted/10 px-2 py-1">
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                          onClick={() => expandWeek(weekIdx)}
+                        >
+                          +{overflowCount} more this week
+                        </button>
                       </div>
                     )}
                   </Fragment>
