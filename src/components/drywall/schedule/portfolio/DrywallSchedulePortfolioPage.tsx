@@ -22,6 +22,7 @@ import {
 } from '@/components/drywall/schedule/scheduleItemStatusStyles'
 import { ScheduleItemDialog } from '../ScheduleItemDialog'
 import { DrywallPortfolioCalendar } from './DrywallPortfolioCalendar'
+import { DrywallPortfolioList } from './DrywallPortfolioList'
 import {
   computePortfolioRange,
   filterPortfolioItemsInRange,
@@ -41,6 +42,7 @@ type DialogState =
     }
 
 type ScopeFilter = 'active' | 'all'
+type DisplayMode = 'calendar' | 'list'
 
 const VIEW_WINDOW_OPTIONS: { value: PortfolioViewWindow; label: string }[] = [
   { value: 'week', label: 'Week' },
@@ -55,6 +57,7 @@ export function DrywallSchedulePortfolioPage() {
   const [items, setItems] = useState<CrossProjectScheduleItem[]>([])
   const [scope, setScope] = useState<ScopeFilter>('active')
   const [viewWindow, setViewWindow] = useState<PortfolioViewWindow>('month')
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('calendar')
   const [anchorDate, setAnchorDate] = useState(() => new Date())
   const [dialog, setDialog] = useState<DialogState>({ open: false })
   const [personNames, setPersonNames] = useState<Map<string, string>>(new Map())
@@ -211,6 +214,33 @@ export function DrywallSchedulePortfolioPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
+            <button
+              type="button"
+              onClick={() => setDisplayMode('calendar')}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                displayMode === 'calendar'
+                  ? 'bg-card text-foreground shadow'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              Calendar
+            </button>
+            <button
+              type="button"
+              onClick={() => setDisplayMode('list')}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                displayMode === 'list'
+                  ? 'bg-card text-foreground shadow'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              List
+            </button>
+          </div>
+
           <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
             {VIEW_WINDOW_OPTIONS.map((opt) => (
               <button
@@ -401,15 +431,24 @@ export function DrywallSchedulePortfolioPage() {
         </div>
       )}
 
-      <DrywallPortfolioCalendar
-        items={filteredItems}
-        rangeStart={rangeStart}
-        rangeEnd={rangeEnd}
-        viewWindow={viewWindow}
-        referenceMonth={referenceMonth}
-        rangeLabel={rangeLabel}
-        onItemClick={handleItemClick}
-      />
+      {displayMode === 'list' ? (
+        <DrywallPortfolioList
+          items={filteredItems}
+          personNames={personNames}
+          rangeLabel={rangeLabel}
+          onItemClick={handleItemClick}
+        />
+      ) : (
+        <DrywallPortfolioCalendar
+          items={filteredItems}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          viewWindow={viewWindow}
+          referenceMonth={referenceMonth}
+          rangeLabel={rangeLabel}
+          onItemClick={handleItemClick}
+        />
+      )}
 
       {dialog.open && (
         <ScheduleItemDialog
