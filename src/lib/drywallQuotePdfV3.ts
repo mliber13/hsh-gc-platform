@@ -372,20 +372,24 @@ function drawAlternatesSection(
   ctx.doc.setFont('helvetica', 'normal')
   ctx.doc.setFontSize(9)
   setTextRgb(ctx.doc, DW_GRAY)
-  const intro =
-    "The following options are available at customer's request. Pricing additive to base bid."
+  const hasDeduct = blocks.some((b) => b.pricingMode === 'deduct')
+  const intro = hasDeduct
+    ? "The following options are available at customer's request. Each option adds to or deducts from the base bid as noted."
+    : "The following options are available at customer's request. Pricing additive to base bid."
   const introLines = ctx.doc.splitTextToSize(intro, ctx.maxW)
   ctx.doc.text(introLines, ctx.margin, ctx.y)
   ctx.y += introLines.length * 11 + 10
   setTextRgb(ctx.doc, DW_TEXT)
 
   for (const block of blocks) {
-    const { alternate: alt, totalAdd, rows } = block
+    const { alternate: alt, totalAdd, pricingMode, rows } = block
+    const deltaVerb = pricingMode === 'deduct' ? 'Deduct' : 'Add'
+    const deltaAmount = Math.abs(totalAdd)
     ensureRoom(ctx, 56)
     ctx.doc.setFont('helvetica', 'bold')
     ctx.doc.setFontSize(11)
     setTextRgb(ctx.doc, DW_TEXT)
-    ctx.doc.text(alt.name || 'Alternate', ctx.margin, ctx.y)
+    ctx.doc.text(`${alt.name || 'Alternate'} (${deltaVerb})`, ctx.margin, ctx.y)
     ctx.y += 14
     if (alt.description?.trim()) {
       ctx.doc.setFont('helvetica', 'normal')
@@ -398,15 +402,18 @@ function drawAlternatesSection(
     }
     if (rows.length > 0) {
       drawLocationLineTotalTable(ctx, rows, {
-        footLabel: `${alt.name || 'Alternate'} total`,
-        footTotal: totalAdd,
+        footLabel: `${alt.name || 'Alternate'} ${deltaVerb.toLowerCase()}`,
+        footTotal: pricingMode === 'deduct' ? -deltaAmount : deltaAmount,
       })
     } else {
       ctx.doc.setFont('helvetica', 'bold')
       ctx.doc.setFontSize(10)
-      ctx.doc.text(`Add: ${formatQuoteMoney(totalAdd)}`, ctx.pageW - ctx.margin, ctx.y, {
-        align: 'right',
-      })
+      ctx.doc.text(
+        `${deltaVerb}: ${formatQuoteMoney(deltaAmount)}`,
+        ctx.pageW - ctx.margin,
+        ctx.y,
+        { align: 'right' },
+      )
       ctx.y += 16
     }
     ctx.y += 8

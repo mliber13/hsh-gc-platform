@@ -61,13 +61,11 @@ export interface QuoteV3PdfLineRow {
 
 
 export interface QuoteV3PdfAlternateBlock {
-
   alternate: QuoteAlternate
-
+  /** Signed alternate total (negative when deduct). */
   totalAdd: number
-
+  pricingMode: 'add' | 'deduct'
   rows: QuoteV3PdfLineRow[]
-
 }
 
 
@@ -334,57 +332,36 @@ export function buildQuoteV3PdfAlternateBlocks(
 
 
 
-  return quote.alternates.map((alt, idx) => {
-
-    const totalAdd =
-      totals.alternates.find((a) => a.id === alt.id)?.totalAdd ?? 0
+  return quote.alternates.map((alt) => {
+    const summary = totals.alternates.find((a) => a.id === alt.id)
+    const totalAdd = summary?.totalAdd ?? 0
+    const pricingMode = summary?.pricingMode ?? (alt.pricingMode === 'deduct' ? 'deduct' : 'add')
+    // Allocate line sells on magnitude so deduct rows stay positive; footer shows Deduct.
+    const sellMagnitude = Math.abs(totalAdd)
 
     const altDirect = lineDirectCostsFromLines(alt.lineItems, catalogs, laborBurden)
-
     const linesSub = linesSubtotalFromLines(alt.lineItems, catalogs, laborBurden)
-
     const marked = computeMarkupBreakdown(
-
       linesSub,
-
       0,
-
       quote.overhead_pct,
-
       quote.profit_pct,
-
       quote.sales_tax_pct,
-
       0,
-
       prepCleanRate,
-
       altDirect,
-
     )
-
     const rows = allocateLineSellTotals({
-
       lineItems: alt.lineItems,
-
       catalogs,
-
       laborBurden,
-
-      totalSell: totalAdd,
-
+      totalSell: sellMagnitude,
       markupBase: marked.markupBase,
-
       salesTaxPct: quote.sales_tax_pct ?? 0,
-
       taxShownSeparately: false,
-
     })
-
-    return { alternate: alt, totalAdd, rows }
-
+    return { alternate: alt, totalAdd, pricingMode, rows }
   })
-
 }
 
 

@@ -545,6 +545,12 @@ export interface QuoteAlternate {
   name: string
   description: string
   lineItems: QuoteLineItem[]
+  /**
+   * Whether accepting this alternate adds to or deducts from the base bid.
+   * Defaults to `'add'` when omitted (legacy quotes).
+   */
+  pricingMode?: 'add' | 'deduct'
+  /** Fully marked-up alternate total; negative when pricingMode is `'deduct'`. */
   totalAdd?: number
   selected?: boolean
 }

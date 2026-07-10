@@ -179,7 +179,14 @@ export function QuoteTotalsSidebar({ quote, totals, catalogs, readOnly, onChange
               Customer alternates
             </p>
             {alternates.map((alt) => (
-              <Row key={alt.id} label={`Add: ${alt.name}`} value={alt.totalAdd} muted />
+              <Row
+                key={alt.id}
+                label={`${alt.pricingMode === 'deduct' ? 'Deduct' : 'Add'}: ${alt.name}`}
+                value={
+                  alt.pricingMode === 'deduct' ? -Math.abs(alt.totalAdd) : Math.abs(alt.totalAdd)
+                }
+                muted
+              />
             ))}
           </div>
         )}

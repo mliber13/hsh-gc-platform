@@ -200,6 +200,8 @@ function stripLegacyLaborField(line: QuoteLineItem): QuoteLineItem {
 }
 
 function hydrateAlternate(raw: QuoteAlternate, legacyV2Snapshot?: unknown): QuoteAlternate {
+  const pricingMode =
+    raw.pricingMode === 'deduct' ? 'deduct' : raw.pricingMode === 'add' ? 'add' : undefined
   return {
     id: raw.id || generateQuoteId(),
     name: raw.name ?? '',
@@ -209,6 +211,7 @@ function hydrateAlternate(raw: QuoteAlternate, legacyV2Snapshot?: unknown): Quot
           migrateLegacyLaborFields(hydrateLineItem(line), line, legacyV2Snapshot),
         )
       : [],
+    ...(pricingMode ? { pricingMode } : {}),
     totalAdd: raw.totalAdd,
     ...(raw.selected != null ? { selected: Boolean(raw.selected) } : {}),
   }
@@ -360,6 +363,7 @@ export function createQuoteAlternate(name = 'Alternate'): QuoteAlternate {
     id: generateQuoteId(),
     name,
     description: '',
+    pricingMode: 'add',
     lineItems: [],
   }
 }

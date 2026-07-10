@@ -109,7 +109,13 @@ export interface QuoteV3TotalsSummary {
   totalSqft: number
   totalSqftWithWaste: number
   routine: QuoteV3MarkupBreakdown
-  alternates: Array<{ id: string; name: string; totalAdd: number }>
+  alternates: Array<{
+    id: string
+    name: string
+    pricingMode: 'add' | 'deduct'
+    /** Fully marked-up amount; negative when pricingMode is `'deduct'`. */
+    totalAdd: number
+  }>
   grandTotalAllAlternates: number
 }
 
@@ -491,7 +497,14 @@ export function computeQuoteV3Totals(
       prepCleanRate,
       altDirect,
     )
-    return { id: alt.id, name: alt.name, totalAdd: marked.total }
+    const pricingMode = alternatePricingMode(alt)
+    const magnitude = marked.total
+    return {
+      id: alt.id,
+      name: alt.name,
+      pricingMode,
+      totalAdd: pricingMode === 'deduct' ? -magnitude : magnitude,
+    }
   })
 
   const grandTotalAllAlternates =
@@ -524,8 +537,30 @@ export function enrichQuoteAlternates(
       quote.prep_clean_rate ?? DEFAULT_PREP_CLEAN_RATE,
       altDirect,
     )
-    return { ...alt, totalAdd: marked.total }
+    const pricingMode = alternatePricingMode(alt)
+    const magnitude = marked.total
+    return {
+      ...alt,
+      pricingMode,
+      totalAdd: pricingMode === 'deduct' ? -magnitude : magnitude,
+    }
   })
+}
+
+/** Resolve alternate add vs deduct; legacy quotes without the field are adds. */
+export function alternatePricingMode(alt: Pick<QuoteAlternate, 'pricingMode'>): 'add' | 'deduct' {
+  return alt.pricingMode === 'deduct' ? 'deduct' : 'add'
+}
+
+/** Customer-facing label for an alternate's signed total. */
+export function formatAlternateDeltaLabel(
+  totalAdd: number,
+  pricingMode: 'add' | 'deduct' = totalAdd < 0 ? 'deduct' : 'add',
+): string {
+  const magnitude = Math.abs(totalAdd)
+  return pricingMode === 'deduct'
+    ? `Deduct ${formatQuoteMoney(magnitude)}`
+    : `Add ${formatQuoteMoney(magnitude)}`
 }
 
 export function formatQuoteMoney(value: number): string {
