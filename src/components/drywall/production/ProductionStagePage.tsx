@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useOutletContext } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import {
   CurrentCrewTile,
   EstimatedVsActualLaborTile,
@@ -30,6 +31,21 @@ import {
 import { normalizeDrywallProjectStatus } from '@/types/drywall'
 import { cn } from '@/lib/utils'
 
+function todayDateInput(): string {
+  return format(new Date(), 'yyyy-MM-dd')
+}
+
+function isoFromDateInput(dateStr: string): string {
+  return new Date(`${dateStr}T00:00:00`).toISOString()
+}
+
+function dateInputFromIso(iso: string | null | undefined): string {
+  if (!iso) return todayDateInput()
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return todayDateInput()
+  return format(d, 'yyyy-MM-dd')
+}
+
 export function ProductionStagePage() {
   const { projectId, setProjectStatus } = useOutletContext<DrywallProjectShellContext>()
   const { effectiveRole } = usePermissions()
@@ -40,6 +56,8 @@ export function ProductionStagePage() {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string>('project-info')
   const [productionStartedAt, setProductionStartedAt] = useState<string | null>(null)
+  const [productionCompletedAt, setProductionCompletedAt] = useState<string | null>(null)
+  const [completeDateInput, setCompleteDateInput] = useState(todayDateInput)
   const [assessment, setAssessment] = useState<DrywallProjectAssessment | null>(null)
 
   const load = useCallback(async () => {
@@ -59,9 +77,14 @@ export function ProductionStagePage() {
       const ts = project.legacy.productionTimestamps
       if (ts && typeof ts === 'object' && !Array.isArray(ts)) {
         const started = (ts as { productionStartedAt?: string }).productionStartedAt
+        const completed = (ts as { productionCompletedAt?: string }).productionCompletedAt
         setProductionStartedAt(started ?? null)
+        setProductionCompletedAt(completed ?? null)
+        setCompleteDateInput(dateInputFromIso(completed ?? null))
       } else {
         setProductionStartedAt(null)
+        setProductionCompletedAt(null)
+        setCompleteDateInput(todayDateInput())
       }
       setAssessment(nextAssessment)
     } catch (e: unknown) {
@@ -107,9 +130,13 @@ export function ProductionStagePage() {
 
   const handleComplete = async () => {
     if (readOnly) return
+    if (!completeDateInput) {
+      toast.error('Choose a completion date')
+      return
+    }
     setBusy(true)
     try {
-      await markProductionComplete(projectId)
+      await markProductionComplete(projectId, isoFromDateInput(completeDateInput))
       toast.success('Production marked complete')
       await load()
     } catch (e: unknown) {
@@ -117,6 +144,28 @@ export function ProductionStagePage() {
         toast.error(e.message)
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to complete production')
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleUpdateCompleteDate = async () => {
+    if (readOnly) return
+    if (!completeDateInput) {
+      toast.error('Choose a completion date')
+      return
+    }
+    setBusy(true)
+    try {
+      await markProductionComplete(projectId, isoFromDateInput(completeDateInput))
+      toast.success('Completion date updated')
+      await load()
+    } catch (e: unknown) {
+      if (e instanceof DrywallProjectPermissionError) {
+        toast.error(e.message)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Failed to update completion date')
       }
     } finally {
       setBusy(false)
@@ -278,15 +327,57 @@ export function ProductionStagePage() {
       />
 
       {!readOnly && status === 'production' && (
-        <Button onClick={() => void handleComplete()} disabled={busy}>
-          {busy ? 'Updating…' : 'Mark Production Complete'}
-        </Button>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <label htmlFor="production-complete-date" className="text-xs font-medium text-muted-foreground">
+              Completion date
+            </label>
+            <Input
+              id="production-complete-date"
+              type="date"
+              className="w-auto"
+              value={completeDateInput}
+              onChange={(e) => setCompleteDateInput(e.target.value)}
+              disabled={busy}
+            />
+          </div>
+          <Button onClick={() => void handleComplete()} disabled={busy || !completeDateInput}>
+            {busy ? 'Updating…' : 'Mark Production Complete'}
+          </Button>
+        </div>
       )}
 
       {!readOnly && status === 'production-complete' && (
-        <Button variant="outline" onClick={() => void handleRevertComplete()} disabled={busy}>
-          {busy ? 'Updating…' : 'Revert to In Progress'}
-        </Button>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">
+              {productionCompletedAt
+                ? `Completed on ${format(new Date(productionCompletedAt), 'MMMM d, yyyy')}`
+                : 'Production complete'}
+            </p>
+            <label htmlFor="production-complete-date-edit" className="text-xs font-medium text-muted-foreground">
+              Completion date
+            </label>
+            <Input
+              id="production-complete-date-edit"
+              type="date"
+              className="w-auto"
+              value={completeDateInput}
+              onChange={(e) => setCompleteDateInput(e.target.value)}
+              disabled={busy}
+            />
+          </div>
+          <Button
+            variant="secondary"
+            onClick={() => void handleUpdateCompleteDate()}
+            disabled={busy || !completeDateInput}
+          >
+            {busy ? 'Updating…' : 'Update date'}
+          </Button>
+          <Button variant="outline" onClick={() => void handleRevertComplete()} disabled={busy}>
+            {busy ? 'Updating…' : 'Revert to In Progress'}
+          </Button>
+        </div>
       )}
     </div>
   )

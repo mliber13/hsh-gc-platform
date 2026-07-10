@@ -1286,7 +1286,10 @@ export async function markProductionStarted(projectId: string): Promise<void> {
   await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
 }
 
-export async function markProductionComplete(projectId: string): Promise<void> {
+export async function markProductionComplete(
+  projectId: string,
+  completedAt?: string,
+): Promise<void> {
   if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
 
   const orgId = await requireUserOrgId()
@@ -1294,19 +1297,20 @@ export async function markProductionComplete(projectId: string): Promise<void> {
     projectId,
     orgId,
   )
-  assertProjectStatus(rawStatus, 'production')
-  const now = new Date().toISOString()
+  // Idempotent: already-complete jobs can re-call to backdate productionCompletedAt.
+  assertProjectStatus(rawStatus, ['production', 'production-complete'])
+  const at = completedAt ?? new Date().toISOString()
   const timestamps = parseProductionTimestamps(prevLegacy)
   const nextStatus: DrywallProjectStatus = 'production-complete'
   const mergedLegacy = {
     ...prevLegacy,
     status: nextStatus,
-    productionTimestamps: { ...timestamps, productionCompletedAt: now },
+    productionTimestamps: { ...timestamps, productionCompletedAt: at },
   }
   await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
 }
 
-export async function markFullyClosed(projectId: string): Promise<void> {
+export async function markFullyClosed(projectId: string, closedAt?: string): Promise<void> {
   if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
 
   const orgId = await requireUserOrgId()
@@ -1314,14 +1318,15 @@ export async function markFullyClosed(projectId: string): Promise<void> {
     projectId,
     orgId,
   )
-  assertProjectStatus(rawStatus, 'production-complete')
-  const now = new Date().toISOString()
+  // Idempotent: already-closed jobs can re-call to backdate closedAt.
+  assertProjectStatus(rawStatus, ['production-complete', 'closed'])
+  const at = closedAt ?? new Date().toISOString()
   const timestamps = parseProductionTimestamps(prevLegacy)
   const nextStatus: DrywallProjectStatus = 'closed'
   const mergedLegacy = {
     ...prevLegacy,
     status: nextStatus,
-    productionTimestamps: { ...timestamps, closedAt: now },
+    productionTimestamps: { ...timestamps, closedAt: at },
   }
   await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
 }

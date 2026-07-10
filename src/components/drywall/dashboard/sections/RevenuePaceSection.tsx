@@ -61,23 +61,45 @@ export function RevenuePaceSection() {
         status={rp.status}
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <BigStat
-          label="EOM (run-rate)"
-          value={formatDashboardCurrency(rp.projectedEom)}
-          sublabel={`Pace · ${rp.workDaysRemaining} work day${rp.workDaysRemaining === 1 ? '' : 's'} left`}
-        />
-        <BigStat
-          label="EOM (scheduled)"
-          value={formatDashboardCurrency(scheduledEom)}
-          sublabel="From billing schedule"
-        />
-        <BigStat
-          label="Variance"
-          value={formatDashboardCurrency(rp.variance)}
-          sublabel={rp.variance >= 0 ? 'Ahead of monthly goal' : 'Behind monthly goal'}
-        />
-      </div>
+      <dl className="space-y-2.5 rounded-lg border px-3 py-2.5">
+        <div className="flex items-baseline justify-between gap-3">
+          <div className="min-w-0">
+            <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              EOM (run-rate)
+            </dt>
+            <dd className="text-[11px] text-muted-foreground">
+              Pace · {rp.workDaysRemaining} work day{rp.workDaysRemaining === 1 ? '' : 's'} left
+            </dd>
+          </div>
+          <dd className="shrink-0 text-base font-semibold tabular-nums">
+            {formatDashboardCurrency(rp.projectedEom)}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3 border-t pt-2.5">
+          <div className="min-w-0">
+            <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              EOM (scheduled)
+            </dt>
+            <dd className="text-[11px] text-muted-foreground">From billing schedule</dd>
+          </div>
+          <dd className="shrink-0 text-base font-semibold tabular-nums">
+            {formatDashboardCurrency(scheduledEom)}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3 border-t pt-2.5">
+          <div className="min-w-0">
+            <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Variance
+            </dt>
+            <dd className="text-[11px] text-muted-foreground">
+              {rp.variance >= 0 ? 'Ahead of monthly goal' : 'Behind monthly goal'}
+            </dd>
+          </div>
+          <dd className="shrink-0 text-base font-semibold tabular-nums">
+            {formatDashboardCurrency(rp.variance)}
+          </dd>
+        </div>
+      </dl>
 
       <div className="mt-auto rounded-lg border bg-muted/30 px-3 py-2.5">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

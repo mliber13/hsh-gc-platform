@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useOutletContext } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import {
   AfterProductionCostTile,
   EstimatedVsActualLaborTile,
@@ -30,6 +31,21 @@ import {
 import { normalizeDrywallProjectStatus } from '@/types/drywall'
 import { cn } from '@/lib/utils'
 
+function todayDateInput(): string {
+  return format(new Date(), 'yyyy-MM-dd')
+}
+
+function isoFromDateInput(dateStr: string): string {
+  return new Date(`${dateStr}T00:00:00`).toISOString()
+}
+
+function dateInputFromIso(iso: string | null | undefined): string {
+  if (!iso) return todayDateInput()
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return todayDateInput()
+  return format(d, 'yyyy-MM-dd')
+}
+
 export function CloseoutStagePage() {
   const { projectId, setProjectStatus } = useOutletContext<DrywallProjectShellContext>()
   const { effectiveRole } = usePermissions()
@@ -40,6 +56,8 @@ export function CloseoutStagePage() {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string>('project-info')
   const [closedAt, setClosedAt] = useState<string | null>(null)
+  const [closeDateInput, setCloseDateInput] = useState(todayDateInput)
+  const [editingClosedDate, setEditingClosedDate] = useState(false)
   const [assessment, setAssessment] = useState<DrywallProjectAssessment | null>(null)
 
   const load = useCallback(async () => {
@@ -58,6 +76,8 @@ export function CloseoutStagePage() {
       setProjectStatus(next)
       const ts = getProductionTimestampsFromLegacy(project.legacy)
       setClosedAt(ts.closedAt ?? null)
+      setCloseDateInput(dateInputFromIso(ts.closedAt ?? null))
+      setEditingClosedDate(false)
       setAssessment(nextAssessment)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to load project')
@@ -84,9 +104,13 @@ export function CloseoutStagePage() {
 
   const handleClose = async () => {
     if (readOnly) return
+    if (!closeDateInput) {
+      toast.error('Choose a close date')
+      return
+    }
     setBusy(true)
     try {
-      await markFullyClosed(projectId)
+      await markFullyClosed(projectId, isoFromDateInput(closeDateInput))
       toast.success('Project fully closed')
       await load()
     } catch (e: unknown) {
@@ -94,6 +118,28 @@ export function CloseoutStagePage() {
         toast.error(e.message)
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to close project')
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleUpdateClosedDate = async () => {
+    if (readOnly) return
+    if (!closeDateInput) {
+      toast.error('Choose a close date')
+      return
+    }
+    setBusy(true)
+    try {
+      await markFullyClosed(projectId, isoFromDateInput(closeDateInput))
+      toast.success('Close date updated')
+      await load()
+    } catch (e: unknown) {
+      if (e instanceof DrywallProjectPermissionError) {
+        toast.error(e.message)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Failed to update close date')
       }
     } finally {
       setBusy(false)
@@ -150,10 +196,62 @@ export function CloseoutStagePage() {
       <div className="flex flex-wrap items-center gap-3">
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Closeout</h2>
-          {isClosed && closedAt && (
-            <p className="text-sm text-muted-foreground mt-1">
-              Closed on {format(new Date(closedAt), 'MMMM d, yyyy')}
-            </p>
+          {isClosed && closedAt && !editingClosedDate && (
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <p className="text-sm text-muted-foreground">
+                Closed on {format(new Date(closedAt), 'MMMM d, yyyy')}
+              </p>
+              {!readOnly && (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto px-0 text-sm"
+                  onClick={() => {
+                    setCloseDateInput(dateInputFromIso(closedAt))
+                    setEditingClosedDate(true)
+                  }}
+                >
+                  Edit date
+                </Button>
+              )}
+            </div>
+          )}
+          {isClosed && !readOnly && editingClosedDate && (
+            <div className="mt-2 flex flex-wrap items-end gap-3">
+              <div className="space-y-1">
+                <label htmlFor="closeout-closed-date" className="text-xs font-medium text-muted-foreground">
+                  Close date
+                </label>
+                <Input
+                  id="closeout-closed-date"
+                  type="date"
+                  className="w-auto"
+                  value={closeDateInput}
+                  onChange={(e) => setCloseDateInput(e.target.value)}
+                  disabled={busy}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleUpdateClosedDate()}
+                disabled={busy || !closeDateInput}
+              >
+                {busy ? 'Updating…' : 'Update date'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setCloseDateInput(dateInputFromIso(closedAt))
+                  setEditingClosedDate(false)
+                }}
+                disabled={busy}
+              >
+                Cancel
+              </Button>
+            </div>
           )}
         </div>
         <Button
@@ -230,9 +328,24 @@ export function CloseoutStagePage() {
       />
 
       {!readOnly && status === 'production-complete' && (
-        <Button onClick={() => void handleClose()} disabled={busy}>
-          {busy ? 'Updating…' : 'Mark Fully Closed'}
-        </Button>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <label htmlFor="closeout-close-date" className="text-xs font-medium text-muted-foreground">
+              Close date
+            </label>
+            <Input
+              id="closeout-close-date"
+              type="date"
+              className="w-auto"
+              value={closeDateInput}
+              onChange={(e) => setCloseDateInput(e.target.value)}
+              disabled={busy}
+            />
+          </div>
+          <Button onClick={() => void handleClose()} disabled={busy || !closeDateInput}>
+            {busy ? 'Updating…' : 'Mark Fully Closed'}
+          </Button>
+        </div>
       )}
 
       {!readOnly && status === 'closed' && (
