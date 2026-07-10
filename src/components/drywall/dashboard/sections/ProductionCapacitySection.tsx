@@ -1,5 +1,6 @@
 import {
   formatDashboardCurrency,
+  formatDashboardPercent,
   type CrewCounts,
 } from '@/lib/drywall/dashboardCalculations'
 import {
@@ -90,7 +91,12 @@ export function ProductionCapacitySection() {
     <KpiCard
       title="Production Capacity"
       description="Monthly throughput based on crew bottleneck model"
-      headerRight={<StatusPill status={capacity.status} />}
+      headerRight={
+        <StatusPill
+          status={capacity.status}
+          label={`${formatDashboardPercent(capacity.pctOfRequired)} of req`}
+        />
+      }
     >
       <BigStat
         label="Monthly Capacity"
@@ -113,14 +119,14 @@ export function ProductionCapacitySection() {
         />
         <BigStat
           label="Throughput"
-          value={`${Math.round(capacity.throughputSqft).toLocaleString()} sqft/mo`}
+          value={Math.round(capacity.throughputSqft).toLocaleString()}
           sublabel={
             capacity.revenuePerSqft != null ? (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="cursor-help underline decoration-dotted underline-offset-2">
-                      @ {formatRevenuePerSqft(capacity.revenuePerSqft)}/sqft
+                      sqft/mo @ {formatRevenuePerSqft(capacity.revenuePerSqft)}/sqft
                     </span>
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
@@ -129,7 +135,7 @@ export function ProductionCapacitySection() {
                 </Tooltip>
               </TooltipProvider>
             ) : (
-              'No revenue/sqft data'
+              'sqft/mo'
             )
           }
         />

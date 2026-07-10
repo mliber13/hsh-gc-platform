@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, Info } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronRight, Info } from 'lucide-react'
 import {
   computeDashboardAlerts,
   type DashboardAlertSeverity,
@@ -11,12 +11,6 @@ import { KpiCard } from '../ui/KpiCard'
 import { StatusPill } from '../ui/StatusPill'
 import { useDashboardData } from '../useDashboardData'
 import { useDivisionExecution } from '../useDivisionExecution'
-
-const SEVERITY_DOT: Record<DashboardAlertSeverity, string> = {
-  critical: 'bg-rose-500',
-  warning: 'bg-amber-500',
-  info: 'bg-sky-500',
-}
 
 const SEVERITY_ICON: Record<
   DashboardAlertSeverity,
@@ -106,38 +100,41 @@ export function AlertsSection() {
           </p>
         </div>
       ) : (
-        <ul className="divide-y rounded-lg border">
+        <ul className="grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-2">
           {alerts.map((alert) => {
             const Icon = SEVERITY_ICON[alert.severity]
-            return (
-              <li key={alert.id} className="flex gap-3 px-3 py-3">
-                <span className="mt-1.5 flex shrink-0 items-center gap-1.5">
-                  <span
-                    className={cn('size-2 rounded-full', SEVERITY_DOT[alert.severity])}
-                    aria-hidden
-                  />
-                  <Icon
-                    className={cn(
-                      'size-3.5',
-                      alert.severity === 'critical' && 'text-rose-600 dark:text-rose-400',
-                      alert.severity === 'warning' && 'text-amber-600 dark:text-amber-400',
-                      alert.severity === 'info' && 'text-sky-600 dark:text-sky-400',
-                    )}
-                    aria-hidden
-                  />
-                </span>
-                <div className="min-w-0 flex-1 space-y-0.5">
+            const body = (
+              <div className="flex h-full items-start gap-2.5 px-3 py-2.5">
+                <Icon
+                  className={cn(
+                    'mt-0.5 size-4 shrink-0',
+                    alert.severity === 'critical' && 'text-rose-600 dark:text-rose-400',
+                    alert.severity === 'warning' && 'text-amber-600 dark:text-amber-400',
+                    alert.severity === 'info' && 'text-sky-600 dark:text-sky-400',
+                  )}
+                  aria-hidden
+                />
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold leading-snug">{alert.title}</p>
-                  <p className="text-xs text-muted-foreground">{alert.detail}</p>
-                  {alert.href ? (
-                    <Link
-                      to={alert.href}
-                      className="inline-block text-xs font-medium text-primary underline-offset-4 hover:underline"
-                    >
-                      Open
-                    </Link>
-                  ) : null}
+                  <p className="text-xs leading-snug text-muted-foreground">{alert.detail}</p>
                 </div>
+                {alert.href ? (
+                  <ChevronRight
+                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
+                ) : null}
+              </div>
+            )
+            return (
+              <li key={alert.id} className="bg-card">
+                {alert.href ? (
+                  <Link to={alert.href} className="block transition-colors hover:bg-muted/40">
+                    {body}
+                  </Link>
+                ) : (
+                  body
+                )}
               </li>
             )
           })}

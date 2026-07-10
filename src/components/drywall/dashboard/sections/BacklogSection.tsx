@@ -1,6 +1,7 @@
 import { format, parseISO } from 'date-fns'
 import {
   formatDashboardCurrency,
+  formatDashboardPercent,
 } from '@/lib/drywall/dashboardCalculations'
 import { useDashboardData } from '../useDashboardData'
 import { BigStat } from '../ui/BigStat'
@@ -24,7 +25,12 @@ export function BacklogSection() {
     <KpiCard
       title="Backlog"
       description="Approved work in pipeline vs goal"
-      headerRight={<StatusPill status={backlog.status} />}
+      headerRight={
+        <StatusPill
+          status={backlog.status}
+          label={`${formatDashboardPercent(backlog.pctOfGoal)} of goal`}
+        />
+      }
     >
       <BigStat
         label="Current Backlog"

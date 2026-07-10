@@ -14,6 +14,7 @@ type Props = {
   status?: KpiStatus
   label?: string
   showGauge?: boolean
+  showValue?: boolean
   className?: string
 }
 
@@ -23,6 +24,7 @@ export function ProgressBar({
   status = 'green',
   label,
   showGauge = false,
+  showValue = true,
   className,
 }: Props) {
   const pct = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0
@@ -63,10 +65,12 @@ export function ProgressBar({
 
   return (
     <div className={cn('space-y-1.5', className)}>
-      <div className="flex items-center justify-between gap-2 text-xs">
-        {label ? <span className="text-muted-foreground">{label}</span> : <span />}
-        <span className="font-medium tabular-nums">{pctLabel}</span>
-      </div>
+      {(label || showValue) && (
+        <div className="flex items-center justify-between gap-2 text-xs">
+          {label ? <span className="text-muted-foreground">{label}</span> : <span />}
+          {showValue ? <span className="font-medium tabular-nums">{pctLabel}</span> : null}
+        </div>
+      )}
       <div className="h-2 overflow-hidden rounded-full bg-muted">
         <div
           className="h-full rounded-full transition-all duration-500"

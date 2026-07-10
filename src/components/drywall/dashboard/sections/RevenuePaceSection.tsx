@@ -46,7 +46,9 @@ export function RevenuePaceSection() {
     <KpiCard
       title="Revenue Pace"
       description="Monthly billings vs goal from QuickBooks"
-      headerRight={<StatusPill status={rp.status} />}
+      headerRight={
+        <StatusPill status={rp.status} label={`${formatDashboardPercent(rp.pctOfGoal)} of goal`} />
+      }
     >
       <BigStat
         label="Current Month Billings"

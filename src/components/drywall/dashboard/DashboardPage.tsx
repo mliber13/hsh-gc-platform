@@ -90,7 +90,7 @@ export function DashboardPage() {
   return (
     <DashboardDataProvider>
       <DivisionExecutionProvider>
-        <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+        <div className="mx-auto max-w-screen-2xl space-y-6 p-4 md:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">

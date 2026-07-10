@@ -17,12 +17,18 @@ export function NorthStarCard() {
       title="North Star — Revenue Pace"
       description="Are we on pace to hit the annual revenue goal?"
       emphasized
-      headerRight={<StatusPill status={northStar.status} />}
+      headerRight={
+        <StatusPill
+          status={northStar.status}
+          label={`${formatDashboardPercent(northStar.pctOfRequired)} pace`}
+        />
+      }
     >
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <BigStat label="Annual Goal" value={formatDashboardCurrency(northStar.annualGoal)} />
+        <BigStat label="Annual Goal" value={formatDashboardCurrency(northStar.annualGoal)} size="lg" />
         <BigStat
           label="Current Pace"
+          size="lg"
           value={formatDashboardCurrency(northStar.currentPace)}
           sublabel={
             <span>
@@ -47,22 +53,23 @@ export function NorthStarCard() {
             </span>
           }
         />
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             % of Required Pace
+          </p>
+          <p className="text-3xl font-semibold tracking-tight tabular-nums md:text-4xl">
+            {formatDashboardPercent(northStar.pctOfRequired)}
           </p>
           <ProgressBar
             value={northStar.pctOfRequired}
             max={1}
             status={northStar.status}
-            showGauge
+            showValue={false}
           />
-          <p className="text-lg font-semibold tabular-nums">
-            {formatDashboardPercent(northStar.pctOfRequired)}
-          </p>
         </div>
         <BigStat
           label="Revenue Gap"
+          size="lg"
           value={formatDashboardCurrency(northStar.revenueGap)}
           sublabel={northStar.revenueGap >= 0 ? 'Ahead of goal' : 'Behind goal'}
         />

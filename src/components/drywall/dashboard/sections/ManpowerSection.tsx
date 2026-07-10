@@ -2,7 +2,7 @@ import { useDashboardData } from '../useDashboardData'
 import { BigStat } from '../ui/BigStat'
 import { KpiCard } from '../ui/KpiCard'
 import { StatusPill } from '../ui/StatusPill'
-import type { CrewCounts } from '@/lib/drywall/dashboardCalculations'
+import { formatDashboardPercent, type CrewCounts } from '@/lib/drywall/dashboardCalculations'
 
 function formatFinisherTierCaption(crew: CrewCounts): string {
   const parts: string[] = []
@@ -27,7 +27,7 @@ export function ManpowerSection() {
       headerRight={
         <StatusPill
           status={manpower.fillPct >= 1 ? 'green' : 'red'}
-          label={manpower.fillPct >= 1 ? 'Staffed' : 'Understaffed'}
+          label={`${formatDashboardPercent(manpower.fillPct)} staffed`}
         />
       }
     >
