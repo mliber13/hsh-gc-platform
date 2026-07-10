@@ -30,8 +30,14 @@ import {
   mergeFieldTakeoff,
   quotedSqftWithWaste,
 } from '@/lib/drywall/fieldMeasurementUtils'
+import {
+  extractMaterialsFromFieldTakeoff,
+  formatBoardLineDescription,
+  groupBoardsForMaterialsPdf,
+} from '@/lib/drywall/fieldMaterialsPdfData'
 import { phaseForScheduleItem } from '@/components/drywall/schedule/scheduleItemStatusStyles'
 import type {
+  CrewBoardAreaGroup,
   CrewLaborRateSource,
   CrewMeasurePageContext,
   CrewProjectDetail,
@@ -44,8 +50,6 @@ import type {
   DrywallQuote,
   DrywallQuoteV3,
   FieldTakeoff,
-  QuoteBreakdown,
-  QuoteLineItem,
 } from '@/types/drywall'
 import { isDrywallProjectClosed, normalizeDrywallProjectStatus } from '@/types/drywall'
 
@@ -303,7 +307,13 @@ export async function fetchCrewProjectList(
 function parseFieldTakeoff(legacy: Record<string, unknown>): FieldTakeoff | null {
   const raw = legacy.fieldTakeoff
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  return raw as FieldTakeoff
+  const prepared =
+    legacy.fieldMeasurementPrep &&
+    typeof legacy.fieldMeasurementPrep === 'object' &&
+    !Array.isArray(legacy.fieldMeasurementPrep)
+      ? (legacy.fieldMeasurementPrep as Record<string, unknown>)
+      : {}
+  return mergeFieldTakeoff(raw as FieldTakeoff, prepared)
 }
 
 function v2QuoteFromLegacy(legacy: Record<string, unknown>): DrywallQuote | null {
@@ -451,6 +461,50 @@ function resolveMaterials(
       length: acc.length?.trim() || null,
       threadType: acc.threadType?.trim() || null,
     }))
+}
+
+/** Board counts from field takeoff — hangers need these by area to stock/hang. */
+function resolveBoardCountsByArea(
+  field: FieldTakeoff | null,
+  specialty: CrewSpecialty,
+  preview: boolean,
+  scheduleRows: ScheduleRow[] = [],
+): CrewBoardAreaGroup[] {
+  if (!shouldShowBoardCounts(specialty, preview, scheduleRows)) return []
+  if (!field?.measurements?.length) return []
+
+  const { boards } = extractMaterialsFromFieldTakeoff(field)
+  if (boards.length === 0) return []
+
+  return groupBoardsForMaterialsPdf(boards).map((group) => ({
+    area: group.area,
+    boards: group.thicknessWidthGroups.flatMap((tw) =>
+      tw.boards.map((board) => ({
+        id: board.id,
+        label: formatBoardLineDescription(board),
+        quantity: board.quantity,
+      })),
+    ),
+  }))
+}
+
+function scheduleRowIsHang(row: ScheduleRow): boolean {
+  return (
+    phaseForScheduleItem({
+      name: row.name,
+      type: row.type === 'office' ? 'office' : 'field',
+    }) === 'hang'
+  )
+}
+
+function shouldShowBoardCounts(
+  specialty: CrewSpecialty,
+  preview: boolean,
+  scheduleRows: ScheduleRow[] = [],
+): boolean {
+  if (preview || specialty === 'hanger' || specialty === 'both') return true
+  // Position name may not include "hang" — still show if assigned to a Hang item.
+  return scheduleRows.some(scheduleRowIsHang)
 }
 
 function resolveBeadSticks(legacy: Record<string, unknown>): number | null {
@@ -640,56 +694,15 @@ async function resolveLaborRates(
   }
 }
 
-function resolveBreakdowns(
-  legacy: Record<string, unknown>,
-  catalogs: Awaited<ReturnType<typeof fetchOrgDrywallCatalogs>> | null,
-): CrewProjectDetail['breakdowns'] {
-  const v3 = v3QuoteFromLegacy(legacy)
-  if (v3?.lineItems?.length) {
-    return v3.lineItems
-      .filter((l) => l.type === 'drywall')
-      .map((line: QuoteLineItem) => {
-        const finishScope =
-          line.finish_scope_id && catalogs
-            ? catalogs.finish_scopes.find((f) => f.id === line.finish_scope_id)?.display_name ??
-              line.finish_scope_id
-            : line.finish_scope_id ?? null
-        return {
-          id: line.id,
-          description: line.description || 'Drywall',
-          location: line.location?.trim() || null,
-          sqft: num(line.quantity),
-          finishScope,
-        }
-      })
-  }
-
-  const v2 = v2QuoteFromLegacy(legacy)
-  if (v2?.breakdowns?.length) {
-    return v2.breakdowns.map((b: QuoteBreakdown) => ({
-      id: b.id,
-      description: (b.description as string | undefined)?.trim() || 'Scope',
-      location: null,
-      sqft: num(b.sqft),
-      finishScope: null,
-    }))
-  }
-
-  return []
-}
-
 function resolveFieldNotes(field: FieldTakeoff | null): CrewProjectDetail['fieldNotes'] {
-  if (!field) return null
-  const notes = {
-    siteContact: field.siteContact?.trim() || null,
-    contactPhone: field.contactPhone?.trim() || null,
-    meetingLocation: field.meetingLocation?.trim() || null,
-    accessNotes: field.accessNotes?.trim() || null,
-    hazards: field.hazards?.trim() || null,
-    notes: field.notes?.trim() || null,
+  return {
+    siteContact: field?.siteContact?.trim() || null,
+    contactPhone: field?.contactPhone?.trim() || null,
+    meetingLocation: field?.meetingLocation?.trim() || null,
+    accessNotes: field?.accessNotes?.trim() || null,
+    hazards: field?.hazards?.trim() || null,
+    notes: field?.notes?.trim() || null,
   }
-  const hasAny = Object.values(notes).some(Boolean)
-  return hasAny ? notes : null
 }
 
 async function resolveCrewSpecialty(_personId: string): Promise<CrewSpecialty> {
@@ -887,7 +900,6 @@ async function mapProjectDetail(
   const po = getPoDataFromLegacy(legacy)
   const intakeSource = getIntakeSourceFromLegacy(legacy) ?? (po ? 'po' : 'quote')
   const field = parseFieldTakeoff(legacy)
-  const catalogs = v3QuoteFromLegacy(legacy) ? await fetchOrgDrywallCatalogs() : null
   const showJobInfo =
     context.preview === true ||
     (context.personId != null && personSeesJobInfo(context.personId, scheduleRows))
@@ -915,6 +927,17 @@ async function mapProjectDetail(
     materials: showJobInfo
       ? resolveMaterials(field, context.specialty, context.preview === true)
       : [],
+    boardCountsByArea: showJobInfo
+      ? resolveBoardCountsByArea(
+          field,
+          context.specialty,
+          context.preview === true,
+          scheduleRows,
+        )
+      : [],
+    showBoardCounts:
+      showJobInfo &&
+      shouldShowBoardCounts(context.specialty, context.preview === true, scheduleRows),
     photos: showJobInfo
       ? (field?.photos ?? []).map((p) => ({
           id: p.id,
@@ -930,9 +953,8 @@ async function mapProjectDetail(
           preview: context.preview,
         })
       : { hanger: null, finisher: null },
-    fieldNotes: showJobInfo ? resolveFieldNotes(field) : null,
+    fieldNotes: resolveFieldNotes(field),
     scheduleEntries: scheduleRows.map(mapScheduleEntry),
-    breakdowns: showJobInfo ? resolveBreakdowns(legacy, catalogs) : [],
     intakeSource,
     showJobInfo,
   }

@@ -41,20 +41,6 @@ function formatPay(value: number | null): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-/** Auto-conversion placeholders that aren't useful to show crew. */
-const STUB_DESCRIPTION_PATTERNS = [
-  /migrated from v2/i,
-  /^review and refine$/i,
-  /^scope$/i,
-]
-
-function isStubDescription(desc: string | null | undefined): boolean {
-  if (!desc) return true
-  const trimmed = desc.trim()
-  if (!trimmed) return true
-  return STUB_DESCRIPTION_PATTERNS.some((p) => p.test(trimmed))
-}
-
 function CrewPhotoThumb({
   photo,
 }: {
@@ -97,14 +83,6 @@ function CrewPhotoThumb({
       />
     </a>
   )
-}
-
-function breakdownMetaLine(row: CrewProjectDetail['breakdowns'][number]): string {
-  const parts: string[] = []
-  if (row.location?.trim()) parts.push(row.location.trim())
-  if (row.sqft != null) parts.push(`${row.sqft.toLocaleString()} sqft`)
-  if (row.finishScope?.trim()) parts.push(row.finishScope.trim())
-  return parts.join(' · ')
 }
 
 function telHref(phone: string): string {
@@ -212,9 +190,7 @@ export function CrewProjectDetailPage() {
     )
   }
 
-  const contactPhone =
-    detail.fieldNotes?.contactPhone?.trim() ||
-    null
+  const contactPhone = detail.fieldNotes.contactPhone?.trim() || null
 
   const showStartMeasure =
     !isOperatorExplainer &&
@@ -548,53 +524,48 @@ export function CrewProjectDetailPage() {
         )
       })()}
 
-      {detail.fieldNotes ? (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Field notes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            {detail.fieldNotes.siteContact ? (
-              <div>
-                <p className="text-xs font-medium uppercase text-muted-foreground">Site contact</p>
-                <p>{detail.fieldNotes.siteContact}</p>
-              </div>
-            ) : null}
-            {detail.fieldNotes.contactPhone ? (
-              <div>
-                <p className="text-xs font-medium uppercase text-muted-foreground">Phone</p>
-                <a href={telHref(detail.fieldNotes.contactPhone)} className="font-medium text-primary">
-                  {detail.fieldNotes.contactPhone}
-                </a>
-              </div>
-            ) : null}
-            {detail.fieldNotes.meetingLocation ? (
-              <div>
-                <p className="text-xs font-medium uppercase text-muted-foreground">Meeting location</p>
-                <p className="whitespace-pre-wrap">{detail.fieldNotes.meetingLocation}</p>
-              </div>
-            ) : null}
-            {detail.fieldNotes.accessNotes ? (
-              <div>
-                <p className="text-xs font-medium uppercase text-muted-foreground">Access</p>
-                <p className="whitespace-pre-wrap">{detail.fieldNotes.accessNotes}</p>
-              </div>
-            ) : null}
-            {detail.fieldNotes.hazards ? (
-              <div>
-                <p className="text-xs font-medium uppercase text-muted-foreground">Hazards</p>
-                <p className="whitespace-pre-wrap">{detail.fieldNotes.hazards}</p>
-              </div>
-            ) : null}
-            {detail.fieldNotes.notes ? (
-              <div>
-                <p className="text-xs font-medium uppercase text-muted-foreground">Notes</p>
-                <p className="whitespace-pre-wrap">{detail.fieldNotes.notes}</p>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Field notes</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div>
+            <p className="text-xs font-medium uppercase text-muted-foreground">Site contact</p>
+            <p>{detail.fieldNotes.siteContact?.trim() || '—'}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase text-muted-foreground">Phone</p>
+            {detail.fieldNotes.contactPhone?.trim() ? (
+              <a
+                href={telHref(detail.fieldNotes.contactPhone)}
+                className="font-medium text-primary"
+              >
+                {detail.fieldNotes.contactPhone}
+              </a>
+            ) : (
+              <p>—</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase text-muted-foreground">Meeting location</p>
+            <p className="whitespace-pre-wrap">
+              {detail.fieldNotes.meetingLocation?.trim() || '—'}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase text-muted-foreground">Access</p>
+            <p className="whitespace-pre-wrap">{detail.fieldNotes.accessNotes?.trim() || '—'}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase text-muted-foreground">Hazards</p>
+            <p className="whitespace-pre-wrap">{detail.fieldNotes.hazards?.trim() || '—'}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase text-muted-foreground">Notes</p>
+            <p className="whitespace-pre-wrap">{detail.fieldNotes.notes?.trim() || '—'}</p>
+          </div>
+        </CardContent>
+      </Card>
 
       {detail.photos.length > 0 ? (
         <Card>
@@ -614,7 +585,7 @@ export function CrewProjectDetailPage() {
         </Card>
       ) : null}
 
-      {detail.materials.length > 0 ? (
+      {detail.showBoardCounts || detail.materials.length > 0 ? (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -642,39 +613,74 @@ export function CrewProjectDetailPage() {
             ) : null}
           </CardHeader>
           <CardContent className="space-y-4">
-            {(() => {
-              const byType = new Map<string, typeof detail.materials>()
-              for (const m of detail.materials) {
-                const existing = byType.get(m.type) ?? []
-                existing.push(m)
-                byType.set(m.type, existing)
-              }
-              return [...byType.entries()].map(([type, rows]) => (
-                <div key={type} className="space-y-1.5">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">{type}</p>
-                  {rows.map((row) => {
-                    const baseName = row.subtype ?? row.type
-                    const displayName = row.length ? `${row.length} ${baseName}` : baseName
-                    return (
-                      <div
-                        key={row.id}
-                        className="flex items-baseline justify-between gap-3 text-sm"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">{displayName}</p>
-                          {row.threadType ? (
-                            <p className="text-xs text-muted-foreground">{row.threadType}</p>
-                          ) : null}
+            {detail.showBoardCounts ? (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">
+                  Boards by area
+                </p>
+                {(detail.boardCountsByArea?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No board counts yet — they appear here after field measurement logs boards by
+                    area.
+                  </p>
+                ) : (
+                  detail.boardCountsByArea.map((group) => (
+                    <div key={group.area} className="space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground">{group.area}</p>
+                      {group.boards.map((board) => (
+                        <div
+                          key={board.id}
+                          className="flex items-baseline justify-between gap-3 text-sm"
+                        >
+                          <p className="min-w-0 truncate font-medium">{board.label}</p>
+                          <p className="shrink-0 tabular-nums font-medium">
+                            {board.quantity} pcs
+                          </p>
                         </div>
-                        <p className="shrink-0 tabular-nums font-medium">
-                          {row.quantity} {row.unit}
-                        </p>
-                      </div>
-                    )
-                  })}
-                </div>
-              ))
-            })()}
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : null}
+
+            {detail.materials.length > 0
+              ? (() => {
+                  const byType = new Map<string, typeof detail.materials>()
+                  for (const m of detail.materials) {
+                    const existing = byType.get(m.type) ?? []
+                    existing.push(m)
+                    byType.set(m.type, existing)
+                  }
+                  return [...byType.entries()].map(([type, rows]) => (
+                    <div key={type} className="space-y-1.5">
+                      <p className="text-xs font-semibold uppercase text-muted-foreground">
+                        {type}
+                      </p>
+                      {rows.map((row) => {
+                        const baseName = row.subtype ?? row.type
+                        const displayName = row.length ? `${row.length} ${baseName}` : baseName
+                        return (
+                          <div
+                            key={row.id}
+                            className="flex items-baseline justify-between gap-3 text-sm"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{displayName}</p>
+                              {row.threadType ? (
+                                <p className="text-xs text-muted-foreground">{row.threadType}</p>
+                              ) : null}
+                            </div>
+                            <p className="shrink-0 tabular-nums font-medium">
+                              {row.quantity} {row.unit}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))
+                })()
+              : null}
           </CardContent>
         </Card>
       ) : null}
@@ -732,37 +738,6 @@ export function CrewProjectDetailPage() {
           </CardContent>
         </Card>
       ) : null}
-
-      {(() => {
-        const meaningful = detail.breakdowns.filter((b) => !isStubDescription(b.description))
-        if (meaningful.length === 0) return null
-        return (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Scope of work — by area</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 sm:p-0">
-            <table className="w-full text-sm">
-              <tbody>
-                {meaningful.map((row) => {
-                  const meta = breakdownMetaLine(row)
-                  return (
-                    <tr key={row.id} className="border-b last:border-0">
-                      <td className="px-4 py-3">
-                        <p className="font-semibold">{row.description}</p>
-                        {meta ? (
-                          <p className="mt-0.5 text-muted-foreground">{meta}</p>
-                        ) : null}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-        )
-      })()}
 
       <CrewCommsPanel
         projectId={projectId}

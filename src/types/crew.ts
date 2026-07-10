@@ -74,6 +74,16 @@ export interface CrewMaterial {
   threadType: string | null
 }
 
+/** Field-measured board counts for hangers, grouped by area. */
+export interface CrewBoardAreaGroup {
+  area: string
+  boards: Array<{
+    id: string
+    label: string
+    quantity: number
+  }>
+}
+
 export interface CrewStructuredScope {
   useCustom: boolean
   customText: string | null
@@ -113,6 +123,10 @@ export interface CrewProjectDetail {
   beadSticks: number | null
   /** Materials list filtered by user's specialty (hanger sees install hardware, finisher sees all). */
   materials: CrewMaterial[]
+  /** Field board counts by area — hangers / both / operator preview only. */
+  boardCountsByArea: CrewBoardAreaGroup[]
+  /** Whether the Boards by area section should render (even if empty). */
+  showBoardCounts: boolean
   /** Field photos uploaded during measurement — surface to crew for site context. */
   photos: { id: string; storagePath: string | null; url: string | null; label: string | null }[]
   specialty: CrewSpecialty
@@ -134,15 +148,8 @@ export interface CrewProjectDetail {
     hazards: string | null
     /** Free-form notes the field measurer leaves for the crew. */
     notes: string | null
-  } | null
+  }
   scheduleEntries: CrewProjectScheduleEntry[]
-  breakdowns: Array<{
-    id: string
-    description: string
-    location: string | null
-    sqft: number | null
-    finishScope: string | null
-  }>
   intakeSource: 'quote' | 'po'
   /**
    * True when this person is marked "Show job info" on at least one of their
