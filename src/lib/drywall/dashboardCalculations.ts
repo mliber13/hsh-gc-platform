@@ -13,7 +13,11 @@ import { finisherCapacityTier, specialtyFromPositionName } from '@/lib/drywall/c
 import type { DashboardTargets } from '@/lib/drywall/dashboardTargets'
 import { isArchivedMember } from '@/lib/hrTeamUtils'
 import type { CrossProjectScheduleItem } from '@/services/drywallScheduleAggregateService'
-import type { DivisionExecutionJob } from '@/services/drywallDivisionAggregateService'
+import type {
+  DivisionExecutionJob,
+  DivisionLaborPerformance,
+  EstimatingAccuracy,
+} from '@/services/drywallDivisionAggregateService'
 import type { DrywallProjectListItem, DrywallProjectStatus } from '@/types/drywall'
 import { normalizeDrywallProjectStatus } from '@/types/drywall'
 import type { OrgTeamPayload } from '@/types/hr'
@@ -1113,4 +1117,261 @@ export function computeProjectedBillings(
     unpricedProjects,
     status: projectedBillingsStatus(gapToGoal, annualGoal),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Alerts — prioritized rules over already-computed dashboard metrics
+// ---------------------------------------------------------------------------
+
+export type DashboardAlertSeverity = 'critical' | 'warning' | 'info'
+
+export interface DashboardAlert {
+  id: string
+  severity: DashboardAlertSeverity
+  title: string
+  detail: string
+  href?: string
+}
+
+export interface DashboardAlertsExecution {
+  jobs: DivisionExecutionJob[]
+  laborPerformance: DivisionLaborPerformance
+  accuracy: EstimatingAccuracy
+}
+
+export interface DashboardAlertsContext {
+  projects: DrywallProjectListItem[]
+  scheduleItems: CrossProjectScheduleItem[]
+  qbInvoices: DashboardQbInvoiceInput[]
+  targets: DashboardTargets
+}
+
+/** Soft floor for estimating hit-rate alerts (no target field on DashboardTargets yet). */
+export const DEFAULT_ESTIMATING_HIT_RATE_TARGET = 0.35
+
+const ALERT_SEVERITY_ORDER: Record<DashboardAlertSeverity, number> = {
+  critical: 0,
+  warning: 1,
+  info: 2,
+}
+
+function severityFromKpi(status: KpiStatus): DashboardAlertSeverity | null {
+  if (status === 'red') return 'critical'
+  if (status === 'yellow') return 'warning'
+  return null
+}
+
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  )
+}
+
+/**
+ * Prioritized attention list derived from existing KPI Hub metrics + division execution.
+ * Pure — no fetches. Call from AlertsSection with useDashboardData + useDivisionExecution.
+ */
+export function computeDashboardAlerts(
+  metrics: DashboardMetrics,
+  execution: DashboardAlertsExecution,
+  context: DashboardAlertsContext,
+  now = new Date(),
+): DashboardAlert[] {
+  const alerts: DashboardAlert[] = []
+  const { revenuePace, northStar, capacity, manpower, backlog, estimating } = metrics
+
+  // Revenue pace behind
+  if (revenuePace.hasBillings) {
+    const paceSeverity = severityFromKpi(revenuePace.status)
+    if (paceSeverity) {
+      alerts.push({
+        id: 'revenue-pace-behind',
+        severity: paceSeverity,
+        title: 'Billings pace behind goal',
+        detail: `Projected EOM ${formatDashboardCurrency(revenuePace.projectedEom)} vs goal ${formatDashboardCurrency(revenuePace.monthlyGoal)} · variance ${formatDashboardCurrency(revenuePace.variance)}`,
+        href: '/drywall/settings/quickbooks',
+      })
+    }
+  }
+
+  // Behind annual goal (North Star)
+  if (northStar.revenueGap < 0 && northStar.annualGoal > 0) {
+    const nsSeverity = severityFromKpi(northStar.status)
+    if (nsSeverity) {
+      alerts.push({
+        id: 'behind-annual-goal',
+        severity: nsSeverity,
+        title: `Behind annual goal by ${formatDashboardCurrency(Math.abs(northStar.revenueGap))}`,
+        detail: `${formatDashboardPercent(northStar.pctOfRequired)} of required pace`,
+      })
+    }
+  }
+
+  // Capacity bottleneck
+  {
+    const capSeverity = severityFromKpi(capacity.status)
+    if (capSeverity) {
+      const trade = capacity.bottleneck === 'hanging' ? 'Hanging' : 'Finishing'
+      alerts.push({
+        id: 'capacity-bottleneck',
+        severity: capSeverity,
+        title: `${trade} is the constraint`,
+        detail: northStar.biggestConstraint,
+      })
+    }
+  }
+
+  // Understaffed — each manpower role with a positive gap
+  for (const row of [manpower.finishers, manpower.hangerCrews]) {
+    if (row.gap <= 0) continue
+    const large =
+      row.gap >= 2 || (row.target > 0 && row.gap / row.target >= 0.5)
+    const roleLabel = row.label.toLowerCase()
+    alerts.push({
+      id: `understaffed-${row.label.toLowerCase().replace(/\s+/g, '-')}`,
+      severity: large ? 'critical' : 'warning',
+      title: `Need ${row.gap} more ${roleLabel}`,
+      detail: `${row.current} of ${row.target} target`,
+    })
+  }
+
+  // Backlog thin
+  {
+    const thinByStatus = severityFromKpi(backlog.status)
+    const thinByMonths =
+      backlog.monthsRemaining != null && backlog.monthsRemaining < 2
+    if (thinByStatus || thinByMonths) {
+      const monthsLabel =
+        backlog.monthsRemaining != null
+          ? `${backlog.monthsRemaining.toFixed(1)} months`
+          : 'limited months'
+      alerts.push({
+        id: 'backlog-thin',
+        severity: thinByStatus ?? 'warning',
+        title: `Backlog thin — ${monthsLabel} of approved work.`,
+        detail: `Current ${formatDashboardCurrency(backlog.currentBacklog)} vs goal ${formatDashboardCurrency(backlog.goalBacklog)}`,
+      })
+    }
+  }
+
+  // AR aging 90+
+  {
+    const financials = computeFinancialsMetrics(execution.jobs, context.qbInvoices, now)
+    const aging90 = financials.arAging.find((b) => b.label.startsWith('90'))
+    if (aging90 && aging90.amount > 0) {
+      alerts.push({
+        id: 'ar-aging-90',
+        severity: aging90.amount >= 25_000 ? 'critical' : 'warning',
+        title: `${formatDashboardCurrency(aging90.amount)} in receivables 90+ days`,
+        detail: `${aging90.count} open invoice${aging90.count === 1 ? '' : 's'}`,
+        href: '/drywall/settings/quickbooks',
+      })
+    }
+  }
+
+  // Estimating hit rate below target
+  {
+    const hitRate = estimating.hitRateMonth ?? estimating.hitRateTrailing90
+    if (hitRate != null && hitRate < DEFAULT_ESTIMATING_HIT_RATE_TARGET) {
+      const pctPoints = Math.round((DEFAULT_ESTIMATING_HIT_RATE_TARGET - hitRate) * 100)
+      alerts.push({
+        id: 'hit-rate-below-target',
+        severity: hitRate < DEFAULT_ESTIMATING_HIT_RATE_TARGET * 0.7 ? 'critical' : 'warning',
+        title: `Hit rate ${pctPoints}% below target`,
+        detail: `Current ${formatDashboardPercent(hitRate)} vs ${formatDashboardPercent(DEFAULT_ESTIMATING_HIT_RATE_TARGET)} target`,
+      })
+    }
+  }
+
+  // Jobs >15% off estimate
+  {
+    const offJobs = execution.jobs.filter((job) => {
+      if (job.inProgress) return false
+      const est = job.estMaterial + job.estLabor
+      if (est <= 0) return false
+      const actual = job.actualMaterial + job.actualLabor
+      return Math.abs(actual - est) / est > 0.15
+    })
+    if (offJobs.length > 0) {
+      alerts.push({
+        id: 'jobs-off-estimate',
+        severity: offJobs.length >= 3 ? 'critical' : 'warning',
+        title: `${offJobs.length} job${offJobs.length === 1 ? '' : 's'} >15% off estimate.`,
+        detail:
+          execution.accuracy.mostOff.length > 0
+            ? `Worst: ${execution.accuracy.mostOff[0].projectName}`
+            : 'Review estimating accuracy',
+        href: offJobs[0]
+          ? `/drywall/projects/${offJobs[0].projectId}/production`
+          : undefined,
+      })
+    }
+  }
+
+  // Data hygiene — unpriced projected billings
+  {
+    const pb = computeProjectedBillings(
+      context.projects,
+      context.scheduleItems,
+      context.qbInvoices,
+      context.targets,
+      now,
+    )
+    if (pb.unpricedProjectCount > 0) {
+      const names = pb.unpricedProjects
+        .slice(0, 4)
+        .map((p) => p.name)
+        .join(', ')
+      const more =
+        pb.unpricedProjectCount > 4 ? ` (+${pb.unpricedProjectCount - 4} more)` : ''
+      alerts.push({
+        id: 'unpriced-billing-plan',
+        severity: 'info',
+        title: `${pb.unpricedProjectCount} job${pb.unpricedProjectCount === 1 ? '' : 's'} have a billing plan but no contract total: ${names}${more}`,
+        detail: 'Excluded from projected billings until a quote/contract total exists',
+        href: pb.unpricedProjects[0]
+          ? `/drywall/projects/${pb.unpricedProjects[0].id}/info`
+          : undefined,
+      })
+    }
+  }
+
+  // Data hygiene — many jobs completed "today" (pile-up / missing backdates)
+  {
+    const completedToday = execution.jobs.filter((job) => {
+      if (!job.completedAt || job.inProgress) return false
+      const d = parseCompletedAt(job.completedAt)
+      return d != null && isSameCalendarDay(d, now)
+    })
+    if (completedToday.length >= 3) {
+      alerts.push({
+        id: 'completions-pile-today',
+        severity: 'info',
+        title: `${completedToday.length} jobs completed 'today' — backdate for accurate trends`,
+        detail: 'Financials Gross Profit Trend buckets by completion date',
+      })
+    }
+  }
+
+  // Data hygiene — large unmapped labor
+  {
+    const unmapped = execution.laborPerformance.unmappedActual.total
+    const actualLabor = execution.laborPerformance.totalActualLabor
+    const large =
+      unmapped >= 1_000 || (actualLabor > 0 && unmapped / actualLabor >= 0.05)
+    if (unmapped > 0 && large) {
+      alerts.push({
+        id: 'unmapped-labor',
+        severity: 'info',
+        title: `Unattributed labor ${formatDashboardCurrency(unmapped)} — review payroll tagging.`,
+        detail: 'Legacy / hourly / other buckets not mapped to hanger, finisher, components, or prep',
+      })
+    }
+  }
+
+  return alerts.sort(
+    (a, b) => ALERT_SEVERITY_ORDER[a.severity] - ALERT_SEVERITY_ORDER[b.severity],
+  )
 }

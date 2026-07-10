@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import { AlertsSection } from './AlertsSection'
 import { BacklogSection } from './BacklogSection'
 import { DivisionMarginSection } from './DivisionMarginSection'
 import { EstimatingAccuracySection } from './EstimatingAccuracySection'
@@ -10,7 +11,7 @@ import { ProductionCapacitySection } from './ProductionCapacitySection'
 import { ProjectedBillingsSection } from './ProjectedBillingsSection'
 import { RevenuePaceSection } from './RevenuePaceSection'
 
-export type DashboardSectionGroup = 'sales' | 'capacity' | 'execution' | 'financials'
+export type DashboardSectionGroup = 'alerts' | 'sales' | 'capacity' | 'execution' | 'financials'
 export type DashboardSectionSpan = 'compact' | 'wide' | 'full'
 
 export interface DashboardSectionDef {
@@ -23,6 +24,7 @@ export interface DashboardSectionDef {
 }
 
 export const DASHBOARD_GROUP_ORDER: DashboardSectionGroup[] = [
+  'alerts',
   'sales',
   'capacity',
   'execution',
@@ -30,6 +32,7 @@ export const DASHBOARD_GROUP_ORDER: DashboardSectionGroup[] = [
 ]
 
 export const DASHBOARD_GROUP_LABELS: Record<DashboardSectionGroup, string> = {
+  alerts: 'Needs Attention',
   sales: 'Sales & Pace',
   capacity: 'Capacity & Crew',
   execution: 'Execution',
@@ -47,6 +50,14 @@ export const DASHBOARD_SECTION_SPAN_CLASS: Record<DashboardSectionSpan, string> 
  * DashboardPage maps over groups — no page rewrite required.
  */
 export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
+  {
+    id: 'alerts',
+    title: 'Alerts',
+    order: 1,
+    group: 'alerts',
+    span: 'full',
+    component: AlertsSection,
+  },
   {
     id: 'revenue-pace',
     title: 'Revenue Pace',
