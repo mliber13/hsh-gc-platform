@@ -83,6 +83,18 @@ export const SCHEDULE_PHASE_LABELS: Record<SchedulePhase, string> = {
   other: 'Other',
 }
 
+export const SCHEDULE_PHASE_ORDER: SchedulePhase[] = [
+  'measure',
+  'stock',
+  'scaffold',
+  'hang',
+  'paper_floor',
+  'finish',
+  'cleanout',
+  'office',
+  'other',
+]
+
 /** Calendar bar classes — fill + text + border for phase color. */
 export const SCHEDULE_PHASE_BAR_CLASS: Record<SchedulePhase, string> = {
   measure: 'bg-emerald-500 text-white border-emerald-600',

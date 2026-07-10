@@ -5,10 +5,8 @@ import {
   format,
   isSameMonth,
   isToday,
-  isWeekend,
   isWithinInterval,
 } from 'date-fns'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { getItemColsForWeek, toLocalDate } from '@/lib/scheduleCalendarUtils'
 import { packLanes } from '@/lib/drywall/scheduleLanes'
@@ -34,6 +32,7 @@ type Props = {
   viewWindow: PortfolioViewWindow
   referenceMonth: Date
   rangeLabel: string
+  expandAll: boolean
   onItemClick: (item: CrossProjectScheduleItem) => void
 }
 
@@ -57,13 +56,12 @@ export function DrywallPortfolioCalendar({
   viewWindow,
   referenceMonth,
   rangeLabel,
+  expandAll,
   onItemClick,
 }: Props) {
-  const [expandAll, setExpandAll] = useState(false)
   const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(() => new Set())
 
   useEffect(() => {
-    setExpandAll(false)
     setExpandedWeeks(new Set())
   }, [rangeStart, viewWindow])
 
@@ -105,25 +103,13 @@ export function DrywallPortfolioCalendar({
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="mb-3 flex justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => setExpandAll((value) => !value)}
-          >
-            {expandAll ? 'Collapse all' : 'Expand all'}
-          </Button>
-        </div>
-
         <div className="overflow-x-auto">
           <div className="min-w-[720px]">
             <div className="grid grid-cols-7 overflow-hidden rounded-lg border border-border/60">
               {WEEKDAY_NAMES.map((name) => (
                 <div
                   key={name}
-                  className="border-b border-r border-border/60 bg-muted/30 p-2 text-center text-xs font-semibold uppercase text-muted-foreground last:border-r-0"
+                  className="border-b border-r border-border/60 bg-muted/30 p-2 text-center text-xs font-bold uppercase text-foreground last:border-r-0"
                 >
                   {name}
                 </div>
@@ -154,15 +140,11 @@ export function DrywallPortfolioCalendar({
 
                 return (
                   <Fragment key={`week-${weekIdx}`}>
+                    {weekIdx > 0 && <div className="col-span-7 h-2" />}
                     {row.map((day) => (
                       <div
                         key={day.toISOString()}
-                        className={cn(
-                          'border-b border-r border-border/60 px-1.5 py-0.5 last:border-r-0',
-                          !isPrimaryDay(day) && 'bg-muted/20',
-                          isPrimaryDay(day) && isWeekend(day) && 'bg-muted/35',
-                          isPrimaryDay(day) && !isWeekend(day) && 'bg-card',
-                        )}
+                        className="border-b border-r border-border/60 bg-black/40 px-1.5 py-0.5 last:border-r-0"
                       >
                         {isPrimaryDay(day) && isToday(day) ? (
                           <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
@@ -171,10 +153,10 @@ export function DrywallPortfolioCalendar({
                         ) : (
                           <div
                             className={cn(
-                              'text-[11px] font-medium leading-5',
+                              'text-sm font-bold leading-5',
                               !isPrimaryDay(day)
-                                ? 'text-muted-foreground/60'
-                                : 'text-muted-foreground',
+                                ? 'text-muted-foreground/50'
+                                : 'text-foreground',
                             )}
                           >
                             {format(day, 'd')}
@@ -196,7 +178,7 @@ export function DrywallPortfolioCalendar({
                               return (
                                 <div
                                   key={`empty-${weekIdx}-${laneIdx}-${col}`}
-                                  className="flex h-8 items-center border-b border-r border-border/60 bg-transparent px-1 last:border-r-0"
+                                  className="h-8 border-r border-border/60 last:border-r-0 bg-black/5 dark:bg-white/10"
                                 />
                               )
                             }
@@ -221,24 +203,7 @@ export function DrywallPortfolioCalendar({
                             return (
                               <div
                                 key={`${item.id}-c${col}`}
-                                className={cn(
-                                  'flex h-8 cursor-pointer items-center border-b border-r border-border/60 px-1 last:border-r-0 transition-shadow hover:ring-2 hover:ring-primary/40',
-                                  projectColors.bg,
-                                  projectColors.text,
-                                  isLeftEdge && phaseBorder,
-                                  statusOpacity,
-                                  delayedRing,
-                                )}
-                                style={{
-                                  borderTopLeftRadius:
-                                    isLeftEdge && !continuesFromPrior ? 4 : 0,
-                                  borderBottomLeftRadius:
-                                    isLeftEdge && !continuesFromPrior ? 4 : 0,
-                                  borderTopRightRadius:
-                                    isRightEdge && !continuesToNext ? 4 : 0,
-                                  borderBottomRightRadius:
-                                    isRightEdge && !continuesToNext ? 4 : 0,
-                                }}
+                                className="flex h-8 cursor-pointer items-center border-r border-border/60 px-0 last:border-r-0 bg-black/5 dark:bg-white/10"
                                 title={buildTooltip(item)}
                                 onClick={() => onItemClick(item)}
                                 onKeyDown={(e) => {
@@ -250,24 +215,46 @@ export function DrywallPortfolioCalendar({
                                 role="button"
                                 tabIndex={0}
                               >
-                                {showLabel && (
-                                  <span className="flex min-w-0 items-center gap-1">
-                                    {continuesFromPrior && (
-                                      <span className="shrink-0 text-[10px] opacity-70" aria-hidden>
-                                        ‹
+                                <div
+                                  className={cn(
+                                    'flex h-7 w-full items-center px-1',
+                                    projectColors.bg,
+                                    projectColors.text,
+                                    isLeftEdge && phaseBorder,
+                                    statusOpacity,
+                                    delayedRing,
+                                    'transition-shadow hover:ring-2 hover:ring-primary/40',
+                                  )}
+                                  style={{
+                                    borderTopLeftRadius:
+                                      isLeftEdge && !continuesFromPrior ? 4 : 0,
+                                    borderBottomLeftRadius:
+                                      isLeftEdge && !continuesFromPrior ? 4 : 0,
+                                    borderTopRightRadius:
+                                      isRightEdge && !continuesToNext ? 4 : 0,
+                                    borderBottomRightRadius:
+                                      isRightEdge && !continuesToNext ? 4 : 0,
+                                  }}
+                                >
+                                  {showLabel && (
+                                    <span className="flex min-w-0 items-center gap-1">
+                                      {continuesFromPrior && (
+                                        <span className="shrink-0 text-[10px] opacity-70" aria-hidden>
+                                          ‹
+                                        </span>
+                                      )}
+                                      <span className="min-w-0 truncate text-xs">
+                                        <span className="font-medium">{item.name}</span>{' '}
+                                        <span className="opacity-90">({item.projectName})</span>
                                       </span>
-                                    )}
-                                    <span className="min-w-0 truncate text-xs">
-                                      <span className="font-medium">{item.name}</span>{' '}
-                                      <span className="opacity-75">({item.projectName})</span>
+                                      {continuesToNext && (
+                                        <span className="shrink-0 text-[10px] opacity-70" aria-hidden>
+                                          ›
+                                        </span>
+                                      )}
                                     </span>
-                                    {continuesToNext && (
-                                      <span className="shrink-0 text-[10px] opacity-70" aria-hidden>
-                                        ›
-                                      </span>
-                                    )}
-                                  </span>
-                                )}
+                                  )}
+                                </div>
                               </div>
                             )
                           })}

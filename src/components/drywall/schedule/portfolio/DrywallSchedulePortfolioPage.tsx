@@ -19,6 +19,7 @@ import { isDrywallProjectClosed } from '@/types/drywall'
 import {
   phaseForScheduleItem,
   SCHEDULE_PHASE_LABELS,
+  SCHEDULE_PHASE_ORDER,
   type SchedulePhase,
 } from '@/components/drywall/schedule/scheduleItemStatusStyles'
 import { ScheduleItemDialog } from '../ScheduleItemDialog'
@@ -65,6 +66,7 @@ export function DrywallSchedulePortfolioPage() {
   const [excludedProjectIds, setExcludedProjectIds] = useState<Set<string>>(() => new Set())
   const [selectedPersonIds, setSelectedPersonIds] = useState<Set<string>>(() => new Set())
   const [selectedPhases, setSelectedPhases] = useState<Set<SchedulePhase>>(() => new Set())
+  const [expandAll, setExpandAll] = useState(false)
 
   const { rangeStart, rangeEnd, referenceMonth } = useMemo(
     () => computePortfolioRange(anchorDate, viewWindow),
@@ -91,6 +93,10 @@ export function DrywallSchedulePortfolioPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    setExpandAll(false)
+  }, [rangeStart, viewWindow])
 
   useEffect(() => {
     let cancelled = false
@@ -143,8 +149,8 @@ export function DrywallSchedulePortfolioPage() {
   const phaseOptions = useMemo(() => {
     const phases = new Set<SchedulePhase>()
     for (const item of itemsInRange) phases.add(phaseForScheduleItem(item))
-    return [...phases].sort((a, b) =>
-      SCHEDULE_PHASE_LABELS[a].localeCompare(SCHEDULE_PHASE_LABELS[b]),
+    return [...phases].sort(
+      (a, b) => SCHEDULE_PHASE_ORDER.indexOf(a) - SCHEDULE_PHASE_ORDER.indexOf(b),
     )
   }, [itemsInRange])
 
@@ -202,17 +208,17 @@ export function DrywallSchedulePortfolioPage() {
 
   return (
     <div className="space-y-4 pb-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            <CalendarRange className="size-7" />
-            Drywall — Schedule
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            All drywall jobs on one calendar — click a bar to open that project&apos;s schedule.
-          </p>
-        </div>
+      <div>
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+          <CalendarRange className="size-7" />
+          Drywall — Schedule
+        </h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          All drywall jobs on one calendar — click a bar to open that project&apos;s schedule.
+        </p>
+      </div>
 
+      <div className="relative flex items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
             <button
@@ -313,7 +319,7 @@ export function DrywallSchedulePortfolioPage() {
                     </button>
                   )}
                 </div>
-                <div className="flex max-h-72 flex-wrap gap-1.5 overflow-y-auto">
+                <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
                   {legendProjects.map((project) => {
                     const colors = projectColorClass(project.id)
                     const included = !excludedProjectIds.has(project.id)
@@ -323,7 +329,7 @@ export function DrywallSchedulePortfolioPage() {
                         type="button"
                         onClick={() => toggleProject(project.id)}
                         className={cn(
-                          'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+                          'flex w-full items-center justify-start gap-1.5 rounded-md border px-2.5 py-0.5 text-xs transition-colors',
                           included
                             ? 'border-border bg-card text-foreground'
                             : 'border-border/60 bg-muted/40 text-muted-foreground opacity-60',
@@ -333,7 +339,7 @@ export function DrywallSchedulePortfolioPage() {
                           className={cn('size-2.5 shrink-0 rounded-sm border', colors.bg, colors.border)}
                           aria-hidden
                         />
-                        <span className="max-w-[12rem] truncate font-medium">{project.name}</span>
+                        <span className="truncate font-medium">{project.name}</span>
                       </button>
                     )
                   })}
@@ -369,7 +375,7 @@ export function DrywallSchedulePortfolioPage() {
                     </button>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
                   {personOptions.map((person) => {
                     const active =
                       selectedPersonIds.size === 0 || selectedPersonIds.has(person.id)
@@ -383,7 +389,7 @@ export function DrywallSchedulePortfolioPage() {
                           )
                         }
                         className={cn(
-                          'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                          'flex w-full justify-start rounded-md border px-2.5 py-0.5 text-left text-xs font-medium transition-colors',
                           active
                             ? 'border-border bg-card text-foreground'
                             : 'border-border/60 bg-muted/40 text-muted-foreground opacity-60',
@@ -425,7 +431,7 @@ export function DrywallSchedulePortfolioPage() {
                     </button>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
                   {phaseOptions.map((phase) => {
                     const active = selectedPhases.size === 0 || selectedPhases.has(phase)
                     return (
@@ -436,7 +442,7 @@ export function DrywallSchedulePortfolioPage() {
                           setSelectedPhases((current) => toggleSetMembership(current, phase))
                         }
                         className={cn(
-                          'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                          'flex w-full justify-start rounded-md border px-2.5 py-0.5 text-left text-xs font-medium transition-colors',
                           active
                             ? 'border-border bg-card text-foreground'
                             : 'border-border/60 bg-muted/40 text-muted-foreground opacity-60',
@@ -450,39 +456,50 @@ export function DrywallSchedulePortfolioPage() {
               </PopoverContent>
             </Popover>
           )}
+        </div>
 
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setAnchorDate((d) => shiftPortfolioAnchor(d, viewWindow, -1))}
-              aria-label="Previous range"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="min-w-[10rem] text-center text-sm font-semibold">{rangeLabel}</span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setAnchorDate(new Date())}
-            >
-              Today
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setAnchorDate((d) => shiftPortfolioAnchor(d, viewWindow, 1))}
-              aria-label="Next range"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+        <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setAnchorDate((d) => shiftPortfolioAnchor(d, viewWindow, -1))}
+            aria-label="Previous range"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="min-w-[10rem] text-center text-sm font-semibold">{rangeLabel}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setAnchorDate((d) => shiftPortfolioAnchor(d, viewWindow, 1))}
+            aria-label="Next range"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAnchorDate(new Date())}
+          >
+            Today
+          </Button>
+        </div>
 
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => setExpandAll((value) => !value)}
+          >
+            {expandAll ? 'Collapse all' : 'Expand all'}
+          </Button>
           <Button type="button" variant="outline" size="icon" onClick={() => void load()}>
             <RefreshCw className="h-4 w-4" />
             <span className="sr-only">Refresh</span>
@@ -505,6 +522,7 @@ export function DrywallSchedulePortfolioPage() {
           viewWindow={viewWindow}
           referenceMonth={referenceMonth}
           rangeLabel={rangeLabel}
+          expandAll={expandAll}
           onItemClick={handleItemClick}
         />
       )}
