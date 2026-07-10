@@ -22,11 +22,11 @@ const PROJECT_COLOR_CLASSES: Record<
 > = {
   indigo: { bg: 'bg-indigo-500', border: 'border-indigo-600', text: 'text-white' },
   rose: { bg: 'bg-rose-500', border: 'border-rose-600', text: 'text-white' },
-  amber: { bg: 'bg-amber-500', border: 'border-amber-600', text: 'text-amber-950' },
+  amber: { bg: 'bg-amber-600', border: 'border-amber-700', text: 'text-white' },
   teal: { bg: 'bg-teal-500', border: 'border-teal-600', text: 'text-white' },
   fuchsia: { bg: 'bg-fuchsia-500', border: 'border-fuchsia-600', text: 'text-white' },
   cyan: { bg: 'bg-cyan-500', border: 'border-cyan-600', text: 'text-white' },
-  lime: { bg: 'bg-lime-500', border: 'border-lime-600', text: 'text-lime-950' },
+  lime: { bg: 'bg-lime-600', border: 'border-lime-700', text: 'text-white' },
   orange: { bg: 'bg-orange-500', border: 'border-orange-600', text: 'text-white' },
   violet: { bg: 'bg-violet-500', border: 'border-violet-600', text: 'text-white' },
   emerald: { bg: 'bg-emerald-500', border: 'border-emerald-600', text: 'text-white' },

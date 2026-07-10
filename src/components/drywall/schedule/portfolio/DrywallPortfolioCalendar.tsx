@@ -178,7 +178,7 @@ export function DrywallPortfolioCalendar({
                               return (
                                 <div
                                   key={`empty-${weekIdx}-${laneIdx}-${col}`}
-                                  className="h-8 border-r border-border/60 last:border-r-0 bg-black/5 dark:bg-white/10"
+                                  className="h-9 border-r border-border/60 bg-black/5 last:border-r-0 dark:bg-white/10"
                                 />
                               )
                             }
@@ -191,19 +191,21 @@ export function DrywallPortfolioCalendar({
                             const isLeftEdge = col === 0 || !cols.includes(col - 1)
                             const isRightEdge = col === 6 || !cols.includes(col + 1)
                             const showLabel = col === cols[0]
+                            const itemStartsHere = isLeftEdge && !continuesFromPrior
+                            const itemEndsHere = isRightEdge && !continuesToNext
 
                             const projectColors = projectColorClass(item.projectId)
                             const phase = phaseForScheduleItem(item)
                             const phaseBorder = SCHEDULE_PHASE_LEFT_BORDER_CLASS[phase]
                             const statusOpacity =
-                              item.status === 'not-started' ? 'opacity-85' : 'opacity-100'
+                              item.status === 'not-started' ? 'opacity-90' : 'opacity-100'
                             const delayedRing =
                               item.status === 'delayed' ? 'ring-2 ring-red-500' : ''
 
                             return (
                               <div
                                 key={`${item.id}-c${col}`}
-                                className="flex h-8 cursor-pointer items-center border-r border-border/60 px-0 last:border-r-0 bg-black/5 dark:bg-white/10"
+                                className="flex h-9 cursor-pointer items-center border-r border-border/60 bg-black/5 px-0 last:border-r-0 dark:bg-white/10"
                                 title={buildTooltip(item)}
                                 onClick={() => onItemClick(item)}
                                 onKeyDown={(e) => {
@@ -217,38 +219,36 @@ export function DrywallPortfolioCalendar({
                               >
                                 <div
                                   className={cn(
-                                    'flex h-7 w-full items-center px-1',
+                                    'flex h-7 w-full items-center px-1 ring-1 ring-inset ring-black/25',
                                     projectColors.bg,
                                     projectColors.text,
                                     isLeftEdge && phaseBorder,
                                     statusOpacity,
                                     delayedRing,
+                                    itemStartsHere && 'ml-0.5',
+                                    itemEndsHere && 'mr-0.5',
                                     'transition-shadow hover:ring-2 hover:ring-primary/40',
                                   )}
                                   style={{
-                                    borderTopLeftRadius:
-                                      isLeftEdge && !continuesFromPrior ? 4 : 0,
-                                    borderBottomLeftRadius:
-                                      isLeftEdge && !continuesFromPrior ? 4 : 0,
-                                    borderTopRightRadius:
-                                      isRightEdge && !continuesToNext ? 4 : 0,
-                                    borderBottomRightRadius:
-                                      isRightEdge && !continuesToNext ? 4 : 0,
+                                    borderTopLeftRadius: itemStartsHere ? 4 : isLeftEdge ? 2 : 0,
+                                    borderBottomLeftRadius: itemStartsHere ? 4 : isLeftEdge ? 2 : 0,
+                                    borderTopRightRadius: itemEndsHere ? 4 : isRightEdge ? 2 : 0,
+                                    borderBottomRightRadius: itemEndsHere ? 4 : isRightEdge ? 2 : 0,
                                   }}
                                 >
                                   {showLabel && (
                                     <span className="flex min-w-0 items-center gap-1">
                                       {continuesFromPrior && (
-                                        <span className="shrink-0 text-[10px] opacity-70" aria-hidden>
+                                        <span className="shrink-0 text-[10px] opacity-80" aria-hidden>
                                           ‹
                                         </span>
                                       )}
-                                      <span className="min-w-0 truncate text-xs">
-                                        <span className="font-medium">{item.name}</span>{' '}
-                                        <span className="opacity-90">({item.projectName})</span>
+                                      <span className="min-w-0 truncate text-sm [text-shadow:0_1px_1px_rgba(0,0,0,0.45)]">
+                                        <span className="font-semibold">{item.name}</span>{' '}
+                                        <span className="opacity-95">({item.projectName})</span>
                                       </span>
                                       {continuesToNext && (
-                                        <span className="shrink-0 text-[10px] opacity-70" aria-hidden>
+                                        <span className="shrink-0 text-[10px] opacity-80" aria-hidden>
                                           ›
                                         </span>
                                       )}

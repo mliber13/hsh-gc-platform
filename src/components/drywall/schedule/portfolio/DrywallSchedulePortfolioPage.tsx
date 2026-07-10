@@ -63,7 +63,7 @@ export function DrywallSchedulePortfolioPage() {
   const [anchorDate, setAnchorDate] = useState(() => new Date())
   const [dialog, setDialog] = useState<DialogState>({ open: false })
   const [personNames, setPersonNames] = useState<Map<string, string>>(new Map())
-  const [excludedProjectIds, setExcludedProjectIds] = useState<Set<string>>(() => new Set())
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => new Set())
   const [selectedPersonIds, setSelectedPersonIds] = useState<Set<string>>(() => new Set())
   const [selectedPhases, setSelectedPhases] = useState<Set<SchedulePhase>>(() => new Set())
   const [expandAll, setExpandAll] = useState(false)
@@ -156,7 +156,7 @@ export function DrywallSchedulePortfolioPage() {
 
   const filteredItems = useMemo(() => {
     return itemsInRange.filter((item) => {
-      if (excludedProjectIds.has(item.projectId)) return false
+      if (selectedProjectIds.size > 0 && !selectedProjectIds.has(item.projectId)) return false
       if (
         selectedPersonIds.size > 0 &&
         !item.assignedPersons.some((id) => selectedPersonIds.has(id))
@@ -168,10 +168,10 @@ export function DrywallSchedulePortfolioPage() {
       }
       return true
     })
-  }, [itemsInRange, excludedProjectIds, selectedPersonIds, selectedPhases])
+  }, [itemsInRange, selectedProjectIds, selectedPersonIds, selectedPhases])
 
   const toggleProject = (projectId: string) => {
-    setExcludedProjectIds((current) => toggleSetMembership(current, projectId))
+    setSelectedProjectIds((current) => toggleSetMembership(current, projectId))
   }
 
   const handleItemClick = async (item: CrossProjectScheduleItem) => {
@@ -207,9 +207,9 @@ export function DrywallSchedulePortfolioPage() {
   }
 
   return (
-    <div className="space-y-4 pb-10">
-      <div className="relative flex items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-2 pt-2 pb-10">
+      <div className="grid grid-cols-3 items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 py-2.5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
             <button
               type="button"
@@ -283,7 +283,7 @@ export function DrywallSchedulePortfolioPage() {
           </div>
         </div>
 
-        <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-1">
+        <div className="flex items-center justify-center gap-1">
           <Button
             type="button"
             variant="outline"
@@ -294,7 +294,9 @@ export function DrywallSchedulePortfolioPage() {
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="min-w-[10rem] text-center text-sm font-semibold">{rangeLabel}</span>
+          <span className="min-w-[10rem] text-center text-base font-semibold tracking-tight">
+            {rangeLabel}
+          </span>
           <Button
             type="button"
             variant="outline"
@@ -315,15 +317,15 @@ export function DrywallSchedulePortfolioPage() {
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           {legendProjects.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
                 <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs">
                   Projects ▾
-                  {excludedProjectIds.size > 0 && (
+                  {selectedProjectIds.size > 0 && (
                     <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-                      {excludedProjectIds.size}
+                      {selectedProjectIds.size}
                     </span>
                   )}
                 </Button>
@@ -333,20 +335,21 @@ export function DrywallSchedulePortfolioPage() {
                   <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Projects
                   </span>
-                  {excludedProjectIds.size > 0 && (
+                  {selectedProjectIds.size > 0 && (
                     <button
                       type="button"
                       className="text-xs text-primary underline-offset-2 hover:underline"
-                      onClick={() => setExcludedProjectIds(new Set())}
+                      onClick={() => setSelectedProjectIds(new Set())}
                     >
-                      Show all
+                      Clear
                     </button>
                   )}
                 </div>
                 <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
                   {legendProjects.map((project) => {
                     const colors = projectColorClass(project.id)
-                    const included = !excludedProjectIds.has(project.id)
+                    const active =
+                      selectedProjectIds.size === 0 || selectedProjectIds.has(project.id)
                     return (
                       <button
                         key={project.id}
@@ -354,7 +357,7 @@ export function DrywallSchedulePortfolioPage() {
                         onClick={() => toggleProject(project.id)}
                         className={cn(
                           'flex w-full items-center justify-start gap-1.5 rounded-md border px-2.5 py-0.5 text-xs transition-colors',
-                          included
+                          active
                             ? 'border-border bg-card text-foreground'
                             : 'border-border/60 bg-muted/40 text-muted-foreground opacity-60',
                         )}

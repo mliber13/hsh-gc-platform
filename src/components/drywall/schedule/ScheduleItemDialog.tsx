@@ -28,6 +28,7 @@ import { AssignedPersonsPicker } from '@/components/schedule/AssignedPersonsPick
 import {
   DrywallScheduleCascadeError,
   createScheduleItemForDrywallProject,
+  deleteScheduleItemForDrywallProject,
   updateScheduleItemForDrywallProject,
   type DrywallProjectScheduleItem,
   type DrywallScheduleItemStatus,
@@ -76,6 +77,7 @@ export function ScheduleItemDialog({
   const [predOpen, setPredOpen] = useState(false)
   const [predSearch, setPredSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const hasUserEditedPredecessorsRef = useRef(false)
   // Conflict state — set when cascade prediction would override user's chosen start date.
   const [conflict, setConflict] = useState<{
@@ -393,6 +395,30 @@ export function ScheduleItemDialog({
 
   const handleConflictCancel = () => setConflict(null)
 
+  const handleDelete = async () => {
+    if (!editing) return
+    if (!window.confirm(`Delete "${editing.name}" from the schedule?`)) return
+    setDeleting(true)
+    try {
+      await deleteScheduleItemForDrywallProject(editing.id)
+      toast.success('Schedule item deleted')
+      onSaved()
+      onOpenChange(false)
+    } catch (e) {
+      if (e instanceof DrywallScheduleCascadeError) {
+        toast.warning(e.message)
+        onSaved()
+        onOpenChange(false)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Failed to delete item')
+      }
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const busy = saving || deleting
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
@@ -584,41 +610,58 @@ export function ScheduleItemDialog({
           </div>
         ) : null}
 
-        <DialogFooter>
+        <DialogFooter className="sm:justify-between">
           {conflict ? (
             <>
-              <Button type="button" variant="outline" onClick={handleConflictCancel} disabled={saving}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleDetach()}
-                disabled={saving}
-              >
-                Detach
-              </Button>
-              <Button
-                type="button"
-                onClick={() => void handleShiftPredecessor()}
-                disabled={saving || !conflict.predecessor}
-                title={
-                  conflict.predecessor
-                    ? undefined
-                    : 'Shift is only available with a single predecessor'
-                }
-              >
-                {saving ? 'Saving…' : 'Shift predecessor'}
-              </Button>
+              <div />
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={handleConflictCancel} disabled={busy}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleDetach()}
+                  disabled={busy}
+                >
+                  Detach
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void handleShiftPredecessor()}
+                  disabled={busy || !conflict.predecessor}
+                  title={
+                    conflict.predecessor
+                      ? undefined
+                      : 'Shift is only available with a single predecessor'
+                  }
+                >
+                  {saving ? 'Saving…' : 'Shift predecessor'}
+                </Button>
+              </div>
             </>
           ) : (
             <>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={() => void handleSave()} disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
-              </Button>
+              {editing ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => void handleDelete()}
+                  disabled={busy}
+                >
+                  {deleting ? 'Deleting…' : 'Delete'}
+                </Button>
+              ) : (
+                <div />
+              )}
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={() => void handleSave()} disabled={busy}>
+                  {saving ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
             </>
           )}
         </DialogFooter>
