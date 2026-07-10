@@ -73,8 +73,8 @@ export function DrywallSchedulePortfolioPage() {
     [anchorDate, viewWindow],
   )
   const rangeLabel = useMemo(
-    () => formatPortfolioRangeLabel(rangeStart, rangeEnd, viewWindow),
-    [rangeStart, rangeEnd, viewWindow],
+    () => formatPortfolioRangeLabel(rangeStart, rangeEnd, viewWindow, referenceMonth),
+    [rangeStart, rangeEnd, viewWindow, referenceMonth],
   )
 
   const load = useCallback(async () => {

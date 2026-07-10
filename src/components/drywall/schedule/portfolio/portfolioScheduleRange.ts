@@ -47,8 +47,10 @@ export function formatPortfolioRangeLabel(
   rangeStart: Date,
   rangeEnd: Date,
   viewWindow: PortfolioViewWindow,
+  referenceMonth?: Date,
 ): string {
-  if (viewWindow === 'month') return format(rangeStart, 'MMMM yyyy')
+  // Month grid pads leading days from the prior month — label the anchor month, not rangeStart.
+  if (viewWindow === 'month') return format(referenceMonth ?? startOfMonth(rangeStart), 'MMMM yyyy')
   const sameYear = rangeStart.getFullYear() === rangeEnd.getFullYear()
   if (sameYear) {
     return `${format(rangeStart, 'MMM d')} – ${format(rangeEnd, 'MMM d, yyyy')}`
