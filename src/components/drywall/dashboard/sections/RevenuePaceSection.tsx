@@ -1,5 +1,7 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  computeProjectedBillings,
   formatDashboardCurrency,
   formatDashboardPercent,
 } from '@/lib/drywall/dashboardCalculations'
@@ -10,8 +12,15 @@ import { ProgressBar } from '../ui/ProgressBar'
 import { StatusPill } from '../ui/StatusPill'
 
 export function RevenuePaceSection() {
-  const { metrics } = useDashboardData()
+  const { metrics, projects, scheduleItems, qbInvoices, targets } = useDashboardData()
   const { revenuePace: rp } = metrics
+
+  // Bottom-up EOM from the billing schedule (draws × contract value), vs the run-rate below.
+  const scheduledEom = useMemo(() => {
+    const pb = computeProjectedBillings(projects, scheduleItems, qbInvoices, targets, new Date())
+    const row = pb.rows[new Date().getMonth()]
+    return row ? Math.max(row.projected, row.actual) : 0
+  }, [projects, scheduleItems, qbInvoices, targets])
 
   if (!rp.hasBillings) {
     return (
@@ -52,11 +61,16 @@ export function RevenuePaceSection() {
         status={rp.status}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         <BigStat
-          label="Projected EOM"
+          label="EOM (run-rate)"
           value={formatDashboardCurrency(rp.projectedEom)}
-          sublabel={`${rp.workDaysRemaining} work day${rp.workDaysRemaining === 1 ? '' : 's'} left`}
+          sublabel={`Pace · ${rp.workDaysRemaining} work day${rp.workDaysRemaining === 1 ? '' : 's'} left`}
+        />
+        <BigStat
+          label="EOM (scheduled)"
+          value={formatDashboardCurrency(scheduledEom)}
+          sublabel="From billing schedule"
         />
         <BigStat
           label="Variance"

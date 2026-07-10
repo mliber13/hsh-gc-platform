@@ -7,6 +7,7 @@ import { LaborPerformanceSection } from './LaborPerformanceSection'
 import { EstimatingSection } from './EstimatingSection'
 import { ManpowerSection } from './ManpowerSection'
 import { ProductionCapacitySection } from './ProductionCapacitySection'
+import { ProjectedBillingsSection } from './ProjectedBillingsSection'
 import { RevenuePaceSection } from './RevenuePaceSection'
 
 export type DashboardSectionGroup = 'sales' | 'capacity' | 'execution' | 'financials'
@@ -117,6 +118,14 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'financials',
     span: 'full',
     component: FinancialsSection,
+  },
+  {
+    id: 'projected-billings',
+    title: 'Projected Billings',
+    order: 2,
+    group: 'financials',
+    span: 'full',
+    component: ProjectedBillingsSection,
   },
 ]
 

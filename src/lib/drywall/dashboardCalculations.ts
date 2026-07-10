@@ -950,3 +950,167 @@ export function computeFinancialsMetrics(
     status: financialsStatus(ytd.grossMarginPct, ytd.jobCount),
   }
 }
+
+// ---------------------------------------------------------------------------
+// Projected billings (schedule draws × contract value vs QB actuals + goal)
+// ---------------------------------------------------------------------------
+
+export interface ProjectedBillingsMonthRow {
+  month: string
+  label: string
+  projected: number
+  actual: number
+  goal: number
+  cumulativeBillings: number
+  cumulativeGoal: number
+}
+
+export interface ProjectedBillingsMetrics {
+  rows: ProjectedBillingsMonthRow[]
+  billedYtd: number
+  scheduledRestOfYear: number
+  projectedYearEndTotal: number
+  gapToGoal: number
+  unpricedProjectCount: number
+  /** Projects with scheduled billing draws but no contract total — excluded from the forecast. */
+  unpricedProjects: { id: string; name: string }[]
+  status: KpiStatus
+}
+
+type BillingPctParse =
+  | { kind: 'percent'; pct: number }
+  | { kind: 'remainder' }
+
+function parseBillingDrawName(name: string): BillingPctParse | null {
+  const trimmed = name.trim()
+  if (!/^bill\b/i.test(trimmed)) return null
+  const pctMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*%/)
+  if (pctMatch) {
+    const pct = Number(pctMatch[1])
+    return Number.isFinite(pct) ? { kind: 'percent', pct } : null
+  }
+  if (/complete|final|remain|balance/i.test(trimmed)) return { kind: 'remainder' }
+  return null
+}
+
+function projectedBillingsStatus(projectedVsGoalGap: number, annualGoal: number): KpiStatus {
+  if (projectedVsGoalGap >= 0) return 'green'
+  if (annualGoal <= 0) return 'yellow'
+  const shortfallRatio = -projectedVsGoalGap / annualGoal
+  if (shortfallRatio <= 0.1) return 'yellow'
+  return 'red'
+}
+
+/**
+ * Forecast scheduled billing draws against QB actuals and the flat monthly revenue goal.
+ * Standalone (not wired into computeDashboardMetrics).
+ */
+export function computeProjectedBillings(
+  projects: DrywallProjectListItem[],
+  scheduleItems: CrossProjectScheduleItem[],
+  qbInvoices: DashboardQbInvoiceInput[],
+  targets: DashboardTargets,
+  now = new Date(),
+): ProjectedBillingsMetrics {
+  const year = now.getFullYear()
+  const currentMonthIndex = now.getMonth()
+  const monthlyGoal = deriveRevenueGoals(targets).monthly
+  const annualGoal = targets.annualRevenueGoal
+
+  // Contract value for the forecast: finalized quote total when set, else the quote-derived
+  // drywall scope revenue (available pre-order once a quote exists) — quotes rarely change,
+  // and change orders/revisions update this. Only projects with neither are excluded.
+  const quoteByProjectId = new Map(
+    projects.map((p) => [p.id, p.quoteTotal ?? p.drywallScopeRevenue] as const),
+  )
+  const nameByProjectId = new Map(projects.map((p) => [p.id, p.name] as const))
+
+  type Milestone = { projectId: string; startDate: Date; parse: BillingPctParse }
+  const milestonesByProject = new Map<string, Milestone[]>()
+
+  for (const item of scheduleItems) {
+    const parse = parseBillingDrawName(item.name)
+    if (!parse) continue
+    const startDate = parseTxnDate(item.startDate)
+    if (!startDate || startDate.getFullYear() !== year) continue
+    const list = milestonesByProject.get(item.projectId) ?? []
+    list.push({ projectId: item.projectId, startDate, parse })
+    milestonesByProject.set(item.projectId, list)
+  }
+
+  const projectedByMonth = Array.from({ length: 12 }, () => 0)
+  let projectedRestOfYear = 0
+  const unpricedProjects: { id: string; name: string }[] = []
+
+  for (const [projectId, milestones] of milestonesByProject) {
+    const quoteTotal = quoteByProjectId.get(projectId)
+    if (quoteTotal == null || quoteTotal <= 0) {
+      unpricedProjects.push({ id: projectId, name: nameByProjectId.get(projectId) ?? projectId })
+      continue
+    }
+
+    const sumPartials = milestones.reduce(
+      (sum, m) => (m.parse.kind === 'percent' ? sum + m.parse.pct : sum),
+      0,
+    )
+    const remainderCount = milestones.filter((m) => m.parse.kind === 'remainder').length
+    const remainderPctEach =
+      remainderCount > 0 ? Math.max(0, 100 - sumPartials) / remainderCount : 0
+
+    for (const m of milestones) {
+      const pct = m.parse.kind === 'percent' ? m.parse.pct : remainderPctEach
+      const amount = (pct / 100) * quoteTotal
+      const monthIndex = m.startDate.getMonth()
+      projectedByMonth[monthIndex] += amount
+      if (m.startDate.getTime() > now.getTime()) {
+        projectedRestOfYear += amount
+      }
+    }
+  }
+
+  const actualByMonth = Array.from({ length: 12 }, () => 0)
+  for (const inv of qbInvoices) {
+    const txn = parseTxnDate(inv.txnDate)
+    if (!txn || txn.getFullYear() !== year) continue
+    actualByMonth[txn.getMonth()] += inv.totalAmt
+  }
+
+  const rows: ProjectedBillingsMonthRow[] = []
+  let cumulativeBillings = 0
+  let cumulativeGoal = 0
+  for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
+    const projected = projectedByMonth[monthIndex]
+    const actual = actualByMonth[monthIndex]
+    const goal = monthlyGoal
+    cumulativeGoal += goal
+    // Realistic running revenue: actual through current month, projected thereafter.
+    cumulativeBillings += monthIndex <= currentMonthIndex ? actual : projected
+    const monthKey = `${year}-${String(monthIndex + 1).padStart(2, '0')}`
+    rows.push({
+      month: monthKey,
+      label: MONTH_LABELS[monthIndex],
+      projected,
+      actual,
+      goal,
+      cumulativeBillings,
+      cumulativeGoal,
+    })
+  }
+
+  // Actual billed year-to-date (future months have no actuals). "Rest of year" is the
+  // scheduled backlog dated after today — real revenue only, no unsold future work.
+  const billedYtd = actualByMonth.reduce((sum, v) => sum + v, 0)
+  const projectedYearEndTotal = billedYtd + projectedRestOfYear
+  const gapToGoal = projectedYearEndTotal - annualGoal
+
+  return {
+    rows,
+    billedYtd,
+    scheduledRestOfYear: projectedRestOfYear,
+    projectedYearEndTotal,
+    gapToGoal,
+    unpricedProjectCount: unpricedProjects.length,
+    unpricedProjects,
+    status: projectedBillingsStatus(gapToGoal, annualGoal),
+  }
+}
