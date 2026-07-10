@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarRange, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -208,16 +208,6 @@ export function DrywallSchedulePortfolioPage() {
 
   return (
     <div className="space-y-4 pb-10">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <CalendarRange className="size-7" />
-          Drywall — Schedule
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          All drywall jobs on one calendar — click a bar to open that project&apos;s schedule.
-        </p>
-      </div>
-
       <div className="relative flex items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
@@ -291,7 +281,41 @@ export function DrywallSchedulePortfolioPage() {
               All
             </button>
           </div>
+        </div>
 
+        <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setAnchorDate((d) => shiftPortfolioAnchor(d, viewWindow, -1))}
+            aria-label="Previous range"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="min-w-[10rem] text-center text-sm font-semibold">{rangeLabel}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setAnchorDate((d) => shiftPortfolioAnchor(d, viewWindow, 1))}
+            aria-label="Next range"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAnchorDate(new Date())}
+          >
+            Today
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           {legendProjects.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
@@ -456,41 +480,7 @@ export function DrywallSchedulePortfolioPage() {
               </PopoverContent>
             </Popover>
           )}
-        </div>
 
-        <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setAnchorDate((d) => shiftPortfolioAnchor(d, viewWindow, -1))}
-            aria-label="Previous range"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-[10rem] text-center text-sm font-semibold">{rangeLabel}</span>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setAnchorDate((d) => shiftPortfolioAnchor(d, viewWindow, 1))}
-            aria-label="Next range"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setAnchorDate(new Date())}
-          >
-            Today
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-2">
           <Button
             type="button"
             variant="outline"
