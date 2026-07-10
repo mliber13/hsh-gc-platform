@@ -39,11 +39,16 @@ export function quotedSqftWithWaste(quote: DrywallQuoteV2V3 | Record<string, unk
   const q = quote as Record<string, unknown>
 
   // v3 quote — sum drywall line items quantity × (1 + waste_pct)
+  // Default waste matches quoteV3Math (waste_pct ?? 10).
   if (q.version === 3 && Array.isArray(q.lineItems)) {
     const total = (q.lineItems as Array<Record<string, unknown>>).reduce((sum, line) => {
       if (line.type !== 'drywall') return sum
       const qty = parseFloat(String(line.quantity ?? 0)) || 0
-      const waste = parseFloat(String(line.waste_pct ?? 0)) || 0
+      const wasteRaw = line.waste_pct
+      const waste =
+        wasteRaw == null || wasteRaw === ''
+          ? 10
+          : parseFloat(String(wasteRaw)) || 0
       return sum + qty * (1 + waste / 100)
     }, 0)
     return Math.round(total)

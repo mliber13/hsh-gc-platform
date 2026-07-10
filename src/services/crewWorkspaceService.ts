@@ -18,6 +18,7 @@ import {
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import { hydrateDrywallQuoteV3 } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { getCurrentUserProfile, requireUserOrgId } from '@/services/userService'
+import { fetchTeam } from '@/services/hrTeamService'
 import {
   specialtyFromPositionName,
   isMeasurerSpecialty,
@@ -27,6 +28,7 @@ import { crewMeasureWorkflowStatus } from '@/lib/drywall/crewMeasureStatus'
 import {
   fieldTakeoffWithTotals,
   mergeFieldTakeoff,
+  quotedSqftWithWaste,
 } from '@/lib/drywall/fieldMeasurementUtils'
 import { phaseForScheduleItem } from '@/components/drywall/schedule/scheduleItemStatusStyles'
 import type {
@@ -188,12 +190,46 @@ async function fetchAssignedScheduleRows(personId: string): Promise<ScheduleRow[
   return (data ?? []) as ScheduleRow[]
 }
 
-export async function fetchCrewProjectList(): Promise<CrewProjectListItem[]> {
-  if (!isOnlineMode()) return []
+export type CrewViewAsOpts = {
+  viewAsPersonId?: string
+}
 
+/** Operator preview: resolve specialty from org_team (operators can read the roster). */
+export async function resolveSpecialtyForPerson(personId: string): Promise<CrewSpecialty> {
+  try {
+    const team = await fetchTeam()
+    const member =
+      team.employees.find((e) => e.id === personId) ??
+      team.contractors1099.find((c) => c.id === personId)
+    if (!member?.positionId) return 'unknown'
+    const position = team.positions.find((p) => p.id === member.positionId)
+    return specialtyFromPositionName(position?.name ?? null)
+  } catch (e) {
+    console.warn('resolveSpecialtyForPerson failed:', e)
+    return 'unknown'
+  }
+}
+
+async function resolvePersonContext(
+  opts?: CrewViewAsOpts,
+): Promise<{ personId: string; specialty: CrewSpecialty }> {
+  if (opts?.viewAsPersonId) {
+    const personId = opts.viewAsPersonId
+    const specialty = await resolveSpecialtyForPerson(personId)
+    return { personId, specialty }
+  }
   const profile = await getCurrentUserProfile()
   const personId = resolvePersonId(profile)
   const specialty = await resolveCrewSpecialty(personId)
+  return { personId, specialty }
+}
+
+export async function fetchCrewProjectList(
+  opts?: CrewViewAsOpts,
+): Promise<CrewProjectListItem[]> {
+  if (!isOnlineMode()) return []
+
+  const { personId, specialty } = await resolvePersonContext(opts)
   const scheduleRows = await fetchAssignedScheduleRows(personId)
   if (scheduleRows.length === 0) return []
 
@@ -433,16 +469,17 @@ function resolveTotalSqft(
   const measured = num(field?.totalMeasuredSqft)
   if (measured != null && measured > 0) return measured
 
+  // Prefer quote sqft with waste — matches quote labor pay basis (qty × (1 + waste%)).
   const v3 = v3QuoteFromLegacy(legacy)
   if (v3?.lineItems?.length) {
-    const sum = v3.lineItems
-      .filter((l) => l.type === 'drywall')
-      .reduce((acc, l) => acc + (num(l.quantity) ?? 0), 0)
-    if (sum > 0) return sum
+    const withWaste = quotedSqftWithWaste(v3)
+    if (withWaste > 0) return withWaste
   }
 
   const v2 = v2QuoteFromLegacy(legacy)
   if (v2) {
+    const withWaste = quotedSqftWithWaste(v2)
+    if (withWaste > 0) return withWaste
     const direct = num(v2.sqft)
     if (direct != null && direct > 0) return direct
     const breakdownSum = (v2.breakdowns ?? []).reduce(
@@ -485,23 +522,45 @@ async function resolveQuoteCatalogLaborRates(legacy: Record<string, unknown>): P
   if (v3) {
     const catalogs = await fetchOrgDrywallCatalogs()
     const drywallLines = v3.lineItems.filter((l) => l.type === 'drywall')
+    const projectHanger = num(v3.project_hanger_rate)
+    const projectFinisher = num(v3.project_finisher_rate)
     const hasOverride = drywallLines.some(
       (l) => l.custom_hanger_rate != null || l.custom_finisher_rate != null,
     )
+    const hasProjectRate =
+      (projectHanger != null && projectHanger > 0) ||
+      (projectFinisher != null && projectFinisher > 0)
 
-    const hangerRates = drywallLines.map((l) => getEffectiveHangerRate(l, catalogs))
-    const finisherRates = drywallLines.map((l) => getEffectiveFinisherRate(l, catalogs))
     const avg = (vals: number[]) => {
       const positive = vals.filter((v) => v > 0)
       if (positive.length === 0) return null
       return positive.reduce((a, b) => a + b, 0) / positive.length
     }
 
+    // Prefer project-level rates (same as quote UI / projectV3QuoteToV2Shape), then
+    // per-line effective rates with project rate as the catalog fallback input.
+    const hangerRate =
+      projectHanger != null && projectHanger > 0
+        ? projectHanger
+        : avg(
+            drywallLines.map((l) =>
+              getEffectiveHangerRate(l, catalogs, projectHanger ?? undefined),
+            ),
+          )
+    const finisherRate =
+      projectFinisher != null && projectFinisher > 0
+        ? projectFinisher
+        : avg(
+            drywallLines.map((l) =>
+              getEffectiveFinisherRate(l, catalogs, projectFinisher ?? undefined),
+            ),
+          )
+
     return {
-      hangerRate: avg(hangerRates),
-      finisherRate: avg(finisherRates),
+      hangerRate,
+      finisherRate,
       prepCleanRate: num(v3.prep_clean_rate) ?? null,
-      rateSource: hasOverride ? 'v3_override' : 'catalog_default',
+      rateSource: hasOverride || hasProjectRate ? 'v3_override' : 'catalog_default',
     }
   }
 
@@ -563,7 +622,14 @@ async function resolveLaborRates(
       rateSource: 'order_approved',
     }
   }
-  return resolveQuoteCatalogLaborRates(legacy)
+  // Quote/catalog rates stay internal until order finalizes pay — avoids crew seeing
+  // rates (and estimated pay) change after measure / order adjustments.
+  return {
+    hangerRate: null,
+    finisherRate: null,
+    prepCleanRate: null,
+    rateSource: 'pending_order',
+  }
 }
 
 function resolveBreakdowns(
@@ -671,13 +737,15 @@ function computeEstimatedTotalPay(
   return { hanger, finisher }
 }
 
-export async function fetchCrewProjectDetail(projectId: string): Promise<CrewProjectDetail> {
+export async function fetchCrewProjectDetail(
+  projectId: string,
+  opts?: CrewViewAsOpts,
+): Promise<CrewProjectDetail> {
   if (!isOnlineMode()) {
     throw new Error('Crew workspace requires an online connection.')
   }
 
-  const profile = await getCurrentUserProfile()
-  const personId = resolvePersonId(profile)
+  const { personId, specialty } = await resolvePersonContext(opts)
   const scheduleRows = (await fetchAssignedScheduleRows(personId)).filter(
     (r) => r.project_id === projectId,
   )
@@ -686,14 +754,12 @@ export async function fetchCrewProjectDetail(projectId: string): Promise<CrewPro
     throw new CrewWorkspacePermissionError()
   }
 
-  const specialty = await resolveCrewSpecialty(personId)
-
   const project = await fetchDrywallProjectById(projectId)
   if (!project) {
     throw new CrewWorkspacePermissionError()
   }
 
-  return mapProjectDetail(project, scheduleRows, { specialty })
+  return mapProjectDetail(project, scheduleRows, { specialty, preview: false })
 }
 
 function scheduleRowHasMeasurePhase(row: ScheduleRow): boolean {
@@ -734,13 +800,15 @@ function buildCrewMeasurePageContext(
   }
 }
 
-export async function fetchCrewMeasurePage(projectId: string): Promise<CrewMeasurePageContext> {
+export async function fetchCrewMeasurePage(
+  projectId: string,
+  opts?: CrewViewAsOpts,
+): Promise<CrewMeasurePageContext> {
   if (!isOnlineMode()) {
     throw new Error('Crew workspace requires an online connection.')
   }
 
-  const profile = await getCurrentUserProfile()
-  const personId = resolvePersonId(profile)
+  const { personId, specialty } = await resolvePersonContext(opts)
   const scheduleRows = (await fetchAssignedScheduleRows(personId)).filter(
     (r) => r.project_id === projectId,
   )
@@ -749,7 +817,6 @@ export async function fetchCrewMeasurePage(projectId: string): Promise<CrewMeasu
     throw new CrewWorkspacePermissionError()
   }
 
-  const specialty = await resolveCrewSpecialty(personId)
   const project = await fetchDrywallProjectById(projectId)
   if (!project) {
     throw new CrewWorkspacePermissionError()
@@ -881,6 +948,8 @@ export function crewRateSourceLabel(source: CrewLaborRateSource): string {
   switch (source) {
     case 'order_approved':
       return 'order labor rates'
+    case 'pending_order':
+      return 'pending order rates'
     case 'v3_override':
       return 'project override'
     case 'v2_legacy':

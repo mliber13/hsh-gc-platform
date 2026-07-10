@@ -54,6 +54,7 @@ export interface CrewProjectScheduleEntry {
 
 export type CrewLaborRateSource =
   | 'order_approved'
+  | 'pending_order'
   | 'v3_override'
   | 'v2_legacy'
   | 'catalog_default'

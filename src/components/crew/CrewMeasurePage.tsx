@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from 'react'
 import { ArrowLeft, RefreshCw, Save, Send } from 'lucide-react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import {
@@ -56,8 +56,15 @@ function confirmDiscardChanges(): boolean {
 export function CrewMeasurePage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { effectiveRole } = usePermissions()
-  const isPreview = !isCrewRole(effectiveRole)
+  const isOperator = !isCrewRole(effectiveRole)
+  const viewAsPersonId = isOperator ? searchParams.get('as') : null
+  const isViewAs = Boolean(viewAsPersonId)
+  /** Operator without ?as= — existing full preview path. */
+  const isOperatorExplainer = isOperator && !isViewAs
+  const asQuery = viewAsPersonId ? `?as=${encodeURIComponent(viewAsPersonId)}` : ''
+  const jobDetailPath = `/crew/projects/${projectId}${asQuery}`
 
   const [phase, setPhase] = useState<PagePhase>('loading')
   const [context, setContext] = useState<CrewMeasurePageContext | null>(null)
@@ -85,14 +92,17 @@ export function CrewMeasurePage() {
     setPhase('loading')
 
     try {
-      const data = isPreview
-        ? await fetchCrewMeasurePageForPreview(projectId)
-        : await fetchCrewMeasurePage(projectId)
+      const data = isViewAs
+        ? await fetchCrewMeasurePage(projectId, { viewAsPersonId: viewAsPersonId! })
+        : isOperatorExplainer
+          ? await fetchCrewMeasurePageForPreview(projectId)
+          : await fetchCrewMeasurePage(projectId)
 
-      if (!isPreview && !isMeasurerSpecialty(data.specialty)) {
+      // Crew + view-as: non-measurers redirect to job detail (preserve ?as=).
+      if (!isOperatorExplainer && !isMeasurerSpecialty(data.specialty)) {
         redirectingRef.current = true
         setPhase('redirect')
-        navigate(`/crew/projects/${projectId}`, { replace: true })
+        navigate(jobDetailPath, { replace: true })
         return
       }
 
@@ -102,13 +112,25 @@ export function CrewMeasurePage() {
     } catch (e) {
       if (redirectingRef.current) return
       if (e instanceof CrewWorkspacePermissionError) {
-        setError('You do not have access to measure this project.')
+        setError(
+          isViewAs
+            ? 'This crew member does not have access to measure this project.'
+            : 'You do not have access to measure this project.',
+        )
       } else {
         setError(e instanceof Error ? e.message : 'Failed to load measure page')
       }
       setPhase('error')
     }
-  }, [isPreview, navigate, projectId, syncFormFromContext])
+  }, [
+    isOperatorExplainer,
+    isViewAs,
+    jobDetailPath,
+    navigate,
+    projectId,
+    syncFormFromContext,
+    viewAsPersonId,
+  ])
 
   useEffect(() => {
     redirectingRef.current = false
@@ -122,10 +144,11 @@ export function CrewMeasurePage() {
 
   const formReadOnly = useMemo(() => {
     if (!context) return true
+    if (isViewAs) return true
     if (isTakeoffLocked(context.workflowStatus)) return true
-    if (!isPreview && !context.hasMeasureAssignment) return true
+    if (!isOperator && !context.hasMeasureAssignment) return true
     return false
-  }, [context, isPreview])
+  }, [context, isOperator, isViewAs])
 
   const setTakeoffField: SetFieldTakeoff = useCallback((value: SetStateAction<FieldTakeoff>) => {
     setTakeoff((prev) => {
@@ -141,8 +164,8 @@ export function CrewMeasurePage() {
   const handleBack = useCallback(() => {
     if (!projectId) return
     if (isDirty && !formReadOnly && !confirmDiscardChanges()) return
-    navigate(`/crew/projects/${projectId}`)
-  }, [formReadOnly, isDirty, navigate, projectId])
+    navigate(jobDetailPath)
+  }, [formReadOnly, isDirty, jobDetailPath, navigate, projectId])
 
   const handleRefresh = useCallback(() => {
     if (isDirty && !formReadOnly && !confirmDiscardChanges()) return
@@ -155,18 +178,20 @@ export function CrewMeasurePage() {
   )
 
   const canSubmitForReview = useMemo(() => {
-    if (!context || formReadOnly || isPreview) return false
+    if (!context || formReadOnly || isOperator) return false
     if (!context.hasMeasureAssignment) return false
     if (isDirty || saving || submitting) return false
     return measuredSqft > 0
-  }, [context, formReadOnly, isDirty, isPreview, measuredSqft, saving, submitting])
+  }, [context, formReadOnly, isDirty, isOperator, measuredSqft, saving, submitting])
 
   const syncPhotosFromServer = useCallback(async () => {
     if (!projectId) return
     try {
-      const data = isPreview
-        ? await fetchCrewMeasurePageForPreview(projectId)
-        : await fetchCrewMeasurePage(projectId)
+      const data = isViewAs
+        ? await fetchCrewMeasurePage(projectId, { viewAsPersonId: viewAsPersonId! })
+        : isOperatorExplainer
+          ? await fetchCrewMeasurePageForPreview(projectId)
+          : await fetchCrewMeasurePage(projectId)
       setTakeoff((prev) => (prev ? { ...prev, photos: data.fieldTakeoff.photos } : prev))
       setSavedSnapshot((snap) => {
         if (!snap) return snap
@@ -176,7 +201,7 @@ export function CrewMeasurePage() {
     } catch {
       /* photos list refresh is best-effort */
     }
-  }, [isPreview, projectId])
+  }, [isOperatorExplainer, isViewAs, projectId, viewAsPersonId])
 
   const toggleChecklist = useCallback(
     (id: string) => {
@@ -192,12 +217,12 @@ export function CrewMeasurePage() {
   )
 
   const handleSave = async () => {
-    if (!projectId || !takeoff || formReadOnly || saving) return
+    if (!projectId || !takeoff || formReadOnly || saving || isViewAs) return
 
     setSaving(true)
     try {
       const payload = fieldTakeoffWithTotals(takeoff)
-      if (isPreview) {
+      if (isOperatorExplainer) {
         await saveFieldTakeoff(projectId, payload)
       } else {
         await saveFieldTakeoffAsMeasurer(projectId, payload)
@@ -240,11 +265,7 @@ export function CrewMeasurePage() {
         rejectedAt: null,
         rejectionNotes: null,
       })
-      if (isPreview) {
-        await saveFieldTakeoff(projectId, payload)
-      } else {
-        await saveFieldTakeoffAsMeasurer(projectId, payload)
-      }
+      await saveFieldTakeoffAsMeasurer(projectId, payload)
       setSavedSnapshot(JSON.stringify(payload))
       setTakeoff(payload)
       setContext((prev) =>
@@ -288,7 +309,7 @@ export function CrewMeasurePage() {
   if (phase === 'error' || !context || !takeoff) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate(`/crew/projects/${projectId}`)}>
+        <Button variant="ghost" size="sm" onClick={() => navigate(jobDetailPath)}>
           <ArrowLeft className="mr-2 size-4" />
           Back to job
         </Button>
@@ -352,8 +373,10 @@ export function CrewMeasurePage() {
         </span>
       </div>
 
-      {isPreview ? (
+      {isOperatorExplainer ? (
         <p className="text-xs text-muted-foreground">Operator preview — measurer crew view</p>
+      ) : isViewAs ? (
+        <p className="text-xs text-muted-foreground">Read-only preview — Save and Submit disabled</p>
       ) : null}
 
       {context.workflowStatus === 'pending_review' ? (
@@ -393,7 +416,7 @@ export function CrewMeasurePage() {
         </Card>
       ) : null}
 
-      {!context.hasMeasureAssignment && !isPreview ? (
+      {!context.hasMeasureAssignment && !isOperator ? (
         <Card className="border-amber-500/30 bg-amber-500/5">
           <CardContent className="py-4 text-sm text-amber-900 dark:text-amber-100">
             No Measure schedule item is assigned to you on this job yet. Contact the office if you
@@ -440,31 +463,33 @@ export function CrewMeasurePage() {
         <p className="text-sm text-amber-700 dark:text-amber-300">You have unsaved changes.</p>
       ) : null}
 
-      <div className="fixed bottom-0 left-0 right-0 z-20 border-t bg-background/95 p-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="mx-auto flex max-w-lg gap-3">
-          <Button
-            variant="outline"
-            className="flex-1"
-            disabled={formReadOnly || !isDirty || saving || submitting}
-            onClick={() => void handleSave()}
-          >
-            <Save className="mr-2 size-4" />
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-          {!formReadOnly && !isPreview ? (
+      {!isViewAs ? (
+        <div className="fixed bottom-0 left-0 right-0 z-20 border-t bg-background/95 p-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="mx-auto flex max-w-lg gap-3">
             <Button
+              variant="outline"
               className="flex-1"
-              disabled={!canSubmitForReview}
-              onClick={() => {
-                if (canSubmitForReview) setSubmitOpen(true)
-              }}
+              disabled={formReadOnly || !isDirty || saving || submitting}
+              onClick={() => void handleSave()}
             >
-              <Send className="mr-2 size-4" />
-              Submit
+              <Save className="mr-2 size-4" />
+              {saving ? 'Saving…' : 'Save'}
             </Button>
-          ) : null}
+            {!formReadOnly && !isOperator ? (
+              <Button
+                className="flex-1"
+                disabled={!canSubmitForReview}
+                onClick={() => {
+                  if (canSubmitForReview) setSubmitOpen(true)
+                }}
+              >
+                <Send className="mr-2 size-4" />
+                Submit
+              </Button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
         <DialogContent className="max-w-sm">

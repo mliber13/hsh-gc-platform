@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { CalendarDays, ChevronRight, MapPin, RefreshCw } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
@@ -22,7 +22,10 @@ import {
 export function CrewProjectListPage() {
   usePageTitle('My jobs')
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { effectiveRole } = usePermissions()
+  const isOperator = !isCrewRole(effectiveRole)
+  const viewAsPersonId = isOperator ? searchParams.get('as') : null
   const [items, setItems] = useState<CrewProjectListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -31,7 +34,9 @@ export function CrewProjectListPage() {
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchCrewProjectList()
+      const data = await fetchCrewProjectList(
+        viewAsPersonId ? { viewAsPersonId } : undefined,
+      )
       setItems(data)
     } catch (e) {
       // CrewProfileNotLinkedError is the only user-facing error we surface verbatim;
@@ -46,7 +51,7 @@ export function CrewProjectListPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [viewAsPersonId])
 
   useEffect(() => {
     void load()
@@ -63,16 +68,16 @@ export function CrewProjectListPage() {
   }
 
   if (error) {
-    const isOperatorPreview =
-      error.includes('not linked') && !isCrewRole(effectiveRole)
+    const isOperatorExplainer =
+      !viewAsPersonId && error.includes('not linked') && isOperator
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
         <p className="max-w-sm text-sm text-muted-foreground">
-          {isOperatorPreview
-            ? 'Operator preview: assign team members on schedule items in the Schedule workspace. Crew members see jobs where their name is listed under Assigned persons.'
+          {isOperatorExplainer
+            ? 'Operator preview: use View as to see a crew member’s assigned jobs, or assign team members on schedule items in the Schedule workspace.'
             : error}
         </p>
-        {!isOperatorPreview ? (
+        {!isOperatorExplainer ? (
           <Button variant="outline" onClick={() => void load()}>
             <RefreshCw className="mr-2 size-4" />
             Retry
@@ -88,14 +93,24 @@ export function CrewProjectListPage() {
         <CalendarDays className="size-10 text-muted-foreground/50" />
         <h2 className="text-lg font-semibold">No assigned jobs</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Check with your office about scheduling.
+          {viewAsPersonId
+            ? 'This crew member has no schedule assignments in the current workspace.'
+            : 'Check with your office about scheduling.'}
         </p>
       </div>
     )
   }
 
+  const asQuery = viewAsPersonId ? `?as=${encodeURIComponent(viewAsPersonId)}` : ''
+
   return (
-    <div className="space-y-3 pb-8" style={{ transform: `translateY(${pullDistance}px)`, transition: pullDistance === 0 ? 'transform 200ms' : 'none' }}>
+    <div
+      className="space-y-3 pb-8"
+      style={{
+        transform: `translateY(${pullDistance}px)`,
+        transition: pullDistance === 0 ? 'transform 200ms' : 'none',
+      }}
+    >
       {pullDistance > 0 || refreshing ? (
         <div
           className="pointer-events-none fixed left-0 right-0 top-14 flex justify-center"
@@ -107,7 +122,8 @@ export function CrewProjectListPage() {
         </div>
       ) : null}
       <p className="text-sm text-muted-foreground">
-        {items.length} job{items.length === 1 ? '' : 's'} assigned to you
+        {items.length} job{items.length === 1 ? '' : 's'} assigned
+        {viewAsPersonId ? '' : ' to you'}
       </p>
       {items.map((item) => {
         const extraTasks = item.scheduleEntryCount > 1 ? item.scheduleEntryCount - 1 : 0
@@ -119,7 +135,7 @@ export function CrewProjectListPage() {
           <Card
             key={item.projectId}
             className="cursor-pointer transition-colors hover:bg-muted/30 active:bg-muted/50"
-            onClick={() => navigate(`/crew/projects/${item.projectId}`)}
+            onClick={() => navigate(`/crew/projects/${item.projectId}${asQuery}`)}
           >
             <CardContent className="flex items-start gap-3 p-4">
               <div className="min-w-0 flex-1 space-y-2">

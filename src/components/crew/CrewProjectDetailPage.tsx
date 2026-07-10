@@ -12,7 +12,7 @@ import {
   RefreshCw,
   Ruler,
 } from 'lucide-react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
@@ -128,8 +128,14 @@ function isTodayInRange(startISO: string, endISO: string): boolean {
 export function CrewProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { effectiveRole } = usePermissions()
-  const isPreview = !isCrewRole(effectiveRole)
+  const isOperator = !isCrewRole(effectiveRole)
+  const viewAsPersonId = isOperator ? searchParams.get('as') : null
+  const isViewAs = Boolean(viewAsPersonId)
+  /** Operator without ?as= — full unfiltered preview (existing behavior). */
+  const isOperatorExplainer = isOperator && !isViewAs
+  const readOnly = isOperator
   const [detail, setDetail] = useState<CrewProjectDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -139,18 +145,27 @@ export function CrewProjectDetailPage() {
 
   usePageTitle(detail?.projectName ?? 'Job detail')
 
+  const asQuery = viewAsPersonId ? `?as=${encodeURIComponent(viewAsPersonId)}` : ''
+  const crewHome = `/crew${asQuery}`
+
   const load = useCallback(async () => {
     if (!projectId) return
     setLoading(true)
     setError(null)
     try {
-      const data = isCrewRole(effectiveRole)
-        ? await fetchCrewProjectDetail(projectId)
-        : await fetchCrewProjectDetailForPreview(projectId)
+      const data = isViewAs
+        ? await fetchCrewProjectDetail(projectId, { viewAsPersonId: viewAsPersonId! })
+        : isCrewRole(effectiveRole)
+          ? await fetchCrewProjectDetail(projectId)
+          : await fetchCrewProjectDetailForPreview(projectId)
       setDetail(data)
     } catch (e) {
       if (e instanceof CrewWorkspacePermissionError) {
-        setError('You are not assigned to this job.')
+        setError(
+          isViewAs
+            ? 'This crew member is not assigned to this job.'
+            : 'You are not assigned to this job.',
+        )
       } else {
         console.error('fetchCrewProjectDetail failed:', e)
         setError('Could not load this job. Try again or contact the office.')
@@ -159,7 +174,7 @@ export function CrewProjectDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, effectiveRole])
+  }, [projectId, effectiveRole, isViewAs, viewAsPersonId])
 
   useEffect(() => {
     void load()
@@ -182,7 +197,7 @@ export function CrewProjectDetailPage() {
   if (error || !detail) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/crew')}>
+        <Button variant="ghost" size="sm" onClick={() => navigate(crewHome)}>
           <ArrowLeft className="mr-2 size-4" />
           Back
         </Button>
@@ -202,7 +217,7 @@ export function CrewProjectDetailPage() {
     null
 
   const showStartMeasure =
-    !isPreview &&
+    !isOperatorExplainer &&
     isMeasurerSpecialty(detail.specialty) &&
     detail.scheduleEntries.some((entry) => phaseForScheduleItem(entry) === 'measure')
 
@@ -229,7 +244,7 @@ export function CrewProjectDetailPage() {
         </div>
       ) : null}
       <div className="flex items-center justify-between gap-2">
-        <Button variant="ghost" size="sm" className="-ml-2" onClick={() => navigate('/crew')}>
+        <Button variant="ghost" size="sm" className="-ml-2" onClick={() => navigate(crewHome)}>
           <ArrowLeft className="mr-2 size-4" />
           All jobs
         </Button>
@@ -288,7 +303,7 @@ export function CrewProjectDetailPage() {
             <Button
               type="button"
               className="shrink-0"
-              onClick={() => navigate(`/crew/projects/${projectId}/measure`)}
+              onClick={() => navigate(`/crew/projects/${projectId}/measure${asQuery}`)}
             >
               <Ruler className="mr-2 size-4" />
               Start measure
@@ -301,21 +316,42 @@ export function CrewProjectDetailPage() {
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <DollarSign className="size-4" />
-            {isPreview || detail.specialty === 'both' ? 'Pay rates' : 'Pay rate'}
+            {detail.laborRates.rateSource === 'order_approved'
+              ? isOperatorExplainer || detail.specialty === 'both'
+                ? 'Pay rates'
+                : 'Pay rate'
+              : 'Job size'}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!isPreview && isMeasurerSpecialty(detail.specialty) ? (
+          {!isOperatorExplainer && isMeasurerSpecialty(detail.specialty) ? (
             <p className="text-sm text-muted-foreground">
               Field measurer — pay tracked separately
             </p>
-          ) : !isPreview && detail.specialty === 'unknown' ? (
+          ) : !isOperatorExplainer && detail.specialty === 'unknown' ? (
             <p className="text-sm text-muted-foreground">
               Contact office to set your role before pay rates can be shown.
             </p>
+          ) : detail.laborRates.rateSource !== 'order_approved' ? (
+            <>
+              {detail.totalSqft != null && detail.totalSqft > 0 ? (
+                <p>
+                  <span className="text-3xl font-bold tabular-nums">
+                    {detail.totalSqft.toLocaleString()}
+                  </span>
+                  <span className="ml-1 text-base font-medium text-muted-foreground">sqft</span>
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Sqft not set yet.</p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                Pay rate is set by the office after measure and order — it will show here once
+                finalized.
+              </p>
+            </>
           ) : (
             <>
-              {(isPreview || detail.specialty === 'hanger' || detail.specialty === 'both') &&
+              {(isOperatorExplainer || detail.specialty === 'hanger' || detail.specialty === 'both') &&
               detail.laborRates.hangerRate != null ? (
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
@@ -349,14 +385,14 @@ export function CrewProjectDetailPage() {
                 </div>
               ) : null}
 
-              {(isPreview || detail.specialty === 'finisher' || detail.specialty === 'both') &&
+              {(isOperatorExplainer || detail.specialty === 'finisher' || detail.specialty === 'both') &&
               detail.laborRates.finisherRate != null ? (
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
                     {/* Only show sqft on the first eligible block — avoid double display for 'both' */}
                     {detail.totalSqft != null &&
                     detail.totalSqft > 0 &&
-                    !(isPreview || detail.specialty === 'both') ? (
+                    !(isOperatorExplainer || detail.specialty === 'both') ? (
                       <p>
                         <span className="text-3xl font-bold tabular-nums">
                           {detail.totalSqft.toLocaleString()}
@@ -386,7 +422,7 @@ export function CrewProjectDetailPage() {
                 </div>
               ) : null}
 
-              {isPreview && detail.laborRates.prepCleanRate != null ? (
+              {isOperatorExplainer && detail.laborRates.prepCleanRate != null ? (
                 <p className="text-sm text-muted-foreground">
                   Cleanup {formatRate(detail.laborRates.prepCleanRate)}/sqft
                 </p>
@@ -447,7 +483,7 @@ export function CrewProjectDetailPage() {
         }
 
         const showHangScope =
-          isPreview || detail.specialty === 'hanger' || detail.specialty === 'both'
+          isOperatorExplainer || detail.specialty === 'hanger' || detail.specialty === 'both'
 
         const hangThickness = showHangScope
           ? [
@@ -573,7 +609,7 @@ export function CrewProjectDetailPage() {
               <Package className="size-4" />
               Materials
             </CardTitle>
-            {!isPreview ? (
+            {!readOnly ? (
               <Button
                 type="button"
                 variant="outline"
@@ -718,7 +754,7 @@ export function CrewProjectDetailPage() {
 
       <CrewCommsPanel
         projectId={projectId}
-        readOnly={isPreview}
+        readOnly={readOnly}
         prefillText={prefillText}
         prefillToken={prefillToken}
       />

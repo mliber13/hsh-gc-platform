@@ -269,6 +269,12 @@ function drywallNav(role: RbacRole, canAccessQuickBooksAdmin: boolean): NavGroup
       icon: CalendarRange,
       matchPath: '/drywall/schedule',
     },
+    {
+      label: 'Crew View',
+      to: '/crew',
+      icon: UsersRound,
+      matchPath: '/crew',
+    },
   ]
   if (canEditDrywallCatalogs(role)) {
     items.push({
