@@ -177,6 +177,8 @@ export interface DrywallProjectScheduleItem {
   status: DrywallScheduleItemStatus
   notes: string | null
   assigned_persons: string[]
+  /** Subset of assigned_persons who see job info (sqft/pay/materials) in /crew. */
+  show_job_info_person_ids: string[]
   assigned_company_id: string | null
   predecessor_ids: string[]
   lag_work_days: number
@@ -190,6 +192,7 @@ export interface NewScheduleItemInput {
   status?: DrywallScheduleItemStatus
   notes?: string
   assignedPersons?: string[]
+  showJobInfoPersonIds?: string[]
   assignedCompanyId?: string | null
   predecessorIds?: string[]
   lagWorkDays?: number
@@ -209,6 +212,7 @@ type DrywallScheduleItemRow = {
   status: DrywallScheduleItemStatus | null
   assigned_company_id: string | null
   assigned_persons: string[] | null
+  show_job_info_person_ids: string[] | null
   notes: string | null
   predecessors: Array<{ predecessor_id?: string; lag_days?: number }> | null
 }
@@ -246,6 +250,8 @@ function predecessorsToRows(ids: string[], lagWorkDays: number) {
 
 function mapDrywallScheduleRow(row: DrywallScheduleItemRow): DrywallProjectScheduleItem {
   const { ids, lag } = parsePredecessors(row.predecessors)
+  const assigned = row.assigned_persons ?? []
+  const showInfo = row.show_job_info_person_ids ?? []
   return {
     id: row.id,
     project_id: row.project_id,
@@ -257,7 +263,8 @@ function mapDrywallScheduleRow(row: DrywallScheduleItemRow): DrywallProjectSched
     duration: row.duration ?? 1,
     status: row.status ?? 'not-started',
     notes: row.notes,
-    assigned_persons: row.assigned_persons ?? [],
+    assigned_persons: assigned,
+    show_job_info_person_ids: showInfo.filter((id) => assigned.includes(id)),
     assigned_company_id: row.assigned_company_id,
     predecessor_ids: ids,
     lag_work_days: lag,
@@ -324,7 +331,7 @@ async function getOrCreateScheduleForProject(
 }
 
 const DRYWALL_SCHEDULE_SELECT =
-  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, notes, predecessors'
+  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, notes, predecessors'
 
 export async function fetchScheduleItemsForDrywallProject(
   projectId: string,
@@ -412,6 +419,9 @@ function buildInsertRow(
     percent_complete: 0,
     confirmation_status: 'unsent' as ConfirmationStatus,
     assigned_persons: input.assignedPersons ?? [],
+    show_job_info_person_ids: (input.showJobInfoPersonIds ?? input.assignedPersons ?? []).filter(
+      (id) => (input.assignedPersons ?? []).includes(id),
+    ),
     assigned_company_id: input.assignedCompanyId ?? null,
     assigned_to: [],
     predecessors: predecessorsToRows(predecessorIds, lag),
@@ -485,6 +495,17 @@ export async function updateScheduleItemForDrywallProject(
   }
   if (patch.notes !== undefined) updatePayload.notes = patch.notes.trim() || null
   if (patch.assignedPersons !== undefined) updatePayload.assigned_persons = patch.assignedPersons
+  if (patch.showJobInfoPersonIds !== undefined) {
+    const assigned = patch.assignedPersons ?? current.assigned_persons
+    updatePayload.show_job_info_person_ids = patch.showJobInfoPersonIds.filter((id) =>
+      assigned.includes(id),
+    )
+  } else if (patch.assignedPersons !== undefined) {
+    // Keep show-info in sync when assignees change but toggle list wasn't sent.
+    updatePayload.show_job_info_person_ids = current.show_job_info_person_ids.filter((id) =>
+      patch.assignedPersons!.includes(id),
+    )
+  }
   if (patch.assignedCompanyId !== undefined) {
     updatePayload.assigned_company_id = patch.assignedCompanyId
   }

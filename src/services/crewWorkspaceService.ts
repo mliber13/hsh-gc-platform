@@ -74,6 +74,7 @@ type ScheduleRow = {
   end_date: string
   status: string
   notes: string | null
+  show_job_info_person_ids: string[] | null
 }
 
 type ProjectRow = {
@@ -181,13 +182,19 @@ async function fetchAssignedScheduleRows(personId: string): Promise<ScheduleRow[
   const orgId = await requireUserOrgId()
   const { data, error } = await supabase
     .from('schedule_items')
-    .select('id, project_id, name, type, start_date, end_date, status, notes')
+    .select(
+      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids',
+    )
     .eq('organization_id', orgId)
     .contains('assigned_persons', [personId])
     .order('start_date', { ascending: true })
 
   if (error) throw new Error(error.message || 'Failed to load schedule assignments')
   return (data ?? []) as ScheduleRow[]
+}
+
+function personSeesJobInfo(personId: string, rows: ScheduleRow[]): boolean {
+  return rows.some((row) => (row.show_job_info_person_ids ?? []).includes(personId))
 }
 
 export type CrewViewAsOpts = {
@@ -275,6 +282,7 @@ export async function fetchCrewProjectList(
       status: normalizeDrywallProjectStatus(row.status),
       nextScheduledDate: nextScheduledDate(personItems),
       scheduleEntryCount: personItems.length,
+      scheduleItemNames: personItems.map((r) => r.name.trim()).filter(Boolean),
       measureWorkflowStatus,
     })
   }
@@ -759,7 +767,11 @@ export async function fetchCrewProjectDetail(
     throw new CrewWorkspacePermissionError()
   }
 
-  return mapProjectDetail(project, scheduleRows, { specialty, preview: false })
+  return mapProjectDetail(project, scheduleRows, {
+    specialty,
+    preview: false,
+    personId,
+  })
 }
 
 function scheduleRowHasMeasurePhase(row: ScheduleRow): boolean {
@@ -853,7 +865,9 @@ export async function fetchCrewProjectDetailForPreview(
   const orgId = await requireUserOrgId()
   const { data } = await supabase
     .from('schedule_items')
-    .select('id, project_id, name, type, start_date, end_date, status, notes')
+    .select(
+      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids',
+    )
     .eq('organization_id', orgId)
     .eq('project_id', projectId)
     .order('start_date', { ascending: true })
@@ -867,15 +881,26 @@ export async function fetchCrewProjectDetailForPreview(
 async function mapProjectDetail(
   project: DrywallProject,
   scheduleRows: ScheduleRow[],
-  context: { specialty: CrewSpecialty; preview?: boolean },
+  context: { specialty: CrewSpecialty; preview?: boolean; personId?: string },
 ): Promise<CrewProjectDetail> {
   const legacy = project.legacy
   const po = getPoDataFromLegacy(legacy)
   const intakeSource = getIntakeSourceFromLegacy(legacy) ?? (po ? 'po' : 'quote')
   const field = parseFieldTakeoff(legacy)
   const catalogs = v3QuoteFromLegacy(legacy) ? await fetchOrgDrywallCatalogs() : null
-  const totalSqft = resolveTotalSqft(legacy, intakeSource, po)
-  const laborRates = await resolveLaborRates(legacy, field)
+  const showJobInfo =
+    context.preview === true ||
+    (context.personId != null && personSeesJobInfo(context.personId, scheduleRows))
+
+  const totalSqft = showJobInfo ? resolveTotalSqft(legacy, intakeSource, po) : null
+  const laborRates = showJobInfo
+    ? await resolveLaborRates(legacy, field)
+    : {
+        hangerRate: null,
+        finisherRate: null,
+        prepCleanRate: null,
+        rateSource: 'pending_order' as const,
+      }
 
   return {
     projectId: project.id,
@@ -883,29 +908,33 @@ async function mapProjectDetail(
     client: project.client,
     address: project.address,
     status: normalizeDrywallProjectStatus(project.status),
-    scopeOfWork: resolveScopeOfWork(legacy, intakeSource, po),
-    structuredScope: resolveStructuredScope(legacy),
+    scopeOfWork: showJobInfo ? resolveScopeOfWork(legacy, intakeSource, po) : '',
+    structuredScope: showJobInfo ? resolveStructuredScope(legacy) : null,
     totalSqft,
-    beadSticks: resolveBeadSticks(legacy),
-    materials: resolveMaterials(field, context.specialty, context.preview === true),
-    photos: (field?.photos ?? []).map((p) => ({
-      id: p.id,
-      storagePath: p.storagePath?.trim() || null,
-      url: p.url?.trim() || null,
-      label: p.label?.trim() || null,
-    })),
+    beadSticks: showJobInfo ? resolveBeadSticks(legacy) : null,
+    materials: showJobInfo
+      ? resolveMaterials(field, context.specialty, context.preview === true)
+      : [],
+    photos: showJobInfo
+      ? (field?.photos ?? []).map((p) => ({
+          id: p.id,
+          storagePath: p.storagePath?.trim() || null,
+          url: p.url?.trim() || null,
+          label: p.label?.trim() || null,
+        }))
+      : [],
     specialty: context.specialty,
     laborRates,
-    estimatedTotalPay: computeEstimatedTotalPay(
-      totalSqft,
-      laborRates,
-      context.specialty,
-      { preview: context.preview },
-    ),
-    fieldNotes: resolveFieldNotes(field),
+    estimatedTotalPay: showJobInfo
+      ? computeEstimatedTotalPay(totalSqft, laborRates, context.specialty, {
+          preview: context.preview,
+        })
+      : { hanger: null, finisher: null },
+    fieldNotes: showJobInfo ? resolveFieldNotes(field) : null,
     scheduleEntries: scheduleRows.map(mapScheduleEntry),
-    breakdowns: resolveBreakdowns(legacy, catalogs),
+    breakdowns: showJobInfo ? resolveBreakdowns(legacy, catalogs) : [],
     intakeSource,
+    showJobInfo,
   }
 }
 

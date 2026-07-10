@@ -312,6 +312,17 @@ export function CrewProjectDetailPage() {
         </Card>
       ) : null}
 
+      {!detail.showJobInfo ? (
+        <Card>
+          <CardContent className="space-y-1 py-4 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">Schedule assignment</p>
+            <p>
+              Job size, pay rates, and materials are hidden for this assignment. Your schedule
+              items and any notes from the office are below.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -431,6 +442,7 @@ export function CrewProjectDetailPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {detail.beadSticks != null && detail.beadSticks > 0 ? (
         <Card>

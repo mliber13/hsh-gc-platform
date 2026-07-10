@@ -38,6 +38,8 @@ export interface CrewProjectListItem {
   status: string
   nextScheduledDate: string | null
   scheduleEntryCount: number
+  /** Titles of this person's assigned schedule items on the project. */
+  scheduleItemNames: string[]
   /** Measurer workflow pill — only when assigned to a Measure schedule item. */
   measureWorkflowStatus?: CrewMeasureWorkflowStatus | null
 }
@@ -142,6 +144,11 @@ export interface CrewProjectDetail {
     finishScope: string | null
   }>
   intakeSource: 'quote' | 'po'
+  /**
+   * True when this person is marked "Show job info" on at least one of their
+   * schedule assignments for this project. When false, crew UI hides sqft/pay/materials.
+   */
+  showJobInfo: boolean
 }
 
 export interface CommsUnreadEntry {

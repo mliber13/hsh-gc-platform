@@ -161,11 +161,16 @@ export function CrewProjectListPage() {
                     <span className="truncate">{item.address}</span>
                   </p>
                 ) : null}
-                {nextLabel ? (
+                {item.scheduleItemNames.length > 0 ? (
                   <p className="text-sm font-medium text-foreground">
+                    {item.scheduleItemNames.join(' · ')}
+                  </p>
+                ) : null}
+                {nextLabel ? (
+                  <p className="text-sm text-muted-foreground">
                     Next: {nextLabel}
                     {extraTasks > 0 ? (
-                      <span className="font-normal text-muted-foreground">
+                      <span>
                         {' '}
                         · +{extraTasks} more task{extraTasks === 1 ? '' : 's'}
                       </span>

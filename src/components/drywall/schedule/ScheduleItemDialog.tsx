@@ -72,6 +72,7 @@ export function ScheduleItemDialog({
   const [status, setStatus] = useState<DrywallScheduleItemStatus>('not-started')
   const [notes, setNotes] = useState('')
   const [assignedPersons, setAssignedPersons] = useState<string[]>([])
+  const [showJobInfoPersonIds, setShowJobInfoPersonIds] = useState<string[]>([])
   const [predecessorIds, setPredecessorIds] = useState<string[]>([])
   const [lagWorkDays, setLagWorkDays] = useState(1)
   const [predOpen, setPredOpen] = useState(false)
@@ -116,6 +117,7 @@ export function ScheduleItemDialog({
       setStatus(editing.status)
       setNotes(editing.notes ?? '')
       setAssignedPersons(editing.assigned_persons)
+      setShowJobInfoPersonIds(editing.show_job_info_person_ids)
       setPredecessorIds(editing.predecessor_ids)
       setLagWorkDays(editing.lag_work_days)
     } else {
@@ -128,6 +130,7 @@ export function ScheduleItemDialog({
       setStatus('not-started')
       setNotes('')
       setAssignedPersons([])
+      setShowJobInfoPersonIds([])
       setPredecessorIds([])
       setLagWorkDays(1)
     }
@@ -286,6 +289,7 @@ export function ScheduleItemDialog({
       status,
       notes,
       assignedPersons,
+      showJobInfoPersonIds,
       predecessorIds,
       lagWorkDays,
     }
@@ -576,7 +580,12 @@ export function ScheduleItemDialog({
             </Select>
           </div>
 
-          <AssignedPersonsPicker value={assignedPersons} onChange={setAssignedPersons} />
+          <AssignedPersonsPicker
+            value={assignedPersons}
+            onChange={setAssignedPersons}
+            showJobInfoPersonIds={showJobInfoPersonIds}
+            onShowJobInfoPersonIdsChange={setShowJobInfoPersonIds}
+          />
 
           <div className="space-y-1.5">
             <Label htmlFor="schedule-notes">Notes</Label>

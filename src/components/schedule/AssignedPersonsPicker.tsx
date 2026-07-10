@@ -22,6 +22,9 @@ export interface AssignedPersonOption {
 interface AssignedPersonsPickerProps {
   value: string[]
   onChange: (ids: string[]) => void
+  /** When set, shows a per-person "Show job info" toggle for crew workspace. */
+  showJobInfoPersonIds?: string[]
+  onShowJobInfoPersonIdsChange?: (ids: string[]) => void
   disabled?: boolean
   label?: string
 }
@@ -29,6 +32,8 @@ interface AssignedPersonsPickerProps {
 export function AssignedPersonsPicker({
   value,
   onChange,
+  showJobInfoPersonIds,
+  onShowJobInfoPersonIdsChange,
   disabled,
   label = 'Assigned persons',
 }: AssignedPersonsPickerProps) {
@@ -36,6 +41,10 @@ export function AssignedPersonsPicker({
   const [search, setSearch] = useState('')
   const [options, setOptions] = useState<AssignedPersonOption[]>([])
   const [loading, setLoading] = useState(true)
+
+  const jobInfoEnabled =
+    Array.isArray(showJobInfoPersonIds) && typeof onShowJobInfoPersonIdsChange === 'function'
+  const jobInfoIds = showJobInfoPersonIds ?? []
 
   useEffect(() => {
     let cancelled = false
@@ -89,12 +98,33 @@ export function AssignedPersonsPicker({
   const toggle = (id: string) => {
     if (value.includes(id)) {
       onChange(value.filter((v) => v !== id))
+      if (jobInfoEnabled) {
+        onShowJobInfoPersonIdsChange!(jobInfoIds.filter((v) => v !== id))
+      }
     } else {
       onChange([...value, id])
+      // New assignees default to Show job info ON — operator turns off for helpers/pointup.
+      if (jobInfoEnabled && !jobInfoIds.includes(id)) {
+        onShowJobInfoPersonIdsChange!([...jobInfoIds, id])
+      }
     }
   }
 
-  const remove = (id: string) => onChange(value.filter((v) => v !== id))
+  const remove = (id: string) => {
+    onChange(value.filter((v) => v !== id))
+    if (jobInfoEnabled) {
+      onShowJobInfoPersonIdsChange!(jobInfoIds.filter((v) => v !== id))
+    }
+  }
+
+  const setShowJobInfo = (id: string, on: boolean) => {
+    if (!jobInfoEnabled) return
+    if (on) {
+      if (!jobInfoIds.includes(id)) onShowJobInfoPersonIdsChange!([...jobInfoIds, id])
+    } else {
+      onShowJobInfoPersonIdsChange!(jobInfoIds.filter((v) => v !== id))
+    }
+  }
 
   return (
     <div className="space-y-1.5">
@@ -167,26 +197,48 @@ export function AssignedPersonsPicker({
         </PopoverContent>
       </Popover>
       {value.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="space-y-2">
           {value.map((id) => {
             const person = optionById.get(id)
+            const showInfo = jobInfoIds.includes(id)
             return (
-              <span
+              <div
                 key={id}
-                className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-xs"
+                className="flex items-center gap-2 rounded-lg border bg-muted/30 px-2.5 py-2"
               >
-                <span className="max-w-[10rem] truncate">{person?.name ?? id}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{person?.name ?? id}</p>
+                  {jobInfoEnabled ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      {showInfo
+                        ? 'Sees job size, pay, and materials in Crew'
+                        : 'Schedule + notes only in Crew'}
+                    </p>
+                  ) : null}
+                </div>
+                {jobInfoEnabled ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={showInfo ? 'default' : 'outline'}
+                    disabled={disabled}
+                    className="h-7 shrink-0 px-2 text-xs"
+                    onClick={() => setShowJobInfo(id, !showInfo)}
+                  >
+                    {showInfo ? 'Job info on' : 'Job info off'}
+                  </Button>
+                ) : null}
                 {!disabled ? (
                   <button
                     type="button"
-                    className="rounded-full p-0.5 hover:bg-muted"
+                    className="rounded-full p-1 hover:bg-muted"
                     onClick={() => remove(id)}
                     aria-label={`Remove ${person?.name ?? id}`}
                   >
-                    <X className="size-3" />
+                    <X className="size-3.5" />
                   </button>
                 ) : null}
-              </span>
+              </div>
             )
           })}
         </div>
