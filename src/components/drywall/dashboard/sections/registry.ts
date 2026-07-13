@@ -21,6 +21,9 @@ export interface DashboardSectionDef {
   group: DashboardSectionGroup
   span: DashboardSectionSpan
   component: ComponentType
+  /** When false, the card sizes to its content instead of stretching to match
+   *  taller cards in the same row (for lightweight summary cards). Default true. */
+  stretch?: boolean
 }
 
 export const DASHBOARD_GROUP_ORDER: DashboardSectionGroup[] = [
@@ -72,6 +75,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     order: 2,
     group: 'sales',
     span: 'wide',
+    stretch: false,
     component: EstimatingSection,
   },
   {

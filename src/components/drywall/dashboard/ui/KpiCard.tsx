@@ -8,6 +8,8 @@ type Props = {
   className?: string
   headerRight?: React.ReactNode
   emphasized?: boolean
+  /** When false, the card sizes to its content instead of filling its grid cell. */
+  stretch?: boolean
 }
 
 export function KpiCard({
@@ -17,11 +19,13 @@ export function KpiCard({
   className,
   headerRight,
   emphasized = false,
+  stretch = true,
 }: Props) {
   return (
     <Card
       className={cn(
-        'flex h-full flex-col',
+        'flex flex-col',
+        stretch && 'h-full',
         emphasized && 'border-primary/30 bg-gradient-to-br from-primary/5 to-transparent shadow-md',
         className,
       )}

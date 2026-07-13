@@ -70,7 +70,11 @@ function DashboardContent() {
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.25, delay: 0.05 * (delayIndex + 1) }}
-                    className={cn('h-full min-w-0', DASHBOARD_SECTION_SPAN_CLASS[section.span])}
+                    className={cn(
+                      'min-w-0',
+                      section.stretch === false ? 'self-start' : 'h-full',
+                      DASHBOARD_SECTION_SPAN_CLASS[section.span],
+                    )}
                   >
                     <Section />
                   </motion.div>
