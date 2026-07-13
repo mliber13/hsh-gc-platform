@@ -157,13 +157,22 @@ function mapListRow(row: {
   ) {
     return null
   }
-  const { sqft, quoteTotal } = extractListQuoteStats({
+  const { sqft, quoteTotal: statsQuoteTotal } = extractListQuoteStats({
     quote_sqft: row.quote_sqft,
     quote_final_total: row.quote_final_total,
     quote_total_amount: row.quote_total_amount,
     quote_version: row.quote_version,
     quote_line_items: row.quote_line_items,
   })
+  const bidSnapshot = parseBidSnapshot(row.quote_bid_snapshot)
+  // v3 quotes often lack calculations.finalTotal until denormalized; bid snapshot is the
+  // locked send-time total and must drive list/KPI quoteTotal.
+  const bidTotal =
+    bidSnapshot && Number.isFinite(bidSnapshot.total) && bidSnapshot.total > 0
+      ? bidSnapshot.total
+      : null
+  const quoteTotal =
+    statsQuoteTotal != null && statsQuoteTotal > 0 ? statsQuoteTotal : bidTotal
   const fieldMeasuredSqft = coerceListNumber(stageScalars?.field_measured_sqft)
   const fieldTakeoffUpdated = asString(stageScalars?.field_takeoff_updated) || null
   const fieldFirstMeasurementId = asString(stageScalars?.field_first_measurement_id) || null
@@ -178,6 +187,17 @@ function mapListRow(row: {
     orderFirstId,
   }
 
+  const overheadFromCalc = coerceListNumber(row.quote_overhead_amt)
+  const profitFromCalc = coerceListNumber(row.quote_profit_amt)
+  const overheadFromSnap =
+    bidSnapshot?.payload && Number.isFinite(Number(bidSnapshot.payload.overhead))
+      ? Number(bidSnapshot.payload.overhead)
+      : null
+  const profitFromSnap =
+    bidSnapshot?.payload && Number.isFinite(Number(bidSnapshot.payload.profit))
+      ? Number(bidSnapshot.payload.profit)
+      : null
+
   return {
     id: row.id,
     name: row.name?.trim() || 'Untitled',
@@ -190,9 +210,9 @@ function mapListRow(row: {
     quoteApprovedAt: asString(row.quote_approved_at) || null,
     quoteSentAt: asString(row.quote_sent_at) || null,
     quoteLostAt: asString(row.quote_lost_at) || null,
-    quoteOverheadAmount: coerceListNumber(row.quote_overhead_amt),
-    quoteProfitAmount: coerceListNumber(row.quote_profit_amt),
-    drywallScopeRevenue: deriveDrywallScopeRevenue(parseBidSnapshot(row.quote_bid_snapshot)),
+    quoteOverheadAmount: overheadFromCalc ?? overheadFromSnap,
+    quoteProfitAmount: profitFromCalc ?? profitFromSnap,
+    drywallScopeRevenue: deriveDrywallScopeRevenue(bidSnapshot),
   }
 }
 
@@ -1536,6 +1556,12 @@ export async function markQuoteSent(projectId: string, effectiveDate?: string): 
   const now = new Date().toISOString()
   const sentAt = effectiveDate ?? now
   const bidSnapshot = await buildBidSnapshotForQuote(quote, catalogs, now)
+  const prevCalc =
+    prevQuote.calculations &&
+    typeof prevQuote.calculations === 'object' &&
+    !Array.isArray(prevQuote.calculations)
+      ? (prevQuote.calculations as Record<string, unknown>)
+      : {}
 
   await persistQuoteOutcomePatch(projectId, {
     outcome: 'sent',
@@ -1544,6 +1570,14 @@ export async function markQuoteSent(projectId: string, effectiveDate?: string): 
       sentAt,
     },
     bidSnapshot,
+    // Denormalize totals so list/KPI projections (finalTotal / totalQuoteAmount) work for v3.
+    totalQuoteAmount: bidSnapshot.total,
+    calculations: {
+      ...prevCalc,
+      finalTotal: bidSnapshot.total,
+      overheadAmount: bidSnapshot.payload.overhead,
+      profitAmount: bidSnapshot.payload.profit,
+    },
   })
 }
 
