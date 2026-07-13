@@ -2,16 +2,24 @@ import { describe, expect, it } from 'vitest'
 import {
   buildDraftFromPreviousRun,
   buildPayrollPeople,
+  defaultHelperAssignRate,
   entryHasNonZeroAdjustments,
   fieldMeasuredSqftFromProjectMetadata,
+  getHelperDeductionForJob,
+  getNetPieceTotal,
+  getRateFromJob,
   getSqftFromJob,
+  helperAssignDeductionAmount,
   isPayrollDraftEmpty,
+  laborRatesFromProjectMetadata,
   nextPeriodDateRangeFromRun,
   payrollLastWeekRange,
   payrollThisWeekRange,
   personKey,
+  pieceRowHelperDeduction,
   splitGrossByDivisions,
 } from './payrollMath'
+import { projectLaborRateForPieceKey } from './drywall/payrollPieceKeys'
 import type { PayPeriod } from '@/types/payroll'
 import type { Contractor1099, Employee } from '@/types/hr'
 
@@ -220,5 +228,189 @@ describe('getSqftFromJob', () => {
   it('returns null when sqft is missing', () => {
     expect(getSqftFromJob({ fieldMeasuredSqft: null })).toBeNull()
     expect(getSqftFromJob(null)).toBeNull()
+  })
+})
+
+describe('laborRatesFromProjectMetadata', () => {
+  it('prefers order reviewApprovedRates over quote rates', () => {
+    expect(
+      laborRatesFromProjectMetadata({
+        quote: {
+          project_hanger_rate: 0.42,
+          project_finisher_rate: 0.55,
+          prep_clean_rate: 0.1,
+        },
+        legacy: {
+          fieldTakeoff: {
+            reviewApprovedRates: {
+              hangerRate: 0.48,
+              finisherRate: 0.62,
+              prepCleanRate: 0.12,
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      hangerRate: 0.48,
+      finisherRate: 0.62,
+      prepCleanRate: 0.12,
+    })
+  })
+
+  it('falls back to v3 quote project rates when order rates are missing', () => {
+    expect(
+      laborRatesFromProjectMetadata({
+        quote: {
+          project_hanger_rate: 0.42,
+          project_finisher_rate: 0.55,
+          prep_clean_rate: 0.1,
+        },
+      }),
+    ).toEqual({
+      hangerRate: 0.42,
+      finisherRate: 0.55,
+      prepCleanRate: 0.1,
+    })
+  })
+
+  it('falls back to v2 quote rate field names', () => {
+    expect(
+      laborRatesFromProjectMetadata({
+        quote: {
+          hangerRate: 0.4,
+          finisherRate: 0.5,
+          prepCleanRate: 0.08,
+        },
+      }),
+    ).toEqual({
+      hangerRate: 0.4,
+      finisherRate: 0.5,
+      prepCleanRate: 0.08,
+    })
+  })
+})
+
+describe('getRateFromJob / projectLaborRateForPieceKey', () => {
+  const laborRates = {
+    hangerRate: 0.48,
+    finisherRate: 0.62,
+    prepCleanRate: 0.12,
+  }
+
+  it('uses laborRates for hang and finish over quote', () => {
+    const project = {
+      laborRates,
+      quote: { hangerRate: 0.42, finisherRate: 0.55 },
+    }
+    expect(getRateFromJob(project, 'hang')).toBe(0.48)
+    expect(getRateFromJob(project, 'drywall_hanging')).toBe(0.48)
+    expect(getRateFromJob(project, 'finisher')).toBe(0.62)
+    expect(getRateFromJob(project, 'prepClean')).toBe(0.12)
+  })
+
+  it('maps finish-scope piece keys to order finisher rate', () => {
+    const catalogs = {
+      finish_scopes: [
+        {
+          id: 'scope-l5',
+          display_name: 'Level 5',
+          applies_to_locations: ['wall'],
+          finisher_rate: 0.55,
+          accessories_applied: {
+            joint_compound: true,
+            tape: true,
+            screws: false,
+            corner_bead: false,
+          },
+          payroll_piece_key: 'finish_level_5',
+        },
+      ],
+    } as import('@/types/drywallCatalogs').OrgDrywallCatalogs
+
+    expect(
+      projectLaborRateForPieceKey('finish_level_5', laborRates, catalogs),
+    ).toBe(0.62)
+    expect(projectLaborRateForPieceKey('drywall_hanging', laborRates, catalogs)).toBe(
+      0.48,
+    )
+  })
+})
+
+describe('helper assign / piece deduction', () => {
+  it('defaults assign rate from override then worker profile', () => {
+    expect(defaultHelperAssignRate({ rateOverride: '15' }, 18)).toBe('15')
+    expect(defaultHelperAssignRate({}, 18)).toBe('18')
+    expect(defaultHelperAssignRate({ assignRate: '12', rateOverride: '15' }, 18)).toBe('12')
+    expect(defaultHelperAssignRate({ assignRate: '12' }, 18, { force: true })).toBe('18')
+  })
+
+  it('computes hours × assignRate as the deduction amount', () => {
+    expect(helperAssignDeductionAmount({ hours: 8, assignRate: 15 })).toBe(120)
+    expect(helperAssignDeductionAmount({ hours: 8, assignAmount: 50 })).toBe(50)
+  })
+
+  it('deducts assigned helper hours from the named lead on the same job', () => {
+    const leadKey = 'w2-lead'
+    const helperKey = 'w2-helper'
+    const entries = {
+      [helperKey]: {
+        personId: 'helper',
+        personType: 'w2',
+        hourEntries: [
+          {
+            jobId: 'job-1',
+            jobName: 'Oak St',
+            hours: 8,
+            assignToPersonId: leadKey,
+            assignRate: 15,
+          },
+        ],
+      },
+      [leadKey]: {
+        personId: 'lead',
+        personType: 'w2',
+        pieceEntries: [
+          {
+            jobId: 'job-1',
+            jobName: 'Oak St',
+            amount: 500,
+          },
+        ],
+      },
+    }
+
+    expect(getHelperDeductionForJob(entries, leadKey, 'job-1', 'Oak St')).toBe(120)
+    expect(getNetPieceTotal(entries[leadKey].pieceEntries, entries, leadKey)).toBe(380)
+  })
+
+  it('does not deduct when assignTo is set but assignRate is missing', () => {
+    const leadKey = 'w2-lead'
+    const entries = {
+      'w2-helper': {
+        personId: 'helper',
+        personType: 'w2',
+        hourEntries: [
+          {
+            jobId: 'job-1',
+            jobName: 'Oak St',
+            hours: 8,
+            assignToPersonId: leadKey,
+          },
+        ],
+      },
+    }
+    expect(getHelperDeductionForJob(entries, leadKey, 'job-1', 'Oak St')).toBe(0)
+  })
+
+  it('allocates helper deduction across piece rows on the same job', () => {
+    const pe = { jobId: 'job-1', jobName: 'Oak St', amount: 500 }
+    const { raw, helperShare, net } = pieceRowHelperDeduction(
+      [pe, { jobId: 'job-1', jobName: 'Oak St', amount: 500 }],
+      pe,
+      200,
+    )
+    expect(raw).toBe(500)
+    expect(helperShare).toBe(100)
+    expect(net).toBe(400)
   })
 })

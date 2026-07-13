@@ -79,4 +79,13 @@ export interface PayrollProjectOption {
   quote?: Record<string, unknown>
   /** Field measurement total sqft (metadata.legacy.fieldTakeoff.totalMeasuredSqft). */
   fieldMeasuredSqft?: number | null
+  /**
+   * Effective crew pay rates for this job: order-approved rates when set,
+   * otherwise quote project rates (v3 project_* or v2 hanger/finisher).
+   */
+  laborRates?: {
+    hangerRate: number | null
+    finisherRate: number | null
+    prepCleanRate: number | null
+  }
 }

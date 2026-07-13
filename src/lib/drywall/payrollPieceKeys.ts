@@ -172,6 +172,48 @@ export function defaultRateForPieceKey(
   return null
 }
 
+/**
+ * Job-specific hang/finish/prep rates (order-approved or quote) for a piece key.
+ * Component labor stays catalog-driven (returns null here).
+ */
+export function projectLaborRateForPieceKey(
+  pieceKey: string,
+  laborRates:
+    | {
+        hangerRate: number | null
+        finisherRate: number | null
+        prepCleanRate: number | null
+      }
+    | null
+    | undefined,
+  catalogs: OrgDrywallCatalogs | null,
+): number | null {
+  if (!laborRates) return null
+
+  if (isDrywallHangerKey(pieceKey) || pieceKey === 'hang') {
+    return laborRates.hangerRate != null && laborRates.hangerRate > 0
+      ? laborRates.hangerRate
+      : null
+  }
+
+  if (pieceKey === 'prepClean') {
+    return laborRates.prepCleanRate != null && laborRates.prepCleanRate > 0
+      ? laborRates.prepCleanRate
+      : null
+  }
+
+  if (
+    pieceKey === 'finisher' ||
+    (catalogs != null && isFinishScopePieceKey(pieceKey, catalogs.finish_scopes))
+  ) {
+    return laborRates.finisherRate != null && laborRates.finisherRate > 0
+      ? laborRates.finisherRate
+      : null
+  }
+
+  return null
+}
+
 export function defaultPhasesForPieceKey(
   pieceKey: string,
   catalogs: OrgDrywallCatalogs,

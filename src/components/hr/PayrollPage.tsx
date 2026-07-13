@@ -34,6 +34,8 @@ import {
 
   fieldMeasuredSqftFromProjectMetadata,
 
+  laborRatesFromProjectMetadata,
+
 } from '@/lib/payrollMath'
 
 import { fetchTeam } from '@/services/hrTeamService'
@@ -219,6 +221,8 @@ export function PayrollPage() {
           quote: quoteFromProjectMetadata(p.metadata),
 
           fieldMeasuredSqft: fieldMeasuredSqftFromProjectMetadata(p.metadata),
+
+          laborRates: laborRatesFromProjectMetadata(p.metadata),
 
         })),
 

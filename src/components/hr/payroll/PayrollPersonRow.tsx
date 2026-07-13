@@ -20,13 +20,19 @@ import {
   defaultRateForPieceKey,
   isLegacyPayrollWorkType,
   labelForPieceKey,
+  projectLaborRateForPieceKey,
   resolvePieceEntryKey,
   type PayrollPieceTypeOption,
 } from '@/lib/drywall/payrollPieceKeys'
 import {
   PAYROLL_WORK_TYPES,
+  defaultHelperAssignRate,
+  getHelperDeductionForJob,
   getRateFromJob,
   getSqftFromJob,
+  helperAssignDeductionAmount,
+  listHelperAssignmentsForLeadJob,
+  pieceRowHelperDeduction,
   recalcPieceEntryAmount,
   type PayrollRowPerson,
 } from '@/lib/payrollMath'
@@ -51,6 +57,8 @@ interface PayrollPersonRowProps {
   locked: boolean
   projects: PayrollProjectOption[]
   allPeople: PayrollRowPerson[]
+  /** Full draft map — needed so lead piece rows can show helper deductions. */
+  allEntries: Record<string, PayrollEntry>
   drywallCatalogs: OrgDrywallCatalogs | null
   onChange: (entry: PayrollEntry) => void
   onToggleDone: () => void
@@ -62,6 +70,10 @@ function resolvePieceRate(
   project: PayrollProjectOption | undefined,
   catalogs: OrgDrywallCatalogs | null,
 ): number | null {
+  // Prefer order-approved / quote project rates over org catalog defaults.
+  const fromJob = projectLaborRateForPieceKey(pieceKey, project?.laborRates, catalogs)
+  if (fromJob != null) return fromJob
+
   const source =
     catalogSource ??
     (isLegacyPayrollWorkType(pieceKey) ? 'legacy' : catalogs ? 'v3_drywall' : 'legacy')
@@ -105,6 +117,7 @@ export function PayrollPersonRow({
   locked,
   projects,
   allPeople,
+  allEntries,
   drywallCatalogs,
   onChange,
   onToggleDone,
@@ -292,8 +305,25 @@ export function PayrollPersonRow({
         </button>
         {hoursOpen ? (
           <div className="mt-3 space-y-2">
-            {hourEntries.map((he, idx) => (
-              <div key={he.id || idx} className="grid gap-2 rounded border bg-card p-2 md:grid-cols-6">
+            <p className="text-[11px] text-muted-foreground">
+              Assign helper hours to a piece lead, then set Lead $/hr. That amount is deducted from
+              the lead&apos;s piece pay on the same job (helper still keeps their hourly pay).
+            </p>
+            {hourEntries.map((he, idx) => {
+              const canAssign = Boolean(he.jobId && he.jobId !== 'none' && he.jobId !== 'unassigned')
+              const assignDeduction = he.assignToPersonId
+                ? helperAssignDeductionAmount(he)
+                : 0
+              return (
+              <div
+                key={he.id || idx}
+                className={cn(
+                  'grid gap-2 rounded border bg-card p-2',
+                  he.assignToPersonId
+                    ? 'md:grid-cols-[minmax(0,1.4fr)_4.5rem_5.5rem_5.5rem_minmax(0,1fr)_auto_5rem_4.5rem_2.25rem]'
+                    : 'md:grid-cols-6',
+                )}
+              >
                 <JobCombobox
                   jobId={he.jobId}
                   jobName={he.jobName}
@@ -333,31 +363,87 @@ export function PayrollPersonRow({
                   value={he.rateOverride ?? ''}
                   onChange={(e) => patchHour(idx, { rateOverride: e.target.value })}
                 />
-                <Select
-                  disabled={effectiveLocked}
-                  value={he.assignToPersonId || 'none'}
-                  onValueChange={(v) => {
-                    const assignee = allPeople.find((p) => p.personKey === v)
-                    patchHour(idx, {
-                      assignToPersonId: v === 'none' ? '' : v,
-                      assignToPersonName: assignee?.name || '',
-                    })
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Assign to" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Assign —</SelectItem>
-                    {allPeople
-                      .filter((p) => p.personKey !== person.personKey)
-                      .map((p) => (
-                        <SelectItem key={p.personKey} value={p.personKey}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                {canAssign ? (
+                  <div className="flex min-w-0 items-center gap-1">
+                    <Select
+                      disabled={effectiveLocked}
+                      value={he.assignToPersonId || 'none'}
+                      onValueChange={(v) => {
+                        if (v === 'none') {
+                          patchHour(idx, {
+                            assignToPersonId: '',
+                            assignToPersonName: '',
+                            assignRate: '',
+                            assignAmount: '',
+                          })
+                          return
+                        }
+                        const assignee = allPeople.find((p) => p.personKey === v)
+                        patchHour(idx, {
+                          assignToPersonId: v,
+                          assignToPersonName: assignee?.name || '',
+                          assignRate: defaultHelperAssignRate(he, person.hourlyRate),
+                        })
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Assign to" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— Assign —</SelectItem>
+                        {allPeople
+                          .filter((p) => p.personKey !== person.personKey)
+                          .map((p) => (
+                            <SelectItem key={p.personKey} value={p.personKey}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    {!effectiveLocked && he.assignToPersonId ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 px-2"
+                        title="Use this worker's full hourly rate as the lead deduction"
+                        onClick={() =>
+                          patchHour(idx, {
+                            assignRate: defaultHelperAssignRate(he, person.hourlyRate, {
+                              force: true,
+                            }),
+                          })
+                        }
+                      >
+                        All
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <span className="self-center text-xs text-muted-foreground">Select job first</span>
+                )}
+                {he.assignToPersonId ? (
+                  <>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="Lead $/hr"
+                      title="Rate the lead pays for this helper (deducted from the lead's piece pay)"
+                      disabled={effectiveLocked}
+                      value={he.assignRate ?? ''}
+                      onChange={(e) => patchHour(idx, { assignRate: e.target.value })}
+                    />
+                    <span
+                      className="self-center text-right text-xs tabular-nums text-muted-foreground"
+                      title="Charged to the assigned lead's piece pay on this job (helper still receives hourly pay above)"
+                    >
+                      {assignDeduction > 0
+                        ? `Lead −${formatCurrency(assignDeduction)}`
+                        : '—'}
+                    </span>
+                  </>
+                ) : null}
                 {!effectiveLocked && (
                   <Button
                     type="button"
@@ -370,7 +456,8 @@ export function PayrollPersonRow({
                   </Button>
                 )}
               </div>
-            ))}
+              )
+            })}
             {!effectiveLocked && (
               <Button type="button" variant="outline" size="sm" onClick={addHour}>
                 <Plus className="mr-1 size-4" />
@@ -401,16 +488,41 @@ export function PayrollPersonRow({
         </button>
         {pieceOpen ? (
           <div className="mt-3 space-y-2">
-            {pieceEntries.map((pe, idx) => {
+            {(() => {
+              const notedJobs = new Set<string>()
+              return pieceEntries.map((pe, idx) => {
               const pieceKey = resolvePieceEntryKey(pe)
               const knownOption = pieceTypeOptionByValue.get(pieceKey)
               const orphanLabel =
                 !knownOption && pieceKey
                   ? labelForPieceKey(pieceKey, drywallCatalogs)
                   : null
+              const jobHelperDeduction = getHelperDeductionForJob(
+                allEntries,
+                person.personKey,
+                pe.jobId || '',
+                pe.jobName || '',
+              )
+              const { raw, helperShare, net } = pieceRowHelperDeduction(
+                pieceEntries,
+                pe,
+                jobHelperDeduction,
+              )
+              const jobNoteKey = `${pe.jobId || ''}::${String(pe.jobName || '').trim().toLowerCase()}`
+              const showHelperNote = !notedJobs.has(jobNoteKey)
+              if (showHelperNote) notedJobs.add(jobNoteKey)
+              const helpersOnJob = showHelperNote
+                ? listHelperAssignmentsForLeadJob(
+                    allEntries,
+                    person.personKey,
+                    pe.jobId || '',
+                    pe.jobName || '',
+                  )
+                : []
 
               return (
-              <div key={pe.id || idx} className="grid gap-2 rounded border bg-card p-2 md:grid-cols-8">
+              <div key={pe.id || idx} className="space-y-1">
+              <div className="grid gap-2 rounded border bg-card p-2 md:grid-cols-8">
                 <JobCombobox
                   jobId={pe.jobId}
                   jobName={pe.jobName}
@@ -531,9 +643,19 @@ export function PayrollPersonRow({
                   value={pe.rate ?? ''}
                   onChange={(e) => patchPiece(idx, { rate: e.target.value })}
                 />
-                <span className="self-center text-right text-sm font-medium tabular-nums">
-                  {formatCurrency(parseFloat(String(pe.amount)) || 0)}
-                </span>
+                <div className="self-center text-right text-sm tabular-nums">
+                  <div className="font-medium">{formatCurrency(raw)}</div>
+                  {helperShare > 0 && (
+                    <>
+                      <div className="text-[11px] text-red-600 dark:text-red-400">
+                        −{formatCurrency(helperShare)} helper
+                      </div>
+                      <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                        {formatCurrency(net)} net
+                      </div>
+                    </>
+                  )}
+                </div>
                 {!effectiveLocked && (
                   <Button
                     type="button"
@@ -546,7 +668,22 @@ export function PayrollPersonRow({
                   </Button>
                 )}
               </div>
-            )})}
+              {helpersOnJob.length > 0 && (
+                <p className="px-1 text-[11px] text-muted-foreground">
+                  Helper hours charged to this job:{' '}
+                  {helpersOnJob
+                    .map((h) => {
+                      const name =
+                        allPeople.find((p) => p.personKey === h.helperPersonKey)?.name ||
+                        h.helperName
+                      return `${name} −${formatCurrency(h.amount)}`
+                    })
+                    .join(' · ')}
+                </p>
+              )}
+              </div>
+            )})
+            })()}
             {!effectiveLocked && (
               <Button type="button" variant="outline" size="sm" onClick={addPiece}>
                 <Plus className="mr-1 size-4" />

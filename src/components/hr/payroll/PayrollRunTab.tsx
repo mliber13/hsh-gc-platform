@@ -398,6 +398,7 @@ export function PayrollRunTab({
               locked={locked}
               projects={projects}
               allPeople={people as PayrollRowPerson[]}
+              allEntries={entries}
               drywallCatalogs={drywallCatalogs}
               onChange={(e) => setEntry(r.person.personKey, e)}
               onToggleDone={() => togglePersonDone(r.person.personKey)}

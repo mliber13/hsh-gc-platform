@@ -68,13 +68,41 @@ export function getToolDeductionThisWeek(
 }
 
 export function getRateFromJob(
-  project: { quote?: Record<string, unknown> } | null | undefined,
+  project: {
+    quote?: Record<string, unknown>
+    laborRates?: {
+      hangerRate: number | null
+      finisherRate: number | null
+      prepCleanRate: number | null
+    }
+  } | null | undefined,
   workTypeValue: string,
 ): number | null {
+  const rates = project?.laborRates
+  if (rates) {
+    if (workTypeValue === 'hang' || workTypeValue === 'drywall_hanging' || workTypeValue.startsWith('drywall_hanging_')) {
+      if (rates.hangerRate != null && rates.hangerRate > 0) return rates.hangerRate
+    }
+    if (workTypeValue === 'finisher') {
+      if (rates.finisherRate != null && rates.finisherRate > 0) return rates.finisherRate
+    }
+    if (workTypeValue === 'prepClean') {
+      if (rates.prepCleanRate != null && rates.prepCleanRate > 0) return rates.prepCleanRate
+    }
+  }
+
   const wt = PAYROLL_WORK_TYPES.find((p) => p.value === workTypeValue)
   if (!wt?.rateKey) return null
   const q = project?.quote || {}
-  const val = q[wt.rateKey]
+  const val = q[wt.rateKey] ?? (
+    wt.rateKey === 'hangerRate'
+      ? q.project_hanger_rate
+      : wt.rateKey === 'finisherRate'
+        ? q.project_finisher_rate
+        : wt.rateKey === 'prepCleanRate'
+          ? q.prep_clean_rate
+          : undefined
+  )
   if (val == null || val === '') return null
   const n = parseFloat(String(val))
   return Number.isNaN(n) ? null : n
@@ -110,6 +138,35 @@ export function calculatePieceTotal(pieceEntries: PayrollPieceEntry[] | undefine
   return entries.reduce((sum, e) => sum + (parseFloat(String(e.amount)) || 0), 0)
 }
 
+/** $ deducted from the lead's piece pay for one helper hour row. */
+export function helperAssignDeductionAmount(he: PayrollHourEntry): number {
+  const rate = parseFloat(String(he.assignRate))
+  if (!Number.isNaN(rate) && rate > 0) {
+    return (parseFloat(String(he.hours)) || 0) * rate
+  }
+  return parseFloat(String(he.assignAmount)) || 0
+}
+
+/**
+ * Default "lead pays $/hr" when assigning helper hours to a piece lead.
+ * Prefers existing assignRate unless force; else rate override, else worker profile rate.
+ */
+export function defaultHelperAssignRate(
+  hourEntry: Pick<PayrollHourEntry, 'rateOverride' | 'assignRate'>,
+  workerHourlyRate: number | string | null | undefined,
+  opts?: { force?: boolean },
+): string {
+  if (!opts?.force) {
+    const existing = parseFloat(String(hourEntry.assignRate))
+    if (!Number.isNaN(existing) && existing > 0) return String(existing)
+  }
+  const overrideRate = parseFloat(String(hourEntry.rateOverride))
+  if (!Number.isNaN(overrideRate) && overrideRate > 0) return String(overrideRate)
+  const workerRate = parseFloat(String(workerHourlyRate))
+  if (!Number.isNaN(workerRate) && workerRate > 0) return String(workerRate)
+  return ''
+}
+
 export function getHelperDeductionForJob(
   allEntries: Record<string, PayrollEntry>,
   fromPersonKey: string,
@@ -129,16 +186,51 @@ export function getHelperDeductionForJob(
     for (const he of hourEntries) {
       if (he.assignToPersonId !== fromPersonKey) continue
       if (jobsMatch(he.jobId, he.jobName, jobId, jobName)) {
-        const rate = parseFloat(String(he.assignRate))
-        if (!Number.isNaN(rate) && rate > 0) {
-          total += (parseFloat(String(he.hours)) || 0) * rate
-        } else {
-          total += parseFloat(String(he.assignAmount)) || 0
-        }
+        total += helperAssignDeductionAmount(he)
       }
     }
   }
   return total
+}
+
+/** Helpers whose hours are assigned to this lead on this job (for payroll UI). */
+export function listHelperAssignmentsForLeadJob(
+  allEntries: Record<string, PayrollEntry>,
+  leadPersonKey: string,
+  jobId: string,
+  jobName: string,
+): { helperPersonKey: string; helperName: string; amount: number }[] {
+  const rows: { helperPersonKey: string; helperName: string; amount: number }[] = []
+  for (const [helperKey, e] of Object.entries(allEntries)) {
+    for (const he of e.hourEntries || []) {
+      if (he.assignToPersonId !== leadPersonKey) continue
+      if (!jobsMatch(he.jobId, he.jobName, jobId, jobName)) continue
+      const amount = helperAssignDeductionAmount(he)
+      if (amount <= 0) continue
+      rows.push({
+        helperPersonKey: helperKey,
+        helperName: e.personName || he.assignToPersonName || helperKey,
+        amount,
+      })
+    }
+  }
+  return rows
+}
+
+/** Allocate a job-level helper deduction across piece rows on that job (drywall parity). */
+export function pieceRowHelperDeduction(
+  pieceEntries: PayrollPieceEntry[] | undefined,
+  pe: PayrollPieceEntry,
+  jobHelperDeduction: number,
+): { raw: number; helperShare: number; net: number } {
+  const raw = parseFloat(String(pe.amount)) || 0
+  const sameJob = (Array.isArray(pieceEntries) ? pieceEntries : []).filter((x) =>
+    jobsMatch(x.jobId, x.jobName, pe.jobId, pe.jobName),
+  )
+  const jobRawTotal = sameJob.reduce((sum, x) => sum + (parseFloat(String(x.amount)) || 0), 0)
+  const ratio = jobRawTotal > 0 ? Math.min(1, jobHelperDeduction / jobRawTotal) : 0
+  const helperShare = raw * ratio
+  return { raw, helperShare, net: Math.max(0, raw - helperShare) }
 }
 
 export function getNetPieceTotal(
@@ -376,12 +468,7 @@ export function getCalculationDetail(
       for (const he of ent.hourEntries || []) {
         if (he.assignToPersonId !== fromPid) continue
         if (jobsMatch(he.jobId, he.jobName, jobId, jobName)) {
-          const rate = parseFloat(String(he.assignRate))
-          if (!Number.isNaN(rate) && rate > 0) {
-            total += (parseFloat(String(he.hours)) || 0) * rate
-          } else {
-            total += parseFloat(String(he.assignAmount)) || 0
-          }
+          total += helperAssignDeductionAmount(he)
         }
       }
     }
@@ -509,6 +596,60 @@ export function quoteFromProjectMetadata(metadata: unknown): Record<string, unkn
     if (q && typeof q === 'object') return q as Record<string, unknown>
   }
   return undefined
+}
+
+function numOrNull(v: unknown): number | null {
+  if (v == null || v === '') return null
+  const n = typeof v === 'string' ? parseFloat(v) : Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+function fieldTakeoffFromProjectMetadata(metadata: unknown): Record<string, unknown> | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
+  const meta = metadata as Record<string, unknown>
+  const legacy = meta.legacy
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null
+  const takeoff = (legacy as Record<string, unknown>).fieldTakeoff
+  if (!takeoff || typeof takeoff !== 'object' || Array.isArray(takeoff)) return null
+  return takeoff as Record<string, unknown>
+}
+
+/**
+ * Labor rates for payroll piece defaults.
+ * Precedence: order-approved rates → v3 project rates → v2 quote rates.
+ */
+export function laborRatesFromProjectMetadata(metadata: unknown): {
+  hangerRate: number | null
+  finisherRate: number | null
+  prepCleanRate: number | null
+} {
+  const quote = quoteFromProjectMetadata(metadata) ?? {}
+  const takeoff = fieldTakeoffFromProjectMetadata(metadata)
+  const approved =
+    takeoff?.reviewApprovedRates &&
+    typeof takeoff.reviewApprovedRates === 'object' &&
+    !Array.isArray(takeoff.reviewApprovedRates)
+      ? (takeoff.reviewApprovedRates as Record<string, unknown>)
+      : null
+
+  const approvedHanger = approved ? numOrNull(approved.hangerRate) : null
+  const approvedFinisher = approved ? numOrNull(approved.finisherRate) : null
+  const approvedPrep = approved ? numOrNull(approved.prepCleanRate) : null
+
+  return {
+    hangerRate:
+      approvedHanger != null && approvedHanger > 0
+        ? approvedHanger
+        : numOrNull(quote.project_hanger_rate) ?? numOrNull(quote.hangerRate),
+    finisherRate:
+      approvedFinisher != null && approvedFinisher > 0
+        ? approvedFinisher
+        : numOrNull(quote.project_finisher_rate) ?? numOrNull(quote.finisherRate),
+    prepCleanRate:
+      approvedPrep != null && approvedPrep > 0
+        ? approvedPrep
+        : numOrNull(quote.prep_clean_rate) ?? numOrNull(quote.prepCleanRate),
+  }
 }
 
 /** Field measurement total sqft from metadata.legacy.fieldTakeoff.totalMeasuredSqft */

@@ -11,6 +11,7 @@ import {
   entriesWithPay,
   getCalculationDetail,
   getToolDeductionThisWeek,
+  helperAssignDeductionAmount,
   jobsMatch,
   personKey,
   splitGrossByDivisions,
@@ -65,12 +66,7 @@ export function exportPayrollRunPdf(
       for (const he of ent.hourEntries || []) {
         if (he.assignToPersonId !== fromPid) continue
         if (jobsMatch(he.jobId, he.jobName, jobId, jobName)) {
-          const rate = parseFloat(String(he.assignRate))
-          if (!Number.isNaN(rate) && rate > 0) {
-            total += (parseFloat(String(he.hours)) || 0) * rate
-          } else {
-            total += parseFloat(String(he.assignAmount)) || 0
-          }
+          total += helperAssignDeductionAmount(he)
         }
       }
     }
