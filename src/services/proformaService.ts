@@ -712,15 +712,6 @@ function calculateForSalePhasedLocProForma(
   tradeEstimatedCost: number,
 ): ProFormaProjection {
   const engineVersion = 'for-sale-loc-v2.4-loc-interest'
-  const debugEnabled = typeof globalThis !== 'undefined' && (globalThis as any).__HSH_DEBUG_FOR_SALE_LOC__ === true
-  if (debugEnabled) {
-    console.log('[FOR-SALE LOC] entering engine', {
-      engineVersion,
-      mode: input.proFormaMode,
-      projectId: input.projectId,
-      projectionMonths: input.projectionMonths,
-    })
-  }
   const config = input.forSalePhasedLoc!
   const phases = (config.phases || []).filter((p) => p.unitCount > 0 && p.buildMonths > 0)
   const fallbackUnits = Math.max(1, config.totalUnits || 1)
@@ -1109,23 +1100,6 @@ function calculateForSalePhasedLocProForma(
         debtRepaymentWarning =
           'Project does not generate sufficient proceeds to fully repay LOC/Bond debt'
       }
-
-      if (debugEnabled) {
-        console.log('[FOR-SALE LOC] final debt clearance event', {
-          month: monthKey,
-          phase: activePhaseName,
-          allUnitsClosed,
-          isFinalMonth,
-          locBeforeFinalClearance,
-          bondBeforeFinalClearance,
-          locPayoff,
-          bondPayoff,
-          totalPayoff,
-          finalLocAfterClearance: locBalance,
-          finalBondAfterClearance: bondBalance,
-          warning: debtRepaymentWarning,
-        })
-      }
     } else {
       // Distribution should occur only at closings, not from deposit cash.
       const closeOnlyDistribution = Math.max(0, closeRevenue) * Math.max(0, distributionPct)
@@ -1296,23 +1270,6 @@ function calculateForSalePhasedLocProForma(
       stabilizedOccupancy: 0,
     },
     forSaleLocTimeline,
-  }
-  if (debugEnabled) {
-    console.log('[FOR-SALE LOC] engine completed', {
-      engineVersion,
-      peakLoc: result.summary.forSalePeakLocBalance,
-      endingLoc: result.summary.forSaleEndingLocBalance,
-      sweepExecuted: result.summary.forSaleSweepExecuted,
-      finalLocBeforeSweep: result.summary.forSaleFinalLocBeforeSweep,
-      finalLocAfterSweep: result.summary.forSaleFinalLocAfterSweep,
-      closedUnits: result.summary.forSaleClosedUnits,
-      totalUnits: result.summary.forSaleTotalUnits,
-      activations: result.summary.forSalePhaseActivations,
-      fundingAudit: result.summary.forSaleFundingAudit,
-      peakBond: result.summary.forSalePeakBondBalance,
-      endingBond: result.summary.forSaleEndingBondBalance,
-      drawnBond: result.summary.forSaleBondDrawnTotal,
-    })
   }
   return result
 }
@@ -1889,6 +1846,3 @@ export function generateDefaultMilestones(
 
   return milestones
 }
-
-
-

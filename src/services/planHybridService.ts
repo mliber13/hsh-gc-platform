@@ -60,11 +60,9 @@ function transformPlanToSupabase(plan: Plan): any {
  * Get all plans (hybrid)
  */
 export async function getAllPlans_Hybrid(): Promise<Plan[]> {
-  console.log('🔍 getAllPlans_Hybrid - Online mode:', isOnlineMode());
   
   if (isOnlineMode()) {
     try {
-      console.log('📡 Fetching plans from Supabase...');
       const { data, error } = await supabase
         .from('plans')
         .select('*')
@@ -72,30 +70,22 @@ export async function getAllPlans_Hybrid(): Promise<Plan[]> {
 
       if (error) {
         console.error('❌ Error fetching plans from Supabase:', error);
-        console.log('↩️ Falling back to localStorage');
         // Fall back to localStorage
         const localPlans = getAllPlans();
-        console.log('📋 localStorage plans:', localPlans.length);
         return localPlans;
       }
 
-      console.log('✅ Supabase plans fetched:', data.length);
       // Transform Supabase data to Plan format
       const transformedPlans = data.map(plan => transformPlanFromSupabase(plan));
-      console.log('📋 Transformed plans:', transformedPlans);
       return transformedPlans;
     } catch (error) {
       console.error('❌ Error fetching plans from Supabase:', error);
-      console.log('↩️ Falling back to localStorage');
       // Fall back to localStorage
       const localPlans = getAllPlans();
-      console.log('📋 localStorage plans:', localPlans.length);
       return localPlans;
     }
   } else {
-    console.log('💾 Using localStorage (offline mode)');
     const localPlans = getAllPlans();
-    console.log('📋 localStorage plans:', localPlans.length);
     return localPlans;
   }
 }
@@ -172,7 +162,6 @@ export async function createPlan_Hybrid(input: CreatePlanInput): Promise<Plan> {
         return plan;
       }
 
-      console.log('Plan created in both localStorage and Supabase');
       return plan;
     } catch (error) {
       console.error('Error creating plan in Supabase:', error);
@@ -209,7 +198,6 @@ export async function updatePlan_Hybrid(planId: string, updates: UpdatePlanInput
         console.error('Error updating plan in Supabase:', error);
         // Still return localStorage plan even if Supabase fails
       } else {
-        console.log('Plan updated in both localStorage and Supabase');
       }
     } catch (error) {
       console.error('Error updating plan in Supabase:', error);
@@ -238,7 +226,6 @@ export async function deletePlan_Hybrid(planId: string): Promise<boolean> {
       if (error) {
         console.error('Error deleting plan from Supabase:', error);
       } else {
-        console.log('Plan deleted from both localStorage and Supabase');
       }
     } catch (error) {
       console.error('Error deleting plan from Supabase:', error);

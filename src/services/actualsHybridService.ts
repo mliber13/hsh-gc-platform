@@ -387,23 +387,15 @@ export async function getActualsForProjects_Hybrid(
 }
 
 export async function getProjectActuals_Hybrid(projectId: string): Promise<any | null> {
-  console.log('🔍 getProjectActuals_Hybrid called for project:', projectId)
   
   if (isOnlineMode()) {
-    console.log('🌐 Online mode - fetching from Supabase')
     try {
       // Fetch all entries from Supabase
-      console.log('📡 Fetching labor entries...')
       const laborEntries = await fetchLaborEntries(projectId)
-      console.log('📡 Labor entries fetched:', laborEntries.length, laborEntries)
       
-      console.log('📡 Fetching material entries...')
       const materialEntries = await fetchMaterialEntries(projectId)
-      console.log('📡 Material entries fetched:', materialEntries.length, materialEntries)
       
-      console.log('📡 Fetching subcontractor entries...')
       const subcontractorEntries = await fetchSubcontractorEntries(projectId)
-      console.log('📡 Subcontractor entries fetched:', subcontractorEntries.length, subcontractorEntries)
       
       // Calculate totals
       const {
@@ -413,13 +405,6 @@ export async function getProjectActuals_Hybrid(projectId: string): Promise<any |
         totalActualCost,
       } = computeActualsTotals(laborEntries, materialEntries, subcontractorEntries)
       
-      console.log('💰 Calculated totals:', {
-        totalLaborCost,
-        totalMaterialCost,
-        totalSubcontractorCost,
-        totalActualCost
-      })
-      
       const result = buildProjectActuals(
         projectId,
         laborEntries,
@@ -427,20 +412,15 @@ export async function getProjectActuals_Hybrid(projectId: string): Promise<any |
         subcontractorEntries,
       )
       
-      console.log('✅ Returning actuals result:', result)
       return result
     } catch (error) {
       console.error('❌ Error fetching actuals from Supabase:', error)
-      console.log('🔄 Falling back to localStorage...')
       // Fall back to localStorage
       const localResult = getProjectActualsLS(projectId)
-      console.log('💾 localStorage result:', localResult)
       return localResult
     }
   } else {
-    console.log('💾 Offline mode - using localStorage')
     const localResult = getProjectActualsLS(projectId)
-    console.log('💾 localStorage result:', localResult)
     return localResult
   }
 }
@@ -453,7 +433,6 @@ export async function getProjectActuals_Hybrid(projectId: string): Promise<any |
  * Sync an actuals entry to QuickBooks as a Check
  */
 async function syncEntryToQB(entryType: 'labor' | 'material' | 'subcontractor', created: any, originalEntry: any): Promise<void> {
-  console.log(`📤 Syncing ${entryType} entry to QuickBooks...`)
   
   try {
     // Determine vendor name based on entry type
@@ -486,7 +465,6 @@ async function syncEntryToQB(entryType: 'labor' | 'material' | 'subcontractor', 
     })
     
     if (result.success) {
-      console.log(`✅ Synced to QuickBooks - Check ID: ${result.checkId}`)
       
       // Update entry with QB sync status
       const table = entryType === 'labor' ? 'labor_entries' :
@@ -519,4 +497,3 @@ async function syncEntryToQB(entryType: 'labor' | 'material' | 'subcontractor', 
     console.error('Error syncing to QB:', error)
   }
 }
-

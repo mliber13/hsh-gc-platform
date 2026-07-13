@@ -83,10 +83,6 @@ export function PrintableReport({
   }, {} as Record<string, Trade[]>)
 
   // Debug logging
-  console.log('PrintableReport Data:', {
-    totalTrades: trades.length,
-    categories: categoryOrder,
-  })
 
   const handlePrint = () => {
     // Get the printable content
@@ -581,4 +577,3 @@ function FullDetailView({ tradesByCategory, categoryOrder, reportType, actualEnt
     </div>
   )
 }
-

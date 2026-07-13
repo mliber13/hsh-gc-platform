@@ -444,28 +444,20 @@ export function importAllData(data: ExportData, merge: boolean = false): void {
       clearAllData()
     }
 
-    console.log('Starting import...')
-
     // Import all collections - use empty arrays as defaults
     projectStorage.saveAll(data.projects || [])
-    console.log('Projects imported:', data.projects?.length || 0)
     
     estimateStorage.saveAll(data.estimates || [])
-    console.log('Estimates imported:', data.estimates?.length || 0)
     
     tradeStorage.saveAll(data.trades || [])
-    console.log('Trades imported:', data.trades?.length || 0)
     
     takeoffStorage.saveAll(data.takeoffItems || [])
     actualsStorage.saveAll(data.actuals || [])
     laborStorage.saveAll(data.laborEntries || [])
-    console.log('Labor entries imported:', data.laborEntries?.length || 0)
     
     materialStorage.saveAll(data.materialEntries || [])
-    console.log('Material entries imported:', data.materialEntries?.length || 0)
     
     subcontractorStorage.saveAll(data.subcontractorEntries || [])
-    console.log('Subcontractor entries imported:', data.subcontractorEntries?.length || 0)
     
     dailyLogStorage.saveAll(data.dailyLogs || [])
     changeOrderStorage.saveAll(data.changeOrders || [])
@@ -476,19 +468,16 @@ export function importAllData(data: ExportData, merge: boolean = false): void {
     
     if (data.itemTemplates) {
       localStorage.setItem('hsh_gc_item_templates', JSON.stringify(data.itemTemplates))
-      console.log('Item templates imported:', data.itemTemplates?.length || 0)
     }
     
     if (data.plans) {
       localStorage.setItem('hsh-plans', JSON.stringify(data.plans))
-      console.log('Plans imported:', data.plans?.length || 0)
     }
     
     if (data.userPreferences) {
       saveUserPreferences(data.userPreferences)
     }
 
-    console.log('✅ All data imported successfully')
   } catch (error) {
     console.error('❌ Error importing data:', error)
     throw new Error('Failed to import data')
@@ -521,7 +510,6 @@ export function clearAllData(): void {
   // Also clear item templates and plans (separate storage keys)
   localStorage.removeItem('hsh_gc_item_templates')
   localStorage.removeItem('hsh-plans')
-  console.log('All data cleared')
 }
 
 /**
@@ -579,4 +567,3 @@ export function validateStorage(): boolean {
     return false
   }
 }
-

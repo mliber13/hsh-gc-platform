@@ -380,7 +380,6 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
                   <CardTitle>Base Plan Documents</CardTitle>
                   <Button
                     onClick={() => {
-                      console.log('Upload button clicked for base plan')
                       setUploadingFor({ type: 'base' })
                     }}
                     size="sm"
@@ -752,5 +751,3 @@ export function PlanEditor({ plan, onBack, onSave }: PlanEditorProps) {
     </div>
   )
 }
-
-

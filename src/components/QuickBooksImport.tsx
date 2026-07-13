@@ -451,7 +451,6 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                 const result = await getQBJobTransactions(true)
                 if (result._debug) {
                   const excludedCount = Array.isArray(result._excluded) ? result._excluded.length : 0
-                  console.log('QB Job Transactions debug: excluded count =', excludedCount)
                   toast.info(`Debug: excluded count = ${excludedCount}. Full response in Network tab (qb-get-job-transactions).`)
                 }
               }}
@@ -526,7 +525,6 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                     try {
                       const res = await getQBJobTransactions(undefined, true)
                       const { projectTotals: totals, error: err } = res
-                      console.log('Fill from QBO response:', { hasProjectTotals: !!totals, projectTotalsKeys: totals ? Object.keys(totals) : [], sampleProject: projects[0] ? { name: projects[0].name, qbProjectId: projects[0].qbProjectId } : null })
                       if (err) {
                         setError(err)
                         return
@@ -1070,7 +1068,6 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                     const result = await getQBJobTransactions(true, includeUnassigned)
                     const d = result._debug as Record<string, unknown> | undefined
                     if (d) {
-                      console.log('QB full _debug:', d)
                       if (d.earlyReturn === true) {
                         const msg =
                           (result.error ?? 'No accounts/classes matched') +
@@ -1079,29 +1076,15 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                         return
                       }
                       const counts = d.counts as { beforeProjectFilter?: number; afterProjectFilter?: number; pendingCount?: number } | undefined
-                      console.log(
-                        'QB debug counts:',
-                        'beforeProjectFilter:', counts?.beforeProjectFilter,
-                        '| afterProjectFilter:', counts?.afterProjectFilter,
-                        '| pendingCount:', counts?.pendingCount
-                      )
-                      if (counts) console.log('QB debug counts (object):', JSON.stringify(counts))
-                      console.log('QB checksSummary (search for check # or vendor):', d.checksSummary)
                       const checksFetched = (d as { checksFetched?: number }).checksFetched
                       const checkQueryOk = (d as { checkQueryOk?: boolean }).checkQueryOk
                       const checkQueryStatus = (d as { checkQueryStatus?: number }).checkQueryStatus
                       const checkFault = (d as { checkFault?: unknown }).checkFault
                       const checkResponseKeys = (d as { checkResponseKeys?: string[] }).checkResponseKeys
-                      console.log('QB Check query: ok =', checkQueryOk, 'status =', checkQueryStatus, 'checksFetched =', checksFetched)
-                      if (checkFault) console.log('QB Check query Fault (API error):', checkFault)
                       const checkErrorBody = (d as { checkErrorBody?: unknown }).checkErrorBody
                       const checkErrorText = (d as { checkErrorText?: string }).checkErrorText
-                      if (checkErrorBody) console.log('QB Check query 400 error body:', checkErrorBody)
-                      if (checkErrorText) console.log('QB Check query 400 error (raw text):', checkErrorText)
-                      if (checkResponseKeys?.length !== undefined) console.log('QB Check response keys:', checkResponseKeys)
                       const cs = (d.checksSummary ?? []) as Array<{ DocNumber?: string; vendor?: string; status?: string }>
                       const johnny = cs.filter((c) => (c.vendor ?? '').toLowerCase().includes('johnny'))
-                      if (johnny.length > 0) console.log('Checks from Johnny:', johnny)
                       const msg = counts
                         ? `beforeProject: ${counts.beforeProjectFilter ?? 0}, afterProject: ${counts.afterProjectFilter ?? 0}, pending: ${counts.pendingCount ?? 0}. See console for checksSummary.`
                         : 'See console for _debug.'

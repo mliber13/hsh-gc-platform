@@ -93,7 +93,6 @@ export async function sendQuoteRequestEmail(input: SendQuoteRequestEmailInput): 
 
     if (data && typeof data === 'object' && 'success' in data) {
       if (data.success === true) {
-        console.log('Email sent successfully via Edge Function')
         return true
       } else {
         console.warn('Edge Function returned success: false', data)
@@ -164,12 +163,6 @@ export interface SendFeedbackNotificationInput {
  */
 export async function sendFeedbackNotification(input: SendFeedbackNotificationInput): Promise<boolean> {
   try {
-    console.log('📧 Calling send-feedback-email Edge Function...')
-    console.log('📧 Email details:', {
-      to: input.to,
-      notificationType: input.notificationType,
-      feedbackTitle: input.feedbackTitle,
-    })
     
     // Try using Supabase Edge Function first
     const { data, error } = await supabase.functions.invoke('send-feedback-email', {
@@ -196,11 +189,8 @@ export async function sendFeedbackNotification(input: SendFeedbackNotificationIn
       return false
     }
 
-    console.log('📧 Edge Function response:', data)
-
     if (data && typeof data === 'object' && 'success' in data) {
       if (data.success === true) {
-        console.log('✅ Feedback email sent successfully via Edge Function')
         return true
       } else {
         console.warn('⚠️ Edge Function returned success: false', data)

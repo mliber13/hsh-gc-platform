@@ -75,7 +75,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
   const loadProjectForms = async () => {
     try {
       setLoading(true);
-      console.log('Loading forms for project:', projectId);
       
       const { data, error } = await supabase
         .from('project_forms')
@@ -88,7 +87,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
         return;
       }
       
-      console.log('Loaded forms:', data);
       setForms(data || []);
     } catch (error) {
       console.error('Error loading forms:', error);
@@ -98,7 +96,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
   };
 
   const createNewForm = async (formType: string) => {
-    console.log('Creating new form:', formType);
     try {
       const organizationId = await requireUserOrgId();
       const { data, error } = await supabase
@@ -120,8 +117,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
         return;
       }
 
-      console.log('Form created successfully:', data);
-      
       // Reload forms to get the latest data
       await loadProjectForms();
       
@@ -149,8 +144,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
         return;
       }
 
-      console.log('Form deleted successfully');
-      
       // Reload forms to get the latest data
       await loadProjectForms();
       
@@ -1509,7 +1502,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
           onClose={() => setSelectedForm(null)}
           onSave={async (formData) => {
             try {
-              console.log('Saving form data:', formData);
               
               const { error } = await supabase
                 .from('project_forms')
@@ -1525,8 +1517,6 @@ export const ProjectForms: React.FC<ProjectFormsProps> = ({ projectId, project, 
                 return;
               }
 
-              console.log('Form saved successfully');
-              
               // Reload forms to get the latest data
               await loadProjectForms();
               

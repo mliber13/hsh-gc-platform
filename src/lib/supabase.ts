@@ -7,17 +7,8 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-console.log('🔍 Supabase Config Check:', {
-  hasUrl: !!supabaseUrl,
-  hasKey: !!supabaseAnonKey,
-  urlValue: supabaseUrl?.substring(0, 30) + '...',
-  keyValue: supabaseAnonKey?.substring(0, 20) + '...'
-})
-
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('⚠️ Supabase credentials not found. Running in offline mode with localStorage.')
-} else {
-  console.log('✅ Supabase credentials loaded. Running in online mode.')
 }
 
 export const supabase = createClient(
@@ -39,7 +30,6 @@ export const isOnlineMode = () => {
     supabaseUrl !== 'https://placeholder.supabase.co' &&
     supabaseUrl !== 'your_supabase_project_url_here'
   )
-  console.log('🌐 Online Mode Check:', isOnline)
   return isOnline
 }
 
@@ -133,4 +123,3 @@ export type Database = {
     }
   }
 }
-

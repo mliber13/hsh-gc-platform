@@ -25,20 +25,12 @@ export function QuickBooksCallback({ onComplete }: QuickBooksCallbackProps) {
 
   const handleCallback = async () => {
     try {
-      console.log('=== QB CALLBACK HANDLER STARTED ===')
-      console.log('Full URL:', window.location.href)
       
       // Get code and state from URL
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code')
       const state = params.get('state')
       const realmId = params.get('realmId') // QB Company ID
-      
-      console.log('URL Params:', {
-        code: code ? code.substring(0, 20) + '...' : null,
-        state: state,
-        realmId: realmId
-      })
       
       if (!code || !state) {
         console.error('Missing code or state parameter')
@@ -47,15 +39,10 @@ export function QuickBooksCallback({ onComplete }: QuickBooksCallbackProps) {
         return
       }
 
-      console.log('Processing QB OAuth callback...')
-
       // Exchange code for tokens
-      console.log('Calling handleQBOAuthCallback...')
       const success = await handleQBOAuthCallback(code, state, realmId || '')
-      console.log('handleQBOAuthCallback result:', success)
       
       if (success) {
-        console.log('✅ QB connection successful!')
         setStatus('success')
         // Redirect to QB settings after 2 seconds
         setTimeout(() => {
@@ -108,4 +95,3 @@ export function QuickBooksCallback({ onComplete }: QuickBooksCallbackProps) {
     </div>
   )
 }
-

@@ -105,7 +105,6 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
 
   const handleDeleteQuoteRequest = (requestId: string) => {
-    console.log('handleDeleteQuoteRequest called with requestId:', requestId)
     setQuoteRequestToDelete(requestId)
     setDeleteDialogOpen(true)
   }
@@ -113,12 +112,8 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
   const confirmDeleteQuoteRequest = async () => {
     if (!quoteRequestToDelete) return
 
-    console.log('User confirmed delete, proceeding with:', quoteRequestToDelete)
-
     try {
-      console.log('Calling deleteQuoteRequest_Hybrid...')
       const deleted = await deleteQuoteRequest_Hybrid(quoteRequestToDelete)
-      console.log('deleteQuoteRequest_Hybrid returned:', deleted)
       
       if (deleted) {
         // Remove from state
@@ -211,7 +206,6 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
         await updateTrade_Hybrid(tradeId, updates)
         const costLabel = vendorType === 'supplier' ? 'material' : 'subcontractor'
         const clearedLabel = vendorType === 'supplier' ? 'subcontractor' : 'labor'
-        console.log(`✅ Applied ${costLabel} quote amount ${formatCurrency(quote.totalAmount)} to trade ${tradeId} (cleared ${clearedLabel} cost)`)
         toast.success(`Quote amount ${formatCurrency(quote.totalAmount)} applied to ${costLabel} cost. ${clearedLabel.charAt(0).toUpperCase() + clearedLabel.slice(1)} cost cleared`)
         return true
       } else {
@@ -291,9 +285,6 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                     }
 
               await updateTrade_Hybrid(input.assignedTradeId, updates)
-              console.log(
-                `✅ Updated trade ${input.assignedTradeId}: quote $${quote.totalAmount} set as line total (${vendorType})`
-              )
             } else {
               console.warn(`Trade ${input.assignedTradeId} not found`)
             }
@@ -604,7 +595,6 @@ export function QuoteReviewDashboard({ project, onBack }: QuoteReviewDashboardPr
                             onClick={(e) => {
                               e.preventDefault()
                               e.stopPropagation()
-                              console.log('Delete button clicked for request:', request.id)
                               handleDeleteQuoteRequest(request.id)
                             }}
                             variant="destructive"

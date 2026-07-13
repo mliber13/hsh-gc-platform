@@ -1707,7 +1707,6 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
         : undefined,
     }
     if ((globalThis as any).__HSH_DEBUG_FOR_SALE_LOC__ === true && input.forSalePhasedLoc) {
-      console.log('[FOR-SALE LOC] mapped input payload', input.forSalePhasedLoc)
     }
 
     const result = calculateProForma(project, trades, input)
@@ -5103,15 +5102,6 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
                     variant="outline" 
                     onClick={() => {
                       if (projection) {
-                        console.log('[FOR-SALE LOC] exporting PDF from projection state', {
-                          engineVersion: projection.summary.forSaleEngineVersion,
-                          peakLoc: projection.summary.forSalePeakLocBalance,
-                          endingLoc: projection.summary.forSaleEndingLocBalance,
-                          sweepExecuted: projection.summary.forSaleSweepExecuted,
-                          finalLocBeforeSweep: projection.summary.forSaleFinalLocBeforeSweep,
-                          finalLocAfterSweep: projection.summary.forSaleFinalLocAfterSweep,
-                          activations: projection.summary.forSalePhaseActivations,
-                        })
                         exportProFormaToPDF(projection)
                       }
                     }} 
@@ -5157,6 +5147,3 @@ export function ProFormaGenerator({ project, onClose }: ProFormaGeneratorProps) 
     </div>
   )
 }
-
-
-

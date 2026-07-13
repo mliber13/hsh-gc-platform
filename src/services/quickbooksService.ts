@@ -94,14 +94,11 @@ export async function handleQBOAuthCallback(code: string, state: string, realmId
   }
   
   try {
-    console.log('Calling Edge Function to exchange token...')
     // Call our Supabase Edge Function to exchange code for tokens
     // This keeps the client secret secure on the server
     const { data, error } = await supabase.functions.invoke('qb-exchange-token', {
       body: { code, redirect_uri: QB_REDIRECT_URI }
     })
-    
-    console.log('Edge Function response:', { data, error })
     
     if (error) {
       console.error('Error exchanging QB token:', error)
@@ -113,12 +110,9 @@ export async function handleQBOAuthCallback(code: string, state: string, realmId
       return false
     }
     
-    console.log('Tokens received from Edge Function, access_token length:', data.access_token?.length)
-    
     // Store tokens in user profile (include realmId from URL)
     try {
       await saveQBTokens({ ...data, realmId })
-      console.log('Tokens saved successfully')
     } catch (saveError) {
       console.error('Failed to save tokens:', saveError)
       throw saveError
@@ -139,8 +133,6 @@ async function saveQBTokens(tokens: any): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('No user logged in')
   
-  console.log('Saving QB tokens to profile...')
-  
   const { error } = await supabase
     .from('profiles')
     .update({
@@ -157,7 +149,6 @@ async function saveQBTokens(tokens: any): Promise<void> {
     throw error
   }
   
-  console.log('QB tokens saved successfully')
 }
 
 /**
@@ -404,10 +395,7 @@ export async function getQBProjects(): Promise<{ projects: QBProject[]; error?: 
  */
 export async function testQBConnection(): Promise<boolean> {
   try {
-    console.log('Testing QB connection...')
     const { data, error } = await supabase.functions.invoke('qb-test-connection')
-    
-    console.log('QB test response:', { data, error })
     
     if (error) {
       console.error('QB connection test failed:', error)
@@ -416,7 +404,6 @@ export async function testQBConnection(): Promise<boolean> {
     }
     
     if (data.connected) {
-      console.log('QB Company Info:', data)
       toast.success(`Connected to: ${data.company}\n\nBank Accounts: ${data.bankAccounts?.length || 0}\nExpense Accounts: ${data.expenseAccounts?.length || 0}`)
       return true
     }
@@ -439,4 +426,3 @@ function generateRandomState(): string {
   return Math.random().toString(36).substring(2, 15) + 
          Math.random().toString(36).substring(2, 15)
 }
-

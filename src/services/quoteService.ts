@@ -236,8 +236,6 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
 export async function fetchQuoteRequestByToken(token: string): Promise<QuoteRequest | null> {
   if (!isOnlineMode()) return null
 
-  console.log('Fetching quote request with token:', token.substring(0, 8) + '...')
-
   const { data, error } = await supabase
     .from('quote_requests')
     .select('*')
@@ -355,8 +353,6 @@ export async function deleteQuoteRequest(quoteRequestId: string): Promise<boolea
     return false
   }
 
-  console.log('deleteQuoteRequest: Attempting to delete quote request', quoteRequestId, 'for user', user.id)
-
   // First check if user owns this quote request
   const { data: request, error: fetchError } = await supabase
     .from('quote_requests')
@@ -382,8 +378,6 @@ export async function deleteQuoteRequest(quoteRequestId: string): Promise<boolea
     return false
   }
 
-  console.log('deleteQuoteRequest: User owns quote request, proceeding with delete')
-
   // Delete the quote request (cascade will handle submitted quotes if configured)
   const { error } = await supabase
     .from('quote_requests')
@@ -395,8 +389,6 @@ export async function deleteQuoteRequest(quoteRequestId: string): Promise<boolea
     console.error('deleteQuoteRequest: Error details:', JSON.stringify(error, null, 2))
     return false
   }
-
-  console.log('deleteQuoteRequest: Successfully deleted quote request', quoteRequestId)
 
   return true
 }
@@ -662,4 +654,3 @@ export async function updateQuoteStatus(input: UpdateQuoteStatusInput): Promise<
     updatedAt: new Date(data.updated_at),
   }
 }
-

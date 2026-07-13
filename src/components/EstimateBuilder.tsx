@@ -341,19 +341,15 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       return
     }
 
-    console.log('Saving trade:', tradeData)
-
     try {
       let updatedTrade: Trade
 
       if (isAddingTrade) {
         // Add new trade
-        console.log('Adding new trade to estimate:', projectData.estimate.id)
         updatedTrade = await addTrade_Hybrid(projectData.estimate.id, {
           ...tradeData,
           pendingReview: false,
         })
-        console.log('Trade added successfully:', updatedTrade)
         setTrades(prev => [...prev, updatedTrade])
       } else {
         // Update existing trade
@@ -362,7 +358,6 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           return
         }
         
-        console.log('Updating trade:', tradeData.id)
         const result = await updateTrade_Hybrid(tradeData.id, {
           ...tradeData,
           pendingReview: false,
@@ -372,13 +367,11 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           return
         }
         updatedTrade = result
-        console.log('Trade updated successfully:', updatedTrade)
         setTrades(prev => prev.map(t => t.id === tradeData.id ? updatedTrade! : t))
       }
 
       // Reload trades from storage to ensure we have the latest
       const reloadedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
-      console.log('Reloaded trades from storage:', reloadedTrades)
       setTrades(reloadedTrades)
 
       // Project data will be updated through trade storage
@@ -810,7 +803,6 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   }
 
   const handleApplyTemplate = async () => {
-    console.log('🔵 Apply Template clicked', { selectedTemplateToApply, projectData: projectData?.id })
     
     if (!selectedTemplateToApply) {
       toast.error('Please select a template')
@@ -829,18 +821,15 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
         `This estimate currently has ${trades.length} trade(s). Applying a template will ADD the template's trades to your existing trades. Continue?`
       )
       if (!confirmed) {
-        console.log('⚠️ User cancelled')
         return
       }
     }
 
     try {
       setIsApplyingTemplate(true)
-      console.log('📋 Applying template:', selectedTemplateToApply)
       
       // Apply template creates new trades from the template
       const templateTrades = await applyTemplateToEstimate(selectedTemplateToApply, projectData.estimate.id)
-      console.log('✅ Template trades created:', templateTrades.length)
       
       if (templateTrades.length === 0) {
         toast.error('Template has no trades to apply')
@@ -848,7 +837,6 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
       }
 
       // Add trades in parallel; for each created trade, add sub-items in parallel.
-      console.log('💾 Adding trades to database in parallel...', { tradeCount: templateTrades.length })
       const createdTrades = await Promise.all(
         templateTrades.map(async (templateTrade) => {
           const created = await addTrade_Hybrid(projectData.estimate.id, {
@@ -900,15 +888,10 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
           return created
         })
       )
-      console.log('✅ Parallel inserts complete', {
-        createdTradeCount: createdTrades.filter(Boolean).length,
-      })
 
       // Reload trades to show the new ones
-      console.log('🔄 Reloading trades...')
       const updatedTrades = await getTradesForEstimate_Hybrid(projectData.estimate.id)
       setTrades(updatedTrades)
-      console.log('✅ Trades reloaded:', updatedTrades.length)
 
       toast.success(`Applied template — added ${templateTrades.length} trade(s)`)
       setShowApplyTemplateDialog(false)
@@ -2130,7 +2113,6 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                 </Select>
               </div>
             </div>
-
 
             {/* Estimate Status Section */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

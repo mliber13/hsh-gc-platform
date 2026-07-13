@@ -71,9 +71,7 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
   useEffect(() => {
     // Load plans from Plan Library
     const loadPlans = async () => {
-      console.log('🔍 Loading plans from hybrid service...');
       const plans = await getActivePlans_Hybrid()
-      console.log('📋 Plans loaded:', plans.length, plans);
       setAvailablePlans(plans)
     }
     loadPlans()
@@ -692,4 +690,3 @@ export function CreateProjectForm({ onBack, onCreate }: CreateProjectFormProps) 
     </div>
   )
 }
-

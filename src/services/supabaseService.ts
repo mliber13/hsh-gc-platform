@@ -67,8 +67,6 @@ async function transformProject(row: any): Promise<Project> {
     totalEstimate: 0,
   }
 
-  console.log(`Project ${row.name} estimate ID: ${finalEstimate.id}`)
-
   const schedule = await fetchScheduleByProjectId(row.id)
 
   return {
@@ -4275,7 +4273,6 @@ export async function uploadProjectDocument(
     if (bucketError) {
       console.warn('Could not list buckets (may be RLS restriction):', bucketError)
     } else {
-      console.log('Available buckets:', buckets?.map(b => b.id))
       const bucketExists = buckets?.some(b => b.id === 'project-documents')
       if (!bucketExists) {
         console.warn('Bucket "project-documents" not found in list. Available buckets:', buckets?.map(b => b.id))
@@ -5093,4 +5090,3 @@ export async function updateDealDocument(
 // ============================================================================
 
 export { isOnlineMode }
-

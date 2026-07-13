@@ -52,17 +52,13 @@ export async function submitFeedback(input: CreateFeedbackInput): Promise<Feedba
 
     // Send email notification to admin(s)
     try {
-      console.log('📧 Attempting to send feedback notification email...')
       
       // Get all admins in the organization
       const orgUsers = await getOrganizationUsers()
-      console.log('👥 Organization users:', orgUsers.length)
       
       const admins = orgUsers.filter((u) => isFeedbackOwner(u))
-      console.log('👑 Admins found:', admins.length)
       
       const adminEmails = admins.map(a => a.email).filter(Boolean) as string[]
-      console.log('📮 Admin emails:', adminEmails)
 
       if (adminEmails.length > 0) {
         // Get submitter info
@@ -73,7 +69,6 @@ export async function submitFeedback(input: CreateFeedbackInput): Promise<Feedba
           .single()
 
         const submitterName = submitterProfile?.full_name || submitterProfile?.email || 'A team member'
-        console.log('✍️ Submitter:', submitterName)
 
         // Send email to all admins
         const emailSent = await sendFeedbackNotification({
@@ -85,7 +80,6 @@ export async function submitFeedback(input: CreateFeedbackInput): Promise<Feedba
           notificationType: 'new',
         })
         
-        console.log('📧 Email send result:', emailSent ? '✅ Success' : '❌ Failed')
       } else {
         console.warn('⚠️ No admin emails found to send notification to')
       }
@@ -246,14 +240,11 @@ export async function updateFeedback(
     // Send email notification to all organization members if status or notes were updated
     if (updates.status !== undefined || updates.admin_notes !== undefined) {
       try {
-        console.log('📧 Attempting to send feedback update notification email...')
         
         // Get all users in the organization
         const orgUsers = await getOrganizationUsers()
-        console.log('👥 Organization users:', orgUsers.length)
         
         const userEmails = orgUsers.map(u => u.email).filter(Boolean) as string[]
-        console.log('📮 User emails to notify:', userEmails.length)
 
         if (userEmails.length > 0) {
           // Get updater info
@@ -264,7 +255,6 @@ export async function updateFeedback(
             .single()
 
           const updaterName = updaterProfile?.full_name || updaterProfile?.email || 'Admin'
-          console.log('✍️ Updater:', updaterName)
 
           // Send email to all organization members using the updated feedback
           const emailSent = await sendFeedbackNotification({
@@ -279,7 +269,6 @@ export async function updateFeedback(
             updatedBy: updaterName,
           })
           
-          console.log('📧 Email send result:', emailSent ? '✅ Success' : '❌ Failed')
         } else {
           console.warn('⚠️ No user emails found to send notification to')
         }
