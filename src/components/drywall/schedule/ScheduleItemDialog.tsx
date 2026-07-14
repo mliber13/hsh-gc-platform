@@ -467,122 +467,128 @@ export function ScheduleItemDialog({
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Predecessors</Label>
-            {danglingPredecessorIds.length > 0 && (
-              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
-                This item links to a predecessor that no longer exists. Re-select its
-                predecessors below to restore the connection.
-              </div>
-            )}
-            <Popover open={predOpen} onOpenChange={setPredOpen}>
-              <PopoverTrigger asChild>
-                <Button type="button" variant="outline" className="w-full justify-between font-normal">
-                  <span className="truncate text-muted-foreground">
-                    {predecessorIds.length === 0
-                      ? 'None'
-                      : `${predecessorIds.length} selected`}
-                  </span>
-                  <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[min(100vw-2rem,24rem)] p-0" align="start">
-                <div className="border-b p-2">
-                  <Input
-                    placeholder="Search items…"
-                    value={predSearch}
-                    onChange={(e) => setPredSearch(e.target.value)}
-                    className="h-8"
-                  />
-                </div>
-                <div className="max-h-48 overflow-y-auto p-1">
-                  {filteredPredecessors.length === 0 ? (
-                    <p className="px-2 py-4 text-center text-sm text-muted-foreground">
-                      No other items on this project.
-                    </p>
-                  ) : (
-                    filteredPredecessors.map((item) => {
-                      const selected = predecessorIds.includes(item.id)
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={cn(
-                            'flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted',
-                            selected && 'bg-muted/60',
-                          )}
-                          onClick={() => togglePredecessor(item.id)}
-                        >
-                          <Check
-                            className={cn(
-                              'mt-0.5 size-4 shrink-0',
-                              selected ? 'opacity-100' : 'opacity-0',
-                            )}
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate font-medium">{item.name}</span>
-                            <span className="text-muted-foreground text-xs">
-                              {formatDateRange(item.start_date, item.end_date)}
-                            </span>
-                          </span>
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-            {predecessorIds.length > 0 ? (
-              <div className="space-y-2">
-                {predecessorIds.map((id) => {
-                  const pred = siblingItems.find((s) => s.id === id)
-                  return (
-                    <div
-                      key={id}
-                      className={cn(
-                        'flex items-center gap-2 rounded-lg border px-2.5 py-2',
-                        pred ? 'bg-muted/30' : 'border-amber-500/40 bg-amber-500/10',
-                      )}
-                    >
-                      <div className="min-w-0 flex-1">
-                        {pred ? (
-                          <>
-                            <p className="truncate text-sm font-medium">{pred.name}</p>
-                            <p className="text-[11px] text-muted-foreground">
-                              {formatDateRange(pred.start_date, pred.end_date)}
-                            </p>
-                          </>
-                        ) : (
-                          <p className="truncate text-sm font-medium text-amber-800 dark:text-amber-200">
-                            Removed item (no longer exists)
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        className="rounded-full p-1 hover:bg-muted"
-                        onClick={() => togglePredecessor(id)}
-                        aria-label="Remove predecessor"
-                      >
-                        <X className="size-3.5" />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : null}
-          </div>
+          {danglingPredecessorIds.length > 0 && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+              This item links to a predecessor that no longer exists. Re-select its
+              predecessors below to restore the connection.
+            </div>
+          )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="schedule-lag">Lag (work days after predecessor end)</Label>
-            <Input
-              id="schedule-lag"
-              type="number"
-              min={0}
-              step={1}
-              value={lagWorkDays}
-              onChange={(e) => handleLagChange(Math.max(0, parseInt(e.target.value, 10) || 0))}
-            />
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Label>Predecessors</Label>
+              <Popover open={predOpen} onOpenChange={setPredOpen}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full justify-between font-normal">
+                    <span className="truncate text-muted-foreground">
+                      {predecessorIds.length === 0
+                        ? 'None'
+                        : `${predecessorIds.length} selected`}
+                    </span>
+                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[min(100vw-2rem,24rem)] p-0" align="start">
+                  <div className="border-b p-2">
+                    <Input
+                      placeholder="Search items…"
+                      value={predSearch}
+                      onChange={(e) => setPredSearch(e.target.value)}
+                      className="h-8"
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto p-1">
+                    {filteredPredecessors.length === 0 ? (
+                      <p className="px-2 py-4 text-center text-sm text-muted-foreground">
+                        No other items on this project.
+                      </p>
+                    ) : (
+                      filteredPredecessors.map((item) => {
+                        const selected = predecessorIds.includes(item.id)
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={cn(
+                              'flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted',
+                              selected && 'bg-muted/60',
+                            )}
+                            onClick={() => togglePredecessor(item.id)}
+                          >
+                            <Check
+                              className={cn(
+                                'mt-0.5 size-4 shrink-0',
+                                selected ? 'opacity-100' : 'opacity-0',
+                              )}
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-medium">{item.name}</span>
+                              <span className="text-muted-foreground text-xs">
+                                {formatDateRange(item.start_date, item.end_date)}
+                              </span>
+                            </span>
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {predecessorIds.length > 0 ? (
+                <div className="space-y-2">
+                  {predecessorIds.map((id) => {
+                    const pred = siblingItems.find((s) => s.id === id)
+                    return (
+                      <div
+                        key={id}
+                        className={cn(
+                          'flex items-center gap-2 rounded-lg border px-2.5 py-2',
+                          pred ? 'bg-muted/30' : 'border-amber-500/40 bg-amber-500/10',
+                        )}
+                      >
+                        <div className="min-w-0 flex-1">
+                          {pred ? (
+                            <>
+                              <p className="truncate text-sm font-medium">{pred.name}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {formatDateRange(pred.start_date, pred.end_date)}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="truncate text-sm font-medium text-amber-800 dark:text-amber-200">
+                              Removed item (no longer exists)
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="rounded-full p-1 hover:bg-muted"
+                          onClick={() => togglePredecessor(id)}
+                          aria-label="Remove predecessor"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="w-28 shrink-0 space-y-1.5">
+              <Label htmlFor="schedule-lag">Lag (days)</Label>
+              <Input
+                id="schedule-lag"
+                type="number"
+                min={0}
+                step={1}
+                value={lagWorkDays}
+                onChange={(e) => handleLagChange(Math.max(0, parseInt(e.target.value, 10) || 0))}
+              />
+              <p className="text-[11px] leading-tight text-muted-foreground">
+                work days after predecessor ends
+              </p>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
