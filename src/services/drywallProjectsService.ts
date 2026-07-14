@@ -1031,6 +1031,51 @@ export async function saveFieldTakeoff(projectId: string, takeoff: FieldTakeoff)
   await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
 }
 
+/**
+ * Save ONLY the site/access subset of the field takeoff (site contact, phone, meeting
+ * location, access notes, hazards). Merges over the current takeoff in the DB, so it never
+ * touches measurements, board counts, photos, or review status. Lets the office pre-fill
+ * site info from Job Info at quote time — the Field stage reads the same takeoff, so it's
+ * already populated when the field crew arrives (and edits flow back the other way).
+ */
+export type FieldTakeoffSiteInfo = {
+  siteContact: string
+  contactPhone: string
+  meetingLocation: string
+  accessNotes: string
+  hazards: string
+}
+
+export async function saveFieldTakeoffSiteInfo(
+  projectId: string,
+  site: FieldTakeoffSiteInfo,
+): Promise<void> {
+  if (!isOnlineMode()) throw new Error('Saving site info requires an online connection.')
+
+  const orgId = await requireUserOrgId()
+  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+
+  const prevTakeoff =
+    prevLegacy.fieldTakeoff &&
+    typeof prevLegacy.fieldTakeoff === 'object' &&
+    !Array.isArray(prevLegacy.fieldTakeoff)
+      ? (prevLegacy.fieldTakeoff as Record<string, unknown>)
+      : {}
+
+  const mergedTakeoff = {
+    ...prevTakeoff,
+    ...site,
+    updatedAt: new Date().toISOString(),
+  }
+
+  const mergedLegacy = {
+    ...prevLegacy,
+    fieldTakeoff: mergedTakeoff,
+  }
+
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+}
+
 /** Save field takeoff and advance workflow to Order. */
 export async function saveFieldTakeoffAndAdvance(
   projectId: string,

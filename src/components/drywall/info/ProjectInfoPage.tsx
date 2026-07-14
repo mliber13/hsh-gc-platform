@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, Building2, FileText, MapPin, Trash2, User } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  Building2,
+  FileText,
+  MapPin,
+  Phone,
+  Trash2,
+  User,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,7 +29,9 @@ import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import {
   deleteDrywallProject,
   DrywallProjectPermissionError,
+  type FieldTakeoffSiteInfo,
   fetchDrywallProjectById,
+  saveFieldTakeoffSiteInfo,
   updateDrywallProjectInfo,
 } from '@/services/drywallProjectsService'
 import type { ProjectInfoForm } from '@/types/drywall'
@@ -41,6 +52,31 @@ function toForm(project: {
   }
 }
 
+const EMPTY_SITE: FieldTakeoffSiteInfo = {
+  siteContact: '',
+  contactPhone: '',
+  meetingLocation: '',
+  accessNotes: '',
+  hazards: '',
+}
+
+/** Pull the shared site/access fields out of the project's field takeoff (metadata.legacy). */
+function extractSite(legacy: Record<string, unknown> | undefined): FieldTakeoffSiteInfo {
+  const raw =
+    legacy?.fieldTakeoff && typeof legacy.fieldTakeoff === 'object' && !Array.isArray(legacy.fieldTakeoff)
+      ? (legacy.fieldTakeoff as Record<string, unknown>)
+      : {}
+  const str = (key: keyof FieldTakeoffSiteInfo) =>
+    typeof raw[key] === 'string' ? (raw[key] as string) : ''
+  return {
+    siteContact: str('siteContact'),
+    contactPhone: str('contactPhone'),
+    meetingLocation: str('meetingLocation'),
+    accessNotes: str('accessNotes'),
+    hazards: str('hazards'),
+  }
+}
+
 export function ProjectInfoPage() {
   const { projectId, setProjectName } = useOutletContext<DrywallProjectShellContext>()
   const navigate = useNavigate()
@@ -53,7 +89,9 @@ export function ProjectInfoPage() {
     address: '',
     notes: '',
   })
+  const [site, setSite] = useState<FieldTakeoffSiteInfo>(EMPTY_SITE)
   const [savedSnapshot, setSavedSnapshot] = useState('')
+  const [savedSiteSnapshot, setSavedSiteSnapshot] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -71,6 +109,9 @@ export function ProjectInfoPage() {
       const next = toForm(project)
       setForm(next)
       setSavedSnapshot(JSON.stringify(next))
+      const nextSite = extractSite(project.legacy)
+      setSite(nextSite)
+      setSavedSiteSnapshot(JSON.stringify(nextSite))
       setProjectName(project.name)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to load project')
@@ -83,9 +124,13 @@ export function ProjectInfoPage() {
     void load()
   }, [load])
 
+  const siteDirty = useMemo(
+    () => JSON.stringify(site) !== savedSiteSnapshot,
+    [site, savedSiteSnapshot],
+  )
   const isDirty = useMemo(
-    () => JSON.stringify(form) !== savedSnapshot,
-    [form, savedSnapshot],
+    () => JSON.stringify(form) !== savedSnapshot || siteDirty,
+    [form, savedSnapshot, siteDirty],
   )
 
   const validationError = useMemo(() => {
@@ -106,6 +151,20 @@ export function ProjectInfoPage() {
         notes: form.notes.trim(),
         ...(advanceToQuote ? { status: 'quote' as const } : {}),
       })
+      // Site/access info lives in the shared field takeoff — save it only when it changed so
+      // we don't bump the takeoff's updated timestamp on every project-info save.
+      if (siteDirty) {
+        const trimmedSite: FieldTakeoffSiteInfo = {
+          siteContact: site.siteContact.trim(),
+          contactPhone: site.contactPhone.trim(),
+          meetingLocation: site.meetingLocation.trim(),
+          accessNotes: site.accessNotes.trim(),
+          hazards: site.hazards.trim(),
+        }
+        await saveFieldTakeoffSiteInfo(projectId, trimmedSite)
+        setSite(trimmedSite)
+        setSavedSiteSnapshot(JSON.stringify(trimmedSite))
+      }
       const next = toForm(updated)
       setForm(next)
       setSavedSnapshot(JSON.stringify(next))
@@ -226,6 +285,88 @@ export function ProjectInfoPage() {
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               placeholder="Additional project information…"
               rows={4}
+              disabled={readOnly}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <MapPin className="h-5 w-5 text-primary" />
+            Site &amp; Access
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <p className="text-sm text-muted-foreground">
+            Shared with the Field stage — anything you enter here is pre-filled when the crew
+            measures, and their field updates flow back here. Leave blank if unknown.
+          </p>
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="drywall-site-contact" className="flex items-center gap-1">
+                <User className="h-4 w-4" />
+                Site Contact
+              </Label>
+              <Input
+                id="drywall-site-contact"
+                value={site.siteContact}
+                onChange={(e) => setSite((s) => ({ ...s, siteContact: e.target.value }))}
+                placeholder="On-site contact name"
+                disabled={readOnly}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="drywall-site-phone" className="flex items-center gap-1">
+                <Phone className="h-4 w-4" />
+                Contact Phone
+              </Label>
+              <Input
+                id="drywall-site-phone"
+                type="tel"
+                value={site.contactPhone}
+                onChange={(e) => setSite((s) => ({ ...s, contactPhone: e.target.value }))}
+                placeholder="(555) 555-5555"
+                disabled={readOnly}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="drywall-meeting" className="flex items-center gap-1">
+              <MapPin className="h-4 w-4" />
+              Meeting Location
+            </Label>
+            <Input
+              id="drywall-meeting"
+              value={site.meetingLocation}
+              onChange={(e) => setSite((s) => ({ ...s, meetingLocation: e.target.value }))}
+              placeholder="Where to meet on site"
+              disabled={readOnly}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="drywall-access">Access Notes</Label>
+            <Textarea
+              id="drywall-access"
+              rows={3}
+              value={site.accessNotes}
+              onChange={(e) => setSite((s) => ({ ...s, accessNotes: e.target.value }))}
+              placeholder="Gate code, lockbox, parking, entry, hours, keys…"
+              disabled={readOnly}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="drywall-hazards" className="flex items-center gap-1">
+              <AlertTriangle className="h-4 w-4" />
+              Hazards
+            </Label>
+            <Textarea
+              id="drywall-hazards"
+              rows={3}
+              value={site.hazards}
+              onChange={(e) => setSite((s) => ({ ...s, hazards: e.target.value }))}
+              placeholder="Safety hazards, PPE needs…"
               disabled={readOnly}
             />
           </div>
