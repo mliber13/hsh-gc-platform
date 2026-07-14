@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseISO } from 'date-fns'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -532,6 +532,45 @@ export function ScheduleItemDialog({
                 </div>
               </PopoverContent>
             </Popover>
+            {predecessorIds.length > 0 ? (
+              <div className="space-y-2">
+                {predecessorIds.map((id) => {
+                  const pred = siblingItems.find((s) => s.id === id)
+                  return (
+                    <div
+                      key={id}
+                      className={cn(
+                        'flex items-center gap-2 rounded-lg border px-2.5 py-2',
+                        pred ? 'bg-muted/30' : 'border-amber-500/40 bg-amber-500/10',
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        {pred ? (
+                          <>
+                            <p className="truncate text-sm font-medium">{pred.name}</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {formatDateRange(pred.start_date, pred.end_date)}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="truncate text-sm font-medium text-amber-800 dark:text-amber-200">
+                            Removed item (no longer exists)
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded-full p-1 hover:bg-muted"
+                        onClick={() => togglePredecessor(id)}
+                        aria-label="Remove predecessor"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">
