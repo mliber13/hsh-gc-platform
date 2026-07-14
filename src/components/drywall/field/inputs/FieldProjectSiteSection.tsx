@@ -111,7 +111,7 @@ export function FieldProjectSiteSection({
               rows={2}
               value={takeoff.varianceNotes ?? ''}
               disabled={readOnly}
-              placeholder="Explain differences from the quoteâ€¦"
+              placeholder="Explain differences from the quote…"
               onChange={(e) => onPatchTakeoff({ varianceNotes: e.target.value })}
             />
           </div>
