@@ -524,6 +524,58 @@ export async function updateScheduleItemForDrywallProject(
   await runCascadeForProject(current.project_id)
 }
 
+/**
+ * Remove deletedItemId from every sibling's predecessors JSONB on the same project.
+ * Best-effort: one sibling update failing does not abort the others.
+ */
+async function stripDeletedPredecessorFromSiblings(
+  projectId: string,
+  organizationId: string,
+  deletedItemId: string,
+): Promise<void> {
+  const { data: siblings, error: siblingsError } = await supabase
+    .from('schedule_items')
+    .select('id, predecessors')
+    .eq('project_id', projectId)
+    .eq('organization_id', organizationId)
+
+  if (siblingsError) throw siblingsError
+  if (!siblings?.length) return
+
+  const now = new Date().toISOString()
+  await Promise.all(
+    siblings.map(async (row) => {
+      const raw = row.predecessors
+      if (!Array.isArray(raw) || raw.length === 0) return
+
+      const next = raw.filter(
+        (p) =>
+          !(
+            p &&
+            typeof p === 'object' &&
+            'predecessor_id' in p &&
+            (p as { predecessor_id?: string }).predecessor_id === deletedItemId
+          ),
+      )
+      if (next.length === raw.length) return
+
+      const { error: updateError } = await supabase
+        .from('schedule_items')
+        .update({ predecessors: next, updated_at: now })
+        .eq('id', row.id)
+        .eq('organization_id', organizationId)
+
+      if (updateError) {
+        console.error(
+          'Failed to strip deleted predecessor from schedule item',
+          row.id,
+          updateError,
+        )
+      }
+    }),
+  )
+}
+
 export async function deleteScheduleItemForDrywallProject(itemId: string): Promise<void> {
   const organizationId = await requireUserOrgId()
 
@@ -546,6 +598,9 @@ export async function deleteScheduleItemForDrywallProject(itemId: string): Promi
     .eq('organization_id', organizationId)
 
   if (error) throw error
+
+  // Strip ghost predecessor refs before cascade so dependents stop pointing at the deleted id.
+  await stripDeletedPredecessorFromSiblings(projectId, organizationId, itemId)
 
   try {
     await runCascadeForProject(projectId)

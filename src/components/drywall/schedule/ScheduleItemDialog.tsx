@@ -92,6 +92,17 @@ export function ScheduleItemDialog({
     [siblingItems, editing?.id],
   )
 
+  const siblingIdSet = useMemo(
+    () => new Set(siblingItems.map((item) => item.id)),
+    [siblingItems],
+  )
+
+  /** Predecessor ids stored on the item that no longer exist among siblings (ghost links). */
+  const danglingPredecessorIds = useMemo(() => {
+    if (!editing) return [] as string[]
+    return editing.predecessor_ids.filter((id) => !siblingIdSet.has(id))
+  }, [editing, siblingIdSet])
+
   const filteredPredecessors = useMemo(() => {
     const q = predSearch.trim().toLowerCase()
     if (!q) return predecessorOptions
@@ -281,6 +292,8 @@ export function ScheduleItemDialog({
       toast.error('Start date is required')
       return null
     }
+    // Drop dangling ghost ids so save self-heals deleted-predecessor refs.
+    const validPredecessorIds = predecessorIds.filter((id) => siblingIdSet.has(id))
     return {
       name: trimmed,
       type,
@@ -290,7 +303,7 @@ export function ScheduleItemDialog({
       notes,
       assignedPersons,
       showJobInfoPersonIds,
-      predecessorIds,
+      predecessorIds: validPredecessorIds,
       lagWorkDays,
     }
   }
@@ -456,6 +469,12 @@ export function ScheduleItemDialog({
 
           <div className="space-y-1.5">
             <Label>Predecessors</Label>
+            {danglingPredecessorIds.length > 0 && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+                This item links to a predecessor that no longer exists. Re-select its
+                predecessors below to restore the connection.
+              </div>
+            )}
             <Popover open={predOpen} onOpenChange={setPredOpen}>
               <PopoverTrigger asChild>
                 <Button type="button" variant="outline" className="w-full justify-between font-normal">
