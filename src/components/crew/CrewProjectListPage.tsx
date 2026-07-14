@@ -101,7 +101,16 @@ export function CrewProjectListPage() {
     )
   }
 
-  const asQuery = viewAsPersonId ? `?as=${encodeURIComponent(viewAsPersonId)}` : ''
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+
+  const openTask = (item: CrewProjectListItem) => {
+    const params = new URLSearchParams()
+    if (viewAsPersonId) params.set('as', viewAsPersonId)
+    // Which task they tapped — the detail uses this to scope the measure prompt to the
+    // right schedule item (a measurer on a hang task shouldn't be prompted to measure).
+    params.set('item', item.scheduleItemId)
+    navigate(`/crew/projects/${item.projectId}?${params.toString()}`)
+  }
 
   return (
     <div
@@ -122,20 +131,18 @@ export function CrewProjectListPage() {
         </div>
       ) : null}
       <p className="text-sm text-muted-foreground">
-        {items.length} job{items.length === 1 ? '' : 's'} assigned
-        {viewAsPersonId ? '' : ' to you'}
+        {items.length} upcoming task{items.length === 1 ? '' : 's'}
+        {viewAsPersonId ? '' : ' for you'}
       </p>
       {items.map((item) => {
-        const extraTasks = item.scheduleEntryCount > 1 ? item.scheduleEntryCount - 1 : 0
-        const nextLabel = item.nextScheduledDate
-          ? format(parseISO(item.nextScheduledDate), 'EEE MMM d')
-          : null
+        const dateLabel = format(parseISO(item.scheduleItemDate), 'EEE MMM d')
+        const isToday = item.scheduleItemDate === todayStr
 
         return (
           <Card
-            key={item.projectId}
+            key={item.scheduleItemId}
             className="cursor-pointer transition-colors hover:bg-muted/30 active:bg-muted/50"
-            onClick={() => navigate(`/crew/projects/${item.projectId}${asQuery}`)}
+            onClick={() => openTask(item)}
           >
             <CardContent className="flex items-start gap-3 p-4">
               <div className="min-w-0 flex-1 space-y-2">
@@ -161,22 +168,15 @@ export function CrewProjectListPage() {
                     <span className="truncate">{item.address}</span>
                   </p>
                 ) : null}
-                {item.scheduleItemNames.length > 0 ? (
-                  <p className="text-sm font-medium text-foreground">
-                    {item.scheduleItemNames.join(' · ')}
-                  </p>
-                ) : null}
-                {nextLabel ? (
-                  <p className="text-sm text-muted-foreground">
-                    Next: {nextLabel}
-                    {extraTasks > 0 ? (
-                      <span>
-                        {' '}
-                        · +{extraTasks} more task{extraTasks === 1 ? '' : 's'}
-                      </span>
-                    ) : null}
-                  </p>
-                ) : null}
+                <p className="text-sm font-medium text-foreground">{item.scheduleItemName}</p>
+                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <CalendarDays className="size-3.5 shrink-0" />
+                  {isToday ? (
+                    <span className="font-semibold text-primary">Today · {dateLabel}</span>
+                  ) : (
+                    dateLabel
+                  )}
+                </p>
               </div>
               <ChevronRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
             </CardContent>

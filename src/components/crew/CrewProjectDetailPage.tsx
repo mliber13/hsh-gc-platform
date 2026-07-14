@@ -192,10 +192,22 @@ export function CrewProjectDetailPage() {
 
   const contactPhone = detail.fieldNotes.contactPhone?.trim() || null
 
+  // Which task did they tap in from? (the list passes ?item=<scheduleItemId>.) The measure
+  // prompt should only surface when they came in from the measure task itself — a measurer
+  // who taps into a job to hang mech closets shouldn't be prompted to start a measure. When
+  // there's no task context (direct link / bookmark), fall back to the job's measure entry.
+  const focusedItemId = searchParams.get('item')
+  const focusedEntry = focusedItemId
+    ? (detail.scheduleEntries.find((entry) => entry.id === focusedItemId) ?? null)
+    : null
+  const measureEntry = focusedEntry
+    ? phaseForScheduleItem(focusedEntry) === 'measure'
+      ? focusedEntry
+      : null
+    : (detail.scheduleEntries.find((entry) => phaseForScheduleItem(entry) === 'measure') ?? null)
+
   const showStartMeasure =
-    !isOperatorExplainer &&
-    isMeasurerSpecialty(detail.specialty) &&
-    detail.scheduleEntries.some((entry) => phaseForScheduleItem(entry) === 'measure')
+    !isOperatorExplainer && isMeasurerSpecialty(detail.specialty) && measureEntry != null
 
   return (
     <div
@@ -267,13 +279,16 @@ export function CrewProjectDetailPage() {
         ) : null}
       </div>
 
-      {showStartMeasure ? (
+      {showStartMeasure && measureEntry ? (
         <Card className="border-primary/40 bg-primary/5">
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
-              <p className="font-semibold">Field measurement assigned</p>
+              <p className="font-semibold">
+                Field measurement assigned — {measureEntry.name}
+              </p>
               <p className="text-sm text-muted-foreground">
-                Capture sqft, photos, and notes for office review.
+                {format(parseISO(measureEntry.startDate), 'EEE MMM d')} · capture sqft, photos,
+                and notes for office review.
               </p>
             </div>
             <Button

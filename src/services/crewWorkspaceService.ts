@@ -174,14 +174,6 @@ function mapScheduleEntry(row: ScheduleRow): CrewProjectScheduleEntry {
   }
 }
 
-function nextScheduledDate(rows: ScheduleRow[]): string | null {
-  if (rows.length === 0) return null
-  const today = format(new Date(), 'yyyy-MM-dd')
-  const sorted = [...rows].sort((a, b) => a.start_date.localeCompare(b.start_date))
-  const upcoming = sorted.find((r) => r.start_date >= today)
-  return upcoming?.start_date ?? sorted[0]?.start_date ?? null
-}
-
 async function fetchAssignedScheduleRows(personId: string): Promise<ScheduleRow[]> {
   const orgId = await requireUserOrgId()
   const { data, error } = await supabase
@@ -244,7 +236,13 @@ export async function fetchCrewProjectList(
   const scheduleRows = await fetchAssignedScheduleRows(personId)
   if (scheduleRows.length === 0) return []
 
-  const projectIds = [...new Set(scheduleRows.map((r) => r.project_id))]
+  // Hide schedule items whose work window has fully passed — crew only see current/upcoming
+  // work, not an endless backlog of last week's/month's tasks.
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const upcomingRows = scheduleRows.filter((r) => (r.end_date || r.start_date) >= today)
+  if (upcomingRows.length === 0) return []
+
+  const projectIds = [...new Set(upcomingRows.map((r) => r.project_id))]
   const orgId = await requireUserOrgId()
 
   const { data, error } = await supabase
@@ -255,49 +253,43 @@ export async function fetchCrewProjectList(
 
   if (error) throw new Error(error.message || 'Failed to load projects')
 
-  const byProject = new Map<string, ScheduleRow[]>()
-  for (const row of scheduleRows) {
-    const list = byProject.get(row.project_id) ?? []
-    list.push(row)
-    byProject.set(row.project_id, list)
-  }
-
-  const items: CrewProjectListItem[] = []
+  // Drywall, non-excluded projects only — keyed for per-item lookup below.
+  const projectById = new Map<string, ProjectRow>()
   for (const row of (data ?? []) as ProjectRow[]) {
     if (!isDrywallProjectRow(row) || isExcludedProject(row)) continue
-    const personItems = byProject.get(row.id) ?? []
-    if (personItems.length === 0) continue
+    projectById.set(row.id, row)
+  }
 
-    const hasMeasureAssignment = personItems.some(scheduleRowHasMeasurePhase)
+  // One entry per assigned schedule item so a project appears once per task it's on.
+  const items: CrewProjectListItem[] = []
+  for (const sched of upcomingRows) {
+    const project = projectById.get(sched.project_id)
+    if (!project) continue
+
     let measureWorkflowStatus: CrewProjectListItem['measureWorkflowStatus'] = null
-    if (isMeasurerSpecialty(specialty) && hasMeasureAssignment) {
+    if (isMeasurerSpecialty(specialty) && scheduleRowHasMeasurePhase(sched)) {
       const legacy =
-        row.metadata?.legacy && typeof row.metadata.legacy === 'object'
-          ? (row.metadata.legacy as Record<string, unknown>)
+        project.metadata?.legacy && typeof project.metadata.legacy === 'object'
+          ? (project.metadata.legacy as Record<string, unknown>)
           : {}
       measureWorkflowStatus = crewMeasureWorkflowStatus(parseFieldTakeoff(legacy))
     }
 
     items.push({
-      projectId: row.id,
-      projectName: row.name?.trim() || 'Untitled',
-      client: formatClient(row.client),
-      address: formatAddress(row),
-      status: normalizeDrywallProjectStatus(row.status),
-      nextScheduledDate: nextScheduledDate(personItems),
-      scheduleEntryCount: personItems.length,
-      scheduleItemNames: personItems.map((r) => r.name.trim()).filter(Boolean),
+      scheduleItemId: sched.id,
+      scheduleItemName: sched.name.trim() || 'Untitled task',
+      scheduleItemDate: sched.start_date,
+      projectId: project.id,
+      projectName: project.name?.trim() || 'Untitled',
+      client: formatClient(project.client),
+      address: formatAddress(project),
+      status: normalizeDrywallProjectStatus(project.status),
       measureWorkflowStatus,
     })
   }
 
   items.sort((a, b) => {
-    if (!a.nextScheduledDate && !b.nextScheduledDate) {
-      return a.projectName.localeCompare(b.projectName)
-    }
-    if (!a.nextScheduledDate) return 1
-    if (!b.nextScheduledDate) return -1
-    const cmp = a.nextScheduledDate.localeCompare(b.nextScheduledDate)
+    const cmp = a.scheduleItemDate.localeCompare(b.scheduleItemDate)
     return cmp !== 0 ? cmp : a.projectName.localeCompare(b.projectName)
   })
 

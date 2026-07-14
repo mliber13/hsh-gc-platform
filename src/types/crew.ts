@@ -31,16 +31,17 @@ export type CrewMeasureWorkflowStatus =
   import('@/lib/drywall/crewMeasureStatus').CrewMeasureWorkflowStatus
 
 export interface CrewProjectListItem {
+  /** Unique per assigned schedule item — a project can appear multiple times, once per task. */
+  scheduleItemId: string
+  scheduleItemName: string
+  /** start_date (yyyy-MM-dd) of this assignment. */
+  scheduleItemDate: string
   projectId: string
   projectName: string
   client: string
   address: string
   status: string
-  nextScheduledDate: string | null
-  scheduleEntryCount: number
-  /** Titles of this person's assigned schedule items on the project. */
-  scheduleItemNames: string[]
-  /** Measurer workflow pill — only when assigned to a Measure schedule item. */
+  /** Measurer workflow pill — only when this schedule item is a Measure phase. */
   measureWorkflowStatus?: CrewMeasureWorkflowStatus | null
 }
 
