@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -62,6 +62,7 @@ export function DrywallSchedulePortfolioPage() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('calendar')
   const [anchorDate, setAnchorDate] = useState(() => new Date())
   const [dialog, setDialog] = useState<DialogState>({ open: false })
+  const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [personNames, setPersonNames] = useState<Map<string, string>>(new Map())
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => new Set())
   const [selectedPersonIds, setSelectedPersonIds] = useState<Set<string>>(() => new Set())
@@ -126,15 +127,17 @@ export function DrywallSchedulePortfolioPage() {
     [scopedItems, rangeStart, rangeEnd],
   )
 
+  // Project filter list spans every in-scope project (not just the selected month) so a
+  // job with no items this month still stays selectable — it just shows nothing for the month.
   const legendProjects = useMemo(() => {
     const byId = new Map<string, string>()
-    for (const item of itemsInRange) {
+    for (const item of scopedItems) {
       if (!byId.has(item.projectId)) byId.set(item.projectId, item.projectName)
     }
     return [...byId.entries()]
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [itemsInRange])
+  }, [scopedItems])
 
   const personOptions = useMemo(() => {
     const ids = new Set<string>()
@@ -190,6 +193,16 @@ export function DrywallSchedulePortfolioPage() {
       })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to open schedule item')
+    }
+  }
+
+  const handleAddItem = async (projectId: string) => {
+    setAddProjectOpen(false)
+    try {
+      const siblings = await fetchScheduleItemsForDrywallProject(projectId)
+      setDialog({ open: true, projectId, siblings, editing: null })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to start a new schedule item')
     }
   }
 
@@ -493,6 +506,40 @@ export function DrywallSchedulePortfolioPage() {
           >
             {expandAll ? 'Collapse all' : 'Expand all'}
           </Button>
+          {legendProjects.length > 0 && (
+            <Popover open={addProjectOpen} onOpenChange={setAddProjectOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" size="sm" className="h-8 gap-1 text-xs">
+                  <Plus className="h-3.5 w-3.5" />
+                  Add item
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 p-2">
+                <p className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Add item to which job?
+                </p>
+                <div className="max-h-72 space-y-0.5 overflow-y-auto">
+                  {legendProjects.map((project) => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      onClick={() => void handleAddItem(project.id)}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                    >
+                      <span
+                        className={cn(
+                          'inline-block size-2.5 shrink-0 rounded-full',
+                          projectColorClass(project.id).bg,
+                        )}
+                      />
+                      <span className="truncate">{project.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+
           <Button type="button" variant="outline" size="icon" onClick={() => void load()}>
             <RefreshCw className="h-4 w-4" />
             <span className="sr-only">Refresh</span>
