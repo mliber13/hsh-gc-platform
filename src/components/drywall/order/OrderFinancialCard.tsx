@@ -253,7 +253,7 @@ export function OrderFinancialCard({
       change: `${fin.revisedMaterialCost - fin.originalMaterialCost >= 0 ? '+' : ''}${money(fin.revisedMaterialCost - fin.originalMaterialCost)}`,
     },
     {
-      label: 'Quote total',
+      label: 'Contract value',
       original: money(fin.baselineTotal),
       revised: money(fin.adjustedTotal),
       change: `${fin.deltaTotal >= 0 ? '+' : ''}${money(fin.deltaTotal)}`,
@@ -471,7 +471,7 @@ export function OrderFinancialCard({
           <CardTitle className="text-lg">Financial impact (live)</CardTitle>
           <CardDescription>
             Original = quote baseline rates × quoted sqft. Revised = adjusted rates × field sqft
-            (material scaled with sqft). Approved change orders add to revised quote total.
+            (material scaled with sqft). Accepted change orders update the contract value.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -499,8 +499,8 @@ export function OrderFinancialCard({
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-3">
-            Contract value stays fixed; this shows how revised field costs affect profit and margin.
-            Labor burden honors per-trade settings from the quote stage.
+            Contract value equals the original accepted quote plus accepted change orders. Labor
+            burden honors per-trade settings from the quote stage.
           </p>
         </CardContent>
       </Card>

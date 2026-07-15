@@ -69,12 +69,12 @@ function DivisionHeadlineTiles({ data }: { data: DivisionExecutionRollUp }) {
               {formatMarginPct(data.aggregateMarginPct)} · completed jobs
             </span>
           ) : (
-            'Completed jobs with bid'
+            'Completed jobs with contract value'
           )
         }
       />
       <BigStat
-        label="Total bid"
+        label="Total contract value"
         value={formatDashboardCurrency(data.totalBidCompleted)}
         sublabel="Completed only"
       />
@@ -113,7 +113,7 @@ function DivisionJobsTable({
           <tr className="border-b bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <th className="px-3 py-2.5">Job</th>
             <th className="px-3 py-2.5">Status</th>
-            <th className="px-3 py-2.5 text-right">Bid</th>
+            <th className="px-3 py-2.5 text-right">Contract</th>
             <th className="px-3 py-2.5 text-right">Actual</th>
             <th className="px-3 py-2.5 text-right">Margin %</th>
           </tr>
@@ -167,7 +167,7 @@ export function DivisionMarginSection() {
     return (
       <KpiCard
         title="Division Execution"
-        description="Bid vs actual margin across in-scope jobs"
+        description="Contract value vs actual margin across in-scope jobs"
       >
         <p className="text-sm text-muted-foreground">Loading margin roll-up…</p>
       </KpiCard>
@@ -178,7 +178,7 @@ export function DivisionMarginSection() {
     return (
       <KpiCard
         title="Division Execution"
-        description="Bid vs actual margin across in-scope jobs"
+        description="Contract value vs actual margin across in-scope jobs"
       >
         <p className="text-sm text-destructive">{error}</p>
       </KpiCard>
@@ -191,7 +191,7 @@ export function DivisionMarginSection() {
     return (
       <KpiCard
         title="Division Execution"
-        description="Bid vs actual margin across in-scope jobs"
+        description="Contract value vs actual margin across in-scope jobs"
       >
         <p className="text-sm text-muted-foreground">
           No production or completed jobs in scope yet.
@@ -205,7 +205,7 @@ export function DivisionMarginSection() {
   return (
     <KpiCard
       title="Division Execution"
-      description="Bid vs actual cost (material + labor + subs) — burden-inclusive"
+      description="Contract value vs actual cost (material + labor + subs) — burden-inclusive"
       headerRight={
         aggregatePill ? (
           <StatusPill
@@ -213,7 +213,7 @@ export function DivisionMarginSection() {
             label={`${formatMarginPct(data.aggregateMarginPct)} margin`}
           />
         ) : (
-          <span className="text-xs text-muted-foreground">No completed bid baseline</span>
+          <span className="text-xs text-muted-foreground">No completed contract baseline</span>
         )
       }
     >

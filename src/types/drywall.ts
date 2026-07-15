@@ -198,6 +198,12 @@ export interface DrywallProjectListItem {
   quoteProfitAmount: number | null
   /** Drywall-only sell revenue from bid snapshot (proportional OH&P), or null. */
   drywallScopeRevenue: number | null
+  /** Original locked contract before accepted change orders. */
+  baseContractValue?: number | null
+  /** Net accepted additions and deductions. */
+  acceptedChangeOrderRevenue?: number
+  /** Original contract plus accepted change orders. */
+  effectiveContractValue?: number | null
 }
 
 /** Full project row for detail / Project Info editing. */
@@ -750,7 +756,13 @@ export interface DrywallOrder {
   updatedAt?: string
 }
 
-export type DrywallChangeOrderStatus = 'draft' | 'submitted' | 'approved' | string
+export type DrywallChangeOrderStatus =
+  | 'draft'
+  | 'submitted'
+  | 'accepted'
+  | 'rejected'
+  /** Legacy value; normalized to accepted when read. */
+  | 'approved'
 
 export interface DrywallChangeOrder {
   id: string
@@ -760,6 +772,14 @@ export interface DrywallChangeOrder {
   scopeChanges?: string
   requestedAmount?: string
   notes?: string
+  submittedAt?: string
+  acceptedAmount?: string
+  acceptedAt?: string
+  acceptedByUserId?: string
+  acceptedByName?: string
+  acceptanceReference?: string
+  rejectedAt?: string
+  rejectionNotes?: string
   createdAt?: string
   updatedAt?: string
 }

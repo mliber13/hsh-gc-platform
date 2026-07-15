@@ -275,8 +275,11 @@ export function CloseoutStagePage() {
         <MarginVsBidTile
           icon={TrendingUp}
           margin={assessment?.margin ?? { marginPct: null, marginUsd: null, marginColor: 'neutral' }}
-          bidTotal={assessment?.bidSnapshot?.total ?? null}
+          contractTotal={assessment?.effectiveContractValue ?? null}
           costTotal={finalTotal ?? 0}
+          billedToDate={assessment?.billedToDate}
+          remainingToBill={assessment?.remainingToBill}
+          overbilledAmount={assessment?.overbilledAmount}
         />
         <AfterProductionCostTile
           icon={Hammer}

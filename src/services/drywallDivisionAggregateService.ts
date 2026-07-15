@@ -18,11 +18,13 @@ import type { DrywallLaborCategory } from '@/lib/drywall/payrollPieceKeys'
 import {
   combineProjectCost,
   computeMarginVsBid,
+  computeMarginVsContractValue,
   summarizeMaterial,
   summarizeSub,
   type DrywallProjectCostSummary,
   type MarginVsBidResult,
 } from '@/lib/drywall/projectCostMath'
+import { computeContractValueFromLegacy } from '@/lib/drywall/contractValue'
 import {
   extractAllProjectLaborEntries,
   summarizeProjectLabor,
@@ -79,6 +81,7 @@ export interface DivisionExecutionJob {
   inProgress: boolean
   completedAt: string | null
   bid: number | null
+  effectiveContractValue?: number | null
   actualMaterial: number
   actualLabor: number
   actualSub: number
@@ -581,6 +584,7 @@ export function buildDivisionExecutionJob(input: {
   projectName: string
   status: string
   bidSnapshot: BidSnapshot | null
+  effectiveContractValue?: number | null
   laborEntries: DrywallProjectLaborEntryFlat[]
   materialEntries: MaterialEntryFlat[]
   subEntries: SubEntryFlat[]
@@ -594,7 +598,9 @@ export function buildDivisionExecutionJob(input: {
   const material = summarizeMaterial(input.materialEntries)
   const sub = summarizeSub(input.subEntries)
   const cost = combineProjectCost(labor, material, sub)
-  const margin = computeMarginVsBid(cost, input.bidSnapshot)
+  const effectiveContractValue =
+    input.effectiveContractValue ?? input.bidSnapshot?.total ?? null
+  const margin = computeMarginVsContractValue(cost, effectiveContractValue)
 
   return {
     projectId: input.projectId,
@@ -602,7 +608,8 @@ export function buildDivisionExecutionJob(input: {
     status,
     inProgress: status === 'production',
     completedAt: input.completedAt ?? null,
-    bid: input.bidSnapshot?.total ?? null,
+    bid: effectiveContractValue,
+    effectiveContractValue,
     actualMaterial: material.totalCost,
     actualLabor: labor.totalCost,
     actualSub: sub.totalCost,
@@ -714,11 +721,13 @@ export async function fetchDivisionExecution(now = new Date()): Promise<Division
       if (shouldDropJobOutsideExecutionWindow(project.status, timestamps, now)) return null
       const { bidSnapshot } = getQuoteOutcomeFromLegacy(project.legacy ?? {})
       const quote = hydrateQuoteFromLegacy(project.legacy ?? {})
+      const contract = computeContractValueFromLegacy(project.legacy ?? {})
       return {
         projectId: project.id,
         projectName: project.name?.trim() || row.name || 'Untitled',
         status: project.status,
         bidSnapshot,
+        effectiveContractValue: contract.effectiveContractValue,
         quote,
         completedAt: jobCompletedAt(timestamps),
       }
@@ -754,6 +763,7 @@ export async function fetchDivisionExecution(now = new Date()): Promise<Division
       projectName: row.projectName,
       status: row.status,
       bidSnapshot: row.bidSnapshot,
+      effectiveContractValue: row.effectiveContractValue,
       laborEntries: laborBuckets.get(row.projectId) ?? [],
       materialEntries: materialByProject.get(row.projectId) ?? [],
       subEntries: subByProject.get(row.projectId) ?? [],

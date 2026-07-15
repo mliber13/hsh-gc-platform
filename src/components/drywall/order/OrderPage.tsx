@@ -9,6 +9,7 @@ import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import { extractMaterialsFromFieldTakeoff } from '@/lib/drywall/fieldMaterialsPdfData'
 import { suggestOrderItemsFromFieldTakeoff } from '@/lib/drywall/orderSuggest'
 import { buildOrderFinancialComparison } from '@/lib/drywall/orderFinancialComparison'
+import { downloadDrywallChangeOrderPdf } from '@/lib/drywallChangeOrderPdf'
 import {
   downloadDrywallFieldMaterialsPdf,
   downloadDrywallLaborRateCardPdf,
@@ -27,6 +28,7 @@ import {
   markDrywallProjectComplete,
   saveFieldTakeoff,
   saveOrderStageSnapshot,
+  transitionDrywallChangeOrder,
 } from '@/services/drywallProjectsService'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import type {
@@ -71,6 +73,7 @@ export function OrderPage() {
   const [savedSnapshot, setSavedSnapshot] = useState('')
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
   const [reopenDialogOpen, setReopenDialogOpen] = useState(false)
+  const [changeOrderBusyId, setChangeOrderBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -143,6 +146,35 @@ export function OrderPage() {
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleChangeOrderTransition = async (
+    changeOrder: DrywallChangeOrder,
+    transition:
+      | { action: 'submit' }
+      | { action: 'accept'; acceptedAmount: string; acceptanceReference: string }
+      | { action: 'reject'; rejectionNotes: string },
+  ) => {
+    if (readOnly) return
+    setChangeOrderBusyId(changeOrder.id)
+    try {
+      // Persist current draft fields first; the transition service then validates the latest JSON.
+      await saveOrderStageSnapshot(projectId, { orders, changeOrders })
+      await transitionDrywallChangeOrder(projectId, changeOrder.id, transition)
+      toast.success(
+        transition.action === 'submit'
+          ? 'Change order submitted'
+          : transition.action === 'accept'
+            ? 'Change order accepted'
+            : 'Change order rejected',
+      )
+      await load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update change order')
+      throw e
+    } finally {
+      setChangeOrderBusyId(null)
     }
   }
 
@@ -221,6 +253,23 @@ export function OrderPage() {
       reviewNotes: String(fieldTakeoff.rejectionNotes ?? ''),
     })
     toast.success('Labor rate card PDF downloaded')
+  }
+
+  const handleChangeOrderPdf = async (changeOrder: DrywallChangeOrder) => {
+    if (!project) return
+    try {
+      await downloadDrywallChangeOrderPdf({
+        project: projectPdfMeta,
+        quote,
+        po: project.legacy.poData ?? project.legacy.po,
+        changeOrder,
+        changeOrders,
+      })
+      toast.success('Change order PDF downloaded')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to generate change order PDF')
+      throw error
+    }
   }
 
   const handleMarkComplete = async () => {
@@ -404,6 +453,21 @@ export function OrderPage() {
         changeOrders={changeOrders}
         readOnly={readOnly}
         onChange={setChangeOrders}
+        busyId={changeOrderBusyId}
+        onSubmit={(changeOrder) =>
+          handleChangeOrderTransition(changeOrder, { action: 'submit' })
+        }
+        onAccept={(changeOrder, acceptedAmount, acceptanceReference) =>
+          handleChangeOrderTransition(changeOrder, {
+            action: 'accept',
+            acceptedAmount,
+            acceptanceReference,
+          })
+        }
+        onReject={(changeOrder, rejectionNotes) =>
+          handleChangeOrderTransition(changeOrder, { action: 'reject', rejectionNotes })
+        }
+        onDownloadPdf={handleChangeOrderPdf}
       />
 
       {!readOnly && (

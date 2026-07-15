@@ -33,7 +33,9 @@
       "Bash(grep -nE \"\\(\\\\\\\\b|[^a-zA-Z_]\\)alert\\\\\\\\\\(\" src/components/ProjectActuals.tsx)",
       "Bash(git push *)",
       "Bash(npx supabase *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "PowerShell(\\(Get-ChildItem \"C:\\\\Users\\\\mlibe\\\\Documents\\\\HSH APP\\\\hsh-gc-platform\\\\supabase\\\\migrations\" -ErrorAction SilentlyContinue\\).Count; \"---\"; \\(Get-ChildItem \"C:\\\\Users\\\\mlibe\\\\Documents\\\\HSH APP\\\\project-bolt-vitejs-vite-armltfjp 72525\\\\project\\\\hsh-drywall-app\\\\supabase\\\\migrations\" -ErrorAction SilentlyContinue\\).Count)",
+      "Bash(git log *)"
     ]
   }
 }

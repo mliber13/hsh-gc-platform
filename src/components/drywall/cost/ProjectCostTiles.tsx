@@ -93,44 +93,50 @@ export function RunningCostTile({
 export function MarginVsBidTile({
   icon,
   margin,
-  bidTotal,
+  contractTotal,
   costTotal,
   billedToDate,
+  remainingToBill,
+  overbilledAmount,
 }: {
   icon: LucideIcon
   margin: MarginVsBidResult
-  bidTotal: number | null
+  contractTotal: number | null
   costTotal: number
   billedToDate?: number
+  remainingToBill?: number | null
+  overbilledAmount?: number
 }) {
   const billedCaption =
-    billedToDate != null && billedToDate > 0
-      ? bidTotal != null && bidTotal > 0
-        ? `Billed to date (QB): ${formatCurrency(billedToDate)} (${((billedToDate / bidTotal) * 100).toFixed(1)}% of bid)`
+    overbilledAmount != null && overbilledAmount > 0
+      ? `Billed ${formatCurrency(overbilledAmount)} over contract`
+      : billedToDate != null && billedToDate > 0
+      ? contractTotal != null && contractTotal > 0
+        ? `Billed (QB): ${formatCurrency(billedToDate)} • Remaining: ${formatCurrency(remainingToBill ?? 0)}`
         : `Billed to date (QB): ${formatCurrency(billedToDate)}`
       : undefined
 
   if (margin.marginPct == null) {
     return (
       <CostTileShell
-        title="Margin vs Bid"
+        title="Margin vs Contract"
         icon={icon}
         value="—"
-        caption={billedCaption ?? 'No bid baseline'}
-        subline={billedCaption ? 'No bid baseline' : undefined}
+        caption={billedCaption ?? 'No contract baseline'}
+        subline={billedCaption ? 'No contract baseline' : undefined}
       />
     )
   }
 
   return (
     <CostTileShell
-      title="Margin vs Bid"
+      title="Margin vs Contract"
       icon={icon}
       value={`${(margin.marginPct * 100).toFixed(1)}%`}
       valueClassName={MARGIN_COLOR_CLASS[margin.marginColor]}
       subline={
-        bidTotal != null
-          ? `Bid ${formatCurrency(bidTotal)} • Cost ${formatCurrency(costTotal)}`
+        contractTotal != null
+          ? `Contract ${formatCurrency(contractTotal)} • Cost ${formatCurrency(costTotal)}`
           : undefined
       }
       caption={billedCaption}

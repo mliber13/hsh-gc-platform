@@ -260,10 +260,11 @@ function drawScopeBlock(ctx: PdfCtx, block: ScopePdfBlock) {
   ctx.doc.setFontSize(BODY_SIZE)
   setTextRgb(ctx.doc, DW_TEXT)
 
-  const textIndent = block.plain ? SP.specIndent : SP.specIndent + SP.bulletIndent
+  const showBullets = !block.plain && block.bulleted !== false
+  const textIndent = showBullets ? SP.specIndent + SP.bulletIndent : SP.specIndent
 
   for (const raw of block.lines) {
-    const prefix = block.plain ? '' : '• '
+    const prefix = showBullets ? '• ' : ''
     const wrapped = ctx.doc.splitTextToSize(`${prefix}${raw}`, ctx.maxW - textIndent - 4)
     drawWrappedLines(ctx, wrapped, ctx.margin + textIndent, lineStep)
     if (block.plain) ctx.y += 4

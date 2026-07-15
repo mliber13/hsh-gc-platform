@@ -3,6 +3,7 @@ import {
   combineProjectCost,
   computeCurrentCrew,
   computeMarginVsBid,
+  computeMarginVsContractValue,
   splitMaterialByProductionWindow,
   splitSubByProductionWindow,
   summarizeMaterial,
@@ -123,6 +124,23 @@ describe('computeMarginVsBid', () => {
     expect(computeMarginVsBid(costAt24, bid)).toMatchObject({
       marginPct: 0.24,
       marginColor: 'red',
+    })
+  })
+
+  it('uses the effective contract value after accepted changes', () => {
+    const cost = combineProjectCost(
+      { ...emptyLaborSummary(), totalCost: 70_000 },
+      summarizeMaterial([]),
+      summarizeSub([]),
+    )
+
+    expect(computeMarginVsContractValue(cost, 100_000)).toMatchObject({
+      marginUsd: 30_000,
+      marginPct: 0.3,
+    })
+    expect(computeMarginVsContractValue(cost, 120_000)).toMatchObject({
+      marginUsd: 50_000,
+      marginPct: 50_000 / 120_000,
     })
   })
 })

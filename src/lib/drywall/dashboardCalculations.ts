@@ -443,7 +443,7 @@ export function computeNorthStarMetrics(
 
   const awardedInSystem = projects
     .filter((p) => isApprovedInCalendarYear(p, year))
-    .reduce((sum, p) => sum + (p.quoteTotal ?? 0), 0)
+    .reduce((sum, p) => sum + (p.effectiveContractValue ?? p.quoteTotal ?? 0), 0)
 
   const baselineApplies =
     targets.offSystemAwardedYtdYear == null || targets.offSystemAwardedYtdYear === year
@@ -519,7 +519,7 @@ export function computeBacklogMetrics(
 ): BacklogMetrics {
   const currentBacklog = projects
     .filter(isBacklogProject)
-    .reduce((sum, p) => sum + (p.quoteTotal ?? 0), 0)
+    .reduce((sum, p) => sum + (p.effectiveContractValue ?? p.quoteTotal ?? 0), 0)
 
   const goalBacklog = targets.backlogGoal
   const pctOfGoal = goalBacklog > 0 ? currentBacklog / goalBacklog : 0
@@ -851,7 +851,7 @@ function jobRevenue(
   billingsByProject: Map<string, number>,
 ): number {
   const billed = billingsByProject.get(job.projectId) ?? 0
-  return billed > 0 ? billed : (job.bid ?? 0)
+  return billed > 0 ? billed : (job.effectiveContractValue ?? job.bid ?? 0)
 }
 
 export function computeFinancialsMetrics(
@@ -1024,8 +1024,11 @@ export function computeProjectedBillings(
   // Contract value for the forecast: finalized quote total when set, else the quote-derived
   // drywall scope revenue (available pre-order once a quote exists) — quotes rarely change,
   // and change orders/revisions update this. Only projects with neither are excluded.
-  const quoteByProjectId = new Map(
-    projects.map((p) => [p.id, p.quoteTotal ?? p.drywallScopeRevenue] as const),
+  const contractByProjectId = new Map(
+    projects.map(
+      (p) =>
+        [p.id, p.effectiveContractValue ?? p.quoteTotal ?? p.drywallScopeRevenue] as const,
+    ),
   )
   const nameByProjectId = new Map(projects.map((p) => [p.id, p.name] as const))
 
@@ -1045,10 +1048,18 @@ export function computeProjectedBillings(
   const projectedByMonth = Array.from({ length: 12 }, () => 0)
   let projectedRestOfYear = 0
   const unpricedProjects: { id: string; name: string }[] = []
+  const billedByProject = new Map<string, number>()
+  for (const invoice of qbInvoices) {
+    if (!invoice.matchedProjectId) continue
+    billedByProject.set(
+      invoice.matchedProjectId,
+      (billedByProject.get(invoice.matchedProjectId) ?? 0) + invoice.totalAmt,
+    )
+  }
 
   for (const [projectId, milestones] of milestonesByProject) {
-    const quoteTotal = quoteByProjectId.get(projectId)
-    if (quoteTotal == null || quoteTotal <= 0) {
+    const contractTotal = contractByProjectId.get(projectId)
+    if (contractTotal == null || contractTotal <= 0) {
       unpricedProjects.push({ id: projectId, name: nameByProjectId.get(projectId) ?? projectId })
       continue
     }
@@ -1061,9 +1072,18 @@ export function computeProjectedBillings(
     const remainderPctEach =
       remainderCount > 0 ? Math.max(0, 100 - sumPartials) / remainderCount : 0
 
-    for (const m of milestones) {
+    let billedRemaining = Math.max(0, billedByProject.get(projectId) ?? 0)
+    let contractRemaining = Math.max(0, contractTotal - billedRemaining)
+    const sortedMilestones = [...milestones].sort(
+      (a, b) => a.startDate.getTime() - b.startDate.getTime(),
+    )
+    for (const m of sortedMilestones) {
       const pct = m.parse.kind === 'percent' ? m.parse.pct : remainderPctEach
-      const amount = (pct / 100) * quoteTotal
+      const plannedAmount = (pct / 100) * contractTotal
+      const consumedByBilling = Math.min(plannedAmount, billedRemaining)
+      billedRemaining -= consumedByBilling
+      const amount = Math.min(Math.max(0, plannedAmount - consumedByBilling), contractRemaining)
+      contractRemaining -= amount
       const monthIndex = m.startDate.getMonth()
       projectedByMonth[monthIndex] += amount
       if (m.startDate.getTime() > now.getTime()) {

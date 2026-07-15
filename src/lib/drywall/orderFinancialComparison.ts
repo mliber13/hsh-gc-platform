@@ -1,6 +1,7 @@
 // @ts-nocheck — parity port from OrderStage.jsx financialComparison useMemo
 import { applyLaborBurden } from '@/lib/drywall/calculations/quantityUtils'
 import { calculateQuoteTotals } from '@/lib/drywall/quoteCalculations'
+import { computeContractValue } from '@/lib/drywall/contractValue'
 import type { DrywallChangeOrder, DrywallQuote, FieldTakeoff } from '@/types/drywall'
 
 export interface OrderReviewLaborRatesInput {
@@ -51,6 +52,7 @@ export interface OrderFinancialComparison {
   deltaMargin: number
   deltaLaborWithTax: number
   approvedChangeOrderRevenue: number
+  acceptedChangeOrderRevenue: number
 }
 
 function num(v: unknown, fallback = 0): number {
@@ -158,8 +160,10 @@ export function buildOrderFinancialComparison(
     (quote.calculations || {}) as never,
   )
   const overriddenQuoteTotal = num(quote.totalQuoteAmount)
-  const baselineTotal =
+  const calculatedBaselineTotal =
     overriddenQuoteTotal > 0 ? overriddenQuoteTotal : baselineTotals?.totalQuote || 0
+  const contract = computeContractValue({ quote, changeOrders })
+  const baselineTotal = contract.baseContractValue ?? calculatedBaselineTotal
   const baselineDirect = baselineTotals?.totalDirectCost || 0
   const baselineSubtotal = baselineTotals?.subtotal || 0
   // Decision #21 — margin = (bid - direct cost) / bid. Overhead is treated as markup returned, not cost recovered.
@@ -180,16 +184,10 @@ export function buildOrderFinancialComparison(
   const deltaDirect = adjustedDirect - baselineDirect
   const subtotalDelta = deltaDirect * (1 + overheadPct / 100)
 
-  const approvedChangeOrderRevenue = changeOrders.reduce(
-    (sum, co) =>
-      String(co.status || '').toLowerCase() === 'approved'
-        ? sum + num(co.requestedAmount)
-        : sum,
-    0,
-  )
+  const acceptedChangeOrderRevenue = contract.acceptedChangeOrderRevenue
 
   const adjustedSubtotal = baselineSubtotal + subtotalDelta
-  const adjustedTotal = baselineTotal + approvedChangeOrderRevenue
+  const adjustedTotal = baselineTotal + acceptedChangeOrderRevenue
   // Decision #21 — same formula as baseline; adjustedDirect already reflects field sqft + revised rates.
   const adjustedProfit = adjustedTotal - adjustedDirect
   const adjustedMargin = adjustedTotal > 0 ? (adjustedProfit / adjustedTotal) * 100 : 0
@@ -226,11 +224,12 @@ export function buildOrderFinancialComparison(
     revisedFinisherPay: effectiveSqft * revisedRates.finisherRate,
     originalPrepPay: quoteSqft * baselineRates.prepCleanRate,
     revisedPrepPay: effectiveSqft * revisedRates.prepCleanRate,
-    deltaTotal: approvedChangeOrderRevenue,
+    deltaTotal: acceptedChangeOrderRevenue,
     deltaDirect,
     deltaProfit: adjustedProfit - baselineProfit,
     deltaMargin: adjustedMargin - baselineMargin,
     deltaLaborWithTax,
-    approvedChangeOrderRevenue,
+    approvedChangeOrderRevenue: acceptedChangeOrderRevenue,
+    acceptedChangeOrderRevenue,
   }
 }

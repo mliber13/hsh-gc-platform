@@ -159,11 +159,18 @@ export function computeMarginVsBid(
   costSummary: DrywallProjectCostSummary,
   bidSnapshot: BidSnapshot | null,
 ): MarginVsBidResult {
-  if (!bidSnapshot || num(bidSnapshot.total) <= 0) {
+  return computeMarginVsContractValue(costSummary, bidSnapshot?.total ?? null)
+}
+
+export function computeMarginVsContractValue(
+  costSummary: DrywallProjectCostSummary,
+  contractValue: number | null,
+): MarginVsBidResult {
+  if (contractValue == null || num(contractValue) <= 0) {
     return { marginPct: null, marginUsd: null, marginColor: 'neutral' }
   }
 
-  const bid = num(bidSnapshot.total)
+  const bid = num(contractValue)
   const cost = num(costSummary.totalCost)
   const marginUsd = bid - cost
   const marginPct = marginUsd / bid

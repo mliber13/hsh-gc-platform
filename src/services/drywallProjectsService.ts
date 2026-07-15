@@ -14,6 +14,12 @@ import { buildPoBidSnapshot, DEFAULT_PO_SCOPE_TEXT } from '@/lib/drywall/poBidSn
 import { buildDrywallQuoteCalculations } from '@/lib/drywall/buildDrywallQuoteCalculations'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import { deriveAddonFlagsFromData } from '@/lib/drywall/deriveAddonFlagsFromData'
+import { computeContractValue } from '@/lib/drywall/contractValue'
+import { deriveEffectiveRole } from '@/lib/rbac'
+import {
+  applyDrywallChangeOrderTransition,
+  type DrywallChangeOrderTransition,
+} from '@/lib/drywall/changeOrderWorkflow'
 import {
   archiveKeyForTimestamp,
   buildFreshV3FromSnapshot,
@@ -61,7 +67,7 @@ export class DrywallProjectPermissionError extends Error {
 }
 
 const DRYWALL_LIST_SELECT =
-  'id, name, address, client, status, updated_at, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_line_items:metadata->legacy->quote->lineItems, quote_outcome:metadata->legacy->quote->>outcome, quote_approved_at:metadata->legacy->quote->outcomeTimestamps->>approvedAt, quote_sent_at:metadata->legacy->quote->outcomeTimestamps->>sentAt, quote_lost_at:metadata->legacy->quote->outcomeTimestamps->>lostAt, quote_overhead_amt:metadata->legacy->quote->calculations->>overheadAmount, quote_profit_amt:metadata->legacy->quote->calculations->>profitAmount, quote_bid_snapshot:metadata->legacy->quote->bidSnapshot'
+  'id, name, address, client, status, updated_at, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_line_items:metadata->legacy->quote->lineItems, quote_outcome:metadata->legacy->quote->>outcome, quote_approved_at:metadata->legacy->quote->outcomeTimestamps->>approvedAt, quote_sent_at:metadata->legacy->quote->outcomeTimestamps->>sentAt, quote_lost_at:metadata->legacy->quote->outcomeTimestamps->>lostAt, quote_overhead_amt:metadata->legacy->quote->calculations->>overheadAmount, quote_profit_amt:metadata->legacy->quote->calculations->>profitAmount, quote_bid_snapshot:metadata->legacy->quote->bidSnapshot, change_orders:metadata->legacy->changeOrders'
 
 type DrywallListStageScalarsRow = {
   id: string
@@ -139,6 +145,7 @@ function mapListRow(row: {
   quote_overhead_amt?: unknown
   quote_profit_amt?: unknown
   quote_bid_snapshot?: unknown
+  change_orders?: unknown
 },
   stageScalars?: DrywallListStageScalarsRow,
 ): DrywallProjectListItem | null {
@@ -177,6 +184,19 @@ function mapListRow(row: {
   const fieldTakeoffUpdated = asString(stageScalars?.field_takeoff_updated) || null
   const fieldFirstMeasurementId = asString(stageScalars?.field_first_measurement_id) || null
   const orderFirstId = asString(stageScalars?.order_first_id) || null
+  const changeOrders = Array.isArray(row.change_orders)
+    ? row.change_orders
+        .map(normalizeChangeOrder)
+        .filter((co): co is DrywallChangeOrder => co != null)
+    : []
+  const contract = computeContractValue({
+    quote: {
+      bidSnapshot,
+      calculations: { finalTotal: row.quote_final_total },
+      totalQuoteAmount: row.quote_total_amount,
+    },
+    changeOrders,
+  })
 
   const listScalars = {
     sqft,
@@ -213,6 +233,9 @@ function mapListRow(row: {
     quoteOverheadAmount: overheadFromCalc ?? overheadFromSnap,
     quoteProfitAmount: profitFromCalc ?? profitFromSnap,
     drywallScopeRevenue: deriveDrywallScopeRevenue(bidSnapshot),
+    baseContractValue: contract.baseContractValue,
+    acceptedChangeOrderRevenue: contract.acceptedChangeOrderRevenue,
+    effectiveContractValue: contract.effectiveContractValue,
   }
 }
 
@@ -1147,14 +1170,29 @@ function normalizeOrder(raw: unknown): DrywallOrder | null {
 function normalizeChangeOrder(raw: unknown): DrywallChangeOrder | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const r = raw as Record<string, unknown>
+  const rawStatus = asString(r.status).toLowerCase()
+  const status = rawStatus === 'approved' ? 'accepted' : rawStatus || 'draft'
   return {
     id: asString(r.id) || generateFieldId(),
     changeOrderNumber: asString(r.changeOrderNumber) || undefined,
-    status: asString(r.status) || 'draft',
+    status: status as DrywallChangeOrder['status'],
     reason: asString(r.reason) || undefined,
     scopeChanges: asString(r.scopeChanges) || undefined,
     requestedAmount: r.requestedAmount != null ? String(r.requestedAmount) : undefined,
     notes: asString(r.notes) || undefined,
+    submittedAt: asString(r.submittedAt) || undefined,
+    acceptedAmount:
+      r.acceptedAmount != null
+        ? String(r.acceptedAmount)
+        : rawStatus === 'approved' && r.requestedAmount != null
+          ? String(r.requestedAmount)
+          : undefined,
+    acceptedAt: asString(r.acceptedAt || r.approvedAt) || undefined,
+    acceptedByUserId: asString(r.acceptedByUserId || r.approvedByUserId) || undefined,
+    acceptedByName: asString(r.acceptedByName || r.approvedByName) || undefined,
+    acceptanceReference: asString(r.acceptanceReference) || undefined,
+    rejectedAt: asString(r.rejectedAt) || undefined,
+    rejectionNotes: asString(r.rejectionNotes) || undefined,
     createdAt: asString(r.createdAt) || undefined,
     updatedAt: asString(r.updatedAt) || undefined,
   }
@@ -1222,11 +1260,27 @@ export async function saveOrderStageSnapshot(
     updatedAt: o.updatedAt || now,
     createdAt: o.createdAt || now,
   }))
-  const changeOrders = snapshot.changeOrders.map((co) => ({
-    ...co,
-    updatedAt: co.updatedAt || now,
-    createdAt: co.createdAt || now,
-  }))
+  const existingChangeOrders = parseLegacyChangeOrders(prevLegacy)
+  const workflowFields = (co: DrywallChangeOrder): Partial<DrywallChangeOrder> => ({
+    status: co.status,
+    submittedAt: co.submittedAt,
+    acceptedAmount: co.acceptedAmount,
+    acceptedAt: co.acceptedAt,
+    acceptedByUserId: co.acceptedByUserId,
+    acceptedByName: co.acceptedByName,
+    acceptanceReference: co.acceptanceReference,
+    rejectedAt: co.rejectedAt,
+    rejectionNotes: co.rejectionNotes,
+  })
+  const changeOrders = snapshot.changeOrders.map((co) => {
+    const existing = existingChangeOrders.find((item) => item.id === co.id)
+    return {
+      ...co,
+      ...(existing ? workflowFields(existing) : { status: 'draft' as const }),
+      updatedAt: now,
+      createdAt: co.createdAt || now,
+    }
+  })
 
   const mergedLegacy = {
     ...prevLegacy,
@@ -1234,6 +1288,41 @@ export async function saveOrderStageSnapshot(
     changeOrders,
   }
   await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+}
+
+/** Persist an audited change-order workflow transition against the latest project JSON. */
+export async function transitionDrywallChangeOrder(
+  projectId: string,
+  changeOrderId: string,
+  transition: DrywallChangeOrderTransition,
+): Promise<DrywallChangeOrder> {
+  if (!isOnlineMode()) throw new Error('Change orders require an online connection.')
+
+  const [orgId, profile] = await Promise.all([requireUserOrgId(), getCurrentUserProfile()])
+  const effectiveRole = deriveEffectiveRole(profile)
+  const canAccept = effectiveRole === 'owner' || effectiveRole === 'office_drywall'
+  if (!canAccept) throw new DrywallProjectPermissionError()
+
+  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const changeOrders = parseLegacyChangeOrders(prevLegacy)
+  const index = changeOrders.findIndex((co) => co.id === changeOrderId)
+  if (index < 0) throw new Error('Change order not found. Save the draft before continuing.')
+
+  const now = new Date().toISOString()
+  const next = applyDrywallChangeOrderTransition(changeOrders[index], changeOrders, transition, {
+    now,
+    actorUserId: profile?.id,
+    actorName: profile?.full_name?.trim() || profile?.email || 'Office user',
+  })
+
+  const nextChangeOrders = changeOrders.map((co, i) => (i === index ? next : co))
+  await persistLegacyMetadata(
+    projectId,
+    orgId,
+    { ...prevLegacy, changeOrders: nextChangeOrders },
+    prevMeta,
+  )
+  return next
 }
 
 /** Remove one order by id from legacy.orders. */

@@ -6,7 +6,7 @@ import { isOnlineMode, supabase } from '@/lib/supabase'
 import {
   combineProjectCost,
   computeCurrentCrew,
-  computeMarginVsBid,
+  computeMarginVsContractValue,
   pickWindowEntries,
   splitMaterialByProductionWindow,
   splitSubByProductionWindow,
@@ -17,6 +17,7 @@ import {
   type MaterialEntryFlat,
   type SubEntryFlat,
 } from '@/lib/drywall/projectCostMath'
+import { computeContractValueFromLegacy } from '@/lib/drywall/contractValue'
 import {
   fetchDrywallProjectLaborSummary,
   type DrywallLaborWindow,
@@ -51,6 +52,11 @@ export interface DrywallProjectAssessment {
   bidSnapshot: BidSnapshot | null
   margin: MarginVsBidResult
   billedToDate: number
+  baseContractValue: number | null
+  acceptedChangeOrderRevenue: number
+  effectiveContractValue: number | null
+  remainingToBill: number | null
+  overbilledAmount: number
   estimatedMaterial: EstimatedMaterialBreakdown
   estimatedLabor: EstimatedLaborBreakdown
   productionComplete: DrywallProjectCostSummary | null
@@ -413,7 +419,8 @@ export async function fetchDrywallProjectAssessment(
       fetchEstimatedCostBreakdownsForProject(projectId),
     ])
 
-  const margin = computeMarginVsBid(currentCost, bidSnapshot)
+  const contract = computeContractValueFromLegacy(project.legacy, billedToDate)
+  const margin = computeMarginVsContractValue(currentCost, contract.effectiveContractValue)
   const currentCrew = computeCurrentCrew(currentCost.labor.summary)
 
   return {
@@ -421,6 +428,11 @@ export async function fetchDrywallProjectAssessment(
     bidSnapshot,
     margin,
     billedToDate,
+    baseContractValue: contract.baseContractValue,
+    acceptedChangeOrderRevenue: contract.acceptedChangeOrderRevenue,
+    effectiveContractValue: contract.effectiveContractValue,
+    remainingToBill: contract.remainingToBill,
+    overbilledAmount: contract.overbilledAmount,
     estimatedMaterial: estimates.estimatedMaterial,
     estimatedLabor: estimates.estimatedLabor,
     productionComplete,

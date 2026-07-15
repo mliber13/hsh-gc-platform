@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { format } from 'date-fns'
-import { Hammer, Package, RefreshCw, TrendingUp, Users } from 'lucide-react'
+import { FilePenLine, Hammer, Package, RefreshCw, TrendingUp, Users } from 'lucide-react'
 import { toast } from 'sonner'
-import { useOutletContext } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -265,6 +265,24 @@ export function ProductionStagePage() {
         </Button>
       </div>
 
+      <Card>
+        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="flex items-center gap-2 font-medium">
+              <FilePenLine className="h-4 w-4" />
+              Production change orders
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Accepted changes: {(assessment?.acceptedChangeOrderRevenue ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+              {' · '}Contract value: {(assessment?.effectiveContractValue ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+            </p>
+          </div>
+          <Button asChild variant="outline">
+            <Link to={`/drywall/projects/${projectId}/order`}>Manage change orders</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-col gap-3 sm:flex-row">
         <RunningCostTile
           icon={Hammer}
@@ -277,9 +295,11 @@ export function ProductionStagePage() {
         <MarginVsBidTile
           icon={TrendingUp}
           margin={assessment?.margin ?? { marginPct: null, marginUsd: null, marginColor: 'neutral' }}
-          bidTotal={assessment?.bidSnapshot?.total ?? null}
+          contractTotal={assessment?.effectiveContractValue ?? null}
           costTotal={cost?.totalCost ?? 0}
           billedToDate={assessment?.billedToDate}
+          remainingToBill={assessment?.remainingToBill}
+          overbilledAmount={assessment?.overbilledAmount}
         />
         <CurrentCrewTile
           icon={Users}

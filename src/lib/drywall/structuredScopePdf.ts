@@ -1,6 +1,11 @@
 import type { DrywallQuote, DrywallQuoteV3 } from '@/types/drywall'
 
-export type ScopePdfBlock = { heading?: string; lines: string[]; plain?: boolean }
+export type ScopePdfBlock = {
+  heading?: string
+  lines: string[]
+  plain?: boolean
+  bulleted?: boolean
+}
 
 function textOrBlank(value: unknown): string {
   return String(value ?? '').trim()
@@ -51,12 +56,13 @@ function hangFinishBlocks(input: {
 /** v2 quote PDF scope blocks (full parity including drywall scope + component addons). */
 export function quoteScopeBlocksFromV2(quote: DrywallQuote): ScopePdfBlock[] {
   if (quote.useCustomScopeOfWork && textOrBlank(quote.customScopeOfWork)) {
-    return [{ lines: [String(quote.customScopeOfWork)] }]
+    return [{ lines: [String(quote.customScopeOfWork)], bulleted: false }]
   }
 
   const blocks: ScopePdfBlock[] = []
   const scope = String(quote.drywallScope || 'hang_and_finish')
   blocks.push({
+    bulleted: false,
     lines: [
       `Drywall: ${
         scope === 'hang_only'
@@ -107,7 +113,7 @@ export function quoteScopeBlocksFromV2(quote: DrywallQuote): ScopePdfBlock[] {
 /** v3 quote PDF scope blocks — structured hang/finish + additional notes (no v2 component addons). */
 export function quoteScopeBlocksFromV3(quote: DrywallQuoteV3): ScopePdfBlock[] {
   if (quote.use_custom_scope_of_work && textOrBlank(quote.custom_scope_of_work)) {
-    return [{ lines: [String(quote.custom_scope_of_work)] }]
+    return [{ lines: [String(quote.custom_scope_of_work)], bulleted: false }]
   }
 
   const blocks = hangFinishBlocks({
