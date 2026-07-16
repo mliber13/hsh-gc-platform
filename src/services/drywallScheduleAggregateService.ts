@@ -30,6 +30,8 @@ type ProjectRow = {
   quote_final_total: unknown
   quote_total_amount: unknown
   quote_version: unknown
+  /** First v3 line item only — presence probe; never the full array. */
+  quote_first_line_item?: unknown
 }
 
 type ScheduleItemRow = {
@@ -51,12 +53,13 @@ function isDrywallProjectRow(row: ProjectRow): boolean {
     quote_final_total: row.quote_final_total,
     quote_total_amount: row.quote_total_amount,
     quote_version: row.quote_version,
+    quote_has_line_items: row.quote_first_line_item != null,
   })
 }
 
 /** Scalar-only project projection — never select full metadata (can be multi-MB per row). */
 const SCHEDULE_PROJECT_SELECT =
-  'id, name, status, type, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version'
+  'id, name, status, type, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_first_line_item:metadata->legacy->quote->lineItems->0'
 
 export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectScheduleItem[]> {
   if (!isOnlineMode()) return []
