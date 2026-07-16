@@ -145,6 +145,9 @@ export type DrywallListQuoteScalars = {
   quote_final_total?: unknown
   quote_total_amount?: unknown
   quote_version?: unknown
+  /** True when RPC reports non-empty v3 line items (avoids shipping the array). */
+  quote_has_line_items?: boolean
+  /** @deprecated Prefer quote_has_line_items — full arrays must not be selected on the list path. */
   quote_line_items?: unknown
 }
 
@@ -186,7 +189,7 @@ export function belongsInDrywallWorkspaceFromListScalars(
   if (hasDrywallListStageData(stage)) return true
   if (
     String(row.quote_version ?? '') === '3' &&
-    hasNonEmptyLineItems(row.quote_line_items)
+    (row.quote_has_line_items === true || hasNonEmptyLineItems(row.quote_line_items))
   ) {
     return true
   }

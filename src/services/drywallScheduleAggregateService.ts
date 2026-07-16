@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { supabase, isOnlineMode } from '@/lib/supabase'
-import { belongsInDrywallWorkspace } from '@/services/projectVisibility'
+import { belongsInDrywallWorkspaceFromListScalars } from '@/services/projectVisibility'
 import { requireUserOrgId } from '@/services/userService'
 import { normalizeDrywallProjectStatus } from '@/types/drywall'
 
@@ -25,7 +25,11 @@ type ProjectRow = {
   name: string
   status: string
   type: string | null
-  metadata: Record<string, unknown> | null
+  app_scope: unknown
+  quote_sqft: unknown
+  quote_final_total: unknown
+  quote_total_amount: unknown
+  quote_version: unknown
 }
 
 type ScheduleItemRow = {
@@ -41,8 +45,18 @@ type ScheduleItemRow = {
 
 function isDrywallProjectRow(row: ProjectRow): boolean {
   if (row.type === 'drywall') return true
-  return belongsInDrywallWorkspace(row.metadata)
+  return belongsInDrywallWorkspaceFromListScalars({
+    app_scope: row.app_scope,
+    quote_sqft: row.quote_sqft,
+    quote_final_total: row.quote_final_total,
+    quote_total_amount: row.quote_total_amount,
+    quote_version: row.quote_version,
+  })
 }
+
+/** Scalar-only project projection — never select full metadata (can be multi-MB per row). */
+const SCHEDULE_PROJECT_SELECT =
+  'id, name, status, type, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version'
 
 export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectScheduleItem[]> {
   if (!isOnlineMode()) return []
@@ -51,7 +65,7 @@ export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectSche
 
   const { data: projects, error: projectsError } = await supabase
     .from('projects')
-    .select('id, name, status, type, metadata')
+    .select(SCHEDULE_PROJECT_SELECT)
     .eq('organization_id', organizationId)
 
   if (projectsError) {

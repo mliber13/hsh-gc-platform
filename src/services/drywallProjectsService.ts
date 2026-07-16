@@ -9,12 +9,11 @@ import { hydrateDrywallQuote } from '@/lib/drywall/createEmptyDrywallQuote'
 import { hydrateDrywallQuoteV3, prepareDrywallQuoteV3ForSave } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { buildV3FromV2, v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
 import { buildBidSnapshotForQuote } from '@/lib/drywall/bidSnapshot'
-import { deriveDrywallScopeRevenue } from '@/lib/drywall/drywallScopeRevenue'
 import { buildPoBidSnapshot, DEFAULT_PO_SCOPE_TEXT } from '@/lib/drywall/poBidSnapshot'
 import { buildDrywallQuoteCalculations } from '@/lib/drywall/buildDrywallQuoteCalculations'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
-import { deriveAddonFlagsFromData } from '@/lib/drywall/deriveAddonFlagsFromData'
 import { computeContractValue } from '@/lib/drywall/contractValue'
+import { deriveAddonFlagsFromData } from '@/lib/drywall/deriveAddonFlagsFromData'
 import { deriveEffectiveRole } from '@/lib/rbac'
 import {
   applyDrywallChangeOrderTransition,
@@ -67,7 +66,7 @@ export class DrywallProjectPermissionError extends Error {
 }
 
 const DRYWALL_LIST_SELECT =
-  'id, name, address, client, status, updated_at, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_line_items:metadata->legacy->quote->lineItems, quote_outcome:metadata->legacy->quote->>outcome, quote_approved_at:metadata->legacy->quote->outcomeTimestamps->>approvedAt, quote_sent_at:metadata->legacy->quote->outcomeTimestamps->>sentAt, quote_lost_at:metadata->legacy->quote->outcomeTimestamps->>lostAt, quote_overhead_amt:metadata->legacy->quote->calculations->>overheadAmount, quote_profit_amt:metadata->legacy->quote->calculations->>profitAmount, quote_bid_snapshot:metadata->legacy->quote->bidSnapshot, change_orders:metadata->legacy->changeOrders'
+  'id, name, address, client, status, updated_at, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_outcome:metadata->legacy->quote->>outcome, quote_approved_at:metadata->legacy->quote->outcomeTimestamps->>approvedAt, quote_sent_at:metadata->legacy->quote->outcomeTimestamps->>sentAt, quote_lost_at:metadata->legacy->quote->outcomeTimestamps->>lostAt, quote_overhead_amt:metadata->legacy->quote->calculations->>overheadAmount, quote_profit_amt:metadata->legacy->quote->calculations->>profitAmount, quote_bid_total:metadata->legacy->quote->bidSnapshot->>total, quote_bid_overhead:metadata->legacy->quote->bidSnapshot->payload->>overhead, quote_bid_profit:metadata->legacy->quote->bidSnapshot->payload->>profit'
 
 type DrywallListStageScalarsRow = {
   id: string
@@ -75,6 +74,10 @@ type DrywallListStageScalarsRow = {
   field_takeoff_updated: string | null
   field_first_measurement_id: string | null
   order_first_id: string | null
+  quote_has_line_items: boolean | null
+  quote_drywall_sqft: number | null
+  drywall_scope_revenue: number | null
+  accepted_change_order_revenue: number | null
 }
 
 const DRYWALL_DETAIL_SELECT =
@@ -137,15 +140,15 @@ function mapListRow(row: {
   quote_final_total: unknown
   quote_total_amount: unknown
   quote_version?: unknown
-  quote_line_items?: unknown
   quote_outcome?: unknown
   quote_approved_at?: unknown
   quote_sent_at?: unknown
   quote_lost_at?: unknown
   quote_overhead_amt?: unknown
   quote_profit_amt?: unknown
-  quote_bid_snapshot?: unknown
-  change_orders?: unknown
+  quote_bid_total?: unknown
+  quote_bid_overhead?: unknown
+  quote_bid_profit?: unknown
 },
   stageScalars?: DrywallListStageScalarsRow,
 ): DrywallProjectListItem | null {
@@ -157,7 +160,7 @@ function mapListRow(row: {
         quote_final_total: row.quote_final_total,
         quote_total_amount: row.quote_total_amount,
         quote_version: row.quote_version,
-        quote_line_items: row.quote_line_items,
+        quote_has_line_items: stageScalars?.quote_has_line_items === true,
       },
       stageScalars,
     )
@@ -169,34 +172,31 @@ function mapListRow(row: {
     quote_final_total: row.quote_final_total,
     quote_total_amount: row.quote_total_amount,
     quote_version: row.quote_version,
-    quote_line_items: row.quote_line_items,
+    quote_drywall_sqft: stageScalars?.quote_drywall_sqft,
   })
-  const bidSnapshot = parseBidSnapshot(row.quote_bid_snapshot)
-  // v3 quotes often lack calculations.finalTotal until denormalized; bid snapshot is the
+  // v3 quotes often lack calculations.finalTotal until denormalized; bid snapshot total is the
   // locked send-time total and must drive list/KPI quoteTotal.
-  const bidTotal =
-    bidSnapshot && Number.isFinite(bidSnapshot.total) && bidSnapshot.total > 0
-      ? bidSnapshot.total
-      : null
+  const bidTotal = coerceListNumber(row.quote_bid_total)
   const quoteTotal =
     statsQuoteTotal != null && statsQuoteTotal > 0 ? statsQuoteTotal : bidTotal
   const fieldMeasuredSqft = coerceListNumber(stageScalars?.field_measured_sqft)
   const fieldTakeoffUpdated = asString(stageScalars?.field_takeoff_updated) || null
   const fieldFirstMeasurementId = asString(stageScalars?.field_first_measurement_id) || null
   const orderFirstId = asString(stageScalars?.order_first_id) || null
-  const changeOrders = Array.isArray(row.change_orders)
-    ? row.change_orders
-        .map(normalizeChangeOrder)
-        .filter((co): co is DrywallChangeOrder => co != null)
-    : []
   const contract = computeContractValue({
     quote: {
-      bidSnapshot,
+      // Scalar bid total only — full bidSnapshot payload is not selected on the list path.
+      bidSnapshot: bidTotal != null && bidTotal > 0 ? { total: bidTotal } : undefined,
       calculations: { finalTotal: row.quote_final_total },
       totalQuoteAmount: row.quote_total_amount,
     },
-    changeOrders,
+    changeOrders: [],
   })
+  const acceptedChangeOrderRevenue =
+    coerceListNumber(stageScalars?.accepted_change_order_revenue) ?? 0
+  const baseContractValue = contract.baseContractValue
+  const effectiveContractValue =
+    baseContractValue == null ? null : baseContractValue + acceptedChangeOrderRevenue
 
   const listScalars = {
     sqft,
@@ -209,14 +209,8 @@ function mapListRow(row: {
 
   const overheadFromCalc = coerceListNumber(row.quote_overhead_amt)
   const profitFromCalc = coerceListNumber(row.quote_profit_amt)
-  const overheadFromSnap =
-    bidSnapshot?.payload && Number.isFinite(Number(bidSnapshot.payload.overhead))
-      ? Number(bidSnapshot.payload.overhead)
-      : null
-  const profitFromSnap =
-    bidSnapshot?.payload && Number.isFinite(Number(bidSnapshot.payload.profit))
-      ? Number(bidSnapshot.payload.profit)
-      : null
+  const overheadFromSnap = coerceListNumber(row.quote_bid_overhead)
+  const profitFromSnap = coerceListNumber(row.quote_bid_profit)
 
   return {
     id: row.id,
@@ -232,10 +226,10 @@ function mapListRow(row: {
     quoteLostAt: asString(row.quote_lost_at) || null,
     quoteOverheadAmount: overheadFromCalc ?? overheadFromSnap,
     quoteProfitAmount: profitFromCalc ?? profitFromSnap,
-    drywallScopeRevenue: deriveDrywallScopeRevenue(bidSnapshot),
-    baseContractValue: contract.baseContractValue,
-    acceptedChangeOrderRevenue: contract.acceptedChangeOrderRevenue,
-    effectiveContractValue: contract.effectiveContractValue,
+    drywallScopeRevenue: coerceListNumber(stageScalars?.drywall_scope_revenue),
+    baseContractValue,
+    acceptedChangeOrderRevenue,
+    effectiveContractValue,
   }
 }
 
@@ -254,35 +248,18 @@ function extractListQuoteStats(scalars: {
   quote_final_total: unknown
   quote_total_amount: unknown
   quote_version?: unknown
-  quote_line_items?: unknown
+  quote_drywall_sqft?: unknown
 }): {
   sqft: number | null
   quoteTotal: number | null
 } {
   const sqftFromV2 = coerceListNumber(scalars.quote_sqft)
-  const sqftFromV3 = sumDrywallSqftFromLineItems(scalars.quote_line_items)
+  const sqftFromV3 = coerceListNumber(scalars.quote_drywall_sqft)
   const sqft = sqftFromV2 ?? sqftFromV3
   const finalTotal = coerceListNumber(scalars.quote_final_total)
   if (finalTotal != null) return { sqft, quoteTotal: finalTotal }
   const totalAmount = coerceListNumber(scalars.quote_total_amount)
   return { sqft, quoteTotal: totalAmount }
-}
-
-function sumDrywallSqftFromLineItems(items: unknown): number | null {
-  if (!Array.isArray(items) || items.length === 0) return null
-  let sum = 0
-  let found = false
-  for (const item of items) {
-    if (!item || typeof item !== 'object') continue
-    const line = item as Record<string, unknown>
-    if (line.type !== 'drywall') continue
-    const qty = coerceListNumber(line.quantity)
-    if (qty != null) {
-      sum += qty
-      found = true
-    }
-  }
-  return found ? sum : null
 }
 
 function parseProductionTimestamps(legacy: Record<string, unknown>): ProductionTimestamps {
@@ -428,7 +405,15 @@ export async function fetchDrywallProjects(): Promise<DrywallProjectListItem[]> 
     quote_final_total: unknown
     quote_total_amount: unknown
     quote_version?: unknown
-    quote_line_items?: unknown
+    quote_outcome?: unknown
+    quote_approved_at?: unknown
+    quote_sent_at?: unknown
+    quote_lost_at?: unknown
+    quote_overhead_amt?: unknown
+    quote_profit_amt?: unknown
+    quote_bid_total?: unknown
+    quote_bid_overhead?: unknown
+    quote_bid_profit?: unknown
   }
   const rows = (data ?? []) as ListRow[]
   const stageByProjectId = await loadDrywallListStageScalars(rows.map((r) => r.id))
