@@ -71,4 +71,46 @@ describe('drywall contract value', () => {
     expect(result.effectiveContractValue).toBeNull()
     expect(result.acceptedChangeOrderRevenue).toBe(1000)
   })
+
+  it('treats sub-cent contract vs billed drift as fully billed, not overbilled', () => {
+    const result = computeContractValue({
+      quote: { calculations: { finalTotal: 61266.34623211532 } },
+      billedToDate: 61266.35,
+    })
+
+    expect(result.effectiveContractValue).toBe(61266.34623211532)
+    expect(result.billedToDate).toBe(61266.35)
+    expect(result.remainingToBill).toBe(0)
+    expect(result.overbilledAmount).toBe(0)
+  })
+
+  it('still reports a genuine overbill after rounding to cents', () => {
+    const result = computeContractValue({
+      quote: { bidSnapshot: { total: 60_000 } },
+      billedToDate: 61266.35,
+    })
+
+    expect(result.remainingToBill).toBe(0)
+    expect(result.overbilledAmount).toBe(1266.35)
+  })
+
+  it('still reports remaining to bill when under billed', () => {
+    const result = computeContractValue({
+      quote: { bidSnapshot: { total: 61266.35 } },
+      billedToDate: 40_000,
+    })
+
+    expect(result.remainingToBill).toBe(21266.35)
+    expect(result.overbilledAmount).toBe(0)
+  })
+
+  it('leaves remaining null and overbilled zero when there is no contract baseline', () => {
+    const result = computeContractValue({
+      billedToDate: 61266.35,
+    })
+
+    expect(result.effectiveContractValue).toBeNull()
+    expect(result.remainingToBill).toBeNull()
+    expect(result.overbilledAmount).toBe(0)
+  })
 })

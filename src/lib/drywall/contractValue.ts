@@ -66,8 +66,11 @@ export function computeContractValue(input: {
   const effectiveContractValue =
     baseContractValue == null ? null : baseContractValue + acceptedChangeOrderRevenue
   const billedToDate = finite(input.billedToDate) ?? 0
+  // Snap the remaining/overbilled gap to cents so sub-cent float drift (quote math vs QB)
+  // cannot flip a fully-billed job into a phantom overbill. Leave the raw totals unrounded.
+  const roundCents = (n: number) => Math.round(n * 100) / 100
   const difference =
-    effectiveContractValue == null ? null : effectiveContractValue - billedToDate
+    effectiveContractValue == null ? null : roundCents(effectiveContractValue - billedToDate)
 
   return {
     baseContractValue,
