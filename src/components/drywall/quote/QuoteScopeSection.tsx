@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { ScopeMarkdownEditor } from '@/components/drywall/quote/v3/ScopeMarkdownEditor'
 import { appendScopeTemplate, ScopeTemplateChips } from '@/lib/drywall/scopeTemplateHelpers'
 import {
   CEILING_EXCEPTION_TEMPLATES,
@@ -245,13 +246,10 @@ export function QuoteScopeSection({ quote, readOnly, onChange }: Props) {
             {useCustom ? (
               <div className="space-y-2">
                 <Label>Custom scope of work</Label>
-                <Textarea
-                  rows={8}
-                  disabled={readOnly}
-                  className="font-mono text-sm"
+                <ScopeMarkdownEditor
                   value={String(quote.customScopeOfWork ?? '')}
-                  placeholder="Enter the full scope text as it should appear on the generated quote…"
-                  onChange={(e) => onChange({ customScopeOfWork: e.target.value })}
+                  readOnly={readOnly}
+                  onChange={(next) => onChange({ customScopeOfWork: next })}
                 />
               </div>
             ) : (

@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { ScopeMarkdownEditor } from '@/components/drywall/quote/v3/ScopeMarkdownEditor'
 import { generateScopeOfWorkFromLineItems } from '@/lib/drywall/quoteScopeOfWorkGenerate'
 import { ScopeTemplatePopover } from '@/lib/drywall/scopeTemplateHelpers'
 import type { DrywallQuoteV3 } from '@/types/drywall'
@@ -333,13 +334,10 @@ export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChang
           {useCustom ? (
             <div className="space-y-2">
               <Label>Custom scope of work</Label>
-              <Textarea
-                rows={8}
-                disabled={readOnly}
-                className="font-mono text-sm"
+              <ScopeMarkdownEditor
                 value={String(quote.custom_scope_of_work ?? '')}
-                placeholder="Enter the full scope text as it should appear on the generated quote…"
-                onChange={(e) => onChange({ custom_scope_of_work: e.target.value })}
+                readOnly={readOnly}
+                onChange={(next) => onChange({ custom_scope_of_work: next })}
               />
             </div>
           ) : (

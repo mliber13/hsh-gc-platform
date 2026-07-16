@@ -18,6 +18,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ScopeMarkdownPreview } from '@/components/drywall/quote/v3/ScopeMarkdownPreview'
 import { drywallStatusLabel, drywallStatusPillClass } from '@/lib/drywall/crewStatusStyles'
 import { isMeasurerSpecialty } from '@/lib/drywall/crewSpecialty'
 import { phaseForScheduleItem } from '@/components/drywall/schedule/scheduleItemStatusStyles'
@@ -479,7 +480,7 @@ export function CrewProjectDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm whitespace-pre-wrap">{scope.customText}</p>
+                <ScopeMarkdownPreview markdown={scope.customText} />
               </CardContent>
             </Card>
           )

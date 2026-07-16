@@ -30,6 +30,7 @@ import {
   buildQuotePdfTermsLines,
   resolveQuotePdfSettings,
 } from '@/lib/drywall/quotePdfSettings'
+import { drawMarkdownScope } from '@/lib/drywall/markdownToPdf'
 import { quoteScopeBlocksFromV2, type ScopePdfBlock } from '@/lib/drywall/structuredScopePdf'
 import type { DrywallProject, DrywallQuote, DrywallQuoteCalculations } from '@/types/drywall'
 
@@ -761,8 +762,30 @@ export async function downloadDrywallQuotePdf(
 
   drawSectionTitle(ctx, 'SCOPE OF WORK', { skipTopGap: true, keepWithNext: 48 })
   ctx.y += 4
-  for (const block of quoteScopeBlocks(quote)) {
-    drawScopeBlock(ctx, block)
+  const customScopeText = String(quote.customScopeOfWork ?? '').trim()
+  if (quote.useCustomScopeOfWork && customScopeText) {
+    drawMarkdownScope(
+      ctx,
+      String(quote.customScopeOfWork ?? ''),
+      {
+        specLine: SP.specLine,
+        specIndent: SP.specIndent,
+        bulletIndent: SP.bulletIndent,
+        subsectionTop: SP.subsectionTop,
+        subsectionAfterHeading: SP.subsectionAfterHeading,
+        bottomReserve: DW_PAGE.bottomReserve,
+      },
+      {
+        bodySize: BODY_SIZE,
+        h1Size: 12,
+        h2Size: SUBSECTION_SIZE,
+        h3Size: BODY_SIZE,
+      },
+    )
+  } else {
+    for (const block of quoteScopeBlocks(quote)) {
+      drawScopeBlock(ctx, block)
+    }
   }
 
   if (toNum(calculations.durationDays) > 0) {

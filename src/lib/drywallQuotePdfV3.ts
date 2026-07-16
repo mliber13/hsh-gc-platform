@@ -35,6 +35,7 @@ import {
 import { resolveQuoteV3PdfSettings, buildQuoteV3PdfTermsLines } from '@/lib/drywall/quoteV3PdfSettings'
 import { resolveQuotePdfSettings } from '@/lib/drywall/quotePdfSettings'
 import { computeQuoteV3Totals, type QuoteV3MarkupBreakdown } from '@/lib/drywall/quoteV3Math'
+import { drawMarkdownScope } from '@/lib/drywall/markdownToPdf'
 import { quoteScopeBlocksFromV3, type ScopePdfBlock } from '@/lib/drywall/structuredScopePdf'
 import type { DrywallQuoteV3 } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
@@ -255,6 +256,31 @@ function drawScopeBlock(ctx: PdfCtx, block: ScopePdfBlock) {
 function drawStructuredScopeOfWork(ctx: PdfCtx, quote: DrywallQuoteV3) {
   drawSectionTitle(ctx, 'SCOPE OF WORK', { skipTopGap: true, keepWithNext: 48 })
   ctx.y += 4
+
+  const customText = String(quote.custom_scope_of_work ?? '').trim()
+  if (quote.use_custom_scope_of_work && customText) {
+    drawMarkdownScope(
+      ctx,
+      String(quote.custom_scope_of_work ?? ''),
+      {
+        specLine: SP.specLine,
+        specIndent: SP.specIndent,
+        bulletIndent: SP.bulletIndent,
+        subsectionTop: SP.subsectionTop,
+        subsectionAfterHeading: SP.subsectionAfterHeading,
+        bottomReserve: DW_PAGE.bottomReserve,
+      },
+      {
+        bodySize: BODY_SIZE,
+        h1Size: 12,
+        h2Size: SUBSECTION_SIZE,
+        h3Size: BODY_SIZE,
+      },
+    )
+    ctx.y += SP.sectionBottom
+    return
+  }
+
   for (const block of quoteScopeBlocksFromV3(quote)) {
     drawScopeBlock(ctx, block)
   }
