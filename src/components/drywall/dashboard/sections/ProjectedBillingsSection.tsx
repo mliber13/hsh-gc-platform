@@ -95,8 +95,10 @@ export function ProjectedBillingsSection() {
   const currentMonthIndex = new Date().getMonth()
 
   const chartData = rows.map((row, monthIndex) => {
-    // Past: actual billed. Current month: actual billed so far + remaining scheduled draw.
-    // Future: scheduled draws only.
+    // Past: actual billed only.
+    // Current month: actual MTD + remaining scheduled draws (projected is already net of
+    // lifetime invoice consumption — do not subtract month actuals again).
+    // Future: remaining scheduled draws only.
     if (monthIndex < currentMonthIndex) {
       return { label: row.label, month: row.month, actual: row.actual, projected: 0, goal: row.goal }
     }
@@ -105,7 +107,7 @@ export function ProjectedBillingsSection() {
         label: row.label,
         month: row.month,
         actual: row.actual,
-        projected: Math.max(0, row.projected - row.actual),
+        projected: row.projected,
         goal: row.goal,
       }
     }

@@ -1046,7 +1046,6 @@ export function computeProjectedBillings(
   }
 
   const projectedByMonth = Array.from({ length: 12 }, () => 0)
-  let projectedRestOfYear = 0
   const unpricedProjects: { id: string; name: string }[] = []
   const billedByProject = new Map<string, number>()
   for (const invoice of qbInvoices) {
@@ -1086,11 +1085,14 @@ export function computeProjectedBillings(
       contractRemaining -= amount
       const monthIndex = m.startDate.getMonth()
       projectedByMonth[monthIndex] += amount
-      if (m.startDate.getTime() > now.getTime()) {
-        projectedRestOfYear += amount
-      }
     }
   }
+
+  // Remaining scheduled draws in the current month and beyond (already net of invoice
+  // consumption). Includes unpaid draws earlier this month — not only dates after today.
+  const projectedRestOfYear = projectedByMonth
+    .slice(currentMonthIndex)
+    .reduce((sum, v) => sum + v, 0)
 
   const actualByMonth = Array.from({ length: 12 }, () => 0)
   for (const inv of qbInvoices) {
@@ -1121,8 +1123,8 @@ export function computeProjectedBillings(
     })
   }
 
-  // Actual billed year-to-date (future months have no actuals). "Rest of year" is the
-  // scheduled backlog dated after today — real revenue only, no unsold future work.
+  // Actual billed year-to-date. "Rest of year" is remaining scheduled draws from this month
+  // forward (invoice consumption already applied) — real backlog only, no unsold work.
   const billedYtd = actualByMonth.reduce((sum, v) => sum + v, 0)
   const projectedYearEndTotal = billedYtd + projectedRestOfYear
   const gapToGoal = projectedYearEndTotal - annualGoal

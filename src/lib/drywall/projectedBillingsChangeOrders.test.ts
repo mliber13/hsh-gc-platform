@@ -89,4 +89,41 @@ describe('projected billings with change orders', () => {
     expect(result.scheduledRestOfYear).toBe(0)
     expect(result.rows[7].projected).toBe(0)
   })
+
+  it('keeps current-month draws projected when invoices this month pay earlier draws', () => {
+    // Catch-up invoice in July pays the June draw; July's scheduled Bill must still forecast.
+    const result = computeProjectedBillings(
+      [project({ effectiveContractValue: 100_000, quoteTotal: 100_000 })],
+      [draw('draw-1', 'Bill 50%', '2026-06-01'), draw('draw-2', 'Bill 50%', '2026-07-20')],
+      [
+        {
+          totalAmt: 50_000,
+          balance: 0,
+          txnDate: '2026-07-05',
+          matchedProjectId: 'project-1',
+        },
+      ],
+      DEFAULT_DASHBOARD_TARGETS,
+      new Date('2026-07-15T12:00:00Z'),
+    )
+
+    expect(result.rows[5].projected).toBe(0)
+    expect(result.rows[6].projected).toBe(50_000)
+    expect(result.rows[6].actual).toBe(50_000)
+    expect(result.scheduledRestOfYear).toBe(50_000)
+    expect(result.projectedYearEndTotal).toBe(100_000)
+  })
+
+  it('includes unpaid draws earlier in the current month in scheduled rest of year', () => {
+    const result = computeProjectedBillings(
+      [project({ effectiveContractValue: 80_000, quoteTotal: 80_000 })],
+      [draw('draw-1', 'Bill 100%', '2026-07-01')],
+      [],
+      DEFAULT_DASHBOARD_TARGETS,
+      new Date('2026-07-15T12:00:00Z'),
+    )
+
+    expect(result.rows[6].projected).toBe(80_000)
+    expect(result.scheduledRestOfYear).toBe(80_000)
+  })
 })

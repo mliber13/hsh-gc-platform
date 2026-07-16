@@ -15,11 +15,12 @@ export function RevenuePaceSection() {
   const { metrics, projects, scheduleItems, qbInvoices, targets } = useDashboardData()
   const { revenuePace: rp } = metrics
 
-  // Bottom-up EOM from the billing schedule (draws × contract value), vs the run-rate below.
+  // Bottom-up EOM: MTD actuals + remaining scheduled draws this month (projected is already
+  // net of lifetime invoice consumption — do not use max, which drops catch-up invoices).
   const scheduledEom = useMemo(() => {
     const pb = computeProjectedBillings(projects, scheduleItems, qbInvoices, targets, new Date())
     const row = pb.rows[new Date().getMonth()]
-    return row ? Math.max(row.projected, row.actual) : 0
+    return row ? row.actual + row.projected : 0
   }, [projects, scheduleItems, qbInvoices, targets])
 
   if (!rp.hasBillings) {
