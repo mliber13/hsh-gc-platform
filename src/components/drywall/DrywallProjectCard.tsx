@@ -1,6 +1,6 @@
 import type { MouseEvent } from 'react'
-import { formatDistanceToNow } from 'date-fns'
-import { FileText, Info, Package, Ruler } from 'lucide-react'
+import { format, formatDistanceToNow, parseISO } from 'date-fns'
+import { CalendarDays, FileText, Flag, Hammer, Info, Package, Ruler } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,14 @@ import {
 } from '@/types/drywall'
 import { cn } from '@/lib/utils'
 
-export type DrywallProjectStage = 'project-info' | 'quote' | 'field-measurement' | 'order'
+export type DrywallProjectStage =
+  | 'project-info'
+  | 'quote'
+  | 'schedule'
+  | 'field-measurement'
+  | 'order'
+  | 'production'
+  | 'closeout'
 
 interface StatusVisual {
   bg: string
@@ -135,6 +142,16 @@ const STAGE_BUTTONS: {
     hasData: listItemHasQuoteData,
   },
   {
+    stage: 'schedule',
+    path: 'schedule',
+    label: 'Schedule',
+    icon: CalendarDays,
+    iconColor: 'text-indigo-500',
+    title: 'Schedule',
+    emptyTooltip: '',
+    hasData: () => true,
+  },
+  {
     stage: 'field-measurement',
     path: 'field',
     label: 'Field',
@@ -153,6 +170,32 @@ const STAGE_BUTTONS: {
     title: 'Order',
     emptyTooltip: 'No orders yet',
     hasData: listItemHasOrderData,
+  },
+  {
+    stage: 'production',
+    path: 'production',
+    label: 'Production',
+    icon: Hammer,
+    iconColor: 'text-emerald-500',
+    title: 'Production',
+    emptyTooltip: 'Not in production yet',
+    hasData: (project) => {
+      const s = normalizeDrywallProjectStatus(project.status)
+      return s === 'production' || s === 'production-complete' || s === 'closed'
+    },
+  },
+  {
+    stage: 'closeout',
+    path: 'closeout',
+    label: 'Closeout',
+    icon: Flag,
+    iconColor: 'text-slate-500',
+    title: 'Closeout',
+    emptyTooltip: 'Closeout not available yet',
+    hasData: (project) => {
+      const s = normalizeDrywallProjectStatus(project.status)
+      return s === 'production-complete' || s === 'closed'
+    },
   },
 ]
 
@@ -177,6 +220,61 @@ function formatSqft(sqft: number | null): string {
 function formatQuoteTotal(total: number | null): string {
   if (total == null || total <= 0) return '—'
   return formatCurrency(total)
+}
+
+function formatPerSqft(total: number | null, sqft: number | null): string {
+  if (total == null || total <= 0 || sqft == null || sqft <= 0) return '—'
+  return `$${(total / sqft).toFixed(2)}`
+}
+
+/** Quote margin % = (overhead + profit) / total — mirrors dashboardCalculations. */
+function formatMargin(project: DrywallProjectListItem): string {
+  const total = project.quoteTotal
+  if (total == null || total <= 0) return '—'
+  if (project.quoteOverheadAmount == null && project.quoteProfitAmount == null) return '—'
+  const oh = project.quoteOverheadAmount ?? 0
+  const p = project.quoteProfitAmount ?? 0
+  return `${Math.round(((oh + p) / total) * 100)}%`
+}
+
+/** Sales-pipeline chip (distinct from project stage). Null for drafted / no quote. */
+function quoteOutcomeChip(
+  project: DrywallProjectListItem,
+): { label: string; className: string } | null {
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return ''
+    try {
+      return format(parseISO(iso), 'MMM d')
+    } catch {
+      return ''
+    }
+  }
+  switch (project.quoteOutcome) {
+    case 'approved': {
+      const d = fmtDate(project.quoteApprovedAt)
+      return {
+        label: d ? `Won ${d}` : 'Won',
+        className:
+          'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+      }
+    }
+    case 'sent': {
+      const d = fmtDate(project.quoteSentAt)
+      return {
+        label: d ? `Sent ${d}` : 'Sent',
+        className: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+      }
+    }
+    case 'lost': {
+      const d = fmtDate(project.quoteLostAt)
+      return {
+        label: d ? `Lost ${d}` : 'Lost',
+        className: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
+      }
+    }
+    default:
+      return null
+  }
 }
 
 export interface DrywallProjectCardProps {
@@ -205,6 +303,7 @@ export function DrywallProjectCard({
   const status = statusVisual(project.status)
   const sqftTone = project.sqft != null && project.sqft > 0 ? 'default' : 'muted'
   const quoteTone = project.quoteTotal != null && project.quoteTotal > 0 ? 'default' : 'muted'
+  const outcomeChip = quoteOutcomeChip(project)
 
   const handleCardClick = (e: MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement
@@ -269,6 +368,16 @@ export function DrywallProjectCard({
                     </div>
                   )}
                 </div>
+                {outcomeChip && (
+                  <span
+                    className={cn(
+                      'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium',
+                      outcomeChip.className,
+                    )}
+                  >
+                    {outcomeChip.label}
+                  </span>
+                )}
               </div>
               {project.client && (
                 <p className="truncate text-sm text-muted-foreground">{project.client}</p>
@@ -282,16 +391,33 @@ export function DrywallProjectCard({
             </div>
 
             <div className="flex flex-col items-end gap-2 lg:shrink-0">
-              <div className="flex items-baseline gap-6 text-right">
+              <div className="flex flex-wrap items-baseline justify-end gap-x-6 gap-y-2 text-right">
                 <FinancialColumn
                   label="Sqft"
                   value={formatSqft(project.sqft)}
                   tone={sqftTone}
                 />
                 <FinancialColumn
+                  label="$/sqft"
+                  value={formatPerSqft(project.quoteTotal, project.sqft)}
+                  tone={
+                    project.quoteTotal != null &&
+                    project.quoteTotal > 0 &&
+                    project.sqft != null &&
+                    project.sqft > 0
+                      ? 'default'
+                      : 'muted'
+                  }
+                />
+                <FinancialColumn
                   label="Quote total"
                   value={formatQuoteTotal(project.quoteTotal)}
                   tone={quoteTone}
+                />
+                <FinancialColumn
+                  label="Margin"
+                  value={formatMargin(project)}
+                  tone={formatMargin(project) === '—' ? 'muted' : 'default'}
                 />
               </div>
               {showReopen && isDrywallProjectClosed(project.status) && onReopen && !isViewer && (
