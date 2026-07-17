@@ -81,7 +81,7 @@ const formatCurrency = (n: number) =>
 const toNum = (v: unknown): number => parseFloat(String(v ?? 0)) || 0
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-type TradeSummaryLine = { label: string; amount: number }
+export type TradeSummaryLine = { label: string; amount: number }
 
 type PdfCtx = {
   doc: jsPDF
@@ -273,7 +273,7 @@ function drawScopeBlock(ctx: PdfCtx, block: ScopePdfBlock) {
 }
 
 /** Per-trade totals for the summary box (legacy QuotePDF parity). */
-function getTradeSummaryLines(
+export function getTradeSummaryLines(
   quote: DrywallQuote,
   calculations: DrywallQuoteCalculations,
   quoteForCalc: DrywallQuote,
@@ -321,6 +321,7 @@ function getTradeSummaryLines(
         {
           ...base,
           ...strip,
+          includeRcChannel: true,
           breakdowns: [
             {
               ...item,
@@ -392,7 +393,10 @@ function getTradeSummaryLines(
       sums.suspended > 0 ? sums.suspended : toNum(calculations.suspendedGridTotal)
     push('Suspended Drywall Grid Ceiling:', sg)
   }
-  if (quote.includeRcChannel) push('RC Channel:', sums.rc)
+  if (quote.includeRcChannel) {
+    const rc = sums.rc > 0 ? sums.rc : toNum(calculations.rcChannelTotal)
+    push('RC Channel:', rc)
+  }
   if (quote.includeInsulation) push('Insulation:', toNum(calculations.insulationTotal))
   if (quote.includeAcousticCeiling) {
     push('Acoustic Ceiling Tile & Grid:', toNum(calculations.acousticCeilingTotal))
