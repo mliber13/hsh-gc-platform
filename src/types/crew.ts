@@ -88,6 +88,10 @@ export interface CrewBoardAreaGroup {
 export interface CrewStructuredScope {
   useCustom: boolean
   customText: string | null
+  /** Hang/finish scope summary — e.g. "Hang and finish included." */
+  drywallScopeLabel: string | null
+  /** Optional component trades (grid, RC channel, metal stud, etc.). */
+  addonLines: string[]
   hangCeilingThickness: string | null
   hangWallThickness: string | null
   hangExceptions: string | null
@@ -108,6 +112,8 @@ export interface CrewMeasurePageContext {
   /** Normalized field takeoff from metadata.legacy.fieldTakeoff. */
   fieldTakeoff: FieldTakeoff
   projectAddress: string
+  scopeOfWork: string
+  structuredScope: CrewStructuredScope | null
 }
 
 export interface CrewProjectDetail {

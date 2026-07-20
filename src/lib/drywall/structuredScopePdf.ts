@@ -16,6 +16,35 @@ function resolveFinishLabel(raw?: string, other?: string): string {
   return textOrBlank(raw)
 }
 
+/** Human-readable drywall hang/finish scope line (v2 quote drywallScope code). */
+export function drywallScopeSummary(
+  scope: string | null | undefined = 'hang_and_finish',
+): string {
+  const code = String(scope || 'hang_and_finish')
+  if (code === 'hang_only') return 'Hang only. Finish not included.'
+  if (code === 'finish_only') return 'Finish only. Hang not included.'
+  return 'Hang and finish included.'
+}
+
+/** Optional component trade lines included in v2 quote scope. */
+export function v2QuoteAddonLines(quote: DrywallQuote): string[] {
+  const addonLines: string[] = []
+  if (quote.includeSuspendedGrid) {
+    addonLines.push('Suspended Drywall Grid Ceiling: Material and labor per plans and specs.')
+  }
+  if (quote.includeRcChannel) {
+    addonLines.push('RC Channel: Labor and material per plans and specs.')
+  }
+  if (quote.includeMetalStudFraming) {
+    addonLines.push('Metal Stud Framing: Labor and material per plans and specs.')
+  }
+  if (quote.includeAcousticCeiling) {
+    addonLines.push('Acoustic Ceiling Tile & Grid: Labor and material per plans and specs.')
+  }
+  if (quote.includeFRP) addonLines.push('FRP: Labor and material per plans and specs.')
+  return addonLines
+}
+
 function hangFinishBlocks(input: {
   ceilingThickness?: string
   wallThickness?: string
@@ -63,15 +92,7 @@ export function quoteScopeBlocksFromV2(quote: DrywallQuote): ScopePdfBlock[] {
   const scope = String(quote.drywallScope || 'hang_and_finish')
   blocks.push({
     bulleted: false,
-    lines: [
-      `Drywall: ${
-        scope === 'hang_only'
-          ? 'Hang only. Finish not included.'
-          : scope === 'finish_only'
-            ? 'Finish only. Hang not included.'
-            : 'Hang and finish included.'
-      }`,
-    ],
+    lines: [`Drywall: ${drywallScopeSummary(scope)}`],
   })
 
   blocks.push(
@@ -88,20 +109,7 @@ export function quoteScopeBlocksFromV2(quote: DrywallQuote): ScopePdfBlock[] {
     }),
   )
 
-  const addonLines: string[] = []
-  if (quote.includeSuspendedGrid) {
-    addonLines.push('Suspended Drywall Grid Ceiling: Material and labor per plans and specs.')
-  }
-  if (quote.includeRcChannel) {
-    addonLines.push('RC Channel: Labor and material per plans and specs.')
-  }
-  if (quote.includeMetalStudFraming) {
-    addonLines.push('Metal Stud Framing: Labor and material per plans and specs.')
-  }
-  if (quote.includeAcousticCeiling) {
-    addonLines.push('Acoustic Ceiling Tile & Grid: Labor and material per plans and specs.')
-  }
-  if (quote.includeFRP) addonLines.push('FRP: Labor and material per plans and specs.')
+  const addonLines = v2QuoteAddonLines(quote)
   if (addonLines.length) blocks.push({ lines: addonLines, plain: true })
 
   const notes = textOrBlank(quote.scopeOfWork)

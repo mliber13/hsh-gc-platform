@@ -5,7 +5,6 @@ import {
   Calendar,
   Camera,
   DollarSign,
-  FileText,
   MapPin,
   Package,
   Phone,
@@ -18,7 +17,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ScopeMarkdownPreview } from '@/components/drywall/quote/v3/ScopeMarkdownPreview'
+import { CrewScopeOfWorkCard } from '@/components/crew/CrewScopeOfWorkCard'
 import { drywallStatusLabel, drywallStatusPillClass } from '@/lib/drywall/crewStatusStyles'
 import { isMeasurerSpecialty } from '@/lib/drywall/crewSpecialty'
 import { phaseForScheduleItem } from '@/components/drywall/schedule/scheduleItemStatusStyles'
@@ -304,6 +303,13 @@ export function CrewProjectDetailPage() {
         </Card>
       ) : null}
 
+      <CrewScopeOfWorkCard
+        structuredScope={detail.structuredScope}
+        scopeOfWork={detail.scopeOfWork}
+        specialty={detail.specialty}
+        isOperatorExplainer={isOperatorExplainer}
+      />
+
       {!detail.showJobInfo ? (
         <Card>
           <CardContent className="space-y-1 py-4 text-sm text-muted-foreground">
@@ -449,96 +455,6 @@ export function CrewProjectDetailPage() {
           </CardContent>
         </Card>
       ) : null}
-
-
-      {(() => {
-        const scope = detail.structuredScope
-        if (!scope) {
-          // Fall back to legacy text-only scope when no structured scope is available (e.g. PO intake)
-          return detail.scopeOfWork ? (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <FileText className="size-4" />
-                  Scope of work
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm whitespace-pre-wrap">{detail.scopeOfWork}</p>
-              </CardContent>
-            </Card>
-          ) : null
-        }
-
-        if (scope.useCustom && scope.customText) {
-          return (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <FileText className="size-4" />
-                  Scope of work
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ScopeMarkdownPreview markdown={scope.customText} />
-              </CardContent>
-            </Card>
-          )
-        }
-
-        const showHangScope =
-          isOperatorExplainer || detail.specialty === 'hanger' || detail.specialty === 'both'
-
-        const hangThickness = showHangScope
-          ? [
-              scope.hangCeilingThickness ? `Ceiling ${scope.hangCeilingThickness}` : null,
-              scope.hangWallThickness ? `Wall ${scope.hangWallThickness}` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')
-          : ''
-
-        const hasAny =
-          (showHangScope && (hangThickness || scope.hangExceptions)) ||
-          scope.ceilingFinish ||
-          scope.ceilingExceptions ||
-          scope.wallFinish ||
-          scope.wallExceptions ||
-          scope.additionalNotes
-        if (!hasAny) return null
-
-        const Row = ({ label, value }: { label: string; value: string | null }) =>
-          value ? (
-            <div>
-              <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
-              <p className="whitespace-pre-wrap">{value}</p>
-            </div>
-          ) : null
-
-        return (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <FileText className="size-4" />
-                Scope of work
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              {showHangScope ? (
-                <>
-                  <Row label="Drywall thickness" value={hangThickness || null} />
-                  <Row label="Hang exceptions" value={scope.hangExceptions} />
-                </>
-              ) : null}
-              <Row label="Ceiling finish" value={scope.ceilingFinish} />
-              <Row label="Ceiling exceptions" value={scope.ceilingExceptions} />
-              <Row label="Wall finish" value={scope.wallFinish} />
-              <Row label="Wall exceptions" value={scope.wallExceptions} />
-              <Row label="Additional notes" value={scope.additionalNotes} />
-            </CardContent>
-          </Card>
-        )
-      })()}
 
       <Card>
         <CardHeader className="pb-2">

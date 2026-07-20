@@ -3,6 +3,7 @@ import { ArrowLeft, RefreshCw, Save, Send } from 'lucide-react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { usePageTitle } from '@/contexts/PageTitleContext'
+import { CrewScopeOfWorkCard } from '@/components/crew/CrewScopeOfWorkCard'
 import {
   FieldAccessoriesSection,
   FieldChecklistSection,
@@ -424,6 +425,13 @@ export function CrewMeasurePage() {
           </CardContent>
         </Card>
       ) : null}
+
+      <CrewScopeOfWorkCard
+        structuredScope={context.structuredScope}
+        scopeOfWork={context.scopeOfWork}
+        specialty={context.specialty}
+        isOperatorExplainer={isOperatorExplainer}
+      />
 
       <FieldProjectSiteSection
         variant="crew"

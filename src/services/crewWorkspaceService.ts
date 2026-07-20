@@ -17,6 +17,8 @@ import {
 } from '@/services/drywallProjectsService'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import { hydrateDrywallQuoteV3 } from '@/lib/drywall/createEmptyDrywallQuoteV3'
+import { v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
+import { drywallScopeSummary, v2QuoteAddonLines } from '@/lib/drywall/structuredScopePdf'
 import { getCurrentUserProfile, requireUserOrgId } from '@/services/userService'
 import { fetchTeam } from '@/services/hrTeamService'
 import {
@@ -43,6 +45,7 @@ import type {
   CrewProjectDetail,
   CrewProjectListItem,
   CrewProjectScheduleEntry,
+  CrewStructuredScope,
 } from '@/types/crew'
 import type {
   DrywallPoData,
@@ -349,6 +352,62 @@ function nonEmptyStr(v: unknown): string | null {
   return t.length > 0 ? t : null
 }
 
+function resolveScopeAddonLines(legacy: Record<string, unknown>): string[] {
+  const v2 = v2QuoteFromLegacy(legacy)
+  if (v2) return v2QuoteAddonLines(v2)
+
+  const v3 = v3QuoteFromLegacy(legacy)
+  if (!v3) return []
+
+  const v2Snap = v3.legacyV2Snapshot ? v2QuoteFromV3Snapshot(v3.legacyV2Snapshot) : null
+  if (v2Snap) return v2QuoteAddonLines(v2Snap)
+
+  const types = new Set(v3.lineItems.map((li) => li.type))
+  const lines: string[] = []
+  if (types.has('suspended_grid')) {
+    lines.push('Suspended Drywall Grid Ceiling: Material and labor per plans and specs.')
+  }
+  if (types.has('rc_channel')) {
+    lines.push('RC Channel: Labor and material per plans and specs.')
+  }
+  if (types.has('metal_stud')) {
+    lines.push('Metal Stud Framing: Labor and material per plans and specs.')
+  }
+  if (types.has('acoustic')) {
+    lines.push('Acoustic Ceiling Tile & Grid: Labor and material per plans and specs.')
+  }
+  if (types.has('frp')) lines.push('FRP: Labor and material per plans and specs.')
+  return lines
+}
+
+function resolveDrywallScopeLabel(legacy: Record<string, unknown>): string | null {
+  const v2 = v2QuoteFromLegacy(legacy)
+  if (v2 && !v2.useCustomScopeOfWork) return drywallScopeSummary(v2.drywallScope)
+
+  const v3 = v3QuoteFromLegacy(legacy)
+  if (!v3 || v3.use_custom_scope_of_work) return null
+
+  const v2Snap = v3.legacyV2Snapshot ? v2QuoteFromV3Snapshot(v3.legacyV2Snapshot) : null
+  if (v2Snap && !v2Snap.useCustomScopeOfWork) {
+    return drywallScopeSummary(v2Snap.drywallScope)
+  }
+  if (v3.lineItems.some((li) => li.type === 'drywall')) {
+    return drywallScopeSummary('hang_and_finish')
+  }
+  return null
+}
+
+function withScopeExtras(
+  legacy: Record<string, unknown>,
+  scope: Omit<CrewStructuredScope, 'drywallScopeLabel' | 'addonLines'>,
+): CrewStructuredScope {
+  return {
+    ...scope,
+    drywallScopeLabel: scope.useCustom ? null : resolveDrywallScopeLabel(legacy),
+    addonLines: scope.useCustom ? [] : resolveScopeAddonLines(legacy),
+  }
+}
+
 function resolveStructuredScope(
   legacy: Record<string, unknown>,
 ): CrewProjectDetail['structuredScope'] {
@@ -364,7 +423,7 @@ function resolveStructuredScope(
         : nonEmptyStr(v3.wall_finish)
     const useCustom = Boolean(v3.use_custom_scope_of_work)
     const customText = nonEmptyStr(v3.custom_scope_of_work)
-    return {
+    return withScopeExtras(legacy, {
       useCustom,
       customText,
       hangCeilingThickness: nonEmptyStr(v3.ceiling_thickness),
@@ -375,7 +434,7 @@ function resolveStructuredScope(
       wallFinish,
       wallExceptions: nonEmptyStr(v3.wall_exceptions),
       additionalNotes: nonEmptyStr(v3.scope_of_work),
-    }
+    })
   }
 
   const v2 = v2QuoteFromLegacy(legacy)
@@ -390,7 +449,7 @@ function resolveStructuredScope(
         : nonEmptyStr(v2.wallFinish)
     const useCustom = Boolean(v2.useCustomScopeOfWork)
     const customText = nonEmptyStr(v2.customScopeOfWork)
-    return {
+    return withScopeExtras(legacy, {
       useCustom,
       customText,
       hangCeilingThickness: nonEmptyStr(v2.ceilingThickness),
@@ -401,7 +460,7 @@ function resolveStructuredScope(
       wallFinish,
       wallExceptions: nonEmptyStr(v2.wallExceptions),
       additionalNotes: nonEmptyStr(v2.scopeOfWork),
-    }
+    })
   }
 
   return null
@@ -805,6 +864,9 @@ function buildCrewMeasurePageContext(
   scheduleRows: ScheduleRow[],
   specialty: CrewSpecialty,
 ): CrewMeasurePageContext {
+  const legacy = project.legacy
+  const po = getPoDataFromLegacy(legacy)
+  const intakeSource = getIntakeSourceFromLegacy(legacy) ?? (po ? 'po' : 'quote')
   const fieldTakeoff = resolveFieldTakeoffFromProject(project)
   return {
     projectId: project.id,
@@ -814,6 +876,8 @@ function buildCrewMeasurePageContext(
     hasMeasureAssignment: scheduleRows.some(scheduleRowHasMeasurePhase),
     fieldTakeoff,
     projectAddress: project.address?.trim() ?? '',
+    scopeOfWork: resolveScopeOfWork(legacy, intakeSource, po),
+    structuredScope: resolveStructuredScope(legacy),
   }
 }
 
@@ -895,6 +959,7 @@ async function mapProjectDetail(
   const showJobInfo =
     context.preview === true ||
     (context.personId != null && personSeesJobInfo(context.personId, scheduleRows))
+  const showScope = showJobInfo || isMeasurerSpecialty(context.specialty)
 
   const totalSqft = showJobInfo ? resolveTotalSqft(legacy, intakeSource, po) : null
   const laborRates = showJobInfo
@@ -912,8 +977,8 @@ async function mapProjectDetail(
     client: project.client,
     address: project.address,
     status: normalizeDrywallProjectStatus(project.status),
-    scopeOfWork: showJobInfo ? resolveScopeOfWork(legacy, intakeSource, po) : '',
-    structuredScope: showJobInfo ? resolveStructuredScope(legacy) : null,
+    scopeOfWork: showScope ? resolveScopeOfWork(legacy, intakeSource, po) : '',
+    structuredScope: showScope ? resolveStructuredScope(legacy) : null,
     totalSqft,
     beadSticks: showJobInfo ? resolveBeadSticks(legacy) : null,
     materials: showJobInfo
