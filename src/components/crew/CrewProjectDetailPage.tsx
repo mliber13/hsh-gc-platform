@@ -18,6 +18,7 @@ import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CrewScopeOfWorkCard } from '@/components/crew/CrewScopeOfWorkCard'
+import { FieldPhotosSection } from '@/components/drywall/field/inputs'
 import { drywallStatusLabel, drywallStatusPillClass } from '@/lib/drywall/crewStatusStyles'
 import { isMeasurerSpecialty } from '@/lib/drywall/crewSpecialty'
 import { phaseForScheduleItem } from '@/components/drywall/schedule/scheduleItemStatusStyles'
@@ -208,6 +209,15 @@ export function CrewProjectDetailPage() {
 
   const showStartMeasure =
     !isOperatorExplainer && isMeasurerSpecialty(detail.specialty) && measureEntry != null
+
+  const canManagePhotos =
+    isOperatorExplainer ||
+    (isMeasurerSpecialty(detail.specialty) && !isViewAs && detail.hasMeasureAssignment)
+  const photosLocked =
+    detail.measureWorkflowStatus === 'pending_review' ||
+    detail.measureWorkflowStatus === 'approved'
+  const photosReadOnly = !canManagePhotos || photosLocked
+  const showMeasurerPhotoSection = canManagePhotos || isMeasurerSpecialty(detail.specialty)
 
   return (
     <div
@@ -499,7 +509,32 @@ export function CrewProjectDetailPage() {
         </CardContent>
       </Card>
 
-      {detail.photos.length > 0 ? (
+      {showMeasurerPhotoSection ? (
+        <div className="space-y-2">
+          {photosLocked && canManagePhotos ? (
+            <p className="text-sm text-muted-foreground">
+              Photos are locked while measurements are{' '}
+              {detail.measureWorkflowStatus === 'approved'
+                ? 'approved'
+                : 'with the office for review'}
+              .
+            </p>
+          ) : null}
+          {!canManagePhotos &&
+          isMeasurerSpecialty(detail.specialty) &&
+          !isViewAs &&
+          !detail.hasMeasureAssignment ? (
+            <p className="text-sm text-muted-foreground">
+              Ask the office to assign you a Measure schedule item on this job to upload photos.
+            </p>
+          ) : null}
+          <FieldPhotosSection
+            projectId={projectId}
+            readOnly={photosReadOnly}
+            onPhotosChange={() => void load()}
+          />
+        </div>
+      ) : detail.photos.length > 0 ? (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">

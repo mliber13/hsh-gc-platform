@@ -163,6 +163,10 @@ export interface CrewProjectDetail {
    * schedule assignments for this project. When false, crew UI hides sqft/pay/materials.
    */
   showJobInfo: boolean
+  /** Measurer schedule assignment present — gates field takeoff / photo writes. */
+  hasMeasureAssignment: boolean
+  /** Field takeoff review workflow — set for measurers / operator preview. */
+  measureWorkflowStatus: CrewMeasureWorkflowStatus | null
 }
 
 export interface CommsUnreadEntry {

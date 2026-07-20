@@ -960,6 +960,13 @@ async function mapProjectDetail(
     context.preview === true ||
     (context.personId != null && personSeesJobInfo(context.personId, scheduleRows))
   const showScope = showJobInfo || isMeasurerSpecialty(context.specialty)
+  const showPhotos = showJobInfo || isMeasurerSpecialty(context.specialty)
+  const hasMeasureAssignment =
+    context.preview === true || scheduleRows.some(scheduleRowHasMeasurePhase)
+  const measureWorkflowStatus =
+    context.preview === true || isMeasurerSpecialty(context.specialty)
+      ? crewMeasureWorkflowStatus(field)
+      : null
 
   const totalSqft = showJobInfo ? resolveTotalSqft(legacy, intakeSource, po) : null
   const laborRates = showJobInfo
@@ -995,7 +1002,7 @@ async function mapProjectDetail(
     showBoardCounts:
       showJobInfo &&
       shouldShowBoardCounts(context.specialty, context.preview === true, scheduleRows),
-    photos: showJobInfo
+    photos: showPhotos
       ? (field?.photos ?? []).map((p) => ({
           id: p.id,
           storagePath: p.storagePath?.trim() || null,
@@ -1014,6 +1021,8 @@ async function mapProjectDetail(
     scheduleEntries: scheduleRows.map(mapScheduleEntry),
     intakeSource,
     showJobInfo,
+    hasMeasureAssignment,
+    measureWorkflowStatus,
   }
 }
 

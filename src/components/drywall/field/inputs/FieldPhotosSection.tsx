@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Camera, Loader2, Trash2 } from 'lucide-react'
+import { Camera, ImagePlus, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,8 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   deleteFieldPhoto,
   DrywallPhotoError,
@@ -97,7 +95,8 @@ function PhotoThumb({
 }
 
 export function FieldPhotosSection({ projectId, readOnly, onPhotosChange }: FieldPhotosSectionProps) {
-  const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const libraryRef = useRef<HTMLInputElement>(null)
   const [photos, setPhotos] = useState<FieldPhotoRef[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -133,7 +132,8 @@ export function FieldPhotosSection({ projectId, readOnly, onPhotosChange }: Fiel
       toast.error(e instanceof DrywallPhotoError ? e.message : 'Upload failed')
     } finally {
       setUploading(false)
-      if (fileRef.current) fileRef.current.value = ''
+      if (cameraRef.current) cameraRef.current.value = ''
+      if (libraryRef.current) libraryRef.current.value = ''
     }
   }
 
@@ -165,19 +165,47 @@ export function FieldPhotosSection({ projectId, readOnly, onPhotosChange }: Fiel
         <CardContent className="space-y-4">
           {!readOnly && (
             <div className="space-y-2">
-              <Label htmlFor="field-photo-input">Add photos</Label>
-              <Input
-                id="field-photo-input"
-                ref={fileRef}
+              <input
+                ref={cameraRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
-                multiple
+                className="sr-only"
                 disabled={uploading}
                 onChange={(e) => void handleUpload(e.target.files)}
               />
+              <input
+                ref={libraryRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="sr-only"
+                disabled={uploading}
+                onChange={(e) => void handleUpload(e.target.files)}
+              />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  className="w-full sm:flex-1"
+                  disabled={uploading}
+                  onClick={() => cameraRef.current?.click()}
+                >
+                  <Camera className="mr-2 size-4" />
+                  Take photo
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:flex-1"
+                  disabled={uploading}
+                  onClick={() => libraryRef.current?.click()}
+                >
+                  <ImagePlus className="mr-2 size-4" />
+                  Choose photos
+                </Button>
+              </div>
               {uploading && (
-                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Uploading…
                 </p>
@@ -188,11 +216,11 @@ export function FieldPhotosSection({ projectId, readOnly, onPhotosChange }: Fiel
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading photos…</p>
           ) : photos.length === 0 ? (
-            <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-6 text-center">
-              No photos yet.
+            <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              {readOnly ? 'No photos yet.' : 'No photos yet — take or choose a photo above.'}
             </p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {photos.map((photo) => (
                 <PhotoThumb
                   key={photo.id}
@@ -216,7 +244,7 @@ export function FieldPhotosSection({ projectId, readOnly, onPhotosChange }: Fiel
             <img
               src={enlargeSrc}
               alt="Field photo enlarged"
-              className="max-h-[80vh] w-full object-contain rounded-md"
+              className="max-h-[80vh] w-full rounded-md object-contain"
             />
           ) : null}
         </DialogContent>
