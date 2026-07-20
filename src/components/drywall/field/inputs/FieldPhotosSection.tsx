@@ -165,44 +165,49 @@ export function FieldPhotosSection({ projectId, readOnly, onPhotosChange }: Fiel
         <CardContent className="space-y-4">
           {!readOnly && (
             <div className="space-y-2">
-              <input
-                ref={cameraRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="sr-only"
-                disabled={uploading}
-                onChange={(e) => void handleUpload(e.target.files)}
-              />
-              <input
-                ref={libraryRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="sr-only"
-                disabled={uploading}
-                onChange={(e) => void handleUpload(e.target.files)}
-              />
+              {/*
+                Overlay the file input on the button so the tap hits <input> directly.
+                Programmatic input.click() / hidden label tricks often force iOS Safari
+                straight to the camera and skip Photo Library.
+              */}
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  className="w-full sm:flex-1"
-                  disabled={uploading}
-                  onClick={() => cameraRef.current?.click()}
-                >
-                  <Camera className="mr-2 size-4" />
-                  Take photo
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full sm:flex-1"
-                  disabled={uploading}
-                  onClick={() => libraryRef.current?.click()}
-                >
-                  <ImagePlus className="mr-2 size-4" />
-                  Choose photos
-                </Button>
+                <div className="relative w-full sm:flex-1">
+                  <Button type="button" className="pointer-events-none w-full" tabIndex={-1}>
+                    <Camera className="mr-2 size-4" />
+                    Take photo
+                  </Button>
+                  <input
+                    ref={cameraRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    disabled={uploading}
+                    aria-label="Take photo"
+                    className="absolute inset-0 z-10 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                    onChange={(e) => void handleUpload(e.target.files)}
+                  />
+                </div>
+                <div className="relative w-full sm:flex-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="pointer-events-none w-full"
+                    tabIndex={-1}
+                  >
+                    <ImagePlus className="mr-2 size-4" />
+                    Choose from library
+                  </Button>
+                  <input
+                    ref={libraryRef}
+                    type="file"
+                    accept="image/*,image/heic,image/heif,.heic,.heif"
+                    multiple
+                    disabled={uploading}
+                    aria-label="Choose photos from library"
+                    className="absolute inset-0 z-10 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                    onChange={(e) => void handleUpload(e.target.files)}
+                  />
+                </div>
               </div>
               {uploading && (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground">
