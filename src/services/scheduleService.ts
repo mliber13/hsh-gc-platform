@@ -268,7 +268,7 @@ function predecessorsToRows(ids: string[], lagWorkDays: number) {
   }))
 }
 
-function parseTasks(raw: unknown): ScheduleItemTask[] {
+export function parseScheduleItemTasks(raw: unknown): ScheduleItemTask[] {
   if (!Array.isArray(raw)) return []
   const tasks: ScheduleItemTask[] = []
   for (const t of raw) {
@@ -308,7 +308,7 @@ function mapDrywallScheduleRow(row: DrywallScheduleItemRow): DrywallProjectSched
     assigned_company_id: row.assigned_company_id,
     predecessor_ids: ids,
     lag_work_days: lag,
-    tasks: parseTasks(row.tasks),
+    tasks: parseScheduleItemTasks(row.tasks),
   }
 }
 

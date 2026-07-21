@@ -1,3 +1,5 @@
+import type { ScheduleItemTask } from '@/services/scheduleService'
+
 export interface CrewInviteToken {
   id: string
   token: string
@@ -53,6 +55,7 @@ export interface CrewProjectScheduleEntry {
   endDate: string
   status: string
   notes: string | null
+  tasks: ScheduleItemTask[]
 }
 
 export type CrewLaborRateSource =

@@ -16,6 +16,7 @@ import {
   getPoDataFromLegacy,
 } from '@/services/drywallProjectsService'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
+import { parseScheduleItemTasks } from '@/services/scheduleService'
 import { hydrateDrywallQuoteV3 } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
 import { drywallScopeSummary, v2QuoteAddonLines } from '@/lib/drywall/structuredScopePdf'
@@ -82,6 +83,7 @@ type ScheduleRow = {
   status: string
   notes: string | null
   show_job_info_person_ids: string[] | null
+  tasks: unknown
 }
 
 type ProjectRow = {
@@ -174,6 +176,7 @@ function mapScheduleEntry(row: ScheduleRow): CrewProjectScheduleEntry {
     endDate: row.end_date,
     status: row.status,
     notes: row.notes,
+    tasks: parseScheduleItemTasks(row.tasks),
   }
 }
 
@@ -182,7 +185,7 @@ async function fetchAssignedScheduleRows(personId: string): Promise<ScheduleRow[
   const { data, error } = await supabase
     .from('schedule_items')
     .select(
-      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids',
+      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, tasks',
     )
     .eq('organization_id', orgId)
     .contains('assigned_persons', [personId])
@@ -228,6 +231,51 @@ async function resolvePersonContext(
   const personId = resolvePersonId(profile)
   const specialty = await resolveCrewSpecialty(personId)
   return { personId, specialty }
+}
+
+/** Key: `${scheduleItemId}:${taskId}` -> cumulative % complete (0..100) for the resolved person. */
+export type CrewTaskProgressMap = Map<string, number>
+
+export async function fetchTaskProgressForProject(
+  projectId: string,
+  opts?: CrewViewAsOpts,
+): Promise<CrewTaskProgressMap> {
+  if (!isOnlineMode()) return new Map()
+  const { personId } = await resolvePersonContext(opts)
+  const orgId = await requireUserOrgId()
+  const { data, error } = await supabase
+    .from('task_progress')
+    .select('schedule_item_id, task_id, pct')
+    .eq('organization_id', orgId)
+    .eq('project_id', projectId)
+    .eq('person_id', personId)
+  if (error) {
+    console.warn('fetchTaskProgressForProject:', error)
+    return new Map()
+  }
+  const map: CrewTaskProgressMap = new Map()
+  for (const row of data ?? []) {
+    const r = row as { schedule_item_id: string; task_id: string; pct: number | string }
+    map.set(`${r.schedule_item_id}:${r.task_id}`, Number(r.pct) || 0)
+  }
+  return map
+}
+
+export async function updateCrewTaskProgress(
+  scheduleItemId: string,
+  taskId: string,
+  pct: number,
+): Promise<void> {
+  if (!isOnlineMode()) throw new Error('Updating progress requires an online connection.')
+  const { error } = await supabase.rpc('crew_update_task_progress', {
+    p_schedule_item_id: scheduleItemId,
+    p_task_id: taskId,
+    p_pct: pct,
+  })
+  if (error) {
+    console.error('updateCrewTaskProgress:', error)
+    throw new Error('Could not save progress. Try again.')
+  }
 }
 
 export async function fetchCrewProjectList(

@@ -26,10 +26,15 @@ import {
   CrewWorkspacePermissionError,
   fetchCrewProjectDetail,
   fetchCrewProjectDetailForPreview,
+  fetchTaskProgressForProject,
+  updateCrewTaskProgress,
+  type CrewTaskProgressMap,
 } from '@/services/crewWorkspaceService'
 import { getSignedPhotoUrl } from '@/services/drywallPhotosService'
 import type { CrewProjectDetail } from '@/types/crew'
 import { isCrewRole } from '@/lib/rbac'
+import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { CrewCommsPanel } from '@/components/crew/CrewCommsPanel'
 
 function formatRate(value: number | null): string {
@@ -116,6 +121,7 @@ export function CrewProjectDetailPage() {
   const isOperatorExplainer = isOperator && !isViewAs
   const readOnly = isOperator
   const [detail, setDetail] = useState<CrewProjectDetail | null>(null)
+  const [progress, setProgress] = useState<CrewTaskProgressMap>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Prefill plumbing for Materials → comms request flow
@@ -126,6 +132,7 @@ export function CrewProjectDetailPage() {
 
   const asQuery = viewAsPersonId ? `?as=${encodeURIComponent(viewAsPersonId)}` : ''
   const crewHome = `/crew${asQuery}`
+  const todayKey = format(new Date(), 'yyyy-MM-dd')
 
   const load = useCallback(async () => {
     if (!projectId) return
@@ -138,6 +145,16 @@ export function CrewProjectDetailPage() {
           ? await fetchCrewProjectDetail(projectId)
           : await fetchCrewProjectDetailForPreview(projectId)
       setDetail(data)
+      // Task progress — skip for the unfiltered operator preview (no linked person).
+      if (isViewAs || isCrewRole(effectiveRole)) {
+        const prog = await fetchTaskProgressForProject(
+          projectId,
+          isViewAs ? { viewAsPersonId: viewAsPersonId! } : undefined,
+        )
+        setProgress(prog)
+      } else {
+        setProgress(new Map())
+      }
     } catch (e) {
       if (e instanceof CrewWorkspacePermissionError) {
         setError(
@@ -160,6 +177,19 @@ export function CrewProjectDetailPage() {
   }, [load])
 
   const { pullDistance, refreshing: pullRefreshing } = usePullToRefresh(load)
+
+  const handleSetProgress = async (scheduleItemId: string, taskId: string, pct: number) => {
+    const key = `${scheduleItemId}:${taskId}`
+    const prev = progress.get(key) ?? 0
+    if (prev === pct) return
+    setProgress((m) => new Map(m).set(key, pct)) // optimistic
+    try {
+      await updateCrewTaskProgress(scheduleItemId, taskId, pct)
+    } catch (e) {
+      setProgress((m) => new Map(m).set(key, prev)) // revert
+      toast.error(e instanceof Error ? e.message : 'Could not save progress')
+    }
+  }
 
   if (!projectId) {
     return null
@@ -663,6 +693,7 @@ export function CrewProjectDetailPage() {
           <CardContent className="space-y-3">
             {detail.scheduleEntries.map((entry) => {
               const isToday = isTodayInRange(entry.startDate, entry.endDate)
+              const started = entry.startDate <= todayKey
               return (
                 <div
                   key={entry.id}
@@ -698,6 +729,70 @@ export function CrewProjectDetailPage() {
                   </p>
                   {entry.notes ? (
                     <p className="mt-2 text-sm whitespace-pre-wrap">{entry.notes}</p>
+                  ) : null}
+                  {entry.tasks.length > 0 ? (
+                    <div className="mt-3 space-y-3 border-t pt-3">
+                      {!started ? (
+                        <p className="text-xs text-muted-foreground">
+                          Starts {format(parseISO(entry.startDate), 'EEE MMM d')} — you can log
+                          progress once the job begins.
+                        </p>
+                      ) : null}
+                      {entry.tasks.map((task) => {
+                        const key = `${entry.id}:${task.id}`
+                        const pct = progress.get(key) ?? 0
+                        return (
+                          <div key={task.id} className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium">{task.label}</span>
+                              {task.progressMode === 'percent' ? (
+                                <span className="text-xs tabular-nums text-muted-foreground">
+                                  {pct}%
+                                </span>
+                              ) : null}
+                            </div>
+                            {task.progressMode === 'percent' ? (
+                              <div className="flex gap-1">
+                                {[0, 25, 50, 75, 100].map((v) => (
+                                  <button
+                                    key={v}
+                                    type="button"
+                                    disabled={readOnly || !started}
+                                    onClick={() => void handleSetProgress(entry.id, task.id, v)}
+                                    className={cn(
+                                      'flex-1 rounded-md border py-2 text-xs font-medium transition-colors',
+                                      pct === v
+                                        ? 'border-primary bg-primary text-primary-foreground'
+                                        : 'border-border bg-card hover:bg-muted',
+                                      (readOnly || !started) && 'opacity-60',
+                                    )}
+                                  >
+                                    {v === 100 ? 'Done' : `${v}%`}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={readOnly || !started}
+                                onClick={() =>
+                                  void handleSetProgress(entry.id, task.id, pct >= 100 ? 0 : 100)
+                                }
+                                className={cn(
+                                  'w-full rounded-md border py-2 text-xs font-medium transition-colors',
+                                  pct >= 100
+                                    ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                    : 'border-border bg-card hover:bg-muted',
+                                  (readOnly || !started) && 'opacity-60',
+                                )}
+                              >
+                                {pct >= 100 ? '✓ Done' : 'Mark done'}
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
                   ) : null}
                 </div>
               )
