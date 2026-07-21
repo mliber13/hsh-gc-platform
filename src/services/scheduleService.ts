@@ -200,6 +200,8 @@ export interface DrywallProjectScheduleItem {
   predecessor_ids: string[]
   lag_work_days: number
   tasks: ScheduleItemTask[]
+  /** Journeyman(s) whose piece this item belongs to; day-rate helpers deduct from them. */
+  lead_person_ids: string[]
 }
 
 export interface NewScheduleItemInput {
@@ -215,6 +217,7 @@ export interface NewScheduleItemInput {
   predecessorIds?: string[]
   lagWorkDays?: number
   tasks?: ScheduleItemTask[]
+  leadPersonIds?: string[]
 }
 
 type DrywallScheduleItemRow = {
@@ -235,6 +238,7 @@ type DrywallScheduleItemRow = {
   notes: string | null
   predecessors: Array<{ predecessor_id?: string; lag_days?: number }> | null
   tasks: unknown
+  lead_person_ids: string[] | null
 }
 
 function toDateOnly(value: string): string {
@@ -309,6 +313,7 @@ function mapDrywallScheduleRow(row: DrywallScheduleItemRow): DrywallProjectSched
     predecessor_ids: ids,
     lag_work_days: lag,
     tasks: parseScheduleItemTasks(row.tasks),
+    lead_person_ids: row.lead_person_ids ?? [],
   }
 }
 
@@ -372,7 +377,7 @@ async function getOrCreateScheduleForProject(
 }
 
 const DRYWALL_SCHEDULE_SELECT =
-  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, notes, predecessors, tasks'
+  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, notes, predecessors, tasks, lead_person_ids'
 
 export async function fetchScheduleItemsForDrywallProject(
   projectId: string,
@@ -467,6 +472,7 @@ function buildInsertRow(
     assigned_to: [],
     predecessors: predecessorsToRows(predecessorIds, lag),
     tasks: input.tasks ?? [],
+    lead_person_ids: input.leadPersonIds ?? [],
     notes: input.notes?.trim() || null,
   }
 }
@@ -556,6 +562,9 @@ export async function updateScheduleItemForDrywallProject(
   }
   if (patch.tasks !== undefined) {
     updatePayload.tasks = patch.tasks
+  }
+  if (patch.leadPersonIds !== undefined) {
+    updatePayload.lead_person_ids = patch.leadPersonIds
   }
 
   const { error } = await supabase

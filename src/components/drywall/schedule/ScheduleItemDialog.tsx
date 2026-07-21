@@ -77,6 +77,7 @@ export function ScheduleItemDialog({
   const [predecessorIds, setPredecessorIds] = useState<string[]>([])
   const [lagWorkDays, setLagWorkDays] = useState(1)
   const [tasks, setTasks] = useState<ScheduleItemTask[]>([])
+  const [leadPersonIds, setLeadPersonIds] = useState<string[]>([])
   const [predOpen, setPredOpen] = useState(false)
   const [predSearch, setPredSearch] = useState('')
   const [saving, setSaving] = useState(false)
@@ -134,6 +135,7 @@ export function ScheduleItemDialog({
       setPredecessorIds(editing.predecessor_ids)
       setLagWorkDays(editing.lag_work_days)
       setTasks(editing.tasks ?? [])
+      setLeadPersonIds(editing.lead_person_ids ?? [])
     } else {
       const today = new Date().toISOString().slice(0, 10)
       setName('')
@@ -148,6 +150,7 @@ export function ScheduleItemDialog({
       setPredecessorIds([])
       setLagWorkDays(1)
       setTasks([])
+      setLeadPersonIds([])
     }
     setPredSearch('')
     setConflict(null)
@@ -325,6 +328,7 @@ export function ScheduleItemDialog({
       tasks: tasks
         .map((t) => ({ ...t, label: t.label.trim() }))
         .filter((t) => t.label.length > 0),
+      leadPersonIds,
     }
   }
 
@@ -670,6 +674,18 @@ export function ScheduleItemDialog({
             showJobInfoPersonIds={showJobInfoPersonIds}
             onShowJobInfoPersonIdsChange={setShowJobInfoPersonIds}
           />
+
+          <div className="space-y-1.5">
+            <AssignedPersonsPicker
+              value={leadPersonIds}
+              onChange={setLeadPersonIds}
+              label="Lead(s) — piece owner"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              The journeyman(s) doing the piece here. Day-rate helpers on this item split their
+              day rate out of the lead(s)&apos; piece. A lead doesn&apos;t need to be assigned above.
+            </p>
+          </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="schedule-notes">Notes</Label>
