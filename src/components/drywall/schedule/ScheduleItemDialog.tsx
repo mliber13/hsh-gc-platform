@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseISO } from 'date-fns'
-import { Check, ChevronsUpDown, X } from 'lucide-react'
+import { Check, ChevronsUpDown, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -33,6 +33,7 @@ import {
   type DrywallProjectScheduleItem,
   type DrywallScheduleItemStatus,
   type NewScheduleItemInput,
+  type ScheduleItemTask,
 } from '@/services/scheduleService'
 
 type Props = {
@@ -75,6 +76,7 @@ export function ScheduleItemDialog({
   const [showJobInfoPersonIds, setShowJobInfoPersonIds] = useState<string[]>([])
   const [predecessorIds, setPredecessorIds] = useState<string[]>([])
   const [lagWorkDays, setLagWorkDays] = useState(1)
+  const [tasks, setTasks] = useState<ScheduleItemTask[]>([])
   const [predOpen, setPredOpen] = useState(false)
   const [predSearch, setPredSearch] = useState('')
   const [saving, setSaving] = useState(false)
@@ -131,6 +133,7 @@ export function ScheduleItemDialog({
       setShowJobInfoPersonIds(editing.show_job_info_person_ids)
       setPredecessorIds(editing.predecessor_ids)
       setLagWorkDays(editing.lag_work_days)
+      setTasks(editing.tasks ?? [])
     } else {
       const today = new Date().toISOString().slice(0, 10)
       setName('')
@@ -144,6 +147,7 @@ export function ScheduleItemDialog({
       setShowJobInfoPersonIds([])
       setPredecessorIds([])
       setLagWorkDays(1)
+      setTasks([])
     }
     setPredSearch('')
     setConflict(null)
@@ -282,6 +286,19 @@ export function ScheduleItemDialog({
     return cascaded.startDate.toISOString().slice(0, 10)
   }
 
+  const addTask = () => {
+    setTasks((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), label: '', payLinked: false, progressMode: 'check' },
+    ])
+  }
+  const updateTask = (id: string, patch: Partial<ScheduleItemTask>) => {
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+  }
+  const removeTask = (id: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id))
+  }
+
   const buildPayload = (): NewScheduleItemInput | null => {
     const trimmed = name.trim()
     if (!trimmed) {
@@ -305,6 +322,9 @@ export function ScheduleItemDialog({
       showJobInfoPersonIds,
       predecessorIds: validPredecessorIds,
       lagWorkDays,
+      tasks: tasks
+        .map((t) => ({ ...t, label: t.label.trim() }))
+        .filter((t) => t.label.length > 0),
     }
   }
 
@@ -660,6 +680,66 @@ export function ScheduleItemDialog({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Optional notes for crew or office"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <Label>Tasks</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1 text-xs"
+                onClick={addTask}
+              >
+                <Plus className="size-3.5" />
+                Add task
+              </Button>
+            </div>
+            {tasks.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Optional. Add the steps for this item (e.g. Tape, Bed, Skim) and mark the ones that
+                drive piece pay. Crew check these off as they complete them.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {tasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-2 rounded-lg border bg-muted/30 px-2.5 py-2"
+                  >
+                    <Input
+                      value={task.label}
+                      placeholder="Task name"
+                      onChange={(e) => updateTask(task.id, { label: e.target.value })}
+                      className="h-8 flex-1"
+                    />
+                    <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="size-3.5"
+                        checked={task.payLinked}
+                        onChange={(e) =>
+                          updateTask(task.id, {
+                            payLinked: e.target.checked,
+                            progressMode: e.target.checked ? 'percent' : 'check',
+                          })
+                        }
+                      />
+                      Drives pay
+                    </label>
+                    <button
+                      type="button"
+                      className="rounded-full p-1 hover:bg-muted"
+                      onClick={() => removeTask(task.id)}
+                      aria-label="Remove task"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

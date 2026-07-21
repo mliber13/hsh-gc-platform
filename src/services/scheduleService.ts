@@ -165,6 +165,23 @@ export async function fetchActiveSubcontractors(): Promise<ActiveSubcontractor[]
 
 export type DrywallScheduleItemStatus = 'not-started' | 'in-progress' | 'complete' | 'delayed'
 
+/** How a task's completion is tracked. */
+export type ScheduleTaskProgressMode = 'percent' | 'check'
+
+/**
+ * Office-defined task on a schedule item. Pay-linked tasks (finish steps / hang) later drive
+ * piece pay tracked by % complete; non-pay tasks are progress-only checklists.
+ * See docs/CREW_TIME_CLOCK_PLAN.md.
+ */
+export interface ScheduleItemTask {
+  id: string
+  label: string
+  payLinked: boolean
+  progressMode: ScheduleTaskProgressMode
+  /** When payLinked: the piece key / step this maps to for pay (e.g. 'hang', a finish step). */
+  pieceKey?: string
+}
+
 export interface DrywallProjectScheduleItem {
   id: string
   project_id: string
@@ -182,6 +199,7 @@ export interface DrywallProjectScheduleItem {
   assigned_company_id: string | null
   predecessor_ids: string[]
   lag_work_days: number
+  tasks: ScheduleItemTask[]
 }
 
 export interface NewScheduleItemInput {
@@ -196,6 +214,7 @@ export interface NewScheduleItemInput {
   assignedCompanyId?: string | null
   predecessorIds?: string[]
   lagWorkDays?: number
+  tasks?: ScheduleItemTask[]
 }
 
 type DrywallScheduleItemRow = {
@@ -215,6 +234,7 @@ type DrywallScheduleItemRow = {
   show_job_info_person_ids: string[] | null
   notes: string | null
   predecessors: Array<{ predecessor_id?: string; lag_days?: number }> | null
+  tasks: unknown
 }
 
 function toDateOnly(value: string): string {
@@ -248,6 +268,26 @@ function predecessorsToRows(ids: string[], lagWorkDays: number) {
   }))
 }
 
+function parseTasks(raw: unknown): ScheduleItemTask[] {
+  if (!Array.isArray(raw)) return []
+  const tasks: ScheduleItemTask[] = []
+  for (const t of raw) {
+    if (!t || typeof t !== 'object') continue
+    const o = t as Record<string, unknown>
+    const id = typeof o.id === 'string' ? o.id : ''
+    const label = typeof o.label === 'string' ? o.label.trim() : ''
+    if (!id || !label) continue
+    tasks.push({
+      id,
+      label,
+      payLinked: o.payLinked === true,
+      progressMode: o.progressMode === 'percent' ? 'percent' : 'check',
+      pieceKey: typeof o.pieceKey === 'string' ? o.pieceKey : undefined,
+    })
+  }
+  return tasks
+}
+
 function mapDrywallScheduleRow(row: DrywallScheduleItemRow): DrywallProjectScheduleItem {
   const { ids, lag } = parsePredecessors(row.predecessors)
   const assigned = row.assigned_persons ?? []
@@ -268,6 +308,7 @@ function mapDrywallScheduleRow(row: DrywallScheduleItemRow): DrywallProjectSched
     assigned_company_id: row.assigned_company_id,
     predecessor_ids: ids,
     lag_work_days: lag,
+    tasks: parseTasks(row.tasks),
   }
 }
 
@@ -331,7 +372,7 @@ async function getOrCreateScheduleForProject(
 }
 
 const DRYWALL_SCHEDULE_SELECT =
-  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, notes, predecessors'
+  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, notes, predecessors, tasks'
 
 export async function fetchScheduleItemsForDrywallProject(
   projectId: string,
@@ -425,6 +466,7 @@ function buildInsertRow(
     assigned_company_id: input.assignedCompanyId ?? null,
     assigned_to: [],
     predecessors: predecessorsToRows(predecessorIds, lag),
+    tasks: input.tasks ?? [],
     notes: input.notes?.trim() || null,
   }
 }
@@ -511,6 +553,9 @@ export async function updateScheduleItemForDrywallProject(
   }
   if (patch.predecessorIds !== undefined || patch.lagWorkDays !== undefined) {
     updatePayload.predecessors = predecessorsToRows(predecessorIds, lag)
+  }
+  if (patch.tasks !== undefined) {
+    updatePayload.tasks = patch.tasks
   }
 
   const { error } = await supabase
