@@ -77,15 +77,18 @@ export function DrywallScheduleCalendar({
   )
 
   const itemsInMonth = useMemo(() => {
-    const monthStart = startOfMonth(month)
-    const monthEnd = endOfMonth(month)
+    // Filter to the full visible grid (incl. leading/trailing overflow days), not the strict
+    // month — so an item on a next/prev-month day shown in the grid still renders. Matches the
+    // portfolio calendar.
+    const rangeStart = startOfWeek(startOfMonth(month), { weekStartsOn: WEEK_STARTS_ON })
+    const rangeEnd = endOfWeek(endOfMonth(month), { weekStartsOn: WEEK_STARTS_ON })
     return items.filter((item) => {
       const start = toLocalDate(item.start_date)
       const end = toLocalDate(item.end_date)
       return (
-        isWithinInterval(start, { start: monthStart, end: monthEnd }) ||
-        isWithinInterval(end, { start: monthStart, end: monthEnd }) ||
-        (start <= monthStart && end >= monthEnd)
+        isWithinInterval(start, { start: rangeStart, end: rangeEnd }) ||
+        isWithinInterval(end, { start: rangeStart, end: rangeEnd }) ||
+        (start <= rangeStart && end >= rangeEnd)
       )
     })
   }, [items, month])
