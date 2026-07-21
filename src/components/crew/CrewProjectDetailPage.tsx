@@ -28,7 +28,11 @@ import {
   fetchCrewProjectDetailForPreview,
   fetchTaskProgressForProject,
   updateCrewTaskProgress,
+  fetchMyOpenPunch,
+  crewClockIn,
+  crewClockOut,
   type CrewTaskProgressMap,
+  type CrewOpenPunch,
 } from '@/services/crewWorkspaceService'
 import { getSignedPhotoUrl } from '@/services/drywallPhotosService'
 import type { CrewProjectDetail } from '@/types/crew'
@@ -122,6 +126,8 @@ export function CrewProjectDetailPage() {
   const readOnly = isOperator
   const [detail, setDetail] = useState<CrewProjectDetail | null>(null)
   const [progress, setProgress] = useState<CrewTaskProgressMap>(new Map())
+  const [openPunch, setOpenPunch] = useState<CrewOpenPunch | null>(null)
+  const [clockBusy, setClockBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Prefill plumbing for Materials → comms request flow
@@ -145,15 +151,18 @@ export function CrewProjectDetailPage() {
           ? await fetchCrewProjectDetail(projectId)
           : await fetchCrewProjectDetailForPreview(projectId)
       setDetail(data)
-      // Task progress — skip for the unfiltered operator preview (no linked person).
+      // Task progress + open punch — skip for the unfiltered operator preview (no linked person).
       if (isViewAs || isCrewRole(effectiveRole)) {
-        const prog = await fetchTaskProgressForProject(
-          projectId,
-          isViewAs ? { viewAsPersonId: viewAsPersonId! } : undefined,
-        )
+        const viewOpts = isViewAs ? { viewAsPersonId: viewAsPersonId! } : undefined
+        const [prog, punch] = await Promise.all([
+          fetchTaskProgressForProject(projectId, viewOpts),
+          fetchMyOpenPunch(viewOpts),
+        ])
         setProgress(prog)
+        setOpenPunch(punch)
       } else {
         setProgress(new Map())
+        setOpenPunch(null)
       }
     } catch (e) {
       if (e instanceof CrewWorkspacePermissionError) {
@@ -188,6 +197,32 @@ export function CrewProjectDetailPage() {
     } catch (e) {
       setProgress((m) => new Map(m).set(key, prev)) // revert
       toast.error(e instanceof Error ? e.message : 'Could not save progress')
+    }
+  }
+
+  const handleClockIn = async () => {
+    if (!projectId) return
+    setClockBusy(true)
+    try {
+      await crewClockIn(projectId)
+      setOpenPunch(await fetchMyOpenPunch())
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not clock in')
+    } finally {
+      setClockBusy(false)
+    }
+  }
+
+  const handleClockOut = async () => {
+    if (!openPunch) return
+    setClockBusy(true)
+    try {
+      await crewClockOut(openPunch.entryId)
+      setOpenPunch(await fetchMyOpenPunch())
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not clock out')
+    } finally {
+      setClockBusy(false)
     }
   }
 
@@ -318,6 +353,47 @@ export function CrewProjectDetailPage() {
           </a>
         ) : null}
       </div>
+
+      {!isOperatorExplainer ? (
+        <Card>
+          <CardContent className="flex items-center justify-between gap-3 p-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Time clock</p>
+              {openPunch ? (
+                openPunch.projectId === projectId ? (
+                  <p className="text-xs text-muted-foreground">
+                    Clocked in since {format(parseISO(openPunch.clockIn), 'h:mm a')}
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Clocked in at {openPunch.projectName ?? 'another job'}
+                  </p>
+                )
+              ) : (
+                <p className="text-xs text-muted-foreground">Not clocked in</p>
+              )}
+            </div>
+            {openPunch ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={readOnly || clockBusy}
+                onClick={() => void handleClockOut()}
+              >
+                {clockBusy ? '…' : 'Clock out'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                disabled={readOnly || clockBusy}
+                onClick={() => void handleClockIn()}
+              >
+                {clockBusy ? '…' : 'Clock in'}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {showStartMeasure && measureEntry ? (
         <Card className="border-primary/40 bg-primary/5">

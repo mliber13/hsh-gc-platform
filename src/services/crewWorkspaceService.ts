@@ -278,6 +278,66 @@ export async function updateCrewTaskProgress(
   }
 }
 
+export interface CrewOpenPunch {
+  entryId: string
+  projectId: string | null
+  projectName: string | null
+  clockIn: string
+}
+
+/** The resolved person's current open clock-in (no clock_out), if any. */
+export async function fetchMyOpenPunch(opts?: CrewViewAsOpts): Promise<CrewOpenPunch | null> {
+  if (!isOnlineMode()) return null
+  const { personId } = await resolvePersonContext(opts)
+  const orgId = await requireUserOrgId()
+  const { data, error } = await supabase
+    .from('time_entries')
+    .select('id, project_id, project_name, clock_in')
+    .eq('organization_id', orgId)
+    .eq('person_id', personId)
+    .is('clock_out', null)
+    .order('clock_in', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    console.warn('fetchMyOpenPunch:', error)
+    return null
+  }
+  if (!data) return null
+  const r = data as {
+    id: string
+    project_id: string | null
+    project_name: string | null
+    clock_in: string
+  }
+  return { entryId: r.id, projectId: r.project_id, projectName: r.project_name, clockIn: r.clock_in }
+}
+
+export async function crewClockIn(projectId: string): Promise<void> {
+  if (!isOnlineMode()) throw new Error('Clocking in requires an online connection.')
+  const { error } = await supabase.rpc('crew_clock_in', { p_project_id: projectId })
+  if (error) {
+    console.error('crewClockIn:', error)
+    const msg = error.message || ''
+    if (msg.includes('already clocked in')) {
+      throw new Error("You're already clocked in — clock out first.")
+    }
+    if (msg.includes('not assigned')) {
+      throw new Error("You're not assigned to this job.")
+    }
+    throw new Error('Could not clock in. Try again.')
+  }
+}
+
+export async function crewClockOut(entryId: string): Promise<void> {
+  if (!isOnlineMode()) throw new Error('Clocking out requires an online connection.')
+  const { error } = await supabase.rpc('crew_clock_out', { p_entry_id: entryId })
+  if (error) {
+    console.error('crewClockOut:', error)
+    throw new Error('Could not clock out. Try again.')
+  }
+}
+
 export async function fetchCrewProjectList(
   opts?: CrewViewAsOpts,
 ): Promise<CrewProjectListItem[]> {
