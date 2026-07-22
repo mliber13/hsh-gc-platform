@@ -14,7 +14,238 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
-import type { DrywallChangeOrder } from '@/types/drywall'
+import {
+  changeOrderLineTotal,
+  changeOrderOptionTotal,
+  computeChangeOrderTotals,
+  resolveChangeOrderRequestedAmount,
+} from '@/lib/drywall/changeOrderTotals'
+import type { DrywallChangeOrder, DrywallChangeOrderLineItem } from '@/types/drywall'
+
+/**
+ * Decimal-safe numeric field. A plain controlled number input truncates a mid-typed decimal
+ * (typing "7.4" briefly renders "7", then the next keystroke lands as "74"). This owns a local
+ * string and only pushes a parsed number upward, so decimals like rates type cleanly.
+ */
+function NumberCell({
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  className,
+}: {
+  value: number
+  onChange: (next: number) => void
+  disabled?: boolean
+  placeholder?: string
+  className?: string
+}) {
+  const [text, setText] = useState(value ? String(value) : '')
+  return (
+    <Input
+      type="number"
+      inputMode="decimal"
+      step="any"
+      className={className}
+      disabled={disabled}
+      placeholder={placeholder}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value)
+        const parsed = Number(e.target.value)
+        onChange(Number.isFinite(parsed) ? parsed : 0)
+      }}
+    />
+  )
+}
+
+function money(value: unknown): string {
+  const amount = Number(value)
+  return Number.isFinite(amount)
+    ? amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
+    : '—'
+}
+
+/**
+ * Line-item editor + totals for one priced scope — used both for a single-scope CO and for each
+ * option within a multi-option CO, so the two never drift.
+ */
+function ScopeEditor({
+  lineItems,
+  overheadPct,
+  profitPct,
+  editable,
+  totalLabel,
+  onAddLine,
+  onUpdateLine,
+  onRemoveLine,
+  onMarkupChange,
+}: {
+  lineItems: DrywallChangeOrderLineItem[]
+  overheadPct?: number
+  profitPct?: number
+  editable: boolean
+  totalLabel: string
+  onAddLine: () => void
+  onUpdateLine: (lineId: string, patch: Partial<DrywallChangeOrderLineItem>) => void
+  onRemoveLine: (lineId: string) => void
+  onMarkupChange: (patch: { overheadPct?: number; profitPct?: number }) => void
+}) {
+  const totals = computeChangeOrderTotals({ lineItems, overheadPct, profitPct })
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Line items</Label>
+        {editable && (
+          <Button type="button" variant="outline" size="sm" onClick={onAddLine}>
+            <Plus className="mr-1 h-4 w-4" />
+            Add line
+          </Button>
+        )}
+      </div>
+
+      {lineItems.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No line items yet. Add lines to itemize by location.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          <div className="hidden gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-12">
+            <span className="sm:col-span-2">Location</span>
+            <span className="sm:col-span-2">Description</span>
+            <span className="sm:col-span-1">Qty</span>
+            <span className="sm:col-span-1">Unit</span>
+            <span className="sm:col-span-2">Material ($)</span>
+            <span className="sm:col-span-2">Labor ($)</span>
+            <span className="sm:col-span-2 text-right">Total</span>
+          </div>
+          {lineItems.map((line) => (
+            <div key={line.id} className="grid grid-cols-2 gap-2 sm:grid-cols-12 sm:items-center">
+              <Input
+                className="sm:col-span-2"
+                placeholder="Location"
+                value={line.location}
+                onChange={(e) => onUpdateLine(line.id, { location: e.target.value })}
+                disabled={!editable}
+              />
+              <Input
+                className="sm:col-span-2"
+                placeholder="Description"
+                value={line.description}
+                onChange={(e) => onUpdateLine(line.id, { description: e.target.value })}
+                disabled={!editable}
+              />
+              <NumberCell
+                className="sm:col-span-1"
+                placeholder="Qty"
+                value={line.quantity}
+                onChange={(next) => onUpdateLine(line.id, { quantity: next })}
+                disabled={!editable}
+              />
+              <Input
+                className="sm:col-span-1"
+                placeholder="unit"
+                value={line.unit}
+                onChange={(e) => onUpdateLine(line.id, { unit: e.target.value })}
+                disabled={!editable}
+              />
+              <NumberCell
+                className="sm:col-span-2"
+                placeholder="Material"
+                value={line.materialRate ?? 0}
+                onChange={(next) => onUpdateLine(line.id, { materialRate: next })}
+                disabled={!editable}
+              />
+              <NumberCell
+                className="sm:col-span-2"
+                placeholder="Labor"
+                value={line.laborRate ?? 0}
+                onChange={(next) => onUpdateLine(line.id, { laborRate: next })}
+                disabled={!editable}
+              />
+              <div className="flex items-center justify-between gap-1 sm:col-span-2 sm:justify-end">
+                <span className="text-sm font-medium tabular-nums">
+                  {money(changeOrderLineTotal(line))}
+                </span>
+                {editable && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => onRemoveLine(line.id)}
+                    aria-label="Remove line"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {totals.hasLineItems && (
+        <div className="space-y-1.5 rounded-md border bg-muted/30 p-3 text-sm">
+          {totals.groups.length > 1 &&
+            totals.groups.map((group) => (
+              <div
+                key={group.location}
+                className="flex justify-between text-xs text-muted-foreground"
+              >
+                <span>{group.location}</span>
+                <span className="tabular-nums">{money(group.subtotal)}</span>
+              </div>
+            ))}
+          <div className="flex justify-between border-t pt-1.5 text-xs text-muted-foreground">
+            <span>Material</span>
+            <span className="tabular-nums">{money(totals.materialSubtotal)}</span>
+          </div>
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Labor</span>
+            <span className="tabular-nums">{money(totals.laborSubtotal)}</span>
+          </div>
+          <div className="flex justify-between border-t pt-1.5">
+            <span>Subtotal</span>
+            <span className="tabular-nums">{money(totals.subtotal)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span>Overhead</span>
+              <NumberCell
+                className="h-7 w-16"
+                placeholder="%"
+                value={overheadPct ?? 0}
+                onChange={(next) => onMarkupChange({ overheadPct: next })}
+                disabled={!editable}
+              />
+              <span className="text-muted-foreground">%</span>
+            </div>
+            <span className="tabular-nums">{money(totals.overhead)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span>Profit</span>
+              <NumberCell
+                className="h-7 w-16"
+                placeholder="%"
+                value={profitPct ?? 0}
+                onChange={(next) => onMarkupChange({ profitPct: next })}
+                disabled={!editable}
+              />
+              <span className="text-muted-foreground">%</span>
+            </div>
+            <span className="tabular-nums">{money(totals.profit)}</span>
+          </div>
+          <div className="flex justify-between border-t pt-1.5 text-base font-semibold">
+            <span>{totalLabel}</span>
+            <span className="tabular-nums">{money(totals.total)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface ChangeOrdersSectionProps {
   changeOrders: DrywallChangeOrder[]
@@ -75,8 +306,8 @@ export function ChangeOrdersSection({
         id: generateFieldId(),
         changeOrderNumber: `CO-${String(n).padStart(3, '0')}`,
         status: 'draft',
-        reason: '',
-        scopeChanges: '',
+        description: '',
+        lineItems: [],
         requestedAmount: '',
         notes: '',
       },
@@ -89,6 +320,147 @@ export function ChangeOrdersSection({
 
   const remove = (id: string) => {
     onChange(changeOrders.filter((co) => co.id !== id))
+  }
+
+  /** Keep requestedAmount in sync with computed line-item / option totals. */
+  const withSyncedAmount = (co: DrywallChangeOrder): DrywallChangeOrder => {
+    if (co.options && co.options.length > 0) {
+      return { ...co, requestedAmount: resolveChangeOrderRequestedAmount(co).toFixed(2) }
+    }
+    const totals = computeChangeOrderTotals(co)
+    if (!totals.hasLineItems) return co
+    return { ...co, requestedAmount: totals.total.toFixed(2) }
+  }
+
+  const mutateCo = (id: string, mutator: (co: DrywallChangeOrder) => DrywallChangeOrder) => {
+    onChange(changeOrders.map((co) => (co.id === id ? withSyncedAmount(mutator(co)) : co)))
+  }
+
+  const blankLine = (lastLocation: string): DrywallChangeOrderLineItem => ({
+    id: generateFieldId(),
+    location: lastLocation,
+    description: '',
+    quantity: 0,
+    unit: '',
+    materialRate: 0,
+    laborRate: 0,
+  })
+
+  const addLine = (coId: string) => {
+    mutateCo(coId, (co) => {
+      const lines = co.lineItems ?? []
+      const lastLocation = lines.length > 0 ? lines[lines.length - 1].location : ''
+      return { ...co, lineItems: [...lines, blankLine(lastLocation)] }
+    })
+  }
+
+  const updateLine = (
+    coId: string,
+    lineId: string,
+    patch: Partial<DrywallChangeOrderLineItem>,
+  ) => {
+    mutateCo(coId, (co) => ({
+      ...co,
+      lineItems: (co.lineItems ?? []).map((li) =>
+        li.id === lineId ? { ...li, ...patch } : li,
+      ),
+    }))
+  }
+
+  const removeLine = (coId: string, lineId: string) => {
+    mutateCo(coId, (co) => ({
+      ...co,
+      lineItems: (co.lineItems ?? []).filter((li) => li.id !== lineId),
+    }))
+  }
+
+  // --- Options (mutually-exclusive priced scopes) ---
+  const addOption = (coId: string) => {
+    mutateCo(coId, (co) => {
+      const existing = co.options ?? []
+      if (existing.length === 0) {
+        // First split: move the current single scope into Option A, add a blank Option B.
+        return {
+          ...co,
+          lineItems: [],
+          options: [
+            {
+              id: generateFieldId(),
+              name: 'Option A',
+              lineItems: co.lineItems ?? [],
+              overheadPct: co.overheadPct,
+              profitPct: co.profitPct,
+            },
+            {
+              id: generateFieldId(),
+              name: 'Option B',
+              lineItems: [],
+              overheadPct: co.overheadPct,
+              profitPct: co.profitPct,
+            },
+          ],
+        }
+      }
+      return {
+        ...co,
+        options: [
+          ...existing,
+          {
+            id: generateFieldId(),
+            name: `Option ${String.fromCharCode(65 + existing.length)}`,
+            lineItems: [],
+            overheadPct: co.overheadPct,
+            profitPct: co.profitPct,
+          },
+        ],
+      }
+    })
+  }
+
+  const removeOption = (coId: string, optionId: string) => {
+    mutateCo(coId, (co) => {
+      const next = (co.options ?? []).filter((o) => o.id !== optionId)
+      return next.length === 0 ? { ...co, options: undefined } : { ...co, options: next }
+    })
+  }
+
+  const patchOption = (
+    coId: string,
+    optionId: string,
+    mutator: (option: NonNullable<DrywallChangeOrder['options']>[number]) => NonNullable<
+      DrywallChangeOrder['options']
+    >[number],
+  ) => {
+    mutateCo(coId, (co) => ({
+      ...co,
+      options: (co.options ?? []).map((o) => (o.id === optionId ? mutator(o) : o)),
+    }))
+  }
+
+  const addOptionLine = (coId: string, optionId: string) => {
+    patchOption(coId, optionId, (o) => {
+      const lastLocation = o.lineItems.length ? o.lineItems[o.lineItems.length - 1].location : ''
+      return { ...o, lineItems: [...o.lineItems, blankLine(lastLocation)] }
+    })
+  }
+
+  const updateOptionLine = (
+    coId: string,
+    optionId: string,
+    lineId: string,
+    patch: Partial<DrywallChangeOrderLineItem>,
+  ) => {
+    patchOption(coId, optionId, (o) => ({
+      ...o,
+      lineItems: o.lineItems.map((li) => (li.id === lineId ? { ...li, ...patch } : li)),
+    }))
+  }
+
+  const removeOptionLine = (coId: string, optionId: string, lineId: string) => {
+    patchOption(coId, optionId, (o) => ({
+      ...o,
+      lineItems: o.lineItems.filter((li) => li.id !== lineId),
+    }))
   }
 
   return (
@@ -113,6 +485,8 @@ export function ChangeOrdersSection({
             const status = co.status === 'approved' ? 'accepted' : co.status || 'draft'
             const editable = !readOnly && (status === 'draft' || status === 'rejected')
             const busy = busyId === co.id
+            const lineItems = co.lineItems ?? []
+            const options = co.options ?? []
             return (
             <div key={co.id} className="space-y-3 rounded-md border border-border p-4">
               <div className="flex items-center justify-between gap-2">
@@ -145,43 +519,134 @@ export function ChangeOrdersSection({
                 )}
                 </div>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>CO #</Label>
+                    <Input
+                      value={co.changeOrderNumber ?? ''}
+                      onChange={(e) => update(co.id, { changeOrderNumber: e.target.value })}
+                      disabled={!editable}
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>Description of change</Label>
+                    <Textarea
+                      rows={2}
+                      value={co.description ?? ''}
+                      placeholder="What changed and why — e.g. Owner added a basement bedroom; hang & finish new walls, add RC ceiling."
+                      onChange={(e) => update(co.id, { description: e.target.value })}
+                      disabled={!editable}
+                    />
+                  </div>
+                </div>
+
+                {/* Single priced scope, or a set of mutually-exclusive customer options */}
+                {options.length === 0 ? (
+                  <>
+                    <ScopeEditor
+                      lineItems={lineItems}
+                      overheadPct={co.overheadPct}
+                      profitPct={co.profitPct}
+                      editable={editable}
+                      totalLabel="CO total"
+                      onAddLine={() => addLine(co.id)}
+                      onUpdateLine={(lineId, patch) => updateLine(co.id, lineId, patch)}
+                      onRemoveLine={(lineId) => removeLine(co.id, lineId)}
+                      onMarkupChange={(patch) => mutateCo(co.id, (c) => ({ ...c, ...patch }))}
+                    />
+                    {lineItems.length === 0 && (
+                      <div className="space-y-2 sm:max-w-xs">
+                        <Label>Requested amount ($)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={co.requestedAmount ?? ''}
+                          onChange={(e) => update(co.id, { requestedAmount: e.target.value })}
+                          disabled={!editable}
+                        />
+                      </div>
+                    )}
+                    {editable && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground"
+                        onClick={() => addOption(co.id)}
+                      >
+                        <Plus className="mr-1 h-4 w-4" />
+                        Split into customer options (they pick one)
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                      This change order presents options — the customer picks one. Each option
+                      prices separately, including its own overhead and profit.
+                    </p>
+                    {options.map((option, idx) => (
+                      <div
+                        key={option.id}
+                        className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 text-xs font-semibold text-muted-foreground">
+                            OPTION {String.fromCharCode(65 + idx)}
+                          </span>
+                          <Input
+                            className="h-8 flex-1"
+                            placeholder="Option name — e.g. Garage ceiling only"
+                            value={option.name}
+                            onChange={(e) =>
+                              patchOption(co.id, option.id, (o) => ({ ...o, name: e.target.value }))
+                            }
+                            disabled={!editable}
+                          />
+                          <span className="shrink-0 text-sm font-semibold tabular-nums">
+                            {formatMoney(changeOrderOptionTotal(option))}
+                          </span>
+                          {editable && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0"
+                              onClick={() => removeOption(co.id, option.id)}
+                              aria-label="Remove option"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
+                        <ScopeEditor
+                          lineItems={option.lineItems}
+                          overheadPct={option.overheadPct}
+                          profitPct={option.profitPct}
+                          editable={editable}
+                          totalLabel="Option total"
+                          onAddLine={() => addOptionLine(co.id, option.id)}
+                          onUpdateLine={(lineId, patch) =>
+                            updateOptionLine(co.id, option.id, lineId, patch)
+                          }
+                          onRemoveLine={(lineId) => removeOptionLine(co.id, option.id, lineId)}
+                          onMarkupChange={(patch) =>
+                            patchOption(co.id, option.id, (o) => ({ ...o, ...patch }))
+                          }
+                        />
+                      </div>
+                    ))}
+                    {editable && (
+                      <Button type="button" variant="outline" size="sm" onClick={() => addOption(co.id)}>
+                        <Plus className="mr-1 h-4 w-4" />
+                        Add option
+                      </Button>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-2">
-                  <Label>CO #</Label>
-                  <Input
-                    value={co.changeOrderNumber ?? ''}
-                    onChange={(e) => update(co.id, { changeOrderNumber: e.target.value })}
-                    disabled={!editable}
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label>Reason (Optional)</Label>
-                  <Input
-                    value={co.reason ?? ''}
-                    onChange={(e) => update(co.id, { reason: e.target.value })}
-                    disabled={!editable}
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label>Scope changes</Label>
-                  <Textarea
-                    rows={2}
-                    value={co.scopeChanges ?? ''}
-                    onChange={(e) => update(co.id, { scopeChanges: e.target.value })}
-                    disabled={!editable}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Requested amount ($)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={co.requestedAmount ?? ''}
-                    onChange={(e) => update(co.id, { requestedAmount: e.target.value })}
-                    disabled={!editable}
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
                   <Label>Notes</Label>
                   <Textarea
                     rows={2}
@@ -264,6 +729,27 @@ export function ChangeOrdersSection({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {accepting?.options && accepting.options.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Which option did the customer choose?</Label>
+                <div className="flex flex-wrap gap-2">
+                  {accepting.options.map((option, idx) => (
+                    <Button
+                      key={option.id}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setAcceptedAmount(changeOrderOptionTotal(option).toFixed(2))
+                      }
+                    >
+                      {`Option ${String.fromCharCode(65 + idx)}`}
+                      {option.name ? ` — ${option.name}` : ''}: {formatMoney(changeOrderOptionTotal(option))}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="co-accepted-amount">Accepted amount ($)</Label>
               <Input

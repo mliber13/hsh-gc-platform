@@ -3,6 +3,11 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { acceptedChangeOrderTotal, resolveBaseContractValue } from '@/lib/drywall/contractValue'
 import {
+  changeOrderLineTotal,
+  computeChangeOrderTotals,
+  type ChangeOrderScope,
+} from '@/lib/drywall/changeOrderTotals'
+import {
   AUTO_TABLE_BASE,
   AUTO_TABLE_HEAD,
   DW_BLUE,
@@ -215,6 +220,72 @@ function acceptedAtLabel(value?: string): string {
   return Number.isNaN(date.getTime()) ? value : format(date, 'MMM d, yyyy h:mm a')
 }
 
+/**
+ * Itemized detail grouped by location. Overhead + profit are baked into the customer-facing line
+ * amounts (so the detail ties to the total) and are NEVER printed — the margin structure stays
+ * internal. Returns false if no line items.
+ */
+function drawChangeOrderLineItems(
+  ctx: PdfContext,
+  scope: ChangeOrderScope,
+  title: string,
+): boolean {
+  const totals = computeChangeOrderTotals(scope)
+  if (!totals.hasLineItems) return false
+  const multiGroup = totals.groups.length > 1
+  // Distribute overhead + profit proportionally across the line amounts.
+  const markup = totals.subtotal > 0 ? totals.total / totals.subtotal : 1
+  const sell = (raw: number) => raw * markup
+
+  const body: Array<Array<string | { content: string; colSpan?: number; styles?: object }>> = []
+  for (const group of totals.groups) {
+    group.lines.forEach((line, i) => {
+      body.push([
+        i === 0 ? group.location : '',
+        line.description || '—',
+        String(finite(line.quantity)),
+        line.unit || '',
+        currency(sell(changeOrderLineTotal(line))),
+      ])
+    })
+    if (multiGroup) {
+      body.push([
+        { content: `Subtotal — ${group.location}`, colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: currency(sell(group.subtotal)), styles: { halign: 'right' } },
+      ])
+    }
+  }
+
+  const foot: Array<Array<{ content: string; colSpan?: number; styles?: object }>> = [
+    [
+      { content: 'Total', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: currency(totals.total), styles: { halign: 'right', fontStyle: 'bold', textColor: DW_BLUE } },
+    ],
+  ]
+
+  drawSectionTitle(ctx, title)
+  autoTable(ctx.doc, {
+    startY: ctx.y,
+    head: [['Location', 'Description', 'Qty', 'Unit', 'Amount']],
+    body,
+    foot,
+    theme: 'grid',
+    headStyles: AUTO_TABLE_HEAD,
+    styles: AUTO_TABLE_BASE,
+    footStyles: { fontStyle: 'normal', textColor: DW_TEXT, fillColor: [245, 245, 245] },
+    margin: { left: ctx.margin, right: ctx.margin },
+    columnStyles: {
+      2: { halign: 'right', cellWidth: 44 },
+      3: { cellWidth: 52 },
+      4: { halign: 'right', cellWidth: 84 },
+    },
+  })
+  ctx.y =
+    (ctx.doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ??
+    ctx.y + 100
+  return true
+}
+
 function drawChangeOrderAmount(ctx: PdfContext, model: DrywallChangeOrderPdfModel) {
   drawSectionTitle(ctx, 'CHANGE ORDER AMOUNT')
   autoTable(ctx.doc, {
@@ -313,17 +384,40 @@ export async function downloadDrywallChangeOrderPdf(
   drawHeader(ctx)
   drawMetadata(ctx, model)
   drawPreparedForAndProject(ctx, input.project)
-  const reason = input.changeOrder.reason?.trim() || ''
-  const scope = input.changeOrder.scopeChanges?.trim() || ''
-  if (reason || scope) {
-    drawSectionTitle(ctx, 'CHANGE ORDER SCOPE')
-    if (reason) drawLabeledText(ctx, 'Reason', reason)
-    if (scope) drawLabeledText(ctx, 'Scope of Work', scope)
+  const description =
+    input.changeOrder.description?.trim() ||
+    [input.changeOrder.reason, input.changeOrder.scopeChanges]
+      .map((value) => value?.trim())
+      .filter(Boolean)
+      .join('\n\n')
+  if (description) {
+    drawSectionTitle(ctx, 'DESCRIPTION OF CHANGE')
+    drawLabeledText(ctx, 'Scope of Work', description)
   }
+
+  const options = input.changeOrder.options ?? []
+  if (options.length > 0) {
+    drawSectionTitle(ctx, 'OPTIONS — SELECT ONE')
+    drawLabeledText(
+      ctx,
+      '',
+      'This change order presents the following options. Select one; pricing is per option.',
+    )
+    options.forEach((option, index) => {
+      const label = `OPTION ${String.fromCharCode(65 + index)}${option.name ? ` — ${option.name}` : ''}`
+      drawChangeOrderLineItems(ctx, option, label)
+    })
+  } else {
+    drawChangeOrderLineItems(ctx, input.changeOrder, 'CHANGE ORDER DETAIL')
+  }
+
   if (input.changeOrder.notes?.trim()) {
     drawLabeledText(ctx, 'Notes', input.changeOrder.notes)
   }
-  drawChangeOrderAmount(ctx, model)
+  // For an options CO, the headline amount only makes sense once one is accepted.
+  if (options.length === 0 || model.status === 'Accepted') {
+    drawChangeOrderAmount(ctx, model)
+  }
   drawAcceptance(ctx, input.changeOrder, model)
   drawFooter(ctx)
 

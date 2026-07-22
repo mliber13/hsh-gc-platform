@@ -764,11 +764,55 @@ export type DrywallChangeOrderStatus =
   /** Legacy value; normalized to accepted when read. */
   | 'approved'
 
+/** One itemized change-order line, grouped in the UI/PDF by `location`. */
+export interface DrywallChangeOrderLineItem {
+  id: string
+  /** Named area/location the line belongs to (groups lines in the UI + PDF). */
+  location: string
+  description: string
+  quantity: number
+  /** Free-text unit label: sqft, lf, ea, ls, etc. */
+  unit: string
+  /** Material cost per unit. Line total = quantity × (materialRate + laborRate). */
+  materialRate?: number
+  /** Labor cost per unit. */
+  laborRate?: number
+  /** @deprecated Legacy single blended rate; read as fallback when material/labor are unset. */
+  rate?: number
+}
+
+/**
+ * A mutually-exclusive priced option within a change order (customer picks one). Each option is
+ * a self-contained scope with its own line items + markup, so it totals separately — e.g.
+ * "Garage ceiling" vs "Garage ceiling + walls".
+ */
+export interface DrywallChangeOrderOption {
+  id: string
+  name: string
+  lineItems: DrywallChangeOrderLineItem[]
+  overheadPct?: number
+  profitPct?: number
+}
+
 export interface DrywallChangeOrder {
   id: string
   changeOrderNumber?: string
   status?: DrywallChangeOrderStatus
+  /** Merged reason + scope of change (replaces the old `reason`/`scopeChanges` pair). */
+  description?: string
+  /** Itemized lines; when present, requestedAmount is computed from them + markup. */
+  lineItems?: DrywallChangeOrderLineItem[]
+  /** Optional overhead markup % applied to the line-item subtotal. */
+  overheadPct?: number
+  /** Optional profit markup % applied to (subtotal + overhead), mirroring the quote. */
+  profitPct?: number
+  /** When present, the CO presents these options (customer chooses one) instead of a single scope. */
+  options?: DrywallChangeOrderOption[]
+  /** The option the customer selected (set at acceptance). */
+  selectedOptionId?: string
+  /** @deprecated Merged into `description`; still read for backward compat. */
   reason?: string
+  /** @deprecated Merged into `description`; still read for backward compat. */
   scopeChanges?: string
   requestedAmount?: string
   notes?: string

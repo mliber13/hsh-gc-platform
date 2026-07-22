@@ -34,9 +34,10 @@ export function applyDrywallChangeOrderTransition(
       throw new Error('Only draft or rejected change orders can be submitted.')
     }
     const number = existing.changeOrderNumber?.trim()
-    const scope = existing.scopeChanges?.trim()
+    // `description` is the merged field; fall back to legacy scopeChanges for old drafts.
+    const scope = existing.description?.trim() || existing.scopeChanges?.trim()
     if (!number || !scope) {
-      throw new Error('CO number and scope changes are required before submission.')
+      throw new Error('CO number and a description of the change are required before submission.')
     }
     const duplicate = siblings.some(
       (co) =>

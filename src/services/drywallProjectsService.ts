@@ -40,6 +40,8 @@ import type {
   CreateDrywallProjectFromPoInput,
   DrywallPoData,
   DrywallChangeOrder,
+  DrywallChangeOrderLineItem,
+  DrywallChangeOrderOption,
   DrywallCommsLogEntry,
   DrywallOrder,
   DrywallOrderItem,
@@ -1152,17 +1154,77 @@ function normalizeOrder(raw: unknown): DrywallOrder | null {
   }
 }
 
+function normalizeChangeOrderLineItems(raw: unknown): DrywallChangeOrderLineItem[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const lines = raw
+    .map((entry): DrywallChangeOrderLineItem | null => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null
+      const li = entry as Record<string, unknown>
+      const quantity = Number(li.quantity)
+      const materialRate = Number(li.materialRate)
+      const laborRate = Number(li.laborRate)
+      const rate = Number(li.rate)
+      return {
+        id: asString(li.id) || generateFieldId(),
+        location: asString(li.location),
+        description: asString(li.description),
+        unit: asString(li.unit),
+        quantity: Number.isFinite(quantity) ? quantity : 0,
+        materialRate: Number.isFinite(materialRate) ? materialRate : 0,
+        laborRate: Number.isFinite(laborRate) ? laborRate : 0,
+        rate: Number.isFinite(rate) ? rate : undefined,
+      }
+    })
+    .filter((li): li is DrywallChangeOrderLineItem => li != null)
+  return lines.length > 0 ? lines : undefined
+}
+
+function normalizeChangeOrderOptions(raw: unknown): DrywallChangeOrderOption[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const options = raw
+    .map((entry): DrywallChangeOrderOption | null => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null
+      const o = entry as Record<string, unknown>
+      const overheadPct = o.overheadPct != null ? Number(o.overheadPct) : undefined
+      const profitPct = o.profitPct != null ? Number(o.profitPct) : undefined
+      return {
+        id: asString(o.id) || generateFieldId(),
+        name: asString(o.name),
+        lineItems: normalizeChangeOrderLineItems(o.lineItems) ?? [],
+        overheadPct: Number.isFinite(overheadPct as number) ? overheadPct : undefined,
+        profitPct: Number.isFinite(profitPct as number) ? profitPct : undefined,
+      }
+    })
+    .filter((o): o is DrywallChangeOrderOption => o != null)
+  return options.length > 0 ? options : undefined
+}
+
 function normalizeChangeOrder(raw: unknown): DrywallChangeOrder | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const r = raw as Record<string, unknown>
   const rawStatus = asString(r.status).toLowerCase()
   const status = rawStatus === 'approved' ? 'accepted' : rawStatus || 'draft'
+  const reason = asString(r.reason) || undefined
+  const scopeChanges = asString(r.scopeChanges) || undefined
+  // Merge legacy reason/scopeChanges into the single description field for display.
+  const description =
+    asString(r.description) ||
+    [reason, scopeChanges].filter(Boolean).join('\n\n') ||
+    undefined
+  const overheadPct = r.overheadPct != null ? Number(r.overheadPct) : undefined
+  const profitPct = r.profitPct != null ? Number(r.profitPct) : undefined
   return {
     id: asString(r.id) || generateFieldId(),
     changeOrderNumber: asString(r.changeOrderNumber) || undefined,
     status: status as DrywallChangeOrder['status'],
-    reason: asString(r.reason) || undefined,
-    scopeChanges: asString(r.scopeChanges) || undefined,
+    description,
+    lineItems: normalizeChangeOrderLineItems(r.lineItems),
+    overheadPct: Number.isFinite(overheadPct as number) ? overheadPct : undefined,
+    profitPct: Number.isFinite(profitPct as number) ? profitPct : undefined,
+    options: normalizeChangeOrderOptions(r.options),
+    selectedOptionId: asString(r.selectedOptionId) || undefined,
+    reason,
+    scopeChanges,
     requestedAmount: r.requestedAmount != null ? String(r.requestedAmount) : undefined,
     notes: asString(r.notes) || undefined,
     submittedAt: asString(r.submittedAt) || undefined,
