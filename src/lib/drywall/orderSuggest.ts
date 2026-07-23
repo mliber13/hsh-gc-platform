@@ -19,6 +19,7 @@ export function suggestOrderItemsFromFieldTakeoff(takeoff: FieldTakeoff): Drywal
       quantity: String(board.quantity),
       unit: 'pcs',
       notes: board.measurementNotes || '',
+      area: board.area || undefined,
     })
   }
 
@@ -30,8 +31,38 @@ export function suggestOrderItemsFromFieldTakeoff(takeoff: FieldTakeoff): Drywal
       quantity: String(acc.quantity || ''),
       unit: normalizeOrderUnit(acc.unit),
       notes: acc.autoCalculated ? 'Auto-calculated' : '',
+      // Accessories are project-level (no field area) → grouped under "Accessories".
     })
   }
 
   return items
+}
+
+export interface OrderItemAreaGroup {
+  area: string
+  items: DrywallOrderItem[]
+}
+
+/** Group order items by their field area for display/PDF. Area-less items (accessories,
+ *  manual adds) fall into a trailing "Accessories & general" group. */
+export function groupOrderItemsByArea(items: DrywallOrderItem[]): OrderItemAreaGroup[] {
+  const GENERAL = 'Accessories & general'
+  const groups: OrderItemAreaGroup[] = []
+  const byKey = new Map<string, OrderItemAreaGroup>()
+  for (const item of items) {
+    const area = (item.area || '').trim() || GENERAL
+    let group = byKey.get(area)
+    if (!group) {
+      group = { area, items: [] }
+      byKey.set(area, group)
+      groups.push(group)
+    }
+    group.items.push(item)
+  }
+  // Keep the general bucket last.
+  return groups.sort((a, b) => {
+    if (a.area === GENERAL) return 1
+    if (b.area === GENERAL) return -1
+    return 0
+  })
 }

@@ -36,6 +36,8 @@ interface OrderEditorDialogProps {
   project: Pick<DrywallProject, 'name' | 'address' | 'client'>
   suppliers: Supplier[]
   readOnly: boolean
+  /** Hide the Duplicate action (e.g. the schedule-item attach flow, which is one order per item). */
+  allowDuplicate?: boolean
   onChange: (order: DrywallOrder) => void
   onDuplicate: () => void
   onDelete: () => void
@@ -63,6 +65,7 @@ export function OrderEditorDialog({
   project,
   suppliers,
   readOnly,
+  allowDuplicate = true,
   onChange,
   onDuplicate,
   onDelete,
@@ -303,10 +306,12 @@ export function OrderEditorDialog({
             </Button>
             {!readOnly && (
               <>
-                <Button type="button" variant="outline" onClick={onDuplicate}>
-                  <Copy className="mr-2 h-4 w-4" />
-                  Duplicate
-                </Button>
+                {allowDuplicate && (
+                  <Button type="button" variant="outline" onClick={onDuplicate}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Duplicate
+                  </Button>
+                )}
                 <Button type="button" variant="destructive" onClick={onDelete}>
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete

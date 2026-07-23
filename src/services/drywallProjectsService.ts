@@ -1129,6 +1129,7 @@ function normalizeOrderItem(raw: unknown): DrywallOrderItem | null {
     quantity: r.quantity != null ? String(r.quantity) : '',
     unit: asString(r.unit) || 'pcs',
     notes: asString(r.notes) || undefined,
+    area: asString(r.area) || undefined,
   }
 }
 
@@ -1142,6 +1143,7 @@ function normalizeOrder(raw: unknown): DrywallOrder | null {
   return {
     id,
     orderNumber: asString(r.orderNumber) || undefined,
+    scheduleItemId: asString(r.scheduleItemId) || undefined,
     supplierId: asString(r.supplierId) || undefined,
     supplier: asString(r.supplier) || undefined,
     supplierContact: asString(r.supplierContact) || undefined,
@@ -1150,6 +1152,8 @@ function normalizeOrder(raw: unknown): DrywallOrder | null {
     notes: asString(r.notes) || undefined,
     items,
     status: (asString(r.status) || 'draft') as DrywallOrderStatus,
+    supplierConfirmedAt: asString(r.supplierConfirmedAt) || undefined,
+    supplierDeliveredAt: asString(r.supplierDeliveredAt) || undefined,
     createdAt: asString(r.createdAt) || undefined,
     updatedAt: asString(r.updatedAt) || undefined,
   }
@@ -1263,6 +1267,11 @@ export async function fetchOrders(projectId: string): Promise<DrywallOrder[]> {
   const project = await fetchDrywallProjectById(projectId)
   if (!project) throw new Error('Project not found')
   return parseLegacyOrders(project.legacy)
+}
+
+/** Sync parse of legacy.orders — for callers that already hold the project (avoids a re-fetch). */
+export function getOrdersFromLegacy(legacy: Record<string, unknown>): DrywallOrder[] {
+  return parseLegacyOrders(legacy)
 }
 
 /** Read metadata.legacy.changeOrders (normalized). */

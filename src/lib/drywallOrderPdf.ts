@@ -5,6 +5,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { orderStatusLabel } from '@/lib/drywall/orderConstants'
+import { groupOrderItemsByArea } from '@/lib/drywall/orderSuggest'
 import type { OrderFinancialComparison } from '@/lib/drywall/orderFinancialComparison'
 import { orderPdfFilename } from '@/lib/drywall/orderPdfFilename'
 import type { DrywallOrder, DrywallProject } from '@/types/drywall'
@@ -85,17 +86,32 @@ export function downloadDrywallOrderPdf(
 
   y = Math.max(y, metaY) + 8
 
-  const rows = (order.items || []).map((item) => [
-    item.description || '—',
-    item.quantity || '',
-    item.unit || 'pcs',
-    item.notes || '',
-  ])
+  const groups = groupOrderItemsByArea(order.items || [])
+  const showAreaHeaders = groups.length > 1
+  const body: Array<Array<string | { content: string; colSpan?: number; styles?: object }>> = []
+  if (!order.items || order.items.length === 0) {
+    body.push(['No line items', '', '', ''])
+  } else {
+    for (const group of groups) {
+      if (showAreaHeaders) {
+        body.push([
+          {
+            content: group.area,
+            colSpan: 4,
+            styles: { fillColor: [232, 236, 244], textColor: 40, fontStyle: 'bold', fontSize: 8.5 },
+          },
+        ])
+      }
+      for (const item of group.items) {
+        body.push([item.description || '—', item.quantity || '', item.unit || 'pcs', item.notes || ''])
+      }
+    }
+  }
 
   autoTable(doc, {
     startY: y,
     head: [['Description', 'Qty', 'Unit', 'Notes']],
-    body: rows.length ? rows : [['No line items', '', '', '']],
+    body,
     theme: 'grid',
     headStyles: { fillColor: BRAND, textColor: 255, fontSize: 9 },
     bodyStyles: { fontSize: 8.5, textColor: 40 },

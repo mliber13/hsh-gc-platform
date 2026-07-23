@@ -114,6 +114,8 @@ import { PayrollPage } from '@/components/hr/PayrollPage'
 import { TimeClockPage } from '@/components/hr/TimeClockPage'
 import { HrWorkspaceShell } from '@/components/hr/HrWorkspaceShell'
 import { DrywallProjectsListPage } from '@/components/drywall/DrywallProjectsListPage'
+import { DrywallSupplierOrdersPage } from '@/components/drywall/supplier/DrywallSupplierOrdersPage'
+import { SupplierOrderSharePage } from '@/routes/SupplierOrderSharePage'
 import { DrywallProjectShell } from '@/components/drywall/DrywallProjectShell'
 import { CloseoutStagePage } from '@/components/drywall/closeout/CloseoutStagePage'
 import { OrderPage } from '@/components/drywall/order/OrderPage'
@@ -161,6 +163,7 @@ export function AppRoutes() {
       {/* Public — no AuthGate */}
       <Route path="/vendor-quote/:token" element={<VendorQuotePortal />} />
       <Route path="/quote/:token" element={<VendorQuotePortal />} />
+      <Route path="/supplier/:token" element={<SupplierOrderSharePage />} />
       <Route path="/privacy" element={<PublicPrivacy />} />
       <Route path="/terms" element={<PublicTerms />} />
       <Route path="/crew-signup" element={<CrewSignupPage />} />
@@ -306,6 +309,14 @@ export function AppRoutes() {
             element={
               <RequireWorkspaceAccess workspace="drywall">
                 <DashboardPage />
+              </RequireWorkspaceAccess>
+            }
+          />
+          <Route
+            path="/drywall/supplier-orders"
+            element={
+              <RequireWorkspaceAccess workspace="drywall">
+                <DrywallSupplierOrdersPage />
               </RequireWorkspaceAccess>
             }
           />

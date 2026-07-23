@@ -21,6 +21,7 @@ import {
   Calendar,
   CalendarDays,
   CalendarRange,
+  Truck,
   Clock3,
   ClipboardList,
   DollarSign,
@@ -268,6 +269,12 @@ function drywallNav(role: RbacRole, canAccessQuickBooksAdmin: boolean): NavGroup
       to: '/drywall/schedule',
       icon: CalendarRange,
       matchPath: '/drywall/schedule',
+    },
+    {
+      label: 'Suppliers',
+      to: '/drywall/supplier-orders',
+      icon: Truck,
+      matchPath: '/drywall/supplier-orders',
     },
     {
       label: 'Crew View',

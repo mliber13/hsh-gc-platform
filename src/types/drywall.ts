@@ -739,12 +739,16 @@ export interface DrywallOrderItem {
   quantity: string
   unit: string
   notes?: string
+  /** Field-measurement area this material belongs to; groups the order by area. Blank = general. */
+  area?: string
 }
 
 /** Material supplier order — prod shape from legacy.orders[] */
 export interface DrywallOrder {
   id: string
   orderNumber?: string
+  /** Links this order sheet to a stock schedule item; the item's date drives the delivery date. */
+  scheduleItemId?: string
   /** Suppliers-directory id when picked from the directory; `supplier` caches the name for display. */
   supplierId?: string
   supplier?: string
@@ -754,6 +758,10 @@ export interface DrywallOrder {
   notes?: string
   items: DrywallOrderItem[]
   status?: DrywallOrderStatus | string
+  /** Set when the supplier acknowledges the order via the share link (status → confirmed). */
+  supplierConfirmedAt?: string
+  /** Set when the supplier marks the order delivered via the share link (status → complete). */
+  supplierDeliveredAt?: string
   createdAt?: string
   updatedAt?: string
 }

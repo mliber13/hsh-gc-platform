@@ -35,6 +35,7 @@ import {
   type NewScheduleItemInput,
   type ScheduleItemTask,
 } from '@/services/scheduleService'
+import { ScheduleItemOrderSheet } from './ScheduleItemOrderSheet'
 
 type Props = {
   open: boolean
@@ -697,6 +698,16 @@ export function ScheduleItemDialog({
               placeholder="Optional notes for crew or office"
             />
           </div>
+
+          {/* Attach a supplier order sheet (stock deliveries) — saved items only. */}
+          {editing && (
+            <ScheduleItemOrderSheet
+              projectId={projectId}
+              scheduleItemId={editing.id}
+              scheduleItemDate={editing.start_date}
+              readOnly={false}
+            />
+          )}
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2">
