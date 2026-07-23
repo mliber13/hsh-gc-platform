@@ -60,7 +60,45 @@ export function TermsOfUse({ onBack, showBackButton = true }: TermsOfUseProps) {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">5. Disclaimer</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">5. SMS / Text Messaging Program</h2>
+            <p>
+              HSH Contractor and HSH Drywall ("HSH") operate an operational text-messaging program to
+              coordinate job scheduling with field crew members, subcontractors, and project customers and
+              general-contractor superintendents. By providing your mobile number to HSH, you consent to
+              receive these messages.
+            </p>
+            <p>
+              <strong>Program &amp; message types.</strong> Messages are transactional and office-initiated
+              and relate to job scheduling — including schedule assignments and confirmations, material stock
+              and delivery dates, point-up scheduling, and related project updates. HSH does not send marketing
+              or promotional text messages.
+            </p>
+            <p>
+              <strong>Message frequency.</strong> Message frequency varies based on project activity.
+            </p>
+            <p>
+              <strong>Message and data rates.</strong> Message and data rates may apply according to your
+              mobile carrier plan.
+            </p>
+            <p>
+              <strong>Opt-out.</strong> You can cancel the text-messaging service at any time by replying{' '}
+              <strong>STOP</strong> to any message. After you send STOP, HSH will send a one-time confirmation
+              and will not send further messages unless you opt back in by replying <strong>START</strong>.
+            </p>
+            <p>
+              <strong>Help.</strong> Reply <strong>HELP</strong> for assistance, or contact HSH at
+              330-614-1127 or mark@hshdrywall.com.
+            </p>
+            <p>
+              Carriers are not liable for delayed or undelivered messages. Mobile numbers collected for this
+              program are used only to deliver these operational messages and are not shared with third parties
+              or used for marketing. See our{' '}
+              <a href="/privacy" className="text-blue-600 underline">Privacy Policy</a> for details.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">6. Disclaimer</h2>
             <p>
               The App is provided “as is.” We disclaim warranties of merchantability, fitness for a particular purpose,
               and non-infringement. We are not liable for any indirect, incidental, or consequential damages arising from your use of the App.
@@ -68,14 +106,14 @@ export function TermsOfUse({ onBack, showBackButton = true }: TermsOfUseProps) {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">6. Changes</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">7. Changes</h2>
             <p>
               We may update these terms from time to time. Continued use of the App after changes constitutes acceptance. The “Last updated” date at the top reflects the latest revision.
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">7. Contact</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">8. Contact</h2>
             <p>
               For questions about these terms, contact us at the support or contact information provided in the App or by your administrator.
             </p>
