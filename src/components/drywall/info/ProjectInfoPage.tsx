@@ -37,6 +37,7 @@ import {
 import type { ProjectInfoForm } from '@/types/drywall'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
 import { CommsLogPanel } from '@/components/drywall/comms/CommsLogPanel'
+import { CustomerCommsCard } from '@/components/drywall/info/CustomerCommsCard'
 
 function toForm(project: {
   name: string
@@ -402,6 +403,8 @@ export function ProjectInfoPage() {
       )}
 
       <CommsLogPanel projectId={projectId} />
+
+      <CustomerCommsCard projectId={projectId} readOnly={readOnly} />
 
       {!readOnly && (
         <Card className="border-destructive/30">
