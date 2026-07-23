@@ -745,6 +745,8 @@ export interface DrywallOrderItem {
 export interface DrywallOrder {
   id: string
   orderNumber?: string
+  /** Suppliers-directory id when picked from the directory; `supplier` caches the name for display. */
+  supplierId?: string
   supplier?: string
   supplierContact?: string
   deliveryDate?: string

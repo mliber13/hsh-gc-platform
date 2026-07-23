@@ -1142,6 +1142,7 @@ function normalizeOrder(raw: unknown): DrywallOrder | null {
   return {
     id,
     orderNumber: asString(r.orderNumber) || undefined,
+    supplierId: asString(r.supplierId) || undefined,
     supplier: asString(r.supplier) || undefined,
     supplierContact: asString(r.supplierContact) || undefined,
     deliveryDate: asString(r.deliveryDate) || undefined,

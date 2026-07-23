@@ -31,6 +31,8 @@ import {
   transitionDrywallChangeOrder,
 } from '@/services/drywallProjectsService'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
+import { fetchSuppliers } from '@/services/partnerDirectoryService'
+import type { Supplier } from '@/types/partners'
 import type {
   DrywallChangeOrder,
   DrywallOrder,
@@ -69,6 +71,7 @@ export function OrderPage() {
   const [fieldTakeoff, setFieldTakeoff] = useState<FieldTakeoff | null>(null)
   const [quote, setQuote] = useState<DrywallQuote | null>(null)
   const [orders, setOrders] = useState<DrywallOrder[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [changeOrders, setChangeOrders] = useState<DrywallChangeOrder[]>([])
   const [savedSnapshot, setSavedSnapshot] = useState('')
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
@@ -78,13 +81,14 @@ export function OrderPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, qRaw, t, o, co, catalogs] = await Promise.all([
+      const [p, qRaw, t, o, co, catalogs, sup] = await Promise.all([
         fetchDrywallProjectById(projectId),
         fetchDrywallQuoteV2V3(projectId),
         fetchFieldTakeoff(projectId),
         fetchOrders(projectId),
         fetchChangeOrders(projectId),
         fetchOrgDrywallCatalogs(),
+        fetchSuppliers().catch(() => [] as Supplier[]),
       ])
       if (!p) {
         toast.error('Project not found')
@@ -98,6 +102,7 @@ export function OrderPage() {
       setQuote(q)
       setFieldTakeoff(t)
       setOrders(sortOrders(o))
+      setSuppliers(sup)
       setChangeOrders(co)
       const snap: StageSnapshot = { orders: sortOrders(o), changeOrders: co }
       setSavedSnapshot(JSON.stringify(snap))
@@ -178,6 +183,19 @@ export function OrderPage() {
     }
   }
 
+  // Division has one main supplier (L&W): a single active supplier is the default; otherwise
+  // fall back to the most-recently-used supplier across existing orders.
+  const defaultSupplier = useMemo<Supplier | null>(() => {
+    if (suppliers.length === 1) return suppliers[0]
+    for (const o of orders) {
+      if (o.supplierId) {
+        const match = suppliers.find((s) => s.id === o.supplierId)
+        if (match) return match
+      }
+    }
+    return null
+  }, [suppliers, orders])
+
   const handleCreateOrder = () => {
     if (readOnly || !fieldTakeoff) return
     const suggested = suggestOrderItemsFromFieldTakeoff(fieldTakeoff)
@@ -187,6 +205,15 @@ export function OrderPage() {
       status: 'draft',
       items: suggested,
       deliveryAddress: project?.address,
+      ...(defaultSupplier
+        ? {
+            supplierId: defaultSupplier.id,
+            supplier: defaultSupplier.name,
+            supplierContact:
+              [defaultSupplier.contactName, defaultSupplier.phone].filter(Boolean).join(' · ') ||
+              undefined,
+          }
+        : {}),
       createdAt: now,
       updatedAt: now,
     }
@@ -503,6 +530,7 @@ export function OrderPage() {
         }}
         order={editingOrder}
         project={projectPdfMeta}
+        suppliers={suppliers}
         readOnly={readOnly}
         onChange={(next) => {
           setOrders((prev) => prev.map((o) => (o.id === next.id ? next : o)))

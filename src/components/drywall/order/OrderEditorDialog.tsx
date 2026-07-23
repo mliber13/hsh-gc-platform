@@ -26,6 +26,7 @@ import {
 import { downloadDrywallOrderPdf } from '@/lib/drywallOrderPdf'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import type { DrywallOrder, DrywallOrderItem, DrywallProject } from '@/types/drywall'
+import type { Supplier } from '@/types/partners'
 import { OrderStatusBadge } from './OrderStatusBadge'
 
 interface OrderEditorDialogProps {
@@ -33,10 +34,16 @@ interface OrderEditorDialogProps {
   onOpenChange: (open: boolean) => void
   order: DrywallOrder | null
   project: Pick<DrywallProject, 'name' | 'address' | 'client'>
+  suppliers: Supplier[]
   readOnly: boolean
   onChange: (order: DrywallOrder) => void
   onDuplicate: () => void
   onDelete: () => void
+}
+
+/** Formats a supplier's contact name + phone into the cached contact string on the order. */
+function supplierContactLine(supplier: Supplier): string {
+  return [supplier.contactName, supplier.phone].filter(Boolean).join(' · ')
 }
 
 function emptyItem(): DrywallOrderItem {
@@ -54,12 +61,18 @@ export function OrderEditorDialog({
   onOpenChange,
   order,
   project,
+  suppliers,
   readOnly,
   onChange,
   onDuplicate,
   onDelete,
 }: OrderEditorDialogProps) {
   if (!order) return null
+
+  const supplierKnown = order.supplierId
+    ? suppliers.some((s) => s.id === order.supplierId)
+    : false
+  const supplierValue = order.supplierId || (order.supplier ? '__legacy__' : '__none__')
 
   const update = (patch: Partial<DrywallOrder>) => onChange({ ...order, ...patch })
 
@@ -122,12 +135,42 @@ export function OrderEditorDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor="supplier">Supplier</Label>
-            <Input
-              id="supplier"
-              value={order.supplier ?? ''}
-              onChange={(e) => update({ supplier: e.target.value })}
+            <Select
+              value={supplierValue}
+              onValueChange={(v) => {
+                if (v === '__none__') {
+                  update({ supplierId: undefined, supplier: undefined, supplierContact: undefined })
+                  return
+                }
+                if (v === '__legacy__') return
+                const s = suppliers.find((x) => x.id === v)
+                if (!s) return
+                update({
+                  supplierId: s.id,
+                  supplier: s.name,
+                  supplierContact: supplierContactLine(s) || undefined,
+                })
+              }}
               disabled={readOnly}
-            />
+            >
+              <SelectTrigger id="supplier">
+                <SelectValue placeholder="Select supplier" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— None —</SelectItem>
+                {order.supplierId && !supplierKnown && order.supplier ? (
+                  <SelectItem value={order.supplierId}>{order.supplier} (inactive)</SelectItem>
+                ) : null}
+                {!order.supplierId && order.supplier ? (
+                  <SelectItem value="__legacy__">{order.supplier} (unlinked)</SelectItem>
+                ) : null}
+                {suppliers.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="supplierContact">Supplier contact</Label>
