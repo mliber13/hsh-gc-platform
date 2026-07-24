@@ -20,6 +20,7 @@ import { ProjectSelector } from './ProjectSelector'
 import { DealSelector } from './DealSelector'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { CommsNotificationBell } from '@/components/comms/CommsNotificationBell'
+import { FieldReviewNotificationBell } from '@/components/drywall/field/FieldReviewNotificationBell'
 
 /** Pathname → human title fallback for pages that haven't called usePageTitle yet. */
 function fallbackTitleFromPath(pathname: string): string {
@@ -69,6 +70,7 @@ export function AppHeader() {
 
       {/* Right: workspace switcher */}
       <div className="ml-auto flex items-center gap-2">
+        <FieldReviewNotificationBell />
         <CommsNotificationBell scope="operator" />
         <WorkspaceSwitcher />
       </div>
