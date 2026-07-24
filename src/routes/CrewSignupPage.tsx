@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,7 +18,6 @@ import hshLogo from '/HSH Contractor Logo - Color.png'
 
 export function CrewSignupPage() {
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const token = searchParams.get('token') ?? ''
 
   const [invite, setInvite] = useState<CrewInviteToken | null | undefined>(undefined)
@@ -85,15 +84,49 @@ export function CrewSignupPage() {
       }
 
       if (!data.session) {
+        // Email confirmation is ON, so signUp returned no session — we can't
+        // consume the invite (no auth.uid()). Don't strand a half-provisioned
+        // account: there's no session to sign out of, and we tell them to
+        // finish from the link once confirmed.
         setError(
-          'Check your email to verify your account, then sign in. You may need a new invite link after verifying.',
+          'Check your email to confirm your account, then open your invite link again to finish setup. Contact your office if the link has expired.',
         )
         return
       }
 
-      await consumeCrewInviteToken(token, { userId })
-      navigate('/crew', { replace: true })
+      try {
+        await consumeCrewInviteToken(token, { userId })
+      } catch (consumeErr) {
+        // Linking failed (revoked/expired/mismatched invite). An account exists
+        // and is signed in but is NOT linked to a crew profile — leaving it
+        // signed in would drop them into the full app as an orphaned viewer.
+        // Sign out so they land back on the login screen instead.
+        try {
+          await supabase.auth.signOut()
+        } catch {
+          /* best effort */
+        }
+        setError(
+          consumeErr instanceof Error
+            ? consumeErr.message
+            : 'This invite could not be completed. Contact your office for a new link.',
+        )
+        return
+      }
+
+      // Hard reload rather than SPA navigate: the auth profile was fetched at
+      // SIGNED_IN (before consume ran), so it still has no org/crew role. A full
+      // reload re-bootstraps the profile with the freshly-linked org so the
+      // unprovisioned guard doesn't trip on stale state.
+      window.location.assign('/crew')
     } catch (err) {
+      // Any unexpected failure after signUp — sign out to avoid stranding a
+      // signed-in, unlinked account in the operator app.
+      try {
+        await supabase.auth.signOut()
+      } catch {
+        /* best effort */
+      }
       setError(err instanceof Error ? err.message : 'Signup failed')
     } finally {
       setLoading(false)

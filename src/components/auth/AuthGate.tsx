@@ -11,6 +11,23 @@ import { Login } from './Login'
 import { Signup } from './Signup'
 import { ResetPassword } from './ResetPassword'
 import { SetNewPassword } from './SetNewPassword'
+import { PendingAccount } from './PendingAccount'
+
+/**
+ * An account is "unprovisioned" when it has authenticated but was never linked
+ * to an org and holds no real role — only a bare `viewer` (or nothing). Every
+ * legitimate user has either a real role (owner, office, field, or crew) or an
+ * organization; this fingerprint is the orphaned crew-signup that would
+ * otherwise get read access to every operator workspace.
+ */
+function isUnprovisioned(
+  organizationId: string | null | undefined,
+  roles: string[],
+): boolean {
+  const hasOrg = Boolean(organizationId)
+  const hasRealRole = roles.some((r) => r && r !== 'viewer')
+  return !hasOrg && !hasRealRole
+}
 
 type AuthView = 'login' | 'signup' | 'reset'
 
@@ -19,7 +36,8 @@ interface AuthGateProps {
 }
 
 export function AuthGate({ children }: AuthGateProps) {
-  const { user, loading, isOnline, needsNewPassword, clearRecoveryMode } = useAuth()
+  const { user, loading, isOnline, needsNewPassword, clearRecoveryMode, profile, profileLoading } =
+    useAuth()
   const [authView, setAuthView] = useState<AuthView>('login')
 
   // User landed via password-reset link: show set-new-password form instead of app
@@ -65,6 +83,14 @@ export function AuthGate({ children }: AuthGateProps) {
           />
         )
     }
+  }
+
+  // Authenticated but never linked to an org/role: park them on a "pending"
+  // screen instead of dropping them into the app as a read-everything viewer.
+  // Wait for the profile to load first so a legit user isn't flashed the screen
+  // during the initial fetch.
+  if (!profileLoading && isUnprovisioned(profile?.organization_id, profile?.roles ?? [])) {
+    return <PendingAccount />
   }
 
   // User is authenticated, show the app
