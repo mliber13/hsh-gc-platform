@@ -15,6 +15,7 @@ import {
   fetchSupplierShareOrders,
   supplierUpdateOrderStatus,
   type SupplierShareOrder,
+  type SupplierShareUpcoming,
 } from '@/services/supplierShareService'
 import type { DrywallOrder } from '@/types/drywall'
 import hshLogo from '/HSH Contractor Logo - Color.png'
@@ -40,6 +41,7 @@ export function SupplierOrderSharePage() {
   const [error, setError] = useState('')
   const [supplierName, setSupplierName] = useState<string | null>(null)
   const [orders, setOrders] = useState<SupplierShareOrder[]>([])
+  const [upcoming, setUpcoming] = useState<SupplierShareUpcoming[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -85,6 +87,7 @@ export function SupplierOrderSharePage() {
       const data = await fetchSupplierShareOrders(token)
       setSupplierName(data.supplierName)
       setOrders(data.orders)
+      setUpcoming(data.upcoming)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'This link is not valid.')
     } finally {
@@ -316,6 +319,40 @@ export function SupplierOrderSharePage() {
             })}
           </div>
         )}
+
+        {!loading && !error && upcoming.length > 0 ? (
+          <div className="mt-4 overflow-hidden rounded-lg border border-dashed bg-white">
+            <div className="border-b px-4 py-2.5">
+              <p className="text-sm font-semibold text-gray-600">
+                Upcoming — estimate (not yet ordered)
+              </p>
+              <p className="text-xs text-gray-400">A heads-up on jobs coming your way.</p>
+            </div>
+            <div className="divide-y">
+              {upcoming.map((u, i) => (
+                <div
+                  key={`${u.projectName}-${u.itemName}-${i}`}
+                  className="flex items-center justify-between gap-2 px-4 py-2.5 text-sm"
+                >
+                  <div className="min-w-0">
+                    <span className="block truncate font-medium text-gray-900">{u.projectName}</span>
+                    <span className="block truncate text-xs text-gray-400">{u.itemName}</span>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className="block text-gray-600">
+                      {u.stockDate ? formatDelivery(u.stockDate) : 'TBD'}
+                    </span>
+                    {u.quotedSqft != null ? (
+                      <span className="block text-xs text-gray-400">
+                        ~{u.quotedSqft.toLocaleString()} sqft
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <p className="mt-8 text-center text-xs text-gray-400">
           HSH Drywall · 330-614-1127 · This page is read-only except confirming your orders.

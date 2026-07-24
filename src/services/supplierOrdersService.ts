@@ -36,6 +36,37 @@ type RpcRow = {
   schedule_item_name: string | null
 }
 
+export interface SupplierUpcomingRow {
+  supplierId: string | null
+  supplierName: string | null
+  projectId: string
+  projectName: string
+  itemId: string
+  itemName: string
+  stockDate: string | null
+  quotedSqft: number | null
+}
+
+/** Supplier-assigned future stock items with no real order yet (advance-notice estimate). */
+export async function fetchSupplierUpcoming(): Promise<SupplierUpcomingRow[]> {
+  if (!isOnlineMode()) return []
+  const { data, error } = await supabase.rpc('drywall_supplier_upcoming')
+  if (error) {
+    console.error('fetchSupplierUpcoming:', error)
+    return []
+  }
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    supplierId: (r.supplier_id as string | null) ?? null,
+    supplierName: (r.supplier_name as string | null) ?? null,
+    projectId: r.project_id as string,
+    projectName: (r.project_name as string | null)?.trim() || 'Untitled',
+    itemId: r.item_id as string,
+    itemName: (r.item_name as string | null) ?? '',
+    stockDate: (r.stock_date as string | null) ?? null,
+    quotedSqft: r.quoted_sqft == null ? null : Number(r.quoted_sqft),
+  }))
+}
+
 export async function fetchSupplierOrders(): Promise<SupplierOrderRow[]> {
   if (!isOnlineMode()) return []
   const { data, error } = await supabase.rpc('drywall_supplier_orders')

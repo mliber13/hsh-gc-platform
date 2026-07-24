@@ -21,7 +21,12 @@ import {
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { DRYWALL_ORDER_STATUSES, ORDER_STATUS_LABELS } from '@/lib/drywall/orderConstants'
 import { OrderStatusBadge } from '@/components/drywall/order/OrderStatusBadge'
-import { fetchSupplierOrders, type SupplierOrderRow } from '@/services/supplierOrdersService'
+import {
+  fetchSupplierOrders,
+  fetchSupplierUpcoming,
+  type SupplierOrderRow,
+  type SupplierUpcomingRow,
+} from '@/services/supplierOrdersService'
 import { getOrCreateSupplierShareLink } from '@/services/supplierShareService'
 
 const NO_SUPPLIER = '__none__'
@@ -57,6 +62,7 @@ export function DrywallSupplierOrdersPage() {
   const navigate = useNavigate()
 
   const [orders, setOrders] = useState<SupplierOrderRow[]>([])
+  const [upcoming, setUpcoming] = useState<SupplierUpcomingRow[]>([])
   const [loading, setLoading] = useState(true)
   const [supplierFilter, setSupplierFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -66,9 +72,10 @@ export function DrywallSupplierOrdersPage() {
     let cancelled = false
     void (async () => {
       setLoading(true)
-      const rows = await fetchSupplierOrders()
+      const [rows, up] = await Promise.all([fetchSupplierOrders(), fetchSupplierUpcoming()])
       if (!cancelled) {
         setOrders(rows)
+        setUpcoming(up)
         setLoading(false)
       }
     })()
@@ -136,6 +143,18 @@ export function DrywallSupplierOrdersPage() {
     return arr
   }, [filtered])
 
+  const upcomingFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return upcoming.filter((u) => {
+      if (supplierFilter !== 'all' && (u.supplierId ?? NO_SUPPLIER) !== supplierFilter) return false
+      if (q) {
+        const hay = `${u.projectName} ${u.itemName} ${u.supplierName ?? ''}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [upcoming, supplierFilter, search])
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5 p-4 sm:p-6">
       <div className="flex items-center gap-3">
@@ -186,6 +205,40 @@ export function DrywallSupplierOrdersPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {!loading && upcomingFiltered.length > 0 ? (
+        <Card className="border-dashed">
+          <div className="border-b px-4 py-2.5">
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              Upcoming — estimate (not yet ordered)
+            </h2>
+          </div>
+          <div className="divide-y">
+            {upcomingFiltered.map((u) => (
+              <button
+                key={u.itemId}
+                type="button"
+                onClick={() => navigate(`/drywall/projects/${u.projectId}/schedule`)}
+                className="grid w-full grid-cols-12 items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-muted/50"
+              >
+                <span className="col-span-5 min-w-0 truncate font-medium sm:col-span-4">
+                  {u.projectName}
+                </span>
+                <span className="col-span-4 truncate text-muted-foreground sm:col-span-4">
+                  {u.itemName}
+                  {u.supplierName ? ` · ${u.supplierName}` : ''}
+                </span>
+                <span className="col-span-3 tabular-nums text-muted-foreground sm:col-span-2">
+                  {formatDelivery(u.stockDate).label}
+                </span>
+                <span className="hidden text-right text-muted-foreground sm:col-span-2 sm:inline">
+                  {u.quotedSqft != null ? `~${u.quotedSqft.toLocaleString()} sqft` : '—'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       {loading ? (
         <p className="py-12 text-center text-sm text-muted-foreground">Loading orders…</p>

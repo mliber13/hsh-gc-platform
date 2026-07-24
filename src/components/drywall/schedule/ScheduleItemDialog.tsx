@@ -36,6 +36,8 @@ import {
   type ScheduleItemTask,
 } from '@/services/scheduleService'
 import { ScheduleItemOrderSheet } from './ScheduleItemOrderSheet'
+import { fetchSuppliers } from '@/services/partnerDirectoryService'
+import type { Supplier } from '@/types/partners'
 
 type Props = {
   open: boolean
@@ -79,6 +81,8 @@ export function ScheduleItemDialog({
   const [lagWorkDays, setLagWorkDays] = useState(1)
   const [tasks, setTasks] = useState<ScheduleItemTask[]>([])
   const [leadPersonIds, setLeadPersonIds] = useState<string[]>([])
+  const [supplierId, setSupplierId] = useState<string | null>(null)
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [predOpen, setPredOpen] = useState(false)
   const [predSearch, setPredSearch] = useState('')
   const [saving, setSaving] = useState(false)
@@ -137,6 +141,7 @@ export function ScheduleItemDialog({
       setLagWorkDays(editing.lag_work_days)
       setTasks(editing.tasks ?? [])
       setLeadPersonIds(editing.lead_person_ids ?? [])
+      setSupplierId(editing.supplier_id ?? null)
     } else {
       const today = new Date().toISOString().slice(0, 10)
       setName('')
@@ -152,10 +157,24 @@ export function ScheduleItemDialog({
       setLagWorkDays(1)
       setTasks([])
       setLeadPersonIds([])
+      setSupplierId(null)
     }
     setPredSearch('')
     setConflict(null)
   }, [open, editing])
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void fetchSuppliers()
+      .then((s) => {
+        if (!cancelled) setSuppliers(s)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   // Preview cascade only when the user changes predecessors/lag in-dialog — not on initial open of an
   // existing item (which would clobber the cascade-saved start_date). Match the service semantic:
@@ -330,6 +349,7 @@ export function ScheduleItemDialog({
         .map((t) => ({ ...t, label: t.label.trim() }))
         .filter((t) => t.label.length > 0),
       leadPersonIds,
+      supplierId,
     }
   }
 
@@ -697,6 +717,30 @@ export function ScheduleItemDialog({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Optional notes for crew or office"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Supplier</Label>
+            <Select
+              value={supplierId ?? '__none__'}
+              onValueChange={(v) => setSupplierId(v === '__none__' ? null : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="No supplier" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— None —</SelectItem>
+                {suppliers.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              For stock/delivery items — assign the supplier (e.g. L&amp;W) so this shows on their
+              upcoming board before an order exists.
+            </p>
           </div>
 
           {/* Attach a supplier order sheet (stock deliveries) — saved items only. */}

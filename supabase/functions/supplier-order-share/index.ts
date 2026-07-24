@@ -83,6 +83,15 @@ serve(async (req) => {
         order_json: Record<string, unknown>
         delivery_date: string | null
       }>
+      // Advance-notice estimates: supplier-assigned future stock items with no order yet.
+      const { data: upData } = await admin.rpc('supplier_share_upcoming', { p_token: token })
+      const upcoming = ((upData ?? []) as Array<Record<string, unknown>>).map((u) => ({
+        projectName: (u.project_name as string | null) ?? 'Project',
+        itemName: (u.item_name as string | null) ?? '',
+        stockDate: (u.stock_date as string | null) ?? null,
+        quotedSqft: u.quoted_sqft == null ? null : Number(u.quoted_sqft),
+      }))
+
       return json({
         supplierName: rows[0]?.supplier_name ?? null,
         orders: rows.map((r) => ({
@@ -93,6 +102,7 @@ serve(async (req) => {
           deliveryDate: r.delivery_date,
           order: r.order_json,
         })),
+        upcoming,
       })
     }
 

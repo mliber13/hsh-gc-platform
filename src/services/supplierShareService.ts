@@ -51,9 +51,17 @@ export interface SupplierShareOrder {
   order: DrywallOrder
 }
 
+export interface SupplierShareUpcoming {
+  projectName: string
+  itemName: string
+  stockDate: string | null
+  quotedSqft: number | null
+}
+
 export interface SupplierShareData {
   supplierName: string | null
   orders: SupplierShareOrder[]
+  upcoming: SupplierShareUpcoming[]
 }
 
 export async function fetchSupplierShareOrders(token: string): Promise<SupplierShareData> {
@@ -65,6 +73,7 @@ export async function fetchSupplierShareOrders(token: string): Promise<SupplierS
   return {
     supplierName: data?.supplierName ?? null,
     orders: (data?.orders ?? []) as SupplierShareOrder[],
+    upcoming: (data?.upcoming ?? []) as SupplierShareUpcoming[],
   }
 }
 

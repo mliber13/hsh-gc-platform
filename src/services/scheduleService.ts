@@ -202,6 +202,8 @@ export interface DrywallProjectScheduleItem {
   tasks: ScheduleItemTask[]
   /** Journeyman(s) whose piece this item belongs to; day-rate helpers deduct from them. */
   lead_person_ids: string[]
+  /** Supplier (Suppliers directory id) this item is for — e.g. a stock delivery to L&W. */
+  supplier_id: string | null
 }
 
 export interface NewScheduleItemInput {
@@ -218,6 +220,7 @@ export interface NewScheduleItemInput {
   lagWorkDays?: number
   tasks?: ScheduleItemTask[]
   leadPersonIds?: string[]
+  supplierId?: string | null
 }
 
 type DrywallScheduleItemRow = {
@@ -239,6 +242,7 @@ type DrywallScheduleItemRow = {
   predecessors: Array<{ predecessor_id?: string; lag_days?: number }> | null
   tasks: unknown
   lead_person_ids: string[] | null
+  supplier_id: string | null
 }
 
 function toDateOnly(value: string): string {
@@ -314,6 +318,7 @@ function mapDrywallScheduleRow(row: DrywallScheduleItemRow): DrywallProjectSched
     lag_work_days: lag,
     tasks: parseScheduleItemTasks(row.tasks),
     lead_person_ids: row.lead_person_ids ?? [],
+    supplier_id: row.supplier_id ?? null,
   }
 }
 
@@ -377,7 +382,7 @@ async function getOrCreateScheduleForProject(
 }
 
 const DRYWALL_SCHEDULE_SELECT =
-  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, notes, predecessors, tasks, lead_person_ids'
+  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, notes, predecessors, tasks, lead_person_ids, supplier_id'
 
 export async function fetchScheduleItemsForDrywallProject(
   projectId: string,
@@ -473,6 +478,7 @@ function buildInsertRow(
     predecessors: predecessorsToRows(predecessorIds, lag),
     tasks: input.tasks ?? [],
     lead_person_ids: input.leadPersonIds ?? [],
+    supplier_id: input.supplierId ?? null,
     notes: input.notes?.trim() || null,
   }
 }
@@ -565,6 +571,9 @@ export async function updateScheduleItemForDrywallProject(
   }
   if (patch.leadPersonIds !== undefined) {
     updatePayload.lead_person_ids = patch.leadPersonIds
+  }
+  if (patch.supplierId !== undefined) {
+    updatePayload.supplier_id = patch.supplierId
   }
 
   const { error } = await supabase
