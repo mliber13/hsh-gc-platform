@@ -85,6 +85,19 @@ export function CustomerCommsCard({
     }
   }, [projectId, loadMessages])
 
+  // Live-update the conversation: poll every 20s while the tab is visible.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') void loadMessages()
+    }
+    const id = window.setInterval(tick, 20_000)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', tick)
+    }
+  }, [loadMessages])
+
   const handleSaveContact = async () => {
     const digits = normalizeCustomerPhone(phone)
     if (digits.length !== 10) {

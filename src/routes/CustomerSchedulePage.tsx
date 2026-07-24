@@ -208,6 +208,19 @@ export function CustomerSchedulePage() {
     void load()
   }, [load])
 
+  // Live-update: silently re-fetch every 20s while the tab is visible, and on regaining focus.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+    const id = window.setInterval(tick, 20_000)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', tick)
+    }
+  }, [refresh])
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
       <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
