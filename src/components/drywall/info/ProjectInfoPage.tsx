@@ -404,7 +404,12 @@ export function ProjectInfoPage() {
 
       <CommsLogPanel projectId={projectId} />
 
-      <CustomerCommsCard projectId={projectId} readOnly={readOnly} />
+      <CustomerCommsCard
+        projectId={projectId}
+        readOnly={readOnly}
+        siteContactName={site.siteContact}
+        siteContactPhone={site.contactPhone}
+      />
 
       {!readOnly && (
         <Card className="border-destructive/30">

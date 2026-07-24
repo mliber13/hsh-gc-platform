@@ -116,6 +116,7 @@ import { HrWorkspaceShell } from '@/components/hr/HrWorkspaceShell'
 import { DrywallProjectsListPage } from '@/components/drywall/DrywallProjectsListPage'
 import { DrywallSupplierOrdersPage } from '@/components/drywall/supplier/DrywallSupplierOrdersPage'
 import { SupplierOrderSharePage } from '@/routes/SupplierOrderSharePage'
+import { CustomerSchedulePage } from '@/routes/CustomerSchedulePage'
 import { DrywallProjectShell } from '@/components/drywall/DrywallProjectShell'
 import { CloseoutStagePage } from '@/components/drywall/closeout/CloseoutStagePage'
 import { OrderPage } from '@/components/drywall/order/OrderPage'
@@ -164,6 +165,7 @@ export function AppRoutes() {
       <Route path="/vendor-quote/:token" element={<VendorQuotePortal />} />
       <Route path="/quote/:token" element={<VendorQuotePortal />} />
       <Route path="/supplier/:token" element={<SupplierOrderSharePage />} />
+      <Route path="/customer/:token" element={<CustomerSchedulePage />} />
       <Route path="/privacy" element={<PublicPrivacy />} />
       <Route path="/terms" element={<PublicTerms />} />
       <Route path="/crew-signup" element={<CrewSignupPage />} />

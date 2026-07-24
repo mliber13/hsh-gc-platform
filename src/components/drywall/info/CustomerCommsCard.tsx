@@ -4,9 +4,10 @@
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react'
-import { MessageSquare, Send } from 'lucide-react'
+import { Link2, MessageSquare, RefreshCw, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { getOrCreateCustomerShareLink } from '@/services/customerShareService'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -34,9 +35,17 @@ function formatTime(iso: string): string {
 interface CustomerCommsCardProps {
   projectId: string
   readOnly: boolean
+  /** Site & Access contact — often the same person, offered as a one-click fill. */
+  siteContactName?: string
+  siteContactPhone?: string
 }
 
-export function CustomerCommsCard({ projectId, readOnly }: CustomerCommsCardProps) {
+export function CustomerCommsCard({
+  projectId,
+  readOnly,
+  siteContactName,
+  siteContactPhone,
+}: CustomerCommsCardProps) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [savedPhone, setSavedPhone] = useState('')
@@ -48,6 +57,16 @@ export function CustomerCommsCard({ projectId, readOnly }: CustomerCommsCardProp
   const loadMessages = useCallback(async () => {
     setMessages(await fetchProjectCustomerMessages(projectId))
   }, [projectId])
+
+  const [refreshingMessages, setRefreshingMessages] = useState(false)
+  const refreshMessages = async () => {
+    setRefreshingMessages(true)
+    try {
+      await loadMessages()
+    } finally {
+      setRefreshingMessages(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -105,6 +124,29 @@ export function CustomerCommsCard({ projectId, readOnly }: CustomerCommsCardProp
   }
 
   const canText = savedPhone.length === 10
+  const [copyingLink, setCopyingLink] = useState(false)
+
+  const handleCopyScheduleLink = async () => {
+    setCopyingLink(true)
+    try {
+      const url = await getOrCreateCustomerShareLink(savedPhone)
+      await navigator.clipboard.writeText(url)
+      toast.success('Customer schedule link copied to clipboard')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not create schedule link')
+    } finally {
+      setCopyingLink(false)
+    }
+  }
+
+  const siteName = (siteContactName ?? '').trim()
+  const sitePhone10 = normalizeCustomerPhone(siteContactPhone ?? '')
+  const siteContactAvailable = Boolean(siteName) || sitePhone10.length === 10
+  const matchesSite = name.trim() === siteName && normalizeCustomerPhone(phone) === sitePhone10
+  const useSiteContact = () => {
+    setName(siteContactName ?? '')
+    setPhone(siteContactPhone ?? '')
+  }
 
   return (
     <Card>
@@ -155,9 +197,45 @@ export function CustomerCommsCard({ projectId, readOnly }: CustomerCommsCardProp
           </div>
         </div>
 
+        {!readOnly && siteContactAvailable && !matchesSite ? (
+          <button
+            type="button"
+            onClick={useSiteContact}
+            className="text-left text-xs font-medium text-primary hover:underline"
+          >
+            Same as site contact{siteName ? ` (${siteName})` : ''}? Use it →
+          </button>
+        ) : null}
+
+        {!readOnly && canText ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void handleCopyScheduleLink()}
+            disabled={copyingLink}
+          >
+            <Link2 className="mr-1 h-4 w-4" />
+            {copyingLink ? 'Copying…' : 'Copy schedule link for customer'}
+          </Button>
+        ) : null}
+
         {/* Thread */}
         <div className="space-y-2">
-          <Label>Conversation</Label>
+          <div className="flex items-center justify-between">
+            <Label>Conversation</Label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 text-xs text-muted-foreground"
+              onClick={() => void refreshMessages()}
+              disabled={refreshingMessages}
+            >
+              <RefreshCw className={'h-3.5 w-3.5 ' + (refreshingMessages ? 'animate-spin' : '')} />
+              Refresh
+            </Button>
+          </div>
           {messages.length === 0 ? (
             <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
               No texts yet. Save a number and send the first message below.
