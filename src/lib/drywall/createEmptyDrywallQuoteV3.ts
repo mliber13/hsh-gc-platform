@@ -119,16 +119,17 @@ export function hydrateDrywallQuoteV3(raw: unknown): DrywallQuoteV3 {
   return stripMigratedLineLaborRates(hydrated)
 }
 
-/** v2 convert copied labor rates onto every line; project-level rates are canonical in v3. */
+/** v2 convert copied labor rates onto every line; project-level rates are canonical until overridden.
+ * Strip once and clear the migration marker so later per-line overrides persist across reloads. */
 function stripMigratedLineLaborRates(quote: DrywallQuoteV3): DrywallQuoteV3 {
   const stripLine = (line: QuoteLineItem): QuoteLineItem => {
     if (line.type !== 'drywall') return line
     if (line.override_reason !== V3_LINE_MIGRATION_OVERRIDE_REASON) return line
-    if (line.custom_hanger_rate == null && line.custom_finisher_rate == null) return line
     return {
       ...line,
       custom_hanger_rate: undefined,
       custom_finisher_rate: undefined,
+      override_reason: undefined,
     }
   }
 

@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 import type { QuoteLineItem } from '@/types/drywall'
+import { V3_LINE_MIGRATION_OVERRIDE_REASON } from '@/lib/drywall/convertQuoteV2ToV3'
 
 
 
@@ -71,7 +72,18 @@ export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave 
 
 
 
-  const patch = (p: Partial<QuoteLineItem>) => setDraft((prev) => (prev ? { ...prev, ...p } : prev))
+  const patch = (p: Partial<QuoteLineItem>) =>
+    setDraft((prev) => {
+      if (!prev) return prev
+      const next = { ...prev, ...p }
+      if (
+        (p.custom_hanger_rate !== undefined || p.custom_finisher_rate !== undefined) &&
+        next.override_reason === V3_LINE_MIGRATION_OVERRIDE_REASON
+      ) {
+        next.override_reason = undefined
+      }
+      return next
+    })
 
 
 

@@ -417,7 +417,7 @@ function drawAlternatesSection(
     setTextRgb(ctx.doc, DW_TEXT)
     ctx.doc.text(`${alt.name || 'Alternate'} (${deltaVerb})`, ctx.margin, ctx.y)
     ctx.y += 14
-    if (alt.description?.trim()) {
+    if (alt.description?.trim() && alt.description.trim() !== (alt.name || '').trim()) {
       ctx.doc.setFont('helvetica', 'normal')
       ctx.doc.setFontSize(10)
       setTextRgb(ctx.doc, DW_GRAY)

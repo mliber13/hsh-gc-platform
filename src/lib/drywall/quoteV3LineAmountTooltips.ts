@@ -7,7 +7,8 @@ import {
   getLineUnit,
   materialRateUnitSuffix,
 } from './quoteV3CatalogResolve'
-import { formatQuoteMoney, type QuoteV3LineComputed } from './quoteV3Math'
+import { includeLaborBurden, LABOR_TAX_RATE } from './calculations/quantityUtils'
+import { formatQuoteMoney, type QuoteV3LaborBurdenOptions, type QuoteV3LineComputed } from './quoteV3Math'
 import type { QuoteLineItem } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 
@@ -53,17 +54,36 @@ export function laborAmountTooltip(
   line: QuoteLineItem,
   catalogs: OrgDrywallCatalogs,
   computed: QuoteV3LineComputed,
+  laborBurden?: QuoteV3LaborBurdenOptions,
 ): string | undefined {
   const qty = line.quantity || 0
   if (qty === 0 && computed.laborTotal === 0) return undefined
 
   if (line.type === 'drywall') {
-    const hangerRate = getEffectiveHangerRate(line, catalogs)
-    const finisherRate = getEffectiveFinisherRate(line, catalogs)
+    const wastePct = line.waste_pct ?? 10
+    const wasteMult = 1 + wastePct / 100
+    const effectiveSqft = qty * wasteMult
+    const hangerRate = getEffectiveHangerRate(
+      line,
+      catalogs,
+      laborBurden?.projectHangerRate,
+    )
+    const finisherRate = getEffectiveFinisherRate(
+      line,
+      catalogs,
+      laborBurden?.projectFinisherRate,
+    )
     const hangerLabel = formatRate(hangerRate, '/sqft')
     const finisherLabel = formatRate(finisherRate, '/sqft')
-    const qtyLabel = formatQty(qty)
-    return `${qtyLabel} sqft × ${hangerLabel} hanger + ${qtyLabel} sqft × ${finisherLabel} finisher = ${formatQuoteMoney(computed.laborTotal)}`
+    const sqftLabel = formatQty(effectiveSqft)
+    const hangerBurdened = includeLaborBurden(laborBurden?.hangerIncludeLaborBurden)
+    const finisherBurdened = includeLaborBurden(laborBurden?.finisherIncludeLaborBurden)
+    const burdenNote =
+      hangerBurdened || finisherBurdened
+        ? ` incl. ${(LABOR_TAX_RATE * 100).toFixed(0)}% labor burden`
+        : ''
+    const wasteNote = wasteMult !== 1 ? ` (${formatQty(qty)} sqft × ${wasteMult.toFixed(2)} waste)` : ''
+    return `${sqftLabel} sqft${wasteNote} × ${hangerLabel} hanger + ${sqftLabel} sqft × ${finisherLabel} finisher${burdenNote} = ${formatQuoteMoney(computed.laborTotal)}`
   }
 
   const unit = getLineUnit(line, catalogs)

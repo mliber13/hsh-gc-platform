@@ -191,14 +191,7 @@ function AlternateCard({
         </div>
       </div>
       {open && (
-        <div className="space-y-3 p-3">
-          <Input
-            className="h-8"
-            disabled={readOnly}
-            value={alternate.description}
-            onChange={(e) => onPatch({ description: e.target.value })}
-            placeholder="Description for customer"
-          />
+        <div className="p-3">
           <LineItemsTable
             lines={alternate.lineItems}
             catalogs={catalogs}

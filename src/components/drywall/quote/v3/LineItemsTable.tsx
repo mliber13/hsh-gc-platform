@@ -614,7 +614,7 @@ function LineRow({
       <CurrencyAmountCell
         value={computed.laborTotal}
         variant="labor"
-        tooltip={laborAmountTooltip(line, catalogs, computed)}
+        tooltip={laborAmountTooltip(line, catalogs, computed, lineComputeOptions)}
         showWasteHint={showsMaterialWasteHint(line)}
       />
       <td className="px-1.5 py-1 text-right">
