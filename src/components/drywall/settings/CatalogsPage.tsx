@@ -15,6 +15,7 @@ import type { DrywallCatalogKey, OrgDrywallCatalogs } from '@/types/drywallCatal
 import { BoardsTab } from './catalogs/BoardsTab'
 import {
   AcousticTab,
+  DoorInstallTab,
   FrpTab,
   InsulationTab,
   MetalStudTab,
@@ -140,6 +141,7 @@ export function CatalogsPage() {
           <TabsTrigger value="acoustic">Acoustic ({catalogs.acoustic.length})</TabsTrigger>
           <TabsTrigger value="metal">Metal Stud ({catalogs.metal_stud.length})</TabsTrigger>
           <TabsTrigger value="frp">FRP ({catalogs.frp.length})</TabsTrigger>
+          <TabsTrigger value="door">Door Install ({catalogs.door_install.length})</TabsTrigger>
           <TabsTrigger value="targets">Margin Targets</TabsTrigger>
           <TabsTrigger value="dashboard-targets">Dashboard Targets</TabsTrigger>
         </TabsList>
@@ -163,6 +165,7 @@ export function CatalogsPage() {
         <TabsContent value="acoustic"><AcousticTab {...tabProps} /></TabsContent>
         <TabsContent value="metal"><MetalStudTab {...tabProps} /></TabsContent>
         <TabsContent value="frp"><FrpTab {...tabProps} /></TabsContent>
+        <TabsContent value="door"><DoorInstallTab {...tabProps} /></TabsContent>
         <TabsContent value="targets">
           <TargetsTab
             catalogs={catalogs}

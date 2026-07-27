@@ -485,6 +485,7 @@ function resolveScopeAddonLines(legacy: Record<string, unknown>): string[] {
     lines.push('Acoustic Ceiling Tile & Grid: Labor and material per plans and specs.')
   }
   if (types.has('frp')) lines.push('FRP: Labor and material per plans and specs.')
+  if (types.has('door_install')) lines.push('Door Installation: Labor and material per plans and specs.')
   return lines
 }
 

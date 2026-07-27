@@ -9,6 +9,7 @@ export const QUOTE_LINE_TYPE_LABELS: Record<QuoteLineItemType, string> = {
   acoustic: 'Acoustic',
   metal_stud: 'Metal Stud',
   frp: 'FRP',
+  door_install: 'Door Install',
 }
 
 /** Context-aware catalog column header per line type. */
@@ -24,6 +25,7 @@ export function catalogColumnLabel(type: QuoteLineItemType): string {
     case 'acoustic':
     case 'metal_stud':
     case 'frp':
+    case 'door_install':
       return 'Component'
     default:
       return 'Catalog'
@@ -69,6 +71,8 @@ export function getCatalogDefaultMaterialRate(
       )
     case 'frp':
       return catalogs.frp.find((e) => e.id === line.catalog_id)?.material_rate ?? 0
+    case 'door_install':
+      return catalogs.door_install.find((e) => e.id === line.catalog_id)?.material_rate ?? 0
     default:
       return 0
   }
@@ -130,6 +134,8 @@ export function getCatalogDefaultComponentLaborRate(
       return catalogs.metal_stud.find((e) => e.id === line.catalog_id)?.labor_rate ?? 0
     case 'frp':
       return catalogs.frp.find((e) => e.id === line.catalog_id)?.labor_rate ?? 0
+    case 'door_install':
+      return catalogs.door_install.find((e) => e.id === line.catalog_id)?.labor_rate ?? 0
     default:
       return 0
   }
@@ -165,6 +171,8 @@ export function materialRateUnitSuffix(line: QuoteLineItem, catalogs: OrgDrywall
     case 'rc_channel':
     case 'metal_stud':
       return '/piece'
+    case 'door_install':
+      return '/door'
     case 'suspended_grid':
     case 'acoustic':
     case 'frp': {
@@ -191,6 +199,8 @@ export function materialRateHeaderForType(type: QuoteLineItemType): string {
     case 'rc_channel':
     case 'metal_stud':
       return 'Mat. rate ($/piece)'
+    case 'door_install':
+      return 'Mat. rate ($/door)'
     case 'suspended_grid':
     case 'acoustic':
     case 'frp':
@@ -232,6 +242,8 @@ export function componentLaborRateHeaderForType(type: QuoteLineItemType): string
       return 'Labor rate ($/LF)'
     case 'metal_stud':
       return 'Labor rate ($/LF)'
+    case 'door_install':
+      return 'Labor rate ($/door)'
     case 'suspended_grid':
     case 'acoustic':
     case 'frp':
@@ -270,6 +282,8 @@ export function getLineUnit(line: QuoteLineItem, catalogs: OrgDrywallCatalogs): 
       return line.rc_surface === 'ceiling' ? 'sqft' : 'lf'
     case 'metal_stud':
       return 'lf'
+    case 'door_install':
+      return 'each'
     case 'suspended_grid': {
       const e = catalogs.suspended_grid.find((x) => x.id === line.catalog_id)
       return e?.unit ?? 'each'
@@ -303,6 +317,8 @@ export function getLineCatalogLabel(line: QuoteLineItem, catalogs: OrgDrywallCat
       return catalogs.metal_stud.find((e) => e.id === line.catalog_id)?.display_name ?? '—'
     case 'frp':
       return catalogs.frp.find((e) => e.id === line.catalog_id)?.display_name ?? '—'
+    case 'door_install':
+      return catalogs.door_install.find((e) => e.id === line.catalog_id)?.display_name ?? '—'
     default:
       return '—'
   }
@@ -327,6 +343,8 @@ export function catalogOptionsForLineType(
       return catalogs.metal_stud.map((e) => ({ id: e.id, label: e.display_name }))
     case 'frp':
       return catalogs.frp.map((e) => ({ id: e.id, label: e.display_name }))
+    case 'door_install':
+      return catalogs.door_install.map((e) => ({ id: e.id, label: e.display_name }))
     default:
       return []
   }

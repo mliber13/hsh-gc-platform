@@ -501,6 +501,7 @@ export type QuoteLineItemType =
   | 'acoustic'
   | 'metal_stud'
   | 'frp'
+  | 'door_install'
 
 export interface QuoteLineItem {
   id: string

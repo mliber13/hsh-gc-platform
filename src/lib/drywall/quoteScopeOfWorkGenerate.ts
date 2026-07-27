@@ -15,6 +15,7 @@ const TRADE_ORDER: QuoteLineItemType[] = [
   'acoustic',
   'metal_stud',
   'frp',
+  'door_install',
 ]
 
 function formatQty(n: number): string {

@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   Box,
+  DoorOpen,
   Grid3x3,
   Hammer,
   Layers,
@@ -67,5 +68,12 @@ export const TRADE_SECTION_THEMES: Record<QuoteLineItemType, TradeSectionTheme> 
     headerClass: 'bg-teal-500/10 text-teal-950 dark:text-teal-100',
     subtotalRowClass: 'bg-teal-500/8 border-t border-teal-500/20',
     locationSubtotalClass: 'bg-teal-500/5 border-t border-teal-500/15',
+  },
+  door_install: {
+    icon: DoorOpen,
+    borderClass: 'border-l-indigo-500',
+    headerClass: 'bg-indigo-500/10 text-indigo-950 dark:text-indigo-100',
+    subtotalRowClass: 'bg-indigo-500/8 border-t border-indigo-500/20',
+    locationSubtotalClass: 'bg-indigo-500/5 border-t border-indigo-500/15',
   },
 }

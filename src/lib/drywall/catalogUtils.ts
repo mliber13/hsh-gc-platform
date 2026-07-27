@@ -205,6 +205,14 @@ export function parseOrgDrywallCatalogs(raw: unknown): OrgDrywallCatalogs {
         notes: o.notes != null ? String(o.notes) : undefined,
       })),
     ),
+    door_install: parseArray(p.door_install, (item) =>
+      parseGenericEntry(item, (o, base) => ({
+        ...base,
+        material_rate: toNum(o.material_rate),
+        labor_rate: toNum(o.labor_rate),
+        notes: o.notes != null ? String(o.notes) : undefined,
+      })),
+    ),
     marginFloorTarget: DEFAULT_MARGIN_FLOOR_TARGET,
     poEstimatedCostPerSqft: DEFAULT_PO_ESTIMATED_COST_PER_SQFT,
     dashboardTargets: DEFAULT_DASHBOARD_TARGETS,
@@ -238,6 +246,7 @@ export function isEmptyCatalogPayload(raw: unknown): boolean {
     'acoustic',
     'metal_stud',
     'frp',
+    'door_install',
   ]
   return keys.every((k) => !Array.isArray(p[k]) || (p[k] as unknown[]).length === 0)
 }

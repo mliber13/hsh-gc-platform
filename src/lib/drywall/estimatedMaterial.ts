@@ -24,6 +24,7 @@ const COMPONENT_LABELS: Record<string, string> = {
   acoustic: 'Acoustic Ceiling',
   metal_stud: 'Metal Stud Framing',
   frp: 'FRP',
+  door_install: 'Door Install',
 }
 
 const V2_OTHER_COMPONENT_FIELDS: Array<{ key: string; field: string }> = [
@@ -43,6 +44,7 @@ const V3_LINE_TYPES: QuoteLineItemType[] = [
   'acoustic',
   'metal_stud',
   'frp',
+  'door_install',
 ]
 
 function num(v: unknown): number {

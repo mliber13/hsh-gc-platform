@@ -372,6 +372,7 @@ const COMPONENT_LABOR_LABELS: Array<{
   { key: 'acoustic_labor', label: 'Acoustic Ceiling Labor' },
   { key: 'metal_stud_labor', label: 'Metal Stud Labor' },
   { key: 'frp_labor', label: 'FRP Labor' },
+  { key: 'door_install_labor', label: 'Door Install Labor' },
 ]
 
 function ComponentLaborRows({

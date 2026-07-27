@@ -79,6 +79,7 @@ const emptyCatalogs: OrgDrywallCatalogs = {
   acoustic: [],
   metal_stud: [],
   frp: [],
+  door_install: [],
   marginFloorTarget: 0.3,
   poEstimatedCostPerSqft: 2.5,
   dashboardTargets: DEFAULT_DASHBOARD_TARGETS,

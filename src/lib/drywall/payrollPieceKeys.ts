@@ -32,6 +32,7 @@ export const COMPONENT_LABOR_PIECE_KEYS = {
   acoustic: 'acoustic_labor',
   metal_stud: 'metal_stud_labor',
   frp: 'frp_labor',
+  door_install: 'door_install_labor',
 } as const
 
 export type ComponentLaborPieceKey =
@@ -49,6 +50,7 @@ const COMPONENT_LABOR_LABELS: Record<ComponentLaborPieceKey, string> = {
   acoustic_labor: 'Acoustic Ceiling Labor',
   metal_stud_labor: 'Metal Stud Labor',
   frp_labor: 'FRP Labor',
+  door_install_labor: 'Door Install Labor',
 }
 
 const COMPONENT_CATALOG_KEY_BY_PIECE_KEY: Record<
@@ -61,6 +63,7 @@ const COMPONENT_CATALOG_KEY_BY_PIECE_KEY: Record<
   acoustic_labor: 'acoustic',
   metal_stud_labor: 'metal_stud',
   frp_labor: 'frp',
+  door_install_labor: 'door_install',
 }
 
 const COMPONENT_LABOR_PIECE_KEY_SET = new Set<string>(Object.values(COMPONENT_LABOR_PIECE_KEYS))

@@ -192,6 +192,7 @@ export function createDefaultDrywallCatalogSeeds(): OrgDrywallCatalogs {
     acoustic: [],
     metal_stud: [],
     frp: [],
+    door_install: [],
     marginFloorTarget: DEFAULT_MARGIN_FLOOR_TARGET,
     poEstimatedCostPerSqft: DEFAULT_PO_ESTIMATED_COST_PER_SQFT,
     dashboardTargets: DEFAULT_DASHBOARD_TARGETS,

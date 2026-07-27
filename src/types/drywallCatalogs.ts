@@ -146,6 +146,16 @@ export interface FrpCatalogEntry {
   notes?: string
 }
 
+export interface DoorInstallCatalogEntry {
+  id: string
+  display_name: string
+  /** $ per door — hardware/frame/slab; optional (leave 0 for labor-only). */
+  material_rate: number
+  /** $ per door installed. */
+  labor_rate: number
+  notes?: string
+}
+
 export interface OrgDrywallCatalogs {
   boards: BoardCatalogEntry[]
   finish_scopes: FinishScopeCatalogEntry[]
@@ -156,6 +166,7 @@ export interface OrgDrywallCatalogs {
   acoustic: AcousticCatalogEntry[]
   metal_stud: MetalStudCatalogEntry[]
   frp: FrpCatalogEntry[]
+  door_install: DoorInstallCatalogEntry[]
   /** D.4 — org margin floor (0–1). Stored on org_drywall_catalogs row, not JSONB payload. */
   marginFloorTarget: number
   /** D.4 — PO estimated all-in cost per sqft. Stored on org_drywall_catalogs row. */

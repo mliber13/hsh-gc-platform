@@ -16,6 +16,7 @@ const emptyCatalogs = {
   acoustic: [],
   metal_stud: [],
   frp: [],
+  door_install: [],
 } as unknown as OrgDrywallCatalogs
 
 function drywallLine(patch: Partial<QuoteLineItem> = {}): QuoteLineItem {

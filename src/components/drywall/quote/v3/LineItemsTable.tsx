@@ -52,6 +52,7 @@ const LINE_TYPES: QuoteLineItemType[] = [
   'acoustic',
   'metal_stud',
   'frp',
+  'door_install',
 ]
 
 type Props = {

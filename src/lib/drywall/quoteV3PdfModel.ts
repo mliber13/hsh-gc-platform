@@ -42,6 +42,8 @@ export const PDF_TRADE_ORDER: QuoteLineItemType[] = [
 
   'frp',
 
+  'door_install',
+
 ]
 
 

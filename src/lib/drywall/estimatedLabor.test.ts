@@ -92,6 +92,8 @@ const catalogs: OrgDrywallCatalogs = {
 
   frp: [],
 
+  door_install: [],
+
   marginFloorTarget: 0.3,
 
   poEstimatedCostPerSqft: 2.5,
@@ -310,7 +312,10 @@ describe('computeEstimatedLabor v3', () => {
 
     const rc = result.components.find((c) => c.key === 'rc_channel_labor')
 
-    expect(rc?.amount).toBeCloseTo(100 * rcLaborRate, 5)
+    // RC wall qty=100, height unset → rows=1; default 10% waste + component labor burden
+    const rcLaborExpected = 100 * 1.1 * rcLaborRate * (1 + LABOR_TAX_RATE)
+
+    expect(rc?.amount).toBeCloseTo(rcLaborExpected, 5)
 
     expect(rc?.label).toBe('RC Channel')
 
@@ -324,7 +329,7 @@ describe('computeEstimatedLabor v3', () => {
 
         sqft * prepCleanRate * (1 + LABOR_TAX_RATE) +
 
-        100 * rcLaborRate,
+        rcLaborExpected,
 
       5,
 

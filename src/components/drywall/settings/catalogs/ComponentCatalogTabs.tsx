@@ -19,6 +19,7 @@ import {
 import { generateCatalogEntryId } from '@/lib/drywall/catalogUtils'
 import type {
   AcousticCatalogEntry,
+  DoorInstallCatalogEntry,
   DrywallCatalogKey,
   FrpCatalogEntry,
   InsulationCatalogEntry,
@@ -551,6 +552,93 @@ export function FrpTab({ readOnly, onUpdate, catalogs }: TabProps) {
             </Field>
             <Field label="Material rate *"><Input type="number" min={0} step={0.01} value={String(draft.material_rate)} onChange={(e) => setDraft({ ...draft, material_rate: parseCatalogRate(e.target.value) })} /></Field>
             <Field label="Labor rate *"><Input type="number" min={0} step={0.01} value={String(draft.labor_rate)} onChange={(e) => setDraft({ ...draft, labor_rate: parseCatalogRate(e.target.value) })} /></Field>
+          </>
+        )}
+      </EntryDialog>
+    </>
+  )
+}
+
+export function DoorInstallTab({ readOnly, onUpdate, catalogs }: TabProps) {
+  const items = catalogs.door_install
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState<DoorInstallCatalogEntry | null>(null)
+
+  const startEdit = (entry?: DoorInstallCatalogEntry) => {
+    setDraft(
+      entry ?? {
+        id: generateCatalogEntryId('door'),
+        display_name: '',
+        material_rate: 0,
+        labor_rate: 0,
+      },
+    )
+    setOpen(true)
+  }
+
+  const save = () => {
+    if (!draft?.display_name.trim()) return
+    const next = items.some((i) => i.id === draft.id)
+      ? items.map((i) => (i.id === draft.id ? draft : i))
+      : [...items, draft]
+    onUpdate('door_install', next)
+    setOpen(false)
+  }
+
+  return (
+    <>
+      <ComponentCatalogTab
+        title="Door Install"
+        description="Door install rates — labor and optional material per door."
+        emptyMessage="No Door Install entries yet. Add your first entry to seed rates for quotes."
+        items={items}
+        readOnly={readOnly}
+        searchText={(i) => `${i.display_name} ${i.notes ?? ''}`}
+        onChange={(next) => onUpdate('door_install', next)}
+        onAdd={() => startEdit()}
+        onEdit={startEdit}
+        columns={[
+          { key: 'name', header: 'Name', cell: (i) => i.display_name },
+          { key: 'mat', header: 'Mat $/door', cell: (i) => formatCatalogRate(i.material_rate), className: 'tabular-nums' },
+          { key: 'labor', header: 'Labor $/door', cell: (i) => formatCatalogRate(i.labor_rate), className: 'tabular-nums' },
+        ]}
+      />
+      <EntryDialog
+        open={open}
+        title={draft && items.some((i) => i.id === draft.id) ? 'Edit Door Install' : 'Add Door Install'}
+        onOpenChange={setOpen}
+        onSave={save}
+        saveDisabled={!draft?.display_name.trim()}
+      >
+        {draft && (
+          <>
+            <Field label="Display name *">
+              <Input value={draft.display_name} onChange={(e) => setDraft({ ...draft, display_name: e.target.value })} />
+            </Field>
+            <Field label="Material rate ($/door)">
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={String(draft.material_rate)}
+                onChange={(e) => setDraft({ ...draft, material_rate: parseCatalogRate(e.target.value) })}
+              />
+            </Field>
+            <Field label="Labor rate ($/door) *">
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={String(draft.labor_rate)}
+                onChange={(e) => setDraft({ ...draft, labor_rate: parseCatalogRate(e.target.value) })}
+              />
+            </Field>
+            <Field label="Notes">
+              <Input
+                value={draft.notes ?? ''}
+                onChange={(e) => setDraft({ ...draft, notes: e.target.value || undefined })}
+              />
+            </Field>
           </>
         )}
       </EntryDialog>

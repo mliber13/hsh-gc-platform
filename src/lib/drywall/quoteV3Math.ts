@@ -30,6 +30,7 @@ export function emptyComponentLaborByTrade(): QuoteV3ComponentLaborByTrade {
     acoustic_labor: 0,
     metal_stud_labor: 0,
     frp_labor: 0,
+    door_install_labor: 0,
   }
 }
 
@@ -49,6 +50,8 @@ function componentLaborTradeKey(
       return 'metal_stud_labor'
     case 'frp':
       return 'frp_labor'
+    case 'door_install':
+      return 'door_install_labor'
     default:
       return null
   }
@@ -74,6 +77,7 @@ export interface QuoteV3ComponentLaborByTrade {
   acoustic_labor: number
   metal_stud_labor: number
   frp_labor: number
+  door_install_labor: number
 }
 
 export interface QuoteV3LineDirectCosts {
