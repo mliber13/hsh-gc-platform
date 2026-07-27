@@ -390,6 +390,7 @@ export async function fetchCrewProjectList(
       scheduleItemId: sched.id,
       scheduleItemName: sched.name.trim() || 'Untitled task',
       scheduleItemDate: sched.start_date,
+      scheduleItemNotes: sched.notes?.trim() || null,
       projectId: project.id,
       projectName: project.name?.trim() || 'Untitled',
       client: formatClient(project.client),

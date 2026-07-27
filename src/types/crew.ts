@@ -38,6 +38,8 @@ export interface CrewProjectListItem {
   scheduleItemName: string
   /** start_date (yyyy-MM-dd) of this assignment. */
   scheduleItemDate: string
+  /** Free-text schedule-item notes (e.g. per-job address on off-system jobs); shown lightly on the list. */
+  scheduleItemNotes: string | null
   projectId: string
   projectName: string
   client: string
