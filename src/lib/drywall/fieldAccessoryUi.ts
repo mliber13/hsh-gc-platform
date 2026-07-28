@@ -111,7 +111,7 @@ export const FIELD_MATERIAL_OPTIONS: { category: string; items: string[] }[] = [
     ],
   },
   { category: 'Hat Channel', items: ['7/8" Hat Channel', '1-1/2" Hat Channel', 'Z-Furring Channel'] },
-  { category: 'RC Channel', items: ['RC-1 Channel'] },
+  { category: 'RC Channel', items: ['RC-1 Channel', 'RC Deluxe'] },
 ]
 
 export function getSubtypeOptions(type: string): string[] {
