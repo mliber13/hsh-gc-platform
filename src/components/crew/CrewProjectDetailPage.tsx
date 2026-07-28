@@ -40,6 +40,9 @@ import { isCrewRole } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { CrewCommsPanel } from '@/components/crew/CrewCommsPanel'
+import { CrewOrderStatusCard } from '@/components/crew/CrewOrderStatusCard'
+import { CrewForemanScheduleEditSheet } from '@/components/crew/CrewForemanScheduleEditSheet'
+import type { CrewProjectScheduleEntry } from '@/types/crew'
 
 function formatRate(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return '—'
@@ -117,13 +120,14 @@ export function CrewProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { effectiveRole } = usePermissions()
+  const { effectiveRole, isFieldForeman } = usePermissions()
   const isOperator = !isCrewRole(effectiveRole)
   const viewAsPersonId = isOperator ? searchParams.get('as') : null
   const isViewAs = Boolean(viewAsPersonId)
   /** Operator without ?as= — full unfiltered preview (existing behavior). */
   const isOperatorExplainer = isOperator && !isViewAs
   const readOnly = isOperator
+  const canEditSchedule = isFieldForeman && !isOperator
   const [detail, setDetail] = useState<CrewProjectDetail | null>(null)
   const [progress, setProgress] = useState<CrewTaskProgressMap>(new Map())
   const [openPunch, setOpenPunch] = useState<CrewOpenPunch | null>(null)
@@ -133,6 +137,8 @@ export function CrewProjectDetailPage() {
   // Prefill plumbing for Materials → comms request flow
   const [prefillText, setPrefillText] = useState<string>('')
   const [prefillToken, setPrefillToken] = useState<number>(0)
+  const [editEntry, setEditEntry] = useState<CrewProjectScheduleEntry | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
 
   usePageTitle(detail?.projectName ?? 'Job detail')
 
@@ -436,7 +442,7 @@ export function CrewProjectDetailPage() {
             </p>
           </CardContent>
         </Card>
-      ) : (
+      ) : detail.hideJobSizePay ? null : (
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -658,7 +664,11 @@ export function CrewProjectDetailPage() {
         </Card>
       ) : null}
 
-      {detail.showBoardCounts || detail.materials.length > 0 ? (
+      {/* Crew (non-readonly) always get this card so "Request more" is reachable
+          even before the office populates a materials list — that's exactly when
+          a shortage needs reporting. Operators previewing (readOnly) only see it
+          when there's real data. */}
+      {!readOnly || detail.showBoardCounts || detail.materials.length > 0 ? (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -754,8 +764,19 @@ export function CrewProjectDetailPage() {
                   ))
                 })()
               : null}
+
+            {!detail.showBoardCounts && detail.materials.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No materials listed for this job yet. Tap “Request more” to ask the office for
+                what you need.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
+      ) : null}
+
+      {detail.isFieldForeman || canEditSchedule ? (
+        <CrewOrderStatusCard projectId={detail.projectId} />
       ) : null}
 
       {detail.scheduleEntries.length > 0 ? (
@@ -763,7 +784,7 @@ export function CrewProjectDetailPage() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Calendar className="size-4" />
-              Your schedule
+              {canEditSchedule ? 'Project schedule' : 'Your schedule'}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -782,6 +803,20 @@ export function CrewProjectDetailPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-medium">{entry.name}</p>
                     <div className="flex items-center gap-1.5">
+                      {canEditSchedule ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            setEditEntry(entry)
+                            setEditOpen(true)
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      ) : null}
                       {isToday ? (
                         <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase text-primary-foreground">
                           Today
@@ -802,6 +837,7 @@ export function CrewProjectDetailPage() {
                     {format(parseISO(entry.startDate), 'EEE MMM d')}
                     {' – '}
                     {format(parseISO(entry.endDate), 'EEE MMM d')}
+                    {entry.status ? ` · ${entry.status}` : ''}
                   </p>
                   {entry.notes ? (
                     <p className="mt-2 text-sm whitespace-pre-wrap">{entry.notes}</p>
@@ -883,6 +919,16 @@ export function CrewProjectDetailPage() {
         prefillText={prefillText}
         prefillToken={prefillToken}
       />
+
+      {canEditSchedule ? (
+        <CrewForemanScheduleEditSheet
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          projectId={detail.projectId}
+          entry={editEntry}
+          onSaved={() => void load()}
+        />
+      ) : null}
     </div>
   )
 }

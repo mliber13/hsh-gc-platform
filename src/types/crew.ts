@@ -47,6 +47,11 @@ export interface CrewProjectListItem {
   status: string
   /** Measurer workflow pill — only when this schedule item is a Measure phase. */
   measureWorkflowStatus?: CrewMeasureWorkflowStatus | null
+  /**
+   * Resolved assignee display names — populated only for field-foreman list views.
+   * Empty for regular crew (UI skips the assignee line).
+   */
+  assignedPersonNames: string[]
 }
 
 export interface CrewProjectScheduleEntry {
@@ -58,6 +63,8 @@ export interface CrewProjectScheduleEntry {
   status: string
   notes: string | null
   tasks: ScheduleItemTask[]
+  /** Present when loaded for foreman schedule edit (may be empty for regular crew). */
+  assignedPersons?: string[]
 }
 
 export type CrewLaborRateSource =
@@ -166,8 +173,13 @@ export interface CrewProjectDetail {
   /**
    * True when this person is marked "Show job info" on at least one of their
    * schedule assignments for this project. When false, crew UI hides sqft/pay/materials.
+   * Field foreman forces materials/scope on regardless; see hideJobSizePay.
    */
   showJobInfo: boolean
+  /** Field foreman: suppress Job size / pay card (no dollars in /crew). */
+  hideJobSizePay?: boolean
+  /** Caller is field foreman — enables schedule edit + order status card. */
+  isFieldForeman?: boolean
   /** Measurer schedule assignment present — gates field takeoff / photo writes. */
   hasMeasureAssignment: boolean
   /** Field takeoff review workflow — set for measurers / operator preview. */

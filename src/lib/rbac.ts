@@ -156,6 +156,15 @@ export function canManageMeetingPrompts(
   return hasCapabilityFlag(profile, role, 'is_meeting_operator')
 }
 
+/**
+ * Crew-expansion flag — does NOT owner-short-circuit.
+ * Owners/office use desktop tools; only profiles with is_field_foreman expand /crew.
+ */
+export function isFieldForeman(profile: UserProfile | null | undefined): boolean {
+  if (!profile) return false
+  return Boolean(profile.is_field_foreman ?? profile.isFieldForeman)
+}
+
 export function isFeedbackOwner(
   profile:
     | UserProfile

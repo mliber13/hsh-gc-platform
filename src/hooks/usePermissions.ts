@@ -18,6 +18,7 @@ import {
   canAccessCrewWorkspace as rbacCanAccessCrewWorkspace,
   deriveEffectiveRole,
   isCrewRole,
+  isFieldForeman as rbacIsFieldForeman,
   isOwnerRole,
 } from '@/lib/rbac'
 
@@ -36,8 +37,12 @@ export function usePermissions() {
       roles: ['owner'],
       is_meeting_operator: true,
       can_admin_qb: true,
+      can_run_payroll: true,
+      is_field_foreman: false,
       isMeetingOperator: true,
       canAdminQb: true,
+      canRunPayroll: true,
+      isFieldForeman: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }),
@@ -89,6 +94,8 @@ export function usePermissions() {
   const canRunPayroll =
     isOwner || Boolean(userProfile?.can_run_payroll ?? userProfile?.canRunPayroll)
 
+  const isFieldForeman = rbacIsFieldForeman(userProfile)
+
   const canAccessCrewWorkspace = () => rbacCanAccessCrewWorkspace(effectiveRole)
 
   return {
@@ -110,12 +117,14 @@ export function usePermissions() {
     flags: {
       isMeetingOperator,
       canAdminQb,
+      isFieldForeman,
     },
     canAccessWorkspace,
     canWriteWorkspace,
     canAccessQuickBooksAdmin,
     canManageMeetingPrompts,
     canRunPayroll,
+    isFieldForeman,
     canAccessCrewWorkspace,
   }
 }

@@ -27,6 +27,8 @@ interface AssignedPersonsPickerProps {
   onShowJobInfoPersonIdsChange?: (ids: string[]) => void
   disabled?: boolean
   label?: string
+  /** When provided, skip fetchTeam and use these options (foreman roster RPC). */
+  options?: AssignedPersonOption[]
 }
 
 export function AssignedPersonsPicker({
@@ -36,17 +38,23 @@ export function AssignedPersonsPicker({
   onShowJobInfoPersonIdsChange,
   disabled,
   label = 'Assigned persons',
+  options: optionsProp,
 }: AssignedPersonsPickerProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [options, setOptions] = useState<AssignedPersonOption[]>([])
-  const [loading, setLoading] = useState(true)
+  const [options, setOptions] = useState<AssignedPersonOption[]>(optionsProp ?? [])
+  const [loading, setLoading] = useState(!optionsProp)
 
   const jobInfoEnabled =
     Array.isArray(showJobInfoPersonIds) && typeof onShowJobInfoPersonIdsChange === 'function'
   const jobInfoIds = showJobInfoPersonIds ?? []
 
   useEffect(() => {
+    if (optionsProp) {
+      setOptions(optionsProp)
+      setLoading(false)
+      return
+    }
     let cancelled = false
     setLoading(true)
     fetchTeam()
@@ -81,7 +89,7 @@ export function AssignedPersonsPicker({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [optionsProp])
 
   const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options])
 

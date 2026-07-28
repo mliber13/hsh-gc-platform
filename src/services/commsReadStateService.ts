@@ -6,7 +6,7 @@ import { supabase, isOnlineMode } from '@/lib/supabase'
 import { fetchCrewProjectList } from '@/services/crewWorkspaceService'
 import { fetchDrywallProjects } from '@/services/drywallProjectsService'
 import { getCurrentUserProfile, requireUserOrgId } from '@/services/userService'
-import { isCrewRole, deriveEffectiveRole } from '@/lib/rbac'
+import { isCrewRole, deriveEffectiveRole, isFieldForeman } from '@/lib/rbac'
 import type { CommsUnreadEntry, CommsUnreadSummary } from '@/types/crew'
 
 export type ProjectCrewReadState = {
@@ -141,8 +141,13 @@ export async function fetchCommsUnreadSummary(options?: {
 
   const profile = await getCurrentUserProfile()
   const effectiveRole = deriveEffectiveRole(profile)
-  const scope =
+  // Field foreman: all drywall projects (operator-style), while staying in /crew UI.
+  // Even when the bell passes scope="crew", upgrade unread scope for foreman.
+  let scope: 'operator' | 'crew' =
     options?.scope ?? (isCrewRole(effectiveRole) ? 'crew' : 'operator')
+  if (scope === 'crew' && isFieldForeman(profile)) {
+    scope = 'operator'
+  }
 
   const projects = await loadProjectsForScope(scope)
   if (projects.length === 0) {

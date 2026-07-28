@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { fetchTeam } from '@/services/hrTeamService'
+import { personIsForeman } from '@/services/crewWorkspaceService'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import { CommsNotificationBell } from '@/components/comms/CommsNotificationBell'
 
@@ -26,7 +27,7 @@ type ViewAsOption = { id: string; name: string }
 
 export function CrewShell() {
   const { signOut, profile } = useAuth()
-  const { effectiveRole } = usePermissions()
+  const { effectiveRole, isFieldForeman } = usePermissions()
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -34,6 +35,7 @@ export function CrewShell() {
   const viewAsPersonId = isOperator ? searchParams.get('as') : null
 
   const [viewAsOptions, setViewAsOptions] = useState<ViewAsOption[]>([])
+  const [viewAsIsForeman, setViewAsIsForeman] = useState(false)
 
   useEffect(() => {
     if (!isOperator) return
@@ -61,6 +63,20 @@ export function CrewShell() {
     }
   }, [isOperator])
 
+  useEffect(() => {
+    if (!viewAsPersonId) {
+      setViewAsIsForeman(false)
+      return
+    }
+    let cancelled = false
+    void personIsForeman(viewAsPersonId).then((yes) => {
+      if (!cancelled) setViewAsIsForeman(yes)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [viewAsPersonId])
+
   const viewAsName = useMemo(() => {
     if (!viewAsPersonId) return null
     return viewAsOptions.find((o) => o.id === viewAsPersonId)?.name ?? 'crew member'
@@ -68,18 +84,33 @@ export function CrewShell() {
 
   const onMeasure = /^\/crew\/projects\/[^/]+\/measure$/.test(location.pathname)
   const onDetail = /^\/crew\/projects\//.test(location.pathname) && !onMeasure
-  const headerTitle = onMeasure ? 'Measure' : onDetail ? 'Job detail' : 'My jobs'
+  const listScope = searchParams.get('scope') === 'all' ? 'all' : 'mine'
+  const viewAsFirst = viewAsName?.trim().split(/\s+/)[0] ?? 'crew'
+  const isForemanList = (viewAsPersonId && viewAsIsForeman) || (isFieldForeman && !isOperator)
+  const jobsLabel = (() => {
+    if (!isForemanList) return 'My jobs'
+    const base = listScope === 'all' ? 'All jobs' : 'My jobs'
+    if (viewAsPersonId && viewAsIsForeman) return `${base} (${viewAsFirst})`
+    return base
+  })()
+  const headerTitle = onMeasure ? 'Measure' : onDetail ? 'Job detail' : jobsLabel
 
   const setViewAs = (personId: string | null) => {
     const next = new URLSearchParams(searchParams)
     if (personId) next.set('as', personId)
     else next.delete('as')
+    // Keep scope when switching view-as targets; clear when leaving preview.
+    if (!personId) next.delete('scope')
     setSearchParams(next, { replace: true })
   }
 
-  const homePath = viewAsPersonId
-    ? `/crew?as=${encodeURIComponent(viewAsPersonId)}`
-    : '/crew'
+  const homePath = (() => {
+    const params = new URLSearchParams()
+    if (viewAsPersonId) params.set('as', viewAsPersonId)
+    if (listScope === 'all' && isForemanList) params.set('scope', 'all')
+    const q = params.toString()
+    return q ? `/crew?${q}` : '/crew'
+  })()
 
   return (
     <PageTitleProvider>
@@ -148,7 +179,9 @@ export function CrewShell() {
           </div>
           {viewAsPersonId ? (
             <div className="border-t border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-950 dark:text-amber-100">
-              Viewing as {viewAsName} — read-only preview
+              {viewAsIsForeman
+                ? `Viewing as ${viewAsName} — foreman preview (read-only)`
+                : `Viewing as ${viewAsName} — read-only preview`}
             </div>
           ) : null}
         </header>

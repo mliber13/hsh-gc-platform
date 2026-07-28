@@ -26,11 +26,13 @@ export interface UserProfile {
   is_meeting_operator?: boolean;
   can_admin_qb?: boolean;
   can_run_payroll?: boolean;
+  is_field_foreman?: boolean;
   hr_person_id?: string | null;
   hr_person_type?: string | null;
   isMeetingOperator?: boolean;
   canAdminQb?: boolean;
   canRunPayroll?: boolean;
+  isFieldForeman?: boolean;
   hrPersonId?: string | null;
   hrPersonType?: string | null;
   linked_employee_id?: string | null;
@@ -49,6 +51,7 @@ function normalizeUserProfile(row: any): UserProfile {
   const isMeetingOperator = Boolean(row?.is_meeting_operator);
   const canAdminQb = Boolean(row?.can_admin_qb);
   const canRunPayroll = Boolean(row?.can_run_payroll);
+  const isFieldForeman = Boolean(row?.is_field_foreman);
   const hrPersonId =
     typeof row?.hr_person_id === 'string' ? row.hr_person_id : row?.hr_person_id ?? null;
   const hrPersonType =
@@ -67,6 +70,7 @@ function normalizeUserProfile(row: any): UserProfile {
     is_meeting_operator: isMeetingOperator,
     can_admin_qb: canAdminQb,
     can_run_payroll: canRunPayroll,
+    is_field_foreman: isFieldForeman,
     hr_person_id: hrPersonId,
     hr_person_type: hrPersonType,
     linked_employee_id: linkedEmployeeId,
@@ -74,6 +78,7 @@ function normalizeUserProfile(row: any): UserProfile {
     isMeetingOperator,
     canAdminQb,
     canRunPayroll,
+    isFieldForeman,
     hrPersonId,
     hrPersonType,
     linkedEmployeeId,

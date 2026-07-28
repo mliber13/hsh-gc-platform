@@ -22,6 +22,8 @@ import { v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
 import { drywallScopeSummary, v2QuoteAddonLines } from '@/lib/drywall/structuredScopePdf'
 import { getCurrentUserProfile, requireUserOrgId } from '@/services/userService'
 import { fetchTeam } from '@/services/hrTeamService'
+import { isFieldForeman } from '@/lib/rbac'
+import { fetchForemanTeamRoster } from '@/services/foremanScheduleService'
 import {
   specialtyFromPositionName,
   isMeasurerSpecialty,
@@ -84,6 +86,7 @@ type ScheduleRow = {
   notes: string | null
   show_job_info_person_ids: string[] | null
   tasks: unknown
+  assigned_persons?: string[] | null
 }
 
 type ProjectRow = {
@@ -177,6 +180,7 @@ function mapScheduleEntry(row: ScheduleRow): CrewProjectScheduleEntry {
     status: row.status,
     notes: row.notes,
     tasks: parseScheduleItemTasks(row.tasks),
+    assignedPersons: row.assigned_persons ?? [],
   }
 }
 
@@ -185,7 +189,7 @@ async function fetchAssignedScheduleRows(personId: string): Promise<ScheduleRow[
   const { data, error } = await supabase
     .from('schedule_items')
     .select(
-      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, tasks',
+      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, tasks, assigned_persons',
     )
     .eq('organization_id', orgId)
     .contains('assigned_persons', [personId])
@@ -195,12 +199,68 @@ async function fetchAssignedScheduleRows(personId: string): Promise<ScheduleRow[
   return (data ?? []) as ScheduleRow[]
 }
 
+/** Field foreman: all org schedule items (no assignment filter). Regular crew unchanged. */
+async function fetchOrgScheduleRows(): Promise<ScheduleRow[]> {
+  const orgId = await requireUserOrgId()
+  const { data, error } = await supabase
+    .from('schedule_items')
+    .select(
+      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, tasks, assigned_persons',
+    )
+    .eq('organization_id', orgId)
+    .order('start_date', { ascending: true })
+
+  if (error) throw new Error(error.message || 'Failed to load schedule')
+  return (data ?? []) as ScheduleRow[]
+}
+
+/** In-flight cache so list/detail don't double-hit the RPC in one navigation burst. */
+const personForemanInflight = new Map<string, Promise<boolean>>()
+
+/**
+ * Operator-only RPC: is this org_team person a field foreman?
+ * Non-operators / errors → false (RPC also returns false when unauthorized).
+ */
+export async function personIsForeman(personId: string): Promise<boolean> {
+  if (!personId) return false
+  const cached = personForemanInflight.get(personId)
+  if (cached) return cached
+
+  const promise = (async () => {
+    try {
+      const { data, error } = await supabase.rpc('person_is_field_foreman', {
+        p_person_id: personId,
+      })
+      if (error) {
+        console.warn('person_is_field_foreman:', error)
+        return false
+      }
+      return data === true
+    } catch (e) {
+      console.warn('person_is_field_foreman failed:', e)
+      return false
+    }
+  })()
+
+  personForemanInflight.set(personId, promise)
+  try {
+    return await promise
+  } finally {
+    // Drop after settle so a later flag flip can be re-fetched; still dedupes concurrent calls.
+    personForemanInflight.delete(personId)
+  }
+}
+
 function personSeesJobInfo(personId: string, rows: ScheduleRow[]): boolean {
   return rows.some((row) => (row.show_job_info_person_ids ?? []).includes(personId))
 }
 
+export type CrewListScope = 'mine' | 'all'
+
 export type CrewViewAsOpts = {
   viewAsPersonId?: string
+  /** Foreman list scope. Default 'mine'. Only 'all' expands to org-wide jobs for a foreman view. */
+  scope?: CrewListScope
 }
 
 /** Operator preview: resolve specialty from org_team (operators can read the roster). */
@@ -344,7 +404,19 @@ export async function fetchCrewProjectList(
   if (!isOnlineMode()) return []
 
   const { personId, specialty } = await resolvePersonContext(opts)
-  const scheduleRows = await fetchAssignedScheduleRows(personId)
+  const scope: CrewListScope = opts?.scope === 'all' ? 'all' : 'mine'
+  const profile = await getCurrentUserProfile()
+  const viewAsForeman = opts?.viewAsPersonId
+    ? await personIsForeman(opts.viewAsPersonId)
+    : false
+  const foremanView = isFieldForeman(profile) || viewAsForeman
+
+  // Foreman + scope=all → org-wide. Everything else (including foreman mine) → assigned-only.
+  const scheduleRows =
+    foremanView && scope === 'all'
+      ? await fetchOrgScheduleRows()
+      : await fetchAssignedScheduleRows(personId)
+
   if (scheduleRows.length === 0) return []
 
   // Hide schedule items whose work window has fully passed — crew only see current/upcoming
@@ -371,6 +443,18 @@ export async function fetchCrewProjectList(
     projectById.set(row.id, row)
   }
 
+  // Foreman list only: resolve assignee ids → names once (cost-free roster RPC).
+  let nameByPersonId: Map<string, string> | null = null
+  if (foremanView) {
+    try {
+      const roster = await fetchForemanTeamRoster()
+      nameByPersonId = new Map(roster.map((p) => [p.id, p.name]))
+    } catch (e) {
+      console.warn('fetchForemanTeamRoster for list assignees:', e)
+      nameByPersonId = new Map()
+    }
+  }
+
   // One entry per assigned schedule item so a project appears once per task it's on.
   const items: CrewProjectListItem[] = []
   for (const sched of upcomingRows) {
@@ -386,6 +470,13 @@ export async function fetchCrewProjectList(
       measureWorkflowStatus = crewMeasureWorkflowStatus(parseFieldTakeoff(legacy))
     }
 
+    const assignedPersonNames =
+      nameByPersonId == null
+        ? []
+        : (sched.assigned_persons ?? [])
+            .map((id) => nameByPersonId!.get(id))
+            .filter((name): name is string => Boolean(name?.trim()))
+
     items.push({
       scheduleItemId: sched.id,
       scheduleItemName: sched.name.trim() || 'Untitled task',
@@ -397,6 +488,7 @@ export async function fetchCrewProjectList(
       address: formatAddress(project),
       status: normalizeDrywallProjectStatus(project.status),
       measureWorkflowStatus,
+      assignedPersonNames,
     })
   }
 
@@ -928,9 +1020,30 @@ export async function fetchCrewProjectDetail(
   }
 
   const { personId, specialty } = await resolvePersonContext(opts)
-  const scheduleRows = (await fetchAssignedScheduleRows(personId)).filter(
-    (r) => r.project_id === projectId,
-  )
+  const profile = await getCurrentUserProfile()
+  const viewAsForeman = opts?.viewAsPersonId
+    ? await personIsForeman(opts.viewAsPersonId)
+    : false
+  const foreman = isFieldForeman(profile) || viewAsForeman
+
+  let scheduleRows: ScheduleRow[]
+  if (foreman) {
+    const orgId = await requireUserOrgId()
+    const { data, error } = await supabase
+      .from('schedule_items')
+      .select(
+        'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, tasks, assigned_persons',
+      )
+      .eq('organization_id', orgId)
+      .eq('project_id', projectId)
+      .order('start_date', { ascending: true })
+    if (error) throw new Error(error.message || 'Failed to load schedule')
+    scheduleRows = (data ?? []) as ScheduleRow[]
+  } else {
+    scheduleRows = (await fetchAssignedScheduleRows(personId)).filter(
+      (r) => r.project_id === projectId,
+    )
+  }
 
   if (scheduleRows.length === 0) {
     throw new CrewWorkspacePermissionError()
@@ -945,6 +1058,7 @@ export async function fetchCrewProjectDetail(
     specialty,
     preview: false,
     personId,
+    isFieldForeman: foreman,
   })
 }
 
@@ -1060,17 +1174,26 @@ export async function fetchCrewProjectDetailForPreview(
 async function mapProjectDetail(
   project: DrywallProject,
   scheduleRows: ScheduleRow[],
-  context: { specialty: CrewSpecialty; preview?: boolean; personId?: string },
+  context: {
+    specialty: CrewSpecialty
+    preview?: boolean
+    personId?: string
+    isFieldForeman?: boolean
+  },
 ): Promise<CrewProjectDetail> {
   const legacy = project.legacy
   const po = getPoDataFromLegacy(legacy)
   const intakeSource = getIntakeSourceFromLegacy(legacy) ?? (po ? 'po' : 'quote')
   const field = parseFieldTakeoff(legacy)
+  const isForeman = context.isFieldForeman === true
   const showJobInfo =
     context.preview === true ||
+    isForeman ||
     (context.personId != null && personSeesJobInfo(context.personId, scheduleRows))
-  const showScope = showJobInfo || isMeasurerSpecialty(context.specialty)
-  const showPhotos = showJobInfo || isMeasurerSpecialty(context.specialty)
+  // Foreman sees scope/materials/photos on any project; still no dollars.
+  const showScope = showJobInfo || isMeasurerSpecialty(context.specialty) || isForeman
+  const showPhotos = showJobInfo || isMeasurerSpecialty(context.specialty) || isForeman
+  const showMaterials = showJobInfo || isForeman
   const hasMeasureAssignment =
     context.preview === true || scheduleRows.some(scheduleRowHasMeasurePhase)
   const measureWorkflowStatus =
@@ -1078,15 +1201,18 @@ async function mapProjectDetail(
       ? crewMeasureWorkflowStatus(field)
       : null
 
-  const totalSqft = showJobInfo ? resolveTotalSqft(legacy, intakeSource, po) : null
-  const laborRates = showJobInfo
-    ? await resolveLaborRates(legacy, field)
-    : {
-        hangerRate: null,
-        finisherRate: null,
-        prepCleanRate: null,
-        rateSource: 'pending_order' as const,
-      }
+  const emptyRates = {
+    hangerRate: null as number | null,
+    finisherRate: null as number | null,
+    prepCleanRate: null as number | null,
+    rateSource: 'pending_order' as const,
+  }
+
+  // Suppress all $ figures for field foreman (cost-free /crew).
+  const totalSqft =
+    showJobInfo && !isForeman ? resolveTotalSqft(legacy, intakeSource, po) : null
+  const laborRates =
+    showJobInfo && !isForeman ? await resolveLaborRates(legacy, field) : emptyRates
 
   return {
     projectId: project.id,
@@ -1097,21 +1223,25 @@ async function mapProjectDetail(
     scopeOfWork: showScope ? resolveScopeOfWork(legacy, intakeSource, po) : '',
     structuredScope: showScope ? resolveStructuredScope(legacy) : null,
     totalSqft,
-    beadSticks: showJobInfo ? resolveBeadSticks(legacy) : null,
-    materials: showJobInfo
-      ? resolveMaterials(field, context.specialty, context.preview === true)
+    beadSticks: showMaterials ? resolveBeadSticks(legacy) : null,
+    materials: showMaterials
+      ? resolveMaterials(field, context.specialty, context.preview === true || isForeman)
       : [],
-    boardCountsByArea: showJobInfo
+    boardCountsByArea: showMaterials
       ? resolveBoardCountsByArea(
           field,
           context.specialty,
-          context.preview === true,
+          context.preview === true || isForeman,
           scheduleRows,
         )
       : [],
     showBoardCounts:
-      showJobInfo &&
-      shouldShowBoardCounts(context.specialty, context.preview === true, scheduleRows),
+      showMaterials &&
+      shouldShowBoardCounts(
+        context.specialty,
+        context.preview === true || isForeman,
+        scheduleRows,
+      ),
     photos: showPhotos
       ? (field?.photos ?? []).map((p) => ({
           id: p.id,
@@ -1122,15 +1252,18 @@ async function mapProjectDetail(
       : [],
     specialty: context.specialty,
     laborRates,
-    estimatedTotalPay: showJobInfo
-      ? computeEstimatedTotalPay(totalSqft, laborRates, context.specialty, {
-          preview: context.preview,
-        })
-      : { hanger: null, finisher: null },
+    estimatedTotalPay:
+      showJobInfo && !isForeman
+        ? computeEstimatedTotalPay(totalSqft, laborRates, context.specialty, {
+            preview: context.preview,
+          })
+        : { hanger: null, finisher: null },
     fieldNotes: resolveFieldNotes(field),
     scheduleEntries: scheduleRows.map(mapScheduleEntry),
     intakeSource,
     showJobInfo,
+    hideJobSizePay: isForeman,
+    isFieldForeman: isForeman,
     hasMeasureAssignment,
     measureWorkflowStatus,
   }
