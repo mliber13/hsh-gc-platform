@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { CalendarRange, LayoutList, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { CalendarRange, History, LayoutList, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { startOfMonth } from 'date-fns'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import {
   defaultScheduleCalendarMonth,
 } from './DrywallScheduleCalendar'
 import { GenerateStandardScheduleDialog } from './GenerateStandardScheduleDialog'
+import { ScheduleChangeLogSheet } from './ScheduleChangeLogSheet'
 import { ScheduleItemDialog } from './ScheduleItemDialog'
 import {
   SCHEDULE_ITEM_STATUS_CLASS,
@@ -47,6 +48,7 @@ export function DrywallScheduleEditor() {
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
   const [dialogOpen, setDialogOpen] = useState(false)
   const [generateOpen, setGenerateOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [editing, setEditing] = useState<DrywallProjectScheduleItem | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -169,6 +171,17 @@ export function DrywallScheduleEditor() {
               </button>
             </div>
           )}
+          {!readOnly ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setHistoryOpen(true)}
+            >
+              <History className="mr-2 h-4 w-4" />
+              Schedule history
+            </Button>
+          ) : null}
           {!readOnly && !empty && (
             <Button type="button" size="sm" onClick={openCreate}>
               <Plus className="mr-2 h-4 w-4" />
@@ -338,6 +351,16 @@ export function DrywallScheduleEditor() {
         projectId={projectId}
         onGenerated={() => void load()}
       />
+
+      {!readOnly ? (
+        <ScheduleChangeLogSheet
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          projectId={projectId}
+          projectName={projectName}
+          title="Schedule history"
+        />
+      ) : null}
     </div>
   )
 }

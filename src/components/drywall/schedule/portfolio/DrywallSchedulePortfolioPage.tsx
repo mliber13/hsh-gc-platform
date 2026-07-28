@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, History, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { usePageTitle } from '@/contexts/PageTitleContext'
+import { usePermissions } from '@/hooks/usePermissions'
 import { projectColorClass } from '@/lib/drywall/projectColor'
 import { cn } from '@/lib/utils'
+import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import {
   fetchCrossProjectScheduleItems,
   type CrossProjectScheduleItem,
@@ -23,6 +25,7 @@ import {
   type SchedulePhase,
 } from '@/components/drywall/schedule/scheduleItemStatusStyles'
 import { ScheduleItemDialog } from '../ScheduleItemDialog'
+import { ScheduleChangeLogSheet } from '../ScheduleChangeLogSheet'
 import { DrywallPortfolioCalendar } from './DrywallPortfolioCalendar'
 import { DrywallPortfolioList } from './DrywallPortfolioList'
 import {
@@ -54,6 +57,8 @@ const VIEW_WINDOW_OPTIONS: { value: PortfolioViewWindow; label: string }[] = [
 
 export function DrywallSchedulePortfolioPage() {
   usePageTitle('Drywall — Schedule')
+  const { effectiveRole } = usePermissions()
+  const canViewActivity = canWriteDrywallProject(effectiveRole)
 
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<CrossProjectScheduleItem[]>([])
@@ -63,6 +68,7 @@ export function DrywallSchedulePortfolioPage() {
   const [anchorDate, setAnchorDate] = useState(() => new Date())
   const [dialog, setDialog] = useState<DialogState>({ open: false })
   const [addProjectOpen, setAddProjectOpen] = useState(false)
+  const [activityOpen, setActivityOpen] = useState(false)
   const [personNames, setPersonNames] = useState<Map<string, string>>(new Map())
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => new Set())
   const [selectedPersonIds, setSelectedPersonIds] = useState<Set<string>>(() => new Set())
@@ -138,6 +144,14 @@ export function DrywallSchedulePortfolioPage() {
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [scopedItems])
+
+  const projectNamesById = useMemo(() => {
+    const byId = new Map<string, string>()
+    for (const item of items) {
+      if (!byId.has(item.projectId)) byId.set(item.projectId, item.projectName)
+    }
+    return byId
+  }, [items])
 
   const personOptions = useMemo(() => {
     const ids = new Set<string>()
@@ -540,6 +554,19 @@ export function DrywallSchedulePortfolioPage() {
             </Popover>
           )}
 
+          {canViewActivity ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 text-xs"
+              onClick={() => setActivityOpen(true)}
+            >
+              <History className="h-3.5 w-3.5" />
+              Activity
+            </Button>
+          ) : null}
+
           <Button type="button" variant="outline" size="icon" onClick={() => void load()}>
             <RefreshCw className="h-4 w-4" />
             <span className="sr-only">Refresh</span>
@@ -579,6 +606,14 @@ export function DrywallSchedulePortfolioPage() {
           onSaved={handleDialogSaved}
         />
       )}
+
+      {canViewActivity ? (
+        <ScheduleChangeLogSheet
+          open={activityOpen}
+          onOpenChange={setActivityOpen}
+          projectNames={projectNamesById}
+        />
+      ) : null}
     </div>
   )
 }
