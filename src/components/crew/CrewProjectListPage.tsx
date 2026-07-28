@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { CalendarDays, ChevronRight, MapPin, RefreshCw, Users } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -22,9 +22,21 @@ import {
   crewMeasureStatusLabel,
   crewMeasureStatusPillClass,
 } from '@/lib/drywall/crewMeasureStatus'
+import {
+  SCHEDULE_PHASE_LABELS,
+  SCHEDULE_PHASE_ORDER,
+  type SchedulePhase,
+} from '@/components/drywall/schedule/scheduleItemStatusStyles'
+
+const FILTER_ALL = 'all'
 
 function parseScope(raw: string | null): CrewListScope {
   return raw === 'all' ? 'all' : 'mine'
+}
+
+function displayAssigneeNames(item: CrewProjectListItem): string {
+  const names = item.assignedPersonNames.filter(Boolean)
+  return names.length > 0 ? names.join(', ') : 'Unassigned'
 }
 
 export function CrewProjectListPage() {
@@ -40,6 +52,10 @@ export function CrewProjectListPage() {
   const [error, setError] = useState<string | null>(null)
   const [previewIsForeman, setPreviewIsForeman] = useState(false)
   const [previewFirstName, setPreviewFirstName] = useState<string | null>(null)
+
+  const [phaseFilter, setPhaseFilter] = useState(FILTER_ALL)
+  const [jobFilter, setJobFilter] = useState(FILTER_ALL)
+  const [personFilter, setPersonFilter] = useState(FILTER_ALL)
 
   const isForemanView = isFieldForeman || previewIsForeman
 
@@ -78,6 +94,13 @@ export function CrewProjectListPage() {
     }
   }, [viewAsPersonId])
 
+  // Reset filters when scope / view-as changes.
+  useEffect(() => {
+    setPhaseFilter(FILTER_ALL)
+    setJobFilter(FILTER_ALL)
+    setPersonFilter(FILTER_ALL)
+  }, [scope, viewAsPersonId, isForemanView])
+
   const setScope = (next: CrewListScope) => {
     const params = new URLSearchParams(searchParams)
     if (next === 'mine') params.delete('scope')
@@ -112,6 +135,136 @@ export function CrewProjectListPage() {
   }, [load])
 
   const { pullDistance, refreshing } = usePullToRefresh(load)
+
+  const phaseOptions = useMemo(() => {
+    const present = new Set<SchedulePhase>()
+    for (const item of items) {
+      if (item.phase) present.add(item.phase)
+    }
+    return SCHEDULE_PHASE_ORDER.filter((p) => present.has(p))
+  }, [items])
+
+  const jobOptions = useMemo(() => {
+    const byId = new Map<string, string>()
+    for (const item of items) {
+      if (!byId.has(item.projectId)) byId.set(item.projectId, item.projectName)
+    }
+    return [...byId.entries()]
+      .map(([projectId, projectName]) => ({ projectId, projectName }))
+      .sort((a, b) => a.projectName.localeCompare(b.projectName))
+  }, [items])
+
+  const personOptions = useMemo(() => {
+    const byId = new Map<string, string>()
+    for (const item of items) {
+      for (let i = 0; i < item.assignedPersonIds.length; i++) {
+        const id = item.assignedPersonIds[i]
+        if (!id || byId.has(id)) continue
+        const name = item.assignedPersonNames[i]?.trim()
+        byId.set(id, name || 'Crew member')
+      }
+    }
+    return [...byId.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [items])
+
+  const filtersActive =
+    phaseFilter !== FILTER_ALL || jobFilter !== FILTER_ALL || personFilter !== FILTER_ALL
+
+  const filteredItems = useMemo(() => {
+    if (!isForemanView) return items
+    return items.filter((item) => {
+      if (phaseFilter !== FILTER_ALL && item.phase !== phaseFilter) return false
+      if (jobFilter !== FILTER_ALL && item.projectId !== jobFilter) return false
+      if (
+        personFilter !== FILTER_ALL &&
+        !item.assignedPersonIds.includes(personFilter)
+      ) {
+        return false
+      }
+      return true
+    })
+  }, [items, isForemanView, phaseFilter, jobFilter, personFilter])
+
+  const clearFilters = () => {
+    setPhaseFilter(FILTER_ALL)
+    setJobFilter(FILTER_ALL)
+    setPersonFilter(FILTER_ALL)
+  }
+
+  const selectClassName =
+    'h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs text-foreground'
+
+  const filterBar =
+    isForemanView && items.length > 0 ? (
+      <div className="space-y-2 rounded-lg border bg-muted/30 p-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="sr-only" htmlFor="crew-filter-phase">
+            Phase
+          </label>
+          <select
+            id="crew-filter-phase"
+            className={selectClassName}
+            value={phaseFilter}
+            onChange={(e) => setPhaseFilter(e.target.value)}
+          >
+            <option value={FILTER_ALL}>All phases</option>
+            {phaseOptions.map((phase) => (
+              <option key={phase} value={phase}>
+                {SCHEDULE_PHASE_LABELS[phase]}
+              </option>
+            ))}
+          </select>
+          <label className="sr-only" htmlFor="crew-filter-job">
+            Job
+          </label>
+          <select
+            id="crew-filter-job"
+            className={selectClassName}
+            value={jobFilter}
+            onChange={(e) => setJobFilter(e.target.value)}
+          >
+            <option value={FILTER_ALL}>All jobs</option>
+            {jobOptions.map((job) => (
+              <option key={job.projectId} value={job.projectId}>
+                {job.projectName}
+              </option>
+            ))}
+          </select>
+          <label className="sr-only" htmlFor="crew-filter-person">
+            Person
+          </label>
+          <select
+            id="crew-filter-person"
+            className={selectClassName}
+            value={personFilter}
+            onChange={(e) => setPersonFilter(e.target.value)}
+          >
+            <option value={FILTER_ALL}>All people</option>
+            {personOptions.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {filtersActive ? (
+          <div className="flex items-center justify-between gap-2 px-0.5">
+            <p className="text-xs text-muted-foreground">
+              Showing {filteredItems.length} of {items.length}
+            </p>
+            <button
+              type="button"
+              className="text-xs font-medium text-primary hover:underline"
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : null}
+      </div>
+    ) : null
 
   const scopeToggle =
     isForemanView ? (
@@ -236,83 +389,96 @@ export function CrewProjectListPage() {
       ) : null}
 
       {scopeToggle}
+      {filterBar}
 
       <p className="text-sm text-muted-foreground">
-        {items.length} upcoming task{items.length === 1 ? '' : 's'}
-        {scope === 'mine' && !viewAsPersonId ? ' for you' : ''}
-        {scope === 'all' ? ' across all jobs' : ''}
+        {filtersActive
+          ? `${filteredItems.length} of ${items.length} task${items.length === 1 ? '' : 's'}`
+          : `${items.length} upcoming task${items.length === 1 ? '' : 's'}`}
+        {!filtersActive && scope === 'mine' && !viewAsPersonId ? ' for you' : ''}
+        {!filtersActive && scope === 'all' ? ' across all jobs' : ''}
       </p>
-      {items.map((item) => {
-        const dateLabel = format(parseISO(item.scheduleItemDate), 'EEE MMM d')
-        const isToday = item.scheduleItemDate === todayStr
 
-        return (
-          <Card
-            key={item.scheduleItemId}
-            className="cursor-pointer transition-colors hover:bg-muted/30 active:bg-muted/50"
-            onClick={() => openTask(item)}
+      {filteredItems.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
+          <p className="text-sm text-muted-foreground">No tasks match these filters.</p>
+          <button
+            type="button"
+            className="text-sm font-medium text-primary hover:underline"
+            onClick={clearFilters}
           >
-            <CardContent className="flex items-start gap-3 p-4">
-              <div className="min-w-0 flex-1 space-y-2">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <h3 className="text-base font-semibold leading-snug">{item.projectName}</h3>
-                  <div className="flex flex-wrap items-start justify-end gap-2">
-                    {item.measureWorkflowStatus ? (
-                      <span className={crewMeasureStatusPillClass(item.measureWorkflowStatus)}>
-                        Measure: {crewMeasureStatusLabel(item.measureWorkflowStatus)}
+            Clear filters
+          </button>
+        </div>
+      ) : (
+        filteredItems.map((item) => {
+          const dateLabel = format(parseISO(item.scheduleItemDate), 'EEE MMM d')
+          const isToday = item.scheduleItemDate === todayStr
+
+          return (
+            <Card
+              key={item.scheduleItemId}
+              className="cursor-pointer transition-colors hover:bg-muted/30 active:bg-muted/50"
+              onClick={() => openTask(item)}
+            >
+              <CardContent className="flex items-start gap-3 p-4">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <h3 className="text-base font-semibold leading-snug">{item.projectName}</h3>
+                    <div className="flex flex-wrap items-start justify-end gap-2">
+                      {item.measureWorkflowStatus ? (
+                        <span className={crewMeasureStatusPillClass(item.measureWorkflowStatus)}>
+                          Measure: {crewMeasureStatusLabel(item.measureWorkflowStatus)}
+                        </span>
+                      ) : null}
+                      <span className={drywallStatusPillClass(item.status)}>
+                        {drywallStatusLabel(item.status)}
                       </span>
-                    ) : null}
-                    <span className={drywallStatusPillClass(item.status)}>
-                      {drywallStatusLabel(item.status)}
-                    </span>
+                    </div>
                   </div>
+                  {item.client ? (
+                    <p className="text-sm text-muted-foreground">{item.client}</p>
+                  ) : null}
+                  {item.address ? (
+                    <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <MapPin className="size-3.5 shrink-0" />
+                      <span className="truncate">{item.address}</span>
+                    </p>
+                  ) : null}
+                  <p className="text-sm font-medium text-foreground">{item.scheduleItemName}</p>
+                  <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <CalendarDays className="size-3.5 shrink-0" />
+                    {isToday ? (
+                      <span className="font-semibold text-primary">Today · {dateLabel}</span>
+                    ) : (
+                      dateLabel
+                    )}
+                  </p>
+                  {isForemanView ? (
+                    <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <Users className="size-3.5 shrink-0" />
+                      <span className="truncate">{displayAssigneeNames(item)}</span>
+                    </p>
+                  ) : null}
+                  {item.scheduleItemNotes ? (
+                    <p className="whitespace-pre-line rounded-md bg-muted/40 p-2 text-xs leading-snug text-muted-foreground md:hidden">
+                      {item.scheduleItemNotes}
+                    </p>
+                  ) : null}
                 </div>
-                {item.client ? (
-                  <p className="text-sm text-muted-foreground">{item.client}</p>
-                ) : null}
-                {item.address ? (
-                  <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <MapPin className="size-3.5 shrink-0" />
-                    <span className="truncate">{item.address}</span>
-                  </p>
-                ) : null}
-                <p className="text-sm font-medium text-foreground">{item.scheduleItemName}</p>
-                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <CalendarDays className="size-3.5 shrink-0" />
-                  {isToday ? (
-                    <span className="font-semibold text-primary">Today · {dateLabel}</span>
-                  ) : (
-                    dateLabel
-                  )}
-                </p>
-                {isForemanView ? (
-                  <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Users className="size-3.5 shrink-0" />
-                    <span className="truncate">
-                      {item.assignedPersonNames.length > 0
-                        ? item.assignedPersonNames.join(', ')
-                        : 'Unassigned'}
-                    </span>
-                  </p>
-                ) : null}
                 {item.scheduleItemNotes ? (
-                  <p className="whitespace-pre-line rounded-md bg-muted/40 p-2 text-xs leading-snug text-muted-foreground md:hidden">
-                    {item.scheduleItemNotes}
-                  </p>
+                  <div className="hidden w-2/5 shrink-0 self-stretch border-l border-border/60 pl-3 md:block">
+                    <p className="line-clamp-5 whitespace-pre-line text-sm leading-snug text-muted-foreground">
+                      {item.scheduleItemNotes}
+                    </p>
+                  </div>
                 ) : null}
-              </div>
-              {item.scheduleItemNotes ? (
-                <div className="hidden w-2/5 shrink-0 self-stretch border-l border-border/60 pl-3 md:block">
-                  <p className="line-clamp-5 whitespace-pre-line text-sm leading-snug text-muted-foreground">
-                    {item.scheduleItemNotes}
-                  </p>
-                </div>
-              ) : null}
-              <ChevronRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
-            </CardContent>
-          </Card>
-        )
-      })}
+                <ChevronRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          )
+        })
+      )}
     </div>
   )
 }

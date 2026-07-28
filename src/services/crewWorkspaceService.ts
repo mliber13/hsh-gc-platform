@@ -470,12 +470,20 @@ export async function fetchCrewProjectList(
       measureWorkflowStatus = crewMeasureWorkflowStatus(parseFieldTakeoff(legacy))
     }
 
-    const assignedPersonNames =
-      nameByPersonId == null
-        ? []
-        : (sched.assigned_persons ?? [])
-            .map((id) => nameByPersonId!.get(id))
-            .filter((name): name is string => Boolean(name?.trim()))
+    // Foreman list only: keep ids/names parallel (empty name if roster miss) for person filter.
+    const assignedPersonIds = foremanView
+      ? (sched.assigned_persons ?? []).filter(Boolean)
+      : []
+    const assignedPersonNames = foremanView
+      ? assignedPersonIds.map((id) => nameByPersonId?.get(id)?.trim() ?? '')
+      : []
+
+    const phase = foremanView
+      ? phaseForScheduleItem({
+          name: sched.name,
+          type: sched.type === 'office' ? 'office' : 'field',
+        })
+      : null
 
     items.push({
       scheduleItemId: sched.id,
@@ -489,6 +497,8 @@ export async function fetchCrewProjectList(
       status: normalizeDrywallProjectStatus(project.status),
       measureWorkflowStatus,
       assignedPersonNames,
+      assignedPersonIds,
+      phase,
     })
   }
 

@@ -1,4 +1,5 @@
 import type { ScheduleItemTask } from '@/services/scheduleService'
+import type { SchedulePhase } from '@/components/drywall/schedule/scheduleItemStatusStyles'
 
 export interface CrewInviteToken {
   id: string
@@ -52,6 +53,13 @@ export interface CrewProjectListItem {
    * Empty for regular crew (UI skips the assignee line).
    */
   assignedPersonNames: string[]
+  /**
+   * Raw assigned_persons ids — foreman list only (for person filter).
+   * Empty for regular crew.
+   */
+  assignedPersonIds: string[]
+  /** Schedule phase — foreman list only (for phase filter). */
+  phase: SchedulePhase | null
 }
 
 export interface CrewProjectScheduleEntry {
