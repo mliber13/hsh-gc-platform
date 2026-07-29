@@ -9,11 +9,10 @@ import { fetchCommsUnreadSummary } from '@/services/commsReadStateService'
 import type { CommsUnreadEntry } from '@/types/crew'
 import { cn } from '@/lib/utils'
 
-// Stopgap for egress: the unread poll currently fetches full project metadata (~11 MB across
-// all projects) every tick, so a 60s interval was a major egress driver. Widened to 5 min until
-// the real fix lands (return only the comms log via a scalar RPC, not full metadata). Once the
-// payload is tiny, this can go back to a short interval cheaply.
-const POLL_MS = 300_000
+// Unread is computed server-side via the comms_unread_for_projects RPC (scalar counts) and the
+// project list is id+name only — so a short poll is cheap now. 60s balances timely notifications
+// vs cost. (Was 5 min as an egress stopgap, before the count RPC replaced the full-metadata haul.)
+const POLL_MS = 60_000
 
 interface CommsNotificationBellProps {
   scope?: 'operator' | 'crew'
