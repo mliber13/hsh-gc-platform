@@ -136,6 +136,88 @@
         "finisherIncludeLaborBurden": true,
         "prepCleanIncludeLaborBurden": true
       }
+    },
+    {
+      "id": "component-material-carry",
+      "name": "Component Material Carry",
+      "v2Quote": {
+        "version": 2,
+        "sqft": 0,
+        "wastePercentage": 0,
+        "materialRate": 0.66,
+        "boardOnlyMaterialRate": 0.66,
+        "hangerRate": 0.35,
+        "finisherRate": 0.45,
+        "prepCleanRate": 0,
+        "overheadPercentage": 0,
+        "profitPercentage": 0,
+        "salesTaxRate": 0,
+        "drywallScope": "hang_and_finish",
+        "hangLayers": 1,
+        "finishLayers": 1,
+        "breakdowns": [],
+        "options": [],
+        "hangerIncludeLaborBurden": true,
+        "finisherIncludeLaborBurden": true,
+        "prepCleanIncludeLaborBurden": true,
+        "includeMetalStudFraming": true,
+        "metalStudWastePercentage": 0,
+        "metalStudLaborRate": 1,
+        "metalStudStudRates": {
+          "3.625_20": 0.5
+        },
+        "metalStudTrackRates": {
+          "3.625_20": 0.4
+        },
+        "metalStudEntries": [
+          {
+            "wallLf": 100,
+            "wallHeight": 10,
+            "spacing": 16,
+            "tracksPerRun": 2,
+            "size": "3.625",
+            "gauge": "20"
+          }
+        ],
+        "includeSuspendedGrid": true,
+        "suspendedGridSqft": 400,
+        "suspendedGridWastePercentage": 0,
+        "carpenterRate": 0.5,
+        "shiny90Rate": 2,
+        "mainsRate": 10,
+        "tees4ftRate": 5,
+        "wireRate": 0.25,
+        "lagsRate": 0.5,
+        "includeAcousticCeiling": true,
+        "acousticCeilingSqft": 200,
+        "acousticCeilingWastePercentage": 0,
+        "acousticCeilingTileRate": 1.25,
+        "acousticCeilingLaborRate": 0.4,
+        "acousticWallAngleCount": 10,
+        "acousticWallAngleRate": 3,
+        "acousticMainsCount": 5,
+        "acousticMainsRate": 8,
+        "includeInsulation": true,
+        "insulationWastePercentage": 0,
+        "insulationCeilingLaborRate": 0.2,
+        "insulationWallLaborRate": 0.15,
+        "insulationEntries": [
+          {
+            "location": "Wall",
+            "sqft": 100,
+            "type": "r13",
+            "face": "unfaced",
+            "materialRate": 0.5
+          },
+          {
+            "location": "Ceiling",
+            "sqft": 50,
+            "type": "r19",
+            "face": "unfaced",
+            "materialRate": 0.6
+          }
+        ]
+      }
     }
   ],
   "catalogsPayload": {

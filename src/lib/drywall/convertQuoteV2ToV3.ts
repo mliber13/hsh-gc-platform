@@ -6,6 +6,7 @@ import type {
   QuoteLineItem,
   QuoteOption,
 } from '@/types/drywall'
+import { buildDrywallQuoteCalculations } from './buildDrywallQuoteCalculations'
 import { hydrateDrywallQuote } from './createEmptyDrywallQuote'
 import { createEmptyDrywallQuoteV3 } from './createEmptyDrywallQuoteV3'
 import { generateQuoteId } from './drywallQuoteHelpers'
@@ -77,6 +78,8 @@ export function buildV3FromV2(v2: DrywallQuote): DrywallQuoteV3 {
     hanger_include_labor_burden: v2.hangerIncludeLaborBurden !== false,
     finisher_include_labor_burden: v2.finisherIncludeLaborBurden !== false,
     prep_clean_include_labor_burden: v2.prepCleanIncludeLaborBurden !== false,
+    // v2 component labor always embeds LABOR_TAX_RATE (×1.25); keep v3 in lockstep.
+    component_include_labor_burden: true,
     lineItems,
     alternates,
     pdf_settings: mapV2PdfSettingsToV3(v2.pdfSettings),
@@ -138,8 +141,16 @@ function buildDrywallStarterLines(v2: DrywallQuote): QuoteLineItem[] {
   ]
 }
 
+/** Back-compute $/unit from a v2 aggregate so qty × rate preserves dollars. */
+function customRateFromV2Total(total: number, divisor: number): number | undefined {
+  if (!(total > 0) || !(divisor > 0)) return undefined
+  return total / divisor
+}
+
 function buildComponentStarterLines(v2: DrywallQuote): QuoteLineItem[] {
   const lines: QuoteLineItem[] = []
+  // Rebuild so convert matches the parity path (pre-tax / pre-burden base fields).
+  const calc = buildDrywallQuoteCalculations(v2) as Record<string, unknown>
 
   if (v2.includeRcChannel) {
     const qty = estimateRcChannelLinearFt(v2)
@@ -161,18 +172,28 @@ function buildComponentStarterLines(v2: DrywallQuote): QuoteLineItem[] {
   if (v2.includeInsulation) {
     const entries = Array.isArray(v2.insulationEntries) ? v2.insulationEntries : []
     if (entries.length > 0) {
+      // Blended rates across ALL entries — do NOT divide aggregates by a single entry's sqft.
+      let totalInsulationSqft = 0
+      for (const entry of entries) {
+        totalInsulationSqft += parseNum(entry.sqft, 0)
+      }
+      const insulationMatRate = customRateFromV2Total(
+        parseNum(calc.insulationMaterialCost),
+        totalInsulationSqft,
+      )
+      const insulationLaborRate = customRateFromV2Total(
+        parseNum(calc.insulationLaborCostBase),
+        totalInsulationSqft,
+      )
       for (const entry of entries) {
         const sqft = parseNum(entry.sqft, 0)
         if (sqft <= 0) continue
-        const isCeiling = String(entry.location ?? '').toLowerCase() === 'ceiling'
-        const laborRate = parseNum(
-          isCeiling ? v2.insulationCeilingLaborRate : v2.insulationWallLaborRate,
-        )
         lines.push(
           buildComponentLine('insulation', {
             location: String(entry.location ?? 'Insulation').trim() || 'Insulation',
             quantity: sqft,
-            custom_labor_rate: laborRate > 0 ? laborRate : undefined,
+            custom_labor_rate: insulationLaborRate,
+            custom_material_rate: insulationMatRate,
             description: `Migrated insulation — ${entry.location ?? 'area'}`,
           }),
         )
@@ -184,13 +205,19 @@ function buildComponentStarterLines(v2: DrywallQuote): QuoteLineItem[] {
     const sqft = parseNum(v2.acousticCeilingPerimeter, 0) // fallback: use tile area if stored elsewhere
     const tileSqft = parseNum((v2 as Record<string, unknown>).acousticCeilingSqft, 0)
     const qty = tileSqft > 0 ? tileSqft : sqft
-    const laborRate = parseNum(v2.acousticCeilingLaborRate)
-    if (qty > 0 || laborRate > 0) {
+    if (qty > 0 || parseNum(calc.acousticCeilingLaborCostBase) > 0) {
       lines.push(
         buildComponentLine('acoustic', {
           location: 'Acoustic ceiling',
           quantity: qty,
-          custom_labor_rate: laborRate > 0 ? laborRate : undefined,
+          custom_labor_rate: customRateFromV2Total(
+            parseNum(calc.acousticCeilingLaborCostBase),
+            qty,
+          ),
+          custom_material_rate: customRateFromV2Total(
+            parseNum(calc.acousticCeilingMaterialCost),
+            qty,
+          ),
           description: 'Migrated acoustic ceiling',
         }),
       )
@@ -203,13 +230,19 @@ function buildComponentStarterLines(v2: DrywallQuote): QuoteLineItem[] {
     for (const entry of entries) {
       totalLf += parseNum(entry.wallLf, 0)
     }
-    const laborRate = parseNum(v2.metalStudLaborRate)
-    if (totalLf > 0 || laborRate > 0) {
+    if (totalLf > 0 || parseNum(calc.metalStudLaborCostBase) > 0) {
       lines.push(
         buildComponentLine('metal_stud', {
           location: 'Metal stud',
           quantity: totalLf,
-          custom_labor_rate: laborRate > 0 ? laborRate : undefined,
+          custom_labor_rate: customRateFromV2Total(
+            parseNum(calc.metalStudLaborCostBase),
+            totalLf,
+          ),
+          custom_material_rate: customRateFromV2Total(
+            parseNum(calc.metalStudMaterialCost),
+            totalLf,
+          ),
           description: 'Migrated metal stud framing',
         }),
       )
@@ -218,13 +251,16 @@ function buildComponentStarterLines(v2: DrywallQuote): QuoteLineItem[] {
 
   if (v2.includeSuspendedGrid) {
     const sqft = parseNum((v2 as Record<string, unknown>).suspendedGridSqft, parseNum(v2.sqft, 0))
-    const laborRate = parseNum(v2.carpenterRate)
-    if (sqft > 0 || laborRate > 0) {
+    if (sqft > 0 || parseNum(calc.carpenterCost) > 0) {
       lines.push(
         buildComponentLine('suspended_grid', {
           location: 'Suspended grid',
           quantity: sqft,
-          custom_labor_rate: laborRate > 0 ? laborRate : undefined,
+          custom_labor_rate: customRateFromV2Total(parseNum(calc.carpenterCost), sqft),
+          custom_material_rate: customRateFromV2Total(
+            parseNum(calc.suspendedGridMaterialCost),
+            sqft,
+          ),
           description: 'Migrated suspended grid (carpenter labor)',
         }),
       )

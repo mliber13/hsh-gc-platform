@@ -70,7 +70,11 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
     },
     test: {
-      include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      include: [
+        'src/**/*.{test,spec}.{ts,tsx}',
+        // Optional harnesses require PARITY_PAYLOAD_PATH (or similar) — include when set.
+        ...(process.env.PARITY_PAYLOAD_PATH ? ['scripts/**/*.harness.test.ts'] : []),
+      ],
       // Optional harnesses (scripts/**/*.harness.test.ts) require env payloads — run explicitly.
       environment: 'node',
     },

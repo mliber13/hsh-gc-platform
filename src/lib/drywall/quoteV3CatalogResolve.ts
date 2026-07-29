@@ -262,11 +262,13 @@ export function isFinisherRateEnabled(line: QuoteLineItem): boolean {
 }
 
 export function isMaterialRateEnabled(line: QuoteLineItem): boolean {
-  return Boolean(line.catalog_id)
+  // Drywall stays catalog-gated; component lines are always rate-editable
+  // (catalog optional — migrated custom rates must remain editable).
+  return line.type === 'drywall' ? Boolean(line.catalog_id) : true
 }
 
 export function isComponentLaborRateEnabled(line: QuoteLineItem): boolean {
-  return line.type !== 'drywall' && Boolean(line.catalog_id)
+  return line.type !== 'drywall'
 }
 
 export function isLaborRateEnabled(line: QuoteLineItem): boolean {

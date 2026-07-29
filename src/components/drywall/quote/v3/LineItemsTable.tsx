@@ -435,8 +435,6 @@ function LineRow({
             onChange={(e) =>
               patch({
                 catalog_id: e.target.value,
-                custom_material_rate: undefined,
-                custom_labor_rate: undefined,
               })
             }
             aria-label={catalogLabel}
