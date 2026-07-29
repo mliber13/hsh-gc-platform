@@ -163,6 +163,7 @@ function parseEstimateRow(values: string[], headers: string[], category: string)
   const totalIndex = findColumnIndex(headers, ['total estimated', 'total']);
   const markupIndex = findColumnIndex(headers, ['markup', 'markup amount']);
   const notesIndex = findColumnIndex(headers, ['notes', 'description']);
+  const subcontractorCostIndex = findColumnIndex(headers, ['subcontractor cost', 'subcontractor', 'sub cost']);
 
   // Parse numeric values
   const quantity = parseNumericValue(values[qtyIndex] || '0');
@@ -182,8 +183,8 @@ function parseEstimateRow(values: string[], headers: string[], category: string)
   
   const notes = values[notesIndex]?.trim();
 
-  // Calculate subcontractor cost (assume 0 for now, can be updated later)
-  const subcontractorCost = 0;
+  // Subcontractor cost — parsed from a sub-cost column when the template has one; 0 otherwise.
+  const subcontractorCost = parseNumericValue(values[subcontractorCostIndex] || '0');
 
   return {
     category: category || 'other',

@@ -44,7 +44,7 @@ interface CategoryVariance {
   actual: number
   variance: number
   variancePercent: number
-  trades: Trade[]
+  trades: Array<Trade & { actual: number }>
 }
 
 interface TradeVariance {
@@ -132,7 +132,7 @@ export function VarianceReport({ project, onBack }: VarianceReportProps) {
         const categoryData = categoryMap.get(trade.category)!
         categoryData.estimated += tradeEstimated
         categoryData.actual += tradeActual
-        categoryData.trades.push(trade)
+        categoryData.trades.push({ ...trade, actual: tradeActual })
       })
 
       // Calculate variance for each category
@@ -340,8 +340,8 @@ export function VarianceReport({ project, onBack }: VarianceReportProps) {
                               {categoryVar.trades.map((trade) => {
                                 const tradeEstimated = trade.totalCost * (1 + (trade.markupPercent || 20) / 100)
                                 
-                                // Get actuals for this specific trade (simplified for now)
-                                const tradeActual = 0 // TODO: Calculate from loaded actuals
+                                // Per-trade actual computed in the data-build loop (from loaded actuals)
+                                const tradeActual = trade.actual
 
                                 const tradeVariance = tradeActual - tradeEstimated
                                 const tradeVariancePercent = tradeEstimated > 0 ? (tradeVariance / tradeEstimated) * 100 : 0
