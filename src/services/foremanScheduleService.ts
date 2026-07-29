@@ -14,6 +14,7 @@ import {
   fetchScheduleItemsForDrywallProject,
   type DrywallProjectScheduleItem,
 } from '@/services/scheduleService'
+import { requestPushNotify } from '@/services/pushService'
 import type { AssignedPersonOption } from '@/components/schedule/AssignedPersonsPicker'
 
 export async function fetchForemanTeamRoster(): Promise<AssignedPersonOption[]> {
@@ -81,6 +82,26 @@ export async function applyForemanScheduleEdit(
   if (error) {
     console.error('foreman_apply_schedule_changes:', error)
     throw new Error(error.message || 'Could not save schedule changes')
+  }
+
+  const personIds = new Set<string>()
+  for (const item of preview.items) {
+    for (const id of item.assigned_persons ?? []) personIds.add(id)
+  }
+  const primary =
+    preview.items.find((i) => i.id === itemId) ?? preview.items[0] ?? null
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (user && personIds.size > 0) {
+    void requestPushNotify({
+      kind: 'schedule',
+      projectId,
+      authorUserId: user.id,
+      assignedPersonIds: [...personIds],
+      itemName: primary?.name,
+      newDate: primary?.start_date,
+    })
   }
 
   return preview

@@ -22,6 +22,7 @@ import { fetchTeam } from '@/services/hrTeamService'
 import { personIsForeman } from '@/services/crewWorkspaceService'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 import { CommsNotificationBell } from '@/components/comms/CommsNotificationBell'
+import { EnableNotificationsControl } from '@/components/push/EnableNotificationsControl'
 
 type ViewAsOption = { id: string; name: string }
 
@@ -161,6 +162,7 @@ export function CrewShell() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : null}
+              <EnableNotificationsControl variant="button" />
               <CommsNotificationBell scope="crew" />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -186,6 +188,9 @@ export function CrewShell() {
           ) : null}
         </header>
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4">
+          {!viewAsPersonId ? (
+            <EnableNotificationsControl variant="banner" className="mb-3" />
+          ) : null}
           <Outlet />
         </main>
       </div>

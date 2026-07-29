@@ -5,6 +5,7 @@
 import { supabase, isOnlineMode } from '@/lib/supabase'
 import { belongsInDrywallWorkspaceFromListScalars } from '@/services/projectVisibility'
 import { requireUserOrgId, getCurrentUserProfile } from '@/services/userService'
+import { requestPushNotify } from '@/services/pushService'
 import { hydrateDrywallQuote } from '@/lib/drywall/createEmptyDrywallQuote'
 import { hydrateDrywallQuoteV3, prepareDrywallQuoteV3ForSave } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { buildV3FromV2, v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
@@ -1640,6 +1641,12 @@ export async function addCommsLogEntry(
     }
     const entry = normalizeCommsLogEntry(data)
     if (!entry) throw new Error('Failed to parse comms entry from server')
+    void notifyCommsPush({
+      projectId,
+      authorUserId: entry.authorUserId ?? authorUserId ?? profile?.id,
+      authorName: entry.author,
+      preview: entry.body,
+    })
     return entry
   }
 
@@ -1659,7 +1666,37 @@ export async function addCommsLogEntry(
     commsLog: [entry, ...existing],
   }
   await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  void notifyCommsPush({
+    projectId,
+    authorUserId: authorUserId ?? profile?.id,
+    authorName: entry.author,
+    preview: entry.body,
+  })
   return entry
+}
+
+async function notifyCommsPush(opts: {
+  projectId: string
+  authorUserId?: string | null
+  authorName?: string
+  preview?: string
+}): Promise<void> {
+  if (!opts.authorUserId) return
+  let projectName: string | undefined
+  try {
+    const project = await fetchDrywallProjectById(opts.projectId)
+    projectName = project?.name
+  } catch {
+    /* best-effort */
+  }
+  await requestPushNotify({
+    kind: 'comms',
+    projectId: opts.projectId,
+    authorUserId: opts.authorUserId,
+    projectName,
+    authorName: opts.authorName,
+    preview: opts.preview,
+  })
 }
 
 export function getProductionTimestampsFromLegacy(

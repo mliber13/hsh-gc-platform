@@ -13,6 +13,9 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
         registerType: 'autoUpdate',
         includeAssets: ['HSH Contractor Logo - Color.png', 'vite.svg'],
         manifest: {
@@ -46,37 +49,9 @@ export default defineConfig(({ mode }) => {
             }
           ]
         },
-        workbox: {
+        injectManifest: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-          // Allow the current main chunk to be precached; code-splitting remains a separate task.
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-          // Clean up old caches on update
-          cleanupOutdatedCaches: true,
-          // Skip waiting and claim clients immediately
-          skipWaiting: true,
-          clientsClaim: true,
-          // Handle missing precache entries gracefully
-          navigateFallback: 'index.html',
-          navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/],
-          // Handle precache errors gracefully
-          runtimeCaching: [
-            {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'google-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                }
-              }
-            }
-          ],
-          // Add error handling for missing precache entries
-          importScripts: [],
         },
         // Force service worker update
         devOptions: {
@@ -95,7 +70,8 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
     },
     test: {
-      include: ['src/**/*.{test,spec}.{ts,tsx}', 'scripts/**/*.test.ts'],
+      include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      // Optional harnesses (scripts/**/*.harness.test.ts) require env payloads — run explicitly.
       environment: 'node',
     },
   }

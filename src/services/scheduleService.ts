@@ -5,6 +5,7 @@ import { cascadeSchedule, workdaysBetween } from '@/lib/scheduleDateMath'
 import type { ConfirmationStatus } from '@/types'
 import type { ScheduleItem } from '@/types'
 import { isVisibleInGcApp } from './projectVisibility'
+import { requestPushNotify } from './pushService'
 import { requireUserOrgId } from './userService'
 
 export type PortfolioTypeFilter = 'all' | 'gc' | 'drywall'
@@ -427,9 +428,12 @@ async function persistCascadedDates(items: ScheduleItem[]): Promise<void> {
   )
 }
 
-async function runCascadeForProject(projectId: string): Promise<void> {
+async function runCascadeForProject(projectId: string): Promise<{
+  changedItemIds: string[]
+  items: DrywallProjectScheduleItem[]
+}> {
   const items = await fetchScheduleItemsForDrywallProject(projectId)
-  if (items.length === 0) return
+  if (items.length === 0) return { changedItemIds: [], items }
 
   const models = items.map(toScheduleItemModel)
   // Drywall uses parallel-zero semantic: lag=0 = same day as predecessor (Stock + Scaffold/Prep pattern).
@@ -444,6 +448,11 @@ async function runCascadeForProject(projectId: string): Promise<void> {
 
   if (result.changes.length > 0) {
     await persistCascadedDates(result.items)
+  }
+
+  return {
+    changedItemIds: result.changes.map((c) => c.itemId),
+    items,
   }
 }
 
@@ -507,7 +516,40 @@ export async function createScheduleItemForDrywallProject(
   }
 
   const refreshed = await fetchScheduleItemsForDrywallProject(projectId)
-  return refreshed.find((item) => item.id === itemId) ?? mapDrywallScheduleRow(data as DrywallScheduleItemRow)
+  const created =
+    refreshed.find((item) => item.id === itemId) ??
+    mapDrywallScheduleRow(data as DrywallScheduleItemRow)
+
+  void notifySchedulePush({
+    projectId,
+    itemName: created.name,
+    newDate: created.start_date,
+    assignedPersonIds: created.assigned_persons,
+  })
+
+  return created
+}
+
+async function notifySchedulePush(opts: {
+  projectId: string
+  itemName: string
+  newDate?: string
+  assignedPersonIds: string[]
+}): Promise<void> {
+  const personIds = [...new Set(opts.assignedPersonIds.filter(Boolean))]
+  if (personIds.length === 0) return
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
+  await requestPushNotify({
+    kind: 'schedule',
+    projectId: opts.projectId,
+    authorUserId: user.id,
+    assignedPersonIds: personIds,
+    itemName: opts.itemName,
+    newDate: opts.newDate,
+  })
 }
 
 export async function updateScheduleItemForDrywallProject(
@@ -584,7 +626,33 @@ export async function updateScheduleItemForDrywallProject(
 
   if (error) throw error
 
-  await runCascadeForProject(current.project_id)
+  let cascadeChangedIds: string[] = []
+  let cascadeItems: DrywallProjectScheduleItem[] = []
+  try {
+    const cascade = await runCascadeForProject(current.project_id)
+    cascadeChangedIds = cascade.changedItemIds
+    cascadeItems = cascade.items
+  } catch (e) {
+    if (e instanceof DrywallScheduleCascadeError) throw e
+    throw e
+  }
+
+  const personIds = new Set<string>([
+    ...current.assigned_persons,
+    ...(patch.assignedPersons ?? []),
+  ])
+  for (const id of cascadeChangedIds) {
+    const row = cascadeItems.find((i) => i.id === id)
+    for (const pid of row?.assigned_persons ?? []) personIds.add(pid)
+  }
+
+  const nextStart = toDateOnly(patch.startDate ?? current.start_date)
+  void notifySchedulePush({
+    projectId: current.project_id,
+    itemName: (patch.name ?? current.name).trim() || current.name,
+    newDate: nextStart,
+    assignedPersonIds: [...personIds],
+  })
 }
 
 /**
