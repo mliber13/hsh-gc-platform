@@ -9,6 +9,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
+import {
+  notifyUsersBestEffort,
+  resolveProjectOperators,
+} from '../_shared/webpush.ts'
 
 const shareCors = {
   ...corsHeaders,
@@ -192,6 +196,36 @@ serve(async (req) => {
         status: 'via_link',
       })
       if (insErr) return json({ error: insErr.message }, 500)
+
+      // Best-effort operator push — never blocks the customer response.
+      if (projectId) {
+        try {
+          const [{ data: proj }, { data: contactRow }, operatorIds] = await Promise.all([
+            admin.from('projects').select('name').eq('id', projectId).maybeSingle(),
+            admin
+              .from('customer_project_contacts')
+              .select('contact_name')
+              .eq('organization_id', link.organization_id)
+              .eq('project_id', projectId)
+              .eq('contact_phone', link.contact_phone)
+              .maybeSingle(),
+            resolveProjectOperators(admin, projectId),
+          ])
+          const projectName = (proj?.name as string | undefined)?.trim() || 'Project'
+          const contactName =
+            (contactRow?.contact_name as string | undefined)?.trim() || 'Customer'
+          const preview = message.slice(0, 120)
+          await notifyUsersBestEffort(admin, operatorIds, {
+            title: `${projectName} — customer message`,
+            body: `${contactName}: ${preview}`,
+            url: `/drywall/projects/${projectId}/info`,
+            tag: `custcomms-${projectId}`,
+          })
+        } catch (pushErr) {
+          console.warn('customer-schedule-share push notify failed:', pushErr)
+        }
+      }
+
       return json({ success: true })
     }
 
