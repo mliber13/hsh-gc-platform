@@ -8,6 +8,8 @@ import {
   isWithinInterval,
 } from 'date-fns'
 import { Card, CardContent } from '@/components/ui/card'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { getItemColsForWeek, toLocalDate } from '@/lib/scheduleCalendarUtils'
 import { packLanes } from '@/lib/drywall/scheduleLanes'
 import { projectColorClass } from '@/lib/drywall/projectColor'
@@ -15,8 +17,13 @@ import { cn } from '@/lib/utils'
 import type { CrossProjectScheduleItem } from '@/services/drywallScheduleAggregateService'
 import {
   phaseForScheduleItem,
+  SCHEDULE_ITEM_STATUS_CLASS,
+  SCHEDULE_ITEM_STATUS_LABELS,
+  SCHEDULE_PHASE_DOT_CLASS,
   SCHEDULE_PHASE_LEFT_BORDER_CLASS,
 } from '@/components/drywall/schedule/scheduleItemStatusStyles'
+
+const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 import {
   filterPortfolioItemsInRange,
   maxLanesForWindow,
@@ -60,6 +67,8 @@ export function DrywallPortfolioCalendar({
   onItemClick,
 }: Props) {
   const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(() => new Set())
+  const isMobile = useIsMobile()
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null)
 
   useEffect(() => {
     setExpandedWeeks(new Set())
@@ -98,6 +107,153 @@ export function DrywallPortfolioCalendar({
       next.delete(weekIdx)
       return next
     })
+  }
+
+  // ── Mobile: compact dot-grid month that fits the screen; tap a day for detail. ──
+  if (isMobile) {
+    const dayItems = (day: Date): CrossProjectScheduleItem[] => {
+      const key = format(day, 'yyyy-MM-dd')
+      return itemsInRange.filter((it) => it.startDate <= key && it.endDate >= key)
+    }
+    const selectedItems = selectedDay ? dayItems(selectedDay) : []
+
+    return (
+      <Card>
+        <CardContent className="p-2">
+          <div className="grid grid-cols-7 gap-1">
+            {WEEKDAY_INITIALS.map((name, i) => (
+              <div
+                key={`${name}-${i}`}
+                className="pb-1 text-center text-[11px] font-bold uppercase text-muted-foreground"
+              >
+                {name}
+              </div>
+            ))}
+
+            {calendarDays.map((day) => {
+              const items = dayItems(day)
+              const primary = isPrimaryDay(day)
+              const today = isToday(day)
+              return (
+                <button
+                  key={day.toISOString()}
+                  type="button"
+                  onClick={() => setSelectedDay(day)}
+                  className={cn(
+                    'flex min-h-[46px] flex-col items-center gap-1 rounded-md border border-border/50 p-1 transition-colors active:bg-muted/60',
+                    primary ? 'bg-card' : 'bg-muted/20',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold',
+                      today
+                        ? 'bg-primary text-primary-foreground'
+                        : primary
+                          ? 'text-foreground'
+                          : 'text-muted-foreground/50',
+                    )}
+                  >
+                    {format(day, 'd')}
+                  </span>
+                  {items.length > 0 && (
+                    <span className="flex flex-wrap items-center justify-center gap-0.5">
+                      {items.slice(0, 4).map((it, idx) => (
+                        <span
+                          key={`${it.id}-${idx}`}
+                          className={cn(
+                            'size-1.5 rounded-full',
+                            projectColorClass(it.projectId).bg,
+                          )}
+                          aria-hidden
+                        />
+                      ))}
+                      {items.length > 4 && (
+                        <span className="text-[9px] font-semibold leading-none text-muted-foreground">
+                          +{items.length - 4}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {itemsInRange.length === 0 && (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              No drywall schedule items for {rangeLabel}.
+            </p>
+          )}
+        </CardContent>
+
+        <Sheet open={selectedDay !== null} onOpenChange={(open) => !open && setSelectedDay(null)}>
+          <SheetContent side="bottom" className="max-h-[70vh] overflow-y-auto">
+            <SheetHeader className="mb-3 text-left">
+              <SheetTitle>
+                {selectedDay ? format(selectedDay, 'EEEE, MMM d') : ''}
+              </SheetTitle>
+            </SheetHeader>
+            {selectedItems.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Nothing scheduled this day.
+              </p>
+            ) : (
+              <div className="space-y-2 pb-4">
+                {selectedItems.map((item) => {
+                  const phase = phaseForScheduleItem(item)
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDay(null)
+                        onItemClick(item)
+                      }}
+                      className="flex w-full flex-col gap-1.5 rounded-lg border bg-card p-3 text-left transition-colors active:bg-muted/50"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            className={cn(
+                              'size-2.5 shrink-0 rounded-sm border',
+                              projectColorClass(item.projectId).bg,
+                              projectColorClass(item.projectId).border,
+                            )}
+                            aria-hidden
+                          />
+                          <span className="truncate text-sm font-medium">
+                            {item.projectName}
+                          </span>
+                        </span>
+                        <span
+                          className={cn(
+                            'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium',
+                            SCHEDULE_ITEM_STATUS_CLASS[item.status],
+                          )}
+                        >
+                          {SCHEDULE_ITEM_STATUS_LABELS[item.status]}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            'inline-block size-2.5 shrink-0 rounded-full',
+                            SCHEDULE_PHASE_DOT_CLASS[phase],
+                          )}
+                          aria-hidden
+                        />
+                        <span className="text-sm font-medium">{item.name}</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
+      </Card>
+    )
   }
 
   return (

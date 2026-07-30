@@ -1,10 +1,29 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, History, Plus, RefreshCw, UserX } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  History,
+  MoreHorizontal,
+  Plus,
+  RefreshCw,
+  SlidersHorizontal,
+  UserX,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { projectColorClass } from '@/lib/drywall/projectColor'
 import { cn } from '@/lib/utils'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
@@ -20,6 +39,7 @@ import { fetchTeam } from '@/services/hrTeamService'
 import { isDrywallProjectClosed } from '@/types/drywall'
 import {
   phaseForScheduleItem,
+  SCHEDULE_PHASE_DOT_CLASS,
   SCHEDULE_PHASE_LABELS,
   SCHEDULE_PHASE_ORDER,
   type SchedulePhase,
@@ -60,11 +80,30 @@ export function DrywallSchedulePortfolioPage() {
   const { effectiveRole } = usePermissions()
   const canViewActivity = canWriteDrywallProject(effectiveRole)
 
+  const isMobile = useIsMobile()
+
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<CrossProjectScheduleItem[]>([])
   const [scope, setScope] = useState<ScopeFilter>('active')
   const [viewWindow, setViewWindow] = useState<PortfolioViewWindow>('month')
   const [displayMode, setDisplayMode] = useState<DisplayMode>('calendar')
+  const displayModeTouched = useRef(false)
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  const [openFilterSection, setOpenFilterSection] = useState<
+    'projects' | 'people' | 'phase' | null
+  >(null)
+
+  // Default to List on mobile, Calendar on desktop — until the user picks one.
+  useEffect(() => {
+    if (!displayModeTouched.current) {
+      setDisplayMode(isMobile ? 'list' : 'calendar')
+    }
+  }, [isMobile])
+
+  const chooseDisplayMode = (mode: DisplayMode) => {
+    displayModeTouched.current = true
+    setDisplayMode(mode)
+  }
   const [anchorDate, setAnchorDate] = useState(() => new Date())
   const [dialog, setDialog] = useState<DialogState>({ open: false })
   const [addProjectOpen, setAddProjectOpen] = useState(false)
@@ -204,9 +243,30 @@ export function DrywallSchedulePortfolioPage() {
     })
   }, [itemsInRange, selectedProjectIds, selectedPersonIds, selectedPhases, showUnassignedOnly])
 
+  const activeFilterCount =
+    selectedProjectIds.size +
+    selectedPersonIds.size +
+    selectedPhases.size +
+    (showUnassignedOnly ? 1 : 0)
+
   const toggleProject = (projectId: string) => {
     setSelectedProjectIds((current) => toggleSetMembership(current, projectId))
   }
+
+  const clearAllFilters = () => {
+    setSelectedProjectIds(new Set())
+    setSelectedPersonIds(new Set())
+    setSelectedPhases(new Set())
+    setShowUnassignedOnly(false)
+  }
+
+  const chipClass = (active: boolean) =>
+    cn(
+      'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+      active
+        ? 'border-primary bg-primary text-primary-foreground'
+        : 'border-border bg-card text-foreground',
+    )
 
   const handleItemClick = async (item: CrossProjectScheduleItem) => {
     try {
@@ -252,12 +312,381 @@ export function DrywallSchedulePortfolioPage() {
 
   return (
     <div className="space-y-2 pt-2 pb-10">
-      <div className="grid grid-cols-3 items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 py-2.5 shadow-sm">
+      {/* ── Mobile toolbar ── */}
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/60 p-2 shadow-sm md:hidden">
+        <div className="flex items-center gap-2">
+          <div className="flex shrink-0 rounded-lg border border-border/60 bg-muted/30 p-0.5">
+            <button
+              type="button"
+              onClick={() => chooseDisplayMode('calendar')}
+              className={cn(
+                'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                displayMode === 'calendar'
+                  ? 'bg-card text-foreground shadow'
+                  : 'text-muted-foreground',
+              )}
+            >
+              Cal
+            </button>
+            <button
+              type="button"
+              onClick={() => chooseDisplayMode('list')}
+              className={cn(
+                'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                displayMode === 'list' ? 'bg-card text-foreground shadow' : 'text-muted-foreground',
+              )}
+            >
+              List
+            </button>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 flex-1 gap-1 text-xs"
+            onClick={() => setMobileFiltersOpen(true)}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
+
+          {legendProjects.length > 0 && (
+            <Popover open={addProjectOpen} onOpenChange={setAddProjectOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0">
+                  <Plus className="h-4 w-4" />
+                  <span className="sr-only">Add item</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 p-2">
+                <p className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Add item to which job?
+                </p>
+                <div className="max-h-72 space-y-0.5 overflow-y-auto">
+                  {legendProjects.map((project) => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      onClick={() => void handleAddItem(project.id)}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                    >
+                      <span
+                        className={cn(
+                          'inline-block size-2.5 shrink-0 rounded-full',
+                          projectColorClass(project.id).bg,
+                        )}
+                      />
+                      <span className="truncate">{project.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">More</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setExpandAll((v) => !v)}>
+                {expandAll ? 'Collapse all' : 'Expand all'}
+              </DropdownMenuItem>
+              {canViewActivity ? (
+                <DropdownMenuItem onClick={() => setActivityOpen(true)}>Activity</DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem onClick={() => void load()}>Refresh</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="flex items-center justify-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setAnchorDate((d) => shiftPortfolioAnchor(d, viewWindow, -1))}
+            aria-label="Previous range"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="min-w-[9rem] text-center text-sm font-semibold tracking-tight">
+            {rangeLabel}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setAnchorDate((d) => shiftPortfolioAnchor(d, viewWindow, 1))}
+            aria-label="Next range"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setAnchorDate(new Date())}>
+            Today
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Mobile filters & view sheet ── */}
+      <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+          <SheetHeader className="text-left">
+            <SheetTitle>Filters &amp; view</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-4 py-3">
+            <section>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                View
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {VIEW_WINDOW_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={chipClass(viewWindow === opt.value)}
+                    onClick={() => setViewWindow(opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Jobs shown
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  className={chipClass(scope === 'active')}
+                  onClick={() => setScope('active')}
+                >
+                  Active
+                </button>
+                <button
+                  type="button"
+                  className={chipClass(scope === 'all')}
+                  onClick={() => setScope('all')}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className={chipClass(showUnassignedOnly)}
+                  onClick={() => setShowUnassignedOnly((v) => !v)}
+                >
+                  Unassigned only
+                  {unassignedCount > 0 ? ` (${unassignedCount})` : ''}
+                </button>
+              </div>
+            </section>
+
+            {(legendProjects.length > 0 || personOptions.length > 0 || phaseOptions.length > 0) && (
+              <div className="divide-y rounded-lg border">
+                {legendProjects.length > 0 && (
+                  <div>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium"
+                      onClick={() =>
+                        setOpenFilterSection((s) => (s === 'projects' ? null : 'projects'))
+                      }
+                    >
+                      <span>
+                        Projects
+                        {selectedProjectIds.size > 0 ? (
+                          <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                            {selectedProjectIds.size}
+                          </span>
+                        ) : null}
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 text-muted-foreground transition-transform',
+                          openFilterSection === 'projects' && 'rotate-180',
+                        )}
+                      />
+                    </button>
+                    {openFilterSection === 'projects' && (
+                      <div className="max-h-64 overflow-y-auto border-t pb-1">
+                        {legendProjects.map((project) => {
+                          const active = selectedProjectIds.has(project.id)
+                          return (
+                            <button
+                              key={project.id}
+                              type="button"
+                              onClick={() => toggleProject(project.id)}
+                              className={cn(
+                                'flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors',
+                                active ? 'bg-primary/10' : 'hover:bg-muted/50',
+                              )}
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className={cn(
+                                    'size-2.5 shrink-0 rounded-sm border',
+                                    projectColorClass(project.id).bg,
+                                    projectColorClass(project.id).border,
+                                  )}
+                                  aria-hidden
+                                />
+                                <span className="truncate">{project.name}</span>
+                              </span>
+                              {active && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {personOptions.length > 0 && (
+                  <div>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium"
+                      onClick={() =>
+                        setOpenFilterSection((s) => (s === 'people' ? null : 'people'))
+                      }
+                    >
+                      <span>
+                        People
+                        {selectedPersonIds.size > 0 ? (
+                          <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                            {selectedPersonIds.size}
+                          </span>
+                        ) : null}
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 text-muted-foreground transition-transform',
+                          openFilterSection === 'people' && 'rotate-180',
+                        )}
+                      />
+                    </button>
+                    {openFilterSection === 'people' && (
+                      <div className="max-h-64 overflow-y-auto border-t pb-1">
+                        {personOptions.map((person) => {
+                          const active = selectedPersonIds.has(person.id)
+                          return (
+                            <button
+                              key={person.id}
+                              type="button"
+                              onClick={() =>
+                                setSelectedPersonIds((cur) => toggleSetMembership(cur, person.id))
+                              }
+                              className={cn(
+                                'flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors',
+                                active ? 'bg-primary/10' : 'hover:bg-muted/50',
+                              )}
+                            >
+                              <span className="truncate">{person.name}</span>
+                              {active && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {phaseOptions.length > 0 && (
+                  <div>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium"
+                      onClick={() => setOpenFilterSection((s) => (s === 'phase' ? null : 'phase'))}
+                    >
+                      <span>
+                        Phase
+                        {selectedPhases.size > 0 ? (
+                          <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                            {selectedPhases.size}
+                          </span>
+                        ) : null}
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 text-muted-foreground transition-transform',
+                          openFilterSection === 'phase' && 'rotate-180',
+                        )}
+                      />
+                    </button>
+                    {openFilterSection === 'phase' && (
+                      <div className="max-h-64 overflow-y-auto border-t pb-1">
+                        {phaseOptions.map((phase) => {
+                          const active = selectedPhases.has(phase)
+                          return (
+                            <button
+                              key={phase}
+                              type="button"
+                              onClick={() =>
+                                setSelectedPhases((cur) => toggleSetMembership(cur, phase))
+                              }
+                              className={cn(
+                                'flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors',
+                                active ? 'bg-primary/10' : 'hover:bg-muted/50',
+                              )}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span
+                                  className={cn(
+                                    'inline-block size-2.5 rounded-full',
+                                    SCHEDULE_PHASE_DOT_CLASS[phase],
+                                  )}
+                                  aria-hidden
+                                />
+                                {SCHEDULE_PHASE_LABELS[phase]}
+                              </span>
+                              {active && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-2 border-t pt-3">
+              <button
+                type="button"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-40"
+                onClick={clearAllFilters}
+                disabled={activeFilterCount === 0}
+              >
+                Clear filters
+              </button>
+              <Button type="button" size="sm" onClick={() => setMobileFiltersOpen(false)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Desktop toolbar ── */}
+      <div className="hidden gap-2 rounded-lg border border-border bg-muted/60 px-3 py-2.5 shadow-sm md:grid md:grid-cols-3 md:items-center">
         <div className="flex flex-wrap items-center justify-center gap-2">
           <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
             <button
               type="button"
-              onClick={() => setDisplayMode('calendar')}
+              onClick={() => chooseDisplayMode('calendar')}
               className={cn(
                 'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                 displayMode === 'calendar'
@@ -269,7 +698,7 @@ export function DrywallSchedulePortfolioPage() {
             </button>
             <button
               type="button"
-              onClick={() => setDisplayMode('list')}
+              onClick={() => chooseDisplayMode('list')}
               className={cn(
                 'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                 displayMode === 'list'

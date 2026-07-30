@@ -54,23 +54,29 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3">
       {/* Left: sidebar trigger + project selector */}
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mx-1 h-4" />
         <ProjectSelector />
         <DealSelector />
+        {/* Mobile: in-flow, truncating title so it never overlaps the right icons. */}
+        {title && (
+          <h1 className="truncate text-base font-semibold text-foreground md:hidden">
+            {title}
+          </h1>
+        )}
       </div>
 
-      {/* Center: page title (absolute-positioned so it stays centered
-          regardless of left/right content widths) */}
+      {/* Desktop: page title absolute-centered regardless of left/right widths.
+          Hidden on mobile (rendered in-flow on the left instead). */}
       {title && (
-        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2">
+        <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 md:block">
           <h1 className="text-base font-semibold text-foreground">{title}</h1>
         </div>
       )}
 
       {/* Right: workspace switcher */}
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         <EnableNotificationsControl variant="button" />
         <FieldReviewNotificationBell />
         <CommsNotificationBell scope="operator" />
