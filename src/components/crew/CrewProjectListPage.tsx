@@ -412,8 +412,13 @@ export function CrewProjectListPage() {
         </div>
       ) : (
         filteredItems.map((item) => {
-          const dateLabel = format(parseISO(item.scheduleItemDate), 'EEE MMM d')
-          const isToday = item.scheduleItemDate === todayStr
+          const startLabel = format(parseISO(item.scheduleItemDate), 'EEE MMM d')
+          const isRange = item.scheduleItemEndDate !== item.scheduleItemDate
+          const dateLabel = isRange
+            ? `${startLabel} – ${format(parseISO(item.scheduleItemEndDate), 'EEE MMM d')}`
+            : startLabel
+          const isToday =
+            todayStr >= item.scheduleItemDate && todayStr <= item.scheduleItemEndDate
 
           return (
             <Card
