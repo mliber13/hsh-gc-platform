@@ -31,7 +31,7 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 | ~~P0-3~~ | ✅ **DONE by design** (`cbeaa25`) — ~~component catalogs empty~~ | Fix 2 makes catalogs optional for correctness. Residual: seed catalogs in Settings (convenience) | `catalogSeeds.ts` |
 | ~~P0-4~~ | ✅ **DONE** (`d50d1a9`+`bdf7668`, applied 2026-07-30) — ~~anon data leaks~~ | Token-keyed SECURITY DEFINER RPCs replace the anon reads/writes; `USING(true)` policies dropped post-verify. Anon direct selects → 0 rows | migration `20260730130313` (remote) |
 | ~~P0-5~~ | ✅ **DONE** (`d50d1a9`, applied 2026-07-30) — ~~`v_meetings_summary` RLS bypass~~ | Recreated `WITH (security_invoker=on)`; confirmed in remote reloptions | same migration |
-| P0-6 | 🧹⚠️ **Crew materials/pay invisible (Roberto)** | Root cause = `get_my_linked_position_name` returns null (stale `linked_*` id after roster re-import) → `specialty='unknown'` → materials `[]`, board counts hidden, pay blanked. Masked in operator preview | `crewWorkspaceService.ts:598-601, 660-668, 868-878`; RPC `20260625130000` |
+| ~~P0-6~~ → P1 | ⚠️ **Acute case RESOLVED 2026-07-30** — Roberto re-linked, materials/pay now show. **Root fragility remains** (downgraded to P1 hardening): stale `linked_*` id after roster re-import → `get_my_linked_position_name` null → `specialty='unknown'` → materials `[]`/pay blanked, **silently**. Next drift re-triggers it. See P1 Crew "fix properly." | `crewWorkspaceService.ts:598-601, 660-668, 868-878`; RPC `20260625130000` |
 | ~~P0-7~~ | ✅ **DONE** (`1b58123`) — ~~fake numbers in reports~~ | VarianceReport renders computed per-trade actual; excelParser parses a sub-cost column | `VarianceReport.tsx:343`, `excelParser.ts:186` |
 | P0-8 | 🧹💡 **Apply pending migrations** | Supplier/customer-share batch (`20260723xxxxxx`–`20260724xxxxxx`) and `025_add_file_path...` look unapplied; code has workarounds (`project_documents` omits `file_path`) | `supabaseService.ts:4428,4546`; verify `migration list` |
 
@@ -116,7 +116,7 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 | ~~High~~ ✅ | ~~Anon-readable `crew_invite_tokens`/`quote_requests`/`submitted_quotes`~~ — DONE `d50d1a9`+`bdf7668` | RPCs + policy drop, applied to remote |
 | ~~High~~ ✅ | ~~`v_meetings_summary` RLS bypass~~ — DONE `d50d1a9` | `security_invoker=on` |
 | ~~Med~~ ✅ | ~~`supabase db push` broken — migration history diverged~~ — DONE `0d9ad61` (history repaired; push clean) | supabase CLI |
-| High | Crew specialty/linkage blanks materials+pay | `crewWorkspaceService.ts:598-601` |
+| Med | Crew specialty/linkage blanks materials+pay **silently** (acute Roberto case fixed 2026-07-30; hardening remains) | `crewWorkspaceService.ts:598-601` |
 | ~~Med~~ ✅ | ~~VarianceReport per-trade actual = 0~~ — DONE `1b58123` | `VarianceReport.tsx:343` |
 | ~~Med~~ ✅ | ~~excelParser sub cost = 0~~ — DONE `1b58123` | `excelParser.ts:186` |
 | Med | Backup restore stub | `backupService.ts:415` |
