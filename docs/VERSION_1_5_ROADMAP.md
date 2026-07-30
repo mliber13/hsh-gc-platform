@@ -14,6 +14,8 @@ Legend for source of each item:
 The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy end-to-end, close the security holes, and finish the crew workflow — then draw the line.** Everything past P1 is real but can wait.
 
 **Corrections from investigation (memory was stale):**
+- ✅ **Quote-trust batch (P0-1 + P0-2 + P0-3) is DONE** (commit `cbeaa25`, verified 2026-07-30). Converter back-computes component material+labor for all four trades (insulation blended); component rate cells always editable; catalog pick no longer wipes carried rate; RHM verified $0.00 delta via new parity engine. P0-3 resolved by design — Fix 2 makes catalogs optional for correctness. **Residual (convenience only, not a blocker):** seed Metal Stud / Suspended Grid / Door Install catalogs in Settings → Catalogs.
+- ✅ **Fake numbers in reports (P0-7) is DONE** (commit `1b58123`, verified 2026-07-30). VarianceReport renders the computed per-trade actual; excelParser parses a subcontractor-cost column.
 - ✅ **Crew signup orphan-viewer hardening is DONE** (commit `c9c43c0`: sign-out-on-failure + `PendingAccount` gate). Close it. (Optional defense-in-depth RLS audit only.)
 - ✅ **Crew time clock is DONE** (migration `20260716210000_crew_time_clock.sql` + Clock in/out UI on `/crew`). Remaining is polish (global indicator, geofence/lunch), not "build it."
 - ⚠️ **The Roberto job-info bug is real but NOT `show_job_info` id-mismatch** — root cause is the **specialty/linkage** gate (see P0-6). The uncommitted stopgap only treats the symptom.
@@ -24,18 +26,16 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 
 | # | Item | Why it's P0 | Where |
 |---|------|-------------|-------|
-| P0-1 | 🧹🗣️ **v2→v3 converter drops material** for insulation, acoustic, metal_stud, suspended_grid | Silent **under-pricing** on every converted multi-trade quote — exactly what bit Lisbon | `convertQuoteV2ToV3.ts:161-232` |
-| P0-2 | 🧹💡 **Converted component lines are un-editable & rate-wiping** | Migrated lines get `catalog_id:''` → material/labor cells disabled; picking a catalog entry to enable them **nulls the migrated rate** | `quoteV3CatalogResolve.ts:252-258`, `LineItemsTable.tsx:435-440`, `LineRateCells.tsx:151-167` |
-| P0-3 | 🧹🗣️ **Component catalogs are empty** (`door_install`, metal_stud, suspended_grid, acoustic, insulation, rc_channel, frp) | New component lines (incl. **Door Install**) are un-pickable and silently price to $0 | `catalogSeeds.ts:189-195` |
+| ~~P0-1~~ | ✅ **DONE** (`cbeaa25`) — ~~v2→v3 converter drops material~~ | Converter now back-computes component material+labor (insulation blended); $0.00 parity | `convertQuoteV2ToV3.ts:161-278` |
+| ~~P0-2~~ | ✅ **DONE** (`cbeaa25`) — ~~converted lines un-editable & rate-wiping~~ | Component cells always editable; catalog pick preserves carried rate | `quoteV3CatalogResolve.ts:264-272`, `LineItemsTable.tsx:435-439` |
+| ~~P0-3~~ | ✅ **DONE by design** (`cbeaa25`) — ~~component catalogs empty~~ | Fix 2 makes catalogs optional for correctness. Residual: seed catalogs in Settings (convenience) | `catalogSeeds.ts` |
 | P0-4 | 🧹💡 **Anon data leaks** — 3 tables world-readable | `crew_invite_tokens` (token+PII → account takeover), `quote_requests`, `submitted_quotes` (vendor pricing/PII) all `USING (true)` | migrations `20260616130000:81`, `016:23`, `016:61` |
 | P0-5 | 🧹💡 **`v_meetings_summary` view bypasses RLS** | View defaults to definer rights (comment claiming otherwise is wrong) → cross-org meeting data readable by any authenticated user | `20260505_meetings_summary_view.sql:11` |
 | P0-6 | 🧹⚠️ **Crew materials/pay invisible (Roberto)** | Root cause = `get_my_linked_position_name` returns null (stale `linked_*` id after roster re-import) → `specialty='unknown'` → materials `[]`, board counts hidden, pay blanked. Masked in operator preview | `crewWorkspaceService.ts:598-601, 660-668, 868-878`; RPC `20260625130000` |
-| P0-7 | 🧹💡 **Fake numbers in reports** | `VarianceReport` hardcodes per-trade actual = `0`; `excelParser` hardcodes sub cost = `0` | `VarianceReport.tsx:344`, `excelParser.ts:185` |
+| ~~P0-7~~ | ✅ **DONE** (`1b58123`) — ~~fake numbers in reports~~ | VarianceReport renders computed per-trade actual; excelParser parses a sub-cost column | `VarianceReport.tsx:343`, `excelParser.ts:186` |
 | P0-8 | 🧹💡 **Apply pending migrations** | Supplier/customer-share batch (`20260723xxxxxx`–`20260724xxxxxx`) and `025_add_file_path...` look unapplied; code has workarounds (`project_documents` omits `file_path`) | `supabaseService.ts:4428,4546`; verify `migration list` |
 
-**Notes on P0-1/P0-2/P0-3** — these three are one problem: the v3 quote is only trustworthy once (a) the converter carries all trade material, (b) migrated lines are editable without losing their rate, and (c) the org catalogs are populated. Fix them together. The cleanest converter fix also makes your existing **"Refresh from v2 snapshot"** button re-pull material correctly on already-converted projects.
-
-**Suggested P0-2 fix:** relax `isMaterialRateEnabled`/`isComponentLaborRateEnabled` to also enable when a `custom_*_rate` is present, and change the catalog `<select>` to **merge** (keep customs) instead of nulling them.
+**✅ P0-1/P0-2/P0-3 shipped** (`cbeaa25`, verified 2026-07-30) — see `QUOTE_TRUST_BATCH_BRIEF.md`. Already-converted projects (e.g. Lisbon) pick up the material-carry fix via the **"Refresh from v2 snapshot"** button.
 
 **P0-4/P0-5 fix pattern:** replace each `USING (true)` SELECT with a `SECURITY DEFINER` lookup RPC keyed by token (return one row); recreate the view `WITH (security_invoker = on)`. Your newest share-link migrations already follow the good pattern — reuse it.
 
@@ -108,13 +108,13 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 
 | Sev | Item | Location |
 |-----|------|----------|
-| High | Converter material drop (4 trades) | `convertQuoteV2ToV3.ts:161-232` |
-| High | Migrated line rate-wipe on catalog pick | `LineItemsTable.tsx:435-440` |
+| ~~High~~ ✅ | ~~Converter material drop (4 trades)~~ — DONE `cbeaa25` | `convertQuoteV2ToV3.ts:161-278` |
+| ~~High~~ ✅ | ~~Migrated line rate-wipe on catalog pick~~ — DONE `cbeaa25` | `LineItemsTable.tsx:435-439` |
 | High | Anon-readable `crew_invite_tokens`/`quote_requests`/`submitted_quotes` | migrations `20260616130000`,`016` |
 | High | `v_meetings_summary` RLS bypass | `20260505_meetings_summary_view.sql` |
 | High | Crew specialty/linkage blanks materials+pay | `crewWorkspaceService.ts:598-601` |
-| Med | VarianceReport per-trade actual = 0 | `VarianceReport.tsx:344` |
-| Med | excelParser sub cost = 0 | `excelParser.ts:185` |
+| ~~Med~~ ✅ | ~~VarianceReport per-trade actual = 0~~ — DONE `1b58123` | `VarianceReport.tsx:343` |
+| ~~Med~~ ✅ | ~~excelParser sub cost = 0~~ — DONE `1b58123` | `excelParser.ts:186` |
 | Med | Backup restore stub | `backupService.ts:415` |
 | Med | Historical rate stub | `estimateService.ts:340` |
 | Med | search_path unpinned on core RLS helpers | migrations `008`,`007` |
