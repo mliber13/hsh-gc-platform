@@ -46,6 +46,7 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 ## P1 — Should-have for v1.5
 
 ### Estimating & quote quality
+- 🗣️ **Corner-bead spec-group entry (queued 2026-07-30, think-through first).** Mirror the board spec-group (`9c36ebd`, `FieldMeasurementsSection`) for corner bead in `FieldAccessoriesSection`: pick the bead type once (Square Bead / Bullnose / Splay / Arch / Tearaway) → a wrap grid of the available lengths with a qty box per length, instead of one "Add manual" row per length. Maps onto the existing flat `accessories[]` model (qty>0 upserts a Corner Bead accessory for type+length; clearing removes it) so pricing/orders/review are unchanged. Keep the per-row "Add manual" as a one-off fallback. Simpler than boards (no thickness/width). ~30–45 min but deliberately queued to design carefully, not rush.
 - 🗣️💡 **Height-aware accessory estimating** — tape/mud/screws are 100% board-area based today (`quoteV3Accessories.ts:135-173`); a 20 ft and 8 ft wall of equal sqft get identical mud/tape. Add `wall_height`/`ceiling_height` at the field-measurement area and quote-space level and thread into the formulas (seam LF from height+area). _This is the accuracy win you flagged._
 - 🗣️ **Seed real Door Install catalog + Metal Stud + Suspended Grid** (Settings → Catalogs). Prereq for using the trade we just shipped and for clean converts. (Overlaps P0-3.)
 - 💡 **Surface "migrated line needs review" count** in the v3 quote UI — every converted line carries a review flag; make it visible so nothing ships un-reviewed.
