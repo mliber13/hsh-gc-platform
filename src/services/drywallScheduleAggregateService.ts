@@ -18,6 +18,10 @@ export interface CrossProjectScheduleItem {
   endDate: string
   status: 'not-started' | 'in-progress' | 'complete' | 'delayed'
   assignedPersons: string[]
+  /** Assigned supplier (material orders) — counts as assigned for the unassigned filter. */
+  supplierId: string | null
+  /** Assigned subcontractor company — also counts as assigned. */
+  assignedCompanyId: string | null
 }
 
 type ProjectRow = {
@@ -43,6 +47,8 @@ type ScheduleItemRow = {
   end_date: string
   status: CrossProjectScheduleItem['status'] | null
   assigned_persons: string[] | null
+  supplier_id: string | null
+  assigned_company_id: string | null
 }
 
 function isDrywallProjectRow(row: ProjectRow): boolean {
@@ -91,7 +97,9 @@ export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectSche
 
   const { data: items, error: itemsError } = await supabase
     .from('schedule_items')
-    .select('id, project_id, name, type, start_date, end_date, status, assigned_persons')
+    .select(
+      'id, project_id, name, type, start_date, end_date, status, assigned_persons, supplier_id, assigned_company_id',
+    )
     .eq('organization_id', organizationId)
     .in('project_id', projectIds)
     .order('start_date', { ascending: true })
@@ -116,6 +124,8 @@ export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectSche
       endDate: row.end_date,
       status: row.status ?? 'not-started',
       assignedPersons: row.assigned_persons ?? [],
+      supplierId: row.supplier_id ?? null,
+      assignedCompanyId: row.assigned_company_id ?? null,
     })
   }
   return results

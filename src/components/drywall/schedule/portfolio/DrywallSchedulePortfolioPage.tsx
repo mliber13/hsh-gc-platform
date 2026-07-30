@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, History, Plus, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, History, Plus, RefreshCw, UserX } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -73,6 +73,7 @@ export function DrywallSchedulePortfolioPage() {
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => new Set())
   const [selectedPersonIds, setSelectedPersonIds] = useState<Set<string>>(() => new Set())
   const [selectedPhases, setSelectedPhases] = useState<Set<SchedulePhase>>(() => new Set())
+  const [showUnassignedOnly, setShowUnassignedOnly] = useState(false)
   const [expandAll, setExpandAll] = useState(false)
 
   const { rangeStart, rangeEnd, referenceMonth } = useMemo(
@@ -171,10 +172,26 @@ export function DrywallSchedulePortfolioPage() {
     )
   }, [itemsInRange])
 
+  // "Unassigned" = nobody and nothing is on the hook: no crew, no supplier, no sub company.
+  const isUnassigned = (item: CrossProjectScheduleItem) =>
+    item.assignedPersons.filter(Boolean).length === 0 &&
+    !item.supplierId &&
+    !item.assignedCompanyId
+
+  // Count of items with nobody assigned in the current window (respects scope + range,
+  // ignores the other filter selections) so the toggle badge flags at-risk items to catch.
+  const unassignedCount = useMemo(
+    () => itemsInRange.filter(isUnassigned).length,
+    [itemsInRange],
+  )
+
   const filteredItems = useMemo(() => {
     return itemsInRange.filter((item) => {
       if (selectedProjectIds.size > 0 && !selectedProjectIds.has(item.projectId)) return false
-      if (
+      // Unassigned-only overrides the person filter (unassigned items have no people).
+      if (showUnassignedOnly) {
+        if (!isUnassigned(item)) return false
+      } else if (
         selectedPersonIds.size > 0 &&
         !item.assignedPersons.some((id) => selectedPersonIds.has(id))
       ) {
@@ -185,7 +202,7 @@ export function DrywallSchedulePortfolioPage() {
       }
       return true
     })
-  }, [itemsInRange, selectedProjectIds, selectedPersonIds, selectedPhases])
+  }, [itemsInRange, selectedProjectIds, selectedPersonIds, selectedPhases, showUnassignedOnly])
 
   const toggleProject = (projectId: string) => {
     setSelectedProjectIds((current) => toggleSetMembership(current, projectId))
@@ -510,6 +527,31 @@ export function DrywallSchedulePortfolioPage() {
               </PopoverContent>
             </Popover>
           )}
+
+          <Button
+            type="button"
+            variant={showUnassignedOnly ? 'default' : 'outline'}
+            size="sm"
+            className="h-8 gap-1 text-xs"
+            aria-pressed={showUnassignedOnly}
+            title="Show only schedule items with nobody assigned"
+            onClick={() => setShowUnassignedOnly((value) => !value)}
+          >
+            <UserX className="h-3.5 w-3.5" />
+            Unassigned
+            {unassignedCount > 0 && (
+              <span
+                className={cn(
+                  'inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold',
+                  showUnassignedOnly
+                    ? 'bg-primary-foreground text-primary'
+                    : 'bg-amber-500 text-white',
+                )}
+              >
+                {unassignedCount}
+              </span>
+            )}
+          </Button>
 
           <Button
             type="button"
