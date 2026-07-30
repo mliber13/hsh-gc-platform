@@ -29,13 +29,15 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 | ~~P0-1~~ | ✅ **DONE** (`cbeaa25`) — ~~v2→v3 converter drops material~~ | Converter now back-computes component material+labor (insulation blended); $0.00 parity | `convertQuoteV2ToV3.ts:161-278` |
 | ~~P0-2~~ | ✅ **DONE** (`cbeaa25`) — ~~converted lines un-editable & rate-wiping~~ | Component cells always editable; catalog pick preserves carried rate | `quoteV3CatalogResolve.ts:264-272`, `LineItemsTable.tsx:435-439` |
 | ~~P0-3~~ | ✅ **DONE by design** (`cbeaa25`) — ~~component catalogs empty~~ | Fix 2 makes catalogs optional for correctness. Residual: seed catalogs in Settings (convenience) | `catalogSeeds.ts` |
-| P0-4 | 🧹💡 **Anon data leaks** — 3 tables world-readable | `crew_invite_tokens` (token+PII → account takeover), `quote_requests`, `submitted_quotes` (vendor pricing/PII) all `USING (true)` | migrations `20260616130000:81`, `016:23`, `016:61` |
-| P0-5 | 🧹💡 **`v_meetings_summary` view bypasses RLS** | View defaults to definer rights (comment claiming otherwise is wrong) → cross-org meeting data readable by any authenticated user | `20260505_meetings_summary_view.sql:11` |
+| ~~P0-4~~ | ✅ **DONE** (`d50d1a9`+`bdf7668`, applied 2026-07-30) — ~~anon data leaks~~ | Token-keyed SECURITY DEFINER RPCs replace the anon reads/writes; `USING(true)` policies dropped post-verify. Anon direct selects → 0 rows | migration `20260730130313` (remote) |
+| ~~P0-5~~ | ✅ **DONE** (`d50d1a9`, applied 2026-07-30) — ~~`v_meetings_summary` RLS bypass~~ | Recreated `WITH (security_invoker=on)`; confirmed in remote reloptions | same migration |
 | P0-6 | 🧹⚠️ **Crew materials/pay invisible (Roberto)** | Root cause = `get_my_linked_position_name` returns null (stale `linked_*` id after roster re-import) → `specialty='unknown'` → materials `[]`, board counts hidden, pay blanked. Masked in operator preview | `crewWorkspaceService.ts:598-601, 660-668, 868-878`; RPC `20260625130000` |
 | ~~P0-7~~ | ✅ **DONE** (`1b58123`) — ~~fake numbers in reports~~ | VarianceReport renders computed per-trade actual; excelParser parses a sub-cost column | `VarianceReport.tsx:343`, `excelParser.ts:186` |
 | P0-8 | 🧹💡 **Apply pending migrations** | Supplier/customer-share batch (`20260723xxxxxx`–`20260724xxxxxx`) and `025_add_file_path...` look unapplied; code has workarounds (`project_documents` omits `file_path`) | `supabaseService.ts:4428,4546`; verify `migration list` |
 
 **✅ P0-1/P0-2/P0-3 shipped** (`cbeaa25`, verified 2026-07-30) — see `QUOTE_TRUST_BATCH_BRIEF.md`. Already-converted projects (e.g. Lisbon) pick up the material-carry fix via the **"Refresh from v2 snapshot"** button.
+
+**✅ P0-4/P0-5 shipped + applied to remote** (`d50d1a9` part A, `bdf7668` part B, 2026-07-30). Applied via Supabase MCP `apply_migration` (not `db push`). Post-lockdown verified: anon direct selects return 0 rows; crew-signup / vendor-portal / submit RPCs still work; only the authenticated operator policies remain. **Two follow-ups:** (a) **`supabase db push` is broken** — local/remote migration history diverged (remote has DDL the local dir doesn't); needs a `migration repair` before the next CLI push. (b) delete leftover smoke rows in `submitted_quotes`/`quote_requests` (`P0-4 smoke…`, `portal-smoke@…`, `post-lockdown-smoke@…`); one real quote (`wwheating01@…`) was flipped sent→viewed during the smoke test (cosmetic).
 
 **P0-4/P0-5 fix pattern:** replace each `USING (true)` SELECT with a `SECURITY DEFINER` lookup RPC keyed by token (return one row); recreate the view `WITH (security_invoker = on)`. Your newest share-link migrations already follow the good pattern — reuse it.
 
@@ -51,6 +53,7 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 - 💡 Document/decide: converted drywall lines set `accessories_in_material_rate:true`, so they **bypass** the itemized accessory engine (tape/mud stays the flat v2 rate). Intended, but should be explicit.
 
 ### Crew
+- 🗣️ **Crew photo upload for all crew (not just measurers)** — every crew member on `/crew` should be able to upload job-site photos, reusing the measurer's existing path (`persistFieldTakeoffPhotos` → SECURITY DEFINER write RPC `20260627130000_crew_can_write_drywall_photos.sql`; read via `20260626120000`). **Gotcha:** the current write RPC gates on `crew_is_measurer()` + `crew_has_measure_assignment()`, so extending to all crew needs either a broader crew-write RPC (validate crew role + assignment on the project) or relaxed gating — plus surfacing an upload control on `CrewProjectDetailPage` (measurer UI is on the `/measure` page today). Storage-side RLS already allows crew reads/writes.
 - 💡 **Fix P0-6 properly** + **surface `specialty==='unknown'` loudly** in `/crew` instead of silently returning empty materials/pay. Add an operator "re-link crew account" action for id drift.
 - 💡 **Normalize empty-string linkage** — `resolvePersonId` uses `??` so `''` leaks through as a person id and mismatches everything (`crewWorkspaceService.ts:137-142`).
 - 💡 **Global "clocked in" indicator** in `CrewShell`/home list (clock in/out currently only on the per-job page).
@@ -110,8 +113,9 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 |-----|------|----------|
 | ~~High~~ ✅ | ~~Converter material drop (4 trades)~~ — DONE `cbeaa25` | `convertQuoteV2ToV3.ts:161-278` |
 | ~~High~~ ✅ | ~~Migrated line rate-wipe on catalog pick~~ — DONE `cbeaa25` | `LineItemsTable.tsx:435-439` |
-| High | Anon-readable `crew_invite_tokens`/`quote_requests`/`submitted_quotes` | migrations `20260616130000`,`016` |
-| High | `v_meetings_summary` RLS bypass | `20260505_meetings_summary_view.sql` |
+| ~~High~~ ✅ | ~~Anon-readable `crew_invite_tokens`/`quote_requests`/`submitted_quotes`~~ — DONE `d50d1a9`+`bdf7668` | RPCs + policy drop, applied to remote |
+| ~~High~~ ✅ | ~~`v_meetings_summary` RLS bypass~~ — DONE `d50d1a9` | `security_invoker=on` |
+| Med | `supabase db push` broken — local/remote migration history diverged (needs `migration repair`) | supabase CLI |
 | High | Crew specialty/linkage blanks materials+pay | `crewWorkspaceService.ts:598-601` |
 | ~~Med~~ ✅ | ~~VarianceReport per-trade actual = 0~~ — DONE `1b58123` | `VarianceReport.tsx:343` |
 | ~~Med~~ ✅ | ~~excelParser sub cost = 0~~ — DONE `1b58123` | `excelParser.ts:186` |
