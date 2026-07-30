@@ -281,14 +281,10 @@ export function CrewProjectDetailPage() {
   const showStartMeasure =
     !isOperatorExplainer && isMeasurerSpecialty(detail.specialty) && measureEntry != null
 
-  const canManagePhotos =
-    isOperatorExplainer ||
-    (isMeasurerSpecialty(detail.specialty) && !isViewAs && detail.hasMeasureAssignment)
-  const photosLocked =
-    detail.measureWorkflowStatus === 'pending_review' ||
-    detail.measureWorkflowStatus === 'approved'
-  const photosReadOnly = !canManagePhotos || photosLocked
-  const showMeasurerPhotoSection = canManagePhotos || isMeasurerSpecialty(detail.specialty)
+  // Any assigned crew can upload job-site photos (RPC crew_append_field_photo gates
+  // assignment). Measure review lock must NOT block this append-only path.
+  const photosReadOnly = isViewAs
+  const showPhotoUploader = !isViewAs
 
   return (
     <div
@@ -621,31 +617,12 @@ export function CrewProjectDetailPage() {
         </CardContent>
       </Card>
 
-      {showMeasurerPhotoSection ? (
-        <div className="space-y-2">
-          {photosLocked && canManagePhotos ? (
-            <p className="text-sm text-muted-foreground">
-              Photos are locked while measurements are{' '}
-              {detail.measureWorkflowStatus === 'approved'
-                ? 'approved'
-                : 'with the office for review'}
-              .
-            </p>
-          ) : null}
-          {!canManagePhotos &&
-          isMeasurerSpecialty(detail.specialty) &&
-          !isViewAs &&
-          !detail.hasMeasureAssignment ? (
-            <p className="text-sm text-muted-foreground">
-              Ask the office to assign you a Measure schedule item on this job to upload photos.
-            </p>
-          ) : null}
-          <FieldPhotosSection
-            projectId={projectId}
-            readOnly={photosReadOnly}
-            onPhotosChange={() => void load()}
-          />
-        </div>
+      {showPhotoUploader ? (
+        <FieldPhotosSection
+          projectId={projectId}
+          readOnly={photosReadOnly}
+          onPhotosChange={() => void load()}
+        />
       ) : detail.photos.length > 0 ? (
         <Card>
           <CardHeader className="pb-2">

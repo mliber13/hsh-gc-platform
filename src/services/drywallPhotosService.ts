@@ -52,7 +52,7 @@ async function assertProjectInOrg(projectId: string, orgId: string): Promise<voi
   if (!data) throw new DrywallPhotoError('Project not found in your organization.')
 }
 
-/** Crew measurers persist photo refs via SECURITY DEFINER RPC; operators use direct merge. */
+/** Crew measurers persist full takeoff via SECURITY DEFINER RPC; operators use direct merge. */
 async function persistFieldTakeoffPhotos(projectId: string, takeoff: FieldTakeoff): Promise<void> {
   const profile = await getCurrentUserProfile()
   const roles = profile?.roles ?? []
@@ -66,6 +66,14 @@ async function persistFieldTakeoffPhotos(projectId: string, takeoff: FieldTakeof
   }
 
   await saveFieldTakeoff(projectId, takeoff)
+}
+
+function isCrewOnlyProfile(roles: string[] | null | undefined): boolean {
+  const r = roles ?? []
+  return (
+    r.includes('crew') &&
+    !r.some((role) => role === 'owner' || role === 'office_gc' || role === 'office_drywall')
+  )
 }
 
 /** Upload image; append ref to metadata.legacy.fieldTakeoff.photos (atomic). */
@@ -108,6 +116,24 @@ export async function uploadFieldPhoto(
   }
 
   try {
+    const profile = await getCurrentUserProfile()
+    if (isCrewOnlyProfile(profile?.roles)) {
+      // Append-only path — does not rewrite takeoff or touch reviewStatus.
+      const { error } = await supabase.rpc('crew_append_field_photo', {
+        p_project_id: projectId,
+        p_photo: {
+          id: ref.id,
+          storagePath: ref.storagePath,
+          uploadedAt: ref.uploadedAt,
+          label: ref.label ?? null,
+        },
+      })
+      if (error) {
+        throw new DrywallPhotoError(error.message || 'Failed to save photo to project.')
+      }
+      return ref
+    }
+
     const takeoff = await fetchFieldTakeoff(projectId)
     const photos = [...(takeoff.photos ?? []), ref]
     await persistFieldTakeoffPhotos(projectId, { ...takeoff, photos })
