@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Bell, BellOff, X } from 'lucide-react'
+import { Bell, Volume2, VolumeX, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -173,7 +173,7 @@ export function EnableNotificationsControl({ variant = 'button', className }: Pr
           })
         }
       >
-        <BellOff className="size-4" />
+        <VolumeX className="size-4" />
         <span className="sr-only">Notifications need Home Screen install</span>
       </Button>
     )
@@ -190,7 +190,7 @@ export function EnableNotificationsControl({ variant = 'button', className }: Pr
         title="Disable notifications"
         onClick={() => void disable()}
       >
-        <Bell className="size-4 text-primary" />
+        <Volume2 className="size-4 text-primary" />
         <span className="sr-only">Disable notifications</span>
       </Button>
     )
@@ -210,7 +210,7 @@ export function EnableNotificationsControl({ variant = 'button', className }: Pr
       }
       onClick={() => void enable()}
     >
-      <BellOff className="size-4" />
+      <VolumeX className="size-4" />
       <span className="sr-only">Enable notifications</span>
     </Button>
   )
