@@ -37,7 +37,7 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 
 **✅ P0-1/P0-2/P0-3 shipped** (`cbeaa25`, verified 2026-07-30) — see `QUOTE_TRUST_BATCH_BRIEF.md`. Already-converted projects (e.g. Lisbon) pick up the material-carry fix via the **"Refresh from v2 snapshot"** button.
 
-**✅ P0-4/P0-5 shipped + applied to remote** (`d50d1a9` part A, `bdf7668` part B, 2026-07-30). Applied via Supabase MCP `apply_migration` (not `db push`). Post-lockdown verified: anon direct selects return 0 rows; crew-signup / vendor-portal / submit RPCs still work; only the authenticated operator policies remain. **Two follow-ups:** (a) **`supabase db push` is broken** — local/remote migration history diverged (remote has DDL the local dir doesn't); needs a `migration repair` before the next CLI push. (b) delete leftover smoke rows in `submitted_quotes`/`quote_requests` (`P0-4 smoke…`, `portal-smoke@…`, `post-lockdown-smoke@…`); one real quote (`wwheating01@…`) was flipped sent→viewed during the smoke test (cosmetic).
+**✅ P0-4/P0-5 shipped + applied to remote** (`d50d1a9` part A, `bdf7668` part B, 2026-07-30). Applied via Supabase MCP `apply_migration` (not `db push`). Post-lockdown verified: anon direct selects return 0 rows; crew-signup / vendor-portal / submit RPCs still work; only the authenticated operator policies remain. **Follow-ups (both RESOLVED 2026-07-30):** (a) ✅ **`supabase db push` history repaired** (`0d9ad61`) — reverted 48 remote-only MCP/dashboard versions, marked local applied, renamed 40 short-prefix files to unique 14-digit timestamps; `db push` now reports "up to date." This also unblocks **P0-8**. (b) ✅ leftover smoke rows deleted (5 rows; `wwheating01@…` left as-is).
 
 **P0-4/P0-5 fix pattern:** replace each `USING (true)` SELECT with a `SECURITY DEFINER` lookup RPC keyed by token (return one row); recreate the view `WITH (security_invoker = on)`. Your newest share-link migrations already follow the good pattern — reuse it.
 
@@ -53,7 +53,7 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 - 💡 Document/decide: converted drywall lines set `accessories_in_material_rate:true`, so they **bypass** the itemized accessory engine (tape/mud stays the flat v2 rate). Intended, but should be explicit.
 
 ### Crew
-- 🗣️ **Crew photo upload for all crew (not just measurers)** — every crew member on `/crew` should be able to upload job-site photos, reusing the measurer's existing path (`persistFieldTakeoffPhotos` → SECURITY DEFINER write RPC `20260627130000_crew_can_write_drywall_photos.sql`; read via `20260626120000`). **Gotcha:** the current write RPC gates on `crew_is_measurer()` + `crew_has_measure_assignment()`, so extending to all crew needs either a broader crew-write RPC (validate crew role + assignment on the project) or relaxed gating — plus surfacing an upload control on `CrewProjectDetailPage` (measurer UI is on the `/measure` page today). Storage-side RLS already allows crew reads/writes.
+- ✅ **Crew photo upload for all crew (not just measurers)** — DONE 2026-07-30 (`f04a656`). New append-only SECURITY DEFINER RPC `crew_append_field_photo` + `crew_is_assigned_to_project` (migration `20260730140000`) lets any assigned crew append a photo without touching the takeoff reviewStatus lock; `drywallPhotosService` routes crew-only uploads through it; uploader surfaced on `CrewProjectDetailPage`. Measurer `/measure` + operator flows unchanged. tsc clean, 148 drywall tests green.
 - 💡 **Fix P0-6 properly** + **surface `specialty==='unknown'` loudly** in `/crew` instead of silently returning empty materials/pay. Add an operator "re-link crew account" action for id drift.
 - 💡 **Normalize empty-string linkage** — `resolvePersonId` uses `??` so `''` leaks through as a person id and mismatches everything (`crewWorkspaceService.ts:137-142`).
 - 💡 **Global "clocked in" indicator** in `CrewShell`/home list (clock in/out currently only on the per-job page).
@@ -115,7 +115,7 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 | ~~High~~ ✅ | ~~Migrated line rate-wipe on catalog pick~~ — DONE `cbeaa25` | `LineItemsTable.tsx:435-439` |
 | ~~High~~ ✅ | ~~Anon-readable `crew_invite_tokens`/`quote_requests`/`submitted_quotes`~~ — DONE `d50d1a9`+`bdf7668` | RPCs + policy drop, applied to remote |
 | ~~High~~ ✅ | ~~`v_meetings_summary` RLS bypass~~ — DONE `d50d1a9` | `security_invoker=on` |
-| Med | `supabase db push` broken — local/remote migration history diverged (needs `migration repair`) | supabase CLI |
+| ~~Med~~ ✅ | ~~`supabase db push` broken — migration history diverged~~ — DONE `0d9ad61` (history repaired; push clean) | supabase CLI |
 | High | Crew specialty/linkage blanks materials+pay | `crewWorkspaceService.ts:598-601` |
 | ~~Med~~ ✅ | ~~VarianceReport per-trade actual = 0~~ — DONE `1b58123` | `VarianceReport.tsx:343` |
 | ~~Med~~ ✅ | ~~excelParser sub cost = 0~~ — DONE `1b58123` | `excelParser.ts:186` |
