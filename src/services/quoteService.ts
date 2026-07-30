@@ -236,11 +236,11 @@ export async function createQuoteRequestInDB(input: CreateQuoteRequestInput): Pr
 export async function fetchQuoteRequestByToken(token: string): Promise<QuoteRequest | null> {
   if (!isOnlineMode()) return null
 
-  const { data, error } = await supabase
-    .from('quote_requests')
-    .select('*')
-    .eq('token', token)
-    .single()
+  // Read via SECURITY DEFINER RPC keyed by token (the table's anon SELECT
+  // policy is locked down). The RPC also marks the request viewed server-side.
+  const { data: rpcRow, error } = await supabase
+    .rpc('get_quote_request_by_token', { p_token: token })
+    .maybeSingle()
 
   if (error) {
     console.error('Error fetching quote request:', {
@@ -254,18 +254,12 @@ export async function fetchQuoteRequestByToken(token: string): Promise<QuoteRequ
     return null
   }
 
-  if (!data) {
+  if (!rpcRow) {
     console.warn('No quote request found for token:', token.substring(0, 8) + '...')
     return null
   }
 
-  // Update viewed_at if not already set
-  if (!data.viewed_at) {
-    await supabase
-      .from('quote_requests')
-      .update({ viewed_at: new Date().toISOString(), status: 'viewed' })
-      .eq('id', data.id)
-  }
+  const data = rpcRow as Record<string, any>
 
   return {
     id: data.id,
@@ -460,22 +454,17 @@ export async function submitQuote(input: SubmitQuoteInput): Promise<SubmittedQuo
   // Upload quote document if provided (vendor's document - goes to quote-documents bucket)
   let quoteDocumentUrl: string | undefined
   if (input.quoteDocument) {
-    const quoteRequestData = await supabase
-      .from('quote_requests')
-      .select('organization_id, project_id, user_id')
-      .eq('token', input.token)
-      .single()
-
-    if (quoteRequestData.data) {
+    // Reuse the request we already fetched by token (no second anon read).
+    {
       const fileExt = input.quoteDocument.name.split('.').pop()
       const fileName = `quote-${quoteRequest.id}-${Date.now()}.${fileExt}`
       // Use organization_id if valid UUID, otherwise use user_id
-      const orgId = quoteRequestData.data.organization_id && 
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quoteRequestData.data.organization_id)
-        ? quoteRequestData.data.organization_id
-        : quoteRequestData.data.user_id
-      const filePath = `${orgId}/${quoteRequestData.data.project_id}/${fileName}`
-      
+      const orgId = quoteRequest.organizationId &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quoteRequest.organizationId)
+        ? quoteRequest.organizationId
+        : quoteRequest.userId
+      const filePath = `${orgId}/${quoteRequest.projectId}/${fileName}`
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('quote-documents')
         .upload(filePath, input.quoteDocument, {
@@ -492,23 +481,21 @@ export async function submitQuote(input: SubmitQuoteInput): Promise<SubmittedQuo
     }
   }
 
-  // Create submitted quote
-  const { data, error } = await supabase
-    .from('submitted_quotes')
-    .insert({
-      quote_request_id: quoteRequest.id,
-      vendor_name: input.vendorName,
-      vendor_email: input.vendorEmail,
-      vendor_company: input.vendorCompany || null,
-      vendor_phone: input.vendorPhone || null,
-      line_items: input.lineItems,
-      total_amount: input.totalAmount,
-      valid_until: input.validUntil?.toISOString() || null,
-      notes: input.notes || null,
-      quote_document_url: quoteDocumentUrl || null,
-      status: 'pending',
+  // Create submitted quote via SECURITY DEFINER RPC (validates token, inserts,
+  // and marks the request submitted — the table's anon INSERT policy is locked down).
+  const { data: rpcRow, error } = await supabase
+    .rpc('submit_vendor_quote', {
+      p_token: input.token,
+      p_vendor_name: input.vendorName,
+      p_vendor_email: input.vendorEmail,
+      p_vendor_company: input.vendorCompany || null,
+      p_vendor_phone: input.vendorPhone || null,
+      p_line_items: input.lineItems,
+      p_total_amount: input.totalAmount,
+      p_valid_until: input.validUntil?.toISOString() || null,
+      p_notes: input.notes || null,
+      p_quote_document_url: quoteDocumentUrl || null,
     })
-    .select()
     .single()
 
   if (error) {
@@ -516,11 +503,7 @@ export async function submitQuote(input: SubmitQuoteInput): Promise<SubmittedQuo
     return null
   }
 
-  // Update quote request status
-  await supabase
-    .from('quote_requests')
-    .update({ status: 'submitted' })
-    .eq('id', quoteRequest.id)
+  const data = rpcRow as Record<string, any>
 
   return {
     id: data.id,

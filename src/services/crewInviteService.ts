@@ -111,10 +111,10 @@ export async function revokeCrewInviteToken(tokenId: string): Promise<void> {
 export async function fetchCrewInviteByToken(token: string): Promise<CrewInviteToken | null> {
   if (!token.trim() || !isOnlineMode()) return null
 
+  // Read via SECURITY DEFINER RPC keyed by exact token (the table's anon
+  // SELECT policy is locked down; the RPC returns only active invites).
   const { data, error } = await supabase
-    .from('crew_invite_tokens')
-    .select('*')
-    .eq('token', token.trim())
+    .rpc('get_crew_invite_by_token', { p_token: token.trim() })
     .maybeSingle()
 
   if (error) {
