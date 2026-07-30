@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { cn } from '@/lib/utils'
 import { NorthStarCard } from './NorthStarCard'
+import { ProductionReadyNudge } from './ProductionReadyNudge'
 import {
   DASHBOARD_GROUP_LABELS,
   DASHBOARD_GROUP_ORDER,
@@ -39,6 +40,8 @@ function DashboardContent() {
 
   return (
     <div className="space-y-8">
+      <ProductionReadyNudge />
+
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
