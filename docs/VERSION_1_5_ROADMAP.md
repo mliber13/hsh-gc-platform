@@ -74,9 +74,9 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 - 💡 **CommsNotificationBell** — replace the 5-min-poll egress stopgap with a scalar unread RPC, then restore a short interval (`CommsNotificationBell.tsx:12-16`).
 
 ### Correctness cleanups
-- 💡 **Backup restore** — `backupService.ts:415` throws "coming soon". Either build restore or hide the feature (shipping a no-op DR button is a trap).
-- 💡 **Historical rate lookup** — `estimateService.ts:340` always returns null; any "suggested rate" UI is dead. Fix or hide.
-- 💡 **Retire 5 live `@deprecated` callers** and delete 2 dead deprecated symbols (`LaborRateCell` alias, `shouldDropStaleClosedJob`). See tech-debt register below.
+- ✅ **Dead code removed 2026-07-31** (`39cdffa`, `<next>`): the 2 dead deprecated symbols (`LaborRateCell` alias, `shouldDropStaleClosedJob`) and the uncalled `getSuggestedRate` historical-rate stub. All had zero callers — pure removal, no behavior change.
+- 📋 **Backup restore** — `restoreFromBackup` (`backupService.ts:392`) throws "coming soon" but is **uncalled + unwired to any UI** (so the "no-op DR button trap" premise doesn't hold — there's no button). **Decision:** delete the scaffold, or keep it as documented intent for a future DR-restore feature (counterpart to the backup export). Not urgent either way.
+- 📋 **Lifecycle `@deprecated` callers** — `markDrywallProjectComplete` (← `OrderPage`) and `revertDrywallProjectComplete` (← `ReopenProjectConfirmDialog`) are NOT mechanical renames: they jump the lifecycle (Order→closed; closed→order) while the replacements enforce `production → production-complete → closed`. Retiring them **changes closeout behavior** — a product decision, not cleanup. `includeDrywallSubBreakdown` stays (legit backward-compat read for pre-rename saved quotes). Most other `@deprecated` markers in `drywall.ts` are similar load-bearing compat shims — do NOT bulk-delete.
 
 ---
 
@@ -122,14 +122,14 @@ The single theme of v1.5 should be: **make the drywall v3 quote path trustworthy
 | Med | Crew specialty/linkage blanks materials+pay **silently** (acute Roberto case fixed 2026-07-30; hardening remains) | `crewWorkspaceService.ts:598-601` |
 | ~~Med~~ ✅ | ~~VarianceReport per-trade actual = 0~~ — DONE `1b58123` | `VarianceReport.tsx:343` |
 | ~~Med~~ ✅ | ~~excelParser sub cost = 0~~ — DONE `1b58123` | `excelParser.ts:186` |
-| Med | Backup restore stub | `backupService.ts:415` |
-| Med | Historical rate stub | `estimateService.ts:340` |
+| Low | Backup restore stub — **uncalled/unwired** (decision: delete scaffold or keep) | `backupService.ts:392` |
+| ~~Med~~ ✅ | ~~Historical rate stub~~ — DELETED `<next>` (was uncalled dead code) | `estimateService.ts` |
 | Med | search_path unpinned on core RLS helpers | migrations `008`,`007` |
 | Med | Metadata over-fetch (E1-E4) | see P1 |
-| Low | 5 live `@deprecated` callers + 2 dead symbols | see below |
+| ~~Low~~ ✅ | ~~2 dead deprecated symbols~~ — DELETED `39cdffa`. Lifecycle deprecations = product decision (see Correctness) | `39cdffa` |
 | Low | CommsNotificationBell 5-min poll stopgap | `CommsNotificationBell.tsx:12` |
 
-**Deprecated symbols still referenced (rework):** `markDrywallProjectComplete` (`drywallProjectsService.ts:1425` ← `OrderPage.tsx`), `revertDrywallProjectComplete` (`:1443` ← `ReopenProjectConfirmDialog.tsx`), `includeDrywallSubBreakdown` (`drywall.ts:352` ← `quotePdfSettings.ts`). **Dead (delete):** `LaborRateCell` alias (`LineRateCells.tsx:602`), `shouldDropStaleClosedJob` (`drywallDivisionAggregateService.ts:257`).
+**Deprecated symbols — status:** ✅ DELETED (dead): `LaborRateCell` alias, `shouldDropStaleClosedJob`. **Kept (load-bearing compat read):** `includeDrywallSubBreakdown` (reads pre-rename saved quotes). **Product decision, not cleanup:** `markDrywallProjectComplete` (← `OrderPage.tsx`) + `revertDrywallProjectComplete` (← `ReopenProjectConfirmDialog.tsx`) — retiring changes lifecycle/closeout behavior.
 
 ---
 

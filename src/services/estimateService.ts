@@ -322,31 +322,6 @@ export function calculateVolume(length: number, width: number, height: number): 
 // ----------------------------------------------------------------------------
 
 // ----------------------------------------------------------------------------
-// Historical Rate Suggestions
-// ----------------------------------------------------------------------------
-
-/**
- * Get suggested rate based on historical data
- * (This will be implemented in Phase 3 when we have actual historical data)
- */
-export function getSuggestedRate(
-  tradeCategory: string,
-  projectType: string
-): {
-  rate: number | null
-  confidence: 'high' | 'medium' | 'low'
-  projectCount: number
-} {
-  // TODO: Implement historical rate lookup
-  // For now, return null to indicate no historical data available
-  return {
-    rate: null,
-    confidence: 'low',
-    projectCount: 0,
-  }
-}
-
-// ----------------------------------------------------------------------------
 // Estimate Analysis
 // ----------------------------------------------------------------------------
 
