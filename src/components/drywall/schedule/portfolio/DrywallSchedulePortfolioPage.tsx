@@ -107,6 +107,7 @@ export function DrywallSchedulePortfolioPage() {
   const [anchorDate, setAnchorDate] = useState(() => new Date())
   const [dialog, setDialog] = useState<DialogState>({ open: false })
   const [addProjectOpen, setAddProjectOpen] = useState(false)
+  const [addProjectOpenMobile, setAddProjectOpenMobile] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
   const [personNames, setPersonNames] = useState<Map<string, string>>(new Map())
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => new Set())
@@ -289,6 +290,7 @@ export function DrywallSchedulePortfolioPage() {
 
   const handleAddItem = async (projectId: string) => {
     setAddProjectOpen(false)
+    setAddProjectOpenMobile(false)
     try {
       const siblings = await fetchScheduleItemsForDrywallProject(projectId)
       setDialog({ open: true, projectId, siblings, editing: null })
@@ -357,7 +359,7 @@ export function DrywallSchedulePortfolioPage() {
           </Button>
 
           {legendProjects.length > 0 && (
-            <Popover open={addProjectOpen} onOpenChange={setAddProjectOpen}>
+            <Popover open={addProjectOpenMobile} onOpenChange={setAddProjectOpenMobile}>
               <PopoverTrigger asChild>
                 <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0">
                   <Plus className="h-4 w-4" />
