@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseISO } from 'date-fns'
-import { Check, ChevronsUpDown, Plus, X } from 'lucide-react'
+import { Bell, Check, ChevronsUpDown, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase'
+import { requestPushNotify } from '@/services/pushService'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -87,6 +89,9 @@ export function ScheduleItemDialog({
   const [predSearch, setPredSearch] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [notifyOpen, setNotifyOpen] = useState(false)
+  const [notifyMessage, setNotifyMessage] = useState('')
+  const [notifying, setNotifying] = useState(false)
   const hasUserEditedPredecessorsRef = useRef(false)
   // Conflict state — set when cascade prediction would override user's chosen start date.
   const [conflict, setConflict] = useState<{
@@ -161,6 +166,8 @@ export function ScheduleItemDialog({
     }
     setPredSearch('')
     setConflict(null)
+    setNotifyOpen(false)
+    setNotifyMessage('')
   }, [open, editing])
 
   useEffect(() => {
@@ -457,6 +464,43 @@ export function ScheduleItemDialog({
 
   const handleConflictCancel = () => setConflict(null)
 
+  const handleNotify = async () => {
+    if (!editing || assignedPersons.length === 0) return
+    setNotifying(true)
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error('Not signed in')
+        return
+      }
+      const result = await requestPushNotify({
+        kind: 'schedule',
+        projectId,
+        authorUserId: user.id,
+        assignedPersonIds: assignedPersons,
+        itemName: name.trim() || editing.name,
+        message: notifyMessage.trim() || undefined,
+      })
+      if (result === null) {
+        toast.error('Could not send notification')
+        return
+      }
+      toast.success(
+        result.recipients > 0
+          ? `Notified ${result.recipients} ${result.recipients === 1 ? 'person' : 'people'}`
+          : 'Sent — no one with notifications on is assigned',
+      )
+      setNotifyMessage('')
+      setNotifyOpen(false)
+    } catch {
+      toast.error('Could not send notification')
+    } finally {
+      setNotifying(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!editing) return
     if (!window.confirm(`Delete "${editing.name}" from the schedule?`)) return
@@ -695,6 +739,41 @@ export function ScheduleItemDialog({
             showJobInfoPersonIds={showJobInfoPersonIds}
             onShowJobInfoPersonIdsChange={setShowJobInfoPersonIds}
           />
+
+          {editing && assignedPersons.length > 0 && (
+            <Popover open={notifyOpen} onOpenChange={setNotifyOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" size="sm" className="gap-1.5">
+                  <Bell className="size-3.5" />
+                  Notify assigned crew
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[min(100vw-2rem,22rem)] space-y-2">
+                <p className="text-sm font-medium">
+                  Push a heads-up to the {assignedPersons.length} assigned
+                </p>
+                <Textarea
+                  rows={2}
+                  value={notifyMessage}
+                  onChange={(e) => setNotifyMessage(e.target.value)}
+                  placeholder="Optional message (blank = default schedule alert)"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Only people with notifications turned on will receive it.
+                </p>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={notifying}
+                    onClick={() => void handleNotify()}
+                  >
+                    {notifying ? 'Sending…' : 'Send push'}
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
 
           <div className="space-y-1.5">
             <AssignedPersonsPicker

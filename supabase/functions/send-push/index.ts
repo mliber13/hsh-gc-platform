@@ -29,9 +29,17 @@ type ScheduleBody = {
   assignedPersonIds: string[]
   itemName?: string
   newDate?: string
+  /** Manual heads-up message — when present, overrides the default body. */
+  message?: string
 }
 
-type RequestBody = CommsBody | ScheduleBody
+/** Self-test: push to the caller's own devices to verify delivery. */
+type TestBody = {
+  kind: 'test'
+  message?: string
+}
+
+type RequestBody = CommsBody | ScheduleBody | TestBody
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -152,7 +160,16 @@ serve(async (req) => {
     let userIds: string[] = []
     let payload: PushPayload
 
-    if ('kind' in body && body.kind === 'comms') {
+    if ('kind' in body && body.kind === 'test') {
+      // Self-test: deliver only to the caller's own devices.
+      userIds = [user.id]
+      payload = {
+        title: 'Test notification',
+        body: body.message?.trim() || 'Push is working 🎉',
+        url: '/',
+        tag: 'push-test',
+      }
+    } else if ('kind' in body && body.kind === 'comms') {
       userIds = await resolveCommsRecipients(admin, body.projectId, body.authorUserId)
       const name = body.projectName?.trim() || 'Project'
       const author = body.authorName?.trim() || 'Someone'
@@ -170,19 +187,27 @@ serve(async (req) => {
         body.authorUserId,
       )
       const item = body.itemName?.trim() || 'Schedule item'
+      const message = body.message?.trim()
       const dateBit = body.newDate ? ` moved to ${body.newDate}` : ' updated'
-      payload = {
-        title: 'Schedule updated',
-        body: `${item}${dateBit}`,
-        url: `/crew/projects/${body.projectId}`,
-        tag: `sched-${body.projectId}`,
-      }
+      payload = message
+        ? {
+            title: item,
+            body: message,
+            url: `/crew/projects/${body.projectId}`,
+            tag: `sched-${body.projectId}`,
+          }
+        : {
+            title: 'Schedule updated',
+            body: `${item}${dateBit}`,
+            url: `/crew/projects/${body.projectId}`,
+            tag: `sched-${body.projectId}`,
+          }
     } else {
       return jsonResponse({ error: 'Invalid send-push body' }, 400)
     }
 
-    // Caller must be the author — basic anti-abuse.
-    if (body.authorUserId !== user.id) {
+    // Caller must be the author — basic anti-abuse (test targets self, no author).
+    if (body.kind !== 'test' && body.authorUserId !== user.id) {
       return jsonResponse({ error: 'authorUserId must match caller' }, 403)
     }
 

@@ -176,17 +176,43 @@ export type NotifySchedulePayload = {
   assignedPersonIds: string[]
   itemName?: string
   newDate?: string
+  /** Manual heads-up message — overrides the default "updated" body when set. */
+  message?: string
 }
 
-/** Best-effort notify — never throws to callers. */
+/** Best-effort notify — never throws. Returns the send summary (recipient count) or null. */
 export async function requestPushNotify(
   payload: NotifyCommsPayload | NotifySchedulePayload,
-): Promise<void> {
-  if (!isOnlineMode()) return
+): Promise<{ recipients: number } | null> {
+  if (!isOnlineMode()) return null
   try {
-    const { error } = await supabase.functions.invoke('send-push', { body: payload })
-    if (error) console.warn('send-push:', error.message)
+    const { data, error } = await supabase.functions.invoke('send-push', { body: payload })
+    if (error) {
+      console.warn('send-push:', error.message)
+      return null
+    }
+    const recipients = (data as { recipients?: number } | null)?.recipients ?? 0
+    return { recipients }
   } catch (e) {
     console.warn('send-push failed:', e)
+    return null
+  }
+}
+
+/** Fire a test push to the caller's own devices. Returns true on success. */
+export async function sendTestPush(message?: string): Promise<boolean> {
+  if (!isOnlineMode()) return false
+  try {
+    const { error } = await supabase.functions.invoke('send-push', {
+      body: { kind: 'test', message },
+    })
+    if (error) {
+      console.warn('send-push test:', error.message)
+      return false
+    }
+    return true
+  } catch (e) {
+    console.warn('send-push test failed:', e)
+    return false
   }
 }

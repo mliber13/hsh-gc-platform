@@ -2,10 +2,17 @@ import { useCallback, useEffect, useState } from 'react'
 import { Bell, Volume2, VolumeX, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import {
   dismissPushPrompt,
   getPushState,
+  sendTestPush,
   subscribeToPush,
   unsubscribeFromPush,
   wasPushPromptDismissed,
@@ -57,6 +64,17 @@ export function EnableNotificationsControl({ variant = 'button', className }: Pr
       await refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not disable notifications')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const test = async () => {
+    setBusy(true)
+    try {
+      const ok = await sendTestPush()
+      if (ok) toast.success('Test sent — you should get a notification shortly')
+      else toast.error('Could not send test notification')
     } finally {
       setBusy(false)
     }
@@ -181,18 +199,25 @@ export function EnableNotificationsControl({ variant = 'button', className }: Pr
 
   if (state.subscribed) {
     return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className={cn('size-8', className)}
-        disabled={busy}
-        title="Disable notifications"
-        onClick={() => void disable()}
-      >
-        <Volume2 className="size-4 text-primary" />
-        <span className="sr-only">Disable notifications</span>
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn('size-8', className)}
+            disabled={busy}
+            title="Notifications"
+          >
+            <Volume2 className="size-4 text-primary" />
+            <span className="sr-only">Notification options</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => void test()}>Send test notification</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void disable()}>Turn off notifications</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     )
   }
 
