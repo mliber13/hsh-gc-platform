@@ -4352,14 +4352,13 @@ export async function uploadProjectDocument(
     }
 
     // Create document record in database
-    // Try with file_path first (if migration has been applied)
-    let insertData: any = {
+    const insertData: any = {
       project_id: projectId,
       organization_id: profile.organization_id,
       name: file.name,
       type: documentType,
       file_url: signedUrl, // Store signed URL instead of public URL
-      file_path: filePath, // Store file path for regenerating signed URLs
+      file_path: filePath, // Store file path for regenerating signed URLs (migration 025)
       file_size: file.size,
       mime_type: file.type,
       uploaded_by: user.id,
@@ -4368,25 +4367,11 @@ export async function uploadProjectDocument(
       tags: tags || null,
     }
 
-    let { data: docData, error: docError } = await supabase
+    const { data: docData, error: docError } = await supabase
       .from('project_documents')
       .insert(insertData)
       .select()
       .single()
-
-    // If file_path column doesn't exist yet (migration not applied), retry without it
-    if (docError && docError.message?.includes("file_path") && docError.message?.includes("schema cache")) {
-      console.warn('file_path column not found, inserting without it. Please run migration 025_add_file_path_to_project_documents.sql')
-      // Remove file_path from insert data
-      delete insertData.file_path
-      const retryResult = await supabase
-        .from('project_documents')
-        .insert(insertData)
-        .select()
-        .single()
-      docData = retryResult.data
-      docError = retryResult.error
-    }
 
     if (docError || !docData) {
       console.error('Error creating document record:', docError)
@@ -4425,11 +4410,9 @@ export async function fetchProjectDocuments(projectId: string): Promise<ProjectD
   if (!isOnlineMode()) return []
 
   try {
-    // Select without file_path for now (migration 025_add_file_path_to_project_documents.sql not applied yet)
-    // Once migration is applied, we can add file_path to the select list for better signed URL regeneration
     const { data, error } = await supabase
       .from('project_documents')
-      .select('id, project_id, name, type, file_url, file_size, mime_type, category, tags, uploaded_by, uploaded_at, description, version, replaces_document_id')
+      .select('id, project_id, name, type, file_url, file_path, file_size, mime_type, category, tags, uploaded_by, uploaded_at, description, version, replaces_document_id')
       .eq('project_id', projectId)
       .order('uploaded_at', { ascending: false })
 
@@ -4543,10 +4526,9 @@ export async function deleteProjectDocument(documentId: string): Promise<boolean
 
   try {
     // First, get the document to find the file path
-    // Select without file_path for now (migration 025_add_file_path_to_project_documents.sql not applied yet)
     const { data: doc, error: fetchError } = await supabase
       .from('project_documents')
-      .select('file_url')
+      .select('file_url, file_path')
       .eq('id', documentId)
       .single()
 
@@ -4555,12 +4537,12 @@ export async function deleteProjectDocument(documentId: string): Promise<boolean
       return false
     }
 
-    // Extract file path from URL (file_path column not available yet)
-    let filePath: string | null = null
+    // Prefer the stored file_path (migration 025); fall back to parsing the URL for legacy rows.
+    let filePath: string | null = doc.file_path?.trim() || null
     let bucketName = 'project-documents'
 
-    // Try to extract from URL
-    if (doc.file_url) {
+    // Legacy rows without a stored file_path — extract it from the URL.
+    if (!filePath && doc.file_url) {
       // Try primary bucket name first
       const urlParts = doc.file_url.split('/project-documents/')
       if (urlParts && urlParts.length >= 2) {
