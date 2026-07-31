@@ -19,15 +19,21 @@ self.addEventListener('push', (event) => {
     data = { body: event.data?.text() }
   }
   const title = data.title ?? 'HSH'
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body: data.body,
-      icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
-      tag: data.tag,
-      data: { url: data.url ?? '/' },
-    }),
-  )
+  // `vibrate` / `renotify` aren't in the base NotificationOptions TS type but are
+  // valid on Android Chrome — extend the type so tsc is happy.
+  const options: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {
+    body: data.body,
+    icon: '/pwa-192x192.png',
+    // Monochrome bell silhouette — the small status-bar icon on Android.
+    badge: '/notification-badge.png',
+    tag: data.tag,
+    silent: false,
+    vibrate: [250, 120, 250, 120, 250],
+    data: { url: data.url ?? '/' },
+  }
+  // renotify requires a tag; re-alert (buzz again) on repeat notifications.
+  if (data.tag) options.renotify = true
+  event.waitUntil(self.registration.showNotification(title, options))
 })
 
 self.addEventListener('notificationclick', (event) => {
