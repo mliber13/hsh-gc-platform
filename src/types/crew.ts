@@ -194,6 +194,13 @@ export interface CrewProjectDetail {
   hasMeasureAssignment: boolean
   /** Field takeoff review workflow — set for measurers / operator preview. */
   measureWorkflowStatus: CrewMeasureWorkflowStatus | null
+  /**
+   * True when this person is entitled to see materials/pay (job info on, not foreman/preview)
+   * but their trade specialty didn't resolve (`unknown`) — so materials/pay come back blank.
+   * Signals a broken account link (e.g. stale linked_* id after a roster re-import) that the
+   * office needs to fix. Drives a loud banner instead of a silent empty screen.
+   */
+  specialtyUnresolved: boolean
 }
 
 export interface CommsUnreadEntry {

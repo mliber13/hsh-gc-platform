@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import {
+  AlertTriangle,
   ArrowLeft,
   Calendar,
   Camera,
@@ -323,6 +324,21 @@ export function CrewProjectDetailPage() {
           <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
         </Button>
       </div>
+
+      {detail.specialtyUnresolved ? (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
+          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+          <div className="space-y-0.5 text-sm">
+            <p className="font-semibold text-foreground">
+              We couldn&apos;t match your trade to this job
+            </p>
+            <p className="text-muted-foreground">
+              Your materials and pay may be hidden. Ask the office to check your account link — this
+              usually happens after a roster update.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-2">

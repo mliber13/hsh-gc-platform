@@ -137,13 +137,16 @@ function formatAddress(row: ProjectRow): string {
 }
 
 function resolvePersonId(profile: Awaited<ReturnType<typeof getCurrentUserProfile>>): string {
-  const id =
-    profile?.linkedEmployeeId ??
-    profile?.linkedContractorId ??
-    profile?.linked_employee_id ??
-    profile?.linked_contractor_id ??
-    null
-  if (!id || typeof id !== 'string') {
+  // Use the first NON-EMPTY linkage. `??` only skips null/undefined, so an
+  // empty-string linked_employee_id would otherwise shadow a valid contractor id
+  // (and mis-key every assignment lookup). Treat '' as "not set".
+  const id = [
+    profile?.linkedEmployeeId,
+    profile?.linkedContractorId,
+    profile?.linked_employee_id,
+    profile?.linked_contractor_id,
+  ].find((v): v is string => typeof v === 'string' && v.trim() !== '')
+  if (!id) {
     throw new CrewProfileNotLinkedError()
   }
   return id
@@ -1262,6 +1265,12 @@ async function mapProjectDetail(
         }))
       : [],
     specialty: context.specialty,
+    // Entitled to materials/pay (job info on, real crew) but trade didn't resolve → blank screen.
+    specialtyUnresolved:
+      context.specialty === 'unknown' &&
+      showJobInfo &&
+      !isForeman &&
+      context.preview !== true,
     laborRates,
     estimatedTotalPay:
       showJobInfo && !isForeman
