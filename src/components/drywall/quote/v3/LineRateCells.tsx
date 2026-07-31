@@ -598,11 +598,6 @@ export function ComponentLaborRateCell({
   )
 }
 
-/** @deprecated Use FinisherRateCell */
-export const LaborRateCell = FinisherRateCell
-
-
-
 function RateInput({
 
   value,

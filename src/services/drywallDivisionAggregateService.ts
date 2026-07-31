@@ -254,15 +254,6 @@ export function shouldDropJobOutsideExecutionWindow(
   return now.getTime() - completionMs > EXECUTION_COMPLETED_WINDOW_MS
 }
 
-/** @deprecated Use shouldDropJobOutsideExecutionWindow */
-export function shouldDropStaleClosedJob(
-  status: string,
-  timestamps: ProductionTimestamps,
-  now: Date,
-): boolean {
-  return shouldDropJobOutsideExecutionWindow(status, timestamps, now)
-}
-
 export function jobCompletedAt(timestamps: ProductionTimestamps): string | null {
   return timestamps.closedAt ?? timestamps.productionCompletedAt ?? null
 }
