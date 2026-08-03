@@ -251,14 +251,16 @@ function TypeSectionTable({
       >
         <colgroup>
           <col style={{ width: 110 }} />
-          <col style={{ width: 148 }} />
+          {/* Catalog: drywall boards need room; component types (RC Deluxe / RC-1 / RC-2) are short. */}
+          <col style={{ width: isDrywall ? 148 : 100 }} />
           <col style={{ width: 82 }} />
           {isDrywall ? (
             <col style={{ width: 128 }} />
           ) : (
             <col style={{ width: 82 }} />
           )}
-          {!isDrywall && <col style={{ width: 190 }} />}
+          {/* Setup (components) — widened with the space freed from the catalog column. */}
+          {!isDrywall && <col style={{ width: 238 }} />}
           {isDrywall && <col style={{ width: 180 }} />}
           {/* Description column — drywall only; components edit description in the line dialog. */}
           <col style={{ width: isDrywall ? 118 : 170 }} />
