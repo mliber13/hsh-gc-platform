@@ -1,6 +1,6 @@
 import { DRYWALL_QUOTE_BASE_DEFAULTS } from './drywallQuoteDefaults'
 import type { DrywallQuoteV3, QuoteAlternate, QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
-import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
+import type { OrgDrywallCatalogs, SuspendedGridComponentType } from '@/types/drywallCatalogs'
 import {
   getEffectiveComponentLaborRate,
   getEffectiveFinisherRate,
@@ -57,6 +57,16 @@ function componentLaborTradeKey(
   }
 }
 
+export interface SuspendedGridBreakdown {
+  perimeter: number
+  mains: number
+  tees_4ft: number
+  /** Linear feet of wire. */
+  wire: number
+  lags: number
+  wall_angle: number
+}
+
 export interface QuoteV3LineComputed {
   materialTotal: number
   hangerLaborTotal: number
@@ -68,6 +78,8 @@ export interface QuoteV3LineComputed {
   unit: string
   catalogLabel: string
   finishLabel: string
+  /** Present for suspended_grid lines priced via the itemized path (not blended). */
+  gridBreakdown?: SuspendedGridBreakdown
 }
 
 export interface QuoteV3ComponentLaborByTrade {
@@ -167,6 +179,7 @@ export function computeLineItem(
   let laborTotal = 0
   let accessoriesTotal = 0
   let accessories: LineAccessoryResult = emptyAccessories()
+  let gridBreakdown: SuspendedGridBreakdown | undefined
 
   if (line.type === 'drywall') {
     const finishScope = resolveFinishScope(line, catalogs)
@@ -222,6 +235,43 @@ export function computeLineItem(
     })
     accessories = rcScrews.accessories
     accessoriesTotal = rcScrews.screwsTotal
+  } else if (line.type === 'suspended_grid') {
+    // Itemized grid material: counts (v2 formulas) × catalog per-component rates.
+    // Labor stays sqft × carpenter rate via the standard component-labor path below.
+    const sqft = qty
+    const gridWastePct = line.waste_pct ?? 0
+    const wasteMultGrid = 1 + gridWastePct / 100
+    const sqftWasted = sqft * wasteMultGrid
+    const basePerimeter =
+      line.grid_perimeter && line.grid_perimeter > 0 ? line.grid_perimeter : 4 * Math.sqrt(sqft)
+    const perimeterWasted = basePerimeter * wasteMultGrid
+    const ov = line.grid_count_overrides ?? {}
+    const mains = ov.mains ?? Math.ceil(sqftWasted / 4 / 12)
+    const tees_4ft = ov.tees_4ft ?? Math.ceil((sqftWasted / 16) * 2)
+    const wire = ov.wire ?? Math.ceil(sqftWasted / 5)
+    const lags = ov.lags ?? Math.ceil(wire / 8)
+    const wall_angle = ov.wall_angle ?? Math.ceil(perimeterWasted / 8)
+
+    if (line.custom_material_rate != null) {
+      // Converted/blended line — preserve v2→v3 parity; don't retro-itemize.
+      materialTotal = qty * line.custom_material_rate
+    } else {
+      const rate = (ct: SuspendedGridComponentType) =>
+        catalogs.suspended_grid.find((e) => e.component_type === ct)?.material_rate ?? 0
+      materialTotal =
+        mains * rate('mains') +
+        tees_4ft * rate('tees_4ft') +
+        wire * rate('wire') +
+        lags * rate('lags') +
+        wall_angle * rate('wall_angle')
+      gridBreakdown = { perimeter: perimeterWasted, mains, tees_4ft, wire, lags, wall_angle }
+    }
+
+    const laborRate = getEffectiveComponentLaborRate(line, catalogs)
+    laborTotal = applyLaborBurden(
+      qty * laborRate,
+      laborBurden?.componentIncludeLaborBurden ?? true,
+    )
   } else {
     const laborRate = getEffectiveComponentLaborRate(line, catalogs)
     laborTotal = applyLaborBurden(
@@ -241,6 +291,7 @@ export function computeLineItem(
     unit: getLineUnit(line, catalogs),
     catalogLabel: getLineCatalogLabel(line, catalogs),
     finishLabel: resolveFinishScope(line, catalogs)?.display_name ?? '—',
+    gridBreakdown,
   }
 }
 

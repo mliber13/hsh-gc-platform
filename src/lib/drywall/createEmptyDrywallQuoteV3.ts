@@ -356,6 +356,8 @@ export function createQuoteLineItem(
     rc_surface: type === 'rc_channel' ? 'wall' : undefined,
     rc_spacing_in: type === 'rc_channel' ? 24 : undefined,
     accessoryOverrides: type === 'rc_channel' ? { screws: true } : undefined,
+    // Suspended grid: carpenter install labor is $/sqft; default to the v2 base carpenter rate.
+    custom_labor_rate: type === 'suspended_grid' ? 2.0 : undefined,
   }
 }
 

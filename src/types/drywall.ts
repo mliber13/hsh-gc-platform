@@ -521,6 +521,17 @@ export interface QuoteLineItem {
   rc_surface?: 'wall' | 'ceiling'
   rc_wall_height?: number
   rc_spacing_in?: number
+  /** Suspended grid: perimeter override (LF); derived 4×√sqft when blank. Drives wall-angle count. */
+  grid_perimeter?: number
+  /** Suspended grid: per-component count overrides; blank = computed from sqft/perimeter/waste. */
+  grid_count_overrides?: {
+    mains?: number
+    tees_4ft?: number
+    /** Wire is counted in linear feet. */
+    wire?: number
+    lags?: number
+    wall_angle?: number
+  }
   /** Applies when material and/or hanger/finisher rates are overridden on a drywall line. */
   override_reason?: string
   waste_pct?: number
