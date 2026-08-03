@@ -425,6 +425,19 @@ export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave 
 
           )}
 
+          {draft.type !== 'drywall' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="line-description">Description</Label>
+              <Input
+                id="line-description"
+                disabled={readOnly}
+                value={draft.description ?? ''}
+                placeholder="Optional line description"
+                onChange={(e) => patch({ description: e.target.value })}
+              />
+            </div>
+          )}
+
           <div className="space-y-1.5">
 
             <Label htmlFor="override-reason">Override reason</Label>

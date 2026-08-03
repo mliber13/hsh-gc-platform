@@ -217,7 +217,8 @@ function TypeSectionTable({
   onEdit: (line: QuoteLineItem) => void
 }) {
   const { isDrywall, catalogLabel, orderedLines, type } = section
-  const colSpan = 12
+  // Drywall = 12 columns; component sections drop the Description column (edited in the dialog).
+  const colSpan = isDrywall ? 12 : 11
   const matRateHeader = materialRateHeaderForType(type)
   const laborRateHeader = componentLaborRateHeaderForType(type)
   const theme = TRADE_SECTION_THEMES[type]
@@ -258,8 +259,9 @@ function TypeSectionTable({
             <col style={{ width: 82 }} />
           )}
           {!isDrywall && <col style={{ width: 190 }} />}
-          <col style={{ width: isDrywall ? 180 : 164 }} />
-          <col style={{ width: 118 }} />
+          {isDrywall && <col style={{ width: 180 }} />}
+          {/* Description column — drywall only; components edit description in the line dialog. */}
+          <col style={{ width: isDrywall ? 118 : 170 }} />
           {isDrywall && <col style={{ width: 64 }} />}
           <col style={{ width: 96 }} />
           <col style={{ width: 96 }} />
@@ -288,7 +290,7 @@ function TypeSectionTable({
               </th>
             )}
             {!isDrywall && <th className="px-1.5 py-2 font-medium">Setup</th>}
-            <th className="px-1.5 py-2 font-medium">Description</th>
+            {isDrywall && <th className="px-1.5 py-2 font-medium">Description</th>}
             <th className="px-1.5 py-2 text-center font-medium">Qty</th>
             {isDrywall && (
               <th className="px-1.5 py-2 font-medium">Waste</th>
@@ -405,8 +407,8 @@ function LineRow({
   const unitLabel =
     line.type === 'rc_channel'
       ? line.rc_surface === 'ceiling'
-        ? 'Ceiling area (sqft)'
-        : 'Wall length (LF)'
+        ? 'sqft'
+        : 'LF'
       : computed.unit
 
   const patch = (p: Partial<QuoteLineItem>) => onPatch(line.id, p)
@@ -565,20 +567,22 @@ function LineRow({
           ) : null}
         </td>
       )}
-      <td className="px-1.5 py-1">
-        {readOnly ? (
-          <span className="truncate block" title={line.description}>
-            {line.description || '—'}
-          </span>
-        ) : (
-          <Input
-            className={`h-7 text-xs ${compact ? 'text-[11px]' : ''}`}
-            value={line.description}
-            placeholder="Notes"
-            onChange={(e) => patch({ description: e.target.value })}
-          />
-        )}
-      </td>
+      {isDrywall && (
+        <td className="px-1.5 py-1">
+          {readOnly ? (
+            <span className="truncate block" title={line.description}>
+              {line.description || '—'}
+            </span>
+          ) : (
+            <Input
+              className={`h-7 text-xs ${compact ? 'text-[11px]' : ''}`}
+              value={line.description}
+              placeholder="Notes"
+              onChange={(e) => patch({ description: e.target.value })}
+            />
+          )}
+        </td>
+      )}
       <td className="px-1.5 py-1">
         <QuantityInput
           value={line.quantity}
