@@ -521,6 +521,11 @@ export interface QuoteLineItem {
   rc_surface?: 'wall' | 'ceiling'
   rc_wall_height?: number
   rc_spacing_in?: number
+  /**
+   * Groups component lines that share one spec (RC type + rates) in the pivot entry UI.
+   * New pivot rows carry an explicit id; legacy/converted lines fall back to grouping by spec.
+   */
+  component_group_id?: string
   /** Suspended grid: perimeter override (LF); derived 4×√sqft when blank. Drives wall-angle count. */
   grid_perimeter?: number
   /** Suspended grid: per-component count overrides; blank = computed from sqft/perimeter/waste. */

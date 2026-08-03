@@ -21,6 +21,7 @@ import { computeLineItem, formatQuoteMoney, type QuoteV3LaborBurdenOptions } fro
 import { TRADE_SECTION_THEMES } from '@/lib/drywall/quoteV3TradeTheme'
 import { cn } from '@/lib/utils'
 import { createQuoteLineItem } from '@/lib/drywall/createEmptyDrywallQuoteV3'
+import { RcChannelPivotSection } from './RcChannelPivotSection'
 import type { QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { LineItemEditDialog } from './LineItemEditDialog'
@@ -139,20 +140,33 @@ export function LineItemsTable({
           No line items yet. Add a line below.
         </div>
       ) : (
-        typeSections.map((section) => (
-          <TypeSectionTable
-            key={section.type}
-            section={section}
-            catalogs={catalogs}
-            readOnly={readOnly}
-            compact={compact}
-            lineComputeOptions={lineComputeOptions}
-            beadAllocation={beadAllocation}
-            onPatch={patchLine}
-            onDelete={deleteLine}
-            onEdit={openEdit}
-          />
-        ))
+        typeSections.map((section) =>
+          section.type === 'rc_channel' ? (
+            <RcChannelPivotSection
+              key={section.type}
+              lines={lines}
+              catalogs={catalogs}
+              readOnly={readOnly}
+              compact={compact}
+              lineComputeOptions={lineComputeOptions}
+              sectionSubtotal={section.sectionSubtotal}
+              onChange={onChange}
+            />
+          ) : (
+            <TypeSectionTable
+              key={section.type}
+              section={section}
+              catalogs={catalogs}
+              readOnly={readOnly}
+              compact={compact}
+              lineComputeOptions={lineComputeOptions}
+              beadAllocation={beadAllocation}
+              onPatch={patchLine}
+              onDelete={deleteLine}
+              onEdit={openEdit}
+            />
+          ),
+        )
       )}
 
       {!readOnly && (
