@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/select'
 import { Briefcase, PlusCircle, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatDateOnly } from '@/lib/dateFormat'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { fetchDeals } from '@/services/dealService'
 import type { Deal, DealStatus } from '@/types/deal'
@@ -372,11 +373,7 @@ function DealRow({
   formatCurrency: (n: number) => string
 }) {
   const expectedStart = deal.expected_start_date
-    ? new Date(deal.expected_start_date).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
+    ? formatDateOnly(deal.expected_start_date, { year: 'numeric', month: 'short', day: 'numeric' })
     : null
 
   return (

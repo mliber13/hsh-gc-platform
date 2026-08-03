@@ -26,6 +26,7 @@ import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { TradeCategoriesEditor } from '@/components/TradeCategoriesManagement'
 import { getCategoryAccentLeftBorderStyle } from '@/lib/categoryAccent'
+import { formatDateOnly } from '@/lib/dateFormat'
 import { EstimateTemplatesContent } from '@/components/EstimateTemplateManagement'
 import { EstimateTemplateEditor } from '@/components/EstimateTemplateEditor'
 import { UNIT_TYPES } from '@/types'
@@ -330,7 +331,7 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
                                     )}
                                     {(item.rateSourceName || item.rateSourceDate) && (
                                       <div className="text-xs text-muted-foreground mt-1">
-                                        Rate: {[item.rateSourceName, item.rateSourceDate ? new Date(item.rateSourceDate).toLocaleDateString() : null].filter(Boolean).join(', ')}
+                                        Rate: {[item.rateSourceName, item.rateSourceDate ? formatDateOnly(item.rateSourceDate, {}) : null].filter(Boolean).join(', ')}
                                         {item.rateSourceNotes && ` — ${item.rateSourceNotes}`}
                                       </div>
                                     )}

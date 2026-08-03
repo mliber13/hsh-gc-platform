@@ -7,6 +7,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
+import { formatDateOnly } from '@/lib/dateFormat'
 
 export type QbReviewStatus = 'pending' | 'accepted' | 'rejected'
 
@@ -19,16 +20,8 @@ export function formatQbCurrency(amount: number): string {
 }
 
 export function formatQbDate(iso: string | null): string {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return iso
-  }
+  // QuickBooks TxnDate is date-only (YYYY-MM-DD) — parse as local so it doesn't shift a day.
+  return formatDateOnly(iso, { year: 'numeric', month: 'short', day: 'numeric' }, '—')
 }
 
 export function qbReviewStatusBadge(status: QbReviewStatus) {
