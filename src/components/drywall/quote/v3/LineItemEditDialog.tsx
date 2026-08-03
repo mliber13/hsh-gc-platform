@@ -70,6 +70,31 @@ export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave 
   const rcChannelLfWasted = (rcChannelLf * (100 + (draft.waste_pct ?? 10))) / 100
   const rcPieces = Math.ceil(rcChannelLfWasted / 12)
 
+  // Suspended grid — computed component counts (defaults shown as placeholders; overridable).
+  const gridSqft = draft.quantity || 0
+  const gridWasteMult = 1 + (draft.waste_pct ?? 0) / 100
+  const gridSqftW = gridSqft * gridWasteMult
+  const gridBasePerimeter =
+    draft.grid_perimeter && draft.grid_perimeter > 0 ? draft.grid_perimeter : 4 * Math.sqrt(gridSqft)
+  const gridPerimeterW = gridBasePerimeter * gridWasteMult
+  const gridCounts = {
+    mains: Math.ceil(gridSqftW / 4 / 12),
+    tees_4ft: Math.ceil((gridSqftW / 16) * 2),
+    wire: Math.ceil(gridSqftW / 5),
+    lags: Math.ceil(Math.ceil(gridSqftW / 5) / 8),
+    wall_angle: Math.ceil(gridPerimeterW / 8),
+  }
+  const gridCountFields: {
+    key: keyof NonNullable<QuoteLineItem['grid_count_overrides']>
+    label: string
+  }[] = [
+    { key: 'mains', label: 'Mains' },
+    { key: 'tees_4ft', label: 'Cross-tees (4ft)' },
+    { key: 'wire', label: 'Wire (LF)' },
+    { key: 'lags', label: 'Lags' },
+    { key: 'wall_angle', label: 'Wall angle' },
+  ]
+
 
 
   const patch = (p: Partial<QuoteLineItem>) =>
@@ -113,7 +138,9 @@ export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave 
 
         <div className="grid gap-3 py-2">
 
-          {(draft.type === 'drywall' || draft.type === 'rc_channel') && (
+          {(draft.type === 'drywall' ||
+            draft.type === 'rc_channel' ||
+            draft.type === 'suspended_grid') && (
 
             <div className="space-y-1.5">
 
@@ -210,6 +237,86 @@ export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave 
 
               <p className="text-xs text-muted-foreground">
                 Derived: {rcChannelLfWasted.toFixed(2)} channel LF (incl. waste) · {rcPieces} pieces
+              </p>
+            </>
+          )}
+
+          {draft.type === 'suspended_grid' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="grid-perimeter">Perimeter (LF)</Label>
+                  <Input
+                    id="grid-perimeter"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    disabled={readOnly}
+                    value={draft.grid_perimeter ?? ''}
+                    placeholder={`≈ ${(4 * Math.sqrt(gridSqft)).toFixed(0)} (4×√sqft)`}
+                    onChange={(e) =>
+                      patch({
+                        grid_perimeter:
+                          e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="grid-labor">Carpenter labor ($/sqft)</Label>
+                  <Input
+                    id="grid-labor"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    disabled={readOnly}
+                    value={draft.custom_labor_rate ?? ''}
+                    placeholder="2.00"
+                    onChange={(e) =>
+                      patch({
+                        custom_labor_rate:
+                          e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs font-medium text-muted-foreground">
+                Component counts (blank = computed; enter to override)
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {gridCountFields.map((f) => (
+                  <div key={f.key} className="space-y-1">
+                    <Label htmlFor={`grid-${f.key}`} className="text-xs">
+                      {f.label}
+                    </Label>
+                    <Input
+                      id={`grid-${f.key}`}
+                      type="number"
+                      min={0}
+                      step={1}
+                      disabled={readOnly}
+                      value={draft.grid_count_overrides?.[f.key] ?? ''}
+                      placeholder={String(gridCounts[f.key])}
+                      onChange={(e) =>
+                        patch({
+                          grid_count_overrides: {
+                            ...(draft.grid_count_overrides || {}),
+                            [f.key]:
+                              e.target.value === ''
+                                ? undefined
+                                : parseFloat(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Material uses the Suspended Grid catalog rates. Set a Custom material rate below only
+                to force a blended $/sqft (bypasses the itemized breakdown).
               </p>
             </>
           )}

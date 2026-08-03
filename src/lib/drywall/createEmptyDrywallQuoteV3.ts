@@ -352,7 +352,7 @@ export function createQuoteLineItem(
     quantity: 0,
     catalog_id: '',
     finish_scope_id: undefined,
-    waste_pct: type === 'drywall' ? 10 : undefined,
+    waste_pct: type === 'drywall' ? 10 : type === 'suspended_grid' ? 0 : undefined,
     rc_surface: type === 'rc_channel' ? 'wall' : undefined,
     rc_spacing_in: type === 'rc_channel' ? 24 : undefined,
     accessoryOverrides: type === 'rc_channel' ? { screws: true } : undefined,
