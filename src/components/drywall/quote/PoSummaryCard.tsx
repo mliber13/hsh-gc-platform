@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { Download, FileText, Pencil } from 'lucide-react'
+import { toLocalDate } from '@/lib/scheduleCalendarUtils'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -161,7 +162,7 @@ export function PoSummaryCard({ projectId }: PoSummaryCardProps) {
           {expectedStartDate && (
             <DetailRow
               label="Expected Start"
-              value={format(new Date(expectedStartDate), 'MMMM d, yyyy')}
+              value={format(toLocalDate(expectedStartDate), 'MMMM d, yyyy')}
             />
           )}
 

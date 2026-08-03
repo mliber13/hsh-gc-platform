@@ -28,6 +28,7 @@ import {
   type SupplierUpcomingRow,
 } from '@/services/supplierOrdersService'
 import { getOrCreateSupplierShareLink } from '@/services/supplierShareService'
+import { toLocalDate } from '@/lib/scheduleCalendarUtils'
 
 const NO_SUPPLIER = '__none__'
 
@@ -42,17 +43,16 @@ function supplierLabel(row: SupplierOrderRow): string {
 /** Sort key: soonest delivery first; undated orders sink to the bottom. */
 function deliverySortKey(row: SupplierOrderRow): number {
   if (!row.deliveryDate) return Number.POSITIVE_INFINITY
-  const t = new Date(row.deliveryDate).getTime()
+  const t = toLocalDate(row.deliveryDate).getTime()
   return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t
 }
 
 function formatDelivery(date: string | null): { label: string; soon: boolean; overdue: boolean } {
   if (!date) return { label: 'No date', soon: false, overdue: false }
-  const d = new Date(date)
+  const d = toLocalDate(date)
   if (Number.isNaN(d.getTime())) return { label: date, soon: false, overdue: false }
   const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const today = toLocalDate(new Date())
   const diffDays = Math.round((d.getTime() - today.getTime()) / 86_400_000)
   return { label, soon: diffDays >= 0 && diffDays <= 7, overdue: diffDays < 0 }
 }

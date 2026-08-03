@@ -18,11 +18,12 @@ import {
   type SupplierShareUpcoming,
 } from '@/services/supplierShareService'
 import type { DrywallOrder } from '@/types/drywall'
+import { toLocalDate } from '@/lib/scheduleCalendarUtils'
 import hshLogo from '/HSH Contractor Logo - Color.png'
 
 function formatDelivery(date: string | null): string {
   if (!date) return 'No date set'
-  const d = new Date(date)
+  const d = toLocalDate(date)
   return Number.isNaN(d.getTime())
     ? date
     : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
@@ -59,7 +60,7 @@ export function SupplierOrderSharePage() {
   const sortedOrders = useMemo(() => {
     const deliveryKey = (r: SupplierShareOrder) => {
       if (!r.deliveryDate) return Number.POSITIVE_INFINITY
-      const t = new Date(r.deliveryDate).getTime()
+      const t = toLocalDate(r.deliveryDate).getTime()
       return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t
     }
     // Needs-action first: awaiting confirmation → awaiting delivery → delivered.
