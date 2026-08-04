@@ -53,6 +53,24 @@ async function resolvePersonName(orgId: string, personId: string, personType: Ti
   return found?.name ?? null
 }
 
+export type TimeClockProject = { id: string; name: string }
+
+/** Org projects for the Time Clock job picker (RLS scopes to the caller's org). */
+export async function fetchTimeClockProjects(): Promise<TimeClockProject[]> {
+  if (!isOnlineMode()) return []
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id, name')
+    .order('name', { ascending: true })
+  if (error) {
+    console.error('fetchTimeClockProjects:', error)
+    return []
+  }
+  return ((data ?? []) as Array<{ id: string; name: string | null }>)
+    .filter((p): p is TimeClockProject => Boolean(p.id && p.name))
+    .map((p) => ({ id: p.id, name: p.name }))
+}
+
 async function resolveProjectName(projectId: string) {
   const { data, error } = await supabase
     .from('projects')

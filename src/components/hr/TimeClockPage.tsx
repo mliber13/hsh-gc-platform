@@ -9,12 +9,21 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   clockIn,
   clockOut,
   deleteEntry,
   fetchEntriesForRange,
   fetchMyOpenPunch,
+  fetchTimeClockProjects,
   updateEntry,
+  type TimeClockProject,
 } from '@/services/hrTimeService'
 import type { PunchState, TimeEntry } from '@/types/hr'
 import { TimeEntryEditDialog } from './time/TimeEntryEditDialog'
@@ -59,6 +68,22 @@ export function TimeClockPage() {
   const [to, setTo] = useState(isoDateFromNow(0))
   const [editEntry, setEditEntry] = useState<TimeEntry | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
+  const [projects, setProjects] = useState<TimeClockProject[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchTimeClockProjects()
+      .then((rows) => {
+        if (!cancelled) setProjects(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setProjects([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -89,8 +114,10 @@ export function TimeClockPage() {
       await clockIn({
         personId: punchState.hrPersonId,
         personType: punchState.hrPersonType,
+        projectId: selectedProjectId || undefined,
       })
       toast.success('Clocked in')
+      setSelectedProjectId('')
       await load()
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to clock in'
@@ -152,6 +179,7 @@ export function TimeClockPage() {
                 <div>
                   <p className="font-medium text-amber-900">You are clocked in</p>
                   <p className="text-sm text-amber-700">
+                    {openPunch.project_name ? `${openPunch.project_name} · ` : ''}
                     Since {formatDateTime(openPunch.clock_in)}
                   </p>
                 </div>
@@ -160,9 +188,30 @@ export function TimeClockPage() {
                 </Button>
               </div>
             ) : (
-              <Button onClick={() => void handleClockIn()} disabled={punchLoading}>
-                {punchLoading ? 'Clocking in…' : 'Clock in'}
-              </Button>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="min-w-56 flex-1 space-y-1.5">
+                  <label className="block text-xs text-muted-foreground">Job (optional)</label>
+                  <Select
+                    value={selectedProjectId || 'none'}
+                    onValueChange={(v) => setSelectedProjectId(v === 'none' ? '' : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="No job — general hours" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No job — general hours</SelectItem>
+                      {projects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={() => void handleClockIn()} disabled={punchLoading}>
+                  {punchLoading ? 'Clocking in…' : 'Clock in'}
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
