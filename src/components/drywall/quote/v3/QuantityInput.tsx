@@ -20,6 +20,8 @@ type Props = {
   unit: string
   readOnly: boolean
   compact?: boolean
+  /** Fixed-width input that hugs the number so the unit sits right beside it (vs. filling the column). */
+  snug?: boolean
   onChange: (quantity: number) => void
 }
 
@@ -27,7 +29,7 @@ type Props = {
  * Text input: formatted with commas when blurred; raw numeric string when focused.
  * Accepts comma-separated paste while editing.
  */
-export function QuantityInput({ value, unit, readOnly, compact, onChange }: Props) {
+export function QuantityInput({ value, unit, readOnly, compact, snug, onChange }: Props) {
   const [focused, setFocused] = useState(false)
   const [draft, setDraft] = useState('')
 
@@ -43,14 +45,15 @@ export function QuantityInput({ value, unit, readOnly, compact, onChange }: Prop
   const rawForEdit = value === 0 ? '' : String(value)
 
   return (
-    <div className="flex items-center justify-end gap-1">
+    <div className="flex items-center justify-end gap-1.5">
       <Input
         type="text"
         inputMode="decimal"
         value={focused ? draft : formatQuantityDisplay(value)}
         placeholder="0"
         className={cn(
-          'h-7 min-w-0 flex-1 px-1.5 text-right text-xs tabular-nums',
+          'h-7 min-w-0 px-1.5 text-right text-xs tabular-nums',
+          snug ? 'w-[88px]' : 'flex-1',
           compact && 'text-[11px]',
         )}
         onFocus={(e) => {

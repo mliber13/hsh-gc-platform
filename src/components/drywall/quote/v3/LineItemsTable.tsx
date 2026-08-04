@@ -594,44 +594,57 @@ function LineRow({
             )
           ) : line.type === 'suspended_grid' ? (
             readOnly ? (
-              <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
                 <span>
-                  perim{' '}
-                  {line.grid_perimeter
-                    ? `${line.grid_perimeter} LF`
-                    : `≈${Math.round(4 * Math.sqrt(line.quantity || 0))}`}
+                  Perimeter{' '}
+                  <span className="text-foreground">
+                    {line.grid_perimeter
+                      ? `${line.grid_perimeter} LF`
+                      : `≈${Math.round(4 * Math.sqrt(line.quantity || 0))} LF`}
+                  </span>
                 </span>
-                <span>·</span>
-                <span>w {line.waste_pct ?? 0}%</span>
+                <span>
+                  Waste <span className="text-foreground">{line.waste_pct ?? 0}%</span>
+                </span>
               </div>
             ) : (
-              <div className="flex flex-wrap items-center gap-1">
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  className={`h-7 w-[74px] px-1 text-xs tabular-nums ${compact ? 'text-[11px]' : ''}`}
-                  placeholder={`perim ${Math.round(4 * Math.sqrt(line.quantity || 0))}`}
-                  title="Perimeter (LF) — drives the wall-angle count; blank = 4×√sqft"
-                  value={line.grid_perimeter ?? ''}
-                  onChange={(e) =>
-                    patch({
-                      grid_perimeter:
-                        e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
-                <span className="text-[10px] text-muted-foreground">LF perim</span>
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  className={`h-7 w-[46px] px-1 text-right text-xs tabular-nums ${compact ? 'text-[11px]' : ''}`}
-                  title="Waste %"
-                  value={line.waste_pct ?? 0}
-                  onChange={(e) => patch({ waste_pct: parseFloat(e.target.value) || 0 })}
-                />
-                <span className="text-[10px] text-muted-foreground">% waste</span>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Perim
+                  </span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    className={`h-7 w-[72px] px-1.5 text-right text-xs tabular-nums ${compact ? 'text-[11px]' : ''}`}
+                    placeholder={String(Math.round(4 * Math.sqrt(line.quantity || 0)))}
+                    title="Perimeter (LF) — drives the wall-angle count; blank = 4×√sqft"
+                    value={line.grid_perimeter ?? ''}
+                    onChange={(e) =>
+                      patch({
+                        grid_perimeter:
+                          e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
+                      })
+                    }
+                  />
+                  <span className="text-[10px] text-muted-foreground">LF</span>
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Waste
+                  </span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    className={`h-7 w-[46px] px-1.5 text-right text-xs tabular-nums ${compact ? 'text-[11px]' : ''}`}
+                    title="Waste %"
+                    value={line.waste_pct ?? 0}
+                    onChange={(e) => patch({ waste_pct: parseFloat(e.target.value) || 0 })}
+                  />
+                  <span className="text-[10px] text-muted-foreground">%</span>
+                </label>
               </div>
             )
           ) : null}
@@ -659,6 +672,7 @@ function LineRow({
           unit={unitLabel}
           readOnly={readOnly}
           compact={compact}
+          snug={line.type === 'suspended_grid'}
           onChange={(quantity) => patch({ quantity })}
         />
       </td>
