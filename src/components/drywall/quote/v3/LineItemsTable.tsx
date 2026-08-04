@@ -231,8 +231,10 @@ function TypeSectionTable({
   onEdit: (line: QuoteLineItem) => void
 }) {
   const { isDrywall, catalogLabel, orderedLines, type } = section
-  // Drywall = 12 columns; component sections drop the Description column (edited in the dialog).
-  const colSpan = isDrywall ? 12 : 11
+  // Suspended grid material is itemized from the catalog, so its blended Mat-rate column is hidden.
+  const hideMatRate = type === 'suspended_grid'
+  // Drywall = 12 columns; component sections drop Description; grid also drops Mat rate.
+  const colSpan = isDrywall ? 12 : hideMatRate ? 10 : 11
   const matRateHeader = materialRateHeaderForType(type)
   const laborRateHeader = componentLaborRateHeaderForType(type)
   const theme = TRADE_SECTION_THEMES[type]
@@ -267,7 +269,7 @@ function TypeSectionTable({
           <col style={{ width: 110 }} />
           {/* Catalog: drywall boards need room; component types (RC Deluxe / RC-1 / RC-2) are short. */}
           <col style={{ width: isDrywall ? 148 : 100 }} />
-          <col style={{ width: 82 }} />
+          {!hideMatRate && <col style={{ width: 82 }} />}
           {isDrywall ? (
             <col style={{ width: 128 }} />
           ) : (
@@ -294,9 +296,11 @@ function TypeSectionTable({
               Location
             </th>
             <th className="px-1.5 py-2 font-medium">{catalogLabel}</th>
-            <th className="px-1.5 py-2 font-medium" title={matRateHeader}>
-              {matRateHeader}
-            </th>
+            {!hideMatRate && (
+              <th className="px-1.5 py-2 font-medium" title={matRateHeader}>
+                {matRateHeader}
+              </th>
+            )}
             {isDrywall && (
               <th className="px-1.5 py-2 font-medium">Finish</th>
             )}
@@ -425,7 +429,9 @@ function LineRow({
       ? line.rc_surface === 'ceiling'
         ? 'sqft'
         : 'LF'
-      : computed.unit
+      : line.type === 'suspended_grid'
+        ? 'sqft'
+        : computed.unit
 
   const patch = (p: Partial<QuoteLineItem>) => onPatch(line.id, p)
   const rcSurface = line.rc_surface === 'ceiling' ? 'ceiling' : 'wall'
@@ -466,15 +472,17 @@ function LineRow({
           </select>
         )}
       </td>
-      <td className="px-1.5 py-1">
-        <MaterialRateCell
-          line={line}
-          catalogs={catalogs}
-          readOnly={readOnly}
-          compact={compact}
-          onPatch={patch}
-        />
-      </td>
+      {line.type !== 'suspended_grid' && (
+        <td className="px-1.5 py-1">
+          <MaterialRateCell
+            line={line}
+            catalogs={catalogs}
+            readOnly={readOnly}
+            compact={compact}
+            onPatch={patch}
+          />
+        </td>
+      )}
       {isDrywall && (
         <td className="px-1.5 py-1">
           {readOnly ? (
@@ -578,6 +586,48 @@ function LineRow({
                   onChange={(e) => patch({ waste_pct: parseFloat(e.target.value) || 0 })}
                 />
                 <span className="text-[10px] text-muted-foreground">%</span>
+              </div>
+            )
+          ) : line.type === 'suspended_grid' ? (
+            readOnly ? (
+              <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                <span>
+                  perim{' '}
+                  {line.grid_perimeter
+                    ? `${line.grid_perimeter} LF`
+                    : `≈${Math.round(4 * Math.sqrt(line.quantity || 0))}`}
+                </span>
+                <span>·</span>
+                <span>w {line.waste_pct ?? 0}%</span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-1">
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  className={`h-7 w-[74px] px-1 text-xs tabular-nums ${compact ? 'text-[11px]' : ''}`}
+                  placeholder={`perim ${Math.round(4 * Math.sqrt(line.quantity || 0))}`}
+                  title="Perimeter (LF) — drives the wall-angle count; blank = 4×√sqft"
+                  value={line.grid_perimeter ?? ''}
+                  onChange={(e) =>
+                    patch({
+                      grid_perimeter:
+                        e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+                <span className="text-[10px] text-muted-foreground">LF perim</span>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  className={`h-7 w-[46px] px-1 text-right text-xs tabular-nums ${compact ? 'text-[11px]' : ''}`}
+                  title="Waste %"
+                  value={line.waste_pct ?? 0}
+                  onChange={(e) => patch({ waste_pct: parseFloat(e.target.value) || 0 })}
+                />
+                <span className="text-[10px] text-muted-foreground">% waste</span>
               </div>
             )
           ) : null}
