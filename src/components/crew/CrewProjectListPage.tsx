@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
-import { CalendarDays, ChevronRight, MapPin, RefreshCw, Users } from 'lucide-react'
+import { CalendarDays, ChevronRight, MapPin, Plus, RefreshCw, Users } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -17,6 +17,10 @@ import {
 } from '@/services/crewWorkspaceService'
 import { fetchTeam } from '@/services/hrTeamService'
 import type { CrewProjectListItem } from '@/types/crew'
+import {
+  CrewForemanScheduleAddSheet,
+  type ForemanAddSheetProject,
+} from '@/components/crew/CrewForemanScheduleAddSheet'
 import { drywallStatusLabel, drywallStatusPillClass } from '@/lib/drywall/crewStatusStyles'
 import {
   crewMeasureStatusLabel,
@@ -57,7 +61,12 @@ export function CrewProjectListPage() {
   const [jobFilter, setJobFilter] = useState(FILTER_ALL)
   const [personFilter, setPersonFilter] = useState(FILTER_ALL)
 
+  const [addOpen, setAddOpen] = useState(false)
+  const [pickerProjects, setPickerProjects] = useState<ForemanAddSheetProject[]>([])
+
   const isForemanView = isFieldForeman || previewIsForeman
+  // Only a real field foreman (not an operator preview) can write.
+  const canAddSchedule = isFieldForeman && !isOperator
 
   const jobsLabel = (() => {
     const base = scope === 'all' ? 'All jobs' : 'My jobs'
@@ -302,6 +311,41 @@ export function CrewProjectListPage() {
       </div>
     ) : null
 
+  const openAdd = async () => {
+    setAddOpen(true)
+    try {
+      // All foreman-visible jobs for the picker, independent of current scope/filters.
+      const all = await fetchCrewProjectList({ scope: 'all' })
+      const byId = new Map<string, string>()
+      for (const it of all) {
+        if (!byId.has(it.projectId)) byId.set(it.projectId, it.projectName)
+      }
+      setPickerProjects(
+        [...byId.entries()]
+          .map(([id, name]) => ({ id, name }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      )
+    } catch {
+      setPickerProjects(jobOptions.map((j) => ({ id: j.projectId, name: j.projectName })))
+    }
+  }
+
+  const addButton = canAddSchedule ? (
+    <Button type="button" className="w-full gap-1.5" onClick={() => void openAdd()}>
+      <Plus className="size-4" />
+      Add schedule item
+    </Button>
+  ) : null
+
+  const addSheet = canAddSchedule ? (
+    <CrewForemanScheduleAddSheet
+      open={addOpen}
+      onOpenChange={setAddOpen}
+      projects={pickerProjects}
+      onSaved={() => void load()}
+    />
+  ) : null
+
   if (loading) {
     return (
       <div className="space-y-3">
@@ -340,6 +384,8 @@ export function CrewProjectListPage() {
     return (
       <div className="space-y-3">
         {scopeToggle}
+        {addButton}
+        {addSheet}
         <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-4 text-center">
           <CalendarDays className="size-10 text-muted-foreground/50" />
           <h2 className="text-lg font-semibold">
@@ -389,6 +435,8 @@ export function CrewProjectListPage() {
       ) : null}
 
       {scopeToggle}
+      {addButton}
+      {addSheet}
       {filterBar}
 
       <p className="text-sm text-muted-foreground">

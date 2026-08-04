@@ -37,14 +37,26 @@ const STATUS_OPTIONS: Array<{ value: DrywallScheduleItemStatus; label: string }>
   { value: 'delayed', label: 'Delayed' },
 ]
 
+export type ForemanAddSheetProject = { id: string; name: string }
+
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  projectId: string
+  /** Fixed project (opened from inside a job). Omit to show a job picker. */
+  projectId?: string
+  /** Job options for the picker (used when projectId is omitted). */
+  projects?: ForemanAddSheetProject[]
   onSaved: () => void
 }
 
-export function CrewForemanScheduleAddSheet({ open, onOpenChange, projectId, onSaved }: Props) {
+export function CrewForemanScheduleAddSheet({
+  open,
+  onOpenChange,
+  projectId,
+  projects,
+  onSaved,
+}: Props) {
+  const [selectedProjectId, setSelectedProjectId] = useState('')
   const [name, setName] = useState('')
   const [type, setType] = useState<'field' | 'office'>('field')
   const [startDate, setStartDate] = useState('')
@@ -54,16 +66,21 @@ export function CrewForemanScheduleAddSheet({ open, onOpenChange, projectId, onS
   const [roster, setRoster] = useState<AssignedPersonOption[]>([])
   const [saving, setSaving] = useState(false)
 
+  const showJobPicker = !projectId
+  const resolvedProjectId = projectId ?? selectedProjectId
+
   useEffect(() => {
     if (!open) return
     const today = new Date().toISOString().slice(0, 10)
+    // Preselect when the picker has exactly one job; otherwise force a choice.
+    setSelectedProjectId(projectId ?? (projects?.length === 1 ? projects[0].id : ''))
     setName('')
     setType('field')
     setStartDate(today)
     setEndDate(today)
     setStatus('not-started')
     setAssignedPersons([])
-  }, [open])
+  }, [open, projectId, projects])
 
   useEffect(() => {
     if (!open) return
@@ -87,6 +104,10 @@ export function CrewForemanScheduleAddSheet({ open, onOpenChange, projectId, onS
   }
 
   const handleSave = async () => {
+    if (!resolvedProjectId) {
+      toast.error('Pick a job first')
+      return
+    }
     if (!name.trim()) {
       toast.error('Name is required')
       return
@@ -97,7 +118,7 @@ export function CrewForemanScheduleAddSheet({ open, onOpenChange, projectId, onS
     }
     setSaving(true)
     try {
-      await createForemanScheduleItem(projectId, {
+      await createForemanScheduleItem(resolvedProjectId, {
         name,
         type,
         startDate,
@@ -122,6 +143,23 @@ export function CrewForemanScheduleAddSheet({ open, onOpenChange, projectId, onS
           <SheetTitle>Add schedule item</SheetTitle>
         </SheetHeader>
         <div className="grid gap-4 py-4">
+          {showJobPicker ? (
+            <div className="grid gap-1.5">
+              <Label>Job</Label>
+              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pick a job…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(projects ?? []).map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="grid gap-1.5">
             <Label htmlFor="ff-add-name">Name</Label>
             <Input
@@ -213,7 +251,11 @@ export function CrewForemanScheduleAddSheet({ open, onOpenChange, projectId, onS
           </p>
         </div>
         <SheetFooter className="flex-col gap-2 sm:flex-col">
-          <Button type="button" onClick={() => void handleSave()} disabled={saving || !name.trim() || !startDate}>
+          <Button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={saving || !resolvedProjectId || !name.trim() || !startDate}
+          >
             {saving ? 'Adding…' : 'Add item'}
           </Button>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
