@@ -487,11 +487,23 @@ export function ScheduleItemDialog({
         toast.error('Could not send notification')
         return
       }
-      toast.success(
-        result.recipients > 0
-          ? `Notified ${result.recipients} ${result.recipients === 1 ? 'person' : 'people'}`
-          : 'Sent — no one with notifications on is assigned',
-      )
+      const { recipients, sent, failed } = result
+      if (recipients === 0) {
+        toast.info('No assigned person is linked to an app account yet.')
+      } else if (sent > 0) {
+        toast.success(
+          `Sent to ${sent} device${sent === 1 ? '' : 's'}` +
+            (failed > 0 ? ` (${failed} failed)` : ''),
+        )
+      } else if (failed > 0) {
+        toast.warning(
+          `Reached ${failed} device${failed === 1 ? '' : 's'} but delivery failed — likely a push config issue, not the crew.`,
+        )
+      } else {
+        toast.warning(
+          `Matched ${recipients} ${recipients === 1 ? 'person' : 'people'}, but none have notifications turned on yet. Ask them to tap the bell and Enable.`,
+        )
+      }
       setNotifyMessage('')
       setNotifyOpen(false)
     } catch {

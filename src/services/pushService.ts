@@ -180,10 +180,21 @@ export type NotifySchedulePayload = {
   message?: string
 }
 
-/** Best-effort notify — never throws. Returns the send summary (recipient count) or null. */
+export type PushSendSummary = {
+  /** Assigned people who have an app account (matched, before subscription lookup). */
+  recipients: number
+  /** Push messages actually accepted by the browser push service. */
+  sent: number
+  /** Subscriptions that errored on send (e.g. VAPID/config mismatch). */
+  failed: number
+  /** Dead subscriptions pruned (404/410) during this send. */
+  pruned: number
+}
+
+/** Best-effort notify — never throws. Returns the full send summary or null on transport error. */
 export async function requestPushNotify(
   payload: NotifyCommsPayload | NotifySchedulePayload,
-): Promise<{ recipients: number } | null> {
+): Promise<PushSendSummary | null> {
   if (!isOnlineMode()) return null
   try {
     const { data, error } = await supabase.functions.invoke('send-push', { body: payload })
@@ -191,8 +202,15 @@ export async function requestPushNotify(
       console.warn('send-push:', error.message)
       return null
     }
-    const recipients = (data as { recipients?: number } | null)?.recipients ?? 0
-    return { recipients }
+    const d =
+      (data as { recipients?: number; sent?: number; failed?: number; pruned?: number } | null) ??
+      {}
+    return {
+      recipients: d.recipients ?? 0,
+      sent: d.sent ?? 0,
+      failed: d.failed ?? 0,
+      pruned: d.pruned ?? 0,
+    }
   } catch (e) {
     console.warn('send-push failed:', e)
     return null
