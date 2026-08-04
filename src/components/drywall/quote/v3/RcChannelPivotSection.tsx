@@ -11,6 +11,7 @@ import {
 } from '@/lib/drywall/quoteV3Math'
 import { createQuoteLineItem } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { generateQuoteId } from '@/lib/drywall/drywallQuoteHelpers'
+import { CurrencyAmountCell } from './CurrencyAmountCell'
 import type { QuoteLineItem } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 
@@ -285,18 +286,29 @@ export function RcChannelPivotSection({
                                     </span>
                                   </span>
                                 </td>
-                                <td className="px-2 py-1.5 text-right tabular-nums text-sky-400">
-                                  {formatQuoteMoney(m.materialTotal)}
-                                </td>
-                                <td className="px-2 py-1.5 text-right tabular-nums text-sky-400">
-                                  {formatQuoteMoney(m.laborTotal)}
-                                </td>
-                                <td className="px-2 py-1.5 text-right tabular-nums text-sky-400">
-                                  {formatQuoteMoney(m.accessoriesTotal)}
-                                </td>
-                                <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
-                                  {formatQuoteMoney(m.lineTotal)}
-                                </td>
+                                <CurrencyAmountCell
+                                  value={m.materialTotal}
+                                  variant="material"
+                                  showWasteHint
+                                  className="px-2 py-1.5"
+                                />
+                                <CurrencyAmountCell
+                                  value={m.laborTotal}
+                                  variant="labor"
+                                  showWasteHint
+                                  className="px-2 py-1.5"
+                                />
+                                <CurrencyAmountCell
+                                  value={m.accessoriesTotal}
+                                  variant="accessories"
+                                  showWasteHint
+                                  className="px-2 py-1.5"
+                                />
+                                <CurrencyAmountCell
+                                  value={m.lineTotal}
+                                  variant="total"
+                                  className="px-2 py-1.5"
+                                />
                                 <td className="px-1 py-1.5 text-right">
                                   {!readOnly && (
                                     <button
