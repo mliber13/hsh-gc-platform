@@ -594,7 +594,7 @@ function LineRow({
             )
           ) : line.type === 'suspended_grid' ? (
             readOnly ? (
-              <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
+              <div className="flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
                 <span>
                   Perimeter{' '}
                   <span className="text-foreground">
@@ -608,7 +608,7 @@ function LineRow({
                 </span>
               </div>
             ) : (
-              <div className="flex items-center gap-4">
+              <div className="flex items-center justify-center gap-4">
                 <label className="flex items-center gap-1.5">
                   <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Perim
