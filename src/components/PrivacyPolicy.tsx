@@ -52,7 +52,34 @@ export function PrivacyPolicy({ onBack, showBackButton = true }: PrivacyPolicyPr
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">4. Data Storage and Security</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">4. Text Messaging (SMS)</h2>
+            <p>
+              HSH Contractor (HSH Drywall) sends text messages for scheduling and job-related
+              communication to crew members, subcontractors, customers, and general contractors who
+              provide their mobile number and consent to receive them. Consent is obtained directly
+              during employment or subcontractor onboarding, or when a customer engages HSH for a
+              project. We do not use a public web form to collect opt-in.
+            </p>
+            <p>
+              Message types include job schedule updates, appointment and delivery coordination, and
+              job-status notifications. Message frequency varies based on job activity.
+            </p>
+            <p>
+              <strong>
+                We do not sell, rent, or share your mobile phone number or SMS consent with any third
+                parties or affiliates for their marketing or promotional purposes.
+              </strong>{' '}
+              Mobile information is used solely to deliver the messages described above; message
+              delivery is handled by our SMS provider (Twilio).
+            </p>
+            <p>
+              Message and data rates may apply. Reply <strong>STOP</strong> to any message to
+              unsubscribe at any time, or reply <strong>HELP</strong> for assistance.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">5. Data Storage and Security</h2>
             <p>
               Data is stored in Supabase (database and auth) and, when you use QuickBooks, is transmitted to Intuit’s
               QuickBooks Online API under their privacy and security practices. We use industry-standard measures to
@@ -61,7 +88,7 @@ export function PrivacyPolicy({ onBack, showBackButton = true }: PrivacyPolicyPr
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">5. Third Parties</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">6. Third Parties</h2>
             <p>
               <strong>Supabase:</strong> hosts our database and authentication. <strong>Intuit / QuickBooks:</strong> when you connect
               QuickBooks, Intuit’s OAuth and API policies apply to that data. We do not share your data with other third
@@ -70,7 +97,7 @@ export function PrivacyPolicy({ onBack, showBackButton = true }: PrivacyPolicyPr
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">6. Your Choices</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">7. Your Choices</h2>
             <p>
               You can disconnect QuickBooks at any time from the App settings. You can request access to or deletion of
               your data by contacting us.
@@ -78,7 +105,7 @@ export function PrivacyPolicy({ onBack, showBackButton = true }: PrivacyPolicyPr
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">7. Contact</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mt-6 mb-2">8. Contact</h2>
             <p>
               For privacy-related questions or requests, contact us at the support or contact information provided in the App or by your administrator.
             </p>
