@@ -315,7 +315,7 @@ export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave 
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                Material uses the Suspended Grid catalog rates. Set a Custom material rate below only
+                Material uses the Suspended Drywall Grid catalog rates. Set a Custom material rate below only
                 to force a blended $/sqft (bypasses the itemized breakdown).
               </p>
             </>

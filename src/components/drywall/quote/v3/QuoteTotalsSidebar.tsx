@@ -367,7 +367,7 @@ const COMPONENT_LABOR_LABELS: Array<{
   label: string
 }> = [
   { key: 'rc_channel_labor', label: 'RC Channel Labor' },
-  { key: 'suspended_grid_labor', label: 'Suspended Grid Labor' },
+  { key: 'suspended_grid_labor', label: 'Suspended Drywall Grid Labor' },
   { key: 'insulation_labor', label: 'Insulation Labor' },
   { key: 'acoustic_labor', label: 'Acoustic Ceiling Labor' },
   { key: 'metal_stud_labor', label: 'Metal Stud Labor' },

@@ -18,7 +18,7 @@ export interface EstimatedMaterialBreakdown {
 
 const COMPONENT_LABELS: Record<string, string> = {
   drywall: 'Drywall (board + accessories)',
-  suspended_grid: 'Suspended Grid',
+  suspended_grid: 'Suspended Drywall Grid',
   rc_channel: 'RC Channel',
   insulation: 'Insulation',
   acoustic: 'Acoustic Ceiling',

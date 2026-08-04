@@ -4,7 +4,7 @@ import type { QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
 export const QUOTE_LINE_TYPE_LABELS: Record<QuoteLineItemType, string> = {
   drywall: 'Drywall',
   rc_channel: 'RC Channel',
-  suspended_grid: 'Suspended Grid',
+  suspended_grid: 'Suspended Drywall Grid',
   insulation: 'Insulation',
   acoustic: 'Acoustic',
   metal_stud: 'Metal Stud',

@@ -27,7 +27,7 @@ export interface EstimatedLaborBreakdown {
 
 const COMPONENT_LABELS: Record<string, string> = {
   rc_channel_labor: 'RC Channel',
-  suspended_grid_labor: 'Suspended Grid',
+  suspended_grid_labor: 'Suspended Drywall Grid',
   insulation_labor: 'Insulation',
   acoustic_labor: 'Acoustic Ceiling',
   metal_stud_labor: 'Metal Stud',

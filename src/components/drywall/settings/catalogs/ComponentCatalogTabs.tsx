@@ -203,9 +203,9 @@ export function SuspendedGridTab({ readOnly, onUpdate, catalogs }: TabProps) {
   return (
     <>
       <ComponentCatalogTab
-        title="Suspended grid"
-        description="Grid ceiling components — mains, tees, wire, lags, and angles."
-        emptyMessage="No suspended grid entries yet."
+        title="Suspended drywall grid"
+        description="Drywall grid ceiling components — mains, tees, wire, lags, and angles."
+        emptyMessage="No suspended drywall grid entries yet."
         items={items}
         readOnly={readOnly}
         searchText={(i) => `${i.display_name} ${i.component_type}`}
@@ -220,7 +220,7 @@ export function SuspendedGridTab({ readOnly, onUpdate, catalogs }: TabProps) {
           { key: 'labor', header: 'Labor rate', cell: (i) => formatCatalogRate(i.labor_rate), className: 'tabular-nums' },
         ]}
       />
-      <EntryDialog open={open} title="Suspended grid entry" onOpenChange={setOpen} onSave={save} saveDisabled={!draft?.display_name.trim()}>
+      <EntryDialog open={open} title="Suspended drywall grid entry" onOpenChange={setOpen} onSave={save} saveDisabled={!draft?.display_name.trim()}>
         {draft && (
           <>
             <Field label="Display name *">

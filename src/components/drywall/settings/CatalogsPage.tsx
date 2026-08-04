@@ -136,7 +136,9 @@ export function CatalogsPage() {
           <TabsTrigger value="finish">Finish Scopes ({catalogs.finish_scopes.length})</TabsTrigger>
           <TabsTrigger value="accessories">Accessories ({catalogs.accessories.length})</TabsTrigger>
           <TabsTrigger value="rc">RC Channel ({catalogs.rc_channel.length})</TabsTrigger>
-          <TabsTrigger value="grid">Suspended Grid ({catalogs.suspended_grid.length})</TabsTrigger>
+          <TabsTrigger value="grid">
+            Suspended Drywall Grid ({catalogs.suspended_grid.length})
+          </TabsTrigger>
           <TabsTrigger value="insulation">Insulation ({catalogs.insulation.length})</TabsTrigger>
           <TabsTrigger value="acoustic">Acoustic ({catalogs.acoustic.length})</TabsTrigger>
           <TabsTrigger value="metal">Metal Stud ({catalogs.metal_stud.length})</TabsTrigger>
