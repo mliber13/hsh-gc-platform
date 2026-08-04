@@ -231,10 +231,12 @@ function TypeSectionTable({
   onEdit: (line: QuoteLineItem) => void
 }) {
   const { isDrywall, catalogLabel, orderedLines, type } = section
-  // Suspended grid material is itemized from the catalog, so its blended Mat-rate column is hidden.
+  // Suspended grid is itemized from the catalog, so it has no single component pick and no blended
+  // Mat-rate column — both are hidden, freeing room for its Setup (perimeter/waste) and qty.
   const hideMatRate = type === 'suspended_grid'
-  // Drywall = 12 columns; component sections drop Description; grid also drops Mat rate.
-  const colSpan = isDrywall ? 12 : hideMatRate ? 10 : 11
+  const hideComponent = type === 'suspended_grid'
+  // Drywall = 12 cols; components drop Description (11); grid also drops Component + Mat rate (9).
+  const colSpan = isDrywall ? 12 : 11 - (hideMatRate ? 1 : 0) - (hideComponent ? 1 : 0)
   const matRateHeader = materialRateHeaderForType(type)
   const laborRateHeader = componentLaborRateHeaderForType(type)
   const theme = TRADE_SECTION_THEMES[type]
@@ -263,23 +265,23 @@ function TypeSectionTable({
       </div>
       <table
         className={`w-full table-fixed text-sm ${compact ? 'text-xs' : ''}`}
-        style={{ minWidth: isDrywall ? 1210 : 1170 }}
+        style={{ minWidth: isDrywall ? 1210 : hideComponent ? 1080 : 1170 }}
       >
         <colgroup>
           <col style={{ width: 110 }} />
-          {/* Catalog: drywall boards need room; component types (RC Deluxe / RC-1 / RC-2) are short. */}
-          <col style={{ width: isDrywall ? 148 : 100 }} />
+          {/* Catalog/Component: drywall boards need room; short for RC; hidden for grid (itemized). */}
+          {!hideComponent && <col style={{ width: isDrywall ? 148 : 100 }} />}
           {!hideMatRate && <col style={{ width: 82 }} />}
           {isDrywall ? (
             <col style={{ width: 128 }} />
           ) : (
             <col style={{ width: 82 }} />
           )}
-          {/* Setup (components) — widened with the space freed from the catalog column. */}
-          {!isDrywall && <col style={{ width: 238 }} />}
+          {/* Setup (components) — grid gets extra room from the dropped Component/Mat columns. */}
+          {!isDrywall && <col style={{ width: hideComponent ? 320 : 238 }} />}
           {isDrywall && <col style={{ width: 180 }} />}
-          {/* Description column — drywall only; components edit description in the line dialog. */}
-          <col style={{ width: isDrywall ? 118 : 170 }} />
+          {/* Qty — drywall 118, RC 170, grid narrower (6-digit sqft). */}
+          <col style={{ width: isDrywall ? 118 : hideComponent ? 130 : 170 }} />
           {isDrywall && <col style={{ width: 64 }} />}
           <col style={{ width: 96 }} />
           <col style={{ width: 96 }} />
@@ -295,7 +297,7 @@ function TypeSectionTable({
             >
               Location
             </th>
-            <th className="px-1.5 py-2 font-medium">{catalogLabel}</th>
+            {!hideComponent && <th className="px-1.5 py-2 font-medium">{catalogLabel}</th>}
             {!hideMatRate && (
               <th className="px-1.5 py-2 font-medium" title={matRateHeader}>
                 {matRateHeader}
@@ -446,32 +448,34 @@ function LineRow({
           onChange={(location) => patch({ location })}
         />
       </td>
-      <td className="px-1.5 py-1">
-        {readOnly ? (
-          <span className="truncate block" title={computed.catalogLabel}>
-            {computed.catalogLabel}
-          </span>
-        ) : (
-          <select
-            className={`flex h-7 w-full truncate rounded-md border border-input bg-background px-1.5 text-xs font-medium ${compact ? 'text-[11px]' : ''}`}
-            value={line.catalog_id}
-            title={computed.catalogLabel || undefined}
-            onChange={(e) =>
-              patch({
-                catalog_id: e.target.value,
-              })
-            }
-            aria-label={catalogLabel}
-          >
-            <option value="">Select…</option>
-            {catalogOptions.map((o) => (
-              <option key={o.id} value={o.id} title={o.label}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        )}
-      </td>
+      {line.type !== 'suspended_grid' && (
+        <td className="px-1.5 py-1">
+          {readOnly ? (
+            <span className="truncate block" title={computed.catalogLabel}>
+              {computed.catalogLabel}
+            </span>
+          ) : (
+            <select
+              className={`flex h-7 w-full truncate rounded-md border border-input bg-background px-1.5 text-xs font-medium ${compact ? 'text-[11px]' : ''}`}
+              value={line.catalog_id}
+              title={computed.catalogLabel || undefined}
+              onChange={(e) =>
+                patch({
+                  catalog_id: e.target.value,
+                })
+              }
+              aria-label={catalogLabel}
+            >
+              <option value="">Select…</option>
+              {catalogOptions.map((o) => (
+                <option key={o.id} value={o.id} title={o.label}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </td>
+      )}
       {line.type !== 'suspended_grid' && (
         <td className="px-1.5 py-1">
           <MaterialRateCell
