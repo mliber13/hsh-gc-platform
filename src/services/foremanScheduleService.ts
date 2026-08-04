@@ -13,9 +13,74 @@ import {
 import {
   fetchScheduleItemsForDrywallProject,
   type DrywallProjectScheduleItem,
+  type DrywallScheduleItemStatus,
 } from '@/services/scheduleService'
 import { requestPushNotify } from '@/services/pushService'
 import type { AssignedPersonOption } from '@/components/schedule/AssignedPersonsPicker'
+
+export type ForemanNewScheduleItem = {
+  name: string
+  type: 'field' | 'office'
+  startDate: string
+  endDate: string
+  status: DrywallScheduleItemStatus
+  assignedPersons: string[]
+  notes?: string
+}
+
+/** Create a new schedule item as a field foreman (SECURITY DEFINER RPC). */
+export async function createForemanScheduleItem(
+  projectId: string,
+  input: ForemanNewScheduleItem,
+): Promise<string> {
+  if (!isOnlineMode()) {
+    throw new Error('Adding schedule items requires an online connection.')
+  }
+
+  const name = input.name.trim()
+  if (!name) throw new Error('Name is required')
+  if (!input.startDate) throw new Error('Start date is required')
+
+  const assignedPersons = [...new Set(input.assignedPersons.filter(Boolean))]
+
+  const { data, error } = await supabase.rpc('foreman_create_schedule_item', {
+    p_project_id: projectId,
+    p_item: {
+      name,
+      type: input.type,
+      start_date: input.startDate.slice(0, 10),
+      end_date: (input.endDate || input.startDate).slice(0, 10),
+      status: input.status,
+      assigned_persons: assignedPersons,
+      notes: input.notes?.trim() || null,
+    },
+  })
+
+  if (error) {
+    console.error('foreman_create_schedule_item:', error)
+    throw new Error(error.message || 'Could not add schedule item')
+  }
+
+  const newItemId = (data as string | null) ?? ''
+
+  if (assignedPersons.length > 0) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (user) {
+      void requestPushNotify({
+        kind: 'schedule',
+        projectId,
+        authorUserId: user.id,
+        assignedPersonIds: assignedPersons,
+        itemName: name,
+        newDate: input.startDate.slice(0, 10),
+      })
+    }
+  }
+
+  return newItemId
+}
 
 export async function fetchForemanTeamRoster(): Promise<AssignedPersonOption[]> {
   if (!isOnlineMode()) return []

@@ -9,6 +9,7 @@ import {
   MapPin,
   Package,
   Phone,
+  Plus,
   RefreshCw,
   Ruler,
 } from 'lucide-react'
@@ -43,6 +44,7 @@ import { toast } from 'sonner'
 import { CrewCommsPanel } from '@/components/crew/CrewCommsPanel'
 import { CrewOrderStatusCard } from '@/components/crew/CrewOrderStatusCard'
 import { CrewForemanScheduleEditSheet } from '@/components/crew/CrewForemanScheduleEditSheet'
+import { CrewForemanScheduleAddSheet } from '@/components/crew/CrewForemanScheduleAddSheet'
 import type { CrewProjectScheduleEntry } from '@/types/crew'
 
 function formatRate(value: number | null): string {
@@ -140,6 +142,7 @@ export function CrewProjectDetailPage() {
   const [prefillToken, setPrefillToken] = useState<number>(0)
   const [editEntry, setEditEntry] = useState<CrewProjectScheduleEntry | null>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
 
   usePageTitle(detail?.projectName ?? 'Job detail')
 
@@ -772,15 +775,32 @@ export function CrewProjectDetailPage() {
         <CrewOrderStatusCard projectId={detail.projectId} />
       ) : null}
 
-      {detail.scheduleEntries.length > 0 ? (
+      {detail.scheduleEntries.length > 0 || canEditSchedule ? (
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Calendar className="size-4" />
               {canEditSchedule ? 'Project schedule' : 'Your schedule'}
             </CardTitle>
+            {canEditSchedule ? (
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() => setAddOpen(true)}
+              >
+                <Plus className="size-3.5" />
+                Add item
+              </Button>
+            ) : null}
           </CardHeader>
           <CardContent className="space-y-3">
+            {detail.scheduleEntries.length === 0 && canEditSchedule ? (
+              <p className="text-sm text-muted-foreground">
+                No schedule items yet. Tap <span className="font-medium">Add item</span> to create
+                the first one.
+              </p>
+            ) : null}
             {detail.scheduleEntries.map((entry) => {
               const isToday = isTodayInRange(entry.startDate, entry.endDate)
               const started = entry.startDate <= todayKey
@@ -914,13 +934,21 @@ export function CrewProjectDetailPage() {
       />
 
       {canEditSchedule ? (
-        <CrewForemanScheduleEditSheet
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          projectId={detail.projectId}
-          entry={editEntry}
-          onSaved={() => void load()}
-        />
+        <>
+          <CrewForemanScheduleEditSheet
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            projectId={detail.projectId}
+            entry={editEntry}
+            onSaved={() => void load()}
+          />
+          <CrewForemanScheduleAddSheet
+            open={addOpen}
+            onOpenChange={setAddOpen}
+            projectId={detail.projectId}
+            onSaved={() => void load()}
+          />
+        </>
       ) : null}
     </div>
   )
