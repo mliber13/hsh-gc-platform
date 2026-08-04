@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -52,6 +52,16 @@ export function RcChannelPivotSection({
 
   const rowMoney = (l: QuoteLineItem) =>
     computeLineItem(l, catalogs, { ...lineComputeOptions, allocatedBeadSticks: 0 })
+
+  // All distinct locations across the quote (any trade) — datalist for matching the drywall names.
+  const allLocations = useMemo(() => {
+    const set = new Set<string>()
+    for (const l of lines) {
+      const t = l.location.trim()
+      if (t) set.add(t)
+    }
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [lines])
 
   // location → groupKey → lines (insertion order preserved)
   const byLocation = useMemo(() => {
@@ -129,16 +139,28 @@ export function RcChannelPivotSection({
         </div>
       </div>
 
+      <datalist id="rc-pivot-locations">
+        {allLocations.map((l) => (
+          <option key={l} value={l} />
+        ))}
+      </datalist>
+
       <div className="space-y-4 p-3">
         {[...byLocation.values()].map((loc) => {
-          const locTotal = [...loc.groups.values()]
-            .flat()
-            .reduce((s, l) => s + rowMoney(l).lineTotal, 0)
+          const locLines = [...loc.groups.values()].flat()
+          const locTotal = locLines.reduce((s, l) => s + rowMoney(l).lineTotal, 0)
+          const locLineIds = new Set(locLines.map((l) => l.id))
+          const renameLocation = (next: string) =>
+            onChange(lines.map((l) => (locLineIds.has(l.id) ? { ...l, location: next } : l)))
           return (
             <div key={loc.label}>
-              <div className="mb-2 flex items-baseline justify-between text-xs font-semibold text-muted-foreground">
-                <span>{loc.label}</span>
-                <span>
+              <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-muted-foreground">
+                <LocationRenameInput
+                  value={loc.label}
+                  readOnly={readOnly}
+                  onCommit={renameLocation}
+                />
+                <span className="shrink-0">
                   Subtotal{' '}
                   <span className="tabular-nums text-foreground">{formatQuoteMoney(locTotal)}</span>
                 </span>
@@ -378,6 +400,42 @@ export function RcChannelPivotSection({
         })}
       </div>
     </div>
+  )
+}
+
+/** Editable location header — draft state so re-grouping (keyed on location) doesn't steal focus mid-edit. */
+function LocationRenameInput({
+  value,
+  readOnly,
+  onCommit,
+}: {
+  value: string
+  readOnly: boolean
+  onCommit: (v: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => setDraft(value), [value])
+
+  if (readOnly) return <span className="text-sm">{value}</span>
+
+  const commit = () => {
+    const t = draft.trim()
+    if (t && t !== value) onCommit(t)
+    else setDraft(value)
+  }
+  return (
+    <input
+      list="rc-pivot-locations"
+      value={draft}
+      title="Rename location (matches drywall locations)"
+      aria-label="Location"
+      className="h-7 min-w-0 max-w-[240px] flex-1 rounded-md border border-transparent bg-transparent px-1.5 text-sm font-semibold text-foreground hover:border-input focus:border-input focus:bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+      }}
+    />
   )
 }
 
