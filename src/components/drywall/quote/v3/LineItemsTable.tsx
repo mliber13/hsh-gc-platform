@@ -647,7 +647,30 @@ function LineRow({
                 </label>
               </div>
             )
-          ) : null}
+          ) : (
+            // insulation / acoustic / metal_stud / frp / door_install — just a waste input.
+            <label className="flex items-center justify-center gap-1.5">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Waste
+              </span>
+              {readOnly ? (
+                <span className="text-[11px] text-foreground">{line.waste_pct ?? 0}%</span>
+              ) : (
+                <>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    className={`h-7 w-[46px] px-1.5 text-right text-xs tabular-nums ${compact ? 'text-[11px]' : ''}`}
+                    title="Waste %"
+                    value={line.waste_pct ?? 0}
+                    onChange={(e) => patch({ waste_pct: parseFloat(e.target.value) || 0 })}
+                  />
+                  <span className="text-[10px] text-muted-foreground">%</span>
+                </>
+              )}
+            </label>
+          )}
         </td>
       )}
       {isDrywall && (

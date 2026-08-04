@@ -169,8 +169,9 @@ export function computeLineItem(
   laborBurden?: QuoteV3LaborBurdenOptions,
 ): QuoteV3LineComputed {
   const qty = line.quantity || 0
-  const wastePct = line.waste_pct ?? 10
-  const wasteMult = line.type === 'drywall' ? 1 + wastePct / 100 : 1
+  // Waste applies to every trade; drywall defaults to 10%, components to 0% (opt-in via their input).
+  const wastePct = line.waste_pct ?? (line.type === 'drywall' ? 10 : 0)
+  const wasteMult = 1 + wastePct / 100
   const materialRate = getLineMaterialRate(line, catalogs)
   let materialTotal = qty * materialRate * wasteMult
 
@@ -258,24 +259,29 @@ export function computeLineItem(
     } else {
       const rate = (ct: SuspendedGridComponentType) =>
         catalogs.suspended_grid.find((e) => e.component_type === ct)?.material_rate ?? 0
+      // The perimeter wall-angle may be catalogued as either "wall_angle" or "shiny_90".
+      const angleRate = rate('wall_angle') || rate('shiny_90')
       materialTotal =
         mains * rate('mains') +
         tees_4ft * rate('tees_4ft') +
         wire * rate('wire') +
         lags * rate('lags') +
-        wall_angle * rate('wall_angle')
+        wall_angle * angleRate
       gridBreakdown = { perimeter: perimeterWasted, mains, tees_4ft, wire, lags, wall_angle }
     }
 
+    // Labor = wasted ceiling sqft × carpenter rate (waste applied, like the material takeoff).
     const laborRate = getEffectiveComponentLaborRate(line, catalogs)
     laborTotal = applyLaborBurden(
-      qty * laborRate,
+      sqftWasted * laborRate,
       laborBurden?.componentIncludeLaborBurden ?? true,
     )
   } else {
+    // insulation / acoustic / metal_stud / frp / door_install — material already carries waste
+    // via wasteMult above; apply the same waste to labor.
     const laborRate = getEffectiveComponentLaborRate(line, catalogs)
     laborTotal = applyLaborBurden(
-      qty * laborRate,
+      qty * wasteMult * laborRate,
       laborBurden?.componentIncludeLaborBurden ?? true,
     )
   }
