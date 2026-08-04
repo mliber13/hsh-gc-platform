@@ -22,6 +22,8 @@ export type ForemanScheduleEditInput = {
   endDate: string
   status: DrywallScheduleItemStatus
   assignedPersons: string[]
+  /** Crew-facing notes. Omit to leave unchanged; empty string clears. */
+  notes?: string
   /** When Detach resolves a conflict — clear predecessor links on the edited item. */
   clearPredecessors?: boolean
 }
@@ -90,6 +92,7 @@ function applyEditToItem(
     duration: durationFromRange(start, end),
     status: edit.status,
     assigned_persons: edit.assignedPersons,
+    notes: edit.notes !== undefined ? edit.notes : item.notes,
     predecessor_ids: edit.clearPredecessors ? [] : item.predecessor_ids,
     lag_work_days: edit.clearPredecessors ? 0 : item.lag_work_days,
   }
@@ -265,6 +268,7 @@ export function toRpcBatch(items: DrywallProjectScheduleItem[]) {
     status: item.status,
     duration: item.duration,
     assigned_persons: item.assigned_persons,
+    notes: item.notes ?? null,
     predecessors: item.predecessor_ids.map((predecessor_id) => ({
       predecessor_id,
       lag_days: item.lag_work_days,

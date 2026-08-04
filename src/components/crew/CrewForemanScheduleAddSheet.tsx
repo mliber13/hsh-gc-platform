@@ -63,6 +63,7 @@ export function CrewForemanScheduleAddSheet({
   const [endDate, setEndDate] = useState('')
   const [status, setStatus] = useState<DrywallScheduleItemStatus>('not-started')
   const [assignedPersons, setAssignedPersons] = useState<string[]>([])
+  const [notes, setNotes] = useState('')
   const [roster, setRoster] = useState<AssignedPersonOption[]>([])
   const [saving, setSaving] = useState(false)
 
@@ -80,6 +81,7 @@ export function CrewForemanScheduleAddSheet({
     setEndDate(today)
     setStatus('not-started')
     setAssignedPersons([])
+    setNotes('')
   }, [open, projectId, projects])
 
   useEffect(() => {
@@ -125,6 +127,7 @@ export function CrewForemanScheduleAddSheet({
         endDate: endDate || startDate,
         status,
         assignedPersons,
+        notes,
       })
       toast.success('Schedule item added')
       onSaved()
@@ -245,6 +248,16 @@ export function CrewForemanScheduleAddSheet({
             options={roster}
             label="Assigned persons"
           />
+          <div className="grid gap-1.5">
+            <Label htmlFor="ff-add-notes">Notes</Label>
+            <Textarea
+              id="ff-add-notes"
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Notes for the crew (e.g. top-out only, bring extra 5/8)"
+            />
+          </div>
           <p className="text-xs text-muted-foreground">
             New items are standalone. To link it to another item (predecessors), ask the office —
             or set the dates directly here.

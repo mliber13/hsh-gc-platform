@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -56,6 +57,7 @@ export function CrewForemanScheduleEditSheet({
   const [endDate, setEndDate] = useState('')
   const [status, setStatus] = useState<DrywallScheduleItemStatus>('not-started')
   const [assignedPersons, setAssignedPersons] = useState<string[]>([])
+  const [notes, setNotes] = useState('')
   const [roster, setRoster] = useState<AssignedPersonOption[]>([])
   const [saving, setSaving] = useState(false)
   const [conflict, setConflict] = useState<ForemanPredecessorConflict | null>(null)
@@ -73,6 +75,7 @@ export function CrewForemanScheduleEditSheet({
         : 'not-started',
     )
     setAssignedPersons(entry.assignedPersons ?? [])
+    setNotes(entry.notes ?? '')
     setConflict(null)
     setCascadeLines([])
   }, [open, entry])
@@ -97,6 +100,7 @@ export function CrewForemanScheduleEditSheet({
     endDate: endDate || startDate,
     status,
     assignedPersons,
+    notes,
   })
 
   const runPreview = async (resolveConflict?: 'detach' | 'shift') => {
@@ -230,6 +234,16 @@ export function CrewForemanScheduleEditSheet({
             options={roster}
             label="Assigned persons"
           />
+          <div className="grid gap-1.5">
+            <Label htmlFor="ff-edit-notes">Notes</Label>
+            <Textarea
+              id="ff-edit-notes"
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Notes for the crew (e.g. top-out only, bring extra 5/8)"
+            />
+          </div>
 
           {cascadeLines.length > 0 ? (
             <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm">
