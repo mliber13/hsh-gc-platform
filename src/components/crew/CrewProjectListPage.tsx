@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { format, parseISO } from 'date-fns'
-import { CalendarDays, ChevronRight, MapPin, Plus, RefreshCw, Users } from 'lucide-react'
+import {
+  CalendarDays,
+  CalendarRange,
+  ChevronRight,
+  List,
+  MapPin,
+  Plus,
+  RefreshCw,
+  Users,
+} from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -21,6 +30,7 @@ import {
   CrewForemanScheduleAddSheet,
   type ForemanAddSheetProject,
 } from '@/components/crew/CrewForemanScheduleAddSheet'
+import { CrewScheduleCalendar } from '@/components/crew/CrewScheduleCalendar'
 import { drywallStatusLabel, drywallStatusPillClass } from '@/lib/drywall/crewStatusStyles'
 import {
   crewMeasureStatusLabel,
@@ -63,10 +73,24 @@ export function CrewProjectListPage() {
 
   const [addOpen, setAddOpen] = useState(false)
   const [pickerProjects, setPickerProjects] = useState<ForemanAddSheetProject[]>([])
+  const [displayMode, setDisplayMode] = useState<'list' | 'calendar'>('list')
+  const displayModeTouched = useRef(false)
 
   const isForemanView = isFieldForeman || previewIsForeman
   // Only a real field foreman (not an operator preview) can write.
   const canAddSchedule = isFieldForeman && !isOperator
+
+  // Foremen get the schedule calendar by default; others only ever see the list.
+  useEffect(() => {
+    if (!displayModeTouched.current) {
+      setDisplayMode(isForemanView ? 'calendar' : 'list')
+    }
+  }, [isForemanView])
+
+  const chooseDisplayMode = (mode: 'list' | 'calendar') => {
+    displayModeTouched.current = true
+    setDisplayMode(mode)
+  }
 
   const jobsLabel = (() => {
     const base = scope === 'all' ? 'All jobs' : 'My jobs'
@@ -311,6 +335,51 @@ export function CrewProjectListPage() {
       </div>
     ) : null
 
+  const viewToggle = isForemanView ? (
+    <div
+      className="flex rounded-lg border bg-muted/40 p-0.5"
+      role="group"
+      aria-label="View mode"
+    >
+      <button
+        type="button"
+        className={cn(
+          'flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+          displayMode === 'calendar'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground',
+        )}
+        aria-pressed={displayMode === 'calendar'}
+        onClick={() => chooseDisplayMode('calendar')}
+      >
+        <CalendarRange className="size-4" />
+        Calendar
+      </button>
+      <button
+        type="button"
+        className={cn(
+          'flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+          displayMode === 'list'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground',
+        )}
+        aria-pressed={displayMode === 'list'}
+        onClick={() => chooseDisplayMode('list')}
+      >
+        <List className="size-4" />
+        List
+      </button>
+    </div>
+  ) : null
+
+  const openProject = (projectId: string) => {
+    const params = new URLSearchParams()
+    if (viewAsPersonId) params.set('as', viewAsPersonId)
+    if (scope === 'all') params.set('scope', 'all')
+    const q = params.toString()
+    navigate(`/crew/projects/${projectId}${q ? `?${q}` : ''}`)
+  }
+
   const openAdd = async () => {
     setAddOpen(true)
     try {
@@ -345,6 +414,20 @@ export function CrewProjectListPage() {
       onSaved={() => void load()}
     />
   ) : null
+
+  // Foreman calendar view — self-contained (loads its own cross-project data),
+  // so it renders independently of the task-list load/empty states.
+  if (isForemanView && displayMode === 'calendar') {
+    return (
+      <div className="space-y-3 pb-8">
+        {scopeToggle}
+        {viewToggle}
+        {addButton}
+        {addSheet}
+        <CrewScheduleCalendar onItemClick={(item) => openProject(item.projectId)} />
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -384,6 +467,7 @@ export function CrewProjectListPage() {
     return (
       <div className="space-y-3">
         {scopeToggle}
+        {viewToggle}
         {addButton}
         {addSheet}
         <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-4 text-center">
@@ -435,6 +519,7 @@ export function CrewProjectListPage() {
       ) : null}
 
       {scopeToggle}
+      {viewToggle}
       {addButton}
       {addSheet}
       {filterBar}
@@ -459,7 +544,7 @@ export function CrewProjectListPage() {
           </button>
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-3">
           {filteredItems.map((item) => {
           const startLabel = format(parseISO(item.scheduleItemDate), 'EEE MMM d')
           const isRange = item.scheduleItemEndDate !== item.scheduleItemDate
