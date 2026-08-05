@@ -19,10 +19,19 @@ const updateSW = registerSW({
     updateSW(true)
   },
   onRegistered(registration) {
-    // Force update check every hour
-    setInterval(() => {
-      registration?.update()
-    }, 60 * 60 * 1000)
+    if (!registration) return
+    const checkForUpdate = () => {
+      void registration.update().catch(() => {})
+    }
+    // Backstop interval while the app stays open.
+    setInterval(checkForUpdate, 15 * 60 * 1000)
+    // Check whenever the app returns to the foreground (reopening the PWA,
+    // switching back to the tab) so field devices pick up deploys promptly
+    // instead of waiting for the next interval tick.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkForUpdate()
+    })
+    window.addEventListener('focus', checkForUpdate)
   },
 })
 
