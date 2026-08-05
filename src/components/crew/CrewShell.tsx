@@ -117,7 +117,7 @@ export function CrewShell() {
     <PageTitleProvider>
       <div className="flex min-h-screen flex-col bg-background">
         <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-3 px-4">
+          <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-3 px-4 lg:max-w-6xl">
             <button
               type="button"
               className="flex min-w-0 items-center gap-2"
@@ -187,7 +187,7 @@ export function CrewShell() {
             </div>
           ) : null}
         </header>
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4">
+        <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-4 lg:max-w-6xl">
           {!viewAsPersonId ? (
             <EnableNotificationsControl variant="banner" className="mb-3" />
           ) : null}

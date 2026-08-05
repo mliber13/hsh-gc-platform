@@ -327,7 +327,7 @@ export function CrewMeasurePage() {
 
   return (
     <div
-      className="space-y-4 pb-24"
+      className="mx-auto w-full max-w-3xl space-y-4 pb-24"
       style={{
         transform: `translateY(${pullDistance}px)`,
         transition: pullDistance === 0 ? 'transform 200ms' : 'none',

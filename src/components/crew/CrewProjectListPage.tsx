@@ -459,7 +459,8 @@ export function CrewProjectListPage() {
           </button>
         </div>
       ) : (
-        filteredItems.map((item) => {
+        <div className="grid gap-3 md:grid-cols-2">
+          {filteredItems.map((item) => {
           const startLabel = format(parseISO(item.scheduleItemDate), 'EEE MMM d')
           const isRange = item.scheduleItemEndDate !== item.scheduleItemDate
           const dateLabel = isRange
@@ -514,23 +515,17 @@ export function CrewProjectListPage() {
                     </p>
                   ) : null}
                   {item.scheduleItemNotes ? (
-                    <p className="whitespace-pre-line rounded-md bg-muted/40 p-2 text-xs leading-snug text-muted-foreground md:hidden">
+                    <p className="whitespace-pre-line rounded-md bg-muted/40 p-2 text-xs leading-snug text-muted-foreground">
                       {item.scheduleItemNotes}
                     </p>
                   ) : null}
                 </div>
-                {item.scheduleItemNotes ? (
-                  <div className="hidden w-2/5 shrink-0 self-stretch border-l border-border/60 pl-3 md:block">
-                    <p className="line-clamp-5 whitespace-pre-line text-sm leading-snug text-muted-foreground">
-                      {item.scheduleItemNotes}
-                    </p>
-                  </div>
-                ) : null}
                 <ChevronRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
               </CardContent>
             </Card>
           )
-        })
+          })}
+        </div>
       )}
     </div>
   )
