@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseISO } from 'date-fns'
 import { toast } from 'sonner'
-import { Check, ChevronsUpDown, X } from 'lucide-react'
+import { Check, ChevronsUpDown, Plus, X } from 'lucide-react'
 import { addWorkdays } from '@/lib/scheduleDateMath'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,6 +32,7 @@ import {
   fetchScheduleItemsForDrywallProject,
   type DrywallProjectScheduleItem,
   type DrywallScheduleItemStatus,
+  type ScheduleItemTask,
 } from '@/services/scheduleService'
 import {
   applyForemanScheduleEdit,
@@ -81,6 +82,7 @@ export function CrewForemanScheduleEditSheet({
   const [predOpen, setPredOpen] = useState(false)
   const [predSearch, setPredSearch] = useState('')
   const predsTouchedRef = useRef(false)
+  const [tasks, setTasks] = useState<ScheduleItemTask[]>([])
 
   useEffect(() => {
     if (!open || !entry) return
@@ -113,6 +115,7 @@ export function CrewForemanScheduleEditSheet({
         const current = rows.find((r) => r.id === entry.id)
         setPredecessorIds(current?.predecessor_ids ?? [])
         setLagWorkDays(current?.lag_work_days ?? 1)
+        setTasks(current?.tasks ?? [])
       })
       .catch(() => {
         if (!cancelled) setSiblings([])
@@ -143,6 +146,21 @@ export function CrewForemanScheduleEditSheet({
     setPredecessorIds((prev) =>
       prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
     )
+  }
+
+  // Foreman edits checklist labels only; new tasks are plain check-off steps.
+  // payLinked / progressMode / pieceKey on existing (office-set) tasks are preserved.
+  const addTask = () => {
+    setTasks((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), label: '', payLinked: false, progressMode: 'check' },
+    ])
+  }
+  const updateTaskLabel = (id: string, label: string) => {
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, label } : t)))
+  }
+  const removeTask = (id: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id))
   }
 
   // When the foreman changes predecessors/lag, move this item to just after them
@@ -189,6 +207,9 @@ export function CrewForemanScheduleEditSheet({
     notes,
     predecessorIds,
     lagWorkDays,
+    tasks: tasks
+      .map((t) => ({ ...t, label: t.label.trim() }))
+      .filter((t) => t.label.length > 0),
   })
 
   const runPreview = async (resolveConflict?: 'detach' | 'shift') => {
@@ -445,6 +466,56 @@ export function CrewForemanScheduleEditSheet({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Notes for the crew (e.g. top-out only, bring extra 5/8)"
             />
+          </div>
+
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <Label>Checklist</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1 text-xs"
+                onClick={addTask}
+              >
+                <Plus className="size-3.5" />
+                Add task
+              </Button>
+            </div>
+            {tasks.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Optional steps the crew checks off (e.g. Tape, Bed, Skim).
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {tasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-2 rounded-lg border bg-muted/30 px-2.5 py-2"
+                  >
+                    <Input
+                      value={task.label}
+                      placeholder="Task name"
+                      onChange={(e) => updateTaskLabel(task.id, e.target.value)}
+                      className="h-8 flex-1"
+                    />
+                    {task.payLinked ? (
+                      <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700 dark:text-amber-300">
+                        Pay
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="rounded-full p-1 hover:bg-muted"
+                      onClick={() => removeTask(task.id)}
+                      aria-label="Remove task"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {cascadeLines.length > 0 ? (

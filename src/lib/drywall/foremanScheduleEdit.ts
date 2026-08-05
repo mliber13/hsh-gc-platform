@@ -15,6 +15,7 @@ import type {
   DrywallProjectScheduleItem,
   DrywallScheduleItemStatus,
   NewScheduleItemInput,
+  ScheduleItemTask,
 } from '@/services/scheduleService'
 
 export type ForemanScheduleEditInput = {
@@ -28,6 +29,8 @@ export type ForemanScheduleEditInput = {
   predecessorIds?: string[]
   /** Work-day lag applied to every predecessor. Omit to leave unchanged. */
   lagWorkDays?: number
+  /** Task checklist. Omit to leave unchanged; empty array clears it. */
+  tasks?: ScheduleItemTask[]
   /** When Detach resolves a conflict — clear predecessor links on the edited item. */
   clearPredecessors?: boolean
 }
@@ -97,6 +100,7 @@ function applyEditToItem(
     status: edit.status,
     assigned_persons: edit.assignedPersons,
     notes: edit.notes !== undefined ? edit.notes : item.notes,
+    tasks: edit.tasks ?? item.tasks,
     predecessor_ids: edit.clearPredecessors ? [] : (edit.predecessorIds ?? item.predecessor_ids),
     lag_work_days: edit.clearPredecessors ? 0 : (edit.lagWorkDays ?? item.lag_work_days),
   }
@@ -276,6 +280,7 @@ export function toRpcBatch(items: DrywallProjectScheduleItem[]) {
     duration: item.duration,
     assigned_persons: item.assigned_persons,
     notes: item.notes ?? null,
+    tasks: item.tasks ?? [],
     predecessors: item.predecessor_ids.map((predecessor_id) => ({
       predecessor_id,
       lag_days: item.lag_work_days,
