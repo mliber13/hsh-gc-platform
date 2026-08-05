@@ -24,6 +24,10 @@ export type ForemanScheduleEditInput = {
   assignedPersons: string[]
   /** Crew-facing notes. Omit to leave unchanged; empty string clears. */
   notes?: string
+  /** Predecessor item ids. Omit to leave unchanged; empty array clears the links. */
+  predecessorIds?: string[]
+  /** Work-day lag applied to every predecessor. Omit to leave unchanged. */
+  lagWorkDays?: number
   /** When Detach resolves a conflict — clear predecessor links on the edited item. */
   clearPredecessors?: boolean
 }
@@ -93,8 +97,8 @@ function applyEditToItem(
     status: edit.status,
     assigned_persons: edit.assignedPersons,
     notes: edit.notes !== undefined ? edit.notes : item.notes,
-    predecessor_ids: edit.clearPredecessors ? [] : item.predecessor_ids,
-    lag_work_days: edit.clearPredecessors ? 0 : item.lag_work_days,
+    predecessor_ids: edit.clearPredecessors ? [] : (edit.predecessorIds ?? item.predecessor_ids),
+    lag_work_days: edit.clearPredecessors ? 0 : (edit.lagWorkDays ?? item.lag_work_days),
   }
 }
 
@@ -149,15 +153,18 @@ export function detectPredecessorConflict(
 ): ForemanPredecessorConflict | null {
   const current = siblings.find((s) => s.id === editingId)
   if (!current) return null
-  const predecessorIds = edit.clearPredecessors ? [] : current.predecessor_ids
+  const predecessorIds = edit.clearPredecessors
+    ? []
+    : (edit.predecessorIds ?? current.predecessor_ids)
   if (predecessorIds.length === 0) return null
+  const lag = edit.clearPredecessors ? 0 : (edit.lagWorkDays ?? current.lag_work_days)
 
   const predicted = predictCascadeStartForEdit(
     siblings,
     editingId,
     edit,
     predecessorIds,
-    current.lag_work_days,
+    lag,
   )
   if (predicted === toDateOnly(edit.startDate)) return null
 

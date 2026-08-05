@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { parseISO } from 'date-fns'
 import { toast } from 'sonner'
+import { Check, ChevronsUpDown, X } from 'lucide-react'
+import { addWorkdays } from '@/lib/scheduleDateMath'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Sheet,
   SheetContent,
@@ -22,14 +26,23 @@ import {
   AssignedPersonsPicker,
   type AssignedPersonOption,
 } from '@/components/schedule/AssignedPersonsPicker'
+import { cn } from '@/lib/utils'
 import type { CrewProjectScheduleEntry } from '@/types/crew'
-import type { DrywallScheduleItemStatus } from '@/services/scheduleService'
+import {
+  fetchScheduleItemsForDrywallProject,
+  type DrywallProjectScheduleItem,
+  type DrywallScheduleItemStatus,
+} from '@/services/scheduleService'
 import {
   applyForemanScheduleEdit,
   fetchForemanTeamRoster,
   previewForemanScheduleEdit,
 } from '@/services/foremanScheduleService'
 import type { ForemanPredecessorConflict } from '@/lib/drywall/foremanScheduleEdit'
+
+function formatDateRange(start: string, end: string): string {
+  return start === end ? start : `${start} → ${end}`
+}
 
 const STATUS_OPTIONS: Array<{ value: DrywallScheduleItemStatus; label: string }> = [
   { value: 'not-started', label: 'Not started' },
@@ -62,6 +75,12 @@ export function CrewForemanScheduleEditSheet({
   const [saving, setSaving] = useState(false)
   const [conflict, setConflict] = useState<ForemanPredecessorConflict | null>(null)
   const [cascadeLines, setCascadeLines] = useState<string[]>([])
+  const [siblings, setSiblings] = useState<DrywallProjectScheduleItem[]>([])
+  const [predecessorIds, setPredecessorIds] = useState<string[]>([])
+  const [lagWorkDays, setLagWorkDays] = useState(1)
+  const [predOpen, setPredOpen] = useState(false)
+  const [predSearch, setPredSearch] = useState('')
+  const predsTouchedRef = useRef(false)
 
   useEffect(() => {
     if (!open || !entry) return
@@ -78,7 +97,74 @@ export function CrewForemanScheduleEditSheet({
     setNotes(entry.notes ?? '')
     setConflict(null)
     setCascadeLines([])
+    setPredOpen(false)
+    setPredSearch('')
+    predsTouchedRef.current = false
   }, [open, entry])
+
+  // Load sibling items (for the predecessor picker) and seed the current item's links.
+  useEffect(() => {
+    if (!open || !entry) return
+    let cancelled = false
+    void fetchScheduleItemsForDrywallProject(projectId)
+      .then((rows) => {
+        if (cancelled) return
+        setSiblings(rows)
+        const current = rows.find((r) => r.id === entry.id)
+        setPredecessorIds(current?.predecessor_ids ?? [])
+        setLagWorkDays(current?.lag_work_days ?? 1)
+      })
+      .catch(() => {
+        if (!cancelled) setSiblings([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, entry, projectId])
+
+  const predecessorOptions = useMemo(
+    () => siblings.filter((item) => item.id !== entry?.id),
+    [siblings, entry?.id],
+  )
+
+  const filteredPredecessors = useMemo(() => {
+    const q = predSearch.trim().toLowerCase()
+    if (!q) return predecessorOptions
+    return predecessorOptions.filter(
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        item.start_date.includes(q) ||
+        item.end_date.includes(q),
+    )
+  }, [predecessorOptions, predSearch])
+
+  const togglePredecessor = (id: string) => {
+    predsTouchedRef.current = true
+    setPredecessorIds((prev) =>
+      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
+    )
+  }
+
+  // When the foreman changes predecessors/lag, move this item to just after them
+  // (same as the operator dialog) so it "just flows" instead of tripping the
+  // Detach/Shift conflict prompt on save. Skips the initial seed on open.
+  useEffect(() => {
+    if (!open || !predsTouchedRef.current || predecessorIds.length === 0) return
+    let maxStart: Date | null = null
+    for (const predId of predecessorIds) {
+      const pred = siblings.find((s) => s.id === predId)
+      if (!pred) continue
+      const candidate =
+        lagWorkDays === 0
+          ? parseISO(pred.end_date)
+          : addWorkdays(parseISO(pred.end_date), lagWorkDays)
+      if (!maxStart || candidate > maxStart) maxStart = candidate
+    }
+    if (!maxStart) return
+    const duration = siblings.find((s) => s.id === entry?.id)?.duration ?? 1
+    setStartDate(maxStart.toISOString().slice(0, 10))
+    setEndDate(addWorkdays(maxStart, Math.max(0, duration - 1)).toISOString().slice(0, 10))
+  }, [open, predecessorIds, lagWorkDays, siblings, entry?.id])
 
   useEffect(() => {
     if (!open) return
@@ -101,6 +187,8 @@ export function CrewForemanScheduleEditSheet({
     status,
     assignedPersons,
     notes,
+    predecessorIds,
+    lagWorkDays,
   })
 
   const runPreview = async (resolveConflict?: 'detach' | 'shift') => {
@@ -228,6 +316,120 @@ export function CrewForemanScheduleEditSheet({
               </SelectContent>
             </Select>
           </div>
+
+          <div className="grid gap-1.5">
+            <Label>Depends on (predecessors)</Label>
+            <Popover open={predOpen} onOpenChange={setPredOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" className="w-full justify-between font-normal">
+                  <span className="truncate text-muted-foreground">
+                    {predecessorIds.length === 0 ? 'None' : `${predecessorIds.length} selected`}
+                  </span>
+                  <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[min(100vw-2rem,24rem)] p-0" align="start">
+                <div className="border-b p-2">
+                  <Input
+                    placeholder="Search items…"
+                    value={predSearch}
+                    onChange={(e) => setPredSearch(e.target.value)}
+                    className="h-8"
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto p-1">
+                  {filteredPredecessors.length === 0 ? (
+                    <p className="px-2 py-4 text-center text-sm text-muted-foreground">
+                      No other items on this job.
+                    </p>
+                  ) : (
+                    filteredPredecessors.map((item) => {
+                      const selected = predecessorIds.includes(item.id)
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={cn(
+                            'flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted',
+                            selected && 'bg-muted/60',
+                          )}
+                          onClick={() => togglePredecessor(item.id)}
+                        >
+                          <Check
+                            className={cn(
+                              'mt-0.5 size-4 shrink-0',
+                              selected ? 'opacity-100' : 'opacity-0',
+                            )}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">{item.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDateRange(item.start_date, item.end_date)}
+                            </span>
+                          </span>
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {predecessorIds.length > 0 ? (
+              <div className="space-y-2">
+                {predecessorIds.map((id) => {
+                  const pred = siblings.find((s) => s.id === id)
+                  return (
+                    <div
+                      key={id}
+                      className={cn(
+                        'flex items-center gap-2 rounded-lg border px-2.5 py-2',
+                        pred ? 'bg-muted/30' : 'border-amber-500/40 bg-amber-500/10',
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        {pred ? (
+                          <>
+                            <p className="truncate text-sm font-medium">{pred.name}</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {formatDateRange(pred.start_date, pred.end_date)}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="truncate text-sm font-medium text-amber-800 dark:text-amber-200">
+                            Removed item
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded-full p-1 hover:bg-muted"
+                        onClick={() => togglePredecessor(id)}
+                        aria-label="Remove predecessor"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  )
+                })}
+                <div className="grid gap-1.5">
+                  <Label htmlFor="ff-lag">Lag (work days after predecessor ends)</Label>
+                  <Input
+                    id="ff-lag"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={lagWorkDays}
+                    onChange={(e) => {
+                      predsTouchedRef.current = true
+                      setLagWorkDays(Math.max(0, parseInt(e.target.value, 10) || 0))
+                    }}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+
           <AssignedPersonsPicker
             value={assignedPersons}
             onChange={setAssignedPersons}
