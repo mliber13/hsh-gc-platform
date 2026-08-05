@@ -25,6 +25,8 @@ const FILTER_ALL = 'all'
 
 type Props = {
   onItemClick: (item: CrossProjectScheduleItem) => void
+  /** Bump to force a re-fetch (e.g. after an edit saved from the parent). */
+  refreshKey?: number
 }
 
 /**
@@ -32,7 +34,7 @@ type Props = {
  * (color-coded by job, desktop grid + mobile dot-grid) with month navigation
  * and job / phase / person filters.
  */
-export function CrewScheduleCalendar({ onItemClick }: Props) {
+export function CrewScheduleCalendar({ onItemClick, refreshKey = 0 }: Props) {
   const [items, setItems] = useState<CrossProjectScheduleItem[]>([])
   const [personNames, setPersonNames] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
@@ -67,7 +69,7 @@ export function CrewScheduleCalendar({ onItemClick }: Props) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [refreshKey])
 
   const { rangeStart, rangeEnd, referenceMonth } = useMemo(
     () => computePortfolioRange(anchorDate, VIEW_WINDOW),

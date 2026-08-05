@@ -31,6 +31,10 @@ import {
   type ForemanAddSheetProject,
 } from '@/components/crew/CrewForemanScheduleAddSheet'
 import { CrewScheduleCalendar } from '@/components/crew/CrewScheduleCalendar'
+import {
+  CrewForemanScheduleEditSheet,
+  type ForemanEditableItem,
+} from '@/components/crew/CrewForemanScheduleEditSheet'
 import { drywallStatusLabel, drywallStatusPillClass } from '@/lib/drywall/crewStatusStyles'
 import {
   crewMeasureStatusLabel,
@@ -75,6 +79,11 @@ export function CrewProjectListPage() {
   const [pickerProjects, setPickerProjects] = useState<ForemanAddSheetProject[]>([])
   const [displayMode, setDisplayMode] = useState<'list' | 'calendar'>('list')
   const displayModeTouched = useRef(false)
+  const [calendarEdit, setCalendarEdit] = useState<{
+    projectId: string
+    entry: ForemanEditableItem
+  } | null>(null)
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0)
 
   const isForemanView = isFieldForeman || previewIsForeman
   // Only a real field foreman (not an operator preview) can write.
@@ -424,7 +433,41 @@ export function CrewProjectListPage() {
         {viewToggle}
         {addButton}
         {addSheet}
-        <CrewScheduleCalendar onItemClick={(item) => openProject(item.projectId)} />
+        <CrewScheduleCalendar
+          refreshKey={calendarRefreshKey}
+          onItemClick={(item) => {
+            // Real foreman → edit in place; read-only preview → open the job.
+            if (canAddSchedule) {
+              setCalendarEdit({
+                projectId: item.projectId,
+                entry: {
+                  id: item.id,
+                  name: item.name,
+                  startDate: item.startDate,
+                  endDate: item.endDate,
+                  status: item.status,
+                  assignedPersons: item.assignedPersons,
+                },
+              })
+            } else {
+              openProject(item.projectId)
+            }
+          }}
+        />
+        {canAddSchedule ? (
+          <CrewForemanScheduleEditSheet
+            open={!!calendarEdit}
+            onOpenChange={(o) => {
+              if (!o) setCalendarEdit(null)
+            }}
+            projectId={calendarEdit?.projectId ?? ''}
+            entry={calendarEdit?.entry ?? null}
+            onSaved={() => {
+              setCalendarEdit(null)
+              setCalendarRefreshKey((k) => k + 1)
+            }}
+          />
+        ) : null}
       </div>
     )
   }

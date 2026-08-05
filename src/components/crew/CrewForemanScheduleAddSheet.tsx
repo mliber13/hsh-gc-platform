@@ -141,11 +141,11 @@ export function CrewForemanScheduleAddSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto sm:max-w-lg sm:mx-auto">
+      <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto sm:mx-auto sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>Add schedule item</SheetTitle>
         </SheetHeader>
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-4 px-4 py-4">
           {showJobPicker ? (
             <div className="grid gap-1.5">
               <Label>Job</Label>

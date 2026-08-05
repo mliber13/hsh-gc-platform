@@ -27,7 +27,6 @@ import {
   type AssignedPersonOption,
 } from '@/components/schedule/AssignedPersonsPicker'
 import { cn } from '@/lib/utils'
-import type { CrewProjectScheduleEntry } from '@/types/crew'
 import {
   fetchScheduleItemsForDrywallProject,
   type DrywallProjectScheduleItem,
@@ -52,11 +51,23 @@ const STATUS_OPTIONS: Array<{ value: DrywallScheduleItemStatus; label: string }>
   { value: 'delayed', label: 'Delayed' },
 ]
 
+/** Minimal item shape the edit sheet needs — satisfied by both a crew schedule
+ *  entry (detail page) and a cross-project calendar item. */
+export type ForemanEditableItem = {
+  id: string
+  name: string
+  startDate: string
+  endDate: string
+  status: string
+  assignedPersons?: string[]
+  notes?: string | null
+}
+
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   projectId: string
-  entry: CrewProjectScheduleEntry | null
+  entry: ForemanEditableItem | null
   onSaved: () => void
 }
 
@@ -116,6 +127,9 @@ export function CrewForemanScheduleEditSheet({
         setPredecessorIds(current?.predecessor_ids ?? [])
         setLagWorkDays(current?.lag_work_days ?? 1)
         setTasks(current?.tasks ?? [])
+        // Callers that don't carry notes (e.g. the calendar) get them from the
+        // authoritative row so a save doesn't wipe an existing note.
+        if (entry.notes == null && current) setNotes(current.notes ?? '')
       })
       .catch(() => {
         if (!cancelled) setSiblings([])
@@ -296,11 +310,11 @@ export function CrewForemanScheduleEditSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto sm:max-w-lg sm:mx-auto">
+      <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto sm:mx-auto sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>{entry?.name ?? 'Edit schedule item'}</SheetTitle>
         </SheetHeader>
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-4 px-4 py-4">
           <div className="grid gap-1.5">
             <Label htmlFor="ff-start">Start date</Label>
             <Input
