@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import {
   dismissPushPrompt,
   getPushState,
+  resyncPushSubscription,
   sendTestPush,
   subscribeToPush,
   unsubscribeFromPush,
@@ -40,6 +41,8 @@ export function EnableNotificationsControl({ variant = 'button', className }: Pr
 
   useEffect(() => {
     void refresh()
+    // Keep the stored subscription current in case the browser rotated it while closed.
+    void resyncPushSubscription()
   }, [refresh])
 
   const enable = async () => {

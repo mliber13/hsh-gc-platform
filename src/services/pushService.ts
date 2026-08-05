@@ -146,6 +146,47 @@ export async function subscribeToPush(): Promise<PushSubscription> {
   return sub
 }
 
+/**
+ * Re-sync the device's current push subscription to the DB (idempotent, no prompt).
+ * Call on app open so a subscription the browser rotated while closed — including one
+ * re-created by the SW `pushsubscriptionchange` handler — lands back in the table.
+ * No-ops when unsupported, permission isn't granted, or there's no active subscription.
+ */
+export async function resyncPushSubscription(): Promise<void> {
+  if (!isOnlineMode() || !isPushSupported()) return
+  if (Notification.permission !== 'granted') return
+  try {
+    const reg = await navigator.serviceWorker.ready
+    const sub = await reg.pushManager.getSubscription()
+    if (!sub) return
+    const json = sub.toJSON()
+    const endpoint = json.endpoint
+    const p256dh = json.keys?.p256dh
+    const auth = json.keys?.auth
+    if (!endpoint || !p256dh || !auth) return
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return
+    const organizationId = await requireUserOrgId()
+
+    // Upsert by endpoint (unique): drop any prior row for it, then insert fresh.
+    await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint)
+    await supabase.from('push_subscriptions').insert({
+      user_id: user.id,
+      organization_id: organizationId,
+      endpoint,
+      p256dh,
+      auth,
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 500) : null,
+      last_seen_at: new Date().toISOString(),
+    })
+  } catch (e) {
+    console.warn('resyncPushSubscription:', e)
+  }
+}
+
 export async function unsubscribeFromPush(): Promise<void> {
   if (!isPushSupported()) return
   const reg = await navigator.serviceWorker.ready
