@@ -45,6 +45,7 @@ import { CrewCommsPanel } from '@/components/crew/CrewCommsPanel'
 import { CrewOrderStatusCard } from '@/components/crew/CrewOrderStatusCard'
 import { CrewForemanScheduleEditSheet } from '@/components/crew/CrewForemanScheduleEditSheet'
 import { CrewForemanScheduleAddSheet } from '@/components/crew/CrewForemanScheduleAddSheet'
+import { CrewScheduleItemPhotos } from '@/components/crew/CrewScheduleItemPhotos'
 import type { CrewProjectScheduleEntry } from '@/types/crew'
 
 function formatRate(value: number | null): string {
@@ -919,6 +920,13 @@ export function CrewProjectDetailPage() {
                       })}
                     </div>
                   ) : null}
+                  <div className="mt-3 border-t pt-3">
+                    <CrewScheduleItemPhotos
+                      projectId={detail.projectId}
+                      itemId={entry.id}
+                      readOnly={readOnly}
+                    />
+                  </div>
                 </div>
               )
             })}

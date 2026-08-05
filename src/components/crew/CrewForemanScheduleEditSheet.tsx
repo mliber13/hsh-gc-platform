@@ -27,6 +27,7 @@ import {
   type AssignedPersonOption,
 } from '@/components/schedule/AssignedPersonsPicker'
 import { cn } from '@/lib/utils'
+import { CrewScheduleItemPhotos } from '@/components/crew/CrewScheduleItemPhotos'
 import {
   fetchScheduleItemsForDrywallProject,
   type DrywallProjectScheduleItem,
@@ -531,6 +532,13 @@ export function CrewForemanScheduleEditSheet({
               </div>
             )}
           </div>
+
+          {entry ? (
+            <div className="grid gap-1.5">
+              <Label>Photos</Label>
+              <CrewScheduleItemPhotos projectId={projectId} itemId={entry.id} />
+            </div>
+          ) : null}
 
           {cascadeLines.length > 0 ? (
             <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm">

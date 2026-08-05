@@ -191,4 +191,103 @@ export async function deleteFieldPhoto(projectId: string, storagePath: string): 
   await persistFieldTakeoffPhotos(projectId, { ...takeoff, photos })
 }
 
+// ============================================================================
+// Per-schedule-item progress photos (schedule_items.photos + crew RPCs)
+// ============================================================================
+
+export type ScheduleItemPhotoRef = {
+  id: string
+  storagePath: string
+  uploadedAt: string
+  uploadedBy?: string
+}
+
+/** Upload an image and append its ref to schedule_items.photos (atomic via RPC). */
+export async function uploadScheduleItemPhoto(
+  projectId: string,
+  itemId: string,
+  file: File,
+): Promise<ScheduleItemPhotoRef> {
+  if (!isOnlineMode()) throw new DrywallPhotoError('Photo uploads require an online connection.')
+
+  const orgId = await requireUserOrgId()
+  const fileId = generateFieldId()
+  const safeName = sanitizeFilename(file.name || 'photo.jpg')
+  const storagePath = `${orgId}/${projectId}/schedule/${itemId}/${fileId}-${safeName}`
+
+  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, file, {
+    contentType: file.type || 'image/jpeg',
+    upsert: false,
+  })
+  if (uploadError) {
+    console.error('uploadScheduleItemPhoto:', uploadError)
+    throw new DrywallPhotoError(storagePermissionMessage(uploadError))
+  }
+
+  const ref: ScheduleItemPhotoRef = {
+    id: fileId,
+    storagePath,
+    uploadedAt: new Date().toISOString(),
+  }
+
+  const { error } = await supabase.rpc('crew_append_schedule_item_photo', {
+    p_item_id: itemId,
+    p_photo: { id: ref.id, storagePath: ref.storagePath, uploadedAt: ref.uploadedAt },
+  })
+  if (error) {
+    // Roll back the uploaded object so storage isn't orphaned.
+    await supabase.storage.from(BUCKET).remove([storagePath])
+    console.error('crew_append_schedule_item_photo:', error)
+    throw new DrywallPhotoError(error.message || 'Could not save photo')
+  }
+
+  return ref
+}
+
+/** List photo refs for a schedule item (crew read schedule_items directly via RLS). */
+export async function listScheduleItemPhotos(itemId: string): Promise<ScheduleItemPhotoRef[]> {
+  if (!isOnlineMode()) return []
+  const { data, error } = await supabase
+    .from('schedule_items')
+    .select('photos')
+    .eq('id', itemId)
+    .maybeSingle()
+  if (error || !data) return []
+
+  const raw = ((data.photos as unknown[]) ?? []).filter(
+    (p): p is Record<string, unknown> => !!p && typeof p === 'object',
+  )
+  return raw
+    .map((p) => ({
+      id: String(p.id ?? p.storagePath ?? ''),
+      storagePath: String(p.storagePath ?? ''),
+      uploadedAt: String(p.uploadedAt ?? ''),
+      uploadedBy: p.uploadedBy ? String(p.uploadedBy) : undefined,
+    }))
+    .filter((p) => p.storagePath)
+}
+
+/** Remove a photo ref (RPC) then best-effort delete the storage object. */
+export async function deleteScheduleItemPhoto(itemId: string, storagePath: string): Promise<void> {
+  if (!isOnlineMode()) throw new DrywallPhotoError('Photo deletes require an online connection.')
+  if (!storagePath) return
+
+  const orgId = await requireUserOrgId()
+  if (!storagePath.startsWith(`${orgId}/`)) {
+    throw new DrywallPhotoError('Invalid photo path for your organization.')
+  }
+
+  const { error: rpcError } = await supabase.rpc('crew_remove_schedule_item_photo', {
+    p_item_id: itemId,
+    p_storage_path: storagePath,
+  })
+  if (rpcError) {
+    console.error('crew_remove_schedule_item_photo:', rpcError)
+    throw new DrywallPhotoError(rpcError.message || 'Could not remove photo')
+  }
+
+  const { error: rmError } = await supabase.storage.from(BUCKET).remove([storagePath])
+  if (rmError) console.warn('schedule photo storage cleanup:', rmError)
+}
+
 export { DrywallProjectPermissionError }
