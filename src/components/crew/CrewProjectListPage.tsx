@@ -90,10 +90,11 @@ export function CrewProjectListPage() {
   } | null>(null)
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0)
   const [myTimeOff, setMyTimeOff] = useState<ScheduleUnavailability[]>([])
+  // In operator "View as" preview, show the previewed person's time off; otherwise the signed-in crew member's.
+  const timeOffPersonId = viewAsPersonId ?? myPersonId
 
-  // The signed-in crew member's own upcoming time off (for a home-screen banner).
   useEffect(() => {
-    if (!myPersonId) {
+    if (!timeOffPersonId) {
       setMyTimeOff([])
       return
     }
@@ -103,7 +104,7 @@ export function CrewProjectListPage() {
       .then((all) => {
         if (cancelled) return
         setMyTimeOff(
-          all.filter((u) => u.personId === myPersonId && u.endDate >= todayKey),
+          all.filter((u) => u.personId === timeOffPersonId && u.endDate >= todayKey),
         )
       })
       .catch(() => {
@@ -112,7 +113,7 @@ export function CrewProjectListPage() {
     return () => {
       cancelled = true
     }
-  }, [myPersonId])
+  }, [timeOffPersonId])
 
   const isForemanView = isFieldForeman || previewIsForeman
   // Only a real field foreman (not an operator preview) can write.
@@ -453,20 +454,33 @@ export function CrewProjectListPage() {
     />
   ) : null
 
-  const timeOffBanner =
-    myTimeOff.length > 0 ? (
-      <div className="rounded-lg border border-zinc-300 bg-zinc-400/15 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-500/15">
-        <p className="text-sm font-medium">🌴 Your time off</p>
-        <ul className="mt-1 space-y-0.5">
-          {myTimeOff.map((t) => (
-            <li key={t.id} className="text-xs text-muted-foreground">
-              {format(parseISO(t.startDate), 'MMM d')} – {format(parseISO(t.endDate), 'MMM d')}
-              {t.reason ? ` · ${t.reason}` : ''}
-            </li>
-          ))}
-        </ul>
-      </div>
-    ) : null
+  const timeOffCards =
+    myTimeOff.length > 0
+      ? myTimeOff.map((t) => (
+          <Card
+            key={`timeoff-${t.id}`}
+            className="border-zinc-300 bg-zinc-400/10 dark:border-zinc-600 dark:bg-zinc-500/10"
+          >
+            <CardContent className="flex items-start gap-3 p-4">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-base font-semibold leading-snug">
+                    🌴 Time off{t.reason ? ` — ${t.reason}` : ''}
+                  </h3>
+                  <span className="rounded-full bg-zinc-400/30 px-2 py-0.5 text-[10px] font-semibold uppercase text-zinc-700 dark:bg-zinc-500/30 dark:text-zinc-200">
+                    Off
+                  </span>
+                </div>
+                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <CalendarDays className="size-3.5 shrink-0" />
+                  {format(parseISO(t.startDate), 'EEE MMM d')} –{' '}
+                  {format(parseISO(t.endDate), 'EEE MMM d')}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ))
+      : null
 
   // Foreman calendar view — self-contained (loads its own cross-project data),
   // so it renders independently of the task-list load/empty states.
@@ -475,7 +489,6 @@ export function CrewProjectListPage() {
       <div className="space-y-3 pb-8">
         {scopeToggle}
         {viewToggle}
-        {timeOffBanner}
         {addButton}
         {addSheet}
         <CrewScheduleCalendar
@@ -556,9 +569,9 @@ export function CrewProjectListPage() {
       <div className="space-y-3">
         {scopeToggle}
         {viewToggle}
-        {timeOffBanner}
         {addButton}
         {addSheet}
+        {timeOffCards}
         <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-4 text-center">
           <CalendarDays className="size-10 text-muted-foreground/50" />
           <h2 className="text-lg font-semibold">
@@ -609,7 +622,6 @@ export function CrewProjectListPage() {
 
       {scopeToggle}
       {viewToggle}
-      {timeOffBanner}
       {addButton}
       {addSheet}
       {filterBar}
@@ -621,6 +633,8 @@ export function CrewProjectListPage() {
         {!filtersActive && scope === 'mine' && !viewAsPersonId ? ' for you' : ''}
         {!filtersActive && scope === 'all' ? ' across all jobs' : ''}
       </p>
+
+      {timeOffCards}
 
       {filteredItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
