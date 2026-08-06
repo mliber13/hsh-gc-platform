@@ -15,6 +15,7 @@ import { packLanes } from '@/lib/drywall/scheduleLanes'
 import { projectColorClass } from '@/lib/drywall/projectColor'
 import { cn } from '@/lib/utils'
 import type { CrossProjectScheduleItem } from '@/services/drywallScheduleAggregateService'
+import type { ScheduleUnavailability } from '@/services/personUnavailabilityService'
 import {
   phaseForScheduleItem,
   SCHEDULE_ITEM_STATUS_CLASS,
@@ -41,6 +42,8 @@ type Props = {
   rangeLabel: string
   expandAll: boolean
   onItemClick: (item: CrossProjectScheduleItem) => void
+  /** Team time-off bands to overlay (grey), display-only. */
+  unavailability?: ScheduleUnavailability[]
 }
 
 function formatItemDates(item: CrossProjectScheduleItem): string {
@@ -65,6 +68,7 @@ export function DrywallPortfolioCalendar({
   rangeLabel,
   expandAll,
   onItemClick,
+  unavailability = [],
 }: Props) {
   const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(() => new Set())
   const isMobile = useIsMobile()
@@ -115,7 +119,12 @@ export function DrywallPortfolioCalendar({
       const key = format(day, 'yyyy-MM-dd')
       return itemsInRange.filter((it) => it.startDate <= key && it.endDate >= key)
     }
+    const dayUnavailable = (day: Date): ScheduleUnavailability[] => {
+      const key = format(day, 'yyyy-MM-dd')
+      return unavailability.filter((u) => u.startDate <= key && u.endDate >= key)
+    }
     const selectedItems = selectedDay ? dayItems(selectedDay) : []
+    const selectedUnavailable = selectedDay ? dayUnavailable(selectedDay) : []
 
     return (
       <Card>
@@ -132,6 +141,7 @@ export function DrywallPortfolioCalendar({
 
             {calendarDays.map((day) => {
               const items = dayItems(day)
+              const out = dayUnavailable(day)
               const primary = isPrimaryDay(day)
               const today = isToday(day)
               return (
@@ -156,7 +166,7 @@ export function DrywallPortfolioCalendar({
                   >
                     {format(day, 'd')}
                   </span>
-                  {items.length > 0 && (
+                  {(items.length > 0 || out.length > 0) && (
                     <span className="flex flex-wrap items-center justify-center gap-0.5">
                       {items.slice(0, 4).map((it, idx) => (
                         <span
@@ -172,6 +182,12 @@ export function DrywallPortfolioCalendar({
                         <span className="text-[9px] font-semibold leading-none text-muted-foreground">
                           +{items.length - 4}
                         </span>
+                      )}
+                      {out.length > 0 && (
+                        <span
+                          className="size-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500"
+                          aria-hidden
+                        />
                       )}
                     </span>
                   )}
@@ -194,9 +210,22 @@ export function DrywallPortfolioCalendar({
                 {selectedDay ? format(selectedDay, 'EEEE, MMM d') : ''}
               </SheetTitle>
             </SheetHeader>
+            {selectedUnavailable.length > 0 && (
+              <div className="mb-3 space-y-1.5">
+                {selectedUnavailable.map((u) => (
+                  <div
+                    key={u.id}
+                    className="rounded-md bg-zinc-400/20 px-3 py-2 text-sm dark:bg-zinc-500/20"
+                  >
+                    🌴 <span className="font-medium">{u.personName}</span> — off
+                    {u.reason ? ` (${u.reason})` : ''}
+                  </div>
+                ))}
+              </div>
+            )}
             {selectedItems.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                Nothing scheduled this day.
+                {selectedUnavailable.length > 0 ? 'Nothing else scheduled this day.' : 'Nothing scheduled this day.'}
               </p>
             ) : (
               <div className="space-y-2 pb-4">
@@ -320,6 +349,56 @@ export function DrywallPortfolioCalendar({
                         )}
                       </div>
                     ))}
+
+                    {unavailability
+                      .map((u) => ({
+                        u,
+                        cols: getItemColsForWeek(
+                          rangeStart,
+                          { startDate: u.startDate, endDate: u.endDate },
+                          weekIdx,
+                        ),
+                      }))
+                      .filter(({ cols }) => cols.length > 0)
+                      .map(({ u, cols }) => (
+                        <Fragment key={`unavail-${weekIdx}-${u.id}`}>
+                          {[0, 1, 2, 3, 4, 5, 6].map((col) => {
+                            if (!cols.includes(col)) {
+                              return (
+                                <div
+                                  key={`u-empty-${weekIdx}-${u.id}-${col}`}
+                                  className="h-8 border-r border-border/60 bg-black/5 last:border-r-0 dark:bg-white/10"
+                                />
+                              )
+                            }
+                            const isLeftEdge = col === 0 || !cols.includes(col - 1)
+                            const isRightEdge = col === 6 || !cols.includes(col + 1)
+                            const showLabel = col === cols[0]
+                            return (
+                              <div
+                                key={`u-${u.id}-c${col}`}
+                                className="flex h-8 items-center border-r border-border/60 bg-black/5 px-0 last:border-r-0 dark:bg-white/10"
+                                title={`${u.personName} — off${u.reason ? ` (${u.reason})` : ''}`}
+                              >
+                                <div
+                                  className={cn(
+                                    'flex h-6 w-full items-center bg-zinc-400/35 px-1 text-zinc-800 ring-1 ring-inset ring-black/10 dark:bg-zinc-500/30 dark:text-zinc-100',
+                                    isLeftEdge && 'ml-0.5 rounded-l',
+                                    isRightEdge && 'mr-0.5 rounded-r',
+                                  )}
+                                >
+                                  {showLabel && (
+                                    <span className="min-w-0 truncate text-xs font-medium">
+                                      🌴 {u.personName}
+                                      {u.reason ? ` · ${u.reason}` : ' · Off'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </Fragment>
+                      ))}
 
                     {Array.from({ length: laneCount }).map((_, laneIdx) => {
                       const laneItems = visibleLanes[laneIdx] ?? []

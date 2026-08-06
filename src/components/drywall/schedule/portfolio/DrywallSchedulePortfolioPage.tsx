@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   SlidersHorizontal,
+  Umbrella,
   UserX,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -47,6 +48,11 @@ import {
 import { ScheduleItemDialog } from '../ScheduleItemDialog'
 import { ScheduleChangeLogSheet } from '../ScheduleChangeLogSheet'
 import { DrywallPortfolioCalendar } from './DrywallPortfolioCalendar'
+import { TimeOffManagerSheet } from '../TimeOffManagerSheet'
+import {
+  fetchPersonUnavailability,
+  type ScheduleUnavailability,
+} from '@/services/personUnavailabilityService'
 import { DrywallPortfolioList } from './DrywallPortfolioList'
 import {
   computePortfolioRange,
@@ -109,6 +115,8 @@ export function DrywallSchedulePortfolioPage() {
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [addProjectOpenMobile, setAddProjectOpenMobile] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
+  const [unavailability, setUnavailability] = useState<ScheduleUnavailability[]>([])
+  const [timeOffOpen, setTimeOffOpen] = useState(false)
   const [personNames, setPersonNames] = useState<Map<string, string>>(new Map())
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => new Set())
   const [selectedPersonIds, setSelectedPersonIds] = useState<Set<string>>(() => new Set())
@@ -128,14 +136,22 @@ export function DrywallSchedulePortfolioPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const rows = await fetchCrossProjectScheduleItems()
+      const [rows, timeOff] = await Promise.all([
+        fetchCrossProjectScheduleItems(),
+        fetchPersonUnavailability().catch(() => []),
+      ])
       setItems(rows)
+      setUnavailability(timeOff)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load schedule')
       setItems([])
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  const reloadTimeOff = useCallback(async () => {
+    setUnavailability(await fetchPersonUnavailability().catch(() => []))
   }, [])
 
   useEffect(() => {
@@ -1040,6 +1056,19 @@ export function DrywallSchedulePortfolioPage() {
             </Button>
           ) : null}
 
+          {canViewActivity ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 text-xs"
+              onClick={() => setTimeOffOpen(true)}
+            >
+              <Umbrella className="h-3.5 w-3.5" />
+              Time off
+            </Button>
+          ) : null}
+
           <Button type="button" variant="outline" size="icon" onClick={() => void load()}>
             <RefreshCw className="h-4 w-4" />
             <span className="sr-only">Refresh</span>
@@ -1064,8 +1093,17 @@ export function DrywallSchedulePortfolioPage() {
           rangeLabel={rangeLabel}
           expandAll={expandAll}
           onItemClick={handleItemClick}
+          unavailability={unavailability}
         />
       )}
+
+      {canViewActivity ? (
+        <TimeOffManagerSheet
+          open={timeOffOpen}
+          onOpenChange={setTimeOffOpen}
+          onChanged={() => void reloadTimeOff()}
+        />
+      ) : null}
 
       {dialog.open && (
         <ScheduleItemDialog

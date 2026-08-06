@@ -19,6 +19,10 @@ import {
   type CrossProjectScheduleItem,
 } from '@/services/drywallScheduleAggregateService'
 import { fetchForemanTeamRoster } from '@/services/foremanScheduleService'
+import {
+  fetchPersonUnavailability,
+  type ScheduleUnavailability,
+} from '@/services/personUnavailabilityService'
 
 const VIEW_WINDOW: PortfolioViewWindow = 'month'
 const FILTER_ALL = 'all'
@@ -36,6 +40,7 @@ type Props = {
  */
 export function CrewScheduleCalendar({ onItemClick, refreshKey = 0 }: Props) {
   const [items, setItems] = useState<CrossProjectScheduleItem[]>([])
+  const [unavailability, setUnavailability] = useState<ScheduleUnavailability[]>([])
   const [personNames, setPersonNames] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -51,11 +56,13 @@ export function CrewScheduleCalendar({ onItemClick, refreshKey = 0 }: Props) {
     Promise.all([
       fetchCrossProjectScheduleItems(),
       fetchForemanTeamRoster().catch(() => []),
+      fetchPersonUnavailability().catch(() => []),
     ])
-      .then(([rows, roster]) => {
+      .then(([rows, roster, timeOff]) => {
         if (cancelled) return
         setItems(rows)
         setPersonNames(new Map(roster.map((r) => [r.id, r.name])))
+        setUnavailability(timeOff)
         setError(null)
       })
       .catch((e) => {
@@ -256,6 +263,7 @@ export function CrewScheduleCalendar({ onItemClick, refreshKey = 0 }: Props) {
         rangeLabel={rangeLabel}
         expandAll={false}
         onItemClick={onItemClick}
+        unavailability={unavailability}
       />
     </div>
   )
