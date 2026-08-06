@@ -27,6 +27,7 @@ import { addWorkdays, cascadeSchedule, workdaysBetween } from '@/lib/scheduleDat
 import type { ScheduleItem } from '@/types'
 import { cn } from '@/lib/utils'
 import { AssignedPersonsPicker } from '@/components/schedule/AssignedPersonsPicker'
+import { TimeOffConflictWarning } from '@/components/schedule/TimeOffConflictWarning'
 import {
   DrywallScheduleCascadeError,
   createScheduleItemForDrywallProject,
@@ -750,6 +751,11 @@ export function ScheduleItemDialog({
             onChange={setAssignedPersons}
             showJobInfoPersonIds={showJobInfoPersonIds}
             onShowJobInfoPersonIdsChange={setShowJobInfoPersonIds}
+          />
+          <TimeOffConflictWarning
+            assignedPersonIds={assignedPersons}
+            startDate={startDate}
+            endDate={endDate}
           />
 
           {editing && assignedPersons.length > 0 && (

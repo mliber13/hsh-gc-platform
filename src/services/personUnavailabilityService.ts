@@ -68,6 +68,25 @@ export async function addPersonUnavailability(input: {
   }
 }
 
+/**
+ * Time-off entries that overlap [startDate, endDate] for any of personIds.
+ * Overlap = ranges intersect (inclusive). Dates are yyyy-mm-dd strings.
+ */
+export function findTimeOffConflicts(
+  unavailability: ScheduleUnavailability[],
+  personIds: string[],
+  startDate: string,
+  endDate: string,
+): ScheduleUnavailability[] {
+  if (!startDate || !endDate || personIds.length === 0) return []
+  const ids = new Set(personIds.filter(Boolean))
+  const start = startDate.slice(0, 10)
+  const end = (endDate || startDate).slice(0, 10)
+  return unavailability.filter(
+    (u) => ids.has(u.personId) && u.startDate <= end && u.endDate >= start,
+  )
+}
+
 export async function deletePersonUnavailability(id: string): Promise<void> {
   if (!isOnlineMode()) throw new Error('Time off requires an online connection.')
   const { error } = await supabase.from('person_unavailability').delete().eq('id', id)

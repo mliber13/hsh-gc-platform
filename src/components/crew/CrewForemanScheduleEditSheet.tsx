@@ -28,6 +28,7 @@ import {
 } from '@/components/schedule/AssignedPersonsPicker'
 import { cn } from '@/lib/utils'
 import { CrewScheduleItemPhotos } from '@/components/crew/CrewScheduleItemPhotos'
+import { TimeOffConflictWarning } from '@/components/schedule/TimeOffConflictWarning'
 import {
   fetchScheduleItemsForDrywallProject,
   type DrywallProjectScheduleItem,
@@ -471,6 +472,11 @@ export function CrewForemanScheduleEditSheet({
             onChange={setAssignedPersons}
             options={roster}
             label="Assigned persons"
+          />
+          <TimeOffConflictWarning
+            assignedPersonIds={assignedPersons}
+            startDate={startDate}
+            endDate={endDate}
           />
           <div className="grid gap-1.5">
             <Label htmlFor="ff-edit-notes">Notes</Label>

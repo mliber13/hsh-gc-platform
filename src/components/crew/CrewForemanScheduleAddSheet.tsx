@@ -22,6 +22,7 @@ import {
   AssignedPersonsPicker,
   type AssignedPersonOption,
 } from '@/components/schedule/AssignedPersonsPicker'
+import { TimeOffConflictWarning } from '@/components/schedule/TimeOffConflictWarning'
 import type { DrywallScheduleItemStatus } from '@/services/scheduleService'
 import {
   createForemanScheduleItem,
@@ -247,6 +248,11 @@ export function CrewForemanScheduleAddSheet({
             onChange={setAssignedPersons}
             options={roster}
             label="Assigned persons"
+          />
+          <TimeOffConflictWarning
+            assignedPersonIds={assignedPersons}
+            startDate={startDate}
+            endDate={endDate}
           />
           <div className="grid gap-1.5">
             <Label htmlFor="ff-add-notes">Notes</Label>
