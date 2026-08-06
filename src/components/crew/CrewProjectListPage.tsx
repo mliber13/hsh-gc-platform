@@ -32,6 +32,10 @@ import {
 } from '@/components/crew/CrewForemanScheduleAddSheet'
 import { CrewScheduleCalendar } from '@/components/crew/CrewScheduleCalendar'
 import {
+  fetchPersonUnavailability,
+  type ScheduleUnavailability,
+} from '@/services/personUnavailabilityService'
+import {
   CrewForemanScheduleEditSheet,
   type ForemanEditableItem,
 } from '@/components/crew/CrewForemanScheduleEditSheet'
@@ -58,7 +62,8 @@ function displayAssigneeNames(item: CrewProjectListItem): string {
 }
 
 export function CrewProjectListPage() {
-  const { isFieldForeman, effectiveRole } = usePermissions()
+  const { isFieldForeman, effectiveRole, profile } = usePermissions()
+  const myPersonId = profile?.linked_employee_id || profile?.linked_contractor_id || null
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const isOperator = !isCrewRole(effectiveRole)
@@ -84,6 +89,30 @@ export function CrewProjectListPage() {
     entry: ForemanEditableItem
   } | null>(null)
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0)
+  const [myTimeOff, setMyTimeOff] = useState<ScheduleUnavailability[]>([])
+
+  // The signed-in crew member's own upcoming time off (for a home-screen banner).
+  useEffect(() => {
+    if (!myPersonId) {
+      setMyTimeOff([])
+      return
+    }
+    let cancelled = false
+    const todayKey = new Date().toISOString().slice(0, 10)
+    void fetchPersonUnavailability()
+      .then((all) => {
+        if (cancelled) return
+        setMyTimeOff(
+          all.filter((u) => u.personId === myPersonId && u.endDate >= todayKey),
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setMyTimeOff([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [myPersonId])
 
   const isForemanView = isFieldForeman || previewIsForeman
   // Only a real field foreman (not an operator preview) can write.
@@ -424,6 +453,21 @@ export function CrewProjectListPage() {
     />
   ) : null
 
+  const timeOffBanner =
+    myTimeOff.length > 0 ? (
+      <div className="rounded-lg border border-zinc-300 bg-zinc-400/15 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-500/15">
+        <p className="text-sm font-medium">🌴 Your time off</p>
+        <ul className="mt-1 space-y-0.5">
+          {myTimeOff.map((t) => (
+            <li key={t.id} className="text-xs text-muted-foreground">
+              {format(parseISO(t.startDate), 'MMM d')} – {format(parseISO(t.endDate), 'MMM d')}
+              {t.reason ? ` · ${t.reason}` : ''}
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : null
+
   // Foreman calendar view — self-contained (loads its own cross-project data),
   // so it renders independently of the task-list load/empty states.
   if (isForemanView && displayMode === 'calendar') {
@@ -431,6 +475,7 @@ export function CrewProjectListPage() {
       <div className="space-y-3 pb-8">
         {scopeToggle}
         {viewToggle}
+        {timeOffBanner}
         {addButton}
         {addSheet}
         <CrewScheduleCalendar
@@ -511,6 +556,7 @@ export function CrewProjectListPage() {
       <div className="space-y-3">
         {scopeToggle}
         {viewToggle}
+        {timeOffBanner}
         {addButton}
         {addSheet}
         <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-4 text-center">
@@ -563,6 +609,7 @@ export function CrewProjectListPage() {
 
       {scopeToggle}
       {viewToggle}
+      {timeOffBanner}
       {addButton}
       {addSheet}
       {filterBar}
