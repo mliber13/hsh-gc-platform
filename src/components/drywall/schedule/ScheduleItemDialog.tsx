@@ -39,6 +39,7 @@ import {
   type ScheduleItemTask,
 } from '@/services/scheduleService'
 import { ScheduleItemOrderSheet } from './ScheduleItemOrderSheet'
+import { CrewScheduleItemPhotos } from '@/components/crew/CrewScheduleItemPhotos'
 import { fetchSuppliers } from '@/services/partnerDirectoryService'
 import type { Supplier } from '@/types/partners'
 
@@ -848,6 +849,14 @@ export function ScheduleItemDialog({
               scheduleItemDate={editing.start_date}
               readOnly={false}
             />
+          )}
+
+          {/* Progress photos — saved items only (need the item id). */}
+          {editing && (
+            <div className="space-y-1.5">
+              <Label>Photos</Label>
+              <CrewScheduleItemPhotos projectId={projectId} itemId={editing.id} />
+            </div>
           )}
 
           <div className="space-y-1.5">
