@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Camera, Loader2, X } from 'lucide-react'
+import { Camera, ImagePlus, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,7 +23,8 @@ export function CrewScheduleItemPhotos({ projectId, itemId, readOnly = false }: 
   const [photos, setPhotos] = useState<PhotoWithUrl[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const libraryRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -65,7 +66,8 @@ export function CrewScheduleItemPhotos({ projectId, itemId, readOnly = false }: 
       toast.error(e instanceof Error ? e.message : 'Could not upload photo')
     } finally {
       setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      if (cameraRef.current) cameraRef.current.value = ''
+      if (libraryRef.current) libraryRef.current.value = ''
     }
   }
 
@@ -86,34 +88,59 @@ export function CrewScheduleItemPhotos({ projectId, itemId, readOnly = false }: 
           Photos{photos.length > 0 ? ` (${photos.length})` : ''}
         </p>
         {!readOnly ? (
-          <div className="relative">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="pointer-events-none h-7 gap-1 text-xs"
-              tabIndex={-1}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Camera className="size-3.5" />
-              )}
-              {uploading ? 'Uploading…' : 'Add photo'}
-            </Button>
-            {/* Overlay the input on the button so the tap hits <input> directly —
-                a programmatic .click() forces iOS Safari to the camera and skips the library. */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,image/heic,image/heif,.heic,.heif"
-              multiple
-              disabled={uploading}
-              aria-label="Add photo"
-              className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-              onChange={(e) => void handleFiles(e.target.files)}
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Two explicit inputs (overlaid on their buttons) — a single input can
+                only do camera OR library per device, so give both. */}
+            <div className="relative">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="pointer-events-none h-7 gap-1 text-xs"
+                tabIndex={-1}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Camera className="size-3.5" />
+                )}
+                Take
+              </Button>
+              <input
+                ref={cameraRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                disabled={uploading}
+                aria-label="Take photo"
+                className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                onChange={(e) => void handleFiles(e.target.files)}
+              />
+            </div>
+            <div className="relative">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="pointer-events-none h-7 gap-1 text-xs"
+                tabIndex={-1}
+                disabled={uploading}
+              >
+                <ImagePlus className="size-3.5" />
+                Library
+              </Button>
+              <input
+                ref={libraryRef}
+                type="file"
+                accept="image/*,image/heic,image/heif,.heic,.heif"
+                multiple
+                disabled={uploading}
+                aria-label="Choose from library"
+                className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                onChange={(e) => void handleFiles(e.target.files)}
+              />
+            </div>
           </div>
         ) : null}
       </div>
