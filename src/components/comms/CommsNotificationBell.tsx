@@ -61,6 +61,11 @@ export function CommsNotificationBell({ scope = 'operator' }: CommsNotificationB
     }
   }
 
+  const openInbox = () => {
+    setOpen(false)
+    navigate(scope === 'crew' ? '/crew/comms' : '/drywall/comms')
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -98,6 +103,13 @@ export function CommsNotificationBell({ scope = 'operator' }: CommsNotificationB
             ))}
           </ul>
         )}
+        <button
+          type="button"
+          className="w-full border-t px-3 py-2.5 text-center text-sm font-medium text-primary hover:bg-muted/60"
+          onClick={openInbox}
+        >
+          View all messages
+        </button>
       </PopoverContent>
     </Popover>
   )

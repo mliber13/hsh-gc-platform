@@ -21,6 +21,7 @@ import {
   Calendar,
   CalendarDays,
   CalendarRange,
+  MessagesSquare,
   Truck,
   Clock3,
   ClipboardList,
@@ -269,6 +270,12 @@ function drywallNav(role: RbacRole, canAccessQuickBooksAdmin: boolean): NavGroup
       to: '/drywall/schedule',
       icon: CalendarRange,
       matchPath: '/drywall/schedule',
+    },
+    {
+      label: 'Messages',
+      to: '/drywall/comms',
+      icon: MessagesSquare,
+      matchPath: '/drywall/comms',
     },
     {
       label: 'Suppliers',
