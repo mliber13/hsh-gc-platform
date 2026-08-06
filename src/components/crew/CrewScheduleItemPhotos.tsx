@@ -86,23 +86,14 @@ export function CrewScheduleItemPhotos({ projectId, itemId, readOnly = false }: 
           Photos{photos.length > 0 ? ` (${photos.length})` : ''}
         </p>
         {!readOnly ? (
-          <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              multiple
-              className="hidden"
-              onChange={(e) => void handleFiles(e.target.files)}
-            />
+          <div className="relative">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-7 gap-1 text-xs"
+              className="pointer-events-none h-7 gap-1 text-xs"
+              tabIndex={-1}
               disabled={uploading}
-              onClick={() => fileInputRef.current?.click()}
             >
               {uploading ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -111,7 +102,19 @@ export function CrewScheduleItemPhotos({ projectId, itemId, readOnly = false }: 
               )}
               {uploading ? 'Uploading…' : 'Add photo'}
             </Button>
-          </>
+            {/* Overlay the input on the button so the tap hits <input> directly —
+                a programmatic .click() forces iOS Safari to the camera and skips the library. */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,image/heic,image/heif,.heic,.heif"
+              multiple
+              disabled={uploading}
+              aria-label="Add photo"
+              className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+              onChange={(e) => void handleFiles(e.target.files)}
+            />
+          </div>
         ) : null}
       </div>
 
