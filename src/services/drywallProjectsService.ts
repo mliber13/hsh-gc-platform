@@ -1603,12 +1603,36 @@ export async function revertCloseoutToProductionComplete(projectId: string): Pro
   await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
 }
 
+/**
+ * Replace email-as-author with the real display name (profile full name / linked
+ * org_team member name) for any entry that carries an authorUserId. Mirrors the
+ * messages-inbox resolution so per-project comms show names, not emails.
+ */
+async function resolveCommsAuthorNames(
+  entries: DrywallCommsLogEntry[],
+): Promise<DrywallCommsLogEntry[]> {
+  const uids = [...new Set(entries.map((e) => e.authorUserId).filter(Boolean))] as string[]
+  if (uids.length === 0) return entries
+  const { data, error } = await supabase.rpc('display_names_for_users', { p_uids: uids })
+  if (error || !data) return entries
+  const nameById = new Map<string, string>()
+  for (const row of data as Array<{ user_id: string; name: string | null }>) {
+    if (row.name && row.name.trim()) nameById.set(row.user_id, row.name.trim())
+  }
+  if (nameById.size === 0) return entries
+  return entries.map((e) => {
+    const resolved = e.authorUserId ? nameById.get(e.authorUserId) : undefined
+    return resolved ? { ...e, author: resolved } : e
+  })
+}
+
 export async function fetchDrywallCommsLog(projectId: string): Promise<DrywallCommsLogEntry[]> {
   const project = await fetchDrywallProjectById(projectId)
   if (!project) return []
-  return parseCommsLog(project.legacy).sort(
+  const entries = parseCommsLog(project.legacy).sort(
     (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
   )
+  return resolveCommsAuthorNames(entries)
 }
 
 export async function addCommsLogEntry(
