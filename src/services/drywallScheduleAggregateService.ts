@@ -12,6 +12,8 @@ export interface CrossProjectScheduleItem {
   projectId: string
   projectName: string
   projectStatus: string
+  /** Formatted job address for search/display. */
+  projectAddress: string
   name: string
   type: 'field' | 'office'
   startDate: string
@@ -29,6 +31,10 @@ type ProjectRow = {
   name: string
   status: string
   type: string | null
+  address: unknown
+  city: string | null
+  state: string | null
+  zip_code: string | null
   app_scope: unknown
   quote_sqft: unknown
   quote_final_total: unknown
@@ -65,7 +71,23 @@ function isDrywallProjectRow(row: ProjectRow): boolean {
 
 /** Scalar-only project projection — never select full metadata (can be multi-MB per row). */
 const SCHEDULE_PROJECT_SELECT =
-  'id, name, status, type, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_first_line_item:metadata->legacy->quote->lineItems->0'
+  'id, name, status, type, address, city, state, zip_code, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_first_line_item:metadata->legacy->quote->lineItems->0'
+
+/** Best-effort address string from the project row (mirrors crewWorkspaceService.formatAddress). */
+function formatProjectAddress(row: ProjectRow): string {
+  if (typeof row.address === 'string' && row.address.trim()) return row.address.trim()
+  if (row.address && typeof row.address === 'object') {
+    const a = row.address as Record<string, unknown>
+    const parts = [
+      typeof a.street === 'string' ? a.street : typeof a.line1 === 'string' ? a.line1 : '',
+      typeof a.city === 'string' ? a.city : row.city ?? '',
+      typeof a.state === 'string' ? a.state : row.state ?? '',
+      typeof a.zip === 'string' ? a.zip : typeof a.zipCode === 'string' ? a.zipCode : row.zip_code ?? '',
+    ].filter(Boolean)
+    if (parts.length) return parts.join(', ')
+  }
+  return [row.city, row.state, row.zip_code].filter(Boolean).join(', ')
+}
 
 export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectScheduleItem[]> {
   if (!isOnlineMode()) return []
@@ -90,6 +112,7 @@ export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectSche
       {
         name: p.name?.trim() || 'Untitled',
         status: normalizeDrywallProjectStatus(p.status),
+        address: formatProjectAddress(p),
       },
     ]),
   )
@@ -118,6 +141,7 @@ export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectSche
       projectId: row.project_id,
       projectName: project.name,
       projectStatus: project.status,
+      projectAddress: project.address,
       name: row.name?.trim() || 'Schedule item',
       type: row.type === 'office' ? 'office' : 'field',
       startDate: row.start_date,

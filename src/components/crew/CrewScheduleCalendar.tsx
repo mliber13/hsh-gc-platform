@@ -49,6 +49,7 @@ export function CrewScheduleCalendar({ onItemClick, refreshKey = 0 }: Props) {
   const [jobFilter, setJobFilter] = useState(FILTER_ALL)
   const [phaseFilter, setPhaseFilter] = useState(FILTER_ALL)
   const [personFilter, setPersonFilter] = useState(FILTER_ALL)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -114,21 +115,33 @@ export function CrewScheduleCalendar({ onItemClick, refreshKey = 0 }: Props) {
   }, [items, personNames])
 
   const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase()
     return items.filter((item) => {
       if (jobFilter !== FILTER_ALL && item.projectId !== jobFilter) return false
       if (phaseFilter !== FILTER_ALL && phaseForScheduleItem(item) !== phaseFilter) return false
       if (personFilter !== FILTER_ALL && !item.assignedPersons.includes(personFilter)) return false
+      if (
+        q &&
+        !item.projectAddress.toLowerCase().includes(q) &&
+        !item.projectName.toLowerCase().includes(q)
+      ) {
+        return false
+      }
       return true
     })
-  }, [items, jobFilter, phaseFilter, personFilter])
+  }, [items, jobFilter, phaseFilter, personFilter, search])
 
   const filtersActive =
-    jobFilter !== FILTER_ALL || phaseFilter !== FILTER_ALL || personFilter !== FILTER_ALL
+    jobFilter !== FILTER_ALL ||
+    phaseFilter !== FILTER_ALL ||
+    personFilter !== FILTER_ALL ||
+    search.trim() !== ''
 
   const clearFilters = () => {
     setJobFilter(FILTER_ALL)
     setPhaseFilter(FILTER_ALL)
     setPersonFilter(FILTER_ALL)
+    setSearch('')
   }
 
   const selectClassName =
@@ -188,6 +201,15 @@ export function CrewScheduleCalendar({ onItemClick, refreshKey = 0 }: Props) {
       </div>
 
       <div className="space-y-2 rounded-lg border bg-muted/30 p-2">
+        <input
+          type="search"
+          inputMode="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by address or job name…"
+          aria-label="Search by address or job name"
+          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
+        />
         <div className="flex flex-wrap items-center gap-2">
           <label className="sr-only" htmlFor="cal-filter-job">
             Job

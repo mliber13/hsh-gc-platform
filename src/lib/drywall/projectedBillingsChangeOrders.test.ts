@@ -37,6 +37,7 @@ function draw(id: string, name: string, startDate: string): CrossProjectSchedule
     projectId: 'project-1',
     projectName: 'Production job',
     projectStatus: 'production',
+    projectAddress: '',
     name,
     type: 'office',
     startDate,
