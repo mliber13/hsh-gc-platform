@@ -9,6 +9,7 @@ import {
   uploadScheduleItemPhoto,
   type ScheduleItemPhotoRef,
 } from '@/services/drywallPhotosService'
+import { CameraCaptureDialog } from '@/components/photo/CameraCaptureDialog'
 
 type PhotoWithUrl = ScheduleItemPhotoRef & { url: string | null }
 
@@ -23,7 +24,7 @@ export function CrewScheduleItemPhotos({ projectId, itemId, readOnly = false }: 
   const [photos, setPhotos] = useState<PhotoWithUrl[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
-  const cameraRef = useRef<HTMLInputElement>(null)
+  const [cameraOpen, setCameraOpen] = useState(false)
   const libraryRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -53,11 +54,11 @@ export function CrewScheduleItemPhotos({ projectId, itemId, readOnly = false }: 
     void load()
   }, [load])
 
-  const handleFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return
+  const uploadFiles = async (files: File[]) => {
+    if (files.length === 0) return
     setUploading(true)
     try {
-      for (const file of Array.from(files)) {
+      for (const file of files) {
         await uploadScheduleItemPhoto(projectId, itemId, file)
       }
       toast.success(files.length === 1 ? 'Photo added' : `${files.length} photos added`)
@@ -66,9 +67,13 @@ export function CrewScheduleItemPhotos({ projectId, itemId, readOnly = false }: 
       toast.error(e instanceof Error ? e.message : 'Could not upload photo')
     } finally {
       setUploading(false)
-      if (cameraRef.current) cameraRef.current.value = ''
       if (libraryRef.current) libraryRef.current.value = ''
     }
+  }
+
+  const handleLibraryFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    void uploadFiles(Array.from(files))
   }
 
   const handleDelete = async (storagePath: string) => {
@@ -91,33 +96,21 @@ export function CrewScheduleItemPhotos({ projectId, itemId, readOnly = false }: 
           <div className="flex flex-wrap items-center gap-2">
             {/* Two explicit inputs (overlaid on their buttons) — a single input can
                 only do camera OR library per device, so give both. */}
-            <div className="relative">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="pointer-events-none h-7 gap-1 text-xs"
-                tabIndex={-1}
-                disabled={uploading}
-              >
-                {uploading ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Camera className="size-3.5" />
-                )}
-                Take
-              </Button>
-              <input
-                ref={cameraRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                disabled={uploading}
-                aria-label="Take photo"
-                className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                onChange={(e) => void handleFiles(e.target.files)}
-              />
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              disabled={uploading}
+              onClick={() => setCameraOpen(true)}
+            >
+              {uploading ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Camera className="size-3.5" />
+              )}
+              Take
+            </Button>
             <div className="relative">
               <Button
                 type="button"
@@ -138,7 +131,7 @@ export function CrewScheduleItemPhotos({ projectId, itemId, readOnly = false }: 
                 disabled={uploading}
                 aria-label="Choose from library"
                 className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                onChange={(e) => void handleFiles(e.target.files)}
+                onChange={(e) => handleLibraryFiles(e.target.files)}
               />
             </div>
           </div>
@@ -188,6 +181,12 @@ export function CrewScheduleItemPhotos({ projectId, itemId, readOnly = false }: 
           ))}
         </div>
       )}
+
+      <CameraCaptureDialog
+        open={cameraOpen}
+        onOpenChange={setCameraOpen}
+        onCapture={(file) => void uploadFiles([file])}
+      />
     </div>
   )
 }
