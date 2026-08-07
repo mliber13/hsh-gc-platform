@@ -243,10 +243,24 @@ export function CommsInboxPage({ variant }: Props) {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-3 p-4">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-          <MessagesSquare className="size-5 text-primary" />
-          Messages
-        </h1>
+        <div className="flex min-w-0 items-center gap-2">
+          {variant === 'crew' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0"
+              aria-label="Back to jobs"
+              onClick={() => navigate('/crew')}
+            >
+              <ArrowLeft className="size-4" />
+            </Button>
+          ) : null}
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+            <MessagesSquare className="size-5 text-primary" />
+            Messages
+          </h1>
+        </div>
         <div className="flex items-center gap-2">
           <select
             aria-label="Sort"
