@@ -103,6 +103,68 @@ export async function fetchProjectCustomerMessages(
   return ((data ?? []) as MessageRow[]).map(mapMessage)
 }
 
+export interface CustomerThread {
+  contactPhone: string
+  contactName: string | null
+  latestBody: string
+  latestAt: string
+  latestDirection: 'inbound' | 'outbound'
+  latestProjectId: string | null
+  count: number
+}
+
+/** All customer message threads (grouped by contact phone), newest activity first. */
+export async function fetchCustomerThreads(limit = 500): Promise<CustomerThread[]> {
+  if (!isOnlineMode()) return []
+  const { data, error } = await supabase
+    .from('customer_messages')
+    .select('id, contact_phone, contact_name, direction, body, project_id, status, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) {
+    console.error('fetchCustomerThreads:', error)
+    return []
+  }
+  const rows = ((data ?? []) as MessageRow[]).map(mapMessage)
+  const byPhone = new Map<string, CustomerThread>()
+  for (const m of rows) {
+    const cur = byPhone.get(m.contactPhone)
+    if (!cur) {
+      byPhone.set(m.contactPhone, {
+        contactPhone: m.contactPhone,
+        contactName: m.contactName,
+        latestBody: m.body,
+        latestAt: m.createdAt,
+        latestDirection: m.direction,
+        latestProjectId: m.projectId,
+        count: 1,
+      })
+    } else {
+      cur.count++
+      if (!cur.contactName && m.contactName) cur.contactName = m.contactName
+      if (!cur.latestProjectId && m.projectId) cur.latestProjectId = m.projectId
+    }
+  }
+  return [...byPhone.values()].sort(
+    (a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime(),
+  )
+}
+
+/** Full conversation with one customer (all jobs), oldest first. */
+export async function fetchCustomerThread(contactPhone: string): Promise<CustomerMessage[]> {
+  if (!isOnlineMode()) return []
+  const { data, error } = await supabase
+    .from('customer_messages')
+    .select('id, contact_phone, contact_name, direction, body, project_id, status, created_at')
+    .eq('contact_phone', contactPhone)
+    .order('created_at', { ascending: true })
+  if (error) {
+    console.error('fetchCustomerThread:', error)
+    return []
+  }
+  return ((data ?? []) as MessageRow[]).map(mapMessage)
+}
+
 export async function sendCustomerMessage(input: {
   projectId: string
   phone: string

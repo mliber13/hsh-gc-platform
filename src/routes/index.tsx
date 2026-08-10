@@ -125,6 +125,7 @@ import { FieldMeasurementPage } from '@/components/drywall/field/FieldMeasuremen
 import { DrywallScheduleEditor } from '@/components/drywall/schedule/DrywallScheduleEditor'
 import { DrywallSchedulePortfolioPage } from '@/components/drywall/schedule/portfolio/DrywallSchedulePortfolioPage'
 import { CommsInboxPage } from '@/components/comms/CommsInboxPage'
+import { CustomerInboxPage } from '@/components/comms/CustomerInboxPage'
 import { DashboardPage } from '@/components/drywall/dashboard/DashboardPage'
 import { QuoteStageRoute } from '@/components/drywall/quote/QuoteStageRoute'
 import { CatalogsPage } from '@/components/drywall/settings/CatalogsPage'
@@ -313,6 +314,14 @@ export function AppRoutes() {
             element={
               <RequireWorkspaceAccess workspace="drywall">
                 <CommsInboxPage variant="operator" />
+              </RequireWorkspaceAccess>
+            }
+          />
+          <Route
+            path="/drywall/customers"
+            element={
+              <RequireWorkspaceAccess workspace="drywall">
+                <CustomerInboxPage />
               </RequireWorkspaceAccess>
             }
           />
