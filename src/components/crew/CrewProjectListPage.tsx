@@ -76,6 +76,7 @@ export function CrewProjectListPage() {
   const [previewIsForeman, setPreviewIsForeman] = useState(false)
   const [previewFirstName, setPreviewFirstName] = useState<string | null>(null)
 
+  const [scheduleSearch, setScheduleSearch] = useState('')
   const [phaseFilter, setPhaseFilter] = useState(FILTER_ALL)
   const [jobFilter, setJobFilter] = useState(FILTER_ALL)
   const [personFilter, setPersonFilter] = useState(FILTER_ALL)
@@ -242,10 +243,14 @@ export function CrewProjectListPage() {
   }, [items])
 
   const filtersActive =
-    phaseFilter !== FILTER_ALL || jobFilter !== FILTER_ALL || personFilter !== FILTER_ALL
+    phaseFilter !== FILTER_ALL ||
+    jobFilter !== FILTER_ALL ||
+    personFilter !== FILTER_ALL ||
+    scheduleSearch.trim() !== ''
 
   const filteredItems = useMemo(() => {
     if (!isForemanView) return items
+    const q = scheduleSearch.trim().toLowerCase()
     return items.filter((item) => {
       if (phaseFilter !== FILTER_ALL && item.phase !== phaseFilter) return false
       if (jobFilter !== FILTER_ALL && item.projectId !== jobFilter) return false
@@ -255,14 +260,22 @@ export function CrewProjectListPage() {
       ) {
         return false
       }
+      if (
+        q &&
+        !(item.address ?? '').toLowerCase().includes(q) &&
+        !item.projectName.toLowerCase().includes(q)
+      ) {
+        return false
+      }
       return true
     })
-  }, [items, isForemanView, phaseFilter, jobFilter, personFilter])
+  }, [items, isForemanView, phaseFilter, jobFilter, personFilter, scheduleSearch])
 
   const clearFilters = () => {
     setPhaseFilter(FILTER_ALL)
     setJobFilter(FILTER_ALL)
     setPersonFilter(FILTER_ALL)
+    setScheduleSearch('')
   }
 
   const selectClassName =
@@ -271,6 +284,15 @@ export function CrewProjectListPage() {
   const filterBar =
     isForemanView && items.length > 0 ? (
       <div className="space-y-2 rounded-lg border bg-muted/30 p-2">
+        <input
+          type="search"
+          inputMode="search"
+          value={scheduleSearch}
+          onChange={(e) => setScheduleSearch(e.target.value)}
+          placeholder="Search by address or job name…"
+          aria-label="Search by address or job name"
+          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
+        />
         <div className="flex flex-wrap items-center gap-2">
           <label className="sr-only" htmlFor="crew-filter-phase">
             Phase
@@ -493,6 +515,8 @@ export function CrewProjectListPage() {
         {addSheet}
         <CrewScheduleCalendar
           refreshKey={calendarRefreshKey}
+          search={scheduleSearch}
+          onSearchChange={setScheduleSearch}
           onItemClick={(item) => {
             // Real foreman → edit in place; read-only preview → open the job.
             if (canAddSchedule) {

@@ -31,6 +31,9 @@ type Props = {
   onItemClick: (item: CrossProjectScheduleItem) => void
   /** Bump to force a re-fetch (e.g. after an edit saved from the parent). */
   refreshKey?: number
+  /** Address/name search (controlled by the parent so it persists across list/calendar). */
+  search: string
+  onSearchChange: (value: string) => void
 }
 
 /**
@@ -38,7 +41,12 @@ type Props = {
  * (color-coded by job, desktop grid + mobile dot-grid) with month navigation
  * and job / phase / person filters.
  */
-export function CrewScheduleCalendar({ onItemClick, refreshKey = 0 }: Props) {
+export function CrewScheduleCalendar({
+  onItemClick,
+  refreshKey = 0,
+  search,
+  onSearchChange,
+}: Props) {
   const [items, setItems] = useState<CrossProjectScheduleItem[]>([])
   const [unavailability, setUnavailability] = useState<ScheduleUnavailability[]>([])
   const [personNames, setPersonNames] = useState<Map<string, string>>(new Map())
@@ -49,7 +57,6 @@ export function CrewScheduleCalendar({ onItemClick, refreshKey = 0 }: Props) {
   const [jobFilter, setJobFilter] = useState(FILTER_ALL)
   const [phaseFilter, setPhaseFilter] = useState(FILTER_ALL)
   const [personFilter, setPersonFilter] = useState(FILTER_ALL)
-  const [search, setSearch] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -141,7 +148,7 @@ export function CrewScheduleCalendar({ onItemClick, refreshKey = 0 }: Props) {
     setJobFilter(FILTER_ALL)
     setPhaseFilter(FILTER_ALL)
     setPersonFilter(FILTER_ALL)
-    setSearch('')
+    onSearchChange('')
   }
 
   const selectClassName =
@@ -205,7 +212,7 @@ export function CrewScheduleCalendar({ onItemClick, refreshKey = 0 }: Props) {
           type="search"
           inputMode="search"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search by address or job name…"
           aria-label="Search by address or job name"
           className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
