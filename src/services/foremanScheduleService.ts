@@ -82,6 +82,18 @@ export async function createForemanScheduleItem(
   return newItemId
 }
 
+/** Delete a schedule item as a field foreman (SECURITY DEFINER RPC; strips ghost predecessor refs). */
+export async function deleteForemanScheduleItem(itemId: string): Promise<void> {
+  if (!isOnlineMode()) {
+    throw new Error('Deleting schedule items requires an online connection.')
+  }
+  const { error } = await supabase.rpc('foreman_delete_schedule_item', { p_item_id: itemId })
+  if (error) {
+    console.error('foreman_delete_schedule_item:', error)
+    throw new Error(error.message || 'Could not delete schedule item')
+  }
+}
+
 export async function fetchForemanTeamRoster(): Promise<AssignedPersonOption[]> {
   if (!isOnlineMode()) return []
   const { data, error } = await supabase.rpc('list_org_team_roster_for_foreman')

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseISO } from 'date-fns'
 import { toast } from 'sonner'
-import { Check, ChevronsUpDown, Plus, X } from 'lucide-react'
+import { Check, ChevronsUpDown, Plus, Trash2, X } from 'lucide-react'
 import { addWorkdays } from '@/lib/scheduleDateMath'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,6 +37,7 @@ import {
 } from '@/services/scheduleService'
 import {
   applyForemanScheduleEdit,
+  deleteForemanScheduleItem,
   fetchForemanTeamRoster,
   previewForemanScheduleEdit,
 } from '@/services/foremanScheduleService'
@@ -87,6 +88,7 @@ export function CrewForemanScheduleEditSheet({
   const [notes, setNotes] = useState('')
   const [roster, setRoster] = useState<AssignedPersonOption[]>([])
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [conflict, setConflict] = useState<ForemanPredecessorConflict | null>(null)
   const [cascadeLines, setCascadeLines] = useState<string[]>([])
   const [siblings, setSiblings] = useState<DrywallProjectScheduleItem[]>([])
@@ -292,6 +294,22 @@ export function CrewForemanScheduleEditSheet({
       toast.error(e instanceof Error ? e.message : 'Could not save')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!entry) return
+    if (!window.confirm(`Delete "${entry.name}" from the schedule?`)) return
+    setDeleting(true)
+    try {
+      await deleteForemanScheduleItem(entry.id)
+      toast.success('Schedule item deleted')
+      onSaved()
+      onOpenChange(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete schedule item')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -614,6 +632,16 @@ export function CrewForemanScheduleEditSheet({
               </Button>
               <Button type="button" onClick={() => void handleSave()} disabled={saving || !startDate}>
                 {saving ? 'Saving…' : 'Save'}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="gap-1"
+                onClick={() => void handleDelete()}
+                disabled={saving || deleting}
+              >
+                <Trash2 className="size-4" />
+                {deleting ? 'Deleting…' : 'Delete'}
               </Button>
             </>
           )}
