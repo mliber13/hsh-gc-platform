@@ -4,11 +4,12 @@
 // supplier, filterable, sorted by delivery date. Read-only; rows open the order.
 // ============================================================================
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, Search, ChevronRight, Link2 } from 'lucide-react'
+import { Truck, Search, ChevronRight, Link2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
@@ -68,21 +69,39 @@ export function DrywallSupplierOrdersPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      setLoading(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (opts?.silent) setRefreshing(true)
+    else setLoading(true)
+    try {
       const [rows, up] = await Promise.all([fetchSupplierOrders(), fetchSupplierUpcoming()])
-      if (!cancelled) {
-        setOrders(rows)
-        setUpcoming(up)
-        setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
+      setOrders(rows)
+      setUpcoming(up)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
     }
   }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  // Refetch when the page regains focus / becomes visible so schedule changes made
+  // elsewhere show up without a manual reload (the RPC data is always live).
+  useEffect(() => {
+    const onFocus = () => void load({ silent: true })
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load({ silent: true })
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [load])
 
   // Distinct suppliers present in the orders (for the filter dropdown).
   const supplierOptions = useMemo(() => {
@@ -159,12 +178,23 @@ export function DrywallSupplierOrdersPage() {
     <div className="mx-auto w-full max-w-6xl space-y-5 p-4 sm:p-6">
       <div className="flex items-center gap-3">
         <Truck className="h-6 w-6 text-primary" />
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-xl font-bold">Supplier Orders</h1>
           <p className="text-sm text-muted-foreground">
             Every material order across drywall projects, grouped by supplier.
           </p>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 gap-1.5"
+          disabled={refreshing}
+          onClick={() => void load({ silent: true })}
+        >
+          <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
+          Refresh
+        </Button>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
