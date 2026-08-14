@@ -423,9 +423,12 @@ export async function fetchCrewProjectList(
   if (scheduleRows.length === 0) return []
 
   // Hide schedule items whose work window has fully passed — crew only see current/upcoming
-  // work, not an endless backlog of last week's/month's tasks.
-  const today = format(new Date(), 'yyyy-MM-dd')
-  const upcomingRows = scheduleRows.filter((r) => (r.end_date || r.start_date) >= today)
+  // work, not an endless backlog. A 5-day grace window keeps recently-overdue tasks (e.g. a
+  // measure scheduled a couple days ago) reachable so crew running behind can still act on them.
+  const cutoffDate = new Date()
+  cutoffDate.setDate(cutoffDate.getDate() - 5)
+  const cutoff = format(cutoffDate, 'yyyy-MM-dd')
+  const upcomingRows = scheduleRows.filter((r) => (r.end_date || r.start_date) >= cutoff)
   if (upcomingRows.length === 0) return []
 
   const projectIds = [...new Set(upcomingRows.map((r) => r.project_id))]
