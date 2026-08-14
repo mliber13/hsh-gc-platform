@@ -33,6 +33,7 @@ import {
 import { formatReviewTimestamp } from '@/components/drywall/field/FieldTakeoffReviewBanner'
 import { fieldTakeoffWithTotals, computeMeasuredSqft } from '@/lib/drywall/fieldMeasurementUtils'
 import { isCrewRole } from '@/lib/rbac'
+import { setUnsavedWork } from '@/lib/unsavedWork'
 import { saveFieldTakeoff } from '@/services/drywallProjectsService'
 import {
   CrewFieldTakeoffSaveError,
@@ -217,7 +218,7 @@ export function CrewMeasurePage() {
     [formReadOnly, setTakeoffField],
   )
 
-  const handleSave = async () => {
+  const handleSave = async (opts?: { silent?: boolean }) => {
     if (!projectId || !takeoff || formReadOnly || saving || isViewAs) return
 
     setSaving(true)
@@ -239,8 +240,13 @@ export function CrewMeasurePage() {
             }
           : prev,
       )
-      toast.success('Saved')
+      if (!opts?.silent) toast.success('Saved')
     } catch (e) {
+      // Autosave failures stay quiet (don't spam) — the manual Save surfaces errors.
+      if (opts?.silent) {
+        console.warn('measure autosave failed:', e)
+        return
+      }
       if (e instanceof CrewWorkspacePermissionError) {
         toast.error(e.message)
       } else if (e instanceof CrewFieldTakeoffSaveError) {
@@ -252,6 +258,30 @@ export function CrewMeasurePage() {
       setSaving(false)
     }
   }
+
+  // Always call the latest handleSave from the debounced autosave without
+  // re-arming the timer on every render.
+  const handleSaveRef = useRef(handleSave)
+  handleSaveRef.current = handleSave
+
+  // Debounced autosave: 4s after the last edit, so a mid-entry reload/close
+  // (PWA deploy, tab switch, battery) doesn't lose the field measurements.
+  const canAutosave = isDirty && !formReadOnly && !saving && !submitting && !isViewAs
+  useEffect(() => {
+    if (!canAutosave) return
+    const t = window.setTimeout(() => {
+      void handleSaveRef.current({ silent: true })
+    }, 4000)
+    return () => window.clearTimeout(t)
+    // `takeoff` re-arms the debounce on each edit; handleSaveRef stays current.
+  }, [canAutosave, takeoff])
+
+  // Let the PWA auto-updater know not to force-reload mid-entry.
+  useEffect(() => {
+    const hasUnsaved = isDirty && !formReadOnly
+    setUnsavedWork('crew-measure', hasUnsaved)
+    return () => setUnsavedWork('crew-measure', false)
+  }, [isDirty, formReadOnly])
 
   const handleSubmitForReview = async () => {
     if (!projectId || !takeoff || !canSubmitForReview) return

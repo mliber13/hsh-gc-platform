@@ -11,10 +11,14 @@ import '@fontsource-variable/geist-mono'
 
 // Register PWA Service Worker
 import { registerSW } from 'virtual:pwa-register'
+import { hasUnsavedWork } from './lib/unsavedWork'
 
 const updateSW = registerSW({
   immediate: true, // Check for updates immediately
   onNeedRefresh() {
+    // Don't yank the user out of active unsaved work (e.g. mid measure-entry) — the
+    // new service worker is installed and takes effect on their next navigation.
+    if (hasUnsavedWork()) return
     // Auto-reload when update is available (don't wait for user confirmation)
     updateSW(true)
   },
