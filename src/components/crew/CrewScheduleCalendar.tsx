@@ -18,6 +18,7 @@ import {
   fetchCrossProjectScheduleItems,
   type CrossProjectScheduleItem,
 } from '@/services/drywallScheduleAggregateService'
+import { isDrywallProjectClosed } from '@/types/drywall'
 import { fetchForemanTeamRoster } from '@/services/foremanScheduleService'
 import {
   fetchPersonUnavailability,
@@ -66,7 +67,9 @@ export function CrewScheduleCalendar({
       fetchForemanTeamRoster().catch(() => []),
       fetchPersonUnavailability().catch(() => []),
     ])
-      .then(([rows, roster, timeOff]) => {
+      .then(([allRows, roster, timeOff]) => {
+        // Exclude closed/complete projects so the job filter matches the task list.
+        const rows = allRows.filter((r) => !isDrywallProjectClosed(r.projectStatus))
         if (cancelled) return
         setItems(rows)
         setPersonNames(new Map(roster.map((r) => [r.id, r.name])))

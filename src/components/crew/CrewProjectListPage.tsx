@@ -294,22 +294,6 @@ export function CrewProjectListPage() {
           className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
         />
         <div className="flex flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="crew-filter-phase">
-            Phase
-          </label>
-          <select
-            id="crew-filter-phase"
-            className={selectClassName}
-            value={phaseFilter}
-            onChange={(e) => setPhaseFilter(e.target.value)}
-          >
-            <option value={FILTER_ALL}>All phases</option>
-            {phaseOptions.map((phase) => (
-              <option key={phase} value={phase}>
-                {SCHEDULE_PHASE_LABELS[phase]}
-              </option>
-            ))}
-          </select>
           <label className="sr-only" htmlFor="crew-filter-job">
             Job
           </label>
@@ -323,6 +307,22 @@ export function CrewProjectListPage() {
             {jobOptions.map((job) => (
               <option key={job.projectId} value={job.projectId}>
                 {job.projectName}
+              </option>
+            ))}
+          </select>
+          <label className="sr-only" htmlFor="crew-filter-phase">
+            Phase
+          </label>
+          <select
+            id="crew-filter-phase"
+            className={selectClassName}
+            value={phaseFilter}
+            onChange={(e) => setPhaseFilter(e.target.value)}
+          >
+            <option value={FILTER_ALL}>All phases</option>
+            {phaseOptions.map((phase) => (
+              <option key={phase} value={phase}>
+                {SCHEDULE_PHASE_LABELS[phase]}
               </option>
             ))}
           </select>
