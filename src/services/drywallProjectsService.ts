@@ -28,6 +28,8 @@ import { isValidDrywallQuoteNumber } from '@/lib/drywall/drywallQuoteNumber'
 import { normalizeQuoteToV2, quoteV2ToLegacyCompat } from '@/lib/drywall/drywallQuoteSchema'
 import { fieldTakeoffWithTotals, mergeFieldTakeoff } from '@/lib/drywall/fieldMeasurementUtils'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
+import { suggestOrderItemsFromFieldTakeoff } from '@/lib/drywall/orderSuggest'
+import { fetchSuppliers } from '@/services/partnerDirectoryService'
 import {
   inferCommsAuthorRole,
   normalizeCommsLogEntry,
@@ -1106,6 +1108,17 @@ export async function saveFieldTakeoffAndAdvance(
 
   const withTotals = fieldTakeoffWithTotals(takeoff)
   const nextStatus: DrywallProjectStatus = 'order'
+
+  // Auto-seed a draft supplier order from the completed field takeoff so the job
+  // lands on the Supplier Orders board immediately — the office just reviews and
+  // marks it sent. Only when no orders exist yet (don't duplicate on re-advance)
+  // and the takeoff actually has materials to order.
+  const existingOrders = parseLegacyOrders(prevLegacy)
+  const autoOrder =
+    existingOrders.length === 0
+      ? await buildAutoDraftOrderFromTakeoff(withTotals)
+      : null
+
   const mergedLegacy = {
     ...prevLegacy,
     status: nextStatus,
@@ -1114,9 +1127,51 @@ export async function saveFieldTakeoffAndAdvance(
       ...withTotals,
       updatedAt: new Date().toISOString(),
     },
+    ...(autoOrder ? { orders: [autoOrder, ...existingOrders] } : {}),
   }
 
   await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
+}
+
+/**
+ * Build a draft order pre-filled from the field takeoff for the field → order
+ * advance. Returns null when there's nothing to order. Defaults the supplier to
+ * the division's single active supplier (L&W) so the board groups it and the
+ * share link works; leaves it unset when there are zero or multiple suppliers.
+ */
+async function buildAutoDraftOrderFromTakeoff(
+  takeoff: FieldTakeoff,
+): Promise<DrywallOrder | null> {
+  const items = suggestOrderItemsFromFieldTakeoff(takeoff)
+  if (items.length === 0) return null
+
+  let supplierFields: Partial<DrywallOrder> = {}
+  try {
+    const suppliers = await fetchSuppliers()
+    if (suppliers.length === 1) {
+      const s = suppliers[0]
+      supplierFields = {
+        supplierId: s.id,
+        supplier: s.name,
+        supplierContact:
+          [s.contactName, s.phone].filter(Boolean).join(' · ') || undefined,
+      }
+    }
+  } catch (e) {
+    // A supplier lookup failure shouldn't block advancing the stage — leave the
+    // order unassigned (still shows on the board under "No supplier").
+    console.warn('buildAutoDraftOrderFromTakeoff: supplier lookup failed', e)
+  }
+
+  const now = new Date().toISOString()
+  return {
+    id: generateFieldId(),
+    status: 'draft',
+    items,
+    ...supplierFields,
+    createdAt: now,
+    updatedAt: now,
+  }
 }
 
 function normalizeOrderItem(raw: unknown): DrywallOrderItem | null {
