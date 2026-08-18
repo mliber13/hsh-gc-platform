@@ -58,6 +58,20 @@ type Row = {
   item_name: string | null
   stock_date: string | null
   quoted_sqft: number | null
+  measured_sqft: number | null
+}
+
+/** Prefer the field-measured total once measured; otherwise the quoted sqft. Blank when neither. */
+function fmtSqft(r: Row): string {
+  const val =
+    r.measured_sqft != null && r.measured_sqft > 0
+      ? r.measured_sqft
+      : r.quoted_sqft != null && r.quoted_sqft > 0
+        ? r.quoted_sqft
+        : null
+  if (val == null) return ''
+  const label = r.measured_sqft != null && r.measured_sqft > 0 ? ' (measured)' : ''
+  return `${Math.round(val).toLocaleString('en-US')} sqft${label}`
 }
 
 /** Is it currently the 8 o'clock hour in New York? (DST-safe via Intl.) */
@@ -102,6 +116,7 @@ function renderHtml(supplierName: string, rows: Row[]): string {
         <td style="padding:7px 8px;border-bottom:1px solid #e2e8f0;white-space:nowrap;font-weight:600;">${esc(fmtDate(r.stock_date))}</td>
         <td style="padding:7px 8px;border-bottom:1px solid #e2e8f0;">${esc(r.project_name || 'Project')}</td>
         <td style="padding:7px 8px;border-bottom:1px solid #e2e8f0;color:${MUTED};">${esc(r.item_name || '')}</td>
+        <td style="padding:7px 8px;border-bottom:1px solid #e2e8f0;text-align:right;white-space:nowrap;color:${MUTED};">${esc(fmtSqft(r))}</td>
       </tr>`,
     )
     .join('')
@@ -124,9 +139,10 @@ function renderHtml(supplierName: string, rows: Row[]): string {
                 <th style="padding:8px;text-align:left;background:${BRAND};color:#fff;">Date</th>
                 <th style="padding:8px;text-align:left;background:${BRAND};color:#fff;">Project</th>
                 <th style="padding:8px;text-align:left;background:${BRAND};color:#fff;">Material</th>
+                <th style="padding:8px;text-align:right;background:${BRAND};color:#fff;">Sqft</th>
               </tr>
             </thead>
-            <tbody>${body || '<tr><td colspan="3" style="padding:8px;color:#64748b;">No upcoming deliveries.</td></tr>'}</tbody>
+            <tbody>${body || '<tr><td colspan="4" style="padding:8px;color:#64748b;">No upcoming deliveries.</td></tr>'}</tbody>
           </table>
           <p style="margin:20px 0 0;font-size:13px;color:${MUTED};">Questions on any delivery? Reply to this email or give us a call.</p>
         </div>
