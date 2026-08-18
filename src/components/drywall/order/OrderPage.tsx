@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { FileDown, Plus, Save, Truck } from 'lucide-react'
+import { FileDown, Mail, Plus, Save, Truck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { sendSupplierOrderEmail } from '@/services/supplierOrdersService'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import { extractMaterialsFromFieldTakeoff } from '@/lib/drywall/fieldMaterialsPdfData'
@@ -26,6 +35,7 @@ import {
   fetchFieldTakeoff,
   fetchOrders,
   markDrywallProjectComplete,
+  markOrderStatus,
   saveFieldTakeoff,
   saveOrderStageSnapshot,
   transitionDrywallChangeOrder,
@@ -252,6 +262,53 @@ export function OrderPage() {
     )
   }
 
+  // ── Email the PO to the supplier (their corporate IT blocks the share link) ──
+  const [sendConfirm, setSendConfirm] = useState<DrywallOrder | null>(null)
+  const [sending, setSending] = useState(false)
+
+  const sendRecipientEmail = useMemo(() => {
+    if (!sendConfirm?.supplierId) return ''
+    return suppliers.find((s) => s.id === sendConfirm.supplierId)?.email?.trim() || ''
+  }, [sendConfirm, suppliers])
+
+  const requestSendToSupplier = (order: DrywallOrder) => {
+    if (readOnly) return
+    if (isDirty) {
+      toast.error('Save your changes before emailing the supplier.')
+      return
+    }
+    if (!order.items || order.items.length === 0) {
+      toast.error('Add line items before sending this order.')
+      return
+    }
+    setSendConfirm(order)
+  }
+
+  const confirmSendToSupplier = async (withEmail: boolean) => {
+    const order = sendConfirm
+    if (!order) return
+    setSending(true)
+    try {
+      let sentTo = ''
+      if (withEmail) {
+        const res = await sendSupplierOrderEmail(projectId, projectPdfMeta, order)
+        sentTo = res.to
+      }
+      await markOrderStatus(projectId, order.id, 'sent')
+      toast.success(
+        withEmail
+          ? `PO emailed to ${sentTo || 'the supplier'} and marked sent`
+          : 'Order marked sent',
+      )
+      setSendConfirm(null)
+      await load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to send order')
+    } finally {
+      setSending(false)
+    }
+  }
+
   const handleFieldMaterialsPdf = () => {
     if (!fieldTakeoff) return
     const { boards, accessories } = extractMaterialsFromFieldTakeoff(fieldTakeoff)
@@ -442,9 +499,10 @@ export function OrderPage() {
                               type="button"
                               size="sm"
                               variant="outline"
-                              onClick={() => handleMarkStatus(order.id, 'sent')}
+                              onClick={() => requestSendToSupplier(order)}
                             >
-                              Mark sent
+                              <Mail className="mr-1.5 h-3.5 w-3.5" />
+                              Send to supplier
                             </Button>
                           )}
                           {order.status === 'sent' && (
@@ -522,6 +580,63 @@ export function OrderPage() {
         projectId={projectId}
         onReopened={load}
       />
+
+      <Dialog
+        open={Boolean(sendConfirm)}
+        onOpenChange={(open) => {
+          if (!open && !sending) setSendConfirm(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send order to supplier</DialogTitle>
+            <DialogDescription>
+              {sendRecipientEmail ? (
+                <>
+                  Email this purchase order (PDF attachment + full order with area/stocking
+                  notes) to{' '}
+                  <span className="font-medium text-foreground">{sendRecipientEmail}</span> and
+                  mark it sent.
+                </>
+              ) : (
+                <>
+                  {sendConfirm?.supplier || 'This supplier'} has no email on file. Add one under{' '}
+                  Suppliers to email the PO, or mark the order sent without emailing.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSendConfirm(null)}
+              disabled={sending}
+            >
+              Cancel
+            </Button>
+            {sendRecipientEmail ? (
+              <Button
+                type="button"
+                onClick={() => void confirmSendToSupplier(true)}
+                disabled={sending}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                {sending ? 'Sending…' : 'Email PO & mark sent'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void confirmSendToSupplier(false)}
+                disabled={sending}
+              >
+                {sending ? 'Saving…' : 'Mark sent without email'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <OrderEditorDialog
         open={Boolean(editingOrderId)}

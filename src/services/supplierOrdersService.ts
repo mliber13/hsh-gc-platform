@@ -5,6 +5,9 @@
 // ============================================================================
 
 import { supabase, isOnlineMode } from '@/lib/supabase'
+import { drywallOrderPdfBase64 } from '@/lib/drywallOrderPdf'
+import { orderPdfFilename } from '@/lib/drywall/orderPdfFilename'
+import type { DrywallOrder, DrywallProject } from '@/types/drywall'
 
 export interface SupplierOrderRow {
   projectId: string
@@ -65,6 +68,41 @@ export async function fetchSupplierUpcoming(): Promise<SupplierUpcomingRow[]> {
     stockDate: (r.stock_date as string | null) ?? null,
     quotedSqft: r.quoted_sqft == null ? null : Number(r.quoted_sqft),
   }))
+}
+
+/**
+ * Email a material PO to the supplier as a PDF attachment (+ inline order body),
+ * for suppliers whose corporate IT blocks the no-login share link. The recipient
+ * is resolved server-side from the supplier record; this only supplies the PDF.
+ * Returns the address it was sent to. Throws with the server's message on failure.
+ */
+export async function sendSupplierOrderEmail(
+  projectId: string,
+  project: Pick<DrywallProject, 'name' | 'address' | 'client'>,
+  order: DrywallOrder,
+): Promise<{ to: string }> {
+  const pdfBase64 = drywallOrderPdfBase64(project, order)
+  const pdfFilename = orderPdfFilename(project.name || 'Project')
+  const { data, error } = await supabase.functions.invoke('send-supplier-order', {
+    body: { projectId, orderId: order.id, pdfBase64, pdfFilename },
+  })
+  if (error) {
+    let msg = error.message || 'Failed to email the supplier'
+    const ctx = (error as { context?: unknown }).context
+    if (ctx instanceof Response) {
+      try {
+        const b = await ctx.clone().json()
+        if (b?.error) msg = b.error
+      } catch {
+        /* fall back to the generic message */
+      }
+    }
+    throw new Error(msg)
+  }
+  if (data && (data as { success?: boolean }).success === false) {
+    throw new Error((data as { error?: string }).error || 'Failed to email the supplier')
+  }
+  return { to: (data as { to?: string })?.to ?? '' }
 }
 
 export async function fetchSupplierOrders(): Promise<SupplierOrderRow[]> {

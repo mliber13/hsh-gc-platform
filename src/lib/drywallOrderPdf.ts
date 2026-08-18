@@ -22,6 +22,25 @@ export function downloadDrywallOrderPdf(
   project: Pick<DrywallProject, 'name' | 'address' | 'client'>,
   order: DrywallOrder,
 ): void {
+  const doc = buildDrywallOrderPdfDoc(project, order)
+  doc.save(orderPdfFilename(project.name || 'Project'))
+}
+
+/** Same order sheet as the download, returned as base64 (no data: prefix) for emailing as an attachment. */
+export function drywallOrderPdfBase64(
+  project: Pick<DrywallProject, 'name' | 'address' | 'client'>,
+  order: DrywallOrder,
+): string {
+  const doc = buildDrywallOrderPdfDoc(project, order)
+  const uri = doc.output('datauristring')
+  const comma = uri.indexOf('base64,')
+  return comma >= 0 ? uri.slice(comma + 'base64,'.length) : uri
+}
+
+function buildDrywallOrderPdfDoc(
+  project: Pick<DrywallProject, 'name' | 'address' | 'client'>,
+  order: DrywallOrder,
+): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
   const margin = 14
@@ -134,7 +153,7 @@ export function downloadDrywallOrderPdf(
     doc.text(noteLines, margin, finalY + 13)
   }
 
-  doc.save(orderPdfFilename(project.name || 'Project'))
+  return doc
 }
 
 /** Labor rate card for field crews — order-stage revised rates × measured sqft (legacy OrderStage rate card PDF). */
