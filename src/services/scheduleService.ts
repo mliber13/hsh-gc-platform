@@ -1,7 +1,12 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
-import { cascadeSchedule, workdaysBetween } from '@/lib/scheduleDateMath'
+import { addWorkdays, cascadeSchedule, workdaysBetween } from '@/lib/scheduleDateMath'
+import {
+  DEFAULT_STANDARD_SCHEDULE_TEMPLATE,
+  type StandardScheduleTemplate,
+} from '@/lib/drywall/standardScheduleTemplate'
+import { fetchStandardScheduleTemplate } from '@/services/standardScheduleTemplateService'
 import type { ConfirmationStatus } from '@/types'
 import type { ScheduleItem } from '@/types'
 import { isVisibleInGcApp } from './projectVisibility'
@@ -744,19 +749,6 @@ export async function deleteScheduleItemForDrywallProject(itemId: string): Promi
   }
 }
 
-const STANDARD_DRYWALL_TEMPLATE: Array<{
-  name: string
-  predecessorIndex: number | null
-  lag: number
-}> = [
-  { name: 'Measure', predecessorIndex: null, lag: 0 },
-  { name: 'Stock', predecessorIndex: 0, lag: 5 },
-  { name: 'Scaffold / Prep', predecessorIndex: 1, lag: 0 },
-  { name: 'Hang', predecessorIndex: 2, lag: 1 },
-  { name: 'Finish', predecessorIndex: 3, lag: 1 },
-  { name: 'Cleanout', predecessorIndex: 4, lag: 1 },
-]
-
 export async function generateStandardDrywallSchedule(
   projectId: string,
   measureDate: string,
@@ -765,23 +757,32 @@ export async function generateStandardDrywallSchedule(
   const scheduleId = await getOrCreateScheduleForProject(projectId, organizationId)
   const start = toDateOnly(measureDate)
 
+  // Org-configured template (Settings → Standard Schedule); falls back to the
+  // built-in default. Steps form a linear chain: each depends on the previous.
+  const template: StandardScheduleTemplate =
+    (await fetchStandardScheduleTemplate()) ?? DEFAULT_STANDARD_SCHEDULE_TEMPLATE
+
   const createdIds: string[] = []
-  const rows = STANDARD_DRYWALL_TEMPLATE.map((step) => {
+  const rows = template.map((step, index) => {
     const id = uuidv4()
     createdIds.push(id)
-    const predecessorId =
-      step.predecessorIndex != null ? createdIds[step.predecessorIndex] : null
-    const predecessorIds = predecessorId ? [predecessorId] : []
+    const predecessorIds = index > 0 ? [createdIds[index - 1]] : []
+    // Seed each item's span from its duration; the cascade then repositions
+    // starts by predecessor + lag while preserving these durations.
+    const endDate = toDateOnly(
+      addWorkdays(parseISO(start), Math.max(1, step.durationDays) - 1).toISOString(),
+    )
 
     return buildInsertRow(
       {
         name: step.name,
-        type: 'field',
+        type: step.type,
         startDate: start,
-        endDate: start,
+        endDate,
         status: 'not-started',
+        assignedPersons: step.assignedPersonIds,
         predecessorIds,
-        lagWorkDays: step.lag,
+        lagWorkDays: step.lagDays,
       },
       { itemId: id, scheduleId, projectId, organizationId },
     )

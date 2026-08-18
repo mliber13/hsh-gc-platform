@@ -26,6 +26,7 @@ import { AccessoriesTab } from './catalogs/AccessoriesTab'
 import { FinishScopesTab } from './catalogs/FinishScopesTab'
 import { TargetsTab } from './catalogs/TargetsTab'
 import { DashboardTargetsTab } from './catalogs/DashboardTargetsTab'
+import { StandardScheduleTab } from './catalogs/StandardScheduleTab'
 
 export function CatalogsPage() {
   usePageTitle('Drywall — Catalogs')
@@ -146,6 +147,7 @@ export function CatalogsPage() {
           <TabsTrigger value="door">Door Install ({catalogs.door_install.length})</TabsTrigger>
           <TabsTrigger value="targets">Margin Targets</TabsTrigger>
           <TabsTrigger value="dashboard-targets">Dashboard Targets</TabsTrigger>
+          <TabsTrigger value="std-schedule">Standard Schedule</TabsTrigger>
         </TabsList>
 
         <TabsContent value="boards">
@@ -193,6 +195,9 @@ export function CatalogsPage() {
               setCatalogs((prev) => (prev ? { ...prev, dashboardTargets } : prev))
             }}
           />
+        </TabsContent>
+        <TabsContent value="std-schedule">
+          <StandardScheduleTab readOnly={readOnly} />
         </TabsContent>
       </Tabs>
     </div>
