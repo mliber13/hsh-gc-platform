@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, Search, ChevronRight, Link2, RefreshCw } from 'lucide-react'
+import { Truck, Search, ChevronRight, Link2, RefreshCw, CalendarClock } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -25,6 +25,7 @@ import { OrderStatusBadge } from '@/components/drywall/order/OrderStatusBadge'
 import {
   fetchSupplierOrders,
   fetchSupplierUpcoming,
+  sendSupplierScheduleDigest,
   type SupplierOrderRow,
   type SupplierUpcomingRow,
 } from '@/services/supplierOrdersService'
@@ -139,6 +140,22 @@ export function DrywallSupplierOrdersPage() {
       toast.error(e instanceof Error ? e.message : 'Could not create share link')
     } finally {
       setCopyingId(null)
+    }
+  }
+
+  const [emailingScheduleId, setEmailingScheduleId] = useState<string | null>(null)
+
+  const emailSchedule = async (supplierId: string, label: string) => {
+    setEmailingScheduleId(supplierId)
+    try {
+      const { to, itemCount } = await sendSupplierScheduleDigest(supplierId)
+      toast.success(
+        `Delivery schedule (${itemCount} item${itemCount === 1 ? '' : 's'}) emailed to ${to || label}`,
+      )
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not email the schedule')
+    } finally {
+      setEmailingScheduleId(null)
     }
   }
 
@@ -288,17 +305,32 @@ export function DrywallSupplierOrdersPage() {
                 <h2 className="font-semibold">{group.label}</h2>
                 <div className="flex items-center gap-3">
                   {group.supplierId ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 gap-1 text-xs"
-                      disabled={copyingId === group.supplierId}
-                      onClick={() => void copyShareLink(group.supplierId!, group.label)}
-                    >
-                      <Link2 className="h-3.5 w-3.5" />
-                      {copyingId === group.supplierId ? 'Copying…' : 'Copy supplier link'}
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1 text-xs"
+                        disabled={emailingScheduleId === group.supplierId}
+                        onClick={() => void emailSchedule(group.supplierId!, group.label)}
+                      >
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        {emailingScheduleId === group.supplierId
+                          ? 'Sending…'
+                          : 'Email delivery schedule'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1 text-xs"
+                        disabled={copyingId === group.supplierId}
+                        onClick={() => void copyShareLink(group.supplierId!, group.label)}
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                        {copyingId === group.supplierId ? 'Copying…' : 'Copy supplier link'}
+                      </Button>
+                    </>
                   ) : null}
                   <span className="text-xs text-muted-foreground">
                     {group.rows.length} order{group.rows.length === 1 ? '' : 's'}

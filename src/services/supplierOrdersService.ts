@@ -105,6 +105,39 @@ export async function sendSupplierOrderEmail(
   return { to: (data as { to?: string })?.to ?? '' }
 }
 
+/**
+ * Manually email one supplier their current delivery schedule now (the same
+ * digest the weekday cron sends only-on-change). Returns the recipient +
+ * number of deliveries. Throws with the server's message on failure.
+ */
+export async function sendSupplierScheduleDigest(
+  supplierId: string,
+): Promise<{ to: string; itemCount: number }> {
+  const { data, error } = await supabase.functions.invoke('send-supplier-schedule-digest', {
+    body: { supplierId },
+  })
+  if (error) {
+    let msg = error.message || 'Failed to email the schedule'
+    const ctx = (error as { context?: unknown }).context
+    if (ctx instanceof Response) {
+      try {
+        const b = await ctx.clone().json()
+        if (b?.error) msg = b.error
+      } catch {
+        /* fall back to the generic message */
+      }
+    }
+    throw new Error(msg)
+  }
+  if (data && (data as { success?: boolean }).success === false) {
+    throw new Error((data as { error?: string }).error || 'Failed to email the schedule')
+  }
+  return {
+    to: (data as { to?: string })?.to ?? '',
+    itemCount: Number((data as { itemCount?: number })?.itemCount ?? 0),
+  }
+}
+
 export async function fetchSupplierOrders(): Promise<SupplierOrderRow[]> {
   if (!isOnlineMode()) return []
   const { data, error } = await supabase.rpc('drywall_supplier_orders')
