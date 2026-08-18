@@ -195,6 +195,19 @@ function diffHours(clockIn: string, clockOut: string | null | undefined): number
   return ms / (1000 * 60 * 60)
 }
 
+/**
+ * Round worked hours to the nearest quarter hour (15-minute increments), the
+ * standard payroll convention. Applied per entry (clock in/out pair) so the
+ * hours shown on each row exactly match what feeds a payroll run — both the
+ * time-clock display and the payroll import call this. There is no stored
+ * "hours" value in the DB (only clock_in/clock_out timestamps), so this is a
+ * front-end-only rounding with no schema/backend impact.
+ */
+export function roundHoursToQuarter(hours: number): number {
+  if (!Number.isFinite(hours) || hours <= 0) return 0
+  return Math.round(hours * 4) / 4
+}
+
 export async function fetchEntriesForPayrollImport(
   query: PayrollTimeImportQuery,
 ): Promise<PayrollTimeImportRow[]> {
@@ -204,7 +217,7 @@ export async function fetchEntriesForPayrollImport(
     const personName = entry.person_name || 'Unknown'
     const projectName = entry.project_name || 'Unassigned'
     const projectId = entry.project_id ?? null
-    const hours = diffHours(entry.clock_in, entry.clock_out)
+    const hours = roundHoursToQuarter(diffHours(entry.clock_in, entry.clock_out))
     if (hours <= 0) continue
     const key = `${entry.person_type}:${entry.person_id}:${projectId ?? 'none'}`
     const current = map.get(key)

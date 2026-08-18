@@ -31,6 +31,7 @@ import {
   fetchEntriesForRange,
   fetchMyOpenPunch,
   fetchTimeClockProjects,
+  roundHoursToQuarter,
   updateEntry,
   type TimeClockProject,
 } from '@/services/hrTimeService'
@@ -48,7 +49,8 @@ function hoursFor(entry: TimeEntry): number {
   if (!entry.clock_out) return 0
   const ms = new Date(entry.clock_out).getTime() - new Date(entry.clock_in).getTime()
   if (!Number.isFinite(ms) || ms <= 0) return 0
-  return ms / (1000 * 60 * 60)
+  // Nearest quarter hour — matches the payroll import so display = pay.
+  return roundHoursToQuarter(ms / (1000 * 60 * 60))
 }
 
 function formatHours(value: number) {
