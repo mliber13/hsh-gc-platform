@@ -17,6 +17,8 @@ export interface StandardScheduleStep {
   lagDays: number
   /** Default org_team member ids assigned when generated (may be empty). */
   assignedPersonIds: string[]
+  /** Default supplier (Suppliers directory id) — for material-delivery steps like Stock. */
+  supplierId?: string | null
 }
 
 export type StandardScheduleTemplate = StandardScheduleStep[]
@@ -41,6 +43,7 @@ export function newStandardScheduleStep(): StandardScheduleStep {
     durationDays: 1,
     lagDays: 1,
     assignedPersonIds: [],
+    supplierId: null,
   }
 }
 
@@ -60,6 +63,7 @@ function normalizeStep(raw: unknown, index: number): StandardScheduleStep | null
     assignedPersonIds: Array.isArray(r.assignedPersonIds)
       ? r.assignedPersonIds.filter((x): x is string => typeof x === 'string' && x.length > 0)
       : [],
+    supplierId: typeof r.supplierId === 'string' && r.supplierId ? r.supplierId : null,
   }
 }
 

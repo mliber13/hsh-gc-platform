@@ -781,6 +781,7 @@ export async function generateStandardDrywallSchedule(
         endDate,
         status: 'not-started',
         assignedPersons: step.assignedPersonIds,
+        supplierId: step.supplierId ?? null,
         predecessorIds,
         lagWorkDays: step.lagDays,
       },

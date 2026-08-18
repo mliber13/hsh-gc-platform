@@ -28,11 +28,16 @@ import {
   fetchStandardScheduleTemplate,
   saveStandardScheduleTemplate,
 } from '@/services/standardScheduleTemplateService'
+import { fetchSuppliers } from '@/services/partnerDirectoryService'
+import type { Supplier } from '@/types/partners'
+
+const NO_SUPPLIER = '__none__'
 
 type Props = { readOnly: boolean }
 
 export function StandardScheduleTab({ readOnly }: Props) {
   const [steps, setSteps] = useState<StandardScheduleStep[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [savedSnapshot, setSavedSnapshot] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -40,9 +45,13 @@ export function StandardScheduleTab({ readOnly }: Props) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const t = await fetchStandardScheduleTemplate()
+      const [t, sup] = await Promise.all([
+        fetchStandardScheduleTemplate(),
+        fetchSuppliers().catch(() => [] as Supplier[]),
+      ])
       const initial = t ?? DEFAULT_STANDARD_SCHEDULE_TEMPLATE
       setSteps(initial)
+      setSuppliers(sup)
       setSavedSnapshot(JSON.stringify(initial))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load the schedule template')
@@ -221,12 +230,39 @@ export function StandardScheduleTab({ readOnly }: Props) {
                   </div>
                 )}
               </div>
-              <AssignedPersonsPicker
-                label="Default assignee(s)"
-                value={step.assignedPersonIds}
-                disabled={readOnly}
-                onChange={(ids) => patchStep(step.id, { assignedPersonIds: ids })}
-              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <AssignedPersonsPicker
+                  label="Default assignee(s)"
+                  value={step.assignedPersonIds}
+                  disabled={readOnly}
+                  onChange={(ids) => patchStep(step.id, { assignedPersonIds: ids })}
+                />
+                <div className="space-y-1.5">
+                  <Label>Default supplier</Label>
+                  <Select
+                    value={step.supplierId ?? NO_SUPPLIER}
+                    disabled={readOnly}
+                    onValueChange={(v) =>
+                      patchStep(step.id, { supplierId: v === NO_SUPPLIER ? null : v })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="No supplier" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_SUPPLIER}>No supplier</SelectItem>
+                      {suppliers.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    For material-delivery steps like Stock.
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         ))}
