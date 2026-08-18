@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { format } from 'date-fns'
+import {
+  format,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  subWeeks,
+  subDays,
+  subMonths,
+} from 'date-fns'
 import { Clock, Link2, Pencil, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -52,6 +61,59 @@ function isoDateFromNow(daysOffset: number) {
   return d.toISOString().slice(0, 10)
 }
 
+const ISO = 'yyyy-MM-dd'
+
+/** Quick date-range presets for the entry log (label + from/to as yyyy-MM-dd). */
+type QuickRange = { key: string; label: string; range: () => { from: string; to: string } }
+
+const QUICK_RANGES: QuickRange[] = [
+  {
+    key: 'today',
+    label: 'Today',
+    range: () => {
+      const d = format(new Date(), ISO)
+      return { from: d, to: d }
+    },
+  },
+  {
+    key: 'this-week',
+    label: 'This week',
+    range: () => {
+      const now = new Date()
+      return { from: format(startOfWeek(now), ISO), to: format(endOfWeek(now), ISO) }
+    },
+  },
+  {
+    key: 'last-week',
+    label: 'Last week',
+    range: () => {
+      const last = subWeeks(new Date(), 1)
+      return { from: format(startOfWeek(last), ISO), to: format(endOfWeek(last), ISO) }
+    },
+  },
+  {
+    key: 'this-month',
+    label: 'This month',
+    range: () => {
+      const now = new Date()
+      return { from: format(startOfMonth(now), ISO), to: format(endOfMonth(now), ISO) }
+    },
+  },
+  {
+    key: 'last-month',
+    label: 'Last month',
+    range: () => {
+      const last = subMonths(new Date(), 1)
+      return { from: format(startOfMonth(last), ISO), to: format(endOfMonth(last), ISO) }
+    },
+  },
+  {
+    key: 'last-14',
+    label: 'Last 14 days',
+    range: () => ({ from: format(subDays(new Date(), 13), ISO), to: format(new Date(), ISO) }),
+  },
+]
+
 export function TimeClockPage() {
   usePageTitle('HR — Time Clock')
   const { effectiveRole } = usePermissions()
@@ -66,6 +128,7 @@ export function TimeClockPage() {
   })
   const [from, setFrom] = useState(isoDateFromNow(-7))
   const [to, setTo] = useState(isoDateFromNow(0))
+  const [personFilter, setPersonFilter] = useState('all')
   const [editEntry, setEditEntry] = useState<TimeEntry | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [projects, setProjects] = useState<TimeClockProject[]>([])
@@ -142,10 +205,52 @@ export function TimeClockPage() {
     }
   }
 
-  const totalHours = useMemo(
-    () => entries.reduce((sum, entry) => sum + hoursFor(entry), 0),
-    [entries],
+  // People present in the loaded range (for the person dropdown), sorted by name.
+  const personOptions = useMemo(() => {
+    const byId = new Map<string, string>()
+    for (const entry of entries) {
+      if (entry.person_id && !byId.has(entry.person_id)) {
+        byId.set(entry.person_id, entry.person_name || 'Unknown person')
+      }
+    }
+    return [...byId.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [entries])
+
+  // Keep the selected person valid when the range changes and they drop out.
+  useEffect(() => {
+    if (personFilter !== 'all' && !personOptions.some((p) => p.id === personFilter)) {
+      setPersonFilter('all')
+    }
+  }, [personOptions, personFilter])
+
+  const visibleEntries = useMemo(
+    () =>
+      personFilter === 'all'
+        ? entries
+        : entries.filter((e) => e.person_id === personFilter),
+    [entries, personFilter],
   )
+
+  const totalHours = useMemo(
+    () => visibleEntries.reduce((sum, entry) => sum + hoursFor(entry), 0),
+    [visibleEntries],
+  )
+
+  const activeRangeKey = useMemo(() => {
+    for (const preset of QUICK_RANGES) {
+      const r = preset.range()
+      if (r.from === from && r.to === to) return preset.key
+    }
+    return null
+  }, [from, to])
+
+  const applyQuickRange = (preset: QuickRange) => {
+    const r = preset.range()
+    setFrom(r.from)
+    setTo(r.to)
+  }
 
   if (loading) {
     return (
@@ -234,10 +339,28 @@ export function TimeClockPage() {
         <CardHeader>
           <CardTitle>Entry log</CardTitle>
           <CardDescription>
-            Entries in range: {entries.length} · Total closed hours: {formatHours(totalHours)}
+            {personFilter === 'all'
+              ? `Entries in range: ${visibleEntries.length}`
+              : `Entries for ${personOptions.find((p) => p.id === personFilter)?.name ?? 'person'}: ${visibleEntries.length}`}{' '}
+            · Total closed hours: {formatHours(totalHours)}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Quick date-range presets */}
+          <div className="flex flex-wrap gap-2">
+            {QUICK_RANGES.map((preset) => (
+              <Button
+                key={preset.key}
+                type="button"
+                size="sm"
+                variant={activeRangeKey === preset.key ? 'default' : 'outline'}
+                onClick={() => applyQuickRange(preset)}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </div>
+
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-44">
               <label className="mb-1 block text-xs text-muted-foreground">From</label>
@@ -247,18 +370,36 @@ export function TimeClockPage() {
               <label className="mb-1 block text-xs text-muted-foreground">To</label>
               <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </div>
+            <div className="min-w-56 flex-1">
+              <label className="mb-1 block text-xs text-muted-foreground">Person</label>
+              <Select value={personFilter} onValueChange={setPersonFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All people" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All people</SelectItem>
+                  {personOptions.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Button variant="outline" onClick={() => void load()}>
-              Apply range
+              Refresh
             </Button>
           </div>
 
-          {entries.length === 0 ? (
+          {visibleEntries.length === 0 ? (
             <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-              No entries found for this range.
+              {personFilter === 'all'
+                ? 'No entries found for this range.'
+                : 'No entries for this person in this range.'}
             </p>
           ) : (
             <div className="space-y-2">
-              {entries.map((entry) => (
+              {visibleEntries.map((entry) => (
                 <div
                   key={entry.id}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"
