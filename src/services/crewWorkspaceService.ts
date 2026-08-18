@@ -423,10 +423,12 @@ export async function fetchCrewProjectList(
   if (scheduleRows.length === 0) return []
 
   // Hide schedule items whose work window has fully passed — crew only see current/upcoming
-  // work, not an endless backlog. A 5-day grace window keeps recently-overdue tasks (e.g. a
-  // measure scheduled a couple days ago) reachable so crew running behind can still act on them.
+  // work, not an endless backlog. Measurers get a 5-day grace window so a measure scheduled a
+  // couple days ago stays reachable for data entry; other crew (hangers/finishers) see strictly
+  // current/upcoming so finished past jobs don't linger in their list.
+  const graceDays = isMeasurerSpecialty(specialty) ? 5 : 0
   const cutoffDate = new Date()
-  cutoffDate.setDate(cutoffDate.getDate() - 5)
+  cutoffDate.setDate(cutoffDate.getDate() - graceDays)
   const cutoff = format(cutoffDate, 'yyyy-MM-dd')
   const upcomingRows = scheduleRows.filter((r) => (r.end_date || r.start_date) >= cutoff)
   if (upcomingRows.length === 0) return []
