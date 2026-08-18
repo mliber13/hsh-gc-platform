@@ -1571,7 +1571,16 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
                                 variant="outline"
                                 onClick={() =>
                                   openAddContact({
-                                    type: partnerTab as 'subcontractor' | 'supplier' | 'developer',
+                                    type:
+                                      partnerTab === 'subcontractors'
+                                        ? 'subcontractor'
+                                        : partnerTab === 'suppliers'
+                                          ? 'supplier'
+                                          : partnerTab === 'developers'
+                                            ? 'developer'
+                                            : partnerTab === 'municipalities'
+                                              ? 'municipality'
+                                              : 'lender',
                                     id: entity.id,
                                     name,
                                   })
