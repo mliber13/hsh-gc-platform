@@ -28,6 +28,18 @@ export const FIELD_MATERIAL_OPTIONS: { category: string; items: string[] }[] = [
       'Drywall Screws 3"',
     ],
   },
+  {
+    category: 'Framing Fasteners',
+    items: [
+      'Self-Tapping Screws 7/16"',
+      'Self-Tapping Screws 1/2"',
+      'Self-Drilling Screws 3/4"',
+      'Concrete Anchors (Tapcon) 1-1/4"',
+      'Concrete Anchors (Tapcon) 1-3/4"',
+      'Powder-Actuated Pins',
+      'Wedge Anchors',
+    ],
+  },
   { category: 'Tape', items: ["500' Paper Tape", "300' Mesh Tape", 'No Coat 325'] },
   {
     category: 'Metal Studs',
@@ -135,7 +147,7 @@ export function getUnitOptions(type: string): string[] {
   if (type === 'Corner Bead') return ['pcs']
   if (type === 'Joint Compound') return ['Bucket', 'Box', 'Bags']
   if (type === 'Adhesives') return ['Tube', 'Can', 'Gallon']
-  if (type === 'Fasteners') return ['Box', 'lbs', 'pcs']
+  if (type === 'Fasteners' || type === 'Framing Fasteners') return ['Box', 'lbs', 'pcs']
   if (type === 'Tape') return ['Roll']
   if (type === 'Metal Studs' || type === 'Metal Track' || type === 'Deflection Track')
     return ['pcs', 'bundle', 'linear ft']
@@ -160,7 +172,7 @@ export function getDefaultUnit(type: string, subtype: string): string {
     return 'Bucket'
   }
   if (type === 'Adhesives') return 'Tube'
-  if (type === 'Fasteners') return 'Box'
+  if (type === 'Fasteners' || type === 'Framing Fasteners') return 'Box'
   if (type === 'Tape') return 'Roll'
   if (type === 'Metal Studs' || type === 'Metal Track' || type === 'Deflection Track') return 'pcs'
   if (type === 'Acoustic Ceiling') {
