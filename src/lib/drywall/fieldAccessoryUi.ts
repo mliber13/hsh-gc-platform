@@ -64,6 +64,18 @@ export const FIELD_MATERIAL_OPTIONS: { category: string; items: string[] }[] = [
     ],
   },
   {
+    category: 'Deflection Track',
+    items: [
+      '20 Gauge - 2-1/2"',
+      '20 Gauge - 3-5/8"',
+      '20 Gauge - 4"',
+      '20 Gauge - 6"',
+      '18 Gauge - 3-5/8"',
+      '18 Gauge - 4"',
+      '18 Gauge - 6"',
+    ],
+  },
+  {
     category: 'Acoustic Ceiling',
     items: [
       "2'x2' Tiles",
@@ -125,7 +137,8 @@ export function getUnitOptions(type: string): string[] {
   if (type === 'Adhesives') return ['Tube', 'Can', 'Gallon']
   if (type === 'Fasteners') return ['Box', 'lbs', 'pcs']
   if (type === 'Tape') return ['Roll']
-  if (type === 'Metal Studs' || type === 'Metal Track') return ['pcs', 'bundle', 'linear ft']
+  if (type === 'Metal Studs' || type === 'Metal Track' || type === 'Deflection Track')
+    return ['pcs', 'bundle', 'linear ft']
   if (type === 'Acoustic Ceiling' || type === 'Suspended Drywall Grid') {
     return ['box', 'pcs', 'carton', 'roll']
   }
@@ -149,7 +162,7 @@ export function getDefaultUnit(type: string, subtype: string): string {
   if (type === 'Adhesives') return 'Tube'
   if (type === 'Fasteners') return 'Box'
   if (type === 'Tape') return 'Roll'
-  if (type === 'Metal Studs' || type === 'Metal Track') return 'pcs'
+  if (type === 'Metal Studs' || type === 'Metal Track' || type === 'Deflection Track') return 'pcs'
   if (type === 'Acoustic Ceiling') {
     if (subtype?.includes('Tiles')) return 'box'
     if (subtype?.includes('Wire')) return 'roll'
@@ -178,7 +191,7 @@ export function getLengthOptions(type: string, subtype: string): string[] {
     if (subtype === 'Tearaway') return ["10'"]
     return ["12'", "10'", "9'", "8'"]
   }
-  if (type === 'Metal Studs' || type === 'Metal Track') {
+  if (type === 'Metal Studs' || type === 'Metal Track' || type === 'Deflection Track') {
     return ["8'", "9'", "10'", "12'", "14'", "16'", "20'", "24'"]
   }
   if (type === 'Hat Channel' || type === 'RC Channel') {
@@ -196,9 +209,6 @@ export function getLengthOptions(type: string, subtype: string): string[] {
 
 export function getThreadTypeOptions(type: string): string[] {
   if (type === 'Fasteners') return ['Coarse Thread', 'Fine Thread']
-  if (type === 'Metal Studs' || type === 'Metal Track') {
-    return ['Standard', 'EQ (Equivalent Gauge)', 'Structural']
-  }
   return []
 }
 
@@ -207,6 +217,7 @@ export function shouldShowLength(type: string): boolean {
     type === 'Corner Bead' ||
     type === 'Metal Studs' ||
     type === 'Metal Track' ||
+    type === 'Deflection Track' ||
     type === 'Hat Channel' ||
     type === 'RC Channel' ||
     type === 'Suspended Drywall Grid' ||
@@ -215,5 +226,8 @@ export function shouldShowLength(type: string): boolean {
 }
 
 export function shouldShowThreadType(type: string): boolean {
-  return type === 'Fasteners' || type === 'Metal Studs' || type === 'Metal Track'
+  // Thread type applies only to Fasteners (Coarse/Fine). Metal studs/track used to
+  // reuse this as a "Grade" (EQ/Structural) selector, but gauge is already in the
+  // item selection, so that field was dropped as redundant/confusing.
+  return type === 'Fasteners'
 }

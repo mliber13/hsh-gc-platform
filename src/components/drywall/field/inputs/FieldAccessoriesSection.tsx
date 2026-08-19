@@ -241,12 +241,10 @@ export function FieldAccessoriesSection({
                 </div>
 
                 <div
-                  className={`grid gap-3 ${
-                    shouldShowLength(acc.type || '') && shouldShowThreadType(acc.type || '')
-                      ? 'md:grid-cols-6'
-                      : shouldShowLength(acc.type || '') || shouldShowThreadType(acc.type || '')
-                        ? 'md:grid-cols-5'
-                        : 'md:grid-cols-4'
+                  className={`grid grid-cols-2 gap-3 md:grid-cols-3 ${
+                    shouldShowLength(acc.type || '') || shouldShowThreadType(acc.type || '')
+                      ? 'lg:grid-cols-5'
+                      : 'lg:grid-cols-4'
                   }`}
                 >
                   <div className="space-y-1">
@@ -313,11 +311,7 @@ export function FieldAccessoriesSection({
 
                   {shouldShowThreadType(acc.type || '') && (
                     <div className="space-y-1">
-                      <Label className="text-xs">
-                        {acc.type === 'Metal Studs' || acc.type === 'Metal Track'
-                          ? 'Grade'
-                          : 'Thread'}
-                      </Label>
+                      <Label className="text-xs">Thread</Label>
                       <Select
                         value={acc.threadType || ''}
                         disabled={readOnly || !acc.subtype || acc.autoCalculated}
