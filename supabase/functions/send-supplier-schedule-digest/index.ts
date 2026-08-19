@@ -98,13 +98,17 @@ async function signature(rows: Row[]): Promise<string> {
 
 function fmtDate(iso: string | null): string {
   if (!iso) return 'TBD'
-  const d = new Date(`${iso}T00:00:00`)
+  // stock_date is a date-only value (YYYY-MM-DD). Build it as a fixed UTC calendar
+  // date and format in UTC so no timezone conversion shifts it a day earlier.
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!m) return iso
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-    timeZone: 'America/New_York',
+    timeZone: 'UTC',
   })
 }
 
