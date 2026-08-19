@@ -241,10 +241,10 @@ export function FieldAccessoriesSection({
                 </div>
 
                 <div
-                  className={`grid grid-cols-2 gap-3 md:grid-cols-3 ${
+                  className={`grid grid-cols-2 gap-3 ${
                     shouldShowLength(acc.type || '') || shouldShowThreadType(acc.type || '')
-                      ? 'lg:grid-cols-5'
-                      : 'lg:grid-cols-4'
+                      ? 'md:grid-cols-[2fr_2fr_1fr_1fr_1fr]'
+                      : 'md:grid-cols-[2fr_2fr_1fr_1fr]'
                   }`}
                 >
                   <div className="space-y-1">
