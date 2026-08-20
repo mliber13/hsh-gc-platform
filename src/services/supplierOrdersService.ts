@@ -6,8 +6,9 @@
 
 import { supabase, isOnlineMode } from '@/lib/supabase'
 import { drywallOrderPdfBase64 } from '@/lib/drywallOrderPdf'
+import { drywallFieldMaterialsPdfBase64 } from '@/lib/drywall/fieldMaterialsOrderPdf'
 import { orderPdfFilename } from '@/lib/drywall/orderPdfFilename'
-import type { DrywallOrder, DrywallProject } from '@/types/drywall'
+import type { DrywallOrder, DrywallProject, FieldTakeoff } from '@/types/drywall'
 
 export interface SupplierOrderRow {
   projectId: string
@@ -80,8 +81,14 @@ export async function sendSupplierOrderEmail(
   projectId: string,
   project: Pick<DrywallProject, 'name' | 'address' | 'client'>,
   order: DrywallOrder,
+  fieldTakeoff?: FieldTakeoff | null,
 ): Promise<{ to: string }> {
-  const pdfBase64 = drywallOrderPdfBase64(project, order)
+  // Attach the same field-materials PDF the office downloads (materials by area,
+  // with delivery/stocking notes). Fall back to the order-line-item PDF only if
+  // there's no field takeoff.
+  const pdfBase64 = fieldTakeoff
+    ? drywallFieldMaterialsPdfBase64(project, fieldTakeoff)
+    : drywallOrderPdfBase64(project, order)
   const pdfFilename = orderPdfFilename(project.name || 'Project')
   const { data, error } = await supabase.functions.invoke('send-supplier-order', {
     body: { projectId, orderId: order.id, pdfBase64, pdfFilename },

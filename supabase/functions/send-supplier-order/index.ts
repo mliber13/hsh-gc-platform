@@ -70,8 +70,9 @@ function renderHtml(opts: {
   projectAddress: string
   supplierName: string
   order: Order
+  areaNotes: Array<{ area: string; notes: string }>
 }): string {
-  const { projectName, projectAddress, supplierName, order } = opts
+  const { projectName, projectAddress, supplierName, order, areaNotes } = opts
   const items = Array.isArray(order.items) ? order.items : []
   const groups = groupByArea(items)
   const showAreas = groups.length > 1
@@ -119,6 +120,19 @@ function renderHtml(opts: {
             <div><strong>Order:</strong> ${esc(orderLabel)}</div>
             ${metaRows.map((r) => `<div>${r}</div>`).join('')}
           </div>
+          ${
+            areaNotes.length > 0
+              ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;margin:0 0 18px;font-size:13px;">
+                   <div style="font-weight:700;margin-bottom:6px;">Delivery / stocking notes by area</div>
+                   ${areaNotes
+                     .map(
+                       (n) =>
+                         `<div style="margin:4px 0;"><strong>${esc(n.area || 'Area')}:</strong> ${esc(n.notes)}</div>`,
+                     )
+                     .join('')}
+                 </div>`
+              : ''
+          }
           <table style="width:100%;border-collapse:collapse;font-size:13px;">
             <thead>
               <tr>
@@ -204,6 +218,19 @@ serve(async (req) => {
     const order = orders.find((o) => o && String(o.id ?? '') === orderId)
     if (!order) return json({ error: 'Order not found' }, 404)
 
+    // Per-area delivery/stocking notes from the field takeoff (server-authoritative).
+    const takeoff =
+      legacy.fieldTakeoff && typeof legacy.fieldTakeoff === 'object'
+        ? (legacy.fieldTakeoff as Record<string, unknown>)
+        : {}
+    const measurements = Array.isArray(takeoff.measurements) ? takeoff.measurements : []
+    const areaNotes = measurements
+      .map((m) => {
+        const rec = (m ?? {}) as Record<string, unknown>
+        return { area: String(rec.area ?? '').trim(), notes: String(rec.notes ?? '').trim() }
+      })
+      .filter((m) => m.notes)
+
     const supplierId = String(order.supplierId ?? '').trim()
     if (!supplierId) {
       return json(
@@ -232,7 +259,7 @@ serve(async (req) => {
     const supplierName = String(supplier?.name ?? order.supplier ?? '')
     const orderLabel = String(order.orderNumber || `Order ${orderId.slice(-6)}`)
 
-    const html = renderHtml({ projectName, projectAddress, supplierName, order })
+    const html = renderHtml({ projectName, projectAddress, supplierName, order, areaNotes })
 
     const attachments =
       typeof body.pdfBase64 === 'string' && body.pdfBase64.length > 0

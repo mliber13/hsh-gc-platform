@@ -291,7 +291,7 @@ export function OrderPage() {
     try {
       let sentTo = ''
       if (withEmail) {
-        const res = await sendSupplierOrderEmail(projectId, projectPdfMeta, order)
+        const res = await sendSupplierOrderEmail(projectId, projectPdfMeta, order, fieldTakeoff)
         sentTo = res.to
       }
       await markOrderStatus(projectId, order.id, 'sent')

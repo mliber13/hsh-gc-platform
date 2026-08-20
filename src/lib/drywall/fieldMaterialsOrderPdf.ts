@@ -17,6 +17,25 @@ export function downloadDrywallFieldMaterialsPdf(
   project: Pick<DrywallProject, 'name' | 'address' | 'client'>,
   takeoff: FieldTakeoff,
 ): void {
+  buildDrywallFieldMaterialsPdfDoc(project, takeoff).save(
+    orderPdfFilename(project.name || 'Unnamed project'),
+  )
+}
+
+/** Same PDF as the download, returned as base64 (no data: prefix) for emailing. */
+export function drywallFieldMaterialsPdfBase64(
+  project: Pick<DrywallProject, 'name' | 'address' | 'client'>,
+  takeoff: FieldTakeoff,
+): string {
+  const uri = buildDrywallFieldMaterialsPdfDoc(project, takeoff).output('datauristring')
+  const i = uri.indexOf('base64,')
+  return i >= 0 ? uri.slice(i + 'base64,'.length) : uri
+}
+
+function buildDrywallFieldMaterialsPdfDoc(
+  project: Pick<DrywallProject, 'name' | 'address' | 'client'>,
+  takeoff: FieldTakeoff,
+): jsPDF {
   const { boards, accessories } = extractMaterialsFromFieldTakeoff(takeoff)
   const projectName = project.name || 'Unnamed project'
 
@@ -128,6 +147,32 @@ export function downloadDrywallFieldMaterialsPdf(
   }
 
   drawHeader()
+
+  // Delivery / stocking notes captured per area in field measurement — surfaced
+  // as its own section (independent of boards) so they show even on a studs-only
+  // order, telling the supplier where/when to stock each area.
+  const areaNotes = (takeoff.measurements ?? [])
+    .map((m) => ({ area: (m.area || '').trim(), notes: (m.notes || '').trim() }))
+    .filter((m) => m.notes)
+  if (areaNotes.length > 0) {
+    drawSectionTitle('Delivery / Stocking Notes')
+    for (const an of areaNotes) {
+      ensureSpace(10)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(28, 28, 28)
+      doc.text(an.area || 'Area', col.desc, y + 3)
+      y += 6
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      doc.setTextColor(55, 55, 55)
+      const wrapped = doc.splitTextToSize(an.notes, col.right - col.desc)
+      ensureSpace(wrapped.length * 3.9 + 2)
+      doc.text(wrapped, col.desc, y)
+      y += wrapped.length * 3.9 + 4
+    }
+    y += 4
+  }
 
   const columnGap = 6
   const columnWidth = (col.right - col.left - columnGap) / 2
@@ -372,5 +417,5 @@ export function downloadDrywallFieldMaterialsPdf(
     y = cursorY
   }
 
-  doc.save(orderPdfFilename(projectName))
+  return doc
 }
