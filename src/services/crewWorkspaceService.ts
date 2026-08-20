@@ -24,6 +24,7 @@ import { getCurrentUserProfile, requireUserOrgId } from '@/services/userService'
 import { fetchTeam } from '@/services/hrTeamService'
 import { isFieldForeman } from '@/lib/rbac'
 import { fetchForemanTeamRoster } from '@/services/foremanScheduleService'
+import type { CrossProjectScheduleItem } from '@/services/drywallScheduleAggregateService'
 import {
   specialtyFromPositionName,
   isMeasurerSpecialty,
@@ -516,6 +517,71 @@ export async function fetchCrewProjectList(
     return cmp !== 0 ? cmp : a.projectName.localeCompare(b.projectName)
   })
 
+  return items
+}
+
+/**
+ * Calendar feed for /crew, in the shared CrossProjectScheduleItem shape. Same
+ * assignment scoping as the task list (regular crew → their assigned items only;
+ * foreman + scope=all → org-wide) so a crew member's calendar can never show
+ * other people's jobs. Unlike the list, no past-date cutoff — the calendar
+ * windows by month itself, so past/future months stay navigable.
+ */
+export async function fetchCrewCalendarItems(
+  opts?: CrewViewAsOpts,
+): Promise<CrossProjectScheduleItem[]> {
+  if (!isOnlineMode()) return []
+
+  const { personId } = await resolvePersonContext(opts)
+  const scope: CrewListScope = opts?.scope === 'all' ? 'all' : 'mine'
+  const profile = await getCurrentUserProfile()
+  const viewAsForeman = opts?.viewAsPersonId
+    ? await personIsForeman(opts.viewAsPersonId)
+    : false
+  const foremanView = isFieldForeman(profile) || viewAsForeman
+
+  const scheduleRows =
+    foremanView && scope === 'all'
+      ? await fetchOrgScheduleRows()
+      : await fetchAssignedScheduleRows(personId)
+  if (scheduleRows.length === 0) return []
+
+  const projectIds = [...new Set(scheduleRows.map((r) => r.project_id))]
+  const orgId = await requireUserOrgId()
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id, name, client, address, city, state, zip_code, status, type, metadata')
+    .eq('organization_id', orgId)
+    .in('id', projectIds)
+  if (error) throw new Error(error.message || 'Failed to load projects')
+
+  const projectById = new Map<string, ProjectRow>()
+  for (const row of (data ?? []) as ProjectRow[]) {
+    if (!isDrywallProjectRow(row) || isExcludedProject(row)) continue
+    projectById.set(row.id, row)
+  }
+
+  const items: CrossProjectScheduleItem[] = []
+  for (const sched of scheduleRows) {
+    const project = projectById.get(sched.project_id)
+    if (!project) continue
+    items.push({
+      id: sched.id,
+      projectId: project.id,
+      projectName: project.name?.trim() || 'Untitled',
+      projectStatus: normalizeDrywallProjectStatus(project.status),
+      projectAddress: formatAddress(project),
+      name: sched.name.trim() || 'Untitled task',
+      type: sched.type === 'office' ? 'office' : 'field',
+      startDate: sched.start_date,
+      endDate: sched.end_date || sched.start_date,
+      status: (sched.status as CrossProjectScheduleItem['status']) || 'not-started',
+      assignedPersons: (sched.assigned_persons ?? []).filter(Boolean),
+      supplierId: null,
+      assignedCompanyId: null,
+    })
+  }
   return items
 }
 

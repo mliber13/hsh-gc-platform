@@ -396,7 +396,7 @@ export function CrewProjectListPage() {
       </div>
     ) : null
 
-  const viewToggle = isForemanView ? (
+  const viewToggle = (
     <div
       className="flex rounded-lg border bg-muted/40 p-0.5"
       role="group"
@@ -431,7 +431,7 @@ export function CrewProjectListPage() {
         List
       </button>
     </div>
-  ) : null
+  )
 
   const openProject = (projectId: string) => {
     const params = new URLSearchParams()
@@ -504,16 +504,20 @@ export function CrewProjectListPage() {
         ))
       : null
 
-  // Foreman calendar view — self-contained (loads its own cross-project data),
-  // so it renders independently of the task-list load/empty states.
-  if (isForemanView && displayMode === 'calendar') {
+  // Calendar view — self-contained (loads its own data), so it renders
+  // independently of the task-list load/empty states. Foremen get the org-wide
+  // feed; regular crew get their assigned jobs only.
+  if (displayMode === 'calendar') {
     return (
       <div className="space-y-3 pb-8">
         {scopeToggle}
         {viewToggle}
         {addButton}
         {addSheet}
+        {timeOffCards}
         <CrewScheduleCalendar
+          foreman={isForemanView}
+          viewAsOpts={{ scope, viewAsPersonId: viewAsPersonId ?? undefined }}
           refreshKey={calendarRefreshKey}
           search={scheduleSearch}
           onSearchChange={setScheduleSearch}

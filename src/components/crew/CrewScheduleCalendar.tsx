@@ -19,6 +19,7 @@ import {
   type CrossProjectScheduleItem,
 } from '@/services/drywallScheduleAggregateService'
 import { isDrywallProjectClosed } from '@/types/drywall'
+import { fetchCrewCalendarItems, type CrewViewAsOpts } from '@/services/crewWorkspaceService'
 import { fetchForemanTeamRoster } from '@/services/foremanScheduleService'
 import {
   fetchPersonUnavailability,
@@ -35,6 +36,10 @@ type Props = {
   /** Address/name search (controlled by the parent so it persists across list/calendar). */
   search: string
   onSearchChange: (value: string) => void
+  /** Foreman → org-wide feed + teammate time-off bands; crew → their assigned jobs only. */
+  foreman: boolean
+  /** Scope / view-as, forwarded to the assigned-only crew feed. */
+  viewAsOpts?: CrewViewAsOpts
 }
 
 /**
@@ -47,6 +52,8 @@ export function CrewScheduleCalendar({
   refreshKey = 0,
   search,
   onSearchChange,
+  foreman,
+  viewAsOpts,
 }: Props) {
   const [items, setItems] = useState<CrossProjectScheduleItem[]>([])
   const [unavailability, setUnavailability] = useState<ScheduleUnavailability[]>([])
@@ -63,9 +70,10 @@ export function CrewScheduleCalendar({
     let cancelled = false
     setLoading(true)
     Promise.all([
-      fetchCrossProjectScheduleItems(),
+      foreman ? fetchCrossProjectScheduleItems() : fetchCrewCalendarItems(viewAsOpts),
       fetchForemanTeamRoster().catch(() => []),
-      fetchPersonUnavailability().catch(() => []),
+      // Crew don't see teammates' time off (per Mark) — bands are foreman-only.
+      foreman ? fetchPersonUnavailability().catch(() => []) : Promise.resolve([]),
     ])
       .then(([allRows, roster, timeOff]) => {
         // Exclude closed/complete projects so the job filter matches the task list.
@@ -87,7 +95,8 @@ export function CrewScheduleCalendar({
     return () => {
       cancelled = true
     }
-  }, [refreshKey])
+    // Primitive deps only — viewAsOpts is a fresh object each render.
+  }, [refreshKey, foreman, viewAsOpts?.scope, viewAsOpts?.viewAsPersonId])
 
   const { rangeStart, rangeEnd, referenceMonth } = useMemo(
     () => computePortfolioRange(anchorDate, VIEW_WINDOW),
@@ -253,22 +262,26 @@ export function CrewScheduleCalendar({
               </option>
             ))}
           </select>
-          <label className="sr-only" htmlFor="cal-filter-person">
-            Person
-          </label>
-          <select
-            id="cal-filter-person"
-            className={selectClassName}
-            value={personFilter}
-            onChange={(e) => setPersonFilter(e.target.value)}
-          >
-            <option value={FILTER_ALL}>All people</option>
-            {personOptions.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name}
-              </option>
-            ))}
-          </select>
+          {foreman ? (
+            <>
+              <label className="sr-only" htmlFor="cal-filter-person">
+                Person
+              </label>
+              <select
+                id="cal-filter-person"
+                className={selectClassName}
+                value={personFilter}
+                onChange={(e) => setPersonFilter(e.target.value)}
+              >
+                <option value={FILTER_ALL}>All people</option>
+                {personOptions.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
         </div>
         {filtersActive ? (
           <div className="flex items-center justify-between gap-2 px-0.5">
