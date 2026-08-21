@@ -20,10 +20,11 @@ export function getAvailableThicknesses(boardType: string): string[] {
 }
 
 export function getAvailableLengths(boardType: string, width: string, thickness: string): string[] {
+  // Lengths always run long → short for consistency.
   if (width === '54') return ['16', '14', '12', '10']
   if (boardType === 'Moisture-Resistant') return ['12', '10', '8']
-  if (thickness === '1/4') return ['8', '10']
-  return ['8', '9', '10', '12', '14', '16']
+  if (thickness === '1/4') return ['10', '8']
+  return ['16', '14', '12', '10', '9', '8']
 }
 
 export function formatThicknessLabel(thickness: string): string {
