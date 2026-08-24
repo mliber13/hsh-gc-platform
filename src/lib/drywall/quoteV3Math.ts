@@ -323,10 +323,17 @@ export function computeLineItem(
       // Converted/blended line — preserve parity; don't retro-itemize.
       materialTotal = qty * line.custom_material_rate
     } else {
-      const rate = (ct: AcousticComponentType) =>
-        catalogs.acoustic.find((e) => e.component_type === ct)?.material_rate ?? 0
+      const find = (ct: AcousticComponentType) =>
+        catalogs.acoustic.find((e) => e.component_type === ct)
+      const rate = (ct: AcousticComponentType) => find(ct)?.material_rate ?? 0
+      // Tile can be priced per-sqft (typical) or per-tile depending on its catalog unit.
+      const tileEntry = find('tile')
+      const tileCost =
+        tileEntry?.unit === 'sqft'
+          ? sqftWasted * (tileEntry.material_rate ?? 0)
+          : tiles * (tileEntry?.material_rate ?? 0)
       materialTotal =
-        tiles * rate('tile') +
+        tileCost +
         mains * rate('mains') +
         tees_4ft * rate('tees_4ft') +
         tees_2ft * rate('tees_2ft') +
