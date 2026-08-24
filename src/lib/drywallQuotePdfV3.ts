@@ -293,6 +293,9 @@ function drawTradeSection(
   rows: ReturnType<typeof buildQuoteV3PdfLineRows>,
   subtotal: number,
 ) {
+  // Gap above each trade group so its heading clears the previous table (the
+  // heading baseline sits at ctx.y, so without this its text overlaps the box).
+  ctx.y += SP.sectionTop
   ensureRoom(ctx, 48)
   ctx.doc.setFont('helvetica', 'bold')
   ctx.doc.setFontSize(11)
