@@ -358,7 +358,7 @@ export function QuoteOutcomeBar({
                 </Button>
               </>
             )}
-            {(outcome === 'approved' || outcome === 'lost') && (
+            {outcome !== 'drafted' && (
               <Button
                 type="button"
                 size="sm"
