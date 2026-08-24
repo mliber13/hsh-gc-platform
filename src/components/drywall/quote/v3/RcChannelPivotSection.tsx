@@ -204,14 +204,13 @@ export function RcChannelPivotSection({
                         />
                       </SpecField>
                       <SpecField label="Waste %">
-                        <Input
-                          type="number"
-                          min={0}
-                          step={0.1}
-                          disabled={readOnly}
-                          className="h-8 w-[60px] text-right text-xs tabular-nums"
+                        <RateInput
                           value={spec.waste_pct ?? 10}
-                          onChange={(e) => updateGroup(ids, { waste_pct: parseFloat(e.target.value) || 0 })}
+                          readOnly={readOnly}
+                          className="w-[64px]"
+                          step={0.1}
+                          placeholder="10"
+                          onChange={(v) => updateGroup(ids, { waste_pct: v ?? 0 })}
                         />
                       </SpecField>
                     </div>
@@ -261,7 +260,7 @@ export function RcChannelPivotSection({
                                         min={0}
                                         step={0.1}
                                         disabled={readOnly}
-                                        className="h-7 w-[54px] text-right text-xs tabular-nums"
+                                        className="h-7 w-[72px] text-right text-xs tabular-nums"
                                         value={l.rc_wall_height ?? ''}
                                         onChange={(e) =>
                                           updateLine(l.id, { rc_wall_height: num(e.target.value) })
@@ -280,7 +279,7 @@ export function RcChannelPivotSection({
                                       min={1}
                                       step={1}
                                       disabled={readOnly}
-                                      className="h-7 w-[54px] text-right text-xs tabular-nums"
+                                      className="h-7 w-[72px] text-right text-xs tabular-nums"
                                       value={l.rc_spacing_in ?? 24}
                                       onChange={(e) =>
                                         updateLine(l.id, { rc_spacing_in: parseFloat(e.target.value) || 24 })
@@ -450,25 +449,45 @@ function SpecField({ label, children }: { label: string; children: React.ReactNo
   )
 }
 
+/**
+ * Rate/waste inputs feed specKey → the group's React key, so committing on every
+ * keystroke re-keys and remounts the group mid-type (focus loss). Hold a local
+ * draft and commit on blur/Enter — same pattern as LocationRenameInput above.
+ */
 function RateInput({
   value,
   readOnly,
   onChange,
+  className = 'w-[80px]',
+  step = 0.01,
+  placeholder = '0.00',
 }: {
   value?: number
   readOnly: boolean
   onChange: (v: number | undefined) => void
+  className?: string
+  step?: number
+  placeholder?: string
 }) {
+  const [draft, setDraft] = useState(value == null ? '' : String(value))
+  useEffect(() => {
+    setDraft(value == null ? '' : String(value))
+  }, [value])
+  const commit = () => onChange(draft === '' ? undefined : parseFloat(draft) || 0)
   return (
     <Input
       type="number"
       min={0}
-      step={0.01}
+      step={step}
       disabled={readOnly}
-      className="h-8 w-[80px] text-right text-xs tabular-nums"
-      value={value ?? ''}
-      placeholder="0.00"
-      onChange={(e) => onChange(e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
+      className={cn('h-8 text-right text-xs tabular-nums', className)}
+      value={draft}
+      placeholder={placeholder}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+      }}
     />
   )
 }
