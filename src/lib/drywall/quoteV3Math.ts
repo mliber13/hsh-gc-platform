@@ -131,8 +131,16 @@ export interface QuoteV3TotalsSummary {
     pricingMode: 'add' | 'deduct'
     /** Fully marked-up amount; negative when pricingMode is `'deduct'`. */
     totalAdd: number
+    /** Drywall sqft this alternate adds/removes; negative when `'deduct'`. */
+    sqft: number
+    /** Whether the customer has accepted this alternate. */
+    selected: boolean
   }>
   grandTotalAllAlternates: number
+  /** Base total + only the ACCEPTED (selected) alternates — the contract total. */
+  acceptedTotal: number
+  /** Base drywall sqft + only the ACCEPTED alternates' sqft — the estimate sqft. */
+  acceptedSqft: number
 }
 
 export interface QuoteV3LaborBurdenOptions {
@@ -560,14 +568,23 @@ export function computeQuoteV3Totals(
     )
     const pricingMode = alternatePricingMode(alt)
     const magnitude = marked.total
+    const altSqft = alt.lineItems.reduce(
+      (s, l) => s + (l.type === 'drywall' ? l.quantity || 0 : 0),
+      0,
+    )
     return {
       id: alt.id,
       name: alt.name,
       pricingMode,
       totalAdd: pricingMode === 'deduct' ? -magnitude : magnitude,
+      sqft: pricingMode === 'deduct' ? -altSqft : altSqft,
+      selected: Boolean(alt.selected),
     }
   })
 
+  const selectedAlts = alternates.filter((a) => a.selected)
+  const acceptedTotal = routine.total + selectedAlts.reduce((s, a) => s + a.totalAdd, 0)
+  const acceptedSqft = totalSqft + selectedAlts.reduce((s, a) => s + a.sqft, 0)
   const grandTotalAllAlternates =
     routine.total + alternates.reduce((s, a) => s + a.totalAdd, 0)
 
@@ -577,6 +594,8 @@ export function computeQuoteV3Totals(
     routine,
     alternates,
     grandTotalAllAlternates,
+    acceptedTotal,
+    acceptedSqft,
   }
 }
 

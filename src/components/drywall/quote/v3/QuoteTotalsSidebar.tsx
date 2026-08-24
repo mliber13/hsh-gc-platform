@@ -25,7 +25,8 @@ type Props = {
 }
 
 export function QuoteTotalsSidebar({ quote, totals, catalogs, readOnly, onChange }: Props) {
-  const { routine, alternates, grandTotalAllAlternates } = totals
+  const { routine, alternates, grandTotalAllAlternates, acceptedTotal, acceptedSqft } = totals
+  const anyAccepted = alternates.some((a) => a.selected)
   const markupBase = routine.markupBase
   const estimatedCost =
     routine.linesSubtotal + routine.cleanupTotal + routine.salesTaxAmount
@@ -181,23 +182,29 @@ export function QuoteTotalsSidebar({ quote, totals, catalogs, readOnly, onChange
             {alternates.map((alt) => (
               <Row
                 key={alt.id}
-                label={`${alt.pricingMode === 'deduct' ? 'Deduct' : 'Add'}: ${alt.name}`}
+                label={`${alt.selected ? '✓ ' : '○ '}${alt.pricingMode === 'deduct' ? 'Deduct' : 'Add'}: ${alt.name}`}
                 value={
                   alt.pricingMode === 'deduct' ? -Math.abs(alt.totalAdd) : Math.abs(alt.totalAdd)
                 }
-                muted
+                muted={!alt.selected}
               />
             ))}
           </div>
         )}
 
-        {alternates.length > 0 && (
-          <Row
-            label="Grand total (all alternates)"
-            value={grandTotalAllAlternates}
-            strong
-          />
-        )}
+        {anyAccepted ? (
+          <div className="space-y-1 border-t pt-3">
+            <Row label="Contract total (accepted)" value={acceptedTotal} strong />
+            <div className="flex items-center justify-between gap-2 text-sm tabular-nums">
+              <span className="font-medium">Estimate sqft (accepted)</span>
+              <span className="font-semibold">
+                {acceptedSqft.toLocaleString(undefined, { maximumFractionDigits: 2 })} sqft
+              </span>
+            </div>
+          </div>
+        ) : alternates.length > 0 ? (
+          <Row label="Grand total (all alternates)" value={grandTotalAllAlternates} strong />
+        ) : null}
       </CardContent>
     </Card>
   )

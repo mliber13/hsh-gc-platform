@@ -76,7 +76,8 @@ export function buildBidSnapshotFromV3Quote(
   }
 
   return {
-    total: routine.total,
+    // Contract total reflects accepted (selected) alternates — a deduct lowers it.
+    total: totals.acceptedTotal,
     at,
     payload,
   }

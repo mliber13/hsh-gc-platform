@@ -52,6 +52,9 @@ export function projectV3QuoteToV2Shape(
   // Derive totals from the v3 math so v2 consumers (Order Financial Card) have real numbers.
   const v3Totals = computeQuoteV3Totals(v3, catalogs)
   const routine = v3Totals.routine
+  // Accepted alternates fold into the carried-forward total + estimate sqft (a
+  // deduct lowers both). Equals the base when nothing is accepted.
+  const effectiveSqft = v3Totals.acceptedSqft
   const laborBurdenOpts = {
     hangerIncludeLaborBurden: v3.hanger_include_labor_burden,
     finisherIncludeLaborBurden: v3.finisher_include_labor_burden,
@@ -74,12 +77,12 @@ export function projectV3QuoteToV2Shape(
   const overheadAmount = routine.overheadAmount
   const profitAmount = routine.profitAmount
   const subtotal = totalDirectCost + overheadAmount
-  const finalTotal = routine.total
+  const finalTotal = v3Totals.acceptedTotal
 
   return {
     ...base,
     version: 2,
-    sqft: totalSqft > 0 ? String(totalSqft) : '',
+    sqft: effectiveSqft > 0 ? String(effectiveSqft) : '',
     wastePercentage: wastePct,
     hangerRate,
     finisherRate,
@@ -99,7 +102,7 @@ export function projectV3QuoteToV2Shape(
     prepCleanIncludeLaborBurden: v3.prep_clean_include_labor_burden !== false,
     totalQuoteAmount: finalTotal,
     calculations: {
-      sqft: totalSqft * (1 + wastePct / 100),
+      sqft: effectiveSqft * (1 + wastePct / 100),
       hangerCost,
       finisherCost,
       prepCleanCost,

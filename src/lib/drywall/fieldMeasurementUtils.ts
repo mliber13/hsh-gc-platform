@@ -38,19 +38,29 @@ export function quotedSqftWithWaste(quote: DrywallQuoteV2V3 | Record<string, unk
   if (!quote || typeof quote !== 'object') return 0
   const q = quote as Record<string, unknown>
 
-  // v3 quote — sum drywall line items quantity × (1 + waste_pct)
+  // v3 quote — sum drywall line items quantity × (1 + waste_pct), then apply
+  // ACCEPTED (selected) alternates so a deduct lowers the estimate sqft.
   // Default waste matches quoteV3Math (waste_pct ?? 10).
   if (q.version === 3 && Array.isArray(q.lineItems)) {
-    const total = (q.lineItems as Array<Record<string, unknown>>).reduce((sum, line) => {
-      if (line.type !== 'drywall') return sum
-      const qty = parseFloat(String(line.quantity ?? 0)) || 0
-      const wasteRaw = line.waste_pct
-      const waste =
-        wasteRaw == null || wasteRaw === ''
-          ? 10
-          : parseFloat(String(wasteRaw)) || 0
-      return sum + qty * (1 + waste / 100)
-    }, 0)
+    const sumDrywallWithWaste = (lines: unknown): number =>
+      (Array.isArray(lines) ? (lines as Array<Record<string, unknown>>) : []).reduce(
+        (sum, line) => {
+          if (line.type !== 'drywall') return sum
+          const qty = parseFloat(String(line.quantity ?? 0)) || 0
+          const wasteRaw = line.waste_pct
+          const waste = wasteRaw == null || wasteRaw === '' ? 10 : parseFloat(String(wasteRaw)) || 0
+          return sum + qty * (1 + waste / 100)
+        },
+        0,
+      )
+
+    let total = sumDrywallWithWaste(q.lineItems)
+    const alternates = Array.isArray(q.alternates) ? (q.alternates as Array<Record<string, unknown>>) : []
+    for (const alt of alternates) {
+      if (!alt?.selected) continue
+      const altSqft = sumDrywallWithWaste(alt.lineItems)
+      total += alt.pricingMode === 'deduct' ? -altSqft : altSqft
+    }
     return Math.round(total)
   }
 

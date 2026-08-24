@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -183,10 +183,32 @@ function AlternateCard({
               Deduct
             </Button>
           </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={readOnly}
+            className={cn(
+              'h-8 gap-1 px-3 text-xs font-semibold',
+              alternate.selected &&
+                'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-600/90 hover:text-white',
+            )}
+            onClick={() => onPatch({ selected: !alternate.selected })}
+          >
+            {alternate.selected ? (
+              <>
+                <Check className="h-3.5 w-3.5" /> Accepted
+              </>
+            ) : (
+              'Accept'
+            )}
+          </Button>
           <span className="text-xs text-muted-foreground">
-            {pricingMode === 'deduct'
-              ? 'Subtracts from the base bid if accepted'
-              : 'Adds to the base bid if accepted'}
+            {alternate.selected
+              ? `${pricingMode === 'deduct' ? 'Deducted from' : 'Added to'} the contract total & estimate sqft`
+              : pricingMode === 'deduct'
+                ? 'Subtracts from the base bid if accepted'
+                : 'Adds to the base bid if accepted'}
           </span>
         </div>
       </div>
