@@ -315,7 +315,7 @@ export function computeLineItem(
     const mains = ov.mains ?? counts?.mainsCount ?? 0
     const tees_4ft = ov.tees_4ft ?? counts?.tees4ftCount ?? 0
     const tees_2ft = ov.tees_2ft ?? counts?.tees2ftCount ?? 0
-    const wire = ov.wire ?? Number(counts?.wireLinearFt ?? 0)
+    const wire = ov.wire ?? Math.round(Number(counts?.wireLinearFt ?? 0))
     const lags = ov.lags ?? counts?.lagsCount ?? 0
     const wall_angle = ov.wall_angle ?? counts?.wallAngleCount ?? 0
 
@@ -328,9 +328,10 @@ export function computeLineItem(
       const rate = (ct: AcousticComponentType) => find(ct)?.material_rate ?? 0
       // Tile can be priced per-sqft (typical) or per-tile depending on its catalog unit.
       const tileEntry = find('tile')
+      // Whole sqft / whole tiles so the breakdown rows sum exactly to the total.
       const tileCost =
         tileEntry?.unit === 'sqft'
-          ? sqftWasted * (tileEntry.material_rate ?? 0)
+          ? Math.round(sqftWasted) * (tileEntry.material_rate ?? 0)
           : tiles * (tileEntry?.material_rate ?? 0)
       materialTotal =
         tileCost +
