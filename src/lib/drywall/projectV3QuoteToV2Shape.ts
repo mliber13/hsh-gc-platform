@@ -65,17 +65,39 @@ export function projectV3QuoteToV2Shape(
   const drywallComputed = drywallLines.map((line) =>
     computeLineItem(line, catalogs, laborBurdenOpts),
   )
-  const materialCostBare = drywallComputed.reduce((sum, c) => sum + c.materialTotal, 0)
-  const accessoriesCost = drywallComputed.reduce((sum, c) => sum + c.accessoriesTotal, 0)
-  const hangerCost = drywallComputed.reduce((sum, c) => sum + c.hangerLaborTotal, 0)
-  const finisherCost = drywallComputed.reduce((sum, c) => sum + c.finisherLaborTotal, 0)
-  const prepCleanCost = routine.cleanupTotal
-  const salesTax = routine.salesTaxAmount
+  let materialCostBare = drywallComputed.reduce((sum, c) => sum + c.materialTotal, 0)
+  let accessoriesCost = drywallComputed.reduce((sum, c) => sum + c.accessoriesTotal, 0)
+  let hangerCost = drywallComputed.reduce((sum, c) => sum + c.hangerLaborTotal, 0)
+  let finisherCost = drywallComputed.reduce((sum, c) => sum + c.finisherLaborTotal, 0)
+  let prepCleanCost = routine.cleanupTotal
+  let salesTax = routine.salesTaxAmount
+  let overheadAmount = routine.overheadAmount
+  let profitAmount = routine.profitAmount
+
+  // Net ACCEPTED alternates into the cost breakdown (deduct subtracts) so cost
+  // matches the accepted revenue on the Order Financial Card. Direct material/
+  // labor come from the alternate's own drywall-line computes; cleanup/tax/
+  // overhead/profit from its markup breakdown — all linear, so netting is exact.
+  for (const summary of v3Totals.alternates) {
+    if (!summary.selected) continue
+    const sign = summary.pricingMode === 'deduct' ? -1 : 1
+    const alt = v3.alternates.find((a) => a.id === summary.id)
+    const altComputed = (alt?.lineItems ?? [])
+      .filter((line) => line.type === 'drywall')
+      .map((line) => computeLineItem(line, catalogs, laborBurdenOpts))
+    materialCostBare += sign * altComputed.reduce((s, c) => s + c.materialTotal, 0)
+    accessoriesCost += sign * altComputed.reduce((s, c) => s + c.accessoriesTotal, 0)
+    hangerCost += sign * altComputed.reduce((s, c) => s + c.hangerLaborTotal, 0)
+    finisherCost += sign * altComputed.reduce((s, c) => s + c.finisherLaborTotal, 0)
+    prepCleanCost += sign * summary.breakdown.cleanupTotal
+    salesTax += sign * summary.breakdown.salesTaxAmount
+    overheadAmount += sign * summary.breakdown.overheadAmount
+    profitAmount += sign * summary.breakdown.profitAmount
+  }
+
   const totalLaborCost = hangerCost + finisherCost + prepCleanCost
   const totalMaterialCost = materialCostBare + accessoriesCost + salesTax
   const totalDirectCost = totalMaterialCost + totalLaborCost
-  const overheadAmount = routine.overheadAmount
-  const profitAmount = routine.profitAmount
   const subtotal = totalDirectCost + overheadAmount
   const finalTotal = v3Totals.acceptedTotal
 

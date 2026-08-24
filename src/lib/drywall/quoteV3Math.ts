@@ -135,6 +135,8 @@ export interface QuoteV3TotalsSummary {
     sqft: number
     /** Whether the customer has accepted this alternate. */
     selected: boolean
+    /** This alternate's own cost breakdown (unsigned magnitudes) for netting. */
+    breakdown: QuoteV3MarkupBreakdown
   }>
   grandTotalAllAlternates: number
   /** Base total + only the ACCEPTED (selected) alternates — the contract total. */
@@ -579,6 +581,7 @@ export function computeQuoteV3Totals(
       totalAdd: pricingMode === 'deduct' ? -magnitude : magnitude,
       sqft: pricingMode === 'deduct' ? -altSqft : altSqft,
       selected: Boolean(alt.selected),
+      breakdown: marked,
     }
   })
 
