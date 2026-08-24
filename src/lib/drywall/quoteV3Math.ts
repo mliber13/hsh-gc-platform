@@ -1,6 +1,11 @@
 import { DRYWALL_QUOTE_BASE_DEFAULTS } from './drywallQuoteDefaults'
 import type { DrywallQuoteV3, QuoteAlternate, QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
-import type { OrgDrywallCatalogs, SuspendedGridComponentType } from '@/types/drywallCatalogs'
+import type {
+  AcousticComponentType,
+  OrgDrywallCatalogs,
+  SuspendedGridComponentType,
+} from '@/types/drywallCatalogs'
+import { calcAcousticCeilingGridCounts } from '@/lib/drywall/calculations/acousticCeilingGridCalc'
 import {
   getEffectiveComponentLaborRate,
   getEffectiveFinisherRate,
@@ -65,6 +70,10 @@ export interface SuspendedGridBreakdown {
   wire: number
   lags: number
   wall_angle: number
+  /** Acoustic only — ceiling tiles. */
+  tiles?: number
+  /** Acoustic 2x2 only — 2ft cross-tees. */
+  tees_2ft?: number
 }
 
 export interface QuoteV3LineComputed {
@@ -286,8 +295,65 @@ export function computeLineItem(
       sqftWasted * laborRate,
       laborBurden?.componentIncludeLaborBurden ?? true,
     )
+  } else if (line.type === 'acoustic') {
+    // Itemized ACT: tiles + grid (mains/tees/wall-angle/wire/lags) from sqft + perimeter +
+    // tile size, priced by the acoustic catalog. Labor is sqft × carpenter rate below.
+    const sqft = qty
+    const acstWastePct = line.waste_pct ?? 0
+    const wasteMultAc = 1 + acstWastePct / 100
+    const sqftWasted = sqft * wasteMultAc
+    const tileSize = line.acst_tile_size === '2x2' ? '2x2' : '2x4'
+    const counts = calcAcousticCeilingGridCounts({
+      baseSqft: sqft,
+      perimeter: line.grid_perimeter,
+      wastePct: acstWastePct,
+      tileSize,
+    })
+    const tileArea = tileSize === '2x2' ? 4 : 8
+    const ov = line.grid_count_overrides ?? {}
+    const tiles = ov.tiles ?? Math.ceil(sqftWasted / tileArea)
+    const mains = ov.mains ?? counts?.mainsCount ?? 0
+    const tees_4ft = ov.tees_4ft ?? counts?.tees4ftCount ?? 0
+    const tees_2ft = ov.tees_2ft ?? counts?.tees2ftCount ?? 0
+    const wire = ov.wire ?? Number(counts?.wireLinearFt ?? 0)
+    const lags = ov.lags ?? counts?.lagsCount ?? 0
+    const wall_angle = ov.wall_angle ?? counts?.wallAngleCount ?? 0
+
+    if (line.custom_material_rate != null) {
+      // Converted/blended line — preserve parity; don't retro-itemize.
+      materialTotal = qty * line.custom_material_rate
+    } else {
+      const rate = (ct: AcousticComponentType) =>
+        catalogs.acoustic.find((e) => e.component_type === ct)?.material_rate ?? 0
+      materialTotal =
+        tiles * rate('tile') +
+        mains * rate('mains') +
+        tees_4ft * rate('tees_4ft') +
+        tees_2ft * rate('tees_2ft') +
+        wire * rate('wire') +
+        lags * rate('lags') +
+        wall_angle * rate('wall_angle')
+      const basePerimeter =
+        line.grid_perimeter && line.grid_perimeter > 0 ? line.grid_perimeter : 4 * Math.sqrt(sqft)
+      gridBreakdown = {
+        perimeter: basePerimeter * wasteMultAc,
+        tiles,
+        mains,
+        tees_4ft,
+        tees_2ft,
+        wire,
+        lags,
+        wall_angle,
+      }
+    }
+
+    const laborRate = getEffectiveComponentLaborRate(line, catalogs)
+    laborTotal = applyLaborBurden(
+      sqftWasted * laborRate,
+      laborBurden?.componentIncludeLaborBurden ?? true,
+    )
   } else {
-    // insulation / acoustic / metal_stud / frp / door_install — material already carries waste
+    // insulation / metal_stud / frp / door_install — material already carries waste
     // via wasteMult above; apply the same waste to labor.
     const laborRate = getEffectiveComponentLaborRate(line, catalogs)
     laborTotal = applyLaborBurden(

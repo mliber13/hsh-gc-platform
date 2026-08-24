@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label'
 
 import type { QuoteLineItem } from '@/types/drywall'
 import { V3_LINE_MIGRATION_OVERRIDE_REASON } from '@/lib/drywall/convertQuoteV2ToV3'
+import { calcAcousticCeilingGridCounts } from '@/lib/drywall/calculations/acousticCeilingGridCalc'
 
 
 
@@ -77,22 +78,52 @@ export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave 
   const gridBasePerimeter =
     draft.grid_perimeter && draft.grid_perimeter > 0 ? draft.grid_perimeter : 4 * Math.sqrt(gridSqft)
   const gridPerimeterW = gridBasePerimeter * gridWasteMult
-  const gridCounts = {
+  type GridCountKey = keyof NonNullable<QuoteLineItem['grid_count_overrides']>
+  const gridCounts: Record<GridCountKey, number> = {
+    tiles: 0,
+    tees_2ft: 0,
     mains: Math.ceil(gridSqftW / 4 / 12),
     tees_4ft: Math.ceil((gridSqftW / 16) * 2),
     wire: Math.ceil(gridSqftW / 5),
     lags: Math.ceil(Math.ceil(gridSqftW / 5) / 8),
     wall_angle: Math.ceil(gridPerimeterW / 8),
   }
-  const gridCountFields: {
-    key: keyof NonNullable<QuoteLineItem['grid_count_overrides']>
-    label: string
-  }[] = [
+  const gridCountFields: { key: GridCountKey; label: string }[] = [
     { key: 'mains', label: 'Mains' },
     { key: 'tees_4ft', label: 'Cross-tees (4ft)' },
     { key: 'wire', label: 'Wire (LF)' },
     { key: 'lags', label: 'Lags' },
     { key: 'wall_angle', label: 'Wall angle' },
+  ]
+
+  // Acoustic ceiling — tiles + grid components from sqft + perimeter + tile size.
+  const acstTileSize = draft.acst_tile_size === '2x2' ? '2x2' : '2x4'
+  const acstCounts = calcAcousticCeilingGridCounts({
+    baseSqft: gridSqft,
+    perimeter: draft.grid_perimeter,
+    wastePct: draft.waste_pct ?? 0,
+    tileSize: acstTileSize,
+  })
+  const acstTiles = Math.ceil(gridSqftW / (acstTileSize === '2x2' ? 4 : 8))
+  const acstCounts2: Record<GridCountKey, number> = {
+    tiles: acstTiles,
+    mains: acstCounts?.mainsCount ?? 0,
+    tees_4ft: acstCounts?.tees4ftCount ?? 0,
+    tees_2ft: acstCounts?.tees2ftCount ?? 0,
+    wire: Math.round(Number(acstCounts?.wireLinearFt ?? 0)),
+    lags: acstCounts?.lagsCount ?? 0,
+    wall_angle: acstCounts?.wallAngleCount ?? 0,
+  }
+  const acstCountFields: { key: GridCountKey; label: string }[] = [
+    { key: 'tiles', label: 'Tiles' },
+    { key: 'mains', label: 'Mains' },
+    { key: 'tees_4ft', label: 'Cross-tees (4ft)' },
+    ...(acstTileSize === '2x2'
+      ? ([{ key: 'tees_2ft', label: 'Cross-tees (2ft)' }] as const)
+      : []),
+    { key: 'wall_angle', label: 'Wall angle' },
+    { key: 'wire', label: 'Wire (LF)' },
+    { key: 'lags', label: 'Lags' },
   ]
 
 
@@ -140,7 +171,8 @@ export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave 
 
           {(draft.type === 'drywall' ||
             draft.type === 'rc_channel' ||
-            draft.type === 'suspended_grid') && (
+            draft.type === 'suspended_grid' ||
+            draft.type === 'acoustic') && (
 
             <div className="space-y-1.5">
 
@@ -317,6 +349,102 @@ export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave 
               <p className="text-xs text-muted-foreground">
                 Material uses the Suspended Drywall Grid catalog rates. Set a Custom material rate below only
                 to force a blended $/sqft (bypasses the itemized breakdown).
+              </p>
+            </>
+          )}
+
+          {draft.type === 'acoustic' && (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="acst-perimeter">Perimeter (LF)</Label>
+                  <Input
+                    id="acst-perimeter"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    disabled={readOnly}
+                    value={draft.grid_perimeter ?? ''}
+                    placeholder={`≈ ${(4 * Math.sqrt(gridSqft)).toFixed(0)} (4×√sqft)`}
+                    title="Room perimeter — drives the wall-angle (wall molding) count"
+                    onChange={(e) =>
+                      patch({
+                        grid_perimeter:
+                          e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="acst-tile-size">Tile size</Label>
+                  <select
+                    id="acst-tile-size"
+                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    disabled={readOnly}
+                    value={acstTileSize}
+                    onChange={(e) =>
+                      patch({ acst_tile_size: e.target.value === '2x2' ? '2x2' : '2x4' })
+                    }
+                  >
+                    <option value="2x4">2×4</option>
+                    <option value="2x2">2×2</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="acst-labor">Carpenter labor ($/sqft)</Label>
+                  <Input
+                    id="acst-labor"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    disabled={readOnly}
+                    value={draft.custom_labor_rate ?? ''}
+                    placeholder="2.00"
+                    onChange={(e) =>
+                      patch({
+                        custom_labor_rate:
+                          e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs font-medium text-muted-foreground">
+                Component counts (blank = computed; enter to override)
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {acstCountFields.map((f) => (
+                  <div key={f.key} className="space-y-1">
+                    <Label htmlFor={`acst-${f.key}`} className="text-xs">
+                      {f.label}
+                    </Label>
+                    <Input
+                      id={`acst-${f.key}`}
+                      type="number"
+                      min={0}
+                      step={1}
+                      disabled={readOnly}
+                      value={draft.grid_count_overrides?.[f.key] ?? ''}
+                      placeholder={String(acstCounts2[f.key])}
+                      onChange={(e) =>
+                        patch({
+                          grid_count_overrides: {
+                            ...(draft.grid_count_overrides || {}),
+                            [f.key]:
+                              e.target.value === ''
+                                ? undefined
+                                : parseFloat(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Tiles + grid use the Acoustic Ceiling catalog rates. Set a Custom material rate below
+                only to force a blended $/sqft (bypasses the itemized breakdown).
               </p>
             </>
           )}

@@ -647,8 +647,80 @@ function LineRow({
                 </label>
               </div>
             )
+          ) : line.type === 'acoustic' ? (
+            readOnly ? (
+              <div className="flex items-center justify-center gap-3 text-[11px] text-muted-foreground">
+                <span>
+                  Perim{' '}
+                  <span className="text-foreground">
+                    {line.grid_perimeter
+                      ? `${line.grid_perimeter} LF`
+                      : `≈${Math.round(4 * Math.sqrt(line.quantity || 0))} LF`}
+                  </span>
+                </span>
+                <span>
+                  Tile <span className="text-foreground">{line.acst_tile_size === '2x2' ? '2×2' : '2×4'}</span>
+                </span>
+                <span>
+                  Waste <span className="text-foreground">{line.waste_pct ?? 0}%</span>
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-3">
+                <label className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Perim
+                  </span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    className={`h-7 w-[64px] px-1.5 text-right text-xs tabular-nums ${compact ? 'text-[11px]' : ''}`}
+                    placeholder={String(Math.round(4 * Math.sqrt(line.quantity || 0)))}
+                    title="Perimeter (LF) — drives the wall-angle count; blank = 4×√sqft"
+                    value={line.grid_perimeter ?? ''}
+                    onChange={(e) =>
+                      patch({
+                        grid_perimeter:
+                          e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
+                      })
+                    }
+                  />
+                  <span className="text-[10px] text-muted-foreground">LF</span>
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Tile
+                  </span>
+                  <select
+                    className="h-7 rounded-md border border-input bg-background px-1 text-xs"
+                    title="Tile size"
+                    value={line.acst_tile_size === '2x2' ? '2x2' : '2x4'}
+                    onChange={(e) => patch({ acst_tile_size: e.target.value === '2x2' ? '2x2' : '2x4' })}
+                  >
+                    <option value="2x4">2×4</option>
+                    <option value="2x2">2×2</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Waste
+                  </span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    className={`h-7 w-[46px] px-1.5 text-right text-xs tabular-nums ${compact ? 'text-[11px]' : ''}`}
+                    title="Waste %"
+                    value={line.waste_pct ?? 0}
+                    onChange={(e) => patch({ waste_pct: parseFloat(e.target.value) || 0 })}
+                  />
+                  <span className="text-[10px] text-muted-foreground">%</span>
+                </label>
+              </div>
+            )
           ) : (
-            // insulation / acoustic / metal_stud / frp / door_install — just a waste input.
+            // insulation / metal_stud / frp / door_install — just a waste input.
             <label className="flex items-center justify-center gap-1.5">
               <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Waste

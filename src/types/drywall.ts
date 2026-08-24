@@ -526,12 +526,18 @@ export interface QuoteLineItem {
    * New pivot rows carry an explicit id; legacy/converted lines fall back to grouping by spec.
    */
   component_group_id?: string
-  /** Suspended grid: perimeter override (LF); derived 4×√sqft when blank. Drives wall-angle count. */
+  /** Suspended grid / acoustic: perimeter override (LF); derived 4×√sqft when blank. Drives wall-angle count. */
   grid_perimeter?: number
-  /** Suspended grid: per-component count overrides; blank = computed from sqft/perimeter/waste. */
+  /** Acoustic ceiling tile size (drives tile + cross-tee counts). Default 2x4. */
+  acst_tile_size?: '2x2' | '2x4'
+  /** Suspended grid / acoustic: per-component count overrides; blank = computed from sqft/perimeter/waste. */
   grid_count_overrides?: {
+    /** Acoustic only — ceiling tiles. */
+    tiles?: number
     mains?: number
     tees_4ft?: number
+    /** Acoustic 2x2 only — 2ft cross-tees. */
+    tees_2ft?: number
     /** Wire is counted in linear feet. */
     wire?: number
     lags?: number

@@ -352,12 +352,15 @@ export function createQuoteLineItem(
     quantity: 0,
     catalog_id: '',
     finish_scope_id: undefined,
-    waste_pct: type === 'drywall' ? 10 : type === 'suspended_grid' ? 0 : undefined,
+    waste_pct:
+      type === 'drywall' ? 10 : type === 'suspended_grid' || type === 'acoustic' ? 0 : undefined,
     rc_surface: type === 'rc_channel' ? 'wall' : undefined,
     rc_spacing_in: type === 'rc_channel' ? 24 : undefined,
     accessoryOverrides: type === 'rc_channel' ? { screws: true } : undefined,
-    // Suspended grid: carpenter install labor is $/sqft; default to the v2 base carpenter rate.
-    custom_labor_rate: type === 'suspended_grid' ? 2.0 : undefined,
+    // Acoustic ceiling tile size (drives tile + cross-tee counts).
+    acst_tile_size: type === 'acoustic' ? '2x4' : undefined,
+    // Grid/acoustic: carpenter install labor is $/sqft; default to the v2 base carpenter rate.
+    custom_labor_rate: type === 'suspended_grid' || type === 'acoustic' ? 2.0 : undefined,
   }
 }
 
