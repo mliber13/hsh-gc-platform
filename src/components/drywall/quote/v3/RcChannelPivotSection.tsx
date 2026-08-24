@@ -260,7 +260,7 @@ export function RcChannelPivotSection({
                                         min={0}
                                         step={0.1}
                                         disabled={readOnly}
-                                        className="h-7 w-[72px] text-right text-xs tabular-nums"
+                                        className="h-7 w-[88px] text-right text-xs tabular-nums"
                                         value={l.rc_wall_height ?? ''}
                                         onChange={(e) =>
                                           updateLine(l.id, { rc_wall_height: num(e.target.value) })
@@ -279,7 +279,7 @@ export function RcChannelPivotSection({
                                       min={1}
                                       step={1}
                                       disabled={readOnly}
-                                      className="h-7 w-[72px] text-right text-xs tabular-nums"
+                                      className="h-7 w-[88px] text-right text-xs tabular-nums"
                                       value={l.rc_spacing_in ?? 24}
                                       onChange={(e) =>
                                         updateLine(l.id, { rc_spacing_in: parseFloat(e.target.value) || 24 })
@@ -295,7 +295,7 @@ export function RcChannelPivotSection({
                                       min={0}
                                       step={0.1}
                                       disabled={readOnly}
-                                      className="h-7 w-[92px] text-right text-xs tabular-nums"
+                                      className="h-7 w-[112px] text-right text-xs tabular-nums"
                                       value={l.quantity || ''}
                                       placeholder="0"
                                       onChange={(e) =>
