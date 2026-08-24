@@ -64,6 +64,8 @@ function isoDateFromNow(daysOffset: number) {
 }
 
 const ISO = 'yyyy-MM-dd'
+/** Weeks run Monday → Sunday. */
+const WEEK_OPTS = { weekStartsOn: 1 } as const
 
 /** Quick date-range presets for the entry log (label + from/to as yyyy-MM-dd). */
 type QuickRange = { key: string; label: string; range: () => { from: string; to: string } }
@@ -82,7 +84,7 @@ const QUICK_RANGES: QuickRange[] = [
     label: 'This week',
     range: () => {
       const now = new Date()
-      return { from: format(startOfWeek(now), ISO), to: format(endOfWeek(now), ISO) }
+      return { from: format(startOfWeek(now, WEEK_OPTS), ISO), to: format(endOfWeek(now, WEEK_OPTS), ISO) }
     },
   },
   {
@@ -90,7 +92,7 @@ const QUICK_RANGES: QuickRange[] = [
     label: 'Last week',
     range: () => {
       const last = subWeeks(new Date(), 1)
-      return { from: format(startOfWeek(last), ISO), to: format(endOfWeek(last), ISO) }
+      return { from: format(startOfWeek(last, WEEK_OPTS), ISO), to: format(endOfWeek(last, WEEK_OPTS), ISO) }
     },
   },
   {
