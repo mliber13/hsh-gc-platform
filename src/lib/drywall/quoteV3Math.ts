@@ -101,6 +101,16 @@ export interface QuoteV3ComponentLaborByTrade {
   door_install_labor: number
 }
 
+/** Direct cost split for one trade (for the trade-grouped totals display). */
+export interface QuoteV3TradeCost {
+  material: number
+  hangerLabor: number
+  finisherLabor: number
+  componentLabor: number
+  accessories: number
+}
+export type QuoteV3CostByTrade = Partial<Record<QuoteLineItemType, QuoteV3TradeCost>>
+
 export interface QuoteV3LineDirectCosts {
   materialSubtotal: number
   hangerLaborSubtotal: number
@@ -108,6 +118,7 @@ export interface QuoteV3LineDirectCosts {
   componentLaborSubtotal: number
   componentLaborByTrade: QuoteV3ComponentLaborByTrade
   accessoriesSubtotal: number
+  byTrade?: QuoteV3CostByTrade
 }
 
 export interface QuoteV3MarkupBreakdown {
@@ -128,6 +139,8 @@ export interface QuoteV3MarkupBreakdown {
   profitAmount: number
   salesTaxAmount: number
   total: number
+  /** Per-trade direct cost split for the trade-grouped totals display. */
+  byTrade?: QuoteV3CostByTrade
 }
 
 export interface QuoteV3TotalsSummary {
@@ -407,7 +420,10 @@ export function computeMarkupBreakdown(
   salesTaxPct: number,
   cleanupDrywallSqft = 0,
   prepCleanRate = DEFAULT_PREP_CLEAN_RATE,
-  directCosts?: QuoteV3LineDirectCosts & { accessoryByCategory?: AccessoryCategoryMap },
+  directCosts?: QuoteV3LineDirectCosts & {
+    accessoryByCategory?: AccessoryCategoryMap
+    byTrade?: QuoteV3CostByTrade
+  },
 ): QuoteV3MarkupBreakdown {
   const materialSubtotal = directCosts?.materialSubtotal ?? 0
   const accessoriesSubtotal = directCosts?.accessoriesSubtotal ?? 0
@@ -456,6 +472,7 @@ export function computeMarkupBreakdown(
     profitAmount,
     salesTaxAmount,
     total,
+    byTrade: directCosts?.byTrade,
   }
 }
 
@@ -499,24 +516,39 @@ export function lineDirectCostsFromLines(
     corner_bead: [],
     other: [],
   }
+  const byTrade: QuoteV3CostByTrade = {}
   const beadAllocation = allocateQuoteBeadSticksAcrossLines(lines, quoteBeadSticks)
   for (const line of lines) {
     const computed = computeLineItem(line, catalogs, {
       ...laborBurden,
       allocatedBeadSticks: beadAllocation.get(line.id) ?? 0,
     })
+    const t =
+      byTrade[line.type] ??
+      (byTrade[line.type] = {
+        material: 0,
+        hangerLabor: 0,
+        finisherLabor: 0,
+        componentLabor: 0,
+        accessories: 0,
+      })
     materialSubtotal += computed.materialTotal
+    t.material += computed.materialTotal
     if (line.type === 'drywall') {
       hangerLaborSubtotal += computed.hangerLaborTotal
       finisherLaborSubtotal += computed.finisherLaborTotal
+      t.hangerLabor += computed.hangerLaborTotal
+      t.finisherLabor += computed.finisherLaborTotal
     } else {
       componentLaborSubtotal += computed.laborTotal
+      t.componentLabor += computed.laborTotal
       const tradeKey = componentLaborTradeKey(line.type)
       if (tradeKey) {
         componentLaborByTrade[tradeKey] += computed.laborTotal
       }
     }
     accessoriesSubtotal += computed.accessoriesTotal
+    t.accessories += computed.accessoriesTotal
     for (const cat of Object.keys(accessoryByCategory) as Array<keyof AccessoryCategoryMap>) {
       accessoryByCategory[cat].push(...computed.accessories.byCategory[cat])
     }
@@ -529,6 +561,7 @@ export function lineDirectCostsFromLines(
     componentLaborByTrade,
     accessoriesSubtotal,
     accessoryByCategory,
+    byTrade,
   }
 }
 

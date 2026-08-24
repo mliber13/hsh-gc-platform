@@ -1,17 +1,15 @@
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { includeLaborBurden } from '@/lib/drywall/calculations/quantityUtils'
 import {
   evaluateMarginVsFloor,
   formatMarginFloorPct,
   marginFloorIndicator,
 } from '@/lib/drywall/marginFloor'
-import { summarizeAccessoryItems } from '@/lib/drywall/quoteV3Accessories'
 import { formatQuoteMoney, formatPctLabel } from '@/lib/drywall/quoteV3Math'
-import type { QuoteV3ComponentLaborByTrade, QuoteV3TotalsSummary } from '@/lib/drywall/quoteV3Math'
-import type { DrywallQuoteV3 } from '@/types/drywall'
+import type { QuoteV3TotalsSummary } from '@/lib/drywall/quoteV3Math'
+import type { DrywallQuoteV3, QuoteLineItemType } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -23,6 +21,17 @@ type Props = {
   readOnly: boolean
   onChange: (patch: Partial<DrywallQuoteV3>) => void
 }
+
+const TRADE_ORDER: { type: QuoteLineItemType; label: string }[] = [
+  { type: 'drywall', label: 'Drywall' },
+  { type: 'rc_channel', label: 'RC Channel' },
+  { type: 'suspended_grid', label: 'Suspended Grid' },
+  { type: 'metal_stud', label: 'Metal Stud' },
+  { type: 'insulation', label: 'Insulation' },
+  { type: 'acoustic', label: 'Acoustic Ceiling' },
+  { type: 'frp', label: 'FRP' },
+  { type: 'door_install', label: 'Door Install' },
+]
 
 export function QuoteTotalsSidebar({ quote, totals, catalogs, readOnly, onChange }: Props) {
   const { routine, alternates, grandTotalAllAlternates, acceptedTotal, acceptedSqft } = totals
@@ -104,37 +113,61 @@ export function QuoteTotalsSidebar({ quote, totals, catalogs, readOnly, onChange
 
         <div className="space-y-1.5 border-t pt-3">
           {routine.linesSubtotal > 0 && (
-            <div className="space-y-1 pb-1">
+            <div className="space-y-2 pb-1">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Line direct costs
               </p>
-              <Row label="Material" value={routine.materialSubtotal} muted indent />
-              <Row
-                label="Hanger labor"
-                value={routine.hangerLaborSubtotal}
-                muted
-                indent
-                inclBurden={includeLaborBurden(quote.hanger_include_labor_burden)}
-              />
-              <Row
-                label="Finisher labor"
-                value={routine.finisherLaborSubtotal}
-                muted
-                indent
-                inclBurden={includeLaborBurden(quote.finisher_include_labor_burden)}
-              />
-              <ComponentLaborRows
-                byTrade={routine.componentLaborByTrade}
-                inclBurden={includeLaborBurden(quote.component_include_labor_burden)}
-              />
-              {routine.accessoriesSubtotal > 0 && (
-                <AccessorySubtotalRow
-                  value={routine.accessoriesSubtotal}
-                  items={summarizeAccessoryItems(
-                    Object.values(routine.accessoryByCategory).flat(),
-                  )}
-                />
-              )}
+              {TRADE_ORDER.map(({ type, label }) => {
+                const t = routine.byTrade?.[type]
+                if (!t) return null
+                const subtotal =
+                  t.material + t.hangerLabor + t.finisherLabor + t.componentLabor + t.accessories
+                if (subtotal <= 0) return null
+                return (
+                  <div key={type} className="space-y-0.5 rounded-md border bg-muted/20 px-2 py-1.5">
+                    <div className="flex items-center justify-between gap-2 text-xs font-semibold">
+                      <span>{label}</span>
+                      <span className="tabular-nums">{formatQuoteMoney(subtotal)}</span>
+                    </div>
+                    {t.material > 0 && <Row label="Material" value={t.material} muted indent />}
+                    {type === 'drywall' ? (
+                      <>
+                        {t.hangerLabor > 0 && (
+                          <Row
+                            label="Hanger labor"
+                            value={t.hangerLabor}
+                            muted
+                            indent
+                            inclBurden={includeLaborBurden(quote.hanger_include_labor_burden)}
+                          />
+                        )}
+                        {t.finisherLabor > 0 && (
+                          <Row
+                            label="Finisher labor"
+                            value={t.finisherLabor}
+                            muted
+                            indent
+                            inclBurden={includeLaborBurden(quote.finisher_include_labor_burden)}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      t.componentLabor > 0 && (
+                        <Row
+                          label="Labor"
+                          value={t.componentLabor}
+                          muted
+                          indent
+                          inclBurden={includeLaborBurden(quote.component_include_labor_burden)}
+                        />
+                      )
+                    )}
+                    {t.accessories > 0 && (
+                      <Row label="Accessories" value={t.accessories} muted indent />
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
           <Row label="Lines subtotal" value={routine.linesSubtotal} />
@@ -365,91 +398,6 @@ function CleanupRow({
         )}
       </span>
       <AmountValue value={value} inclBurden={inclBurden} />
-    </div>
-  )
-}
-
-const COMPONENT_LABOR_LABELS: Array<{
-  key: keyof QuoteV3ComponentLaborByTrade
-  label: string
-}> = [
-  { key: 'rc_channel_labor', label: 'RC Channel Labor' },
-  { key: 'suspended_grid_labor', label: 'Suspended Drywall Grid Labor' },
-  { key: 'insulation_labor', label: 'Insulation Labor' },
-  { key: 'acoustic_labor', label: 'Acoustic Ceiling Labor' },
-  { key: 'metal_stud_labor', label: 'Metal Stud Labor' },
-  { key: 'frp_labor', label: 'FRP Labor' },
-  { key: 'door_install_labor', label: 'Door Install Labor' },
-]
-
-function ComponentLaborRows({
-  byTrade,
-  inclBurden,
-}: {
-  byTrade: QuoteV3ComponentLaborByTrade
-  inclBurden?: boolean
-}) {
-  return (
-    <>
-      {COMPONENT_LABOR_LABELS.map(({ key, label }) =>
-        byTrade[key] > 0 ? (
-          <Row key={key} label={label} value={byTrade[key]} muted indent inclBurden={inclBurden} />
-        ) : null,
-      )}
-    </>
-  )
-}
-
-function AccessorySubtotalRow({
-  value,
-  items,
-}: {
-  value: number
-  items: ReturnType<typeof summarizeAccessoryItems>
-}) {
-  if (value <= 0) return null
-
-  const label = (
-    <span className="pl-3 text-xs text-muted-foreground underline decoration-dotted decoration-muted-foreground/40 underline-offset-2">
-      Accessories
-    </span>
-  )
-
-  if (items.length === 0) {
-    return (
-      <div className="flex items-center justify-between gap-2 tabular-nums">
-        {label}
-        <span>{formatQuoteMoney(value)}</span>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex items-center justify-between gap-2 tabular-nums">
-      <Popover>
-        <PopoverTrigger asChild>
-          <button type="button" className="text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm">
-            {label}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent side="left" align="start" className="w-80 p-3 text-xs">
-          <p className="mb-2 font-medium">Project accessories</p>
-          <ul className="space-y-1.5">
-            {items.map((item) => (
-              <li key={item.display_name} className="flex justify-between gap-2">
-                <span className="text-muted-foreground">
-                  {item.display_name}
-                  <span className="block text-[10px]">
-                    {item.units} {item.unit} × {formatQuoteMoney(item.unitRate)}
-                  </span>
-                </span>
-                <span className="shrink-0 font-medium">{formatQuoteMoney(item.cost)}</span>
-              </li>
-            ))}
-          </ul>
-        </PopoverContent>
-      </Popover>
-      <span>{formatQuoteMoney(value)}</span>
     </div>
   )
 }
