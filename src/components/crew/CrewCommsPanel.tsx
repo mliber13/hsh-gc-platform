@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
-import { CommsRoleBadge } from '@/components/comms/CommsRoleBadge'
 import { useAuth } from '@/contexts/AuthContext'
 import { markProjectCommsRead } from '@/services/commsReadStateService'
 import {
@@ -135,7 +134,6 @@ export function CrewCommsPanel({
               <li key={entry.id} className="rounded-lg border bg-muted/20 p-3">
                 <p className="text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">{entry.author}</span>
-                  <CommsRoleBadge role={entry.authorRole} />
                   {' • '}
                   <time
                     dateTime={entry.at}
