@@ -32,17 +32,6 @@ type Thread = {
   unread: number
 }
 
-function roleBadgeClass(role: string): string {
-  if (role === 'crew') return 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
-  if (role === 'sub') return 'bg-violet-500/15 text-violet-700 dark:text-violet-300'
-  return 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-}
-
-function roleLabel(role: string): string {
-  if (role === 'crew') return 'Crew'
-  if (role === 'sub') return 'Sub'
-  return 'Office'
-}
 
 function formatAt(at: string): string {
   try {
@@ -201,14 +190,6 @@ export function CommsInboxPage({ variant }: Props) {
               <div key={m.id} className="rounded-lg border bg-card p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium">{m.author}</span>
-                  <span
-                    className={cn(
-                      'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase',
-                      roleBadgeClass(m.authorRole ?? 'operator'),
-                    )}
-                  >
-                    {roleLabel(m.authorRole ?? 'operator')}
-                  </span>
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">{formatAt(m.at)}</span>
                 </div>
                 <p className="mt-1 whitespace-pre-wrap text-sm">{m.body}</p>

@@ -10,7 +10,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { CommsRoleBadge } from '@/components/comms/CommsRoleBadge'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
@@ -187,7 +186,6 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
               <li key={entry.id} className="rounded-lg border bg-muted/20 p-3">
                 <p className="text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">{entry.author}</span>
-                  <CommsRoleBadge role={entry.authorRole} />
                   {' • '}
                   <time
                     dateTime={entry.at}
