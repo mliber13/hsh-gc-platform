@@ -16,6 +16,44 @@ import type { FieldPhotoRef, FieldTakeoff } from '@/types/drywall'
 const BUCKET = 'drywall-field-photos'
 const DEFAULT_SIGNED_EXPIRY = 3600
 
+// Bucket-enforced allowed_mime_types (see 20260529120000_drywall_field_photos_bucket.sql).
+// A file whose Content-Type isn't one of these is rejected by Storage with 415
+// invalid_mime_type — which is why we must always send an explicit, allowed type.
+const ALLOWED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/heic',
+  'image/heif',
+])
+const EXT_TO_IMAGE_TYPE: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  heic: 'image/heic',
+  heif: 'image/heif',
+}
+
+/**
+ * Resolve a Storage-acceptable image Content-Type for a picked file.
+ * iOS/HEIC captures often arrive with an empty or non-standard `file.type`; sending
+ * no type (or octet-stream) fails the bucket's allowed_mime_types check. Falls back
+ * to the filename extension, then to jpeg. Returns null only when the file is clearly
+ * not an image (no image type and no image extension).
+ */
+function resolveImageContentType(file: File): string | null {
+  const t = (file.type || '').toLowerCase()
+  if (ALLOWED_IMAGE_TYPES.has(t)) return t
+  const ext = (file.name.split('.').pop() || '').toLowerCase()
+  if (EXT_TO_IMAGE_TYPE[ext]) return EXT_TO_IMAGE_TYPE[ext]
+  // Declared as some image/* subtype we don't explicitly allow → normalize to jpeg.
+  if (t.startsWith('image/')) return 'image/jpeg'
+  return null
+}
+
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120)
 }
@@ -87,8 +125,9 @@ export async function uploadFieldPhoto(
   const orgId = await requireUserOrgId()
   await assertProjectInOrg(projectId, orgId)
 
-  if (!file.type.startsWith('image/')) {
-    throw new DrywallPhotoError('Please choose an image file (JPG, PNG, etc.).')
+  const contentType = resolveImageContentType(file)
+  if (!contentType) {
+    throw new DrywallPhotoError('Please choose an image file (JPG, PNG, HEIC, etc.).')
   }
   if (file.size > 10 * 1024 * 1024) {
     throw new DrywallPhotoError('Image must be under 10 MB.')
@@ -100,6 +139,7 @@ export async function uploadFieldPhoto(
 
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, file, {
     cacheControl: '3600',
+    contentType,
     upsert: false,
   })
 
@@ -216,7 +256,7 @@ export async function uploadScheduleItemPhoto(
   const storagePath = `${orgId}/${projectId}/schedule/${itemId}/${fileId}-${safeName}`
 
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, file, {
-    contentType: file.type || 'image/jpeg',
+    contentType: resolveImageContentType(file) || 'image/jpeg',
     upsert: false,
   })
   if (uploadError) {
