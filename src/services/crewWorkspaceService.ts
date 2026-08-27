@@ -860,7 +860,35 @@ function resolveBeadSticks(legacy: Record<string, unknown>): number | null {
   return null
 }
 
+/** Sum of accepted change orders' additional crew sqft (added scope the crew hangs/finishes). */
+function acceptedChangeOrderCrewSqft(legacy: Record<string, unknown>): number {
+  const raw = legacy.changeOrders
+  if (!Array.isArray(raw)) return 0
+  let sum = 0
+  for (const co of raw) {
+    if (!co || typeof co !== 'object' || Array.isArray(co)) continue
+    const c = co as Record<string, unknown>
+    const status = String(c.status ?? '').toLowerCase()
+    if (status !== 'accepted' && status !== 'approved') continue
+    const sqft = Number(c.additionalCrewSqft)
+    if (Number.isFinite(sqft) && sqft > 0) sum += sqft
+  }
+  return sum
+}
+
+/** Crew piece-pay sqft basis: field-measured/quoted sqft PLUS accepted change-order crew sqft. */
 function resolveTotalSqft(
+  legacy: Record<string, unknown>,
+  intakeSource: 'quote' | 'po',
+  po: DrywallPoData | null,
+): number | null {
+  const base = resolveBaseTotalSqft(legacy, intakeSource, po)
+  const coSqft = acceptedChangeOrderCrewSqft(legacy)
+  if (base == null) return coSqft > 0 ? coSqft : null
+  return base + coSqft
+}
+
+function resolveBaseTotalSqft(
   legacy: Record<string, unknown>,
   intakeSource: 'quote' | 'po',
   po: DrywallPoData | null,

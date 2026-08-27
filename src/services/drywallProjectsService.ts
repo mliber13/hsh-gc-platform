@@ -1284,6 +1284,10 @@ function normalizeChangeOrder(raw: unknown): DrywallChangeOrder | null {
     profitPct: Number.isFinite(profitPct as number) ? profitPct : undefined,
     options: normalizeChangeOrderOptions(r.options),
     selectedOptionId: asString(r.selectedOptionId) || undefined,
+    additionalCrewSqft:
+      r.additionalCrewSqft != null && Number.isFinite(Number(r.additionalCrewSqft))
+        ? Math.max(0, Number(r.additionalCrewSqft))
+        : undefined,
     reason,
     scopeChanges,
     requestedAmount: r.requestedAmount != null ? String(r.requestedAmount) : undefined,

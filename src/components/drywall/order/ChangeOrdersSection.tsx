@@ -539,6 +539,30 @@ export function ChangeOrdersSection({
                       disabled={!editable}
                     />
                   </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`co-crew-sqft-${co.id}`}>Added crew sqft (piece pay)</Label>
+                    <Input
+                      id={`co-crew-sqft-${co.id}`}
+                      type="number"
+                      min={0}
+                      step={1}
+                      className="sm:max-w-[12rem]"
+                      value={co.additionalCrewSqft ?? ''}
+                      placeholder="0"
+                      title="Added drywall sqft the crew hangs/finishes — added to their piece-pay sqft once this CO is accepted"
+                      onChange={(e) =>
+                        update(co.id, {
+                          additionalCrewSqft:
+                            e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0),
+                        })
+                      }
+                      disabled={readOnly}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Adds to the crew&rsquo;s piece-pay sqft once this CO is accepted. Editable
+                      even after acceptance.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Single priced scope, or a set of mutually-exclusive customer options */}

@@ -839,6 +839,9 @@ export interface DrywallChangeOrder {
   overheadPct?: number
   /** Optional profit markup % applied to (subtotal + overhead), mirroring the quote. */
   profitPct?: number
+  /** Added drywall sqft the crew hangs/finishes for this CO — feeds the crew piece-pay
+   *  sqft basis (added to field-measured sqft) so added scope isn't shorted. */
+  additionalCrewSqft?: number
   /** When present, the CO presents these options (customer chooses one) instead of a single scope. */
   options?: DrywallChangeOrderOption[]
   /** The option the customer selected (set at acceptance). */
