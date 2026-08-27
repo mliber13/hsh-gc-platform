@@ -56,9 +56,14 @@ export function PrivacyPolicy({ onBack, showBackButton = true }: PrivacyPolicyPr
             <p>
               HSH Contractor (HSH Drywall) sends text messages for scheduling and job-related
               communication to crew members, subcontractors, customers, and general contractors who
-              provide their mobile number and consent to receive them. Consent is obtained directly
-              during employment or subcontractor onboarding, or when a customer engages HSH for a
-              project. We do not use a public web form to collect opt-in.
+              provide their mobile number and consent to receive them. Consent is obtained either
+              (a) in person or by phone during employment or subcontractor onboarding, or when a
+              customer engages HSH for a project, or (b) through our online opt-in form at{' '}
+              <a href="/sms-opt-in" className="text-blue-600 underline">
+                /sms-opt-in
+              </a>
+              , where the individual enters their mobile number and checks a consent box that is
+              unchecked by default.
             </p>
             <p>
               Message types include job schedule updates, appointment and delivery coordination, and

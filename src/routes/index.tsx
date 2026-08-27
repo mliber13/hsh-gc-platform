@@ -103,6 +103,7 @@ import { FeedbackForm } from '@/components/FeedbackForm'
 import { emitFeedbackChange } from '@/lib/feedbackEventBus'
 import { PrivacyPolicy } from '@/components/PrivacyPolicy'
 import { TermsOfUse } from '@/components/TermsOfUse'
+import { SmsOptIn } from '@/components/SmsOptIn'
 import { MeetingPreRead } from '@/components/meeting/MeetingPreRead'
 import { MeetingView } from '@/components/meeting/MeetingView'
 import { MyActionItems } from '@/components/meeting/MyActionItems'
@@ -170,6 +171,7 @@ export function AppRoutes() {
       <Route path="/customer/:token" element={<CustomerSchedulePage />} />
       <Route path="/privacy" element={<PublicPrivacy />} />
       <Route path="/terms" element={<PublicTerms />} />
+      <Route path="/sms-opt-in" element={<SmsOptIn />} />
       <Route path="/crew-signup" element={<CrewSignupPage />} />
 
       {/* Authed — wrapped in AuthGate + Provider, then in the sidebar shell */}
