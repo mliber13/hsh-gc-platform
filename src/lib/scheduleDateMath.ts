@@ -114,6 +114,26 @@ export function addWorkdays(
   return current
 }
 
+/**
+ * End date for an item that starts on `start` and runs `duration` working days,
+ * counting the start day itself as day 1 — even when the user deliberately placed
+ * the item on a non-workday. A one-day Saturday task therefore ends on Saturday,
+ * not the following Monday (which is what `addWorkdays(start, 0)` returns, since
+ * that snaps a non-workday forward to the next workday). For duration > 1 the
+ * remaining days skip non-workdays as usual. For workday starts this is identical
+ * to the previous `addWorkdays(start, duration - 1)`.
+ */
+export function endDateForDuration(
+  start: Date,
+  duration: number,
+  options?: ScheduleDateMathOptions,
+  companyId?: string,
+): Date {
+  const days = Math.max(1, Math.floor(duration) || 1)
+  if (days <= 1) return new Date(start)
+  return addWorkdays(start, days - 1, options, companyId)
+}
+
 export function workdaysBetween(
   start: Date,
   end: Date,
@@ -253,9 +273,9 @@ export function cascadeSchedule(
         .map((candidate) => candidate.predecessorId)
     }
 
-    const newEndDate = addWorkdays(
+    const newEndDate = endDateForDuration(
       newStartDate,
-      Math.max(0, normalizedDuration - 1),
+      normalizedDuration,
       options,
       original.assignedCompanyId ?? undefined,
     )

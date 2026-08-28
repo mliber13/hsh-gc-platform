@@ -3,6 +3,7 @@ import type { ScheduleItem } from '@/types'
 import {
   addWorkdays,
   cascadeSchedule,
+  endDateForDuration,
   isWorkday,
   nextWorkday,
   workdaysBetween,
@@ -62,6 +63,32 @@ describe('scheduleDateMath', () => {
     expect(addWorkdays(d('2026-05-08'), 1).toISOString().slice(0, 10)).toBe('2026-05-11')
     expect(addWorkdays(d('2026-05-04'), -1).toISOString().slice(0, 10)).toBe('2026-05-01')
     expect(addWorkdays(d('2026-05-04'), 3, { holidays: ['2026-05-06'] }).toISOString().slice(0, 10)).toBe('2026-05-08')
+  })
+
+  it('endDateForDuration keeps a one-day task on its start day, even a weekend', () => {
+    // 2026-05-09 is a Saturday. A 1-work-day task placed there must END Saturday,
+    // not roll forward to Monday (the addWorkdays(start, 0) snap that caused the bug).
+    expect(endDateForDuration(d('2026-05-09'), 1).toISOString().slice(0, 10)).toBe('2026-05-09')
+    // Weekday one-day task unchanged.
+    expect(endDateForDuration(d('2026-05-04'), 1).toISOString().slice(0, 10)).toBe('2026-05-04')
+    // Multi-day still skips weekends for the remaining days.
+    expect(endDateForDuration(d('2026-05-04'), 3).toISOString().slice(0, 10)).toBe('2026-05-06')
+    expect(endDateForDuration(d('2026-05-09'), 2).toISOString().slice(0, 10)).toBe('2026-05-11')
+  })
+
+  it('cascadeSchedule keeps a Saturday one-day item ending Saturday', () => {
+    const sat = makeItem({
+      id: 'sat',
+      name: 'Saturday punch',
+      startDate: d('2026-05-09'),
+      endDate: d('2026-05-09'),
+      duration: 1,
+    })
+    const result = cascadeSchedule([sat])
+    const item = result.items[0]
+    expect(item.startDate.toISOString().slice(0, 10)).toBe('2026-05-09')
+    expect(item.endDate.toISOString().slice(0, 10)).toBe('2026-05-09')
+    expect(result.changes).toHaveLength(0)
   })
 
   it('workdaysBetween counts inclusive and supports reverse order', () => {

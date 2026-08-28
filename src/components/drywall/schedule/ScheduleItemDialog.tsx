@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { addWorkdays, cascadeSchedule, workdaysBetween } from '@/lib/scheduleDateMath'
+import { addWorkdays, cascadeSchedule, endDateForDuration, workdaysBetween } from '@/lib/scheduleDateMath'
 import type { ScheduleItem } from '@/types'
 import { cn } from '@/lib/utils'
 import { AssignedPersonsPicker } from '@/components/schedule/AssignedPersonsPicker'
@@ -207,7 +207,7 @@ export function ScheduleItemDialog({
       const iso = maxStart.toISOString().slice(0, 10)
       setStartDate(iso)
       // Preserve workDays — recompute end based on the cascaded start + current workDays.
-      const newEnd = addWorkdays(maxStart, Math.max(0, workDays - 1))
+      const newEnd = endDateForDuration(maxStart, workDays)
       setEndDate(newEnd.toISOString().slice(0, 10))
     }
   }, [open, predecessorIds, lagWorkDays, siblingItems, editing, workDays])
@@ -224,7 +224,7 @@ export function ScheduleItemDialog({
     setStartDate(value)
     if (!value) return
     const start = parseISO(value)
-    const newEnd = addWorkdays(start, Math.max(0, workDays - 1))
+    const newEnd = endDateForDuration(start, workDays)
     setEndDate(newEnd.toISOString().slice(0, 10))
   }
 
@@ -232,7 +232,7 @@ export function ScheduleItemDialog({
     setWorkDays(value)
     if (!startDate) return
     const start = parseISO(startDate)
-    const newEnd = addWorkdays(start, Math.max(0, value - 1))
+    const newEnd = endDateForDuration(start, value)
     setEndDate(newEnd.toISOString().slice(0, 10))
   }
 
