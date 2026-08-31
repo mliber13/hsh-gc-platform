@@ -37,7 +37,7 @@ function formatDates(item: DrywallProjectScheduleItem): string {
 }
 
 export function DrywallScheduleEditor() {
-  const { projectId, projectName } = useOutletContext<DrywallProjectShellContext>()
+  const { projectId, projectName, projectAddress } = useOutletContext<DrywallProjectShellContext>()
   const { effectiveRole } = usePermissions()
   const readOnly = !canWriteDrywallProject(effectiveRole)
 
@@ -340,6 +340,8 @@ export function DrywallScheduleEditor() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         projectId={projectId}
+        projectName={projectName}
+        projectAddress={projectAddress || undefined}
         siblingItems={items}
         editing={editing}
         onSaved={() => void load()}

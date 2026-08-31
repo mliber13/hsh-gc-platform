@@ -42,6 +42,7 @@ export function DrywallProjectShell() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [projectName, setProjectName] = useState<string>('Drywall Project')
+  const [projectAddress, setProjectAddress] = useState<string>('')
   const [projectStatus, setProjectStatus] = useState<string>('project-info')
   const [loading, setLoading] = useState(true)
   const [wideContent, setWideContent] = useState(false)
@@ -57,6 +58,7 @@ export function DrywallProjectShell() {
         if (cancelled) return
         if (project) {
           setProjectName(project.name)
+          setProjectAddress(project.address ?? '')
           setProjectStatus(normalizeDrywallProjectStatus(project.status))
         } else {
           navigate('/drywall', { replace: true })
@@ -147,7 +149,15 @@ export function DrywallProjectShell() {
       </nav>
 
       <Outlet
-        context={{ projectId, projectName, projectStatus, setProjectName, setProjectStatus, setWideContent }}
+        context={{
+          projectId,
+          projectName,
+          projectAddress,
+          projectStatus,
+          setProjectName,
+          setProjectStatus,
+          setWideContent,
+        }}
       />
     </div>
   )
@@ -156,6 +166,7 @@ export function DrywallProjectShell() {
 export type DrywallProjectShellContext = {
   projectId: string
   projectName: string
+  projectAddress: string
   projectStatus: string
   setProjectName: (name: string) => void
   setProjectStatus: (status: string) => void
