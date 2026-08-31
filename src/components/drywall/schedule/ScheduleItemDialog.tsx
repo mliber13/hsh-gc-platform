@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { addWorkdays, cascadeSchedule, endDateForDuration, workdaysBetween } from '@/lib/scheduleDateMath'
+import { mapsUrl } from '@/lib/mapsUrl'
 import type { ScheduleItem } from '@/types'
 import { cn } from '@/lib/utils'
 import { AssignedPersonsPicker } from '@/components/schedule/AssignedPersonsPicker'
@@ -56,21 +57,6 @@ type Props = {
   projectAddress?: string
 }
 
-/** True on Apple platforms, where maps.apple.com opens the native Maps app. */
-function isAppleDevice(): boolean {
-  if (typeof navigator === 'undefined') return false
-  const ua = navigator.userAgent || ''
-  // iPadOS 13+ reports as "Macintosh"; Macs have the Maps app too, so include both.
-  return /iPad|iPhone|iPod|Macintosh|Mac OS X/.test(ua)
-}
-
-/** Maps link for an address — Apple Maps on Apple devices, Google Maps elsewhere. */
-function mapsUrl(address: string): string {
-  const q = encodeURIComponent(address)
-  return isAppleDevice()
-    ? `https://maps.apple.com/?q=${q}`
-    : `https://www.google.com/maps/search/?api=1&query=${q}`
-}
 
 const STATUS_OPTIONS: { value: DrywallScheduleItemStatus; label: string }[] = [
   { value: 'not-started', label: 'Not started' },

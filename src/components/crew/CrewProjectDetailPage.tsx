@@ -39,6 +39,7 @@ import {
 import { getSignedPhotoUrl } from '@/services/drywallPhotosService'
 import type { CrewProjectDetail } from '@/types/crew'
 import { isCrewRole } from '@/lib/rbac'
+import { mapsUrl } from '@/lib/mapsUrl'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { CrewCommsPanel } from '@/components/crew/CrewCommsPanel'
@@ -104,10 +105,6 @@ function CrewPhotoThumb({
 
 function telHref(phone: string): string {
   return `tel:${phone.replace(/[^\d+]/g, '')}`
-}
-
-function mapsHref(address: string): string {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
 }
 
 function isTodayInRange(startISO: string, endISO: string): boolean {
@@ -356,7 +353,7 @@ export function CrewProjectDetailPage() {
         ) : null}
         {detail.address ? (
           <a
-            href={mapsHref(detail.address)}
+            href={mapsUrl(detail.address)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-start gap-2 text-base font-medium text-foreground hover:text-primary"
