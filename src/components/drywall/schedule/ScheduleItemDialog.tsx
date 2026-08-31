@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseISO } from 'date-fns'
-import { Bell, Check, ChevronsUpDown, Plus, X } from 'lucide-react'
+import { Bell, Check, ChevronsUpDown, MapPin, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { requestPushNotify } from '@/services/pushService'
@@ -50,6 +50,15 @@ type Props = {
   siblingItems: DrywallProjectScheduleItem[]
   editing: DrywallProjectScheduleItem | null
   onSaved: () => void
+  /** Job name shown under the dialog title (cross-project schedule doesn't say which job). */
+  projectName?: string
+  /** Job address shown under the title with an "open in maps" link — saves a trip to Project Info. */
+  projectAddress?: string
+}
+
+/** Google Maps search link for an address string (mirrors the crew view pattern). */
+function mapsUrl(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
 }
 
 const STATUS_OPTIONS: { value: DrywallScheduleItemStatus; label: string }[] = [
@@ -71,6 +80,8 @@ export function ScheduleItemDialog({
   siblingItems,
   editing,
   onSaved,
+  projectName,
+  projectAddress,
 }: Props) {
   const [name, setName] = useState('')
   const [type, setType] = useState<'field' | 'office'>('field')
@@ -544,6 +555,25 @@ export function ScheduleItemDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{editing ? 'Edit schedule item' : 'Add schedule item'}</DialogTitle>
+          {(projectName || projectAddress) && (
+            <div className="space-y-0.5 pt-0.5 text-left">
+              {projectName && (
+                <p className="text-sm font-medium text-foreground">{projectName}</p>
+              )}
+              {projectAddress && (
+                <a
+                  href={mapsUrl(projectAddress)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline"
+                  title="Open in Google Maps"
+                >
+                  <MapPin className="size-3.5 shrink-0" />
+                  {projectAddress}
+                </a>
+              )}
+            </div>
+          )}
         </DialogHeader>
 
         <div className="space-y-4 py-2">

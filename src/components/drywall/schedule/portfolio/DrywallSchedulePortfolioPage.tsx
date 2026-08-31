@@ -68,6 +68,8 @@ type DialogState =
   | {
       open: true
       projectId: string
+      projectName?: string
+      projectAddress?: string
       siblings: DrywallProjectScheduleItem[]
       editing: DrywallProjectScheduleItem | null
     }
@@ -296,6 +298,8 @@ export function DrywallSchedulePortfolioPage() {
       setDialog({
         open: true,
         projectId: item.projectId,
+        projectName: item.projectName,
+        projectAddress: item.projectAddress,
         siblings,
         editing,
       })
@@ -309,7 +313,15 @@ export function DrywallSchedulePortfolioPage() {
     setAddProjectOpenMobile(false)
     try {
       const siblings = await fetchScheduleItemsForDrywallProject(projectId)
-      setDialog({ open: true, projectId, siblings, editing: null })
+      const sourceItem = items.find((i) => i.projectId === projectId)
+      setDialog({
+        open: true,
+        projectId,
+        projectName: projectNamesById.get(projectId),
+        projectAddress: sourceItem?.projectAddress,
+        siblings,
+        editing: null,
+      })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to start a new schedule item')
     }
@@ -1112,6 +1124,8 @@ export function DrywallSchedulePortfolioPage() {
             if (!open) setDialog({ open: false })
           }}
           projectId={dialog.projectId}
+          projectName={dialog.projectName}
+          projectAddress={dialog.projectAddress}
           siblingItems={dialog.siblings}
           editing={dialog.editing}
           onSaved={handleDialogSaved}
