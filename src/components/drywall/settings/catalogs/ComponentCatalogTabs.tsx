@@ -17,6 +17,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { generateCatalogEntryId } from '@/lib/drywall/catalogUtils'
+import { METAL_STUD_GAUGES, METAL_STUD_SIZES } from '@/components/drywall/quote/quoteUiConstants'
+
+/** Readable label for a metal-stud size/gauge key value (falls back to the raw key). */
+function msLabel(options: ReadonlyArray<{ value: string; label: string }>, value: string): string {
+  return options.find((o) => o.value === value)?.label ?? value
+}
 import type {
   AcousticCatalogEntry,
   DoorInstallCatalogEntry,
@@ -415,10 +421,10 @@ export function MetalStudTab({ readOnly, onUpdate, catalogs }: TabProps) {
       entry ?? {
         id: generateCatalogEntryId('ms'),
         display_name: '',
-        size: '',
-        gauge: '',
+        size: '3.625',
+        gauge: '20',
         component: 'stud',
-        material_rate_per_piece: 0,
+        material_rate_per_lf: 0,
         labor_rate: 0,
       },
     )
@@ -438,19 +444,20 @@ export function MetalStudTab({ readOnly, onUpdate, catalogs }: TabProps) {
     <>
       <ComponentCatalogTab
         title="Metal stud"
-        description="Stud and track sizes with material rates per piece."
+        description="Stud and track rates per linear foot, by size × gauge. Labor ($/LF wall) is read from the stud entry for each size × gauge."
         emptyMessage="No metal stud entries yet."
         items={items}
         readOnly={readOnly}
-        searchText={(i) => `${i.display_name} ${i.size} ${i.gauge}`}
+        searchText={(i) => `${i.display_name} ${i.size} ${i.gauge} ${i.component}`}
         onChange={(next) => onUpdate('metal_stud', next)}
         onAdd={() => startEdit()}
         onEdit={startEdit}
         columns={[
           { key: 'name', header: 'Name', cell: (i) => i.display_name },
-          { key: 'size', header: 'Size', cell: (i) => i.size },
+          { key: 'size', header: 'Size', cell: (i) => msLabel(METAL_STUD_SIZES, i.size) },
+          { key: 'gauge', header: 'Gauge', cell: (i) => msLabel(METAL_STUD_GAUGES, i.gauge) },
           { key: 'comp', header: 'Component', cell: (i) => i.component },
-          { key: 'mat', header: 'Mat $/piece', cell: (i) => formatCatalogRate(i.material_rate_per_piece), className: 'tabular-nums' },
+          { key: 'mat', header: 'Mat $/LF', cell: (i) => formatCatalogRate(i.material_rate_per_lf), className: 'tabular-nums' },
           { key: 'labor', header: 'Labor $/LF', cell: (i) => formatCatalogRate(i.labor_rate), className: 'tabular-nums' },
         ]}
       />
@@ -458,8 +465,26 @@ export function MetalStudTab({ readOnly, onUpdate, catalogs }: TabProps) {
         {draft && (
           <>
             <Field label="Display name *"><Input value={draft.display_name} onChange={(e) => setDraft({ ...draft, display_name: e.target.value })} /></Field>
-            <Field label="Size *"><Input value={draft.size} onChange={(e) => setDraft({ ...draft, size: e.target.value })} /></Field>
-            <Field label="Gauge *"><Input value={draft.gauge} onChange={(e) => setDraft({ ...draft, gauge: e.target.value })} /></Field>
+            <Field label="Size *">
+              <Select value={draft.size} onValueChange={(v) => setDraft({ ...draft, size: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {METAL_STUD_SIZES.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Gauge *">
+              <Select value={draft.gauge} onValueChange={(v) => setDraft({ ...draft, gauge: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {METAL_STUD_GAUGES.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
             <Field label="Component">
               <Select value={draft.component} onValueChange={(v) => setDraft({ ...draft, component: v as 'stud' | 'track' })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -469,8 +494,8 @@ export function MetalStudTab({ readOnly, onUpdate, catalogs }: TabProps) {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Material rate ($/piece) *"><Input type="number" min={0} step={0.01} value={String(draft.material_rate_per_piece)} onChange={(e) => setDraft({ ...draft, material_rate_per_piece: parseCatalogRate(e.target.value) })} /></Field>
-            <Field label="Labor rate ($/LF) *"><Input type="number" min={0} step={0.01} value={String(draft.labor_rate)} onChange={(e) => setDraft({ ...draft, labor_rate: parseCatalogRate(e.target.value) })} /></Field>
+            <Field label="Material rate ($/LF) *"><Input type="number" min={0} step={0.01} value={String(draft.material_rate_per_lf)} onChange={(e) => setDraft({ ...draft, material_rate_per_lf: parseCatalogRate(e.target.value) })} /></Field>
+            <Field label="Labor rate ($/LF wall, on stud entry) *"><Input type="number" min={0} step={0.01} value={String(draft.labor_rate)} onChange={(e) => setDraft({ ...draft, labor_rate: parseCatalogRate(e.target.value) })} /></Field>
           </>
         )}
       </EntryDialog>

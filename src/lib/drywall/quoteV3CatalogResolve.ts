@@ -66,9 +66,9 @@ export function getCatalogDefaultMaterialRate(
     case 'acoustic':
       return catalogs.acoustic.find((e) => e.id === line.catalog_id)?.material_rate ?? 0
     case 'metal_stud':
-      return (
-        catalogs.metal_stud.find((e) => e.id === line.catalog_id)?.material_rate_per_piece ?? 0
-      )
+      // Metal stud material = stud LF + track LF (two rates by size×gauge), resolved in
+      // computeLineItem via getMetalStudLfRate. No single per-line material rate.
+      return 0
     case 'frp':
       return catalogs.frp.find((e) => e.id === line.catalog_id)?.material_rate ?? 0
     case 'door_install':
@@ -350,4 +350,39 @@ export function catalogOptionsForLineType(
     default:
       return []
   }
+}
+
+// ── Metal stud: two rates ($/LF) keyed by size × gauge ──────────────────────
+// Metal stud lines carry ms_size/ms_gauge (not a single catalog_id), so material
+// resolves per size×gauge for stud and track separately. Labor is one $/LF read
+// from the matching stud entry (a per-line custom_labor_rate overrides it).
+
+function findMetalStud(
+  catalogs: OrgDrywallCatalogs,
+  size: string,
+  gauge: string,
+  component: 'stud' | 'track',
+) {
+  return catalogs.metal_stud.find(
+    (e) => e.size === size && e.gauge === gauge && e.component === component,
+  )
+}
+
+/** $/LF of material for a stud or track of the given size × gauge (0 when unpriced). */
+export function getMetalStudLfRate(
+  catalogs: OrgDrywallCatalogs,
+  size: string,
+  gauge: string,
+  component: 'stud' | 'track',
+): number {
+  return findMetalStud(catalogs, size, gauge, component)?.material_rate_per_lf ?? 0
+}
+
+/** $/LF of wall install labor for the given size × gauge (from the stud entry). */
+export function getMetalStudLaborRate(
+  catalogs: OrgDrywallCatalogs,
+  size: string,
+  gauge: string,
+): number {
+  return findMetalStud(catalogs, size, gauge, 'stud')?.labor_rate ?? 0
 }

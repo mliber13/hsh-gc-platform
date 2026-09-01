@@ -521,6 +521,16 @@ export interface QuoteLineItem {
   rc_surface?: 'wall' | 'ceiling'
   rc_wall_height?: number
   rc_spacing_in?: number
+  /** Metal stud run geometry (quantity = wall linear feet). Drives stud + track piece math. */
+  ms_wall_height?: number
+  /** Stud spacing on center (inches); default 16. */
+  ms_spacing_in?: number
+  /** Track courses per run (top + bottom = 2); default 2. */
+  ms_tracks_per_run?: number
+  /** Stud size in inches as a string key ('2.5' | '3.625' | '6'); selects the catalog rate. */
+  ms_size?: string
+  /** Stud gauge as a string key ('25' | '20' | '18'); selects the catalog rate. */
+  ms_gauge?: string
   /**
    * Groups component lines that share one spec (RC type + rates) in the pivot entry UI.
    * New pivot rows carry an explicit id; legacy/converted lines fall back to grouping by spec.

@@ -22,9 +22,11 @@ function line(patch: Partial<QuoteLineItem>): QuoteLineItem {
 describe('waste + labor burden across generic component trades', () => {
   const catalogs = createDefaultDrywallCatalogSeeds()
 
-  it('applies waste to material AND labor, plus burden (metal_stud @ 10%)', () => {
+  it('applies waste to material AND labor, plus burden (generic trade @ 10%)', () => {
+    // metal_stud now has a dedicated stud/track branch (see metalStudV3Math.test.ts);
+    // insulation still exercises the generic material×waste + labor×waste×burden path.
     const l = line({
-      type: 'metal_stud',
+      type: 'insulation',
       quantity: 100,
       custom_material_rate: 5,
       custom_labor_rate: 1.5,

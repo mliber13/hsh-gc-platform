@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import { createQuoteLineItem } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { RcChannelPivotSection } from './RcChannelPivotSection'
 import { AcousticPivotSection } from './AcousticPivotSection'
+import { MetalStudPivotSection } from './MetalStudPivotSection'
 import type { QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { LineItemEditDialog } from './LineItemEditDialog'
@@ -155,6 +156,17 @@ export function LineItemsTable({
             />
           ) : section.type === 'acoustic' ? (
             <AcousticPivotSection
+              key={section.type}
+              lines={lines}
+              catalogs={catalogs}
+              readOnly={readOnly}
+              compact={compact}
+              lineComputeOptions={lineComputeOptions}
+              sectionSubtotal={section.sectionSubtotal}
+              onChange={onChange}
+            />
+          ) : section.type === 'metal_stud' ? (
+            <MetalStudPivotSection
               key={section.type}
               lines={lines}
               catalogs={catalogs}

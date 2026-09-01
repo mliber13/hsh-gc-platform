@@ -133,13 +133,25 @@ function classifyToImportedLines(
 
   const location = 'Imported takeoff'
 
-  // Metal stud framing — LF driven.
+  // Metal stud framing — LF driven, with size/gauge/height parsed from the classification.
   if (/metal stud|stud framing/.test(s)) {
     const { size, gauge } = parseStudSizeGauge(raw)
     const line = createQuoteLineItem('metal_stud', { location })
     line.quantity = qtyFt > 0 ? qtyFt : qtySf
-    line.description = `${raw}${size ? ` — ${size}" ${gauge}ga` : ''}`
-    out.push(wrap(line, qtyFt > 0 ? undefined : 'No LF quantity — verify metal stud length.'))
+    line.ms_size = size
+    line.ms_gauge = gauge
+    if (heightFt) line.ms_wall_height = heightFt
+    line.description = raw
+    out.push(
+      wrap(
+        line,
+        qtyFt > 0
+          ? heightFt
+            ? undefined
+            : 'No wall height in the name — set height so studs price.'
+          : 'No LF quantity — verify metal stud length.',
+      ),
+    )
     return out
   }
 

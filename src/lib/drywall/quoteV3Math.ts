@@ -13,6 +13,8 @@ import {
   getLineCatalogLabel,
   getLineMaterialRate,
   getLineUnit,
+  getMetalStudLaborRate,
+  getMetalStudLfRate,
   resolveFinishScope,
 } from './quoteV3CatalogResolve'
 import {
@@ -76,6 +78,19 @@ export interface SuspendedGridBreakdown {
   tees_2ft?: number
 }
 
+export interface MetalStudBreakdown {
+  /** Wall run linear feet (× waste). */
+  wallLf: number
+  /** Number of studs across the run = ceil(LF ÷ spacing). */
+  studCount: number
+  /** Total stud material LF (studCount × height, × waste). */
+  studLf: number
+  /** Total track material LF (LF × tracks/run, × waste). */
+  trackLf: number
+  studRatePerLf: number
+  trackRatePerLf: number
+}
+
 export interface QuoteV3LineComputed {
   materialTotal: number
   hangerLaborTotal: number
@@ -89,6 +104,8 @@ export interface QuoteV3LineComputed {
   finishLabel: string
   /** Present for suspended_grid lines priced via the itemized path (not blended). */
   gridBreakdown?: SuspendedGridBreakdown
+  /** Present for metal_stud lines — stud/track piece math for the pivot UI. */
+  metalStudBreakdown?: MetalStudBreakdown
 }
 
 export interface QuoteV3ComponentLaborByTrade {
@@ -213,6 +230,7 @@ export function computeLineItem(
   let accessoriesTotal = 0
   let accessories: LineAccessoryResult = emptyAccessories()
   let gridBreakdown: SuspendedGridBreakdown | undefined
+  let metalStudBreakdown: MetalStudBreakdown | undefined
 
   if (line.type === 'drywall') {
     const finishScope = resolveFinishScope(line, catalogs)
@@ -373,9 +391,55 @@ export function computeLineItem(
       sqftWasted * laborRate,
       laborBurden?.componentIncludeLaborBurden ?? true,
     )
+  } else if (line.type === 'metal_stud') {
+    const size = line.ms_size || '3.625'
+    const gauge = line.ms_gauge || '20'
+    const laborRate =
+      line.custom_labor_rate != null
+        ? line.custom_labor_rate
+        : getMetalStudLaborRate(catalogs, size, gauge)
+
+    if (line.custom_material_rate != null) {
+      // Converted/blended v2 line (quantity = total wall LF, rate = blended $/LF).
+      // Preserve v2→v3 parity — don't retro-itemize into stud/track pieces.
+      materialTotal = qty * line.custom_material_rate
+      laborTotal = applyLaborBurden(
+        qty * wasteMult * laborRate,
+        laborBurden?.componentIncludeLaborBurden ?? true,
+      )
+    } else {
+      // v2 parity: stud count from spacing, stud LF from height, track LF from tracks/run,
+      // priced with per-LF stud + track rates by size×gauge. quantity = wall LF.
+      const wallLf = qty
+      const wallHeight = line.ms_wall_height && line.ms_wall_height > 0 ? line.ms_wall_height : 0
+      const spacingIn = line.ms_spacing_in && line.ms_spacing_in > 0 ? line.ms_spacing_in : 16
+      const tracksPerRun =
+        line.ms_tracks_per_run && line.ms_tracks_per_run > 0 ? line.ms_tracks_per_run : 2
+      const studRate = getMetalStudLfRate(catalogs, size, gauge, 'stud')
+      const trackRate = getMetalStudLfRate(catalogs, size, gauge, 'track')
+
+      const studCount = wallLf > 0 && spacingIn > 0 ? Math.ceil(wallLf / (spacingIn / 12)) : 0
+      const studLf = studCount * wallHeight * wasteMult
+      const trackLf = wallLf * tracksPerRun * wasteMult
+      const wallLfWasted = wallLf * wasteMult
+      materialTotal = studLf * studRate + trackLf * trackRate
+
+      laborTotal = applyLaborBurden(
+        wallLfWasted * laborRate,
+        laborBurden?.componentIncludeLaborBurden ?? true,
+      )
+      metalStudBreakdown = {
+        wallLf: wallLfWasted,
+        studCount,
+        studLf,
+        trackLf,
+        studRatePerLf: studRate,
+        trackRatePerLf: trackRate,
+      }
+    }
   } else {
-    // insulation / metal_stud / frp / door_install — material already carries waste
-    // via wasteMult above; apply the same waste to labor.
+    // insulation / frp / door_install — material already carries waste via wasteMult
+    // above; apply the same waste to labor.
     const laborRate = getEffectiveComponentLaborRate(line, catalogs)
     laborTotal = applyLaborBurden(
       qty * wasteMult * laborRate,
@@ -395,6 +459,7 @@ export function computeLineItem(
     catalogLabel: getLineCatalogLabel(line, catalogs),
     finishLabel: resolveFinishScope(line, catalogs)?.display_name ?? '—',
     gridBreakdown,
+    metalStudBreakdown,
   }
 }
 

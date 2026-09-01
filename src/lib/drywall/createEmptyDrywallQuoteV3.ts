@@ -353,9 +353,18 @@ export function createQuoteLineItem(
     catalog_id: '',
     finish_scope_id: undefined,
     waste_pct:
-      type === 'drywall' ? 10 : type === 'suspended_grid' || type === 'acoustic' ? 0 : undefined,
+      type === 'drywall' || type === 'metal_stud'
+        ? 10
+        : type === 'suspended_grid' || type === 'acoustic'
+          ? 0
+          : undefined,
     rc_surface: type === 'rc_channel' ? 'wall' : undefined,
     rc_spacing_in: type === 'rc_channel' ? 24 : undefined,
+    // Metal stud run geometry defaults (v2 parity: 16" o.c., top+bottom track, 3⅝" 20ga).
+    ms_spacing_in: type === 'metal_stud' ? 16 : undefined,
+    ms_tracks_per_run: type === 'metal_stud' ? 2 : undefined,
+    ms_size: type === 'metal_stud' ? '3.625' : undefined,
+    ms_gauge: type === 'metal_stud' ? '20' : undefined,
     accessoryOverrides: type === 'rc_channel' ? { screws: true } : undefined,
     // Acoustic ceiling tile size (drives tile + cross-tee counts).
     acst_tile_size: type === 'acoustic' ? '2x4' : undefined,

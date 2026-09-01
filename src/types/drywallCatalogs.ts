@@ -120,10 +120,10 @@ export interface MetalStudCatalogEntry {
   size: string
   gauge: string
   component: 'stud' | 'track'
-  material_rate_per_piece: number
-  /** $ per LF installed (v2 metalStudLaborRate × totalWallLf parity). */
+  /** $ per LF of material (matches v2 stud/track rate matrices). */
+  material_rate_per_lf: number
+  /** $ per LF of wall installed — labor is read from the matching stud entry. */
   labor_rate: number
-  default_piece_length_ft?: number
   notes?: string
 }
 
