@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import { ArrowRight, Download, Save } from 'lucide-react'
+import { ArrowRight, Download, FileUp, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,6 +24,7 @@ import type { DrywallProject, DrywallQuoteOutcome, DrywallQuoteV3 } from '@/type
 import { isDrywallQuoteV3 } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { AlternatesSection } from './AlternatesSection'
+import { ImportTakeoffDialog } from './ImportTakeoffDialog'
 import { LineItemsTable } from './LineItemsTable'
 import { QuoteHeaderV3 } from './QuoteHeaderV3'
 import { QuotePdfOptionsSectionV3 } from './QuotePdfOptionsSectionV3'
@@ -53,6 +54,7 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
   const [refreshing, setRefreshing] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [revertingToV2, setRevertingToV2] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -250,6 +252,16 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
             type="button"
             size="sm"
             variant="outline"
+            disabled={readOnly || !catalogs}
+            onClick={() => setImportOpen(true)}
+          >
+            <FileUp className="mr-2 h-4 w-4" />
+            Import takeoff
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
             disabled={readOnly || isDirty || downloadingPdf}
             onClick={() => void handleDownloadPdf()}
           >
@@ -312,6 +324,17 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
             readOnly={readOnly}
             onChange={(alternates) => patchQuote({ alternates })}
           />
+
+          {catalogs && !readOnly && (
+            <ImportTakeoffDialog
+              open={importOpen}
+              onOpenChange={setImportOpen}
+              catalogs={catalogs}
+              onApply={(imported) =>
+                patchQuote({ lineItems: [...quote.lineItems, ...imported] })
+              }
+            />
+          )}
         </div>
 
         <QuoteTotalsSidebar
