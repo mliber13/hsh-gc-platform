@@ -286,12 +286,39 @@ function hydrateLineItem(raw: QuoteLineItem): QuoteLineItem {
     rc_surface: raw.rc_surface === 'ceiling' ? 'ceiling' : raw.rc_surface === 'wall' ? 'wall' : undefined,
     rc_wall_height: raw.rc_wall_height != null ? num(raw.rc_wall_height) : undefined,
     rc_spacing_in: raw.rc_spacing_in != null ? num(raw.rc_spacing_in) : undefined,
+    component_group_id: typeof raw.component_group_id === 'string' ? raw.component_group_id : undefined,
+    // Suspended grid / acoustic geometry — must round-trip or the pivot resets on reload.
+    grid_perimeter: raw.grid_perimeter != null ? num(raw.grid_perimeter) : undefined,
+    acst_tile_size: raw.acst_tile_size === '2x2' ? '2x2' : raw.acst_tile_size === '2x4' ? '2x4' : undefined,
+    grid_count_overrides: hydrateGridCountOverrides(raw.grid_count_overrides),
+    // Metal stud run geometry.
+    ms_wall_height: raw.ms_wall_height != null ? num(raw.ms_wall_height) : undefined,
+    ms_spacing_in: raw.ms_spacing_in != null ? num(raw.ms_spacing_in) : undefined,
+    ms_tracks_per_run: raw.ms_tracks_per_run != null ? num(raw.ms_tracks_per_run) : undefined,
+    ms_deflection_tracks_per_run:
+      raw.ms_deflection_tracks_per_run != null ? num(raw.ms_deflection_tracks_per_run) : undefined,
+    ms_size: typeof raw.ms_size === 'string' ? raw.ms_size : undefined,
+    ms_gauge: typeof raw.ms_gauge === 'string' ? raw.ms_gauge : undefined,
     override_reason: raw.override_reason,
     waste_pct: raw.waste_pct != null ? num(raw.waste_pct, 10) : undefined,
     accessoryOverrides: hydrateAccessoryOverrides(raw.accessoryOverrides),
     accessories_in_material_rate: optionalBool(raw.accessories_in_material_rate),
     notes: raw.notes,
   }
+}
+
+/** Carry grid/acoustic per-component count overrides through hydrate (numbers only). */
+function hydrateGridCountOverrides(
+  raw: QuoteLineItem['grid_count_overrides'],
+): QuoteLineItem['grid_count_overrides'] {
+  if (!raw || typeof raw !== 'object') return undefined
+  const keys = ['tiles', 'mains', 'tees_4ft', 'tees_2ft', 'wire', 'lags', 'wall_angle'] as const
+  const out: Record<string, number> = {}
+  for (const k of keys) {
+    const v = (raw as Record<string, unknown>)[k]
+    if (v != null && Number.isFinite(Number(v))) out[k] = Number(v)
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 /** One-pass migration from legacy combined custom_labor_rate. */
