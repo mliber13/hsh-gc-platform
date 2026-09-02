@@ -185,11 +185,15 @@ export function parseOrgDrywallCatalogs(raw: unknown): OrgDrywallCatalogs {
         ...base,
         size: String(o.size ?? ''),
         gauge: String(o.gauge ?? ''),
-        component: o.component === 'track' ? 'track' : 'stud',
-        material_rate_per_piece: toNum(o.material_rate_per_piece),
+        component:
+          o.component === 'track'
+            ? 'track'
+            : o.component === 'deflection_track'
+              ? 'deflection_track'
+              : 'stud',
+        // Rates are per LF (older rows used material_rate_per_piece; fall back to it).
+        material_rate_per_lf: toNum(o.material_rate_per_lf ?? o.material_rate_per_piece),
         labor_rate: toNum(o.labor_rate),
-        default_piece_length_ft:
-          o.default_piece_length_ft != null ? toNum(o.default_piece_length_ft) : undefined,
         notes: o.notes != null ? String(o.notes) : undefined,
       })),
     ),
