@@ -297,19 +297,23 @@ function drawTradeSection(
   // Gap above each trade group so its heading clears the previous table (the
   // heading baseline sits at ctx.y, so without this its text overlaps the box).
   ctx.y += SP.sectionTop
-  ensureRoom(ctx, 48)
-  ctx.doc.setFont('helvetica', 'bold')
-  ctx.doc.setFontSize(11)
-  setTextRgb(ctx.doc, DW_BLUE)
-  ctx.doc.text(label, ctx.margin, ctx.y)
-  ctx.y += 10
-
   const preFootRows: Array<[string, number]> = costSplit
     ? [
         ['Material', costSplit.material],
         ['Labor', costSplit.labor],
       ]
     : []
+  // Keep the heading with its table: reserve room for heading + head + rows +
+  // material/labor + subtotal so a page break moves the whole section, not just
+  // the body (which orphaned the heading and duplicated the footer).
+  const rowCount = groupPdfRowsByLocationForDisplay(rows).length
+  const estHeight = 30 + 24 + rowCount * 20 + preFootRows.length * 15 + 26
+  ensureRoom(ctx, estHeight)
+  ctx.doc.setFont('helvetica', 'bold')
+  ctx.doc.setFontSize(11)
+  setTextRgb(ctx.doc, DW_BLUE)
+  ctx.doc.text(label, ctx.margin, ctx.y)
+  ctx.y += 10
 
   drawLocationLineTotalTable(ctx, rows, {
     footLabel: `${label} subtotal`,
@@ -328,11 +332,12 @@ function drawLocationLineTotalTable(
 
   type FootCell = string | { content: string; styles?: Record<string, unknown> }
   const foot: FootCell[][] = []
-  // Material / Labor for this trade (lighter than the bold subtotal row below).
+  // Material / Labor for this trade — smaller + lighter, reading as a sub of the subtotal.
+  const subStyle = { fontStyle: 'normal', textColor: DW_GRAY, fontSize: 8 } as const
   for (const [rowLabel, amount] of opts.preFootRows ?? []) {
     foot.push([
-      { content: rowLabel, styles: { fontStyle: 'normal', textColor: DW_GRAY } },
-      { content: formatQuoteMoney(amount), styles: { fontStyle: 'normal', textColor: DW_GRAY, halign: 'right' } },
+      { content: rowLabel, styles: { ...subStyle } },
+      { content: formatQuoteMoney(amount), styles: { ...subStyle, halign: 'right' } },
     ])
   }
   foot.push([opts.footLabel, formatQuoteMoney(opts.footTotal)])
@@ -344,6 +349,9 @@ function drawLocationLineTotalTable(
     foot,
     theme: 'striped',
     showHead: 'everyPage',
+    // Footer (incl. Material/Labor + subtotal) renders once, on the table's last
+    // page — otherwise autoTable repeats it on every page a table spans.
+    showFoot: 'lastPage',
     headStyles: AUTO_TABLE_HEAD,
     footStyles: AUTO_TABLE_FOOT,
     styles: AUTO_TABLE_BASE,
