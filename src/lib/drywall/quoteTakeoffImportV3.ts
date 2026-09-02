@@ -155,13 +155,21 @@ function classifyToImportedLines(
     return out
   }
 
-  // Suspended drywall grid.
+  // Suspended drywall grid — two lines: the grid, plus the drywall hung & finished
+  // on it (same area). Mirrors the RC drywall + component pattern.
   if (/suspend.*grid|drywall grid/.test(s)) {
-    const line = createQuoteLineItem('suspended_grid', { location })
-    line.quantity = qtySf
-    if (qtyFt > 0) line.grid_perimeter = qtyFt
-    line.description = raw
-    out.push(wrap(line))
+    const grid = createQuoteLineItem('suspended_grid', { location })
+    grid.quantity = qtySf
+    if (qtyFt > 0) grid.grid_perimeter = qtyFt
+    grid.description = raw
+    out.push(wrap(grid))
+
+    const drywall = createQuoteLineItem('drywall', { location })
+    drywall.quantity = qtySf
+    drywall.catalog_id = DEFAULT_BOARD_CATALOG_ID
+    drywall.finish_scope_id = DEFAULT_FINISH_SCOPE_ID
+    drywall.description = `Drywall on suspended grid — ${raw}`
+    out.push(wrap(drywall))
     return out
   }
 

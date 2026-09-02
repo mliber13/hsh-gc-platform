@@ -27,8 +27,9 @@ describe('parseTakeoffFileV3', () => {
     const { lines } = await parseTakeoffFileV3(makeTogalFile())
     const byClass = (c: string) => lines.filter((l) => l.sourceClassification === c).map((l) => l.line)
 
-    // Total + Unassigned skipped; 6 classifications → 8 lines (two RC rows add one each).
-    expect(lines).toHaveLength(8)
+    // Total + Unassigned skipped; 6 classifications → 9 lines (Ceiling Assembly,
+    // the w/RC row, and Suspended Grid each expand to two lines).
+    expect(lines).toHaveLength(9)
 
     // Ceiling Assembly = drywall ceiling + RC channel ceiling.
     const ceiling = byClass('Ceiling Assembly')
@@ -56,11 +57,15 @@ describe('parseTakeoffFileV3', () => {
     expect(walls[0].catalog_id).toBe('5_8_type_x')
     expect(walls[0].quantity).toBeCloseTo(450324.31)
 
-    // Suspended grid: SF + perimeter.
-    const grid = byClass('Suspending Drywall Grid')[0]
-    expect(grid.type).toBe('suspended_grid')
+    // Suspended grid = two lines: the grid (SF + perimeter) + drywall on it (same SF).
+    const gridLines = byClass('Suspending Drywall Grid')
+    expect(gridLines.map((l) => l.type).sort()).toEqual(['drywall', 'suspended_grid'])
+    const grid = gridLines.find((l) => l.type === 'suspended_grid')!
     expect(grid.quantity).toBeCloseTo(29623.29)
     expect(grid.grid_perimeter).toBeCloseTo(9769.17)
+    const gridDrywall = gridLines.find((l) => l.type === 'drywall')!
+    expect(gridDrywall.quantity).toBeCloseTo(29623.29)
+    expect(gridDrywall.catalog_id).toBe('5_8_type_x')
 
     // Acoustic: SF + perimeter.
     const act = byClass('ACT-4')[0]
