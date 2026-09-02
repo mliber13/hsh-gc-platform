@@ -607,11 +607,17 @@ function renderDrywallQuoteV3Pdf(input: QuoteV3PdfInput, logo: DrywallPdfLogo | 
     let costSplit: { material: number; labor: number } | undefined
     if (documentOptions.includeTradeCostBreakdown) {
       const c = totals.routine.byTrade?.[group.trade]
-      const material = (c?.material ?? 0) + (c?.accessories ?? 0)
+      const materialDirect = (c?.material ?? 0) + (c?.accessories ?? 0)
       // Customer-facing: one Labor figure per trade. Drywall lumps hang + finish +
       // cleanup; components use their trade labor.
-      let labor = (c?.hangerLabor ?? 0) + (c?.finisherLabor ?? 0) + (c?.componentLabor ?? 0)
-      if (group.trade === 'drywall') labor += totals.routine.cleanupTotal
+      let laborDirect = (c?.hangerLabor ?? 0) + (c?.finisherLabor ?? 0) + (c?.componentLabor ?? 0)
+      if (group.trade === 'drywall') laborDirect += totals.routine.cleanupTotal
+      // Scale the direct costs up to the marked-up subtotal, split proportionally,
+      // so Material + Labor sum exactly to the trade subtotal shown to the customer.
+      const direct = materialDirect + laborDirect
+      const material =
+        direct > 0 ? Math.round(((group.subtotal * materialDirect) / direct) * 100) / 100 : 0
+      const labor = Math.round((group.subtotal - material) * 100) / 100
       costSplit = { material, labor }
     }
     drawTradeSection(ctx, group.label, group.rows, group.subtotal, costSplit)
