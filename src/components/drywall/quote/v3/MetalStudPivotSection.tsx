@@ -149,7 +149,12 @@ export function MetalStudPivotSection({
                     {loc.runs.map((l) => {
                       const m = rowMoney(l)
                       const studs = m.metalStudBreakdown?.studCount ?? 0
-                      const trackLf = Math.round(m.metalStudBreakdown?.trackLf ?? 0)
+                      // Track LF = all tracks/run (standard + deflection); Defl. LF is the
+                      // deflection portion within that total (priced at the deflection rate).
+                      const trackLf = Math.round(
+                        (m.metalStudBreakdown?.trackLf ?? 0) +
+                          (m.metalStudBreakdown?.deflectionTrackLf ?? 0),
+                      )
                       const deflectionLf = Math.round(m.metalStudBreakdown?.deflectionTrackLf ?? 0)
                       return (
                         <tr key={l.id} className="border-t">
