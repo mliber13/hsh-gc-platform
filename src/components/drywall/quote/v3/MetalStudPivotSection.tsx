@@ -125,18 +125,19 @@ export function MetalStudPivotSection({
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] text-xs">
+                <table className="w-full min-w-[940px] text-xs">
                   <thead>
                     <tr className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       <th className="px-2 py-1.5 text-left font-medium">Size</th>
                       <th className="px-2 py-1.5 text-left font-medium">Gauge</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Spacing</th>
+                      <th className="px-2 py-1.5 text-left font-medium">Spacing</th>
                       <th className="px-2 py-1.5 text-right font-medium">Height</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Tracks/run</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Defl. tracks</th>
+                      <th className="px-2 py-1.5 text-left font-medium">Tracks/run</th>
+                      <th className="px-2 py-1.5 text-left font-medium">Defl. tracks</th>
                       <th className="px-2 py-1.5 text-right font-medium">Wall LF</th>
                       <th className="px-2 py-1.5 text-right font-medium">Waste %</th>
                       <th className="px-2 py-1.5 text-right font-medium">Studs</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Track LF</th>
                       <th className="px-2 py-1.5 text-right font-medium">Material $</th>
                       <th className="px-2 py-1.5 text-right font-medium">Labor $</th>
                       <th className="px-2 py-1.5 text-right font-medium">Total</th>
@@ -147,6 +148,10 @@ export function MetalStudPivotSection({
                     {loc.runs.map((l) => {
                       const m = rowMoney(l)
                       const studs = m.metalStudBreakdown?.studCount ?? 0
+                      const trackLf = Math.round(
+                        (m.metalStudBreakdown?.trackLf ?? 0) +
+                          (m.metalStudBreakdown?.deflectionTrackLf ?? 0),
+                      )
                       return (
                         <tr key={l.id} className="border-t">
                           <td className="px-2 py-1.5">
@@ -278,6 +283,9 @@ export function MetalStudPivotSection({
                           </td>
                           <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
                             {studs}
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
+                            {trackLf.toLocaleString()}
                           </td>
                           <CurrencyAmountCell
                             value={m.materialTotal}
