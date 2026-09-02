@@ -188,6 +188,7 @@ export function LineItemsTable({
               onPatch={patchLine}
               onDelete={deleteLine}
               onEdit={openEdit}
+              onAdd={() => addLine(section.type)}
             />
           ),
         )
@@ -243,6 +244,7 @@ function TypeSectionTable({
   onPatch,
   onDelete,
   onEdit,
+  onAdd,
 }: {
   section: TypeSection
   catalogs: OrgDrywallCatalogs
@@ -253,6 +255,7 @@ function TypeSectionTable({
   onPatch: (id: string, patch: Partial<QuoteLineItem>) => void
   onDelete: (id: string) => void
   onEdit: (line: QuoteLineItem) => void
+  onAdd: () => void
 }) {
   const { isDrywall, catalogLabel, orderedLines, type } = section
   // Suspended grid is itemized from the catalog, so it has no single component pick and no blended
@@ -415,6 +418,19 @@ function TypeSectionTable({
           )}
         </tbody>
       </table>
+      {!readOnly && (
+        <div className="border-t bg-muted/10 px-2.5 py-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={onAdd}
+          >
+            <Plus className="h-3 w-3 text-primary" /> Add {section.label} line
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
