@@ -29,11 +29,9 @@ import {
   buildQuoteV3PdfLineRows,
   groupPdfRowsByLocationForDisplay,
   groupPdfRowsByTrade,
-  PDF_TRADE_ORDER,
   sanitizePdfFilenamePart,
   type QuoteV3PdfLineRow,
 } from '@/lib/drywall/quoteV3PdfModel'
-import { QUOTE_LINE_TYPE_LABELS } from '@/lib/drywall/quoteV3CatalogResolve'
 import { resolveQuoteV3PdfSettings, buildQuoteV3PdfTermsLines } from '@/lib/drywall/quoteV3PdfSettings'
 import { resolveQuotePdfSettings } from '@/lib/drywall/quotePdfSettings'
 import { computeQuoteV3Totals, type QuoteV3MarkupBreakdown } from '@/lib/drywall/quoteV3Math'
@@ -294,6 +292,7 @@ function drawTradeSection(
   label: string,
   rows: ReturnType<typeof buildQuoteV3PdfLineRows>,
   subtotal: number,
+  costSplit?: { material: number; labor: number },
 ) {
   // Gap above each trade group so its heading clears the previous table (the
   // heading baseline sits at ctx.y, so without this its text overlaps the box).
@@ -305,25 +304,44 @@ function drawTradeSection(
   ctx.doc.text(label, ctx.margin, ctx.y)
   ctx.y += 10
 
+  const preFootRows: Array<[string, number]> = costSplit
+    ? [
+        ['Material', costSplit.material],
+        ['Labor', costSplit.labor],
+      ]
+    : []
+
   drawLocationLineTotalTable(ctx, rows, {
     footLabel: `${label} subtotal`,
     footTotal: subtotal,
+    preFootRows,
   })
 }
 
 function drawLocationLineTotalTable(
   ctx: PdfCtx,
   rows: QuoteV3PdfLineRow[],
-  opts: { footLabel: string; footTotal: number },
+  opts: { footLabel: string; footTotal: number; preFootRows?: Array<[string, number]> },
 ) {
   const displayRows = groupPdfRowsByLocationForDisplay(rows)
   const body = displayRows.map((r) => [r.location, formatQuoteMoney(r.sellTotal)])
+
+  type FootCell = string | { content: string; styles?: Record<string, unknown> }
+  const foot: FootCell[][] = []
+  // Material / Labor for this trade (lighter than the bold subtotal row below).
+  for (const [rowLabel, amount] of opts.preFootRows ?? []) {
+    foot.push([
+      { content: rowLabel, styles: { fontStyle: 'normal', textColor: DW_GRAY } },
+      { content: formatQuoteMoney(amount), styles: { fontStyle: 'normal', textColor: DW_GRAY, halign: 'right' } },
+    ])
+  }
+  foot.push([opts.footLabel, formatQuoteMoney(opts.footTotal)])
 
   autoTable(ctx.doc, {
     startY: ctx.y,
     head: [['Location', 'Line Total']],
     body,
-    foot: [[opts.footLabel, formatQuoteMoney(opts.footTotal)]],
+    foot,
     theme: 'striped',
     showHead: 'everyPage',
     headStyles: AUTO_TABLE_HEAD,
@@ -356,38 +374,21 @@ function drawBaseBidTotals(
     body.push(['Sales Tax:', formatQuoteMoney(routine.salesTaxAmount)])
   }
 
-  const costRow = (label: string, amount: number): TableCell[] => [
-    { content: label, styles: { cellPadding: { top: 4, right: 6, bottom: 4, left: 12 } } },
-    { content: formatQuoteMoney(amount), styles: { halign: 'right' } },
-  ]
-
-  if (documentOptions.includeTradeCostBreakdown) {
-    // Per-trade material & labor split (drywall shows Hang / Finish separately).
-    const byTrade = routine.byTrade ?? {}
-    for (const trade of PDF_TRADE_ORDER) {
-      const c = byTrade[trade]
-      if (!c) continue
-      const label = QUOTE_LINE_TYPE_LABELS[trade]
-      const material = c.material + c.accessories
-      if (trade === 'drywall') {
-        if (material) body.push(costRow(`${label} — Material`, material))
-        if (c.hangerLabor) body.push(costRow(`${label} — Hang labor`, c.hangerLabor))
-        if (c.finisherLabor) body.push(costRow(`${label} — Finish labor`, c.finisherLabor))
-      } else {
-        if (material) body.push(costRow(`${label} — Material`, material))
-        if (c.componentLabor) body.push(costRow(`${label} — Labor`, c.componentLabor))
-      }
-    }
-    if (routine.cleanupTotal > 0) body.push(costRow('Cleanup labor', routine.cleanupTotal))
-  } else if (documentOptions.showCostBreakdown) {
+  if (documentOptions.showCostBreakdown && !documentOptions.includeTradeCostBreakdown) {
     const materialsTotal = routine.materialSubtotal + routine.accessoriesSubtotal
     const laborTotal =
       routine.hangerLaborSubtotal +
       routine.finisherLaborSubtotal +
       routine.componentLaborSubtotal +
       routine.cleanupTotal
-    body.push(costRow('Materials:', materialsTotal))
-    body.push(costRow('Labor:', laborTotal))
+    body.push([
+      { content: 'Materials:', styles: { cellPadding: { top: 4, right: 6, bottom: 4, left: 12 } } },
+      { content: formatQuoteMoney(materialsTotal), styles: { halign: 'right' } },
+    ])
+    body.push([
+      { content: 'Labor:', styles: { cellPadding: { top: 4, right: 6, bottom: 4, left: 12 } } },
+      { content: formatQuoteMoney(laborTotal), styles: { halign: 'right' } },
+    ])
   }
 
   autoTable(ctx.doc, {
@@ -595,7 +596,17 @@ function renderDrywallQuoteV3Pdf(input: QuoteV3PdfInput, logo: DrywallPdfLogo | 
   }
   drawStructuredScopeOfWork(ctx, input.quote)
   for (const group of tradeGroups) {
-    drawTradeSection(ctx, group.label, group.rows, group.subtotal)
+    let costSplit: { material: number; labor: number } | undefined
+    if (documentOptions.includeTradeCostBreakdown) {
+      const c = totals.routine.byTrade?.[group.trade]
+      const material = (c?.material ?? 0) + (c?.accessories ?? 0)
+      // Customer-facing: one Labor figure per trade. Drywall lumps hang + finish +
+      // cleanup; components use their trade labor.
+      let labor = (c?.hangerLabor ?? 0) + (c?.finisherLabor ?? 0) + (c?.componentLabor ?? 0)
+      if (group.trade === 'drywall') labor += totals.routine.cleanupTotal
+      costSplit = { material, labor }
+    }
+    drawTradeSection(ctx, group.label, group.rows, group.subtotal, costSplit)
   }
   drawBaseBidTotals(ctx, totals.routine, documentOptions)
   drawAlternatesSection(ctx, input.quote, input.catalogs, totals)
