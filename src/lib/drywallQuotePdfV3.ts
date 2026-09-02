@@ -29,9 +29,11 @@ import {
   buildQuoteV3PdfLineRows,
   groupPdfRowsByLocationForDisplay,
   groupPdfRowsByTrade,
+  PDF_TRADE_ORDER,
   sanitizePdfFilenamePart,
   type QuoteV3PdfLineRow,
 } from '@/lib/drywall/quoteV3PdfModel'
+import { QUOTE_LINE_TYPE_LABELS } from '@/lib/drywall/quoteV3CatalogResolve'
 import { resolveQuoteV3PdfSettings, buildQuoteV3PdfTermsLines } from '@/lib/drywall/quoteV3PdfSettings'
 import { resolveQuotePdfSettings } from '@/lib/drywall/quotePdfSettings'
 import { computeQuoteV3Totals, type QuoteV3MarkupBreakdown } from '@/lib/drywall/quoteV3Math'
@@ -354,21 +356,38 @@ function drawBaseBidTotals(
     body.push(['Sales Tax:', formatQuoteMoney(routine.salesTaxAmount)])
   }
 
-  if (documentOptions.showCostBreakdown && !documentOptions.includeTradeCostBreakdown) {
+  const costRow = (label: string, amount: number): TableCell[] => [
+    { content: label, styles: { cellPadding: { top: 4, right: 6, bottom: 4, left: 12 } } },
+    { content: formatQuoteMoney(amount), styles: { halign: 'right' } },
+  ]
+
+  if (documentOptions.includeTradeCostBreakdown) {
+    // Per-trade material & labor split (drywall shows Hang / Finish separately).
+    const byTrade = routine.byTrade ?? {}
+    for (const trade of PDF_TRADE_ORDER) {
+      const c = byTrade[trade]
+      if (!c) continue
+      const label = QUOTE_LINE_TYPE_LABELS[trade]
+      const material = c.material + c.accessories
+      if (trade === 'drywall') {
+        if (material) body.push(costRow(`${label} — Material`, material))
+        if (c.hangerLabor) body.push(costRow(`${label} — Hang labor`, c.hangerLabor))
+        if (c.finisherLabor) body.push(costRow(`${label} — Finish labor`, c.finisherLabor))
+      } else {
+        if (material) body.push(costRow(`${label} — Material`, material))
+        if (c.componentLabor) body.push(costRow(`${label} — Labor`, c.componentLabor))
+      }
+    }
+    if (routine.cleanupTotal > 0) body.push(costRow('Cleanup labor', routine.cleanupTotal))
+  } else if (documentOptions.showCostBreakdown) {
     const materialsTotal = routine.materialSubtotal + routine.accessoriesSubtotal
     const laborTotal =
       routine.hangerLaborSubtotal +
       routine.finisherLaborSubtotal +
       routine.componentLaborSubtotal +
       routine.cleanupTotal
-    body.push([
-      { content: 'Materials:', styles: { cellPadding: { top: 4, right: 6, bottom: 4, left: 12 } } },
-      { content: formatQuoteMoney(materialsTotal), styles: { halign: 'right' } },
-    ])
-    body.push([
-      { content: 'Labor:', styles: { cellPadding: { top: 4, right: 6, bottom: 4, left: 12 } } },
-      { content: formatQuoteMoney(laborTotal), styles: { halign: 'right' } },
-    ])
+    body.push(costRow('Materials:', materialsTotal))
+    body.push(costRow('Labor:', laborTotal))
   }
 
   autoTable(ctx.doc, {
