@@ -114,12 +114,15 @@ export interface AcousticCatalogEntry {
   notes?: string
 }
 
+export type MetalStudComponent = 'stud' | 'track' | 'deflection_track'
+
 export interface MetalStudCatalogEntry {
   id: string
   display_name: string
   size: string
   gauge: string
-  component: 'stud' | 'track'
+  /** Deflection track is the slip track at walls that run to deck; priced higher than standard track. */
+  component: MetalStudComponent
   /** $ per LF of material (matches v2 stud/track rate matrices). */
   material_rate_per_lf: number
   /** $ per LF of wall installed — labor is read from the matching stud entry. */

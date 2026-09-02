@@ -26,6 +26,15 @@ function catalogsWithMetalStud(): OrgDrywallCatalogs {
         material_rate_per_lf: 1.1,
         labor_rate: 0,
       },
+      {
+        id: 'ms_defl_3625_20',
+        display_name: '3⅝" 20ga deflection track',
+        size: '3.625',
+        gauge: '20',
+        component: 'deflection_track',
+        material_rate_per_lf: 2.5,
+        labor_rate: 0,
+      },
     ],
   }
 }
@@ -56,6 +65,26 @@ describe('computeLineItem metal_stud', () => {
     // labor = 100 * 1.5 = 150
     expect(m.laborTotal).toBeCloseTo(150)
     expect(m.lineTotal).toBeCloseTo(1045)
+  })
+
+  it('prices a deflection track separately from standard track', () => {
+    const line = {
+      ...createQuoteLineItem('metal_stud', { location: 'L1' }),
+      quantity: 100,
+      ms_wall_height: 10,
+      ms_spacing_in: 16,
+      ms_tracks_per_run: 2,
+      ms_deflection_tracks_per_run: 1, // top track = deflection, bottom = standard
+      ms_size: '3.625',
+      ms_gauge: '20',
+      waste_pct: 0,
+    }
+    const m = computeLineItem(line, catalogsWithMetalStud(), NO_BURDEN)
+    // studs 750*0.9=675 ; std track 100*1.1=110 ; defl track 100*2.5=250 → 1035
+    expect(m.metalStudBreakdown?.trackLf).toBeCloseTo(100)
+    expect(m.metalStudBreakdown?.deflectionTrackLf).toBeCloseTo(100)
+    expect(m.materialTotal).toBeCloseTo(1035)
+    expect(m.laborTotal).toBeCloseTo(150)
   })
 
   it('applies waste to stud LF, track LF and labor', () => {

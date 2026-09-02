@@ -363,6 +363,7 @@ export function createQuoteLineItem(
     // Metal stud run geometry defaults (v2 parity: 16" o.c., top+bottom track, 3⅝" 20ga).
     ms_spacing_in: type === 'metal_stud' ? 16 : undefined,
     ms_tracks_per_run: type === 'metal_stud' ? 2 : undefined,
+    ms_deflection_tracks_per_run: type === 'metal_stud' ? 0 : undefined,
     ms_size: type === 'metal_stud' ? '3.625' : undefined,
     ms_gauge: type === 'metal_stud' ? '20' : undefined,
     accessoryOverrides: type === 'rc_channel' ? { screws: true } : undefined,

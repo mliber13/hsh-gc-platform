@@ -198,7 +198,15 @@ export function createDefaultDrywallCatalogSeeds(): OrgDrywallCatalogs {
       { id: 'acst_wire', display_name: 'Hanger Wire', component_type: 'wire', unit: 'lf', material_rate: 0.25, labor_rate: 0 },
       { id: 'acst_lags', display_name: 'Lags', component_type: 'lags', unit: 'each', material_rate: 1, labor_rate: 0 },
     ],
-    metal_stud: [],
+    metal_stud: [
+      // Owner's standard runs (3⅝" and 6", 20ga). Labor $/LF of wall lives on the stud entry.
+      { id: 'ms_stud_3625_20', display_name: '3⅝" 20ga Stud', size: '3.625', gauge: '20', component: 'stud', material_rate_per_lf: 0.95, labor_rate: 12 },
+      { id: 'ms_track_3625_20', display_name: '3⅝" 20ga Track', size: '3.625', gauge: '20', component: 'track', material_rate_per_lf: 0.95, labor_rate: 0 },
+      { id: 'ms_defl_3625_20', display_name: '3⅝" 20ga Deflection Track', size: '3.625', gauge: '20', component: 'deflection_track', material_rate_per_lf: 2.25, labor_rate: 0 },
+      { id: 'ms_stud_6_20', display_name: '6" 20ga Stud', size: '6', gauge: '20', component: 'stud', material_rate_per_lf: 1.5, labor_rate: 12 },
+      { id: 'ms_track_6_20', display_name: '6" 20ga Track', size: '6', gauge: '20', component: 'track', material_rate_per_lf: 1.5, labor_rate: 0 },
+      { id: 'ms_defl_6_20', display_name: '6" 20ga Deflection Track', size: '6', gauge: '20', component: 'deflection_track', material_rate_per_lf: 3, labor_rate: 0 },
+    ],
     frp: [],
     door_install: [],
     marginFloorTarget: DEFAULT_MARGIN_FLOOR_TARGET,

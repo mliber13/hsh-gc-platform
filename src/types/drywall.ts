@@ -527,6 +527,8 @@ export interface QuoteLineItem {
   ms_spacing_in?: number
   /** Track courses per run (top + bottom = 2); default 2. */
   ms_tracks_per_run?: number
+  /** How many of the run's tracks are deflection (slip) track — priced higher; default 0. */
+  ms_deflection_tracks_per_run?: number
   /** Stud size in inches as a string key ('2.5' | '3.625' | '6'); selects the catalog rate. */
   ms_size?: string
   /** Stud gauge as a string key ('25' | '20' | '18'); selects the catalog rate. */

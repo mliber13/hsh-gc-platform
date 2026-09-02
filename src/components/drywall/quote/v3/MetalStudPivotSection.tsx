@@ -133,6 +133,7 @@ export function MetalStudPivotSection({
                       <th className="px-2 py-1.5 text-right font-medium">Spacing</th>
                       <th className="px-2 py-1.5 text-right font-medium">Height</th>
                       <th className="px-2 py-1.5 text-right font-medium">Tracks/run</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Defl. tracks</th>
                       <th className="px-2 py-1.5 text-right font-medium">Wall LF</th>
                       <th className="px-2 py-1.5 text-right font-medium">Waste %</th>
                       <th className="px-2 py-1.5 text-right font-medium">Studs</th>
@@ -223,6 +224,27 @@ export function MetalStudPivotSection({
                               {METAL_STUD_TRACKS_OPTIONS.map((o) => (
                                 <option key={o.value} value={o.value}>
                                   {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1.5 text-right">
+                            <select
+                              className="h-7 rounded-md border border-input bg-background px-1.5 text-xs"
+                              disabled={readOnly}
+                              value={String(l.ms_deflection_tracks_per_run ?? 0)}
+                              onChange={(e) =>
+                                updateLine(l.id, {
+                                  ms_deflection_tracks_per_run: parseInt(e.target.value, 10) || 0,
+                                })
+                              }
+                            >
+                              {Array.from(
+                                { length: (l.ms_tracks_per_run ?? 2) + 1 },
+                                (_, i) => i,
+                              ).map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
                                 </option>
                               ))}
                             </select>

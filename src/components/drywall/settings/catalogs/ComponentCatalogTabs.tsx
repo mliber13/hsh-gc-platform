@@ -30,6 +30,7 @@ import type {
   FrpCatalogEntry,
   InsulationCatalogEntry,
   MetalStudCatalogEntry,
+  MetalStudComponent,
   OrgDrywallCatalogs,
   RcChannelCatalogEntry,
   SuspendedGridCatalogEntry,
@@ -456,7 +457,7 @@ export function MetalStudTab({ readOnly, onUpdate, catalogs }: TabProps) {
           { key: 'name', header: 'Name', cell: (i) => i.display_name },
           { key: 'size', header: 'Size', cell: (i) => msLabel(METAL_STUD_SIZES, i.size) },
           { key: 'gauge', header: 'Gauge', cell: (i) => msLabel(METAL_STUD_GAUGES, i.gauge) },
-          { key: 'comp', header: 'Component', cell: (i) => i.component },
+          { key: 'comp', header: 'Component', cell: (i) => i.component === 'deflection_track' ? 'Deflection track' : i.component },
           { key: 'mat', header: 'Mat $/LF', cell: (i) => formatCatalogRate(i.material_rate_per_lf), className: 'tabular-nums' },
           { key: 'labor', header: 'Labor $/LF', cell: (i) => formatCatalogRate(i.labor_rate), className: 'tabular-nums' },
         ]}
@@ -486,11 +487,12 @@ export function MetalStudTab({ readOnly, onUpdate, catalogs }: TabProps) {
               </Select>
             </Field>
             <Field label="Component">
-              <Select value={draft.component} onValueChange={(v) => setDraft({ ...draft, component: v as 'stud' | 'track' })}>
+              <Select value={draft.component} onValueChange={(v) => setDraft({ ...draft, component: v as MetalStudComponent })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="stud">Stud</SelectItem>
                   <SelectItem value="track">Track</SelectItem>
+                  <SelectItem value="deflection_track">Deflection track</SelectItem>
                 </SelectContent>
               </Select>
             </Field>

@@ -1,4 +1,4 @@
-import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
+import type { MetalStudComponent, OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type { QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
 
 export const QUOTE_LINE_TYPE_LABELS: Record<QuoteLineItemType, string> = {
@@ -361,19 +361,19 @@ function findMetalStud(
   catalogs: OrgDrywallCatalogs,
   size: string,
   gauge: string,
-  component: 'stud' | 'track',
+  component: MetalStudComponent,
 ) {
   return catalogs.metal_stud.find(
     (e) => e.size === size && e.gauge === gauge && e.component === component,
   )
 }
 
-/** $/LF of material for a stud or track of the given size × gauge (0 when unpriced). */
+/** $/LF of material for a stud / track / deflection track of the given size × gauge (0 when unpriced). */
 export function getMetalStudLfRate(
   catalogs: OrgDrywallCatalogs,
   size: string,
   gauge: string,
-  component: 'stud' | 'track',
+  component: MetalStudComponent,
 ): number {
   return findMetalStud(catalogs, size, gauge, component)?.material_rate_per_lf ?? 0
 }

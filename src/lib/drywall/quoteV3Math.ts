@@ -85,10 +85,13 @@ export interface MetalStudBreakdown {
   studCount: number
   /** Total stud material LF (studCount × height, × waste). */
   studLf: number
-  /** Total track material LF (LF × tracks/run, × waste). */
+  /** Standard track material LF (LF × standard tracks/run, × waste). */
   trackLf: number
+  /** Deflection (slip) track material LF (LF × deflection tracks/run, × waste). */
+  deflectionTrackLf: number
   studRatePerLf: number
   trackRatePerLf: number
+  deflectionRatePerLf: number
 }
 
 export interface QuoteV3LineComputed {
@@ -415,14 +418,22 @@ export function computeLineItem(
       const spacingIn = line.ms_spacing_in && line.ms_spacing_in > 0 ? line.ms_spacing_in : 16
       const tracksPerRun =
         line.ms_tracks_per_run && line.ms_tracks_per_run > 0 ? line.ms_tracks_per_run : 2
+      const deflectionTracks = Math.min(
+        Math.max(0, line.ms_deflection_tracks_per_run ?? 0),
+        tracksPerRun,
+      )
+      const standardTracks = tracksPerRun - deflectionTracks
       const studRate = getMetalStudLfRate(catalogs, size, gauge, 'stud')
       const trackRate = getMetalStudLfRate(catalogs, size, gauge, 'track')
+      const deflectionRate = getMetalStudLfRate(catalogs, size, gauge, 'deflection_track')
 
       const studCount = wallLf > 0 && spacingIn > 0 ? Math.ceil(wallLf / (spacingIn / 12)) : 0
       const studLf = studCount * wallHeight * wasteMult
-      const trackLf = wallLf * tracksPerRun * wasteMult
+      const trackLf = wallLf * standardTracks * wasteMult
+      const deflectionTrackLf = wallLf * deflectionTracks * wasteMult
       const wallLfWasted = wallLf * wasteMult
-      materialTotal = studLf * studRate + trackLf * trackRate
+      materialTotal =
+        studLf * studRate + trackLf * trackRate + deflectionTrackLf * deflectionRate
 
       laborTotal = applyLaborBurden(
         wallLfWasted * laborRate,
@@ -433,8 +444,10 @@ export function computeLineItem(
         studCount,
         studLf,
         trackLf,
+        deflectionTrackLf,
         studRatePerLf: studRate,
         trackRatePerLf: trackRate,
+        deflectionRatePerLf: deflectionRate,
       }
     }
   } else {
