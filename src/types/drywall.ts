@@ -71,6 +71,7 @@ export type DrywallStageRouteKey =
   | 'order'
   | 'production'
   | 'closeout'
+  | 'files'
 
 /** Maps legacy `complete` → `closed` on read; does not write back to DB. */
 export function normalizeDrywallProjectStatus(
@@ -679,6 +680,8 @@ export interface FieldPhotoRef {
   id: string
   storagePath?: string
   uploadedAt?: string
+  /** auth uid of the uploader. Backfilled for older photos from storage.objects. */
+  uploadedByUserId?: string
   label?: string
   notes?: string
   /** Legacy BuilderTrend / external URL — no Storage object */

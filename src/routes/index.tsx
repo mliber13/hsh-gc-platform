@@ -120,6 +120,7 @@ import { SupplierOrderSharePage } from '@/routes/SupplierOrderSharePage'
 import { CustomerSchedulePage } from '@/routes/CustomerSchedulePage'
 import { DrywallProjectShell } from '@/components/drywall/DrywallProjectShell'
 import { CloseoutStagePage } from '@/components/drywall/closeout/CloseoutStagePage'
+import { JobFilesPage } from '@/components/drywall/files/JobFilesPage'
 import { OrderPage } from '@/components/drywall/order/OrderPage'
 import { ProductionStagePage } from '@/components/drywall/production/ProductionStagePage'
 import { FieldMeasurementPage } from '@/components/drywall/field/FieldMeasurementPage'
@@ -375,6 +376,7 @@ export function AppRoutes() {
             <Route path="order" element={<OrderPage />} />
             <Route path="production" element={<ProductionStagePage />} />
             <Route path="closeout" element={<CloseoutStagePage />} />
+            <Route path="files" element={<JobFilesPage />} />
           </Route>
 
           <Route

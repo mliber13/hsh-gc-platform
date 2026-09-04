@@ -20,6 +20,7 @@ const STAGE_ROUTES: { key: DrywallStageRouteKey; path: string; label: string }[]
   { key: 'order', path: 'order', label: DRYWALL_STATUS_LABELS.order },
   { key: 'production', path: 'production', label: DRYWALL_STATUS_LABELS.production },
   { key: 'closeout', path: 'closeout', label: 'Closeout' },
+  { key: 'files', path: 'files', label: 'Photos & Files' },
 ]
 
 const STATUS_BADGE_CLASS: Record<string, string> = {

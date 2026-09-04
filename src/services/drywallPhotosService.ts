@@ -148,15 +148,20 @@ export async function uploadFieldPhoto(
     throw new DrywallPhotoError(storagePermissionMessage(uploadError))
   }
 
+  const profileForRef = await getCurrentUserProfile()
   const ref: FieldPhotoRef = {
     id: fileId,
     storagePath,
     uploadedAt: new Date().toISOString(),
+    // Who took it. Without this every photo on a job looks identical in the
+    // gallery, which is how a crew member's photos become indistinguishable
+    // from the measurer's.
+    uploadedByUserId: profileForRef?.id,
     label: label?.trim() || file.name,
   }
 
   try {
-    const profile = await getCurrentUserProfile()
+    const profile = profileForRef
     if (isCrewOnlyProfile(profile?.roles)) {
       // Append-only path — does not rewrite takeoff or touch reviewStatus.
       const { error } = await supabase.rpc('crew_append_field_photo', {
@@ -328,6 +333,104 @@ export async function deleteScheduleItemPhoto(itemId: string, storagePath: strin
 
   const { error: rmError } = await supabase.storage.from(BUCKET).remove([storagePath])
   if (rmError) console.warn('schedule photo storage cleanup:', rmError)
+}
+
+// ============================================================================
+// Whole-job photo roll-up
+// ============================================================================
+
+export type JobPhotoSource = 'field' | 'schedule'
+
+export interface JobPhoto {
+  id: string
+  storagePath: string
+  uploadedAt?: string
+  label?: string
+  source: JobPhotoSource
+  /** Where it came from: "Field measurement", or the schedule item's name. */
+  sourceLabel: string
+  scheduleItemId?: string
+  uploadedByUserId?: string
+  /** Resolved display name; falls back to the uid when unknown. */
+  uploadedByName?: string
+}
+
+/**
+ * Every photo on a job in one list, newest first.
+ *
+ * Photos are physically split: project-level ones live in the field takeoff and
+ * per-task ones on the schedule item. That split is a storage detail, not
+ * something the office should have to navigate — a photo taken during
+ * production is not part of the measurement, even though it is stored with it.
+ */
+export async function listJobPhotos(projectId: string): Promise<JobPhoto[]> {
+  if (!isOnlineMode()) return []
+
+  const [fieldPhotos, scheduleRows] = await Promise.all([
+    listFieldPhotos(projectId).catch(() => [] as FieldPhotoRef[]),
+    supabase
+      .from('schedule_items')
+      .select('id, name, photos')
+      .eq('project_id', projectId)
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn('listJobPhotos schedule_items:', error)
+          return [] as Array<{ id: string; name: string | null; photos: unknown }>
+        }
+        return (data ?? []) as Array<{ id: string; name: string | null; photos: unknown }>
+      }),
+  ])
+
+  const out: JobPhoto[] = []
+
+  for (const p of fieldPhotos) {
+    if (!p.storagePath) continue
+    out.push({
+      id: p.id,
+      storagePath: p.storagePath,
+      uploadedAt: p.uploadedAt,
+      label: p.label,
+      source: 'field',
+      sourceLabel: 'Field measurement',
+      uploadedByUserId: p.uploadedByUserId,
+    })
+  }
+
+  for (const row of scheduleRows) {
+    const raw = Array.isArray(row.photos) ? row.photos : []
+    for (const entry of raw) {
+      if (!entry || typeof entry !== 'object') continue
+      const e = entry as Record<string, unknown>
+      const storagePath = typeof e.storagePath === 'string' ? e.storagePath : null
+      if (!storagePath) continue
+      out.push({
+        id: typeof e.id === 'string' ? e.id : storagePath,
+        storagePath,
+        uploadedAt: typeof e.uploadedAt === 'string' ? e.uploadedAt : undefined,
+        source: 'schedule',
+        sourceLabel: row.name?.trim() || 'Schedule item',
+        scheduleItemId: row.id,
+        // The RPC stamps this server-side from auth.uid().
+        uploadedByUserId: typeof e.uploadedBy === 'string' ? e.uploadedBy : undefined,
+      })
+    }
+  }
+
+  const uids = [...new Set(out.map((p) => p.uploadedByUserId).filter(Boolean))] as string[]
+  if (uids.length > 0) {
+    const { data } = await supabase.rpc('display_names_for_users', { p_uids: uids })
+    const nameById = new Map<string, string>()
+    for (const row of (data ?? []) as Array<{ user_id: string; name: string | null }>) {
+      if (row.name?.trim()) nameById.set(row.user_id, row.name.trim())
+    }
+    for (const photo of out) {
+      if (photo.uploadedByUserId) {
+        photo.uploadedByName = nameById.get(photo.uploadedByUserId)
+      }
+    }
+  }
+
+  return out.sort((a, b) => (b.uploadedAt ?? '').localeCompare(a.uploadedAt ?? ''))
 }
 
 export { DrywallProjectPermissionError }

@@ -154,6 +154,7 @@ export function normalizeFieldPhotoRef(photo: FieldPhotoRef): FieldPhotoRef {
     url: photo.url ?? '',
     storagePath: photo.storagePath,
     uploadedAt: photo.uploadedAt,
+    uploadedByUserId: photo.uploadedByUserId,
   }
 }
 
