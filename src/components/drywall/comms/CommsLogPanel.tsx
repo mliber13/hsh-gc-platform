@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
-import { Forward, Lock, MessageSquarePlus, Megaphone, User } from 'lucide-react'
+import { Forward, Layers, Lock, MessageSquarePlus, Megaphone, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,6 +27,7 @@ import { fetchTeam } from '@/services/hrTeamService'
 import {
   fetchProjectComms,
   groupIntoLanes,
+  laneKeyOf,
   postProjectComms,
   type CommsAudience,
   type CommsLane,
@@ -40,6 +41,13 @@ import {
 } from '@/components/drywall/comms/ForwardMessageDialog'
 
 const COMMS_REFRESH_MS = 60_000
+
+/**
+ * The office reads the whole job in one stream by default. Lanes gate what the
+ * FIELD sees; they were never meant to make the office click through six
+ * conversations to catch up on a job.
+ */
+const ALL_KEY = '__all__'
 
 interface CommsLogPanelProps {
   projectId: string
@@ -221,13 +229,28 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
     })
   }, [messages, nameFor, assignedPersonIds])
 
-  // Default to the lane with the newest traffic so incoming messages are seen.
+  // Open on the whole job; drop into a lane to reply.
   useEffect(() => {
+    if (activeLaneKey === ALL_KEY) return
     if (activeLaneKey && lanes.some((l) => l.key === activeLaneKey)) return
-    setActiveLaneKey(lanes[0]?.key ?? 'office')
+    setActiveLaneKey(ALL_KEY)
   }, [lanes, activeLaneKey])
 
-  const activeLane = lanes.find((l) => l.key === activeLaneKey) ?? lanes[0] ?? null
+  const isAllView = activeLaneKey === ALL_KEY
+  const activeLane = isAllView
+    ? null
+    : (lanes.find((l) => l.key === activeLaneKey) ?? lanes[0] ?? null)
+  const visibleMessages = isAllView ? messages : (activeLane?.messages ?? [])
+
+  /** Which conversation a message sits in — shown as a jump-to badge in All. */
+  const laneLabelFor = useCallback(
+    (m: ProjectCommsMessage) => {
+      if (m.audience === 'job') return 'Job-wide'
+      if (m.audience === 'office') return 'Office only'
+      return (m.audiencePersonId ? nameFor(m.audiencePersonId) : null) ?? m.author
+    },
+    [nameFor],
+  )
 
   // Everyone on the roster can receive a forward, not just the crew assigned to
   // this job — the common case is routing a message to someone about to start.
@@ -309,6 +332,22 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => setActiveLaneKey(ALL_KEY)}
+            aria-pressed={isAllView}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+              isAllView
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-background text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            <Layers className="size-3.5 shrink-0" />
+            <span className="whitespace-nowrap">All</span>
+            {messages.length > 0 ? (
+              <span className={isAllView ? 'opacity-80' : 'opacity-60'}>{messages.length}</span>
+            ) : null}
+          </button>
           {lanes.map((lane) => {
             const isActive = lane.key === activeLane?.key
             return (
@@ -335,7 +374,14 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
           })}
         </div>
 
-        {!readOnly && activeLane && (
+        {isAllView ? (
+          <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+            Everything on this job, newest first. Pick a conversation above — or tap
+            a tag below — to reply in it.
+          </p>
+        ) : null}
+
+        {!readOnly && !isAllView && activeLane && (
           <div className="space-y-2">
             <Textarea
               value={body}
@@ -367,28 +413,42 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
 
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : !activeLane || activeLane.messages.length === 0 ? (
+        ) : visibleMessages.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {activeLane ? laneEmptyText(activeLane) : 'No messages yet.'}
+            {isAllView
+              ? 'No messages on this job yet.'
+              : activeLane
+                ? laneEmptyText(activeLane)
+                : 'No messages yet.'}
           </p>
         ) : (
           <ul className="space-y-4">
-            {activeLane.messages.map((entry) => {
+            {visibleMessages.map((entry) => {
               const alreadySent = describeDestinations(
                 forwardedDestinations.get(entry.forwardedFromId ?? entry.id) ?? new Set(),
               )
               return (
                 <li key={entry.id} className="rounded-lg border bg-muted/20 p-3">
                   <div className="flex items-start gap-2">
-                    <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                    <p className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
                       <span className="font-medium text-foreground">{entry.author}</span>
-                      {' • '}
+                      <span aria-hidden>•</span>
                       <time
                         dateTime={entry.at}
                         title={format(new Date(entry.at), 'MMM d, yyyy h:mm a')}
                       >
                         {formatDistanceToNow(new Date(entry.at), { addSuffix: true })}
                       </time>
+                      {isAllView ? (
+                        <button
+                          type="button"
+                          onClick={() => setActiveLaneKey(laneKeyOf(entry))}
+                          title="Open this conversation"
+                          className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide hover:bg-muted-foreground/20"
+                        >
+                          {laneLabelFor(entry)}
+                        </button>
+                      ) : null}
                     </p>
                     {!readOnly ? (
                       <Button
@@ -418,7 +478,7 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
                     </p>
                   ) : null}
 
-                  {activeLane.audience !== 'office' ? (
+                  {entry.audience !== 'office' ? (
                     <CommsReadReceipt entryAt={entry.at} crewReadState={crewReadState} />
                   ) : null}
                 </li>
