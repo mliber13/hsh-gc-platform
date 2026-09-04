@@ -86,6 +86,20 @@ function laneHint(lane: CommsLane): string {
   return `Private between the office and ${lane.label}.`
 }
 
+/**
+ * An empty lane should say what the lane is for. "No messages yet" on a lane
+ * nobody has ever used reads like something is broken.
+ */
+function laneEmptyText(lane: CommsLane): string {
+  if (lane.audience === 'office') {
+    return 'No internal notes yet. Anything you write here stays in the office.'
+  }
+  if (lane.audience === 'job') {
+    return 'Nothing has gone out to the whole job yet. Post here to reach everyone assigned to it.'
+  }
+  return `No messages with ${lane.label} yet. Anything you post here is private between the two of you.`
+}
+
 export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
   const { effectiveRole } = usePermissions()
   const readOnly = !canWriteDrywallProject(effectiveRole)
@@ -197,7 +211,14 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
         lastAt: null,
       })
     }
-    return [...existing, ...extra]
+    // Sort the whole set, not just the lanes that have traffic — otherwise an
+    // empty Job-wide lane gets appended after Office only and the chip order
+    // shifts as conversations start.
+    const order: Record<CommsAudience, number> = { crew: 0, job: 1, office: 2 }
+    return [...existing, ...extra].sort((a, b) => {
+      if (a.audience !== b.audience) return order[a.audience] - order[b.audience]
+      return (b.lastAt ?? '').localeCompare(a.lastAt ?? '')
+    })
   }, [messages, nameFor, assignedPersonIds])
 
   // Default to the lane with the newest traffic so incoming messages are seen.
@@ -348,9 +369,7 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : !activeLane || activeLane.messages.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {activeLane?.audience === 'office'
-              ? 'No internal notes yet.'
-              : 'No messages in this conversation yet.'}
+            {activeLane ? laneEmptyText(activeLane) : 'No messages yet.'}
           </p>
         ) : (
           <ul className="space-y-4">
