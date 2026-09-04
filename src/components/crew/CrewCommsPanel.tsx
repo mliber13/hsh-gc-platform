@@ -5,15 +5,13 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
-import { useAuth } from '@/contexts/AuthContext'
 import { markProjectCommsRead } from '@/services/commsReadStateService'
+import { DrywallProjectPermissionError } from '@/services/drywallProjectsService'
 import {
-  addCommsLogEntry,
-  DrywallProjectPermissionError,
-  fetchDrywallCommsLog,
-} from '@/services/drywallProjectsService'
-import { getCurrentUserProfile } from '@/services/userService'
-import type { DrywallCommsLogEntry } from '@/types/drywall'
+  fetchProjectComms,
+  postProjectComms,
+  type ProjectCommsMessage,
+} from '@/services/projectCommsService'
 
 interface CrewCommsPanelProps {
   projectId: string
@@ -30,17 +28,15 @@ export function CrewCommsPanel({
   prefillText,
   prefillToken,
 }: CrewCommsPanelProps) {
-  const { user } = useAuth()
-  const [entries, setEntries] = useState<DrywallCommsLogEntry[]>([])
+  const [entries, setEntries] = useState<ProjectCommsMessage[]>([])
   const [body, setBody] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [authorName, setAuthorName] = useState('Unknown')
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const rows = await fetchDrywallCommsLog(projectId)
+      const rows = await fetchProjectComms(projectId)
       setEntries(rows)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to load messages')
@@ -59,16 +55,6 @@ export function CrewCommsPanel({
     })
   }, [projectId])
 
-  useEffect(() => {
-    void getCurrentUserProfile().then((profile) => {
-      if (profile?.full_name?.trim()) {
-        setAuthorName(profile.full_name.trim())
-      } else if (user?.email) {
-        setAuthorName(user.email)
-      }
-    })
-  }, [user?.email])
-
   // Pre-fill the textarea when parent passes a new prefillToken (e.g. "request more materials").
   useEffect(() => {
     if (prefillToken == null || !prefillText) return
@@ -79,7 +65,7 @@ export function CrewCommsPanel({
     if (readOnly || !body.trim()) return
     setSaving(true)
     try {
-      await addCommsLogEntry(projectId, body, authorName, user?.id)
+      await postProjectComms({ projectId, body })
       setBody('')
       await load()
       await markProjectCommsRead(projectId)
@@ -109,10 +95,13 @@ export function CrewCommsPanel({
             <Textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Message the office or crew on this job…"
+              placeholder="Message the office about this job…"
               rows={3}
               disabled={saving}
             />
+            <p className="text-xs text-muted-foreground">
+              Goes to the office only. Other crew on this job can&rsquo;t see it.
+            </p>
             <Button
               type="button"
               onClick={() => void handleSend()}
@@ -132,15 +121,20 @@ export function CrewCommsPanel({
           <ul className="space-y-3">
             {entries.map((entry) => (
               <li key={entry.id} className="rounded-lg border bg-muted/20 p-3">
-                <p className="text-xs text-muted-foreground">
+                <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">{entry.author}</span>
-                  {' • '}
+                  <span aria-hidden>•</span>
                   <time
                     dateTime={entry.at}
                     title={format(new Date(entry.at), 'MMM d, yyyy h:mm a')}
                   >
                     {formatDistanceToNow(new Date(entry.at), { addSuffix: true })}
                   </time>
+                  {entry.audience === 'job' ? (
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                      Everyone on this job
+                    </span>
+                  ) : null}
                 </p>
                 <p className="mt-2 text-sm whitespace-pre-wrap">{entry.body}</p>
               </li>

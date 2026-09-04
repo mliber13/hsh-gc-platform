@@ -10,26 +10,37 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { fetchRecentComms, type CommsFeedEntry } from '@/services/commsFeedService'
-import {
-  addCommsLogEntry,
-  fetchDrywallCommsLog,
-} from '@/services/drywallProjectsService'
 import { fetchCommsUnreadSummary, markProjectCommsRead } from '@/services/commsReadStateService'
-import { getCurrentUserProfile } from '@/services/userService'
-import type { DrywallCommsLogEntry } from '@/types/drywall'
+import {
+  fetchProjectComms,
+  laneKeyOf,
+  postProjectComms,
+  type CommsAudience,
+  type ProjectCommsMessage,
+} from '@/services/projectCommsService'
 
 type Props = {
   variant: 'operator' | 'crew'
 }
 
 type Thread = {
+  /** projectId + lane — one conversation, not one project. */
+  key: string
   projectId: string
   projectName: string
+  laneKey: string
+  audience: CommsAudience
+  audiencePersonId: string | null
+  laneLabel: string | null
   latestAt: string
   latestAuthor: string
   latestBody: string
   count: number
   unread: number
+}
+
+function laneKeyOfEntry(e: CommsFeedEntry): string {
+  return e.audience === 'crew' ? `crew:${e.audiencePersonId ?? 'unknown'}` : e.audience
 }
 
 
@@ -51,11 +62,10 @@ export function CommsInboxPage({ variant }: Props) {
   const [loading, setLoading] = useState(true)
   const [sortOrder, setSortOrder] = useState<'recent' | 'unread'>('recent')
 
-  const [selected, setSelected] = useState<{ projectId: string; projectName: string } | null>(null)
-  const [thread, setThread] = useState<DrywallCommsLogEntry[]>([])
+  const [selected, setSelected] = useState<Thread | null>(null)
+  const [thread, setThread] = useState<ProjectCommsMessage[]>([])
   const [threadLoading, setThreadLoading] = useState(false)
 
-  const [authorName, setAuthorName] = useState('Unknown')
   const [replyBody, setReplyBody] = useState('')
   const [sending, setSending] = useState(false)
 
@@ -77,21 +87,37 @@ export function CommsInboxPage({ variant }: Props) {
     void loadList()
   }, [loadList])
 
-  useEffect(() => {
-    void getCurrentUserProfile().then((profile) => {
-      if (profile?.full_name?.trim()) setAuthorName(profile.full_name.trim())
-      else if (user?.email) setAuthorName(user.email)
-    })
-  }, [user?.email])
-
   const threads = useMemo(() => {
+    // A conversation is a lane within a project, so the office sees one row per
+    // crew member rather than one mixed row per job.
+    const laneName = new Map<string, string>()
+    for (const e of entries) {
+      if (e.audience !== 'crew' || e.authorRole === 'operator') continue
+      const k = `${e.projectId}::${laneKeyOfEntry(e)}`
+      if (!laneName.has(k)) laneName.set(k, e.author)
+    }
+
     const map = new Map<string, Thread>()
     for (const e of entries) {
-      const cur = map.get(e.projectId)
+      const laneKey = laneKeyOfEntry(e)
+      const key = `${e.projectId}::${laneKey}`
+      const cur = map.get(key)
       if (!cur) {
-        map.set(e.projectId, {
+        map.set(key, {
+          key,
           projectId: e.projectId,
           projectName: e.projectName,
+          laneKey,
+          audience: e.audience,
+          audiencePersonId: e.audiencePersonId,
+          laneLabel:
+            e.audience === 'job'
+              ? 'Everyone on this job'
+              : e.audience === 'office'
+                ? 'Office only'
+                : variant === 'crew'
+                  ? null
+                  : (laneName.get(key) ?? 'Crew member'),
           latestAt: e.at,
           latestAuthor: e.author,
           latestBody: e.body,
@@ -102,22 +128,33 @@ export function CommsInboxPage({ variant }: Props) {
         cur.count++
       }
     }
-    const list = [...map.values()].map((t) => ({ ...t, unread: unreadByProject.get(t.projectId) ?? 0 }))
+    const list = [...map.values()]
+    list.sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime())
+
+    // The read watermark is per project, so credit the project's unread count to
+    // its most recently active lane rather than badging every lane on the job.
+    const claimed = new Set<string>()
+    for (const t of list) {
+      if (claimed.has(t.projectId)) continue
+      claimed.add(t.projectId)
+      t.unread = unreadByProject.get(t.projectId) ?? 0
+    }
+
     list.sort((a, b) => {
       if (sortOrder === 'unread' && (a.unread > 0) !== (b.unread > 0)) return a.unread > 0 ? -1 : 1
       return new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime()
     })
     return list
-  }, [entries, unreadByProject, sortOrder])
+  }, [entries, unreadByProject, sortOrder, variant])
 
-  const openThread = async (t: { projectId: string; projectName: string }) => {
+  const openThread = async (t: Thread) => {
     setSelected(t)
     setThread([])
     setReplyBody('')
     setThreadLoading(true)
     try {
-      const rows = await fetchDrywallCommsLog(t.projectId)
-      setThread(rows)
+      const rows = await fetchProjectComms(t.projectId)
+      setThread(rows.filter((m) => laneKeyOf(m) === t.laneKey))
       await markProjectCommsRead(t.projectId).catch(() => {})
       setUnreadByProject((prev) => {
         const next = new Map(prev)
@@ -144,10 +181,15 @@ export function CommsInboxPage({ variant }: Props) {
     if (!selected || !replyBody.trim()) return
     setSending(true)
     try {
-      await addCommsLogEntry(selected.projectId, replyBody, authorName, user?.id)
+      await postProjectComms({
+        projectId: selected.projectId,
+        body: replyBody,
+        audience: selected.audience,
+        audiencePersonId: selected.audiencePersonId,
+      })
       setReplyBody('')
-      const rows = await fetchDrywallCommsLog(selected.projectId)
-      setThread(rows)
+      const rows = await fetchProjectComms(selected.projectId)
+      setThread(rows.filter((m) => laneKeyOf(m) === selected.laneKey))
       await markProjectCommsRead(selected.projectId).catch(() => {})
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not send reply')
@@ -165,7 +207,12 @@ export function CommsInboxPage({ variant }: Props) {
           <Button type="button" variant="ghost" size="icon" className="size-8" onClick={backToList}>
             <ArrowLeft className="size-4" />
           </Button>
-          <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">{selected.projectName}</h1>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-semibold">{selected.projectName}</h1>
+            {selected.laneLabel ? (
+              <p className="truncate text-xs text-muted-foreground">{selected.laneLabel}</p>
+            ) : null}
+          </div>
           <Button
             type="button"
             variant="ghost"
@@ -203,7 +250,11 @@ export function CommsInboxPage({ variant }: Props) {
             rows={2}
             value={replyBody}
             onChange={(e) => setReplyBody(e.target.value)}
-            placeholder={`Reply to ${selected.projectName}…`}
+            placeholder={
+              selected.audience === 'office'
+                ? 'Add an internal note…'
+                : `Reply to ${selected.laneLabel ?? selected.projectName}…`
+            }
             className="flex-1"
           />
           <Button
@@ -271,7 +322,7 @@ export function CommsInboxPage({ variant }: Props) {
         <div className="space-y-2">
           {threads.map((t) => (
             <Card
-              key={t.projectId}
+              key={t.key}
               className={cn(
                 'cursor-pointer transition-colors hover:bg-muted/30 active:bg-muted/50',
                 t.unread > 0 && 'border-primary/40',
@@ -282,6 +333,11 @@ export function CommsInboxPage({ variant }: Props) {
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-semibold">{t.projectName}</span>
+                    {t.laneLabel ? (
+                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {t.laneLabel}
+                      </span>
+                    ) : null}
                     <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                       {formatAt(t.latestAt)}
                     </span>

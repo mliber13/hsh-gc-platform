@@ -20,6 +20,9 @@ type CommsBody = {
   projectName?: string
   authorName?: string
   preview?: string
+  /** Lane the message was posted to — gates who may receive the preview. */
+  audience?: 'office' | 'job' | 'crew'
+  audiencePersonId?: string | null
 }
 
 type ScheduleBody = {
@@ -48,10 +51,19 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
+/**
+ * Recipients for a project message, respecting its lane. The push body carries a
+ * preview of the message, so this MUST match the RLS on project_comms:
+ *   office        -> operators + field foreman only
+ *   job           -> operators + foreman + every assigned crew member
+ *   crew:<person> -> operators + foreman + that one crew member
+ */
 async function resolveCommsRecipients(
   admin: SupabaseClient,
   projectId: string,
   authorUserId: string,
+  audience: 'office' | 'job' | 'crew' = 'job',
+  audiencePersonId?: string | null,
 ): Promise<string[]> {
   const { data: project, error: projErr } = await admin
     .from('projects')
@@ -89,10 +101,20 @@ async function resolveCommsRecipients(
     const isOperator = roles.some((r) => operatorRoles.has(r))
     const isForeman = Boolean(p.is_field_foreman)
     const personId = (p.linked_employee_id as string | null) || (p.linked_contractor_id as string | null)
-    const isAssignedCrew = Boolean(personId && assigned.has(personId))
-    if (isOperator || isForeman || isAssignedCrew) {
+
+    // Office reads every lane.
+    if (isOperator || isForeman) {
+      userIds.add(p.id as string)
+      continue
+    }
+    if (!personId) continue
+
+    if (audience === 'job' && assigned.has(personId)) {
+      userIds.add(p.id as string)
+    } else if (audience === 'crew' && audiencePersonId && personId === audiencePersonId) {
       userIds.add(p.id as string)
     }
+    // audience === 'office': no field recipients.
   }
 
   userIds.delete(authorUserId)
@@ -170,7 +192,13 @@ serve(async (req) => {
         tag: 'push-test',
       }
     } else if ('kind' in body && body.kind === 'comms') {
-      userIds = await resolveCommsRecipients(admin, body.projectId, body.authorUserId)
+      userIds = await resolveCommsRecipients(
+        admin,
+        body.projectId,
+        body.authorUserId,
+        body.audience ?? 'job',
+        body.audiencePersonId ?? null,
+      )
       const name = body.projectName?.trim() || 'Project'
       const author = body.authorName?.trim() || 'Someone'
       const preview = (body.preview ?? '').trim().slice(0, 120)

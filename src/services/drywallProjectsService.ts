@@ -30,10 +30,6 @@ import { fieldTakeoffWithTotals, mergeFieldTakeoff } from '@/lib/drywall/fieldMe
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import { suggestOrderItemsFromFieldTakeoff } from '@/lib/drywall/orderSuggest'
 import { fetchSuppliers } from '@/services/partnerDirectoryService'
-import {
-  inferCommsAuthorRole,
-  normalizeCommsLogEntry,
-} from '@/lib/drywall/commsLogUtils'
 import { isDrywallQuoteV3, normalizeDrywallProjectStatus } from '@/types/drywall'
 import type {
   BidSnapshot,
@@ -45,7 +41,6 @@ import type {
   DrywallChangeOrder,
   DrywallChangeOrderLineItem,
   DrywallChangeOrderOption,
-  DrywallCommsLogEntry,
   DrywallOrder,
   DrywallOrderItem,
   DrywallOrderStatus,
@@ -88,7 +83,7 @@ type DrywallListStageScalarsRow = {
 const DRYWALL_DETAIL_SELECT =
   'id, name, address, client, status, type, organization_id, created_at, updated_at, metadata'
 
-function isRlsOrPermissionError(error: { code?: string; message?: string }): boolean {
+export function isRlsOrPermissionError(error: { code?: string; message?: string }): boolean {
   const code = error.code ?? ''
   const msg = (error.message ?? '').toLowerCase()
   return (
@@ -271,14 +266,6 @@ function parseProductionTimestamps(legacy: Record<string, unknown>): ProductionT
   const raw = legacy.productionTimestamps
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
   return { ...(raw as ProductionTimestamps) }
-}
-
-function parseCommsLog(legacy: Record<string, unknown>): DrywallCommsLogEntry[] {
-  const raw = legacy.commsLog
-  if (!Array.isArray(raw)) return []
-  return raw
-    .map((e) => normalizeCommsLogEntry(e))
-    .filter((e): e is DrywallCommsLogEntry => e !== null)
 }
 
 function mapDetailRow(row: {
@@ -1660,126 +1647,6 @@ export async function revertCloseoutToProductionComplete(projectId: string): Pro
     productionTimestamps: restTimestamps,
   }
   await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
-}
-
-/**
- * Replace email-as-author with the real display name (profile full name / linked
- * org_team member name) for any entry that carries an authorUserId. Mirrors the
- * messages-inbox resolution so per-project comms show names, not emails.
- */
-async function resolveCommsAuthorNames(
-  entries: DrywallCommsLogEntry[],
-): Promise<DrywallCommsLogEntry[]> {
-  const uids = [...new Set(entries.map((e) => e.authorUserId).filter(Boolean))] as string[]
-  if (uids.length === 0) return entries
-  const { data, error } = await supabase.rpc('display_names_for_users', { p_uids: uids })
-  if (error || !data) return entries
-  const nameById = new Map<string, string>()
-  for (const row of data as Array<{ user_id: string; name: string | null }>) {
-    if (row.name && row.name.trim()) nameById.set(row.user_id, row.name.trim())
-  }
-  if (nameById.size === 0) return entries
-  return entries.map((e) => {
-    const resolved = e.authorUserId ? nameById.get(e.authorUserId) : undefined
-    return resolved ? { ...e, author: resolved } : e
-  })
-}
-
-export async function fetchDrywallCommsLog(projectId: string): Promise<DrywallCommsLogEntry[]> {
-  const project = await fetchDrywallProjectById(projectId)
-  if (!project) return []
-  const entries = parseCommsLog(project.legacy).sort(
-    (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
-  )
-  return resolveCommsAuthorNames(entries)
-}
-
-export async function addCommsLogEntry(
-  projectId: string,
-  body: string,
-  author: string,
-  authorUserId?: string,
-  authorRole?: CommsLogAuthorRole,
-): Promise<DrywallCommsLogEntry> {
-  if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
-
-  const trimmed = body.trim()
-  if (!trimmed) throw new Error('Entry body is required')
-
-  const profile = await getCurrentUserProfile()
-  const resolvedRole = inferCommsAuthorRole(profile, authorRole)
-  const isCrewPoster = profile?.roles?.includes('crew') ?? false
-
-  if (isCrewPoster) {
-    const { data, error } = await supabase.rpc('append_drywall_comms_log_entry', {
-      p_project_id: projectId,
-      p_body: trimmed,
-      p_author: author.trim() || 'Unknown',
-      p_author_user_id: authorUserId ?? profile?.id ?? null,
-      p_author_role: resolvedRole,
-    })
-    if (error) {
-      if (isRlsOrPermissionError(error)) throw new DrywallProjectPermissionError()
-      throw new Error(error.message || 'Failed to add comms entry')
-    }
-    const entry = normalizeCommsLogEntry(data)
-    if (!entry) throw new Error('Failed to parse comms entry from server')
-    void notifyCommsPush({
-      projectId,
-      authorUserId: entry.authorUserId ?? authorUserId ?? profile?.id,
-      authorName: entry.author,
-      preview: entry.body,
-    })
-    return entry
-  }
-
-  const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
-  const entry: DrywallCommsLogEntry = {
-    id: crypto.randomUUID(),
-    at: new Date().toISOString(),
-    author: author.trim() || 'Unknown',
-    authorRole: resolvedRole,
-    ...(authorUserId ? { authorUserId } : {}),
-    body: trimmed,
-  }
-  const existing = parseCommsLog(prevLegacy)
-  const mergedLegacy = {
-    ...prevLegacy,
-    commsLog: [entry, ...existing],
-  }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
-  void notifyCommsPush({
-    projectId,
-    authorUserId: authorUserId ?? profile?.id,
-    authorName: entry.author,
-    preview: entry.body,
-  })
-  return entry
-}
-
-async function notifyCommsPush(opts: {
-  projectId: string
-  authorUserId?: string | null
-  authorName?: string
-  preview?: string
-}): Promise<void> {
-  if (!opts.authorUserId) return
-  let projectName: string | undefined
-  try {
-    const project = await fetchDrywallProjectById(opts.projectId)
-    projectName = project?.name
-  } catch {
-    /* best-effort */
-  }
-  await requestPushNotify({
-    kind: 'comms',
-    projectId: opts.projectId,
-    authorUserId: opts.authorUserId,
-    projectName,
-    authorName: opts.authorName,
-    preview: opts.preview,
-  })
 }
 
 export function getProductionTimestampsFromLegacy(

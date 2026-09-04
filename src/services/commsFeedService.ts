@@ -1,5 +1,7 @@
 import { isOnlineMode, supabase } from '@/lib/supabase'
 
+import type { CommsAudience } from '@/services/projectCommsService'
+
 export type CommsFeedEntry = {
   projectId: string
   projectName: string
@@ -8,6 +10,9 @@ export type CommsFeedEntry = {
   author: string
   authorRole: string
   body: string
+  /** Which lane this message belongs to — see projectCommsService. */
+  audience: CommsAudience
+  audiencePersonId: string | null
 }
 
 type Row = {
@@ -18,6 +23,8 @@ type Row = {
   author: string | null
   author_role: string | null
   body: string | null
+  audience: string | null
+  audience_person_id: string | null
 }
 
 /** Recent comms across the caller's accessible projects (operators: all; others: assigned). */
@@ -36,5 +43,10 @@ export async function fetchRecentComms(limit = 100): Promise<CommsFeedEntry[]> {
     author: r.author?.trim() || 'Unknown',
     authorRole: r.author_role ?? 'operator',
     body: r.body ?? '',
+    audience:
+      r.audience === 'job' || r.audience === 'crew'
+        ? (r.audience as CommsAudience)
+        : 'office',
+    audiencePersonId: r.audience_person_id,
   }))
 }

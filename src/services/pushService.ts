@@ -208,6 +208,9 @@ export type NotifyCommsPayload = {
   projectName?: string
   authorName?: string
   preview?: string
+  /** Lane the message was posted to — gates who may receive the preview. */
+  audience?: 'office' | 'job' | 'crew'
+  audiencePersonId?: string | null
 }
 
 export type NotifySchedulePayload = {
