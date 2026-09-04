@@ -11,6 +11,7 @@ import {
 } from 'date-fns'
 import { finisherCapacityTier, specialtyFromPositionName } from '@/lib/drywall/crewSpecialty'
 import type { DashboardTargets } from '@/lib/drywall/dashboardTargets'
+import { parseBillingDrawName, type BillingPctParse } from '@/lib/drywall/scheduleItemNameMeaning'
 import { isArchivedMember } from '@/lib/hrTeamUtils'
 import type { CrossProjectScheduleItem } from '@/services/drywallScheduleAggregateService'
 import type {
@@ -979,22 +980,6 @@ export interface ProjectedBillingsMetrics {
   /** Projects with scheduled billing draws but no contract total — excluded from the forecast. */
   unpricedProjects: { id: string; name: string }[]
   status: KpiStatus
-}
-
-type BillingPctParse =
-  | { kind: 'percent'; pct: number }
-  | { kind: 'remainder' }
-
-function parseBillingDrawName(name: string): BillingPctParse | null {
-  const trimmed = name.trim()
-  if (!/^bill\b/i.test(trimmed)) return null
-  const pctMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*%/)
-  if (pctMatch) {
-    const pct = Number(pctMatch[1])
-    return Number.isFinite(pct) ? { kind: 'percent', pct } : null
-  }
-  if (/complete|final|remain|balance/i.test(trimmed)) return { kind: 'remainder' }
-  return null
 }
 
 function projectedBillingsStatus(projectedVsGoalGap: number, annualGoal: number): KpiStatus {

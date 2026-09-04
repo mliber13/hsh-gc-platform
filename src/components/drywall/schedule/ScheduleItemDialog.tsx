@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { ScheduleItemRenameWarning } from '@/components/drywall/schedule/ScheduleItemRenameWarning'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
@@ -582,6 +583,13 @@ export function ScheduleItemDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder="Hang Main Floor"
             />
+            {editing ? (
+              <ScheduleItemRenameWarning
+                originalName={editing.name}
+                draftName={name}
+                type={type}
+              />
+            ) : null}
           </div>
 
           <div className="space-y-1.5">

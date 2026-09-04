@@ -19,6 +19,8 @@ import type {
 } from '@/services/scheduleService'
 
 export type ForemanScheduleEditInput = {
+  /** Item name. Omit to leave unchanged; blank is ignored rather than clearing it. */
+  name?: string
   startDate: string
   endDate: string
   status: DrywallScheduleItemStatus
@@ -94,6 +96,7 @@ function applyEditToItem(
   const end = toDateOnly(edit.endDate || edit.startDate)
   return {
     ...item,
+    name: edit.name?.trim() ? edit.name.trim() : item.name,
     start_date: start,
     end_date: end,
     duration: durationFromRange(start, end),
@@ -274,6 +277,7 @@ export function buildCascadePreview(
 export function toRpcBatch(items: DrywallProjectScheduleItem[]) {
   return items.map((item) => ({
     id: item.id,
+    name: item.name,
     start_date: item.start_date,
     end_date: item.end_date,
     status: item.status,

@@ -42,6 +42,7 @@ import {
   previewForemanScheduleEdit,
 } from '@/services/foremanScheduleService'
 import type { ForemanPredecessorConflict } from '@/lib/drywall/foremanScheduleEdit'
+import { ScheduleItemRenameWarning } from '@/components/drywall/schedule/ScheduleItemRenameWarning'
 
 function formatDateRange(start: string, end: string): string {
   return start === end ? start : `${start} → ${end}`
@@ -81,6 +82,7 @@ export function CrewForemanScheduleEditSheet({
   entry,
   onSaved,
 }: Props) {
+  const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [status, setStatus] = useState<DrywallScheduleItemStatus>('not-started')
@@ -101,6 +103,7 @@ export function CrewForemanScheduleEditSheet({
 
   useEffect(() => {
     if (!open || !entry) return
+    setName(entry.name)
     setStartDate(entry.startDate)
     setEndDate(entry.endDate)
     setStatus(
@@ -218,6 +221,7 @@ export function CrewForemanScheduleEditSheet({
   }, [open])
 
   const draft = () => ({
+    name,
     startDate,
     endDate: endDate || startDate,
     status,
@@ -335,6 +339,21 @@ export function CrewForemanScheduleEditSheet({
           <SheetTitle>{entry?.name ?? 'Edit schedule item'}</SheetTitle>
         </SheetHeader>
         <div className="grid gap-4 px-4 py-4">
+          <div className="grid gap-1.5">
+            <Label htmlFor="ff-name">Name</Label>
+            <Input
+              id="ff-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Schedule item name"
+            />
+            {entry ? (
+              <ScheduleItemRenameWarning
+                originalName={entry.name}
+                draftName={name}
+              />
+            ) : null}
+          </div>
           <div className="grid gap-1.5">
             <Label htmlFor="ff-start">Start date</Label>
             <Input

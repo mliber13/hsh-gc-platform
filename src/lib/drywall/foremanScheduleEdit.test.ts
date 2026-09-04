@@ -140,10 +140,40 @@ describe('foremanScheduleEdit', () => {
     ])
     expect(batch[0]).toMatchObject({
       id: 'a',
+      name: 'Stock',
       start_date: '2026-07-20',
       end_date: '2026-07-20',
       status: 'not-started',
       assigned_persons: ['p1'],
     })
+  })
+
+  it('carries a rename through the edit into the RPC batch', () => {
+    const preview = buildCascadePreview(
+      [item({ id: 'a', name: 'Hang main floor' })],
+      'a',
+      {
+        name: 'Hang 1st floor',
+        startDate: '2026-07-20',
+        endDate: '2026-07-20',
+        status: 'not-started',
+        assignedPersons: [],
+      },
+    )
+    expect(preview.items.find((i) => i.id === 'a')?.name).toBe('Hang 1st floor')
+    expect(toRpcBatch(preview.items)[0]).toMatchObject({ name: 'Hang 1st floor' })
+  })
+
+  it('leaves the name untouched when the edit omits it or sends blank', () => {
+    for (const name of [undefined, '   ']) {
+      const preview = buildCascadePreview([item({ id: 'a', name: 'Hang main floor' })], 'a', {
+        name,
+        startDate: '2026-07-20',
+        endDate: '2026-07-20',
+        status: 'not-started',
+        assignedPersons: [],
+      })
+      expect(preview.items.find((i) => i.id === 'a')?.name).toBe('Hang main floor')
+    }
   })
 })
