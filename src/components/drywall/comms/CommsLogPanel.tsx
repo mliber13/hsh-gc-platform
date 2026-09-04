@@ -35,6 +35,7 @@ import {
 import { fetchScheduleItemsForDrywallProject } from '@/services/scheduleService'
 import {
   ForwardMessageDialog,
+  JOB_WIDE_KEY,
   type ForwardRecipientOption,
 } from '@/components/drywall/comms/ForwardMessageDialog'
 
@@ -218,19 +219,32 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
     }))
   }, [nameByPersonId, assignedPersonIds])
 
-  /** Lanes a message has already been forwarded into, for the "Forwarded to" note. */
-  const forwardedTo = useMemo(() => {
-    const map = new Map<string, string[]>()
+  /**
+   * Destinations each message has already been forwarded to, keyed by the source
+   * message id. Values are person ids, or 'job' for the broadcast lane. Drives
+   * both the "Forwarded to ..." note and the picker's already-sent state, so the
+   * office can see where something went before sending it again.
+   */
+  const forwardedDestinations = useMemo(() => {
+    const map = new Map<string, Set<string>>()
     for (const m of messages) {
       if (!m.forwardedFromId) continue
-      const label =
-        m.audience === 'job'
-          ? 'everyone on this job'
-          : ((m.audiencePersonId ? nameFor(m.audiencePersonId) : null) ?? 'a crew member')
-      map.set(m.forwardedFromId, [...(map.get(m.forwardedFromId) ?? []), label])
+      const dest = m.audience === 'job' ? JOB_WIDE_KEY : m.audiencePersonId
+      if (!dest) continue
+      const set = map.get(m.forwardedFromId) ?? new Set<string>()
+      set.add(dest)
+      map.set(m.forwardedFromId, set)
     }
     return map
-  }, [messages, nameFor])
+  }, [messages])
+
+  const describeDestinations = useCallback(
+    (destinations: Set<string>) =>
+      [...destinations].map((d) =>
+        d === JOB_WIDE_KEY ? 'everyone on this job' : (nameFor(d) ?? 'a crew member'),
+      ),
+    [nameFor],
+  )
 
   const handleAdd = async () => {
     if (readOnly || !body.trim() || !activeLane) return
@@ -341,7 +355,9 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
         ) : (
           <ul className="space-y-4">
             {activeLane.messages.map((entry) => {
-              const alreadySent = forwardedTo.get(entry.id)
+              const alreadySent = describeDestinations(
+                forwardedDestinations.get(entry.forwardedFromId ?? entry.id) ?? new Set(),
+              )
               return (
                 <li key={entry.id} className="rounded-lg border bg-muted/20 p-3">
                   <div className="flex items-start gap-2">
@@ -377,7 +393,7 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
 
                   <p className="mt-2 text-sm whitespace-pre-wrap">{entry.body}</p>
 
-                  {alreadySent?.length ? (
+                  {alreadySent.length ? (
                     <p className="mt-2 text-xs text-muted-foreground">
                       Forwarded to {alreadySent.join(', ')}
                     </p>
@@ -401,6 +417,12 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
         projectId={projectId}
         message={forwarding}
         recipients={forwardRecipients}
+        alreadySentTo={
+          forwarding
+            ? (forwardedDestinations.get(forwarding.forwardedFromId ?? forwarding.id) ??
+              new Set<string>())
+            : new Set<string>()
+        }
         onForwarded={() => void load({ silent: true })}
       />
     </Card>

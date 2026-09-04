@@ -31,10 +31,14 @@ interface ForwardMessageDialogProps {
   projectId: string
   message: ProjectCommsMessage | null
   recipients: ForwardRecipientOption[]
+  /** Destinations this message already went to — person ids, or JOB_WIDE_KEY. */
+  alreadySentTo: Set<string>
   onForwarded: () => void
 }
 
-const JOB_WIDE = '__job__'
+/** Sentinel for the broadcast lane, shared with the panel that owns the state. */
+export const JOB_WIDE_KEY = '__job__'
+const JOB_WIDE = JOB_WIDE_KEY
 
 export function ForwardMessageDialog({
   open,
@@ -42,6 +46,7 @@ export function ForwardMessageDialog({
   projectId,
   message,
   recipients,
+  alreadySentTo,
   onForwarded,
 }: ForwardMessageDialogProps) {
   const [target, setTarget] = useState<string | null>(null)
@@ -112,16 +117,23 @@ export function ForwardMessageDialog({
             <button
               type="button"
               onClick={() => setTarget(JOB_WIDE)}
+              disabled={alreadySentTo.has(JOB_WIDE)}
               aria-pressed={target === JOB_WIDE}
               className={cn(
                 'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors',
                 target === JOB_WIDE
                   ? 'border-primary bg-primary/10'
                   : 'border-border hover:bg-muted',
+                alreadySentTo.has(JOB_WIDE) && 'cursor-not-allowed opacity-50 hover:bg-transparent',
               )}
             >
               <Megaphone className="size-4 shrink-0 text-muted-foreground" />
-              Everyone on this job
+              <span className="flex-1">Everyone on this job</span>
+              {alreadySentTo.has(JOB_WIDE) ? (
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Already sent
+                </span>
+              ) : null}
             </button>
           </div>
 
@@ -148,17 +160,24 @@ export function ForwardMessageDialog({
                   key={r.personId}
                   type="button"
                   onClick={() => setTarget(r.personId)}
+                  disabled={alreadySentTo.has(r.personId)}
                   aria-pressed={target === r.personId}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors',
                     target === r.personId
                       ? 'border-primary bg-primary/10'
                       : 'border-border hover:bg-muted',
+                    alreadySentTo.has(r.personId) &&
+                      'cursor-not-allowed opacity-50 hover:bg-transparent',
                   )}
                 >
                   <User className="size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate">{r.name}</span>
-                  {r.assigned ? (
+                  {alreadySentTo.has(r.personId) ? (
+                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Already sent
+                    </span>
+                  ) : r.assigned ? (
                     <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
                       On this job
                     </span>
