@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
-import { Lock, MessageSquarePlus, Megaphone, User } from 'lucide-react'
+import { Forward, Lock, MessageSquarePlus, Megaphone, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -33,6 +33,10 @@ import {
   type ProjectCommsMessage,
 } from '@/services/projectCommsService'
 import { fetchScheduleItemsForDrywallProject } from '@/services/scheduleService'
+import {
+  ForwardMessageDialog,
+  type ForwardRecipientOption,
+} from '@/components/drywall/comms/ForwardMessageDialog'
 
 const COMMS_REFRESH_MS = 60_000
 
@@ -93,6 +97,7 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
   const [body, setBody] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [forwarding, setForwarding] = useState<ProjectCommsMessage | null>(null)
 
   const load = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -202,6 +207,31 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
 
   const activeLane = lanes.find((l) => l.key === activeLaneKey) ?? lanes[0] ?? null
 
+  // Everyone on the roster can receive a forward, not just the crew assigned to
+  // this job — the common case is routing a message to someone about to start.
+  const forwardRecipients = useMemo<ForwardRecipientOption[]>(() => {
+    const assigned = new Set(assignedPersonIds)
+    return [...nameByPersonId.entries()].map(([personId, name]) => ({
+      personId,
+      name,
+      assigned: assigned.has(personId),
+    }))
+  }, [nameByPersonId, assignedPersonIds])
+
+  /** Lanes a message has already been forwarded into, for the "Forwarded to" note. */
+  const forwardedTo = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const m of messages) {
+      if (!m.forwardedFromId) continue
+      const label =
+        m.audience === 'job'
+          ? 'everyone on this job'
+          : ((m.audiencePersonId ? nameFor(m.audiencePersonId) : null) ?? 'a crew member')
+      map.set(m.forwardedFromId, [...(map.get(m.forwardedFromId) ?? []), label])
+    }
+    return map
+  }, [messages, nameFor])
+
   const handleAdd = async () => {
     if (readOnly || !body.trim() || !activeLane) return
     setSaving(true)
@@ -310,27 +340,69 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
           </p>
         ) : (
           <ul className="space-y-4">
-            {activeLane.messages.map((entry) => (
-              <li key={entry.id} className="rounded-lg border bg-muted/20 p-3">
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{entry.author}</span>
-                  {' • '}
-                  <time
-                    dateTime={entry.at}
-                    title={format(new Date(entry.at), 'MMM d, yyyy h:mm a')}
-                  >
-                    {formatDistanceToNow(new Date(entry.at), { addSuffix: true })}
-                  </time>
-                </p>
-                <p className="mt-2 text-sm whitespace-pre-wrap">{entry.body}</p>
-                {activeLane.audience !== 'office' ? (
-                  <CommsReadReceipt entryAt={entry.at} crewReadState={crewReadState} />
-                ) : null}
-              </li>
-            ))}
+            {activeLane.messages.map((entry) => {
+              const alreadySent = forwardedTo.get(entry.id)
+              return (
+                <li key={entry.id} className="rounded-lg border bg-muted/20 p-3">
+                  <div className="flex items-start gap-2">
+                    <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{entry.author}</span>
+                      {' • '}
+                      <time
+                        dateTime={entry.at}
+                        title={format(new Date(entry.at), 'MMM d, yyyy h:mm a')}
+                      >
+                        {formatDistanceToNow(new Date(entry.at), { addSuffix: true })}
+                      </time>
+                    </p>
+                    {!readOnly ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="-my-1 h-7 shrink-0 gap-1 px-2 text-xs text-muted-foreground"
+                        onClick={() => setForwarding(entry)}
+                      >
+                        <Forward className="size-3.5" />
+                        Forward
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  {entry.forwardedByName ? (
+                    <p className="mt-1 text-xs italic text-muted-foreground">
+                      Forwarded by {entry.forwardedByName}
+                    </p>
+                  ) : null}
+
+                  <p className="mt-2 text-sm whitespace-pre-wrap">{entry.body}</p>
+
+                  {alreadySent?.length ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Forwarded to {alreadySent.join(', ')}
+                    </p>
+                  ) : null}
+
+                  {activeLane.audience !== 'office' ? (
+                    <CommsReadReceipt entryAt={entry.at} crewReadState={crewReadState} />
+                  ) : null}
+                </li>
+              )
+            })}
           </ul>
         )}
       </CardContent>
+
+      <ForwardMessageDialog
+        open={forwarding !== null}
+        onOpenChange={(open) => {
+          if (!open) setForwarding(null)
+        }}
+        projectId={projectId}
+        message={forwarding}
+        recipients={forwardRecipients}
+        onForwarded={() => void load({ silent: true })}
+      />
     </Card>
   )
 }

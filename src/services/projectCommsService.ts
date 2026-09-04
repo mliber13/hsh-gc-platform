@@ -23,6 +23,9 @@ export interface ProjectCommsMessage {
   audience: CommsAudience
   audiencePersonId: string | null
   body: string
+  /** Set when this message is a copy the office routed into this lane. */
+  forwardedFromId: string | null
+  forwardedByName: string | null
 }
 
 interface Row {
@@ -36,10 +39,12 @@ interface Row {
   audience: string | null
   audience_person_id: string | null
   body: string | null
+  forwarded_from_id: string | null
+  forwarded_by_name: string | null
 }
 
 const SELECT_COLS =
-  'id, project_id, created_at, author_user_id, author_person_id, author_name, author_role, audience, audience_person_id, body'
+  'id, project_id, created_at, author_user_id, author_person_id, author_name, author_role, audience, audience_person_id, body, forwarded_from_id, forwarded_by_name'
 
 function mapRow(r: Row): ProjectCommsMessage {
   const role = r.author_role === 'crew' || r.author_role === 'sub' ? r.author_role : 'operator'
@@ -56,6 +61,8 @@ function mapRow(r: Row): ProjectCommsMessage {
     audience,
     audiencePersonId: r.audience_person_id,
     body: r.body ?? '',
+    forwardedFromId: r.forwarded_from_id ?? null,
+    forwardedByName: r.forwarded_by_name ?? null,
   }
 }
 
@@ -113,6 +120,56 @@ export async function postProjectComms(opts: {
       kind: 'comms',
       projectId: message.projectId,
       authorUserId: message.authorUserId,
+      authorName: message.author,
+      preview: message.body,
+      audience: message.audience,
+      audiencePersonId: message.audiencePersonId,
+    })
+  }
+
+  return message
+}
+
+/**
+ * Route a message into another lane — office only. Pass `toPersonId` to send it to
+ * one crew member, or omit it to share with everyone assigned to the job.
+ *
+ * The copy keeps the original author, so the recipient sees whose words they are,
+ * and records who forwarded it. An optional `note` rides above the quoted original.
+ */
+export async function forwardProjectComms(opts: {
+  messageId: string
+  toPersonId?: string | null
+  note?: string
+  /** Only used to address the push; the lane itself is decided server-side. */
+  projectId: string
+}): Promise<ProjectCommsMessage> {
+  if (!isOnlineMode()) throw new Error('Messages require an online connection.')
+
+  const { data, error } = await supabase.rpc('forward_project_comms', {
+    p_message_id: opts.messageId,
+    p_to_person_id: opts.toPersonId ?? null,
+    p_note: opts.note?.trim() || null,
+  })
+
+  if (error) {
+    if (isRlsOrPermissionError(error)) throw new DrywallProjectPermissionError()
+    throw new Error(error.message || 'Failed to forward message')
+  }
+  if (!data) throw new Error('Failed to forward message')
+  const message = mapRow(data as Row)
+
+  // Address the push to the destination lane. The actor is the forwarder, so they
+  // are excluded from their own notification, while the body still credits the
+  // original author.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (user) {
+    void requestPushNotify({
+      kind: 'comms',
+      projectId: message.projectId,
+      authorUserId: user.id,
       authorName: message.author,
       preview: message.body,
       audience: message.audience,

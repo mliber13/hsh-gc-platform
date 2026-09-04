@@ -136,6 +136,11 @@ export function CrewCommsPanel({
                     </span>
                   ) : null}
                 </p>
+                {entry.forwardedByName ? (
+                  <p className="mt-1 text-xs italic text-muted-foreground">
+                    Passed on by {entry.forwardedByName}
+                  </p>
+                ) : null}
                 <p className="mt-2 text-sm whitespace-pre-wrap">{entry.body}</p>
               </li>
             ))}

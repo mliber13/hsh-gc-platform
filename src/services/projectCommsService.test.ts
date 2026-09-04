@@ -17,6 +17,8 @@ function msg(over: Partial<ProjectCommsMessage>): ProjectCommsMessage {
     audience: 'office',
     audiencePersonId: null,
     body: 'hello',
+    forwardedFromId: null,
+    forwardedByName: null,
     ...over,
   }
 }
@@ -125,5 +127,58 @@ describe('groupIntoLanes', () => {
 
   it('returns no lanes for an empty log', () => {
     expect(groupIntoLanes([])).toEqual([])
+  })
+
+  describe('forwarded messages', () => {
+    // Phil writes into his own lane; the office routes a copy to Shane.
+    const philOriginal = msg({
+      id: 'orig',
+      at: '2026-09-01T09:00:00.000Z',
+      author: 'Phil',
+      authorRole: 'crew',
+      audience: 'crew',
+      audiencePersonId: 'emp-phil',
+      body: 'This is for Shane — bring 9 boxes of all-purpose Tuesday.',
+    })
+    const forwardedToShane = msg({
+      id: 'fwd',
+      at: '2026-09-01T09:30:00.000Z',
+      author: 'Phil',
+      authorRole: 'crew',
+      audience: 'crew',
+      audiencePersonId: 'emp-shane',
+      body: 'This is for Shane — bring 9 boxes of all-purpose Tuesday.',
+      forwardedFromId: 'orig',
+      forwardedByName: 'Mark',
+    })
+
+    it('files the copy in the recipient lane, not the original author lane', () => {
+      const lanes = groupIntoLanes([philOriginal, forwardedToShane])
+      const shane = lanes.find((l) => l.personId === 'emp-shane')
+      const phil = lanes.find((l) => l.personId === 'emp-phil')
+      expect(shane?.messages.map((m) => m.id)).toEqual(['fwd'])
+      expect(phil?.messages.map((m) => m.id)).toEqual(['orig'])
+    })
+
+    it('keeps the original author on the copy so the words stay attributed', () => {
+      const lanes = groupIntoLanes([forwardedToShane])
+      expect(lanes[0]?.messages[0]?.author).toBe('Phil')
+      expect(lanes[0]?.messages[0]?.forwardedByName).toBe('Mark')
+    })
+
+    it('labels the destination lane by the recipient, not the original author', () => {
+      const lanes = groupIntoLanes([forwardedToShane], (id) =>
+        id === 'emp-shane' ? 'Shane' : 'Phil',
+      )
+      expect(lanes[0]?.label).toBe('Shane')
+    })
+
+    it('puts a job-wide forward in the broadcast lane', () => {
+      const lanes = groupIntoLanes([
+        msg({ id: 'fwd-job', audience: 'job', forwardedFromId: 'orig', forwardedByName: 'Mark' }),
+      ])
+      expect(lanes[0]?.audience).toBe('job')
+      expect(lanes[0]?.label).toBe('Job-wide')
+    })
   })
 })
