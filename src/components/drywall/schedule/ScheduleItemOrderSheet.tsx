@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react'
-import { Package, Plus } from 'lucide-react'
+import { FileDown, Package, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -18,6 +18,7 @@ import {
   saveOrder,
 } from '@/services/drywallProjectsService'
 import { suggestOrderItemsFromFieldTakeoff } from '@/lib/drywall/orderSuggest'
+import { downloadDrywallFieldMaterialsPdf } from '@/lib/drywall/fieldMaterialsOrderPdf'
 import { fetchSuppliers } from '@/services/partnerDirectoryService'
 import type { DrywallOrder, DrywallProject } from '@/types/drywall'
 import type { Supplier } from '@/types/partners'
@@ -47,6 +48,7 @@ export function ScheduleItemOrderSheet({
   const [draft, setDraft] = useState<DrywallOrder | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [attaching, setAttaching] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -145,6 +147,31 @@ export function ScheduleItemOrderSheet({
     }
   }
 
+  /**
+   * The materials-by-area PDF, straight from the field takeoff. Deliberately
+   * independent of the order sheet and of any supplier: it takes only the
+   * project and the takeoff, so the list can go to whoever is actually making
+   * the delivery — an employee running material out to a small job — without
+   * inventing a supplier record for them.
+   */
+  const downloadMaterialList = async () => {
+    setDownloading(true)
+    try {
+      const takeoff = await fetchFieldTakeoff(projectId)
+      const hasAnything =
+        (takeoff.measurements?.length ?? 0) > 0 || (takeoff.accessories?.length ?? 0) > 0
+      if (!hasAnything) {
+        toast.error('No field measurements on this project yet.')
+        return
+      }
+      downloadDrywallFieldMaterialsPdf(projectMeta, takeoff)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not build the material list')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   // Nothing to show for a read-only viewer with no attached order.
   if (readOnly && !order) return null
 
@@ -155,7 +182,21 @@ export function ScheduleItemOrderSheet({
           <Package className="h-4 w-4" />
           Material order sheet
         </Label>
-        {order ? <OrderStatusBadge status={order.status} /> : null}
+        <div className="flex items-center gap-2">
+          {order ? <OrderStatusBadge status={order.status} /> : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={() => void downloadMaterialList()}
+            disabled={loading || downloading}
+            title="Materials by area from the field measurements — no supplier needed"
+          >
+            <FileDown className="h-3.5 w-3.5" />
+            {downloading ? 'Building…' : 'Material list PDF'}
+          </Button>
+        </div>
       </div>
 
       {order ? (
