@@ -90,6 +90,7 @@ export function ScheduleItemDialog({
   const [notes, setNotes] = useState('')
   const [assignedPersons, setAssignedPersons] = useState<string[]>([])
   const [showJobInfoPersonIds, setShowJobInfoPersonIds] = useState<string[]>([])
+  const [shareMaterialList, setShareMaterialList] = useState(false)
   const [predecessorIds, setPredecessorIds] = useState<string[]>([])
   const [lagWorkDays, setLagWorkDays] = useState(1)
   const [tasks, setTasks] = useState<ScheduleItemTask[]>([])
@@ -153,6 +154,7 @@ export function ScheduleItemDialog({
       setNotes(editing.notes ?? '')
       setAssignedPersons(editing.assigned_persons)
       setShowJobInfoPersonIds(editing.show_job_info_person_ids)
+      setShareMaterialList(editing.share_material_list === true)
       setPredecessorIds(editing.predecessor_ids)
       setLagWorkDays(editing.lag_work_days)
       setTasks(editing.tasks ?? [])
@@ -169,6 +171,7 @@ export function ScheduleItemDialog({
       setNotes('')
       setAssignedPersons([])
       setShowJobInfoPersonIds([])
+      setShareMaterialList(false)
       setPredecessorIds([])
       setLagWorkDays(1)
       setTasks([])
@@ -361,6 +364,7 @@ export function ScheduleItemDialog({
       notes,
       assignedPersons,
       showJobInfoPersonIds,
+      shareMaterialList,
       predecessorIds: validPredecessorIds,
       lagWorkDays,
       tasks: tasks
@@ -788,6 +792,23 @@ export function ScheduleItemDialog({
             showJobInfoPersonIds={showJobInfoPersonIds}
             onShowJobInfoPersonIdsChange={setShowJobInfoPersonIds}
           />
+          <label className="flex items-start gap-2.5 rounded-md border p-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 shrink-0 accent-primary"
+              checked={shareMaterialList}
+              onChange={(e) => setShareMaterialList(e.target.checked)}
+            />
+            <span className="space-y-0.5">
+              <span className="block text-sm font-medium">Share the material list</span>
+              <span className="block text-xs text-muted-foreground">
+                Everyone assigned to this item sees the job&rsquo;s material list in the
+                crew app, whatever their trade — for a delivery or a one-off run.
+                Materials only; it does not show sqft or pay.
+              </span>
+            </span>
+          </label>
+
           <TimeOffConflictWarning
             assignedPersonIds={assignedPersons}
             startDate={startDate}

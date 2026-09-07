@@ -21,6 +21,7 @@ function item(
     notes: null,
     assigned_persons: [],
     show_job_info_person_ids: [],
+    share_material_list: false,
     assigned_company_id: null,
     predecessor_ids: [],
     lag_work_days: 0,

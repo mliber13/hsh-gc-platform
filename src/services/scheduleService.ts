@@ -202,6 +202,8 @@ export interface DrywallProjectScheduleItem {
   assigned_persons: string[]
   /** Subset of assigned_persons who see job info (sqft/pay/materials) in /crew. */
   show_job_info_person_ids: string[]
+  /** Operator grant: show the material list to everyone assigned to this item. */
+  share_material_list: boolean
   assigned_company_id: string | null
   predecessor_ids: string[]
   lag_work_days: number
@@ -221,6 +223,8 @@ export interface NewScheduleItemInput {
   notes?: string
   assignedPersons?: string[]
   showJobInfoPersonIds?: string[]
+  /** Operator grant: show the material list to everyone assigned to this item. */
+  shareMaterialList?: boolean
   assignedCompanyId?: string | null
   predecessorIds?: string[]
   lagWorkDays?: number
@@ -244,6 +248,7 @@ type DrywallScheduleItemRow = {
   assigned_company_id: string | null
   assigned_persons: string[] | null
   show_job_info_person_ids: string[] | null
+  share_material_list?: boolean | null
   notes: string | null
   predecessors: Array<{ predecessor_id?: string; lag_days?: number }> | null
   tasks: unknown
@@ -319,6 +324,7 @@ function mapDrywallScheduleRow(row: DrywallScheduleItemRow): DrywallProjectSched
     notes: row.notes,
     assigned_persons: assigned,
     show_job_info_person_ids: showInfo.filter((id) => assigned.includes(id)),
+    share_material_list: row.share_material_list === true,
     assigned_company_id: row.assigned_company_id,
     predecessor_ids: ids,
     lag_work_days: lag,
@@ -388,7 +394,7 @@ async function getOrCreateScheduleForProject(
 }
 
 const DRYWALL_SCHEDULE_SELECT =
-  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, notes, predecessors, tasks, lead_person_ids, supplier_id'
+  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, share_material_list, notes, predecessors, tasks, lead_person_ids, supplier_id'
 
 export async function fetchScheduleItemsForDrywallProject(
   projectId: string,
@@ -487,6 +493,7 @@ function buildInsertRow(
     show_job_info_person_ids: (input.showJobInfoPersonIds ?? input.assignedPersons ?? []).filter(
       (id) => (input.assignedPersons ?? []).includes(id),
     ),
+    share_material_list: input.shareMaterialList === true,
     assigned_company_id: input.assignedCompanyId ?? null,
     assigned_to: [],
     predecessors: predecessorsToRows(predecessorIds, lag),
@@ -606,6 +613,9 @@ export async function updateScheduleItemForDrywallProject(
     updatePayload.show_job_info_person_ids = current.show_job_info_person_ids.filter((id) =>
       patch.assignedPersons!.includes(id),
     )
+  }
+  if (patch.shareMaterialList !== undefined) {
+    updatePayload.share_material_list = patch.shareMaterialList
   }
   if (patch.assignedCompanyId !== undefined) {
     updatePayload.assigned_company_id = patch.assignedCompanyId

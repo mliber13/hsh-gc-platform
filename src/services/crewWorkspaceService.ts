@@ -86,6 +86,7 @@ type ScheduleRow = {
   status: string
   notes: string | null
   show_job_info_person_ids: string[] | null
+  share_material_list?: boolean | null
   tasks: unknown
   assigned_persons?: string[] | null
 }
@@ -193,7 +194,7 @@ async function fetchAssignedScheduleRows(personId: string): Promise<ScheduleRow[
   const { data, error } = await supabase
     .from('schedule_items')
     .select(
-      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, tasks, assigned_persons',
+      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, share_material_list, tasks, assigned_persons',
     )
     .eq('organization_id', orgId)
     .contains('assigned_persons', [personId])
@@ -209,7 +210,7 @@ async function fetchOrgScheduleRows(): Promise<ScheduleRow[]> {
   const { data, error } = await supabase
     .from('schedule_items')
     .select(
-      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, tasks, assigned_persons',
+      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, share_material_list, tasks, assigned_persons',
     )
     .eq('organization_id', orgId)
     .order('start_date', { ascending: true })
@@ -257,6 +258,17 @@ export async function personIsForeman(personId: string): Promise<boolean> {
 
 function personSeesJobInfo(personId: string, rows: ScheduleRow[]): boolean {
   return rows.some((row) => (row.show_job_info_person_ids ?? []).includes(personId))
+}
+
+/**
+ * Operator grant on a specific item: show the material list to everyone assigned
+ * to it, whatever their trade. Unlike personSeesJobInfo this never unlocks sqft
+ * or pay — it is materials only.
+ */
+function personSeesSharedMaterials(personId: string, rows: ScheduleRow[]): boolean {
+  return rows.some(
+    (row) => row.share_material_list === true && (row.assigned_persons ?? []).includes(personId),
+  )
 }
 
 export type CrewListScope = 'mine' | 'all'
@@ -1145,7 +1157,7 @@ export async function fetchCrewProjectDetail(
     const { data, error } = await supabase
       .from('schedule_items')
       .select(
-        'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, tasks, assigned_persons',
+        'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, share_material_list, tasks, assigned_persons',
       )
       .eq('organization_id', orgId)
       .eq('project_id', projectId)
@@ -1272,7 +1284,7 @@ export async function fetchCrewProjectDetailForPreview(
   const { data } = await supabase
     .from('schedule_items')
     .select(
-      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids',
+      'id, project_id, name, type, start_date, end_date, status, notes, show_job_info_person_ids, share_material_list',
     )
     .eq('organization_id', orgId)
     .eq('project_id', projectId)
@@ -1306,7 +1318,13 @@ async function mapProjectDetail(
   // Foreman sees scope/materials/photos on any project; still no dollars.
   const showScope = showJobInfo || isMeasurerSpecialty(context.specialty) || isForeman
   const showPhotos = showJobInfo || isMeasurerSpecialty(context.specialty) || isForeman
-  const showMaterials = showJobInfo || isForeman
+  // Materials-only grant on a specific item (e.g. a one-off delivery). Unlike
+  // showJobInfo this unlocks the list WITHOUT sqft or pay, and because it is an
+  // explicit operator decision it is not second-guessed by an inferred specialty.
+  const sharedMaterials =
+    context.personId != null && personSeesSharedMaterials(context.personId, scheduleRows)
+  const showMaterials = showJobInfo || isForeman || sharedMaterials
+  const unfilteredMaterials = context.preview === true || isForeman || sharedMaterials
   const hasMeasureAssignment =
     context.preview === true || scheduleRows.some(scheduleRowHasMeasurePhase)
   const measureWorkflowStatus =
@@ -1338,13 +1356,13 @@ async function mapProjectDetail(
     totalSqft,
     beadSticks: showMaterials ? resolveBeadSticks(legacy) : null,
     materials: showMaterials
-      ? resolveMaterials(field, context.specialty, context.preview === true || isForeman)
+      ? resolveMaterials(field, context.specialty, unfilteredMaterials)
       : [],
     boardCountsByArea: showMaterials
       ? resolveBoardCountsByArea(
           field,
           context.specialty,
-          context.preview === true || isForeman,
+          unfilteredMaterials,
           scheduleRows,
         )
       : [],
@@ -1352,7 +1370,7 @@ async function mapProjectDetail(
       showMaterials &&
       shouldShowBoardCounts(
         context.specialty,
-        context.preview === true || isForeman,
+        unfilteredMaterials,
         scheduleRows,
       ),
     photos: showPhotos
