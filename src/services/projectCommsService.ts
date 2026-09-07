@@ -1,15 +1,7 @@
 import { isOnlineMode, supabase } from '@/lib/supabase'
 import { DrywallProjectPermissionError, isRlsOrPermissionError } from '@/services/drywallProjectsService'
-import { requestPushNotify } from '@/services/pushService'
+import { notifyAndReport } from '@/services/pushService'
 
-/**
- * Message lanes. Visibility is enforced by RLS on `project_comms`, not here —
- * this module only shapes the UI.
- *
- *  office        → office only (operators + field foreman). Internal notes.
- *  job           → everyone assigned to the project, plus office. Broadcasts.
- *  crew:<person> → a private lane between the office and one crew person.
- */
 export type CommsAudience = 'office' | 'job' | 'crew'
 
 export interface ProjectCommsMessage {
@@ -116,7 +108,7 @@ export async function postProjectComms(opts: {
   // Best-effort push. The lane is passed through so the edge function can hold
   // the preview to the same audience RLS allows to read the message.
   if (message.authorUserId) {
-    void requestPushNotify({
+    notifyAndReport({
       kind: 'comms',
       projectId: message.projectId,
       authorUserId: message.authorUserId,
@@ -166,7 +158,7 @@ export async function forwardProjectComms(opts: {
     data: { user },
   } = await supabase.auth.getUser()
   if (user) {
-    void requestPushNotify({
+    notifyAndReport({
       kind: 'comms',
       projectId: message.projectId,
       authorUserId: user.id,

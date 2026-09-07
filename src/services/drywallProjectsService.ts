@@ -5,7 +5,6 @@
 import { supabase, isOnlineMode } from '@/lib/supabase'
 import { belongsInDrywallWorkspaceFromListScalars } from '@/services/projectVisibility'
 import { requireUserOrgId, getCurrentUserProfile } from '@/services/userService'
-import { requestPushNotify } from '@/services/pushService'
 import { hydrateDrywallQuote } from '@/lib/drywall/createEmptyDrywallQuote'
 import { hydrateDrywallQuoteV3, prepareDrywallQuoteV3ForSave } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { buildV3FromV2, v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'

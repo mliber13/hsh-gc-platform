@@ -494,8 +494,8 @@ export function ScheduleItemDialog({
         itemName: name.trim() || editing.name,
         message: notifyMessage.trim() || undefined,
       })
-      if (result === null) {
-        toast.error('Could not send notification')
+      if (!result.ok) {
+        toast.error(`Could not send notification: ${result.reason}`)
         return
       }
       const { recipients, sent, failed } = result

@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { isOnlineMode, supabase } from '@/lib/supabase'
 import { requireUserOrgId } from '@/services/userService'
 
@@ -235,30 +236,108 @@ export type PushSendSummary = {
   pruned: number
 }
 
-/** Best-effort notify — never throws. Returns the full send summary or null on transport error. */
+/**
+ * Outcome of a notify attempt. The failure branch carries the real reason —
+ * previously every failure collapsed to `null` and a console warning, so a push
+ * that never left the building looked identical to one that was delivered.
+ */
+export type PushNotifyOutcome =
+  | ({ ok: true } & PushSendSummary)
+  | { ok: false; reason: string }
+
+/** Best-effort notify — never throws. */
 export async function requestPushNotify(
   payload: NotifyCommsPayload | NotifySchedulePayload,
-): Promise<PushSendSummary | null> {
-  if (!isOnlineMode()) return null
+): Promise<PushNotifyOutcome> {
+  if (!isOnlineMode()) return { ok: false, reason: 'Offline' }
   try {
     const { data, error } = await supabase.functions.invoke('send-push', { body: payload })
     if (error) {
-      console.warn('send-push:', error.message)
-      return null
+      // supabase-js hides the function's own message behind a generic
+      // "non-2xx status code"; dig the real one out of the response body so the
+      // toast names the actual problem.
+      let reason = error.message || 'send-push failed'
+      const res = (error as { context?: Response }).context
+      if (res && typeof res.text === 'function') {
+        try {
+          const raw = await res.clone().text()
+          const parsed = JSON.parse(raw) as { error?: string }
+          if (parsed?.error) reason = parsed.error
+        } catch {
+          /* keep the generic message */
+        }
+      }
+      console.warn('send-push:', reason)
+      return { ok: false, reason }
     }
     const d =
       (data as { recipients?: number; sent?: number; failed?: number; pruned?: number } | null) ??
       {}
     return {
+      ok: true,
       recipients: d.recipients ?? 0,
       sent: d.sent ?? 0,
       failed: d.failed ?? 0,
       pruned: d.pruned ?? 0,
     }
   } catch (e) {
-    console.warn('send-push failed:', e)
-    return null
+    const reason = e instanceof Error ? e.message : 'send-push failed'
+    console.warn('send-push failed:', reason)
+    return { ok: false, reason }
   }
+}
+
+/**
+ * Turn a notify outcome into something worth saying out loud, or null when
+ * there is nothing to report.
+ *
+ * A message send is silent on success on purpose: the sender already knows the
+ * message went, and a toast on every message would be noise. It speaks up only
+ * when the push did NOT reach anyone, which is exactly the case that used to
+ * fail invisibly.
+ */
+export function describePushOutcome(
+  outcome: PushNotifyOutcome,
+): { level: 'warning' | 'info'; message: string } | null {
+  if (!outcome.ok) {
+    return {
+      level: 'warning',
+      message: `Sent, but the notification didn't go out: ${outcome.reason}`,
+    }
+  }
+  if (outcome.recipients === 0) return null // nobody else to notify — normal
+  if (outcome.sent > 0) return null // delivered
+  if (outcome.failed > 0) {
+    return {
+      level: 'warning',
+      message:
+        'Sent, but every notification failed to deliver — likely a push config issue, not the crew.',
+    }
+  }
+  return {
+    level: 'info',
+    message:
+      'Sent. Nobody on this job has notifications turned on yet, so no alert went out.',
+  }
+}
+
+/**
+ * Fire a notify and surface it only when it did not reach anyone.
+ *
+ * Deliberately not awaited by callers: the message or schedule change is already
+ * saved, so a push problem must never fail the action it accompanies. It just
+ * stops failing invisibly, which is how push could be broken for weeks with
+ * nothing to point at.
+ */
+export function notifyAndReport(
+  payload: NotifyCommsPayload | NotifySchedulePayload,
+): void {
+  void requestPushNotify(payload).then((outcome) => {
+    const said = describePushOutcome(outcome)
+    if (!said) return
+    if (said.level === 'warning') toast.warning(said.message)
+    else toast.info(said.message)
+  })
 }
 
 /** Fire a test push to the caller's own devices. Returns true on success. */

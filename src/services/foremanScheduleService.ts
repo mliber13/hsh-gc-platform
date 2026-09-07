@@ -15,7 +15,7 @@ import {
   type DrywallProjectScheduleItem,
   type DrywallScheduleItemStatus,
 } from '@/services/scheduleService'
-import { requestPushNotify } from '@/services/pushService'
+import { notifyAndReport } from '@/services/pushService'
 import type { AssignedPersonOption } from '@/components/schedule/AssignedPersonsPicker'
 
 export type ForemanNewScheduleItem = {
@@ -68,7 +68,7 @@ export async function createForemanScheduleItem(
       data: { user },
     } = await supabase.auth.getUser()
     if (user) {
-      void requestPushNotify({
+      notifyAndReport({
         kind: 'schedule',
         projectId,
         authorUserId: user.id,
@@ -171,7 +171,7 @@ export async function applyForemanScheduleEdit(
     data: { user },
   } = await supabase.auth.getUser()
   if (user && personIds.size > 0) {
-    void requestPushNotify({
+    notifyAndReport({
       kind: 'schedule',
       projectId,
       authorUserId: user.id,
