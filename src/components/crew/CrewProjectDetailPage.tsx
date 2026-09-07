@@ -577,20 +577,6 @@ export function CrewProjectDetailPage() {
       </Card>
       )}
 
-      {detail.beadSticks != null && detail.beadSticks > 0 ? (
-        <Card>
-          <CardContent className="flex items-center gap-4 p-4">
-            <Ruler className="size-8 text-muted-foreground" />
-            <div>
-              <p className="text-3xl font-bold tabular-nums">
-                {detail.beadSticks.toLocaleString()}
-              </p>
-              <p className="text-sm text-muted-foreground">Bead sticks (excl. tearaway)</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Field notes</CardTitle>

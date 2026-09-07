@@ -857,21 +857,6 @@ function shouldShowBoardCounts(
   return scheduleRows.some(scheduleRowIsHang)
 }
 
-function resolveBeadSticks(legacy: Record<string, unknown>): number | null {
-  // v3 stores under bead_sticks; v2 stores under beadSticks. Operator's count excludes tearaway.
-  const v3 = v3QuoteFromLegacy(legacy)
-  if (v3?.bead_sticks != null) {
-    const n = num(v3.bead_sticks)
-    if (n != null && n > 0) return n
-  }
-  const v2 = v2QuoteFromLegacy(legacy)
-  if (v2 && v2.beadSticks != null) {
-    const n = num(v2.beadSticks)
-    if (n != null && n > 0) return n
-  }
-  return null
-}
-
 /** Sum of accepted change orders' additional crew sqft (added scope the crew hangs/finishes). */
 function acceptedChangeOrderCrewSqft(legacy: Record<string, unknown>): number {
   const raw = legacy.changeOrders
@@ -1354,7 +1339,6 @@ async function mapProjectDetail(
     scopeOfWork: showScope ? resolveScopeOfWork(legacy, intakeSource, po) : '',
     structuredScope: showScope ? resolveStructuredScope(legacy) : null,
     totalSqft,
-    beadSticks: showMaterials ? resolveBeadSticks(legacy) : null,
     materials: showMaterials
       ? resolveMaterials(field, context.specialty, unfilteredMaterials)
       : [],

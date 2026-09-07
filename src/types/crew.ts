@@ -149,7 +149,6 @@ export interface CrewProjectDetail {
   structuredScope: CrewStructuredScope | null
   totalSqft: number | null
   /** Total bead sticks on the job — operator's count typically excludes tearaway. */
-  beadSticks: number | null
   /** Materials list filtered by user's specialty (hanger sees install hardware, finisher sees all). */
   materials: CrewMaterial[]
   /** Field board counts by area — hangers / both / operator preview only. */
