@@ -191,6 +191,24 @@ Total: **~11k LOC of GC + ~1k of drywall/HR** removable with zero behaviour chan
 | P2-CON-5 | GC schedule: gate the per-project `ScheduleBuilder` owner-only like the portfolio already is (`rbac.ts:39-42`). **Correction to `GC_WORKSPACE_LESSONS.md`:** GC does *not* write a JSONB schedule blob — both sides read/write the relational `schedule_items` table since `20260507000002`; the "dual-storage" risk is a non-issue. Residual: GC's delete-then-upsert rewrites every row per save. | S |
 | P2-CON-6 | Mount the existing `ProjectDocuments` in the drywall project shell (same table, one UI) — the cheap half of the P2 "job documents" idea | S |
 
+### Mobile UI pass (raised by Mark 2026-09-07 — "the header is so messy on the project page, everything overlaps")
+
+The operator app was built desktop-first and is now used on a phone daily. `useIsMobile` appears in **three** files app-wide (`DrywallPortfolioCalendar`, `DrywallSchedulePortfolioPage`, `ui/sidebar`), so every other surface is desktop layout shrunk down. This is the same finding as `GC_WORKSPACE_LESSONS.md` §"Broader GC workspace", now confirmed on the drywall side too.
+
+**Worked example — `DrywallProjectShell.tsx` header** (the one Mark reported):
+
+| # | Defect | Where |
+|---|---|---|
+| 1 | Project name is `text-2xl` with no `truncate`/`min-w-0`, sharing a `flex-wrap` row with the status badge. A long job name ("Moreland Hills-Murphy") wraps and the badge lands on its own line, reading as overlap. | `DrywallProjectShell.tsx:113-125` |
+| 2 | **Eight** stage chips in `flex flex-wrap gap-2` at `px-4 py-1.5`. On a 375 px phone they wrap to 3–4 rows and push the actual content below the fold. **I made this worse on 2026-09-04 by adding the "Photos & Files" tab** without checking the mobile wrap. | `DrywallProjectShell.tsx:130-149` |
+| 3 | Subtitle reads "Drywall workflow — open any stage; prerequisites are warnings only (Option B)." — internal design language in the product UI, and it costs a full line on mobile. "(Option B)" means nothing to a user. | `DrywallProjectShell.tsx:122-124` |
+
+**Shape of the fix (design before building):** the stage nav wants to become a horizontal scroller with the active chip scrolled into view, or a select on small screens — the Drywall schedule portfolio already has both patterns to copy. Header gets `min-w-0` + `truncate` on the title and drops to `text-lg` on mobile. Subtitle either goes or becomes a real sentence.
+
+**Then sweep the rest, since this is not one page.** Candidate surfaces in rough order of how often a phone hits them: `/crew` job detail and measure page (already mobile-aware, verify), drywall project stage pages (Info/Field/Order/Production/Closeout), the new Photos & Files grid, `CommsLogPanel` lane chips (same wrap problem as the stage nav, same fix), `ScheduleItemDialog`, `DrywallProjectsListPage`. Worth one pass with the device toolbar at 375 px, listing what breaks, before touching anything.
+
+Size: **M** for the shell header plus the lane chips; **L** for a full sweep. Not a v1 blocker, but it is daily friction for the person using it most.
+
 ### Dormancy pass (needs live row counts before acting)
 
 Run once via Cursor MCP, then gate anything with no rows since June behind owner-only in `rbac.ts`/`moduleItems`:
