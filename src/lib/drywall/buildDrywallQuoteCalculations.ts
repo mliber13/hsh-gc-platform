@@ -688,17 +688,27 @@ export function buildDrywallQuoteCalculations(quote: DrywallQuote): DrywallQuote
     const selectedOptionsTotal = options
       .filter(opt => opt.selected)
       .reduce((sum, opt) => {
-        // If option has sqft and rate, calculate: sqft × rate
         const optionSqft = opt.useTotalSqft ? sqftNum : (parseFloat(opt.sqft) || 0);
         const optionRate = parseFloat(opt.rate) || 0;
-        
-        if (optionSqft > 0 && optionRate > 0) {
-          // Calculate based on sqft × rate
-          return sum + (optionSqft * optionRate);
-        } else {
-          // Use manual price entry
-          return sum + (parseFloat(opt.price) || 0);
+        const fixedPrice = parseFloat(opt.price) || 0;
+
+        // Honour the method the estimator actually chose. Inferring it from
+        // "does this have a sqft and a rate" silently ignored a fixed price
+        // whenever stale sqft/rate values were left behind by switching methods.
+        const method = opt.pricingMethod;
+        if (method === 'fixed') {
+          return sum + fixedPrice;
         }
+        if (method === 'totalSqft' || method === 'specificSqft') {
+          return sum + (optionSqft * optionRate);
+        }
+
+        // No method recorded (older saved quotes): fall back to the previous
+        // inference so their totals do not move.
+        if (optionSqft > 0 && optionRate > 0) {
+          return sum + (optionSqft * optionRate);
+        }
+        return sum + fixedPrice;
       }, 0);
 
     // Final total - use breakdown total if breakdowns exist, otherwise use calculated total

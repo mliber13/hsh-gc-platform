@@ -2,6 +2,7 @@ import { CheckSquare, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { Label } from '@/components/ui/label'
 import type { DrywallQuote, QuoteOption, QuoteOptionPricingMethod } from '@/types/drywall'
 
@@ -190,8 +191,7 @@ export function QuoteOptionsSection({
                       {method === 'fixed' && (
                         <div className="md:col-span-3 space-y-1">
                           <Label className="text-xs">Price ($)</Label>
-                          <Input
-                            type="number"
+                          <NumericInput
                             step="0.01"
                             min={0}
                             disabled={readOnly}
@@ -206,8 +206,7 @@ export function QuoteOptionsSection({
                         <>
                           <div className="md:col-span-2 space-y-1">
                             <Label className="text-xs">Rate per sqft ($)</Label>
-                            <Input
-                              type="number"
+                            <NumericInput
                               step="0.01"
                               min={0}
                               disabled={readOnly}
@@ -227,8 +226,7 @@ export function QuoteOptionsSection({
                         <>
                           <div className="space-y-1">
                             <Label className="text-xs">Square footage</Label>
-                            <Input
-                              type="number"
+                            <NumericInput
                               min={0}
                               disabled={readOnly}
                               value={option.sqft ?? ''}
@@ -238,8 +236,7 @@ export function QuoteOptionsSection({
                           </div>
                           <div className="space-y-1">
                             <Label className="text-xs">Rate per sqft ($)</Label>
-                            <Input
-                              type="number"
+                            <NumericInput
                               step="0.01"
                               min={0}
                               disabled={readOnly}

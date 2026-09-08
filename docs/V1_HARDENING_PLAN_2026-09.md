@@ -191,6 +191,14 @@ Total: **~11k LOC of GC + ~1k of drywall/HR** removable with zero behaviour chan
 | P2-CON-5 | GC schedule: gate the per-project `ScheduleBuilder` owner-only like the portfolio already is (`rbac.ts:39-42`). **Correction to `GC_WORKSPACE_LESSONS.md`:** GC does *not* write a JSONB schedule blob — both sides read/write the relational `schedule_items` table since `20260507000002`; the "dual-storage" risk is a non-issue. Residual: GC's delete-then-upsert rewrites every row per save. | S |
 | P2-CON-6 | Mount the existing `ProjectDocuments` in the drywall project shell (same table, one UI) — the cheap half of the P2 "job documents" idea | S |
 
+### Numeric inputs silently discard separators (found 2026-09-08 on a live quote)
+
+`<input type="number">` rejects a thousands separator. Typing or pasting `4,410.62` puts the field in the browser bad-input state: **the text stays visible on screen while `e.target.value` reads as an empty string.** The value saves as `""`, `parseFloat("") || 0` yields 0, and a priced line becomes free with nothing to indicate it. Found when a ,410.62 RFI adder on quote DW-2026-057 totalled /usr/bin/bash.00 — it had already been sent before the cause was known.
+
+`NumericInput` (`src/components/ui/numeric-input.tsx`) fixes the class: a text field with `inputMode="decimal"` that strips separators before handing the value up, so `parseFloat` callers need no change. Applied to the four editable inputs in `QuoteOptionsSection`, where the bug was found.
+
+**Still to sweep: 253 `type="number"` inputs across 54 component files.** Not converted blind — each carries `step`, `min`/`max` and stepper behaviour that could regress, and the money fields deserve a careful pass rather than a find-and-replace. Priority order: the rest of the quote builder (17 files, directly sets price), then field measurement and change orders, then everything else. Size: **M**.
+
 ### Mobile UI pass (raised by Mark 2026-09-07 — "the header is so messy on the project page, everything overlaps")
 
 The operator app was built desktop-first and is now used on a phone daily. `useIsMobile` appears in **three** files app-wide (`DrywallPortfolioCalendar`, `DrywallSchedulePortfolioPage`, `ui/sidebar`), so every other surface is desktop layout shrunk down. This is the same finding as `GC_WORKSPACE_LESSONS.md` §"Broader GC workspace", now confirmed on the drywall side too.
