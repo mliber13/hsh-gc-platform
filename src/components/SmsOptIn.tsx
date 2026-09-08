@@ -20,7 +20,11 @@ export function SmsOptIn() {
   const [error, setError] = useState<string | null>(null)
 
   const digits = phone.replace(/\D/g, '')
-  const canSubmit = name.trim().length > 1 && digits.length >= 10 && consent
+  // Consent is NOT part of this condition on purpose. A2P 10DLC review (error
+  // 30923) rejects a flow where opting in is required to proceed — declining has
+  // to be a real, available outcome, so the form submits either way and only the
+  // confirmation differs.
+  const canSubmit = name.trim().length > 1 && digits.length >= 10
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,10 +34,6 @@ export function SmsOptIn() {
     }
     if (digits.length < 10) {
       setError('Please enter a valid 10-digit mobile number.')
-      return
-    }
-    if (!consent) {
-      setError('Please check the consent box to opt in.')
       return
     }
     // No server storage — this is a compliant CTA; confirm on-screen only.
@@ -52,14 +52,27 @@ export function SmsOptIn() {
         </header>
 
         {submitted ? (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-6 text-center">
-            <h2 className="text-lg font-semibold text-green-800">You&rsquo;re signed up</h2>
-            <p className="mt-2 text-sm text-green-700">
-              Thanks, {name.trim()}. You&rsquo;ve opted in to receive job and schedule text
-              messages from HSH Contractor (HSH Drywall) at {phone.trim()}. Reply{' '}
-              <strong>STOP</strong> at any time to unsubscribe, or <strong>HELP</strong> for help.
-            </p>
-          </div>
+          consent ? (
+            <div className="rounded-lg border border-green-200 bg-green-50 p-6 text-center">
+              <h2 className="text-lg font-semibold text-green-800">You&rsquo;re signed up</h2>
+              <p className="mt-2 text-sm text-green-700">
+                Thanks, {name.trim()}. You&rsquo;ve opted in to receive job and schedule text
+                messages from HSH Contractor (HSH Drywall) at {phone.trim()}. Reply{' '}
+                <strong>STOP</strong> at any time to unsubscribe, or <strong>HELP</strong> for
+                help.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-center">
+              <h2 className="text-lg font-semibold text-gray-900">No text messages will be sent</h2>
+              <p className="mt-2 text-sm text-gray-700">
+                Thanks, {name.trim()}. You did <strong>not</strong> opt in to text messages, so we
+                won&rsquo;t send any to {phone.trim()}. This does not affect your work with us or
+                any service we provide — you can opt in later at any time by returning to this
+                page.
+              </p>
+            </div>
+          )
         ) : (
           <>
             <section className="mb-6 space-y-3 text-sm text-gray-700">
@@ -77,7 +90,13 @@ export function SmsOptIn() {
               <p className="text-gray-600">
                 Message and data rates may apply. Reply <strong>STOP</strong> to unsubscribe at any
                 time, or <strong>HELP</strong> for assistance. We do not sell, rent, or share your
-                mobile number or SMS consent with any third parties for their marketing purposes.
+                mobile number or SMS consent with any third parties or affiliates for their
+                marketing or promotional purposes.
+              </p>
+              <p className="rounded-md border border-gray-200 bg-gray-50 p-3 text-gray-700">
+                <strong>Signing up is optional.</strong> Text messages are a convenience, not a
+                requirement. You can work with us, be scheduled, and use every HSH service without
+                opting in, and you can opt out later at any time.
               </p>
             </section>
 
@@ -141,8 +160,11 @@ export function SmsOptIn() {
               {error && <p className="text-sm text-red-600">{error}</p>}
 
               <Button type="submit" disabled={!canSubmit} className="w-full">
-                Sign up for text updates
+                {consent ? 'Sign up for text updates' : 'Continue without text messages'}
               </Button>
+              <p className="text-center text-xs text-gray-500">
+                Leaving the box unchecked is fine — you can continue without opting in.
+              </p>
             </form>
           </>
         )}
