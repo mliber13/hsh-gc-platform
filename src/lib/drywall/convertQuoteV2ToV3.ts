@@ -153,19 +153,39 @@ function buildComponentStarterLines(v2: DrywallQuote): QuoteLineItem[] {
   const calc = buildDrywallQuoteCalculations(v2) as Record<string, unknown>
 
   if (v2.includeRcChannel) {
-    const qty = estimateRcChannelLinearFt(v2)
     const laborPerLf = rcLaborPerLfFromV2(v2)
     const materialPerPiece = parseNum(v2.rcChannelRate)
-    if (qty > 0 || laborPerLf != null || materialPerPiece > 0) {
-      lines.push(
-        buildComponentLine('rc_channel', {
-          location: 'RC Channel',
-          quantity: qty,
-          custom_labor_rate: laborPerLf,
-          custom_material_rate: materialPerPiece > 0 ? materialPerPiece : undefined,
-          description: 'Migrated RC channel — review LF and rates',
-        }),
-      )
+    // v2 defaults RC waste to 0 and prices screws inside the piece rate; v3 would
+    // otherwise apply its own 10% default and add screw boxes v2 never charged.
+    const rcCommon = {
+      custom_labor_rate: laborPerLf,
+      custom_material_rate: materialPerPiece > 0 ? materialPerPiece : undefined,
+      waste_pct: parseNum(v2.rcChannelWastePercentage, 0),
+      accessories_in_material_rate: true,
+      description: 'Migrated RC channel — review LF and rates',
+    }
+
+    const perPhase = phaseRows(v2)
+      .map((b) => ({ b, lf: rcLinearFtFrom(b, v2) }))
+      .filter((x) => x.lf > 0)
+
+    if (perPhase.length > 0) {
+      for (const { b, lf } of perPhase) {
+        lines.push(
+          buildComponentLine('rc_channel', {
+            ...rcCommon,
+            location: phaseLocation(b, 'RC Channel'),
+            quantity: lf,
+          }),
+        )
+      }
+    } else {
+      const qty = estimateRcChannelLinearFt(v2)
+      if (qty > 0 || laborPerLf != null || materialPerPiece > 0) {
+        lines.push(
+          buildComponentLine('rc_channel', { ...rcCommon, location: 'RC Channel', quantity: qty }),
+        )
+      }
     }
   }
 
@@ -225,43 +245,83 @@ function buildComponentStarterLines(v2: DrywallQuote): QuoteLineItem[] {
   }
 
   if (v2.includeMetalStudFraming) {
-    const entries = Array.isArray(v2.metalStudEntries) ? v2.metalStudEntries : []
-    let totalLf = 0
-    for (const entry of entries) {
-      totalLf += parseNum(entry.wallLf, 0)
+    const perPhase = phaseRows(v2)
+      .map((b) => ({ b, lf: metalStudLfFrom(b) }))
+      .filter((x) => x.lf > 0)
+    const quoteLevelLf = (Array.isArray(v2.metalStudEntries) ? v2.metalStudEntries : []).reduce(
+      (sum, e) => sum + parseNum(e.wallLf, 0),
+      0,
+    )
+    // Rates are back-computed from the v2 AGGREGATE, so they must be divided by
+    // the total LF and then applied to every phase — that keeps qty × rate summing
+    // to exactly what v2 charged, however the work is split.
+    const totalLf = perPhase.length > 0
+      ? perPhase.reduce((sum, x) => sum + x.lf, 0)
+      : quoteLevelLf
+    const studCommon = {
+      custom_labor_rate: customRateFromV2Total(parseNum(calc.metalStudLaborCostBase), totalLf),
+      custom_material_rate: customRateFromV2Total(parseNum(calc.metalStudMaterialCost), totalLf),
+      description: 'Migrated metal stud framing',
     }
-    if (totalLf > 0 || parseNum(calc.metalStudLaborCostBase) > 0) {
+
+    if (perPhase.length > 0) {
+      for (const { b, lf } of perPhase) {
+        lines.push(
+          buildComponentLine('metal_stud', {
+            ...studCommon,
+            location: phaseLocation(b, 'Metal stud'),
+            quantity: lf,
+          }),
+        )
+      }
+    } else if (totalLf > 0 || parseNum(calc.metalStudLaborCostBase) > 0) {
       lines.push(
         buildComponentLine('metal_stud', {
+          ...studCommon,
           location: 'Metal stud',
           quantity: totalLf,
-          custom_labor_rate: customRateFromV2Total(
-            parseNum(calc.metalStudLaborCostBase),
-            totalLf,
-          ),
-          custom_material_rate: customRateFromV2Total(
-            parseNum(calc.metalStudMaterialCost),
-            totalLf,
-          ),
-          description: 'Migrated metal stud framing',
         }),
       )
     }
   }
 
   if (v2.includeSuspendedGrid) {
-    const sqft = parseNum((v2 as Record<string, unknown>).suspendedGridSqft, parseNum(v2.sqft, 0))
-    if (sqft > 0 || parseNum(calc.carpenterCost) > 0) {
+    const perPhase = phaseRows(v2)
+      .map((b) => ({ b, sqft: parseNum(b.suspendedGridSqft, 0) }))
+      .filter((x) => x.sqft > 0)
+    const quoteLevelSqft = parseNum(
+      (v2 as Record<string, unknown>).suspendedGridSqft,
+      parseNum(v2.sqft, 0),
+    )
+    // Same aggregate-rate treatment as metal stud — divide once by the total.
+    const totalSqft = perPhase.length > 0
+      ? perPhase.reduce((sum, x) => sum + x.sqft, 0)
+      : quoteLevelSqft
+    const gridCommon = {
+      custom_labor_rate: customRateFromV2Total(parseNum(calc.carpenterCost), totalSqft),
+      custom_material_rate: customRateFromV2Total(
+        parseNum(calc.suspendedGridMaterialCost),
+        totalSqft,
+      ),
+      description: 'Migrated suspended grid (carpenter labor)',
+    }
+
+    if (perPhase.length > 0) {
+      for (const { b, sqft } of perPhase) {
+        lines.push(
+          buildComponentLine('suspended_grid', {
+            ...gridCommon,
+            location: phaseLocation(b, 'Suspended grid'),
+            quantity: sqft,
+          }),
+        )
+      }
+    } else if (totalSqft > 0 || parseNum(calc.carpenterCost) > 0) {
       lines.push(
         buildComponentLine('suspended_grid', {
+          ...gridCommon,
           location: 'Suspended grid',
-          quantity: sqft,
-          custom_labor_rate: customRateFromV2Total(parseNum(calc.carpenterCost), sqft),
-          custom_material_rate: customRateFromV2Total(
-            parseNum(calc.suspendedGridMaterialCost),
-            sqft,
-          ),
-          description: 'Migrated suspended grid (carpenter labor)',
+          quantity: totalSqft,
         }),
       )
     }
@@ -274,7 +334,11 @@ function buildComponentStarterLines(v2: DrywallQuote): QuoteLineItem[] {
         buildComponentLine('frp', {
           location: 'FRP',
           quantity: sqft,
-          custom_material_rate: parseNum(v2.frpSheetRate) > 0 ? parseNum(v2.frpSheetRate) : undefined,
+          // frpSheetRate is $/SHEET (v2 prices sheets = sqft/32) and the v3 line is
+          // per sqft — carrying it straight across multiplied material ~32x. Blend
+          // the v2 material cost, which also picks up the adhesive and trim sticks
+          // the per-sheet rate left behind.
+          custom_material_rate: customRateFromV2Total(parseNum(calc.frpMaterialCost), sqft),
           custom_labor_rate:
             parseNum(v2.frpLaborRate) > 0 ? parseNum(v2.frpLaborRate) : undefined,
           description: 'Migrated FRP',
@@ -294,6 +358,8 @@ function buildComponentLine(
     description: string
     custom_labor_rate?: number
     custom_material_rate?: number
+    waste_pct?: number
+    accessories_in_material_rate?: boolean
   },
 ): QuoteLineItem {
   return {
@@ -305,9 +371,78 @@ function buildComponentLine(
     catalog_id: '',
     custom_labor_rate: params.custom_labor_rate,
     custom_material_rate: params.custom_material_rate,
+    ...(params.waste_pct !== undefined ? { waste_pct: params.waste_pct } : {}),
+    ...(params.accessories_in_material_rate !== undefined
+      ? { accessories_in_material_rate: params.accessories_in_material_rate }
+      : {}),
     override_reason: MIGRATION_OVERRIDE,
     notes: COMPONENT_MIGRATION_NOTES,
   }
+}
+
+/**
+ * Phase rows the v2 editor calls "(this floor)". RC channel, suspended grid and
+ * metal stud are entered per breakdown, so conversion has to walk them — reading
+ * only the quote-level fields drops the quantities entirely on a phased job.
+ */
+function phaseRows(v2: DrywallQuote): QuoteBreakdown[] {
+  return Array.isArray(v2.breakdowns) ? v2.breakdowns : []
+}
+
+function phaseLocation(b: QuoteBreakdown, fallback: string): string {
+  return String(b.description ?? '').trim() || fallback
+}
+
+/** RC linear feet from either the quote or one breakdown row; spacing is quote-level. */
+function rcLinearFtFrom(
+  src: Pick<
+    QuoteBreakdown,
+    'rcChannelCeilingSqft' | 'rcChannelWallLinearFt' | 'rcChannelWallHeight' | 'rcChannelWallEntries'
+  >,
+  v2: DrywallQuote,
+): number {
+  let lf = 0
+  const ceilingSqft = parseNum(src.rcChannelCeilingSqft, 0)
+  const ceilingSpacing = parseNum(v2.rcChannelCeilingSpacing, 24) || 24
+  if (ceilingSqft > 0 && ceilingSpacing > 0) {
+    lf += ceilingSqft / (ceilingSpacing / 12)
+  }
+
+  const wallSpacing = parseNum(v2.rcChannelWallSpacing, 24) || 24
+  const wallEntries = Array.isArray(src.rcChannelWallEntries) ? src.rcChannelWallEntries : []
+  if (wallEntries.length > 0) {
+    for (const entry of wallEntries) {
+      const raw = entry as unknown as Record<string, unknown>
+      const wallLf = parseNum(entry.linearFt ?? raw.wallLf ?? raw.rcChannelWallLf, 0)
+      const wallHeight = parseNum(entry.height ?? raw.wallHeight ?? raw.rcChannelWallHeight, 0)
+      const spacing = parseNum(raw.spacing, wallSpacing) || wallSpacing
+      if (wallLf > 0 && wallHeight > 0 && spacing > 0) {
+        lf += Math.ceil(wallHeight / (spacing / 12)) * wallLf
+      } else if (wallLf > 0) {
+        lf += wallLf
+      }
+    }
+  } else {
+    // Breakdown rows carry the wall as scalars rather than entries.
+    const wallLf = parseNum(src.rcChannelWallLinearFt, 0)
+    const wallHeight = parseNum(src.rcChannelWallHeight, 0)
+    if (wallLf > 0 && wallHeight > 0) {
+      lf += Math.ceil(wallHeight / (wallSpacing / 12)) * wallLf
+    } else if (wallLf > 0) {
+      lf += wallLf
+    }
+  }
+
+  return Math.round(lf * 100) / 100
+}
+
+/** Metal stud wall LF on one breakdown row (scalar plus any per-wall entries). */
+function metalStudLfFrom(src: QuoteBreakdown): number {
+  const entries = Array.isArray(src.metalStudEntries) ? src.metalStudEntries : []
+  if (entries.length > 0) {
+    return entries.reduce((sum, e) => sum + parseNum(e.wallLf, 0), 0)
+  }
+  return parseNum(src.metalStudWallLf, 0)
 }
 
 function estimateRcChannelLinearFt(v2: DrywallQuote): number {
