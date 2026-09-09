@@ -31,6 +31,7 @@ export const METAL_STUD_GAUGES = [
 ] as const
 
 export const INSULATION_TYPES = [
+  { value: 'r11Batts', label: 'R-11 Batts' },
   { value: 'r13Batts', label: 'R-13 Batts' },
   { value: 'r19Batts', label: 'R-19 Batts' },
   { value: 'r21Batts', label: 'R-21 Batts' },

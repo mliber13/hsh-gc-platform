@@ -810,6 +810,7 @@ function resolveMaterials(
       unit: acc.unit?.trim() || 'pcs',
       length: acc.length?.trim() || null,
       threadType: acc.threadType?.trim() || null,
+      facing: acc.facing?.trim() || null,
     }))
 }
 

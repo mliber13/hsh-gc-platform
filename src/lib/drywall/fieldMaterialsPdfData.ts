@@ -20,6 +20,7 @@ export interface FieldMaterialsAccessoryRow {
   unit: string
   length: string
   threadType: string
+  facing: string
   autoCalculated: boolean
 }
 
@@ -163,6 +164,7 @@ export function extractMaterialsFromFieldTakeoff(takeoff: FieldTakeoff): {
       unit: acc.unit || 'pcs',
       length: acc.length || '',
       threadType: acc.threadType || '',
+      facing: acc.facing || '',
       autoCalculated: Boolean(acc.autoCalculated),
     })
   }
@@ -171,9 +173,10 @@ export function extractMaterialsFromFieldTakeoff(takeoff: FieldTakeoff): {
 }
 
 export function formatAccessoryLineDescription(
-  acc: Pick<FieldMaterialsAccessoryRow, 'subtype' | 'type' | 'length' | 'threadType'>,
+  acc: Pick<FieldMaterialsAccessoryRow, 'subtype' | 'type' | 'length' | 'threadType' | 'facing'>,
 ): string {
   let description = acc.subtype || acc.type || 'Accessory'
+  if (acc.facing) description += ` - ${acc.facing}`
   if (acc.length) description += ` (${acc.length})`
   if (acc.threadType) description += ` - ${acc.threadType}`
   return description

@@ -21,10 +21,12 @@ import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import {
   FIELD_MATERIAL_OPTIONS,
   getDefaultUnit,
+  getFacingOptions,
   getLengthOptions,
   getSubtypeOptions,
   getThreadTypeOptions,
   getUnitOptions,
+  shouldShowFacing,
   shouldShowLength,
   shouldShowThreadType,
 } from '@/lib/drywall/fieldAccessoryUi'
@@ -89,6 +91,7 @@ export function FieldAccessoriesSection({
           autoCalculated: false,
           length: '',
           threadType: '',
+          facing: '',
         },
         ...prev.accessories,
       ],
@@ -109,11 +112,17 @@ export function FieldAccessoriesSection({
           updated.subtype = ''
           updated.length = ''
           updated.threadType = ''
+          updated.facing = ''
           updated.unit = getDefaultUnit(value, '')
           if (acc.autoCalculated) updated.manuallyEdited = false
         }
         if (field === 'subtype' && acc.type === 'Joint Compound') {
           updated.unit = getDefaultUnit(acc.type, value)
+        }
+        // Switching R-13 batts to rigid board would otherwise leave a facing
+        // behind that the new item can't have.
+        if (field === 'subtype' && !shouldShowFacing(acc.type || '', value)) {
+          updated.facing = ''
         }
         return updated
       }),
@@ -242,7 +251,9 @@ export function FieldAccessoriesSection({
 
                 <div
                   className={`grid grid-cols-2 gap-3 ${
-                    shouldShowLength(acc.type || '') || shouldShowThreadType(acc.type || '')
+                    shouldShowLength(acc.type || '') ||
+                    shouldShowThreadType(acc.type || '') ||
+                    shouldShowFacing(acc.type || '', acc.subtype || '')
                       ? 'md:grid-cols-[2fr_2fr_1fr_1fr_1fr]'
                       : 'md:grid-cols-[2fr_2fr_1fr_1fr]'
                   }`}
@@ -302,6 +313,28 @@ export function FieldAccessoriesSection({
                           {getLengthOptions(acc.type || '', acc.subtype || '').map((length) => (
                             <SelectItem key={length} value={length}>
                               {length}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {shouldShowFacing(acc.type || '', acc.subtype || '') && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Facing</Label>
+                      <Select
+                        value={acc.facing || ''}
+                        disabled={readOnly || !acc.subtype || acc.autoCalculated}
+                        onValueChange={(v) => handleAccessoryChange(acc.id, 'facing', v)}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Facing" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getFacingOptions(acc.type || '', acc.subtype || '').map((f) => (
+                            <SelectItem key={f} value={f}>
+                              {f}
                             </SelectItem>
                           ))}
                         </SelectContent>

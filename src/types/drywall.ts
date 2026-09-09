@@ -714,6 +714,8 @@ export interface FieldAccessoryEntry {
   manuallyEdited?: boolean
   length?: string
   threadType?: string
+  /** Insulation only: 'Unfaced' | 'Faced'. */
+  facing?: string
 }
 
 export interface FieldChecklistItem {

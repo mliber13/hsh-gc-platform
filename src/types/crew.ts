@@ -97,6 +97,8 @@ export interface CrewMaterial {
   length: string | null
   /** Thread type for screw fasteners (e.g. "Coarse"). */
   threadType: string | null
+  /** Facing for batt insulation ("Unfaced" | "Faced"). */
+  facing: string | null
 }
 
 /** Field-measured board counts for hangers, grouped by area. */

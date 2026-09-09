@@ -124,6 +124,7 @@ export const FIELD_MATERIAL_OPTIONS: { category: string; items: string[] }[] = [
   {
     category: 'Insulation',
     items: [
+      'R-11 Batts',
       'R-13 Batts',
       'R-19 Batts',
       'R-21 Batts',
@@ -217,6 +218,22 @@ export function getLengthOptions(type: string, subtype: string): string[] {
     if (subtype?.includes('Wall Angle')) return ["10'", "12'"]
   }
   return []
+}
+
+/**
+ * Batts are stocked both faced and unfaced and picking up the wrong one is a
+ * return trip, so facing rides next to the R-value instead of being folded into
+ * the item name — the same shape thread type has on fasteners, and it leaves
+ * every takeoff saved before today readable. Rigid board has no facing.
+ */
+export function getFacingOptions(type: string, subtype: string): string[] {
+  if (type !== 'Insulation') return []
+  if (subtype.includes('Rigid')) return []
+  return ['Unfaced', 'Faced']
+}
+
+export function shouldShowFacing(type: string, subtype: string): boolean {
+  return getFacingOptions(type, subtype).length > 0
 }
 
 export function getThreadTypeOptions(type: string): string[] {

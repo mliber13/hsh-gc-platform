@@ -27,6 +27,8 @@ export const DRYWALL_QUOTE_BASE_DEFAULTS = {
   insulationCeilingLaborRate: 0,
   insulationWallLaborRate: 0,
   insulationPricing: {
+    r11BattsUnfacedRate: 0,
+    r11BattsPaperFacedRate: 0,
     r13BattsUnfacedRate: 0,
     r13BattsPaperFacedRate: 0,
     r19BattsUnfacedRate: 0,

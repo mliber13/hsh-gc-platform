@@ -133,6 +133,7 @@ export function mergeFieldTakeoff(
           manuallyEdited: Boolean(acc.manuallyEdited),
           length: acc.length ?? '',
           threadType: acc.threadType ?? '',
+          facing: acc.facing ?? '',
         }))
       : [],
     checklist:

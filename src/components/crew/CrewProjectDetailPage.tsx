@@ -730,8 +730,10 @@ export function CrewProjectDetailPage() {
                           >
                             <div className="min-w-0">
                               <p className="truncate font-medium">{displayName}</p>
-                              {row.threadType ? (
-                                <p className="text-xs text-muted-foreground">{row.threadType}</p>
+                              {row.facing || row.threadType ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {[row.facing, row.threadType].filter(Boolean).join(' · ')}
+                                </p>
                               ) : null}
                             </div>
                             <p className="shrink-0 tabular-nums font-medium">
