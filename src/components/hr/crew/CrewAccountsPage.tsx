@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/dialog'
 import type { Contractor1099, Employee } from '@/types/hr'
 import type { CrewAccountStatus, CrewInviteToken, CrewProfileLink } from '@/types/crew'
+import { cn } from '@/lib/utils'
 import { fetchTeam } from '@/services/hrTeamService'
-import { fetchCrewProfileLinks } from '@/services/userService'
+import { fetchCrewProfileLinks, setCrewAccountActive } from '@/services/userService'
 import {
   buildCrewSignupUrl,
   fetchCrewInvitesForOrg,
@@ -61,6 +62,7 @@ function CrewPersonTable({
   onGenerateInvite,
   onCopyInvite,
   onRevokeInvite,
+  onSetActive,
   busyPersonId,
 }: {
   title: string
@@ -72,6 +74,7 @@ function CrewPersonTable({
   onGenerateInvite: (person: PersonRow) => void
   onCopyInvite: (person: PersonRow) => void
   onRevokeInvite: (person: PersonRow) => void
+  onSetActive: (person: PersonRow, active: boolean) => void
   busyPersonId: string | null
 }) {
   const activePeople = people
@@ -123,9 +126,9 @@ function CrewPersonTable({
                     <td className="px-4 py-3">
                       {status === 'linked' && link ? (
                         <div className="flex items-start gap-2 text-sm">
-                          <UserCheck className="mt-0.5 size-4 shrink-0 text-green-600" />
+                          <UserCheck className={cn('mt-0.5 size-4 shrink-0', link.isActive ? 'text-green-600' : 'text-muted-foreground')} />
                           <div>
-                            <div>Account active</div>
+                            <div>{link.isActive ? 'Account active' : 'Deactivated'}</div>
                             <div className="text-xs text-muted-foreground">{link.email}</div>
                             <div className="text-xs text-muted-foreground">
                               Updated{' '}
@@ -164,6 +167,16 @@ function CrewPersonTable({
                           onClick={() => onGenerateInvite(person)}
                         >
                           Generate invite link
+                        </Button>
+                      ) : null}
+                      {status === 'linked' && link ? (
+                        <Button
+                          size="sm"
+                          variant={link.isActive ? 'ghost' : 'outline'}
+                          disabled={busy}
+                          onClick={() => onSetActive(person, !link.isActive)}
+                        >
+                          {link.isActive ? 'Deactivate' : 'Reactivate'}
                         </Button>
                       ) : null}
                       {status === 'invite_pending' ? (
@@ -282,6 +295,35 @@ export function CrewAccountsPage() {
     await copyToClipboard(buildCrewSignupUrl(inv.token))
   }
 
+  const handleSetActive = async (person: PersonRow, active: boolean) => {
+    const link = links.find((l) => l.personId === person.id && l.personType === person.kind)
+    if (!link) {
+      toast.error('No linked account found')
+      return
+    }
+    if (
+      !active &&
+      !window.confirm(
+        `Deactivate ${person.name}'s account?\n\n` +
+          'They lose access to the crew app and can no longer clock in, post messages ' +
+          'or upload photos. Their payroll history and past work are kept, and you can ' +
+          'reactivate them at any time.',
+      )
+    ) {
+      return
+    }
+    setBusyPersonId(person.id)
+    try {
+      await setCrewAccountActive(link.userId, active)
+      toast.success(active ? `${person.name} reactivated` : `${person.name} deactivated`)
+      await load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update account status')
+    } finally {
+      setBusyPersonId(null)
+    }
+  }
+
   const handleRevokeInvite = async (person: PersonRow) => {
     const inv = inviteByPersonKey.get(`${person.kind}:${person.id}`)
     if (!inv) {
@@ -348,6 +390,7 @@ export function CrewAccountsPage() {
         onGenerateInvite={handleGenerateInvite}
         onCopyInvite={handleCopyInvite}
         onRevokeInvite={handleRevokeInvite}
+        onSetActive={handleSetActive}
         busyPersonId={busyPersonId}
       />
 
@@ -361,6 +404,7 @@ export function CrewAccountsPage() {
         onGenerateInvite={handleGenerateInvite}
         onCopyInvite={handleCopyInvite}
         onRevokeInvite={handleRevokeInvite}
+        onSetActive={handleSetActive}
         busyPersonId={busyPersonId}
       />
 

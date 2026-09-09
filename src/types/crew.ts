@@ -20,6 +20,8 @@ export interface CrewProfileLink {
   personId: string
   personName: string
   email: string
+  /** false when the office has deactivated the account. */
+  isActive: boolean
   updatedAt: string
 }
 

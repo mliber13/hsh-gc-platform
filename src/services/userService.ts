@@ -126,6 +126,24 @@ export async function getOrganizationUsersByEmail(): Promise<Map<string, UserPro
 }
 
 /**
+ * Activate or deactivate a crew account.
+ *
+ * Goes through set_crew_account_active rather than updating profiles directly:
+ * the RPC admits owners as well as legacy admins, refuses to change your own
+ * account, and confirms the target is in your org. Deactivating blocks every
+ * crew RPC (they gate on user_has_crew_role, which now requires an active
+ * account) and empties the org-scoped reads. org_team is untouched, so payroll
+ * history survives.
+ */
+export async function setCrewAccountActive(userId: string, isActive: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_crew_account_active', {
+    p_user_id: userId,
+    p_active: isActive,
+  })
+  if (error) throw new Error(error.message || 'Failed to update account status')
+}
+
+/**
  * Set user active/inactive (revoke or restore app access). Admin only.
  */
 export async function setUserActive(userId: string, isActive: boolean): Promise<void> {
@@ -225,7 +243,7 @@ export async function fetchCrewProfileLinks(): Promise<CrewProfileLink[]> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, linked_employee_id, linked_contractor_id, roles, updated_at')
+    .select('id, email, linked_employee_id, linked_contractor_id, roles, is_active, updated_at')
     .eq('organization_id', organizationId)
     .contains('roles', ['crew'])
 
@@ -248,6 +266,7 @@ export async function fetchCrewProfileLinks(): Promise<CrewProfileLink[]> {
         personId: employeeId,
         personName: employeeNameById.get(employeeId) ?? 'Employee',
         email: row.email ?? '',
+        isActive: row.is_active !== false,
         updatedAt: row.updated_at ?? new Date().toISOString(),
       })
     } else if (contractorId) {
@@ -257,6 +276,7 @@ export async function fetchCrewProfileLinks(): Promise<CrewProfileLink[]> {
         personId: contractorId,
         personName: contractorNameById.get(contractorId) ?? 'Contractor',
         email: row.email ?? '',
+        isActive: row.is_active !== false,
         updatedAt: row.updated_at ?? new Date().toISOString(),
       })
     }
