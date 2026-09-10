@@ -38,8 +38,6 @@
 //   /feedback                                      → MyFeedback
 //   /privacy                                       → PrivacyPolicy        (public)
 //   /terms                                         → TermsOfUse           (public)
-//   /vendor-quote/:token                           → VendorQuotePortal    (public)
-//   /quote/:token                                  → VendorQuotePortal    (public)
 //
 
 import { useEffect, useState } from 'react'
@@ -89,7 +87,6 @@ import { ItemLibrary } from '@/components/ItemLibrary'
 import { QuickBooksConnect } from '@/components/QuickBooksConnect'
 import { QuickBooksImport } from '@/components/QuickBooksImport'
 import { QuickBooksCallback } from '@/components/QuickBooksCallback'
-import { VendorQuotePortal } from '@/components/VendorQuotePortal'
 import { PurchaseOrdersView } from '@/components/PurchaseOrdersView'
 import { ContactDirectory } from '@/components/ContactDirectory'
 import { SOWManagement } from '@/components/SOWManagement'
@@ -167,8 +164,6 @@ export function AppRoutes() {
   return (
     <Routes>
       {/* Public — no AuthGate */}
-      <Route path="/vendor-quote/:token" element={<VendorQuotePortal />} />
-      <Route path="/quote/:token" element={<VendorQuotePortal />} />
       <Route path="/supplier/:token" element={<SupplierOrderSharePage />} />
       <Route path="/customer/:token" element={<CustomerSchedulePage />} />
       <Route path="/privacy" element={<PublicPrivacy />} />

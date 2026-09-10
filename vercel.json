@@ -1,14 +1,6 @@
 {
   "rewrites": [
     {
-      "source": "/vendor-quote/:token*",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/quote/:token*",
-      "destination": "/index.html"
-    },
-    {
       "source": "/privacy",
       "destination": "/privacy.html"
     },
