@@ -513,7 +513,9 @@ function drawDurationSummary(ctx: PdfCtx, quote: DrywallQuoteV3, drywallSqft: nu
   })
   lines.push(`Total: ${Number(summary.totalDays) || 0} working days`)
 
-  drawSectionTitle(ctx, 'DRYWALL DURATION SUMMARY')
+  // Short list — break it across pages and the total lands alone under a title
+  // that stayed behind. Claim the whole block or start it on the next page.
+  drawSectionTitle(ctx, 'DRYWALL DURATION SUMMARY', { keepWithNext: lines.length * 16 })
   ctx.doc.setFont('helvetica', 'normal')
   ctx.doc.setFontSize(10)
   setTextRgb(ctx.doc, DW_TEXT)
@@ -526,13 +528,6 @@ function drawDurationSummary(ctx: PdfCtx, quote: DrywallQuoteV3, drywallSqft: nu
     }
     ctx.y += 4
   }
-  ensureRoom(ctx, 26)
-  ctx.doc.setFontSize(8)
-  setTextRgb(ctx.doc, DW_GRAY)
-  const note = ctx.doc.splitTextToSize(summary.assumptions, ctx.maxW)
-  ctx.doc.text(note, ctx.margin + 4, ctx.y)
-  ctx.y += note.length * 10
-  setTextRgb(ctx.doc, DW_TEXT)
 }
 
 function drawFooterTerms(
