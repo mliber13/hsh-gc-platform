@@ -95,11 +95,32 @@ export function isRbacRole(value: string): value is RbacRole {
   return (RBAC_ROLES as readonly string[]).includes(value)
 }
 
-/** V1: first element of roles[] is the effective role. */
+/**
+ * Privilege order, highest first. Deliberately not RBAC_ROLES order: crew
+ * outranks viewer here, because a crew account reaches /crew and a viewer
+ * reaches nothing.
+ */
+const ROLE_PRECEDENCE: readonly RbacRole[] = [
+  'owner',
+  'office_gc',
+  'office_drywall',
+  'field_gc',
+  'field_drywall',
+  'crew',
+  'viewer',
+] as const
+
+/**
+ * Highest privilege held, not roles[0]. The SQL side matches with
+ * `roles && ARRAY[...]`, so a ['crew','office_drywall'] profile is an operator
+ * to every policy; reading it as crew in the UI put the two role systems in
+ * disagreement. No-op on current data — every profile holds a single role.
+ */
 export function deriveEffectiveRole(profile: UserProfile | null | undefined): RbacRole {
   if (!profile) return 'viewer'
-  const first = profile.roles?.[0]
-  if (first && isRbacRole(first)) return first
+  const held = profile.roles ?? []
+  const highest = ROLE_PRECEDENCE.find((role) => held.includes(role))
+  if (highest) return highest
   const legacy = profile.role as UserRole
   if (legacy === 'admin') return 'owner'
   if (legacy === 'editor') return 'office_gc'
