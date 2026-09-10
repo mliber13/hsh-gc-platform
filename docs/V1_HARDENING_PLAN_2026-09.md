@@ -74,7 +74,9 @@ Both token RPCs dropped. `submit_vendor_quote` turned out to take **ten scalar a
 
 **Still open after Batch 1:** the `supabase_admin` default-ACL entry still grants `anon=X` to functions *that role* creates (ours are created by `postgres`, so this is latent, not live). The branch anon JWT that item 6 removed from the two scripts is still in `docs/A5C2_C1_PILOT.md:210` and `docs/A5C_BRANCH_VERIFICATION.md:80` — Batch 0 hygiene. `.env.example` never held `VITE_VENDOR_PORTAL_URL`, so that half of item 8 was a no-op.
 
-🔴 **Batch 1 is applied end to end and has never been smoked in a browser.** `docs/briefs/CREW_SMOKE_WALKTHROUGH.md` has not been run once. 1D is the batch most likely to surface something there, because a viewer losing write access is visible. **Run it before starting Batch 2.**
+🟡 **Batch 1 partially smoked 2026-09-13.** Mark opened the crew view for several crew members and everything loaded correctly. That covers the largest surface: 1B's read scoping resolving real linked ids through `crew_is_assigned_to_project`, 1D's revoke not touching the authenticated RPCs the crew workspace calls, and the `org_drywall_catalogs` read that item 5 deliberately left alone.
+
+**Still unproven, in priority order:** (1) **crew signup** — the only path through `consume_crew_invite_token`, the 1A trigger's definer exemption, and 1D's single `anon` carve-out, and the only one that matters before the next onboarding; (2) viewer/`tate` write refusal, which is a deliberate change needing sanction rather than a test; (3) deactivate/reactivate, clock in/out on a 1099 account, QuickBooks connect. Walk-through: `docs/briefs/CREW_SMOKE_WALKTHROUGH.md`.
 
 Brief: `docs/briefs/BATCH_1D_SYSTEMIC_GRANTS_AND_POLICY_GAPS.md`. Original scope: `docs/briefs/BATCH_1D_SYSTEMIC_GRANTS_AND_POLICY_GAPS.md`. Systemic `anon` revoke, the four P1-SEC-5 hardenings, `organizations` RLS, the org-only write policies, `vercel.json` headers, script hygiene, `pending/` removal, plus the `dfp_auth_insert` term from 1B and the orphaned `appConfig.ts` from 1C.
 
