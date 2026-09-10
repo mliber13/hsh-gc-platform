@@ -1,5 +1,9 @@
 // A5-c.2 C2-2 deals subsystem smoke tests — runtime RLS behavior verification.
-// Usage (from repo root): node scripts/a5c2-c2-smoke.mjs
+// Archived: this ran against a Supabase branch project that no longer exists.
+// Kept for the RLS assertions it encodes, not because it still runs.
+//
+// Usage (from repo root):
+//   BRANCH_SUPABASE_ANON_KEY=... node scripts/archive/a5c2-c2-smoke.mjs
 //
 // Target: branch project clqgnnydrwpgxvipyotd only.
 // Branch deal-child tables (deal_activity_events, deal_documents, deal_notes,
@@ -12,8 +16,13 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const BRANCH_URL = 'https://clqgnnydrwpgxvipyotd.supabase.co';
-const ANON_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNscWdubnlkcndwZ3h2aXB5b3RkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDIxMjksImV4cCI6MjA5MjYxODEyOX0.DH9Dk9sgsw3JlZvGy5U9x_wVljnli2mSaEFIis7zuQw';
+const BRANCH_URL = process.env.BRANCH_SUPABASE_URL ?? 'https://clqgnnydrwpgxvipyotd.supabase.co';
+const ANON_KEY   = process.env.BRANCH_SUPABASE_ANON_KEY ?? '';
+
+if (!ANON_KEY) {
+  console.error('Set BRANCH_SUPABASE_ANON_KEY to run this script. The key is no longer committed.');
+  process.exit(1);
+}
 
 const HSH_UUID  = 'b80516ed-a8aa-4b6c-bdf8-2155e18a0129';
 const ORGB_UUID = '444df8c1-875b-4843-8a09-2c2e69a4bcab';
