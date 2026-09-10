@@ -12,11 +12,14 @@
 import { ThemeProvider } from './components/theme-provider'
 import { Toaster } from 'sonner'
 import { AppRoutes } from './routes'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 function App() {
   return (
     <ThemeProvider>
-      <AppRoutes />
+      <ErrorBoundary>
+        <AppRoutes />
+      </ErrorBoundary>
       <Toaster richColors position="top-right" />
     </ThemeProvider>
   )

@@ -142,6 +142,7 @@ import { CrewProjectDetailPage } from '@/components/crew/CrewProjectDetailPage'
 import { CrewMeasurePage } from '@/components/crew/CrewMeasurePage'
 
 import { AppLayout } from '@/components/AppLayout'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { AuthedLayout } from './AuthedLayout'
 import { ProjectScope, useProjectContext } from './ProjectScope'
 import {
@@ -183,12 +184,16 @@ export function AppRoutes() {
         <Route path="/quickbooks/callback" element={<QuickBooksCallbackRoute />} />
         <Route path="/qb-callback" element={<QuickBooksCallbackRoute />} />
 
+        {/* Own boundary: a crew page throwing on a phone in the field must not
+            take the operator app down with it. */}
         <Route
           path="/crew"
           element={
-            <RequireCrewWorkspaceAccess>
-              <CrewShell />
-            </RequireCrewWorkspaceAccess>
+            <ErrorBoundary>
+              <RequireCrewWorkspaceAccess>
+                <CrewShell />
+              </RequireCrewWorkspaceAccess>
+            </ErrorBoundary>
           }
         >
           <Route index element={<CrewProjectListPage />} />
