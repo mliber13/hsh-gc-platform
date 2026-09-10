@@ -30,7 +30,11 @@ Full per-domain reports (with every finding, table, and line ref) are in `docs/a
 
 Two stale references in my brief, both caught: `organization_id_uuid` was renamed to `organization_id` in `20260429000002:209`, and `get_user_organization()` was dropped at `:112`. I cited the migrations that created them without checking what later ones did. `organization_id` is guarded, so no column was left open.
 
-**Next: Batch 1B.** Carries two items found during 1A — see the additions to P1-SEC-5 and P1-SEC-11 below.
+⚠️ **1A is applied to the live database but NOT operator-smoked** (Mark was out of time 2026-09-10). Every failure mode was proven in SQL as a real `authenticated` caller, including the crew-signup mechanism, so residual risk is low — but the app wiring (signUp → consume → `/crew` bootstrap) is unproven. **1B's crew smoke covers both batches**; walk-through in `docs/briefs/CREW_SMOKE_WALKTHROUGH.md`. Do not mark 1A verified until that run happens.
+
+**Next: Batch 1B** — brief written, `docs/briefs/BATCH_1B_CREW_READ_SCOPING.md`. Scopes crew reads (P0-SEC-2), plus P1-SEC-6, P1-SEC-9 and the two 1A findings below. Three traps documented in it, one of which — an empty-string `linked_employee_id` in `crew_is_assigned_to_project` — turns a latent photo-upload bug into a blank app the moment that function starts gating reads.
+
+Batch 1 is now four briefs: **1A** (shipped), **1B** (crew read scoping), **1C** (vendor RFQ removal), **1D** (systemic anon revoke, `vercel.json` headers, org-only write policies, `organizations` RLS, script hygiene, `pending/` reconcile). 1B needs a crew smoke; 1D needs only an operator one — which is why they are not one brief.
 
 ---
 
