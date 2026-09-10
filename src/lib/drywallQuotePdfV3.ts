@@ -504,6 +504,7 @@ function drawDurationSummary(ctx: PdfCtx, quote: DrywallQuoteV3, drywallSqft: nu
     hasLevel5,
     hasTexture,
     paperFloorsRequired: Boolean(quote.paper_floors_required),
+    overrides: quote.duration_overrides,
   })
 
   const lines = summary.lines.map((line) => {

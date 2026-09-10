@@ -30,6 +30,23 @@ export const DEFAULT_DURATION_PARAMS = {
 
 export type DurationParams = typeof DEFAULT_DURATION_PARAMS
 
+/**
+ * Stable identity for each step. The labels move — "Finish" carries a different
+ * parenthetical depending on texture — so an override has to hang off something
+ * that doesn't change when the estimator picks a different finish.
+ */
+export const DURATION_LINE_KEYS = [
+  'prep',
+  'hang',
+  'paperFloors',
+  'finish',
+  'cleanout',
+] as const
+
+export type DurationLineKey = (typeof DURATION_LINE_KEYS)[number]
+
+export type DurationOverrides = Partial<Record<DurationLineKey, unknown>>
+
 export interface DrywallDurationInput {
   drywallSqft: number
   beadSticks?: number
@@ -39,11 +56,34 @@ export interface DrywallDurationInput {
   hasTexture?: boolean
   paperFloorsRequired?: boolean
   params?: Partial<DurationParams>
+  /**
+   * Estimator's own numbers, per step. The model can't know about a phased
+   * handover, a GC who won't have the deck ready, or a crew that's done this
+   * exact building before — so whatever is set here wins over the calculation.
+   */
+  overrides?: DurationOverrides
 }
 
 export interface DurationLine {
+  key: DurationLineKey
   label: string
+  /** What the estimator is standing behind — the override if there is one. */
   days: number
+  /** What the calculation said, kept so the UI can show it and offer a reset. */
+  derivedDays: number
+  overridden: boolean
+}
+
+/**
+ * An override counts only when it is a real, non-negative number. Blank, junk
+ * and negatives fall back to the derived value rather than zeroing a step —
+ * clearing the field is how you go back to automatic.
+ */
+export function parseDurationOverride(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === '') return null
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0) return null
+  return n
 }
 
 /**
@@ -92,9 +132,9 @@ export function computeDrywallDurationSummary(input: DrywallDurationInput): {
     renovation_complex: p.hangRateRenovationComplex,
   }
 
-  const lines: DurationLine[] = []
+  const derived: Array<{ key: DurationLineKey; label: string; days: number }> = []
   const prepStockDays = Math.max(1, p.fixedPrep)
-  lines.push({ label: 'Prep/Scaffold & Stock', days: prepStockDays })
+  derived.push({ key: 'prep', label: 'Prep/Scaffold & Stock', days: prepStockDays })
 
   let hangDays = 0
   if (drywallSqft > 0) {
@@ -106,7 +146,7 @@ export function computeDrywallDurationSummary(input: DrywallDurationInput): {
     hangDays = roundUp ? Math.ceil(rawDays) : Math.floor(rawDays)
     hangDays = Math.max(1, hangDays)
   }
-  lines.push({ label: 'Hang', days: hangDays })
+  derived.push({ key: 'hang', label: 'Hang', days: hangDays })
 
   let finishDays = 0
   let textureDaysSmall = p.textureDaysSmall
@@ -139,20 +179,38 @@ export function computeDrywallDurationSummary(input: DrywallDurationInput): {
     }
   }
   if (paperFloorsRequired) {
-    lines.push({ label: 'Paper Floors', days: 1 })
+    derived.push({ key: 'paperFloors', label: 'Paper Floors', days: 1 })
   }
-  lines.push({
+  derived.push({
+    key: 'finish',
     label: hasTexture
       ? 'Finish (Tape, Bed, Skim, Texture, Sand)'
       : 'Finish (Tape, Bed, Skim, Sand)',
     days: finishDays,
   })
-  lines.push({ label: 'Cleanout', days: p.fixedCleanout })
+  derived.push({ key: 'cleanout', label: 'Cleanout', days: p.fixedCleanout })
+
+  const overrides = input.overrides ?? {}
+  const lines: DurationLine[] = derived.map((line) => {
+    const override = parseDurationOverride(overrides[line.key])
+    return {
+      ...line,
+      days: override ?? line.days,
+      derivedDays: line.days,
+      overridden: override !== null,
+    }
+  })
 
   const totalDays = lines.reduce((sum, l) => sum + l.days, 0)
   const assumptions = hasTexture
     ? `Single crew, no acceleration. Finish days ≥ hang days when sqft > 0. Texture ${textureDaysSmall} day(s) (${textureDaysLarge} if sqft > ${p.largeSqftTexture.toLocaleString()}).`
     : 'Single crew, no acceleration. Finish days ≥ hang days when sqft > 0. No texture time included for Level 4 Smooth / non-textured finishes.'
 
-  return { lines, totalDays, assumptions }
+  return {
+    lines,
+    totalDays,
+    assumptions: lines.some((l) => l.overridden)
+      ? `${assumptions} Adjusted by the estimator.`
+      : assumptions,
+  }
 }

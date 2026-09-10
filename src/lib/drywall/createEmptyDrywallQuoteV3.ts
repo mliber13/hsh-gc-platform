@@ -2,6 +2,7 @@ import { DRYWALL_QUOTE_BASE_DEFAULTS } from './drywallQuoteDefaults'
 import { buildV3FromV2, v2QuoteFromV3Snapshot, V3_LINE_MIGRATION_OVERRIDE_REASON } from './convertQuoteV2ToV3'
 import type { DrywallQuotePdfSettings, DrywallQuoteV3, QuoteAlternate, QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
 import { generateQuoteId } from './drywallQuoteHelpers'
+import { DURATION_LINE_KEYS, parseDurationOverride } from './durationService'
 
 export function createEmptyDrywallQuoteV3(): DrywallQuoteV3 {
   const d = DRYWALL_QUOTE_BASE_DEFAULTS
@@ -20,6 +21,21 @@ export function createEmptyDrywallQuoteV3(): DrywallQuoteV3 {
     notes: '',
     updatedAt: new Date().toISOString(),
   }
+}
+
+/**
+ * Estimator's hand-set day counts. Only keeps real, non-negative numbers under
+ * known step keys — anything else drops back to the calculated duration rather
+ * than persisting a value the summary would refuse to use anyway.
+ */
+function hydrateDurationOverrides(raw: unknown): Record<string, number> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, number> = {}
+  for (const key of DURATION_LINE_KEYS) {
+    const parsed = parseDurationOverride((raw as Record<string, unknown>)[key])
+    if (parsed !== null) out[key] = parsed
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 export function hydrateDrywallQuoteV3(raw: unknown): DrywallQuoteV3 {
@@ -47,6 +63,7 @@ export function hydrateDrywallQuoteV3(raw: unknown): DrywallQuoteV3 {
     complexity: hydrateScopeString(q.complexity, v2Snap?.complexity),
     paper_floors_required: hydrateScopeBool(q.paper_floors_required, v2Snap?.paperFloorsRequired),
     bead_sticks: hydrateScopeBeadSticks(q.bead_sticks, v2Snap?.beadSticks),
+    duration_overrides: hydrateDurationOverrides(q.duration_overrides),
     use_custom_scope_of_work:
       q.use_custom_scope_of_work === true
         ? true
@@ -101,6 +118,9 @@ export function hydrateDrywallQuoteV3(raw: unknown): DrywallQuoteV3 {
       complexity: hydrated.complexity ?? fromV2.complexity,
       paper_floors_required: hydrated.paper_floors_required ?? fromV2.paper_floors_required,
       bead_sticks: hydrated.bead_sticks ?? fromV2.bead_sticks,
+      // v2 has no per-step overrides, so a refresh from the v2 snapshot must not
+      // wipe adjustments made on the v3 side.
+      duration_overrides: hydrated.duration_overrides,
       use_custom_scope_of_work:
         hydrated.use_custom_scope_of_work ?? fromV2.use_custom_scope_of_work,
       custom_scope_of_work: hydrated.custom_scope_of_work ?? fromV2.custom_scope_of_work,

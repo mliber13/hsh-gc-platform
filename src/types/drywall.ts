@@ -636,6 +636,11 @@ export interface DrywallQuoteV3 {
   complexity?: string
   paper_floors_required?: boolean
   bead_sticks?: string | number
+  /**
+   * Per-step day counts the estimator set by hand, keyed by DurationLineKey.
+   * Absent key = use the calculated number. See durationService.
+   */
+  duration_overrides?: Record<string, number>
   /** Custom scope override — replaces structured scope on PDF when true */
   use_custom_scope_of_work?: boolean
   custom_scope_of_work?: string

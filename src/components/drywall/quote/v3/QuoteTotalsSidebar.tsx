@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, RotateCcw } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { includeLaborBurden } from '@/lib/drywall/calculations/quantityUtils'
@@ -11,7 +11,9 @@ import {
 import {
   computeDrywallDurationSummary,
   durationFinishFlags,
+  parseDurationOverride,
 } from '@/lib/drywall/durationService'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { formatQuoteMoney, formatPctLabel } from '@/lib/drywall/quoteV3Math'
 import type { QuoteV3TotalsSummary } from '@/lib/drywall/quoteV3Math'
 import type { DrywallQuoteV3, QuoteLineItemType } from '@/types/drywall'
@@ -57,6 +59,7 @@ export function QuoteTotalsSidebar({ quote, totals, catalogs, readOnly, onChange
       hasLevel5,
       hasTexture,
       paperFloorsRequired: Boolean(quote.paper_floors_required),
+      overrides: quote.duration_overrides,
     })
   }, [
     quote.ceiling_finish,
@@ -67,8 +70,19 @@ export function QuoteTotalsSidebar({ quote, totals, catalogs, readOnly, onChange
     quote.build_type,
     quote.complexity,
     quote.paper_floors_required,
+    quote.duration_overrides,
     totals.totalSqft,
   ])
+
+  const setDurationOverride = (key: string, raw: string) => {
+    const next = { ...(quote.duration_overrides ?? {}) }
+    const parsed = parseDurationOverride(raw)
+    // Clearing the field is how you go back to the calculated number, so an
+    // unusable value removes the override rather than storing a zero.
+    if (parsed === null) delete next[key]
+    else next[key] = parsed
+    onChange({ duration_overrides: Object.keys(next).length > 0 ? next : undefined })
+  }
   const anyAccepted = alternates.some((a) => a.selected)
   const markupBase = routine.markupBase
   const estimatedCost =
@@ -279,17 +293,55 @@ export function QuoteTotalsSidebar({ quote, totals, catalogs, readOnly, onChange
               Drywall duration summary
             </p>
             {durationSummary.lines.map((line) => (
-              <div key={line.label} className="flex justify-between gap-2 text-sm">
-                <span className="text-muted-foreground">{line.label}</span>
-                <span className="tabular-nums">
-                  {line.days} day{line.days !== 1 ? 's' : ''}
+              <div key={line.key} className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 flex-1 truncate text-muted-foreground" title={line.label}>
+                  {line.label}
                 </span>
+                {readOnly ? (
+                  <span className="tabular-nums">
+                    {line.days} day{line.days !== 1 ? 's' : ''}
+                  </span>
+                ) : (
+                  <span className="flex shrink-0 items-center gap-1">
+                    <NumericInput
+                      aria-label={`${line.label} days`}
+                      className={cn(
+                        'h-7 w-14 px-2 text-right text-sm tabular-nums',
+                        line.overridden && 'border-primary font-medium',
+                      )}
+                      placeholder={String(line.derivedDays)}
+                      value={line.overridden ? String(line.days) : ''}
+                      onChange={(e) => setDurationOverride(line.key, e.target.value)}
+                    />
+                    <span className="w-8 text-xs text-muted-foreground">
+                      day{line.days !== 1 ? 's' : ''}
+                    </span>
+                    <button
+                      type="button"
+                      title={`Back to calculated (${line.derivedDays})`}
+                      aria-label={`Reset ${line.label} to calculated days`}
+                      className={cn(
+                        'text-muted-foreground hover:text-foreground',
+                        !line.overridden && 'invisible',
+                      )}
+                      onClick={() => setDurationOverride(line.key, '')}
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
               </div>
             ))}
             <div className="flex justify-between gap-2 border-t border-border/50 pt-2 font-semibold">
               <span>Total</span>
               <span className="tabular-nums">{durationSummary.totalDays} working days</span>
             </div>
+            {!readOnly && (
+              <p className="pt-1 text-xs text-muted-foreground">
+                Calculated from sqft and scope. Type over any step if you know something the
+                estimator doesn't; clear the box to go back to the calculated number.
+              </p>
+            )}
             <p className="pt-1 text-xs text-muted-foreground">{durationSummary.assumptions}</p>
           </div>
         )}

@@ -4,10 +4,12 @@
  * and the section silently dropped off every quote converted from v2.
  */
 import { describe, expect, it } from 'vitest'
+import { hydrateDrywallQuoteV3 } from './createEmptyDrywallQuoteV3'
 import {
   computeDrywallDurationSummary,
   durationFinishFlags,
 } from './durationService'
+
 
 function summaryFor(quote: {
   ceiling_finish?: string
@@ -118,5 +120,88 @@ describe('a v3 quote produces a real duration', () => {
       18500,
     )
     expect(v3).toEqual(v2)
+  })
+})
+
+describe('estimator overrides', () => {
+  function withOverrides(overrides: Record<string, unknown>) {
+    return computeDrywallDurationSummary({
+      drywallSqft: 12000,
+      hasLevel5: false,
+      hasTexture: false,
+      overrides,
+    })
+  }
+
+  it('uses the estimator number and re-totals around it', () => {
+    const auto = withOverrides({})
+    const hangAuto = auto.lines.find((l) => l.key === 'hang')!.days
+    const adjusted = withOverrides({ hang: 9 })
+    const hang = adjusted.lines.find((l) => l.key === 'hang')!
+
+    expect(hang.days).toBe(9)
+    expect(hang.derivedDays).toBe(hangAuto)
+    expect(hang.overridden).toBe(true)
+    expect(adjusted.totalDays).toBe(auto.totalDays - hangAuto + 9)
+  })
+
+  it('leaves the steps that were not touched on automatic', () => {
+    const adjusted = withOverrides({ hang: 9 })
+    for (const line of adjusted.lines.filter((l) => l.key !== 'hang')) {
+      expect(line.overridden).toBe(false)
+      expect(line.days).toBe(line.derivedDays)
+    }
+  })
+
+  it('accepts zero — a step really can be someone else scope', () => {
+    const adjusted = withOverrides({ cleanout: 0 })
+    const cleanout = adjusted.lines.find((l) => l.key === 'cleanout')!
+    expect(cleanout.days).toBe(0)
+    expect(cleanout.overridden).toBe(true)
+  })
+
+  it('falls back to calculated for blank, junk and negative values', () => {
+    for (const bad of ['', null, undefined, 'soon', NaN, -3]) {
+      const line = withOverrides({ hang: bad }).lines.find((l) => l.key === 'hang')!
+      expect(line.overridden).toBe(false)
+      expect(line.days).toBe(line.derivedDays)
+    }
+  })
+
+  it('ignores an override for a step this job does not have', () => {
+    const noPaper = withOverrides({ paperFloors: 4 })
+    expect(noPaper.lines.some((l) => l.key === 'paperFloors')).toBe(false)
+  })
+
+  it('says so in the assumptions note when a number was adjusted', () => {
+    expect(withOverrides({}).assumptions).not.toContain('Adjusted by the estimator')
+    expect(withOverrides({ hang: 9 }).assumptions).toContain('Adjusted by the estimator')
+  })
+
+  it('keeps step identity stable when the finish label changes', () => {
+    const smooth = computeDrywallDurationSummary({ drywallSqft: 12000, hasTexture: false })
+    const textured = computeDrywallDurationSummary({ drywallSqft: 12000, hasTexture: true })
+    const smoothFinish = smooth.lines.find((l) => l.key === 'finish')!
+    const texturedFinish = textured.lines.find((l) => l.key === 'finish')!
+    expect(smoothFinish.label).not.toBe(texturedFinish.label)
+    // Different label, same key — so an override survives a finish change.
+    expect(smoothFinish.key).toBe(texturedFinish.key)
+  })
+})
+
+describe('overrides survive a save and reload', () => {
+  it('keeps known step keys and drops everything else', () => {
+    const saved = hydrateDrywallQuoteV3({
+      version: 3,
+      lineItems: [],
+      alternates: [],
+      duration_overrides: { hang: 9, cleanout: 0, bogus: 5, finish: -2, prep: 'x' },
+    })
+    expect(saved.duration_overrides).toEqual({ hang: 9, cleanout: 0 })
+  })
+
+  it('leaves the field off entirely when nothing was adjusted', () => {
+    const saved = hydrateDrywallQuoteV3({ version: 3, lineItems: [], alternates: [] })
+    expect(saved.duration_overrides).toBeUndefined()
   })
 })
