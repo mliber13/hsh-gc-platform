@@ -8,6 +8,24 @@ Full per-domain reports (with every finding, table, and line ref) are in `docs/a
 
 ---
 
+## 0a. Status — reviewed 2026-09-10
+
+**No batch has started.** The seven days since this plan was written went entirely to field interrupts, all of them legitimate and none of them in the plan: comms lanes + forwarding + whole-job view, foreman schedule rename, Photos & Files tab, honest push-send reporting, the A2P rejection, the v2→v3 per-phase converter loss, the $0 quote option, crew deactivation, insulation facing + R-11, and the v3 duration summary.
+
+**Closed sideways** by that work:
+
+- **Comms → `project_comms` table** — was §7 deferred, pulled forward because lane RLS is row-level and cannot hide a key inside `projects.metadata`. Also closes **P1-SEC-2** (author spoofing) and removes one `projects.metadata` writer.
+- **P1-SEC-7, the `is_active` half** — `crew_clock_in/out` and the `foreman_*` RPCs all gate on `user_has_crew_role`, which `20260909120000` now requires an active account for. The `NULLIF(linked_employee_id,'')` empty-string shadowing in the same RPCs is **still open**.
+- **The `type="number"` class** — `NumericInput` exists and is applied to four fields in `QuoteOptionsSection`. 253 inputs across 54 files remain (see §3).
+
+**Added to the plan** since 9/3: the numeric-input sweep, the mobile UI pass, photo attachments on messages, and the `project_photos` table.
+
+**Verified still open at review time** (grepped, not assumed): `P0-SEC-1` — the `profiles` self-update policy is unchanged, and any authenticated user can still set `roles='{owner}'` via PostgREST. `P0-SEC-4` — neither `send-quote-email` nor `deal-coach-chat` calls `getUser`. `P0-INFRA-1` — `grep ErrorBoundary src` is still 0. `P1-QA-1` — still no `.github/`.
+
+**Next: Batch 1.** Recommended three times now. P0-SEC-1 is a live escalation path that widens with every crew invite, and Q2 is settled so nothing blocks it.
+
+---
+
 ## 0. Executive summary
 
 The app is in materially better shape than the April audit: the earlier cleanup runbooks are executed, quote-trust and anon-lockdown batches shipped, push rotation fixed, foreman/comms/supplier work landed. What remains clusters into **four cross-cutting themes**, and almost every high-severity finding is an instance of one of them:
@@ -311,15 +329,22 @@ Analysed in the per-domain reports; each is a real improvement but structural, s
 
 ---
 
-## 8. Open decisions for Mark
+## 8. Decisions — settled with Mark 2026-09-10
 
-1. **Excel estimate import** (`ImportEstimate.tsx`, unrouted): is it used? If yes it's a wiring bug to fix in Batch 4; if no it's ~1,000 LOC to delete in Batch 6.
-2. **Vendor RFQ / quote-portal chain** (P0-SEC-3 / P2-DEL-3): remove entirely (recommended — nothing can create a request since February), or keep and add expiry/resubmit guards?
-3. **Alternate cleanup semantics** (P1-MONEY-3): should a deduct alternate reduce prep/clean labor proportionally, or is cleanup base-only by design? (Recommend proportional.)
-4. **Order-tab "Mark project complete"** (P0-DATA-5): replacing it with "Start production" enforces `order → production → production-complete → closed`. Confirm that no job legitimately closes straight from Order.
-5. **Overtime default** (P1-MONEY-8): default W2 hourly hours beyond 40 to 1.5× on import/add? (Recommend yes, with per-row override.)
-6. **Dormancy gating**: after the row-count pass, gate workspaces with no activity since June (likely Deals, Tenants, Selection Schedules, SOW, client quotes, meetings) behind owner-only? Nothing gets deleted; it just leaves the sidebar for non-owners.
-7. **Code splitting in Batch 5**: it's mechanical and low-risk but touches every route import. OK to include, or push to post-v1?
+| # | Question | Decision | Consequence |
+|---|---|---|---|
+| Q1 | **GC Excel estimate import** (`ImportEstimate.tsx`, unrouted) | **Delete.** Mark does not estimate GC jobs from spreadsheets. | ~1,000 LOC in Batch 6: `ImportEstimate.tsx`, `importService.ts`, the estimate half of `excelParser`. **Not** `contactsCsvParser`, and **not** the Togal takeoff import — see the correction below. |
+| Q2 | **Vendor RFQ / quote-portal chain** (P0-SEC-3 / P2-DEL-3) | **Remove entirely.** | Unblocks Batch 1: the two unguarded token RPCs go rather than getting expiry guards. Batch 6 deletes ~3,000 LOC + `send-quote-email`; the two public storage buckets become private. |
+| Q3 | **Alternate cleanup semantics** (P1-MONEY-3) | **Proportional** — a deduct alternate reduces prep/clean labor with the sqft. Claude's call, no objection raised. | T3 asserts it. Revisit if a real quote reads wrong. |
+| Q4 | **Order-tab "Mark project complete"** (P0-DATA-5) | **Replace with "Start production."** | Enforces `order → production → production-complete → closed`, so every job carries `productionCompletedAt` and stays in Financials/Labor/Estimating. Both `@deprecated` lifecycle fns get deleted; list pill constrained to guarded one-step transitions. |
+| Q5 | **Overtime default** (P1-MONEY-8) | **Leave at straight time.** Mark's decision. | Raised as an FLSA exposure for W2 hourly: hours past 40 pay 1× unless someone manually flags the row, and time-clock imports always write `'regular'`. Mark chose to keep it manual. **P1-MONEY-8 is closed as won't-fix, not as fixed** — the behaviour is deliberate. T9 still pins the math that exists. |
+| Q6 | **Dormancy gating** | **Unresolved — needs data.** | Run the row-count SQL in §3 first; the gating question is not answerable until we know what has rows. Stays a Batch 6 item. |
+| Q7 | **Code splitting in Batch 5** | **In scope.** Claude's call, no objection raised. | Route-level splitting + dynamic import of `xlsx`/`jspdf`/`recharts`/`framer-motion`/`react-markdown`. |
+
+**Correction logged during this session:** §3 P2-DEL-5 and §4 refer to "Excel import" ambiguously. There are **two** importers and only one is dead:
+
+- `ImportTakeoffDialog` (`quote/v3/`) — Togal xlsx → v3 quote line items, wired at `QuoteStageV3.tsx:329`. **Live, in daily use, not on any deletion list.**
+- `ImportEstimate.tsx` — GC-side Excel/CSV → GC estimate trades, zero importers. **This is the one Q1 deletes.**
 
 ---
 
