@@ -6,7 +6,10 @@
 import { addDays, format } from 'date-fns'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { computeDrywallDurationSummary } from '@/lib/drywall/durationService'
+import {
+  computeDrywallDurationSummary,
+  durationFinishFlags,
+} from '@/lib/drywall/durationService'
 import { calculateQuoteTotals } from '@/lib/drywall/quoteCalculations'
 import {
   AUTO_TABLE_BASE,
@@ -419,23 +422,12 @@ function quoteScopeBlocks(quote: DrywallQuote): ScopePdfBlock[] {
 }
 
 function durationSummaryForQuote(quote: DrywallQuote, calculations: DrywallQuoteCalculations) {
-  const finishes = [
+  const { hasLevel5, hasTexture } = durationFinishFlags([
     quote.ceilingFinish,
     quote.ceilingFinishOther,
     quote.wallFinish,
     quote.wallFinishOther,
-  ].map((s) => String(s ?? '').toLowerCase())
-  const hasLevel5 = finishes.some((s) => s.includes('level 5'))
-  const hasTexture = finishes.some((s) => {
-    return (
-      s.includes('texture') ||
-      s.includes('knockdown') ||
-      s.includes('orange peel') ||
-      s.includes('stomp') ||
-      s.includes('skip trowel') ||
-      s.includes('roll')
-    )
-  })
+  ])
   return computeDrywallDurationSummary({
     drywallSqft: toNum(calculations.sqft),
     beadSticks: toNum(quote.beadSticks),

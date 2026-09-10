@@ -40,7 +40,6 @@ export function QuotePdfOptionsSectionV3({ quote, readOnly, onChange }: Props) {
           settings={settings}
           readOnly={readOnly}
           onPatchSettings={patchDocumentOptions}
-          showDurationSummary={false}
         />
 
         <div className="space-y-2 border-t pt-4">

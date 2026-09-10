@@ -58,7 +58,7 @@ export function QuotePdfOptionsFields({
   readOnly: boolean
   onPatchSettings: (patch: Partial<DrywallQuotePdfSettings>) => void
   idPrefix?: string
-  /** v3 quotes do not yet compute duration — hide when false. */
+/** Hide where the surrounding quote has no duration inputs to feed it. */
   showDurationSummary?: boolean
 }) {
   return (

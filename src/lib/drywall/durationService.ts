@@ -46,6 +46,30 @@ export interface DurationLine {
   days: number
 }
 
+/**
+ * Level 5 and texture add finish days, but nobody records them as flags — they
+ * are read out of the finish selections the estimator already made. Shared so
+ * the v2 and v3 PDFs can't answer the same question differently.
+ */
+export function durationFinishFlags(finishSelections: unknown[]): {
+  hasLevel5: boolean
+  hasTexture: boolean
+} {
+  const finishes = finishSelections.map((s) => String(s ?? '').toLowerCase())
+  return {
+    hasLevel5: finishes.some((s) => s.includes('level 5')),
+    hasTexture: finishes.some(
+      (s) =>
+        s.includes('texture') ||
+        s.includes('knockdown') ||
+        s.includes('orange peel') ||
+        s.includes('stomp') ||
+        s.includes('skip trowel') ||
+        s.includes('roll'),
+    ),
+  }
+}
+
 export function computeDrywallDurationSummary(input: DrywallDurationInput): {
   lines: DurationLine[]
   totalDays: number

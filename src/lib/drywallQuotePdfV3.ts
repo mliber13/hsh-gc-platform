@@ -35,6 +35,10 @@ import {
 import { resolveQuoteV3PdfSettings, buildQuoteV3PdfTermsLines } from '@/lib/drywall/quoteV3PdfSettings'
 import { resolveQuotePdfSettings } from '@/lib/drywall/quotePdfSettings'
 import { computeQuoteV3Totals, type QuoteV3MarkupBreakdown } from '@/lib/drywall/quoteV3Math'
+import {
+  computeDrywallDurationSummary,
+  durationFinishFlags,
+} from '@/lib/drywall/durationService'
 import { drawMarkdownScope } from '@/lib/drywall/markdownToPdf'
 import { quoteScopeBlocksFromV3, type ScopePdfBlock } from '@/lib/drywall/structuredScopePdf'
 import type { DrywallQuoteV3 } from '@/types/drywall'
@@ -478,6 +482,58 @@ function drawAlternatesSection(
   ctx.y += SP.sectionBottom
 }
 
+/**
+ * Duration summary. v3 has carried the estimator inputs (build type, complexity,
+ * bead sticks, paper floors) on the quote since the structured-scope port, but
+ * the PDF never rendered them, so the toggle was hidden and the section silently
+ * dropped off any quote converted from v2. Base-bid sqft only — alternates are
+ * priced separately and their days aren't committed to.
+ */
+function drawDurationSummary(ctx: PdfCtx, quote: DrywallQuoteV3, drywallSqft: number) {
+  const { hasLevel5, hasTexture } = durationFinishFlags([
+    quote.ceiling_finish,
+    quote.ceiling_finish_other,
+    quote.wall_finish,
+    quote.wall_finish_other,
+  ])
+  const summary = computeDrywallDurationSummary({
+    drywallSqft,
+    beadSticks: Number(quote.bead_sticks) || 0,
+    buildType: String(quote.build_type ?? 'new_build'),
+    complexity: String(quote.complexity ?? 'normal'),
+    hasLevel5,
+    hasTexture,
+    paperFloorsRequired: Boolean(quote.paper_floors_required),
+  })
+
+  const lines = summary.lines.map((line) => {
+    const days = Number(line.days) || 0
+    return `${line.label}: ${days} day${days !== 1 ? 's' : ''}`
+  })
+  lines.push(`Total: ${Number(summary.totalDays) || 0} working days`)
+
+  drawSectionTitle(ctx, 'DRYWALL DURATION SUMMARY')
+  ctx.doc.setFont('helvetica', 'normal')
+  ctx.doc.setFontSize(10)
+  setTextRgb(ctx.doc, DW_TEXT)
+  for (const item of lines) {
+    const wrapped = ctx.doc.splitTextToSize(`• ${item}`, ctx.maxW - 8)
+    for (const line of wrapped) {
+      ensureRoom(ctx, 14)
+      ctx.doc.text(line, ctx.margin + 4, ctx.y)
+      ctx.y += 12
+    }
+    ctx.y += 4
+  }
+  ensureRoom(ctx, 26)
+  ctx.doc.setFontSize(8)
+  setTextRgb(ctx.doc, DW_GRAY)
+  const note = ctx.doc.splitTextToSize(summary.assumptions, ctx.maxW)
+  ctx.doc.text(note, ctx.margin + 4, ctx.y)
+  ctx.y += note.length * 10
+  setTextRgb(ctx.doc, DW_TEXT)
+}
+
 function drawFooterTerms(
   ctx: PdfCtx,
   pdfSettings: ReturnType<typeof resolveQuoteV3PdfSettings>,
@@ -624,6 +680,9 @@ function renderDrywallQuoteV3Pdf(input: QuoteV3PdfInput, logo: DrywallPdfLogo | 
   }
   drawBaseBidTotals(ctx, totals.routine, documentOptions)
   drawAlternatesSection(ctx, input.quote, input.catalogs, totals)
+  if (documentOptions.showDurationSummary) {
+    drawDurationSummary(ctx, input.quote, totals.totalSqft)
+  }
   drawFooterTerms(ctx, pdfSettings, validUntil)
   if (documentOptions.includeSignatureLines) {
     drawSignatureBlock(ctx, company.name, input.project.client?.trim() || undefined)

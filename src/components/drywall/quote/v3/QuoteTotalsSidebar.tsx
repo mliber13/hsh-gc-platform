@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -7,6 +8,10 @@ import {
   formatMarginFloorPct,
   marginFloorIndicator,
 } from '@/lib/drywall/marginFloor'
+import {
+  computeDrywallDurationSummary,
+  durationFinishFlags,
+} from '@/lib/drywall/durationService'
 import { formatQuoteMoney, formatPctLabel } from '@/lib/drywall/quoteV3Math'
 import type { QuoteV3TotalsSummary } from '@/lib/drywall/quoteV3Math'
 import type { DrywallQuoteV3, QuoteLineItemType } from '@/types/drywall'
@@ -35,6 +40,35 @@ const TRADE_ORDER: { type: QuoteLineItemType; label: string }[] = [
 
 export function QuoteTotalsSidebar({ quote, totals, catalogs, readOnly, onChange }: Props) {
   const { routine, alternates, grandTotalAllAlternates, acceptedTotal, acceptedSqft } = totals
+
+  // Same figure the PDF prints, so what he checks here is what the customer gets.
+  const durationSummary = useMemo(() => {
+    const { hasLevel5, hasTexture } = durationFinishFlags([
+      quote.ceiling_finish,
+      quote.ceiling_finish_other,
+      quote.wall_finish,
+      quote.wall_finish_other,
+    ])
+    return computeDrywallDurationSummary({
+      drywallSqft: totals.totalSqft,
+      beadSticks: Number(quote.bead_sticks) || 0,
+      buildType: String(quote.build_type ?? 'new_build'),
+      complexity: String(quote.complexity ?? 'normal'),
+      hasLevel5,
+      hasTexture,
+      paperFloorsRequired: Boolean(quote.paper_floors_required),
+    })
+  }, [
+    quote.ceiling_finish,
+    quote.ceiling_finish_other,
+    quote.wall_finish,
+    quote.wall_finish_other,
+    quote.bead_sticks,
+    quote.build_type,
+    quote.complexity,
+    quote.paper_floors_required,
+    totals.totalSqft,
+  ])
   const anyAccepted = alternates.some((a) => a.selected)
   const markupBase = routine.markupBase
   const estimatedCost =
@@ -238,6 +272,27 @@ export function QuoteTotalsSidebar({ quote, totals, catalogs, readOnly, onChange
         ) : alternates.length > 0 ? (
           <Row label="Grand total (all alternates)" value={grandTotalAllAlternates} strong />
         ) : null}
+
+        {totals.totalSqft > 0 && (
+          <div className="space-y-1 border-t pt-3">
+            <p className="font-medium text-xs uppercase tracking-wide text-muted-foreground">
+              Drywall duration summary
+            </p>
+            {durationSummary.lines.map((line) => (
+              <div key={line.label} className="flex justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">{line.label}</span>
+                <span className="tabular-nums">
+                  {line.days} day{line.days !== 1 ? 's' : ''}
+                </span>
+              </div>
+            ))}
+            <div className="flex justify-between gap-2 border-t border-border/50 pt-2 font-semibold">
+              <span>Total</span>
+              <span className="tabular-nums">{durationSummary.totalDays} working days</span>
+            </div>
+            <p className="pt-1 text-xs text-muted-foreground">{durationSummary.assumptions}</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
