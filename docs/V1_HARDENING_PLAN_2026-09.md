@@ -32,7 +32,27 @@ Two stale references in my brief, both caught: `organization_id_uuid` was rename
 
 ⚠️ **1A is applied to the live database but NOT operator-smoked** (Mark was out of time 2026-09-10). Every failure mode was proven in SQL as a real `authenticated` caller, including the crew-signup mechanism, so residual risk is low — but the app wiring (signUp → consume → `/crew` bootstrap) is unproven. **1B's crew smoke covers both batches**; walk-through in `docs/briefs/CREW_SMOKE_WALKTHROUGH.md`. Do not mark 1A verified until that run happens.
 
-**Next: Batch 1B** — brief written, `docs/briefs/BATCH_1B_CREW_READ_SCOPING.md`. Scopes crew reads (P0-SEC-2), plus P1-SEC-6, P1-SEC-9 and the two 1A findings below. Three traps documented in it, one of which — an empty-string `linked_employee_id` in `crew_is_assigned_to_project` — turns a latent photo-upload bug into a blank app the moment that function starts gating reads.
+**Batch 1B SHIPPED 2026-09-11** (`c778185`, `ac25616`; migration `20260911120000_crew_read_scoping.sql`). Closes **P0-SEC-2** (except catalogs, below), **P1-SEC-6**, **P1-SEC-9**, **P1-SEC-13**, **P1-SEC-14**. Measured before/after as real `authenticated` callers — the "before" column is the finding, not a formality:
+
+| Table | Crew (35 assigned projects) | Foreman | Owner |
+|---|---|---|---|
+| projects | 184 → **35** | 184 → 184 | 184 → 184 |
+| schedule_items | 378 → **315** | 378 → 378 | 378 → 378 |
+| pay_periods | 32 → **0** | 32 → **0** | 32 → 32 |
+| contacts | 7 → **0** | 7 → **0** | 7 → 7 |
+| estimates | 128 → **0** | 128 → **0** | 128 → 128 |
+| labor_entries | 134 → **0** | 134 → **0** | 134 → 134 |
+| material_entries | 302 → **0** | 302 → **0** | 302 → 302 |
+
+Crew `schedule_items` lands at 315 not 87 by design: the policy scopes to "items on a project I am assigned to", which the foreman and the job-detail card both need; the client still narrows to 87. The foreman keeps projects and schedule (Trap 1 held) and loses the operator tables, which is intended.
+
+> **Correction — `org_drywall_catalogs` was NOT changed, and the brief was wrong about why it could be.** I claimed no crew read existed. There is one: `crewWorkspaceService.ts:18` imports `fetchOrgDrywallCatalogs` and calls it at `:949`/`:1012` via `resolveQuoteCatalogLaborRates`, on the crew job-detail path whenever the order carries approved labor rates — the normal state for a job in production. Dropping `crew` from `user_can_read_drywall_catalogs` would have blanked the crew pay estimate on live jobs. **My grep searched for the table name inside the consumer file, but the consumer calls a service wrapper — trace the call graph, not the string.** The brief's "verify, then decide; if you find a read, report and skip" instruction is the only reason this didn't ship. **Still open:** crew reads catalog rates and `margin_floor_target`. Move that read behind an RPC that returns only the labor rates, then narrow the role array.
+
+> **Correction — `dfp_auth_insert` is org-wide too.** The brief said to scope the photo DELETE "the same way the write policy scopes uploads." It doesn't; `20260529120000:91` carries the identical org-wide predicate the DELETE had. There was no pattern to copy, so the scoping was built: `drywall_photo_crew_scope_ok` matches path segment 2 against `projects.id::text` rather than casting untrusted path text to uuid, so a malformed name fails to match instead of raising inside a policy.
+
+**Still open after 1B** (queued, not regressions): `dfp_auth_insert` is org-wide, so crew can still upload into any project's folder — same shape as the DELETE hole, wants the same term. `dfp_auth_select` is org-wide, recorded as a conscious V1 trade-off in `20260626120000`. Row scoping is not column scoping: on their 35 assigned projects, crew still receive the full `metadata` blob including quotes and margins — that is the `project_photos` work in §7. `pay_period_includes_linked_person` is now referenced by no policy; kept, because it is the right predicate for a paystub RPC.
+
+**Next: Batch 1C or 1D.** 1B brief: `docs/briefs/BATCH_1B_CREW_READ_SCOPING.md`. Scopes crew reads (P0-SEC-2), plus P1-SEC-6, P1-SEC-9 and the two 1A findings below. Three traps documented in it, one of which — an empty-string `linked_employee_id` in `crew_is_assigned_to_project` — turns a latent photo-upload bug into a blank app the moment that function starts gating reads.
 
 Batch 1 is now four briefs: **1A** (shipped), **1B** (crew read scoping), **1C** (vendor RFQ removal), **1D** (systemic anon revoke, `vercel.json` headers, org-only write policies, `organizations` RLS, script hygiene, `pending/` reconcile). 1B needs a crew smoke; 1D needs only an operator one — which is why they are not one brief.
 

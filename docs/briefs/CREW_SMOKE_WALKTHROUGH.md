@@ -24,8 +24,10 @@ exactly.
 2. Email: **`mliber13+crewtest@gmail.com`**. Gmail delivers plus-addresses to the normal inbox; Supabase
    treats it as a separate account.
 3. Make them a **1099 contractor** — that covers the contractor clock path in the same run.
-4. Assign them to a schedule item on a real project, otherwise they sign up to an empty app and steps 7-8
-   prove nothing.
+4. **Assign them to a schedule item on a real project.** Not optional since 1B: with no assignment they
+   now read zero projects at the database, so the app is genuinely empty and it looks like the migration
+   broke it. The existing `mliber13+testw2`, `+test1099` and `+testmeasurer` accounts all have zero
+   assignments — give one of them a schedule item before testing with it, or make a fresh person.
 
 ## The run
 
