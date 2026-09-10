@@ -64,7 +64,15 @@ Both token RPCs dropped. `submit_vendor_quote` turned out to take **ten scalar a
 
 **For Batch 4, on `quote-documents`:** it is not "the client-quote bucket". 21 objects — 11 `quote-drawings-*` from the deleted `quoteService` (Nov 2025), 8 `{uuid}-{timestamp}.pdf` from `uploadQuotePDF`/EstimateBuilder (Jan–May 2026), 1 `client-quotes/`, 1 smoke-test artifact. Half of it is RFQ-era. The signed-URL conversion has to account for that rather than assume a single writer.
 
-**Next: Batch 1D** — the last of Batch 1. Briefs so far: `docs/briefs/BATCH_1{A,B,C}_*.md`. Scopes crew reads (P0-SEC-2), plus P1-SEC-6, P1-SEC-9 and the two 1A findings below. Three traps documented in it, one of which — an empty-string `linked_employee_id` in `crew_is_assigned_to_project` — turns a latent photo-upload bug into a blank app the moment that function starts gating reads.
+**Next: Batch 1D** — the last of Batch 1, brief written: `docs/briefs/BATCH_1D_SYSTEMIC_GRANTS_AND_POLICY_GAPS.md`. Systemic `anon` revoke, the four P1-SEC-5 hardenings, `organizations` RLS, the org-only write policies, `vercel.json` headers, script hygiene, `pending/` removal, plus the `dfp_auth_insert` term from 1B and the orphaned `appConfig.ts` from 1C.
+
+> **1D's trap: after 1C, exactly ONE function in `public` legitimately needs `anon`** — `get_crew_invite_by_token`, called by `CrewSignupPage` before the user has an account. The other two deliberate anon grants (`get_quote_request_by_token`, `submit_vendor_quote`) were dropped in 1C, which is what makes the carve-out one line. **The supplier and customer share pages are NOT affected**: they invoke edge functions, which call `supplier_share_orders` / `customer_share_schedule` with the **service-role** key — those RPCs are granted `TO service_role`, never `anon`. A defensive "add auth to the share edge functions" would break the no-login links they exist to provide.
+
+The revoke has to target the **default privilege**, not just current grants: `anon` is a named role, so the `REVOKE ALL … FROM PUBLIC` lines throughout the migrations never touched it. `ALTER DEFAULT PRIVILEGES` is recorded per granting role, so the revoke needs the right `FOR ROLE` or it silently does nothing — that is a pre-flight check in the brief, not an assumption.
+
+**When 1D lands, Batch 1 is done.** 1A and 1B are applied but still unsmoked, so run `docs/briefs/CREW_SMOKE_WALKTHROUGH.md` once at that point and it covers all four batches. Then Batch 2 (money).
+
+Briefs: `docs/briefs/BATCH_1{A,B,C,D}_*.md`. Scopes crew reads (P0-SEC-2), plus P1-SEC-6, P1-SEC-9 and the two 1A findings below. Three traps documented in it, one of which — an empty-string `linked_employee_id` in `crew_is_assigned_to_project` — turns a latent photo-upload bug into a blank app the moment that function starts gating reads.
 
 Batch 1 is now four briefs: **1A** (shipped), **1B** (crew read scoping), **1C** (vendor RFQ removal), **1D** (systemic anon revoke, `vercel.json` headers, org-only write policies, `organizations` RLS, script hygiene, `pending/` reconcile). 1B needs a crew smoke; 1D needs only an operator one — which is why they are not one brief.
 
