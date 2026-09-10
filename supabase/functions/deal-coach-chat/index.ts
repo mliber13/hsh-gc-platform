@@ -27,6 +27,7 @@
 //
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -123,6 +124,24 @@ serve(async (req) => {
   if (req.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, 405)
   }
+
+  // Signed-in callers only. The anon key ships in the browser bundle, so
+  // without this anyone on the internet could spend our Anthropic key.
+  // Same shape as send-sms.
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return jsonResponse({ error: 'Supabase function environment not configured' }, 500)
+  }
+
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) return jsonResponse({ error: 'No authorization header' }, 401)
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  })
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) return jsonResponse({ error: 'Not authenticated' }, 401)
 
   let body: CoachRequestBody
   try {
