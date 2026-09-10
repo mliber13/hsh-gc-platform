@@ -24,14 +24,6 @@ import { getTradesForEstimate as getTradesLS } from './storage'
 import * as supabaseService from './supabaseService'
 import { isVisibleInGcApp } from './projectVisibility'
 import { Project, CreateProjectInput, UpdateProjectInput, Trade, TradeInput } from '@/types'
-import * as quoteService from './quoteService'
-import { 
-  QuoteRequest, 
-  SubmittedQuote, 
-  CreateQuoteRequestInput, 
-  SubmitQuoteInput, 
-  UpdateQuoteStatusInput 
-} from '@/types/quote'
 import type { WorkPackage, CreateWorkPackageInput, UpdateWorkPackageInput } from '@/types/workPackage'
 import type {
   ProjectMilestone,
@@ -321,67 +313,6 @@ export async function deleteAllTrades_Hybrid(estimateId: string): Promise<boolea
     const { deleteAllTrades } = await import('./estimateService')
     return deleteAllTrades(estimateId)
   }
-}
-
-// ============================================================================
-// QUOTE OPERATIONS (Online-only - requires email links and vendor access)
-// ============================================================================
-
-export async function createQuoteRequest_Hybrid(input: CreateQuoteRequestInput): Promise<QuoteRequest[]> {
-  // Quotes are online-only feature
-  if (!isOnlineMode()) {
-    throw new Error('Quote requests require online mode')
-  }
-  return await quoteService.createQuoteRequestInDB(input)
-}
-
-export async function fetchQuoteRequestByToken_Hybrid(token: string): Promise<QuoteRequest | null> {
-  if (!isOnlineMode()) {
-    return null
-  }
-  return await quoteService.fetchQuoteRequestByToken(token)
-}
-
-export async function fetchQuoteRequestsForProject_Hybrid(projectId: string): Promise<QuoteRequest[]> {
-  if (!isOnlineMode()) {
-    return []
-  }
-  return await quoteService.fetchQuoteRequestsForProject(projectId)
-}
-
-export async function submitQuote_Hybrid(input: SubmitQuoteInput): Promise<SubmittedQuote | null> {
-  if (!isOnlineMode()) {
-    return null
-  }
-  return await quoteService.submitQuote(input)
-}
-
-export async function fetchSubmittedQuotesForRequest_Hybrid(quoteRequestId: string): Promise<SubmittedQuote[]> {
-  if (!isOnlineMode()) {
-    return []
-  }
-  return await quoteService.fetchSubmittedQuotesForRequest(quoteRequestId)
-}
-
-export async function updateQuoteStatus_Hybrid(input: UpdateQuoteStatusInput): Promise<SubmittedQuote | null> {
-  if (!isOnlineMode()) {
-    return null
-  }
-  return await quoteService.updateQuoteStatus(input)
-}
-
-export async function deleteQuoteRequest_Hybrid(quoteRequestId: string): Promise<boolean> {
-  if (!isOnlineMode()) {
-    return false
-  }
-  return await quoteService.deleteQuoteRequest(quoteRequestId)
-}
-
-export async function resendQuoteRequestEmail_Hybrid(quoteRequest: QuoteRequest, projectName: string, tradeName?: string): Promise<boolean> {
-  if (!isOnlineMode()) {
-    return false
-  }
-  return await quoteService.resendQuoteRequestEmail(quoteRequest, projectName, tradeName)
 }
 
 // ============================================================================
