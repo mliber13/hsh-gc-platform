@@ -84,7 +84,17 @@ Brief: `docs/briefs/BATCH_1D_SYSTEMIC_GRANTS_AND_POLICY_GAPS.md`. Original scope
 
 The revoke has to target the **default privilege**, not just current grants: `anon` is a named role, so the `REVOKE ALL … FROM PUBLIC` lines throughout the migrations never touched it. `ALTER DEFAULT PRIVILEGES` is recorded per granting role, so the revoke needs the right `FOR ROLE` or it silently does nothing — that is a pre-flight check in the brief, not an assumption.
 
-**When 1D lands, Batch 1 is done.** 1A and 1B are applied but still unsmoked, so run `docs/briefs/CREW_SMOKE_WALKTHROUGH.md` once at that point and it covers all four batches. Then Batch 2 (money).
+**Batch 1 is done.** Then Batch 2 (money).
+
+**Batch 2A brief written 2026-09-11:** `docs/briefs/BATCH_2A_ONE_NUMBER_FOUR_WAYS.md`.
+
+**Scope correction — P0-MONEY-2 and P0-MONEY-3 are already DONE** (`1db8d7b`, 2026-09-08). FRP uses `customRateFromV2Total(calc.frpMaterialCost, sqft)` at `convertQuoteV2ToV3.ts:341`; RC sets `waste_pct` from `v2.rcChannelWastePercentage` and `accessories_in_material_rate: true` at `:163-164`. Batch 2 is smaller than this plan assumed.
+
+Batch 2 splits in two. **2A — "one number, four ways"**: P0-MONEY-1, P1-MONEY-1, P1-MONEY-2, tests T1 + T4, plus a read-only per-trade v2-vs-v3 scan to finally diagnose the converter issue Mark hit on 2026-09-08 ("still not working quite right" — he sent from v2 instead and it was never chased; the fixture tests pass, so the fixtures do not cover it). **2B — per-trade pricing semantics**: P1-MONEY-3/4/5/6, tests T2/T3/T5. Kept apart so the cross-surface invariant is green before any formula moves.
+
+2A's theme: `computeQuoteV3Totals` is correct and is not the only math. `projectV3QuoteToV2Shape` sums cost from `type === 'drywall'` lines while `finalTotal` is the whole accepted quote, and `componentLaborSubtotal` appears nowhere — so the D.4 margin-floor gate is blind on component-heavy Togal jobs. `laborBurdenFromQuote` is private to `quoteV3Math`, which is why three divergent copies exist (the bid snapshot drops both project rates *and* component burden). `estimatedLabor.ts:157` omits the `quoteBeadSticks` argument.
+
+**Stale reference in this plan:** P1-MONEY-2 cites `estimatedMaterial.ts:312`; that file is 144 lines and never calls `lineDirectCostsFromLines`. The real omission is `estimatedLabor.ts:157`. The brief has Cursor verify what `computeEstimatedMaterial` actually reads before touching it.
 
 Briefs: `docs/briefs/BATCH_1{A,B,C,D}_*.md`. Scopes crew reads (P0-SEC-2), plus P1-SEC-6, P1-SEC-9 and the two 1A findings below. Three traps documented in it, one of which — an empty-string `linked_employee_id` in `crew_is_assigned_to_project` — turns a latent photo-upload bug into a blank app the moment that function starts gating reads.
 
