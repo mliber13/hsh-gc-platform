@@ -4,7 +4,7 @@ import {
   getEffectiveHangerRate,
   getLineMaterialRate,
 } from './quoteV3CatalogResolve'
-import { computeLineItem, computeQuoteV3Totals } from './quoteV3Math'
+import { computeQuoteV3Totals } from './quoteV3Math'
 import type { DrywallQuote, DrywallQuoteV3 } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 
@@ -55,20 +55,12 @@ export function projectV3QuoteToV2Shape(
   // Accepted alternates fold into the carried-forward total + estimate sqft (a
   // deduct lowers both). Equals the base when nothing is accepted.
   const effectiveSqft = v3Totals.acceptedSqft
-  const laborBurdenOpts = {
-    hangerIncludeLaborBurden: v3.hanger_include_labor_burden,
-    finisherIncludeLaborBurden: v3.finisher_include_labor_burden,
-    prepCleanIncludeLaborBurden: v3.prep_clean_include_labor_burden,
-    projectHangerRate: v3.project_hanger_rate,
-    projectFinisherRate: v3.project_finisher_rate,
-  }
-  const drywallComputed = drywallLines.map((line) =>
-    computeLineItem(line, catalogs, laborBurdenOpts),
-  )
-  let materialCostBare = drywallComputed.reduce((sum, c) => sum + c.materialTotal, 0)
-  let accessoriesCost = drywallComputed.reduce((sum, c) => sum + c.accessoriesTotal, 0)
-  let hangerCost = drywallComputed.reduce((sum, c) => sum + c.hangerLaborTotal, 0)
-  let finisherCost = drywallComputed.reduce((sum, c) => sum + c.finisherLaborTotal, 0)
+  // materialSubtotal is bare board/component material; accessories are separate.
+  let materialCostBare = routine.materialSubtotal
+  let accessoriesCost = routine.accessoriesSubtotal
+  let hangerCost = routine.hangerLaborSubtotal
+  let finisherCost = routine.finisherLaborSubtotal
+  let componentCost = routine.componentLaborSubtotal
   let prepCleanCost = routine.cleanupTotal
   let salesTax = routine.salesTaxAmount
   let overheadAmount = routine.overheadAmount
@@ -76,26 +68,23 @@ export function projectV3QuoteToV2Shape(
 
   // Net ACCEPTED alternates into the cost breakdown (deduct subtracts) so cost
   // matches the accepted revenue on the Order Financial Card. Direct material/
-  // labor come from the alternate's own drywall-line computes; cleanup/tax/
-  // overhead/profit from its markup breakdown — all linear, so netting is exact.
+  // labor and markup all come from the alternate's own QuoteV3MarkupBreakdown.
   for (const summary of v3Totals.alternates) {
     if (!summary.selected) continue
     const sign = summary.pricingMode === 'deduct' ? -1 : 1
-    const alt = v3.alternates.find((a) => a.id === summary.id)
-    const altComputed = (alt?.lineItems ?? [])
-      .filter((line) => line.type === 'drywall')
-      .map((line) => computeLineItem(line, catalogs, laborBurdenOpts))
-    materialCostBare += sign * altComputed.reduce((s, c) => s + c.materialTotal, 0)
-    accessoriesCost += sign * altComputed.reduce((s, c) => s + c.accessoriesTotal, 0)
-    hangerCost += sign * altComputed.reduce((s, c) => s + c.hangerLaborTotal, 0)
-    finisherCost += sign * altComputed.reduce((s, c) => s + c.finisherLaborTotal, 0)
-    prepCleanCost += sign * summary.breakdown.cleanupTotal
-    salesTax += sign * summary.breakdown.salesTaxAmount
-    overheadAmount += sign * summary.breakdown.overheadAmount
-    profitAmount += sign * summary.breakdown.profitAmount
+    const b = summary.breakdown
+    materialCostBare += sign * b.materialSubtotal
+    accessoriesCost += sign * b.accessoriesSubtotal
+    hangerCost += sign * b.hangerLaborSubtotal
+    finisherCost += sign * b.finisherLaborSubtotal
+    componentCost += sign * b.componentLaborSubtotal
+    prepCleanCost += sign * b.cleanupTotal
+    salesTax += sign * b.salesTaxAmount
+    overheadAmount += sign * b.overheadAmount
+    profitAmount += sign * b.profitAmount
   }
 
-  const totalLaborCost = hangerCost + finisherCost + prepCleanCost
+  const totalLaborCost = hangerCost + finisherCost + componentCost + prepCleanCost
   const totalMaterialCost = materialCostBare + accessoriesCost + salesTax
   const totalDirectCost = totalMaterialCost + totalLaborCost
   const subtotal = totalDirectCost + overheadAmount
