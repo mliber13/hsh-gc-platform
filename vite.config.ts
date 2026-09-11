@@ -74,6 +74,7 @@ export default defineConfig(({ mode }) => {
         'src/**/*.{test,spec}.{ts,tsx}',
         // Optional harnesses require PARITY_PAYLOAD_PATH (or similar) — include when set.
         ...(process.env.PARITY_PAYLOAD_PATH ? ['scripts/**/*.harness.test.ts'] : []),
+        ...(process.env.SCAN_PAYLOAD_PATH ? ['scripts/scan-v2-v3-per-trade.harness.test.ts'] : []),
       ],
       // Optional harnesses (scripts/**/*.harness.test.ts) require env payloads — run explicitly.
       environment: 'node',
