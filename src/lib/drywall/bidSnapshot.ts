@@ -1,9 +1,10 @@
+import { allocateQuoteBeadSticksAcrossLines } from '@/lib/drywall/quoteV3Accessories'
 import { buildDrywallQuoteCalculations } from '@/lib/drywall/buildDrywallQuoteCalculations'
 import { calculateQuoteTotals } from '@/lib/drywall/quoteCalculations'
 import {
   computeLineItem,
   computeQuoteV3Totals,
-  type QuoteV3LaborBurdenOptions,
+  laborBurdenFromQuote,
 } from '@/lib/drywall/quoteV3Math'
 import type {
   BidSnapshot,
@@ -22,25 +23,21 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
-function laborBurdenFromV3Quote(quote: DrywallQuoteV3): QuoteV3LaborBurdenOptions {
-  return {
-    hangerIncludeLaborBurden: quote.hanger_include_labor_burden,
-    finisherIncludeLaborBurden: quote.finisher_include_labor_burden,
-    prepCleanIncludeLaborBurden: quote.prep_clean_include_labor_burden,
-  }
-}
-
 export function buildBidSnapshotFromV3Quote(
   quote: DrywallQuoteV3,
   catalogs: OrgDrywallCatalogs,
   at: string,
 ): BidSnapshot {
-  const laborBurden = laborBurdenFromV3Quote(quote)
+  const laborBurden = laborBurdenFromQuote(quote)
   const totals = computeQuoteV3Totals(quote, catalogs)
   const routine = totals.routine
+  const beadAllocation = allocateQuoteBeadSticksAcrossLines(quote.lineItems, quote.bead_sticks)
 
   const lineItems = quote.lineItems.map((line) => {
-    const computed = computeLineItem(line, catalogs, laborBurden)
+    const computed = computeLineItem(line, catalogs, {
+      ...laborBurden,
+      allocatedBeadSticks: beadAllocation.get(line.id) ?? 0,
+    })
     const description =
       line.type === 'drywall'
         ? `${computed.catalogLabel} — ${computed.finishLabel}`

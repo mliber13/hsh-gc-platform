@@ -1,4 +1,4 @@
-import { computeLineItem, computeQuoteV3Totals } from '@/lib/drywall/quoteV3Math'
+import { computeQuoteV3Totals } from '@/lib/drywall/quoteV3Math'
 import type { DrywallQuote, DrywallQuoteV2V3, QuoteLineItemType } from '@/types/drywall'
 import { isDrywallQuoteV3 } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
@@ -121,15 +121,15 @@ function computeEstimatedMaterialV3(
     amountsByKey.set(type, 0)
   }
 
-  for (const line of quote.lineItems) {
-    const computed = computeLineItem(line, catalogs)
-    const lineMaterial =
-      computed.materialTotal + (line.type === 'drywall' ? computed.accessoriesTotal : 0)
-    amountsByKey.set(line.type, (amountsByKey.get(line.type) ?? 0) + lineMaterial)
+  const routine = computeQuoteV3Totals(quote, catalogs).routine
+  const byTrade = routine.byTrade ?? {}
+  for (const type of V3_LINE_TYPES) {
+    const t = byTrade[type]
+    const lineMaterial = (t?.material ?? 0) + (type === 'drywall' ? (t?.accessories ?? 0) : 0)
+    amountsByKey.set(type, lineMaterial)
   }
 
-  const salesTax = computeQuoteV3Totals(quote, catalogs).routine.salesTaxAmount
-  return buildBreakdown(amountsByKey, salesTax)
+  return buildBreakdown(amountsByKey, routine.salesTaxAmount)
 }
 
 export function computeEstimatedMaterial(

@@ -684,7 +684,14 @@ export function computeCleanupTotal(
   return applyLaborBurden(base, laborBurden?.prepCleanIncludeLaborBurden)
 }
 
-function laborBurdenFromQuote(quote: DrywallQuoteV3): QuoteV3LaborBurdenOptions {
+export function laborBurdenFromQuote(quote: {
+  hanger_include_labor_burden?: boolean
+  finisher_include_labor_burden?: boolean
+  prep_clean_include_labor_burden?: boolean
+  component_include_labor_burden?: boolean
+  project_hanger_rate?: number
+  project_finisher_rate?: number
+}): QuoteV3LaborBurdenOptions {
   return {
     hangerIncludeLaborBurden: quote.hanger_include_labor_burden,
     finisherIncludeLaborBurden: quote.finisher_include_labor_burden,

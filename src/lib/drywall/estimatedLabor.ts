@@ -2,9 +2,9 @@ import { applyLaborBurden } from '@/lib/drywall/calculations/quantityUtils'
 import {
   computeCleanupTotal,
   emptyComponentLaborByTrade,
+  laborBurdenFromQuote,
   lineDirectCostsFromLines,
   type QuoteV3ComponentLaborByTrade,
-  type QuoteV3LaborBurdenOptions,
 } from '@/lib/drywall/quoteV3Math'
 import type { DrywallQuote, DrywallQuoteV2V3 } from '@/types/drywall'
 import { isDrywallQuoteV3 } from '@/types/drywall'
@@ -110,18 +110,6 @@ function v2LaborLine(
   return applyLaborBurden(num(base), includeBurden)
 }
 
-function laborBurdenFromV3Quote(
-  quote: Extract<DrywallQuoteV2V3, { version: 3 }>,
-): QuoteV3LaborBurdenOptions {
-  return {
-    hangerIncludeLaborBurden: quote.hanger_include_labor_burden,
-    finisherIncludeLaborBurden: quote.finisher_include_labor_burden,
-    prepCleanIncludeLaborBurden: quote.prep_clean_include_labor_burden,
-    projectHangerRate: quote.project_hanger_rate,
-    projectFinisherRate: quote.project_finisher_rate,
-  }
-}
-
 function computeEstimatedLaborV2(quote: DrywallQuote): EstimatedLaborBreakdown {
   const calc = (quote.calculations ?? {}) as Record<string, unknown>
 
@@ -153,8 +141,8 @@ function computeEstimatedLaborV3(
   quote: Extract<DrywallQuoteV2V3, { version: 3 }>,
   catalogs: OrgDrywallCatalogs,
 ): EstimatedLaborBreakdown {
-  const burden = laborBurdenFromV3Quote(quote)
-  const dc = lineDirectCostsFromLines(quote.lineItems, catalogs, burden)
+  const burden = laborBurdenFromQuote(quote)
+  const dc = lineDirectCostsFromLines(quote.lineItems, catalogs, burden, quote.bead_sticks)
   const prepClean = computeCleanupTotal(
     quote.lineItems,
     num(quote.prep_clean_rate),
