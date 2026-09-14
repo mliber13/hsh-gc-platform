@@ -334,8 +334,15 @@ export function CrewProjectDetailPage() {
               We couldn&apos;t match your trade to this job
             </p>
             <p className="text-muted-foreground">
-              Your materials and pay may be hidden. Ask the office to check your account link — this
-              usually happens after a roster update.
+              {/*
+                Materials are no longer hidden by this: an operator putting you on
+                the job now outranks the trade guess. Only pay is still withheld,
+                so the banner says that rather than claiming the list above it is
+                missing when it is sitting right there.
+              */}
+              Your pay rate is hidden until the office sets your role. Materials are unaffected. If
+              this looks wrong, ask the office to check your account link — it usually happens after
+              a roster update.
             </p>
           </div>
         </div>
