@@ -21,6 +21,7 @@ import {
 } from '@/lib/drywall/changeOrderWorkflow'
 import {
   archiveKeyForTimestamp,
+  refreshWouldEmptyQuote,
   buildFreshV3FromSnapshot,
 } from '@/lib/drywall/staleV3ConvertAudit'
 import { isValidDrywallQuoteNumber } from '@/lib/drywall/drywallQuoteNumber'
@@ -811,6 +812,18 @@ export async function refreshQuoteV3FromSnapshot(projectId: string): Promise<Dry
   }
   if (!prevQuote.legacyV2Snapshot) {
     throw new Error('No v2 snapshot to refresh from')
+  }
+
+  // Refuse rather than empty the quote. A quote built by hand in v3 has an empty
+  // husk for a snapshot, so rebuilding from it produces nothing — that is how
+  // DW-2026-074 lost its only priced line on 2026-09-14. Guarding here rather
+  // than only in the UI because this is the destructive step, and any future
+  // caller reaches it too.
+  if (refreshWouldEmptyQuote(prevQuote, prevQuote.legacyV2Snapshot)) {
+    throw new Error(
+      'Refreshing would empty this quote: its v2 snapshot has no measurements to rebuild from. ' +
+        'This quote was priced directly in v3, so there is nothing to refresh from.',
+    )
   }
 
   const archiveKey = archiveKeyForTimestamp(new Date().toISOString())

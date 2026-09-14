@@ -15,6 +15,7 @@ import {
 import {
   compareStaleConvertTotals,
   refreshNeedsConfirmation,
+  refreshWouldEmptyQuote,
 } from '@/lib/drywall/staleV3ConvertAudit'
 import { formatQuoteMoney } from '@/lib/drywall/quoteV3Math'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
@@ -158,6 +159,17 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
    * buildFreshV3FromSnapshot the write path uses — the dialog cannot quote a
    * figure the refresh would not produce.
    */
+  // A quote priced directly in v3 has an empty husk for a snapshot, so refreshing
+  // can only destroy it. Hide the button rather than let the service refusal be
+  // the first thing the operator learns about it.
+  const refreshWouldDestroy = useMemo(() => {
+    if (!quote?.legacyV2Snapshot) return false
+    return refreshWouldEmptyQuote(
+      quote as unknown as Record<string, unknown>,
+      quote.legacyV2Snapshot,
+    )
+  }, [quote])
+
   const refreshNeedsConfirm = refreshNeedsConfirmation(quoteOutcome)
 
   const refreshPreview = useMemo(() => {
@@ -371,7 +383,8 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
           )}
 
           <p className="text-xs text-muted-foreground">
-            The current quote is archived first, so this can be undone.
+            This writes immediately — there is no unsaved state to back out of. The current quote is
+            archived in the project record, but restoring it is a database job, not a button.
           </p>
 
           <DialogFooter>
@@ -389,7 +402,7 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
         <QuoteV3ConvertBanner
           projectId={projectId}
           legacyV2Snapshot={quote.legacyV2Snapshot}
-          showRefresh={isOwner && !viewerReadOnly && !outcomeLocked}
+          showRefresh={isOwner && !viewerReadOnly && !outcomeLocked && !refreshWouldDestroy}
           refreshing={refreshing}
           onRefresh={requestRefreshFromSnapshot}
         />

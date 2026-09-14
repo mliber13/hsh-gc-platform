@@ -81,6 +81,35 @@ export function buildFreshV3FromSnapshot(
 }
 
 /**
+ * Whether a refresh would replace a quote that has lines with one that has none.
+ *
+ * A quote built by hand in v3 carries a `legacyV2Snapshot` that is an empty husk
+ * — `sqft: ""`, no breakdowns — because there was never a v2 quote to snapshot.
+ * Rebuilding from it yields nothing, so Refresh cannot help such a quote and can
+ * only destroy it. 5084 Neptune Oval (DW-2026-074) was emptied this way on
+ * 2026-09-14, and a sweep found **59 more quotes in the same position**, 19 of
+ * them sent or approved, the largest carrying 17 priced lines.
+ *
+ * Deliberately compares outcomes rather than inspecting the snapshot's shape: the
+ * question is "would this destroy the quote", and running the same builder the
+ * write path uses answers it without a second opinion about what makes a snapshot
+ * usable.
+ */
+export function refreshWouldEmptyQuote(
+  liveQuote: Record<string, unknown>,
+  v2Snapshot: unknown,
+): boolean {
+  const liveLines = Array.isArray(liveQuote.lineItems) ? liveQuote.lineItems.length : 0
+  if (liveLines === 0) return false
+  try {
+    return buildFreshV3FromSnapshot(liveQuote, v2Snapshot).lineItems.length === 0
+  } catch {
+    // If the snapshot cannot even be converted, refreshing from it is not safe.
+    return true
+  }
+}
+
+/**
  * Whether refreshing from the v2 snapshot needs the operator to confirm first.
  *
  * Refresh replaces the priced lines, so on a quote the customer already holds it
