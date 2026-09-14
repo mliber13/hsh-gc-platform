@@ -1296,7 +1296,7 @@ function normalizeChangeOrder(raw: unknown): DrywallChangeOrder | null {
   }
 }
 
-function parseLegacyOrders(legacy: Record<string, unknown>): DrywallOrder[] {
+export function parseLegacyOrders(legacy: Record<string, unknown>): DrywallOrder[] {
   if (!Array.isArray(legacy.orders)) return []
   return legacy.orders.map(normalizeOrder).filter((o): o is DrywallOrder => o != null)
 }

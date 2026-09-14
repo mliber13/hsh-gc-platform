@@ -101,6 +101,24 @@ export interface CrewMaterial {
   facing: string | null
 }
 
+/** One line off a supplier order, as shown to crew when the operator shares the list. */
+export interface CrewOrderMaterial {
+  id: string
+  description: string
+  quantity: string
+  unit: string
+  notes: string | null
+}
+
+/** Order lines grouped by field-measurement area; blank area collects under "General". */
+export interface CrewOrderMaterialGroup {
+  /** Order number or supplier name, so a job with two deliveries stays readable. */
+  orderLabel: string
+  deliveryDate: string | null
+  area: string
+  items: CrewOrderMaterial[]
+}
+
 /** Field-measured board counts for hangers, grouped by area. */
 export interface CrewBoardAreaGroup {
   area: string
@@ -155,6 +173,12 @@ export interface CrewProjectDetail {
   /** Total bead sticks on the job — operator's count typically excludes tearaway. */
   /** Materials list filtered by user's specialty (hanger sees install hardware, finisher sees all). */
   materials: CrewMaterial[]
+  /**
+   * Supplier order lines, when the operator shared the material list on a
+   * schedule item this person is assigned to. Empty otherwise. This is the list
+   * a delivery actually runs off — see resolveOrderMaterials.
+   */
+  orderMaterials: CrewOrderMaterialGroup[]
   /** Field board counts by area — hangers / both / operator preview only. */
   boardCountsByArea: CrewBoardAreaGroup[]
   /** Whether the Boards by area section should render (even if empty). */

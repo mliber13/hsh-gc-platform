@@ -676,6 +676,48 @@ export function CrewProjectDetailPage() {
             ) : null}
           </CardHeader>
           <CardContent className="space-y-4">
+            {/*
+              The shared order list. First, and visually separated, because when
+              this is present it is the reason the person is on the job: it is
+              what is being delivered. The trade-filtered takeoff list below is a
+              different question -- what is on site for my trade.
+            */}
+            {detail.orderMaterials.length > 0 ? (
+              <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">
+                  Material order
+                </p>
+                {detail.orderMaterials.map((group) => (
+                  <div key={`${group.orderLabel}-${group.area}`} className="space-y-1.5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                      <p className="text-xs font-medium">{group.area}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {group.orderLabel}
+                        {group.deliveryDate ? ` · ${group.deliveryDate}` : ''}
+                      </p>
+                    </div>
+                    {group.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-baseline justify-between gap-3 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{item.description}</p>
+                          {item.notes ? (
+                            <p className="text-xs text-muted-foreground">{item.notes}</p>
+                          ) : null}
+                        </div>
+                        <p className="shrink-0 font-medium tabular-nums">
+                          {item.quantity}
+                          {item.unit ? ` ${item.unit}` : ''}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             {detail.showBoardCounts ? (
               <div className="space-y-3">
                 <p className="text-xs font-semibold uppercase text-muted-foreground">

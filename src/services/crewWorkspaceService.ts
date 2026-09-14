@@ -14,6 +14,7 @@ import {
   fetchDrywallProjectById,
   getIntakeSourceFromLegacy,
   getPoDataFromLegacy,
+  parseLegacyOrders,
 } from '@/services/drywallProjectsService'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import { parseScheduleItemTasks } from '@/services/scheduleService'
@@ -46,6 +47,8 @@ import type {
   CrewBoardAreaGroup,
   CrewLaborRateSource,
   CrewMeasurePageContext,
+  CrewOrderMaterial,
+  CrewOrderMaterialGroup,
   CrewProjectDetail,
   CrewProjectListItem,
   CrewProjectScheduleEntry,
@@ -779,6 +782,70 @@ const HANGER_MATERIAL_CATEGORIES = new Set<string>([
 /** Categories the finisher does NOT need to see (hanger-only hardware). */
 const FINISHER_HIDE_CATEGORIES = new Set<string>(['Adhesives', 'Fasteners'])
 
+/**
+ * The supplier order, for whoever the operator shared the list with.
+ *
+ * This is a different list from resolveMaterials and that is the point. Field
+ * accessories are an estimating input; the order is what the operator curated and
+ * what is physically going on the truck. Sharing the list on a schedule item was
+ * built (cdc7e1a) to get materials to someone whose trade does not resolve -- a
+ * driver, a scaffold hand -- but it handed them the takeoff, which is not where
+ * the delivery material lives. A Laborer read an empty card while the order had
+ * everything on it.
+ *
+ * Grouped by the order's own area field so it reads the way the order sheet does.
+ * Every line, including delivered ones: crew need to know what was supposed to
+ * arrive as much as what did.
+ */
+export function resolveOrderMaterials(legacy: Record<string, unknown>): CrewOrderMaterialGroup[] {
+  const orders = parseLegacyOrders(legacy)
+  const groups: CrewOrderMaterialGroup[] = []
+
+  for (const order of orders) {
+    if (order.status === 'cancelled') continue
+    // Quantity is the only filter. normalizeOrderItem already drops a row with
+    // neither description nor quantity and defaults the description to 'Item',
+    // so anything else on the order sheet is something the operator put there —
+    // and the crew list differing from the operator's own list is the bug being
+    // fixed here, not a tidiness opportunity.
+    const items = (order.items ?? []).filter((item) => {
+      const raw = String(item.quantity ?? '').trim()
+      if (raw === '') return false
+      const qty = Number(raw)
+      // Written quantities are real on an order sheet: "1 lift", "as needed".
+      return !Number.isFinite(qty) || qty > 0
+    })
+    if (items.length === 0) continue
+
+    const orderLabel =
+      order.orderNumber?.trim() || order.supplier?.trim() || 'Material order'
+    const byArea = new Map<string, CrewOrderMaterial[]>()
+    for (const item of items) {
+      const area = item.area?.trim() || 'General'
+      const rows = byArea.get(area) ?? []
+      rows.push({
+        id: item.id,
+        description: item.description.trim(),
+        quantity: String(item.quantity ?? '').trim(),
+        unit: item.unit?.trim() || '',
+        notes: item.notes?.trim() || null,
+      })
+      byArea.set(area, rows)
+    }
+
+    for (const [area, rows] of byArea) {
+      groups.push({
+        orderLabel,
+        deliveryDate: order.deliveryDate?.trim() || null,
+        area,
+        items: rows,
+      })
+    }
+  }
+
+  return groups
+}
+
 function resolveMaterials(
   field: FieldTakeoff | null,
   specialty: CrewSpecialty,
@@ -1343,6 +1410,10 @@ async function mapProjectDetail(
     materials: showMaterials
       ? resolveMaterials(field, context.specialty, unfilteredMaterials)
       : [],
+    // Only when the operator explicitly shared the list, or for an operator
+    // preview. showJobInfo alone does not unlock the order.
+    orderMaterials:
+      sharedMaterials || context.preview === true ? resolveOrderMaterials(legacy) : [],
     boardCountsByArea: showMaterials
       ? resolveBoardCountsByArea(
           field,
