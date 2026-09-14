@@ -115,6 +115,19 @@ Both token RPCs dropped. `submit_vendor_quote` turned out to take **ten scalar a
 
 **Still open after Batch 1:** the `supabase_admin` default-ACL entry still grants `anon=X` to functions *that role* creates (ours are created by `postgres`, so this is latent, not live). The branch anon JWT that item 6 removed from the two scripts is still in `docs/A5C2_C1_PILOT.md:210` and `docs/A5C_BRANCH_VERIFICATION.md:80` — Batch 0 hygiene. `.env.example` never held `VITE_VENDOR_PORTAL_URL`, so that half of item 8 was a no-op.
 
+🔴 **Batch 1A shipped a P0 regression that was live for four days: crew signup was completely broken, 2026-09-10 → 2026-09-14.** Fixed by `20260914130000_fix_crew_invite_blocks_new_signups.sql` (`a3b16c8`).
+
+P1-SEC-3's guard was written as *"holds any role other than `crew`"*. But `profiles.roles` is `NOT NULL DEFAULT ARRAY['viewer']` (`20260527000002:5`) and `handle_new_user` inserts without naming `roles` — so **every brand-new account arrives holding `{viewer}`**, trips the guard, and fails with "this account already has app access". Not some signups. Every one. No crew member could be onboarded for four days.
+
+The guard now names the operator roles it means (`owner`, `office_gc`, `office_drywall`, `field_gc`, `field_drywall`) rather than inferring them from the absence of `crew`, so a column default cannot trip it.
+
+> **Two failures produced this, and the second is the one worth keeping.**
+>
+> 1. A predicate defined by *absence* ("anything that isn't crew") silently matched a column default. Name what you mean.
+> 2. **The 1A brief listed crew signup end to end as "the highest-risk regression in the brief" — and then, when Mark was short of time on 2026-09-10, I argued the risk was low because Cursor had proven the mechanism in SQL.** It had. What the SQL could not show is that a real signup starts from a profile carrying a default role the test fixture never had. I talked him out of running the one check that would have caught the bug I had just written, on the day I wrote it.
+>
+> **Rule: an RPC proven against a hand-built fixture is not proven against a real row.** Column defaults, triggers and prior state live in the app path and not in the fixture. When a brief names a check as highest-risk, that is exactly the one that does not get skipped for time.
+
 🟡 **Batch 1 partially smoked 2026-09-13.** Mark opened the crew view for several crew members and everything loaded correctly. That covers the largest surface: 1B's read scoping resolving real linked ids through `crew_is_assigned_to_project`, 1D's revoke not touching the authenticated RPCs the crew workspace calls, and the `org_drywall_catalogs` read that item 5 deliberately left alone.
 
 **Still unproven, in priority order:** (1) **crew signup** — the only path through `consume_crew_invite_token`, the 1A trigger's definer exemption, and 1D's single `anon` carve-out, and the only one that matters before the next onboarding; (2) viewer/`tate` write refusal, which is a deliberate change needing sanction rather than a test; (3) deactivate/reactivate, clock in/out on a 1099 account, QuickBooks connect. Walk-through: `docs/briefs/CREW_SMOKE_WALKTHROUGH.md`.
