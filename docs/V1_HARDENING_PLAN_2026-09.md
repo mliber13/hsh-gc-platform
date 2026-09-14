@@ -32,6 +32,21 @@ live-state claims are being verified separately — see `docs/briefs/DIAG_REGROU
 **Standing rule from this:** a claim about what the database contains, or about who consumes a shared
 bucket/table/function, is a hypothesis until queried. Trace the call graph, not the string.
 
+**Live-state pass run 2026-09-14** (`docs/briefs/DIAG_REGROUND_AUDIT.md`). Six sections; three came back
+wrong, and one of the wrong ones was mine from the same morning:
+
+| Claim | Verdict |
+|---|---|
+| `project_actuals` duplicates are corrupting cost figures | **Wrong — latent.** No UNIQUE constraint (true), but 40 rows and zero duplicates. Fix is prevention, not repair |
+| `increment_use_count` is a call that always fails | **Wrong — dead with a fallback.** Undefined in `pg_proc`, but its only caller has zero callers and catches the error into a direct UPDATE |
+| 23 edge function dirs; delete the three empty ones | **Wrong — 22 dirs, 25 deployed.** The three "empty" dirs are ACTIVE in production with source only in the Dashboard. Deleting the folders would not undeploy them |
+| `change_orders` might have rows, undermining P0-GC-1 | **Confirmed.** Zero rows; only writer is a one-shot script. P0-GC-1 intact |
+| `quote-documents` is public; photo insert 3 terms / delete 4 | **Confirmed** |
+| `20260914120000` drifted out of `schema_migrations` | **Wrong, and mine.** It is recorded. Mark had already run `db push` correctly that morning; I told him twice to do it anyway. I asserted drift from a stale reading instead of checking |
+
+Also corrected: the dormancy SQL in §3 referenced `meeting_submissions.created_at`, which does not exist
+(`submitted_at`), so the block failed on that line. Results are now recorded in §3 rather than pending.
+
 ---
 
 ## 0a. Status — reviewed 2026-09-10
@@ -220,7 +235,7 @@ Defects that lose data, mis-state money, or escalate privilege. All are CONFIRME
 | P1-MONEY-4 | Metal-stud labor rate resolves two ways (engine: size×gauge; rate cell/tooltip: `catalog_id`, never set) → cell shows $0.00 while the line prices at $12/LF. Component tooltip formula omits waste × burden. | `quoteV3Math.ts:400-403`; `quoteV3CatalogResolve.ts:133-134`; `quoteV3LineAmountTooltips.ts:90` | Single `getEffectiveComponentLaborRate(line)`; tooltip reproduces `computed.laborTotal`. | S |
 | P1-MONEY-5 | Typing any material rate on a grid/acoustic/metal-stud line silently switches to the blended "converted" branch (itemization disappears, no warning). | `quoteV3CatalogResolve.ts:264-268`; `quoteV3Math.ts:309/356/405` | Gate blended branch on the migration override reason or an explicit lump-sum toggle. | S |
 | P1-MONEY-6 | Labor for insulation/FRP/door_install is multiplied by material waste (10% waste on doors pays 10% more install labor). | `quoteV3Math.ts:457-460` | Decide per trade; doors at minimum should not. | S |
-| P1-MONEY-7 | GC: `project_actuals` has no UNIQUE on `project_id`; SELECT-then-INSERT races create duplicate rows and `limit(1)` hides half the entries (also affects drywall cost reads). | `supabaseService.ts:2495-2540`; `001_initial_schema.sql:202-219` | Unique index + upsert. | S |
+| P1-MONEY-7 | GC: `project_actuals` has no UNIQUE on `project_id` — confirmed live (PK on `id`, FKs, and a **non-unique** `idx_actuals_project_id`), so SELECT-then-INSERT can race. **Corrected 2026-09-14: latent, not firing.** 40 rows, **zero** `project_id` with more than one row — no cost figure is wrong today. The original wording implied live corruption; it does not. | `supabaseService.ts:2495-2540`; `001_initial_schema.sql:202-219` | Unique index + upsert, as prevention. | S |
 | P1-MONEY-8 | Payroll: overtime defaults to straight time (40h cap computes `asOT` but multiplier is 1 unless manually flagged; imports set `'regular'`). Compliance exposure for W2 hourly. | `payrollMath.ts:301-330, 783`; `PayrollPage.tsx:699` | Default hours beyond 40 to 1.5× for W2 hourly on import/add, operator override. **Decision §8 Q5.** | S |
 | P1-MONEY-9 | Crew phone and payroll disagree on piece-pay sqft (crew adds accepted change-order sqft; payroll default uses field-measured only). | `crewWorkspaceService.ts:880-889` vs `PayrollPage.tsx:670` | Shared `crewPayBasis.ts` resolver used by both. | M |
 
@@ -268,8 +283,8 @@ Defects that lose data, mis-state money, or escalate privilege. All are CONFIRME
 | ID | Finding | Fix | Size |
 |---|---|---|---|
 | P1-QA-1 | No CI: `.github/`, eslint, prettier, hooks all absent; tests never run automatically; two AI agents commit to `master`. | One GitHub Actions workflow: `npm ci` → `tsc --noEmit` → `vitest run` → `vite build`. Make it required on `master`. Add `lint`/`typecheck` scripts + ESLint flat config (the 6 `eslint-disable` comments already assume it). | S–M |
-| P1-QA-2 | `supabase db reset` from scratch is impossible: `org_team`, `project_events`, `work_packages`, `pay_periods`, `time_entries`, `project_milestones` have no `CREATE TABLE` in any migration; RPC `increment_use_count` is called but never defined. | Baseline migration (dump live DDL for the orphans) placed before `20260427000009`; define or remove `increment_use_count`. | M |
-| P1-QA-3 | Edge functions: `qb-find-vendor` is invoked (`quickbooksService.ts:263`) but has no source in the repo; three empty function dirs (`accept-invitation`, `invite-user`, `qb-suggest-allocation`); no `supabase/config.toml` (per-function `verify_jwt` is Dashboard-only state); `std@0.168.0` + unpinned `supabase-js@2` in all 23. | Recover `qb-find-vendor` source from Dashboard or remove the call; delete empty dirs; add `config.toml` + `deno.json` import map. | S |
+| P1-QA-2 | `supabase db reset` from scratch is impossible: `org_team`, `project_events`, `work_packages`, `pay_periods`, `time_entries`, `project_milestones` have no `CREATE TABLE` in any migration. **All six confirmed present live (2026-09-14)** — it is a migration-file gap, not a missing-object problem. `increment_use_count` is indeed undefined in `pg_proc`, but **"the app has a call that always fails" was too strong**: the only caller is `sowService.ts:302` (`incrementSOWTemplateUseCount`), which itself has **zero callers**, and it catches the RPC error and falls back to a `sow_templates.use_count` UPDATE at `:307-319`. Dead code with a fallback, not an ops fire. | Baseline migration (dump live DDL for the orphans) placed before `20260427000009`; define or delete `increment_use_count` with its dead wrapper. | M |
+| P1-QA-3 | **Substantially corrected 2026-09-14.** **22** real function dirs, not 23. **25 functions are deployed.** The three "empty" dirs — `accept-invitation`, `invite-user`, `qb-suggest-allocation` — are **live and ACTIVE** (versions 26 / 29 / 14) with source existing **only in the Dashboard**. ⚠️ **Deleting those folders does not undeploy them**, which the original fix implied; the real work is recovering their source into git or deleting the remote functions deliberately. `qb-find-vendor` is **not deployed and not recoverable** — and its caller `findOrCreateQBVendor` (`quickbooksService.ts:263`) has **zero callers**, so it is a dead invoke, not a production 404. No local source is missing a deploy. Still true: no `supabase/config.toml`; `std@0.168.0` + unpinned `supabase-js@2`. | Recover the three Dashboard-only sources into git **or** delete the remote functions; delete the dead `findOrCreateQBVendor` + its invoke; add `config.toml` + `deno.json`. | S–M |
 
 ---
 
@@ -339,25 +354,34 @@ The operator app was built desktop-first and is now used on a phone daily. `useI
 
 Size: **M** for the shell header plus the lane chips; **L** for a full sweep. Not a v1 blocker, but it is daily friction for the person using it most.
 
-### Dormancy pass (needs live row counts before acting)
+### Dormancy pass — RUN 2026-09-14
 
-Run once via Cursor MCP, then gate anything with no rows since June behind owner-only in `rbac.ts`/`moduleItems`:
+| Table | rows | last write (UTC) | writes since 2026-06-01 | verdict |
+| --- | --- | --- | --- | --- |
+| `deals` | 5 | 2026-05-22 | 0 | dormant |
+| `deal_proforma_versions` | 16 | 2026-05-22 | 0 | dormant |
+| `tenant_pipeline_prospects` | 10 | 2026-05-18 | 0 | dormant |
+| `selection_books` | 8 | 2026-04-24 | 0 | dormant |
+| `selection_schedule_versions` | 0 | — | 0 | empty — the `FEATURE_CLEANUP.md` 3b delete candidate still stands |
+| `client_quotes` | 11 | 2026-08-24 | 3 | **NOT dormant** |
+| `project_forms` | 2 | 2025-10-30 | 0 | dormant |
+| `sow_templates` | 4 | 2026-04-24 | 0 | dormant |
+| `meeting_submissions` | 140 | 2026-06-29 | 53 | busy through June, quiet since |
+| `project_documents` | 59 | 2026-06-02 | 1 | ACTIVE-CORE — sparse, not empty |
+| `change_orders` | **0** | — | 0 | see below |
 
-```sql
-select 'deals' t, count(*) c, max(updated_at) last from deals where updated_at > '2026-06-01'
-union all select 'deal_proforma_versions', count(*), max(created_at) from deal_proforma_versions where created_at > '2026-06-01'
-union all select 'tenant_pipeline_prospects', count(*), max(updated_at) from tenant_pipeline_prospects where updated_at > '2026-06-01'
-union all select 'selection_books', count(*), max(updated_at) from selection_books where updated_at > '2026-06-01'
-union all select 'selection_schedule_versions', count(*), max(created_at) from selection_schedule_versions
-union all select 'client_quotes', count(*), max(updated_at) from client_quotes
-union all select 'project_forms', count(*), max(created_at) from project_forms where created_at > '2026-06-01'
-union all select 'sow_templates', count(*), max(updated_at) from sow_templates
-union all select 'quote_requests', count(*), max(created_at) from quote_requests where created_at > '2026-03-01'
-union all select 'meeting_submissions', count(*), max(created_at) from meeting_submissions where created_at > '2026-07-01'
-union all select 'plans_used', count(*), max(created_at) from projects where plan_id is not null and created_at > '2026-06-01';
-```
+**Gating decision:** Deals, tenant pipeline, selections, project forms and SOW templates have had no
+writes since May — those are the owner-only candidates. **`client_quotes` is still warm (3 writes since
+June), so do not gate quotes along with the deals workspace**, which is the obvious mistake to make since
+they sit near each other in the nav.
 
-`SelectionSchedules` (0 rows in April) is the standing delete candidate from `FEATURE_CLEANUP.md` 3b.
+**`change_orders` has zero rows, which CONFIRMS P0-GC-1 rather than undermining it.** I added it to the
+query expecting rows to contradict the finding. The only `.insert` against it in the whole repo is the
+one-shot `src/scripts/migrateToSupabase.ts`; `backupService` and `projectActivityService` only read it.
+GC change orders really do save to localStorage and never persist.
+
+⚠️ **The query in this document was wrong** and is corrected above: `meeting_submissions` has
+`submitted_at`, not `created_at`, so the original block fails outright on that line.
 
 ---
 
@@ -398,7 +422,7 @@ Each batch is one Cursor brief (or a direct Claude session for the S items), one
 
 | Batch | Contents | Sessions | Needs live DB (Cursor MCP) |
 |---|---|---|---|
-| **0 — Hygiene + CI** | Repo/docs cleanup (§3 hygiene), `CLAUDE.md`, `docs/INDEX.md`, unused deps, `.temp` untrack, empty fn dirs, P1-QA-1 CI workflow, P1-QA-3 `qb-find-vendor` check, P1-SEC-10 pending reconcile | ½ | verify `qb-find-vendor` in Dashboard |
+| **0 — Hygiene + CI** | Repo/docs cleanup (§3 hygiene), `CLAUDE.md`, `docs/INDEX.md`, unused deps, `.temp` untrack, P1-QA-1 CI workflow, delete the dead `findOrCreateQBVendor` + its `qb-find-vendor` invoke. **Do NOT just delete the three empty function dirs** — they are deployed and live; recovering their Dashboard source into git, or deleting the remote functions, is a deliberate decision, not hygiene (see P1-QA-3). P1-SEC-10 and P1-QA-3's `qb-find-vendor` check are both already closed. | ½ | — (live-state pass done 2026-09-14) |
 | **1 — Security** | P0-SEC-1, P0-SEC-2, P0-SEC-3 (decision), P1-SEC-1…9 as one or two migrations + `vercel.json` headers; error boundary (P0-INFRA-1) rides along | 1–2 | yes — apply migrations, run anon + crew smoke, `supabase-audit-recon.mjs`, `organizations` RLS check |
 | **2 — Money** | P0-MONEY-1/2/3, P1-MONEY-1…6, `scan-quote-versions.mjs` (v2-retirement step 0), tests T1–T5 | 1–2 | no (pure TS); re-run parity harness against a real project payload |
 | **3 — Data safety** | P0-DATA-1…5, P1-HR-1…4, P1-DATE-1…3, P1-MONEY-8/9, tests T6–T12 | 2 | yes — `save_pay_period` RPC, supplier edge fn redeploy, clock RPC changes |
@@ -459,7 +483,7 @@ Analysed in the per-domain reports; each is a real improvement but structural, s
 | TS/TSX lines | ~180k (components 102k, services 35k, lib 24k) |
 | Largest files | `ProFormaGenerator.tsx` 5,149 (dead), `supabaseService.ts` 5,074, `DealWorkspace.tsx` 4,715, `ProjectActuals.tsx` 3,467, `EstimateBuilder.tsx` 2,790 |
 | Tests | 42 files / 240 tests, all in `src/lib` + 3 services + 1 component; 0 UI tests |
-| Migrations / edge fns | 179 / 23 real + 3 empty dirs |
+| Migrations / edge fns | 179 / **22** real dirs; **25 deployed** — 3 are Dashboard-only with no git source (corrected 2026-09-14) |
 | Main JS chunk | 4.55 MB, no code splitting |
 | `as any` / `: any` | 173 / 262 |
 | `console.log` | 93 (87 in four files, 34 of them in deletable `src/scripts`) |
