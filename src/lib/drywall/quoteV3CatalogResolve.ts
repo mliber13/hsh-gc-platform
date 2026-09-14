@@ -146,6 +146,22 @@ export function getCatalogDefaultComponentLaborRate(
   }
 }
 
+/**
+ * True when a component line is priced as one blended rate rather than from its
+ * itemised takeoff.
+ *
+ * `custom_material_rate` switches grid / acoustic / metal-stud lines to
+ * `qty × rate` and stops the engine computing a parts breakdown. That is correct
+ * for a converted v2 line — the v2 figure was already blended and re-itemising it
+ * would change the price — but it also fires when an operator simply types a
+ * material rate, and the itemisation then vanishes from the pivot with no
+ * explanation. The maths is defensible; the silence is not. P1-MONEY-5.
+ */
+export function isBlendedComponentLine(line: QuoteLineItem): boolean {
+  if (line.type === 'drywall') return false
+  return line.custom_material_rate != null
+}
+
 /** Component trade labor — catalog default or line custom_labor_rate override. */
 export function getEffectiveComponentLaborRate(
   line: QuoteLineItem,

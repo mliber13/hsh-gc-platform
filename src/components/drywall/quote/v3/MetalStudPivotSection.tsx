@@ -9,6 +9,7 @@ import {
   formatQuoteMoney,
   type QuoteV3LaborBurdenOptions,
 } from '@/lib/drywall/quoteV3Math'
+import { isBlendedComponentLine } from '@/lib/drywall/quoteV3CatalogResolve'
 import { createQuoteLineItem } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import {
   METAL_STUD_GAUGES,
@@ -76,6 +77,7 @@ export function MetalStudPivotSection({
     onChange([...lines, { ...line, quantity: 0 }])
   }
 
+  const anyBlended = lines.some(isBlendedComponentLine)
   const anyUnpriced = catalogs.metal_stud.length === 0
 
   return (
@@ -94,6 +96,14 @@ export function MetalStudPivotSection({
           </span>
         </div>
       </div>
+
+      {anyBlended && (
+        <p className="border-b bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
+          Some runs carry a flat material $/LF, so they are priced as a lump sum and their stud and
+          track counts below read 0. Clear the material rate on a run to price it from the itemised
+          takeoff instead.
+        </p>
+      )}
 
       {anyUnpriced && (
         <p className="border-b bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">

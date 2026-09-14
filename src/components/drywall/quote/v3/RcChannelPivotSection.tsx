@@ -9,6 +9,7 @@ import {
   formatQuoteMoney,
   type QuoteV3LaborBurdenOptions,
 } from '@/lib/drywall/quoteV3Math'
+import { isBlendedComponentLine } from '@/lib/drywall/quoteV3CatalogResolve'
 import { createQuoteLineItem } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { generateQuoteId } from '@/lib/drywall/drywallQuoteHelpers'
 import { CurrencyAmountCell } from './CurrencyAmountCell'
@@ -138,6 +139,13 @@ export function RcChannelPivotSection({
           </span>
         </div>
       </div>
+
+      {lines.some(isBlendedComponentLine) && (
+        <p className="border-b bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
+          Some runs carry a flat material rate, so they are priced as a lump sum and their
+          channel and screw counts below read 0. Clear the material rate to price from the itemised takeoff instead.
+        </p>
+      )}
 
       <datalist id="rc-pivot-locations">
         {allLocations.map((l) => (
