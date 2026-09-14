@@ -4,6 +4,19 @@ import { ArrowRight, Download, FileUp, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  compareStaleConvertTotals,
+  refreshNeedsConfirmation,
+} from '@/lib/drywall/staleV3ConvertAudit'
+import { formatQuoteMoney } from '@/lib/drywall/quoteV3Math'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
 import { QuoteOutcomeBar, isQuoteOutcomeLocked } from '@/components/drywall/quote/QuoteOutcomeBar'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -48,6 +61,7 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
   const [quote, setQuote] = useState<DrywallQuoteV3 | null>(null)
   const [quoteOutcome, setQuoteOutcome] = useState<DrywallQuoteOutcome>('drafted')
   const [catalogs, setCatalogs] = useState<OrgDrywallCatalogs | null>(null)
+  const [refreshConfirmOpen, setRefreshConfirmOpen] = useState(false)
   const [savedSnapshot, setSavedSnapshot] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -132,8 +146,47 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
     return computeQuoteV3Totals(quote, catalogs)
   }, [quote, catalogs])
 
+  /**
+   * Refreshing rebuilds the quote from the v2 snapshot and overwrites the live
+   * one. On a quote that has already gone to the customer that silently rewrites
+   * the price they are holding — found 2026-09-14, when three quotes turned out
+   * to be carrying pre-1db8d7b line splits and two of them were already sent,
+   * $9,192 under their own v2 figures between them.
+   *
+   * So a sent or approved quote gets the numbers first. Totals come from
+   * compareStaleConvertTotals, which builds the fresh quote with the same
+   * buildFreshV3FromSnapshot the write path uses — the dialog cannot quote a
+   * figure the refresh would not produce.
+   */
+  const refreshNeedsConfirm = refreshNeedsConfirmation(quoteOutcome)
+
+  const refreshPreview = useMemo(() => {
+    if (!refreshNeedsConfirm || !quote || !catalogs || !quote.legacyV2Snapshot) return null
+    try {
+      return compareStaleConvertTotals(
+        quote as unknown as Record<string, unknown>,
+        quote.legacyV2Snapshot,
+        catalogs,
+      )
+    } catch {
+      // A preview that cannot be computed must not block the refresh; the dialog
+      // falls back to warning without figures.
+      return null
+    }
+  }, [refreshNeedsConfirm, quote, catalogs])
+
+  const requestRefreshFromSnapshot = async (): Promise<void> => {
+    if (readOnly || !isOwner) return
+    if (refreshNeedsConfirm) {
+      setRefreshConfirmOpen(true)
+      return
+    }
+    await handleRefreshFromSnapshot()
+  }
+
   const handleRefreshFromSnapshot = async () => {
     if (readOnly || !isOwner) return
+    setRefreshConfirmOpen(false)
     setRefreshing(true)
     try {
       const refreshed = await refreshQuoteV3FromSnapshot(projectId)
@@ -280,13 +333,65 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
         </div>
       </div>
 
+      <Dialog open={refreshConfirmOpen} onOpenChange={setRefreshConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>This quote has already gone out</DialogTitle>
+            <DialogDescription>
+              {quoteOutcome === 'approved'
+                ? 'This quote is marked approved.'
+                : 'This quote is marked sent.'}{' '}
+              Refreshing rebuilds it from the v2 snapshot and replaces the priced lines, so the
+              customer would be holding a different number from the one on record.
+            </DialogDescription>
+          </DialogHeader>
+
+          {refreshPreview ? (
+            <div className="space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Current total</span>
+                <span className="tabular-nums">{formatQuoteMoney(refreshPreview.liveTotal)}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">After refresh</span>
+                <span className="tabular-nums">{formatQuoteMoney(refreshPreview.freshTotal)}</span>
+              </div>
+              <div className="flex justify-between gap-3 border-t pt-1 font-semibold">
+                <span>Change</span>
+                <span className="tabular-nums">
+                  {refreshPreview.freshTotal >= refreshPreview.liveTotal ? '+' : '−'}
+                  {formatQuoteMoney(Math.abs(refreshPreview.freshTotal - refreshPreview.liveTotal))}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              The new total could not be previewed. Refreshing will still replace the priced lines.
+            </p>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            The current quote is archived first, so this can be undone.
+          </p>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRefreshConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleRefreshFromSnapshot()} disabled={refreshing}>
+              {refreshing ? 'Refreshing…' : 'Refresh anyway'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {quote.legacyV2Snapshot != null ? (
         <QuoteV3ConvertBanner
           projectId={projectId}
           legacyV2Snapshot={quote.legacyV2Snapshot}
           showRefresh={isOwner && !viewerReadOnly && !outcomeLocked}
           refreshing={refreshing}
-          onRefresh={handleRefreshFromSnapshot}
+          onRefresh={requestRefreshFromSnapshot}
         />
       ) : null}
 

@@ -1,7 +1,12 @@
 import { buildV3FromV2, v2QuoteFromV3Snapshot } from './convertQuoteV2ToV3'
 import { hydrateDrywallQuoteV3, prepareDrywallQuoteV3ForSave } from './createEmptyDrywallQuoteV3'
 import { computeQuoteV3Totals } from './quoteV3Math'
-import type { DrywallQuote, DrywallQuoteV3, QuoteLineItem } from '@/types/drywall'
+import type {
+  DrywallQuote,
+  DrywallQuoteOutcome,
+  DrywallQuoteV3,
+  QuoteLineItem,
+} from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 
 function parseNum(v: unknown, fallback = 0): number {
@@ -73,6 +78,22 @@ export function buildFreshV3FromSnapshot(
       ? liveQuote.quoteNumber.trim()
       : fresh.quoteNumber
   return { ...fresh, quoteNumber }
+}
+
+/**
+ * Whether refreshing from the v2 snapshot needs the operator to confirm first.
+ *
+ * Refresh replaces the priced lines, so on a quote the customer already holds it
+ * silently rewrites their number. Found 2026-09-14: three quotes were still
+ * carrying pre-`1db8d7b` line splits and two of them were already sent, together
+ * $9,192 under their own v2 figures. Correcting them is right — doing it without
+ * the operator seeing the new total is not.
+ *
+ * A drafted quote refreshes freely; nobody has seen it. A lost quote likewise —
+ * there is no live number to disturb.
+ */
+export function refreshNeedsConfirmation(outcome: DrywallQuoteOutcome | undefined): boolean {
+  return outcome === 'sent' || outcome === 'approved'
 }
 
 export interface StaleConvertTotals {
