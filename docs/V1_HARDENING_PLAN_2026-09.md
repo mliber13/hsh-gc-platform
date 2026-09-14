@@ -142,7 +142,11 @@ The guard now names the operator roles it means (`owner`, `office_gc`, `office_d
 
 **Not damage:** Wick Lofts and Moreland Hills - Mario also show zero lines; Mark confirms no quote data was ever entered for either. 122 Sherman St remains the known legacy-GC exception.
 
-🟡 **Batch 1 partially smoked 2026-09-13.** Mark opened the crew view for several crew members and everything loaded correctly. That covers the largest surface: 1B's read scoping resolving real linked ids through `crew_is_assigned_to_project`, 1D's revoke not touching the authenticated RPCs the crew workspace calls, and the `org_drywall_catalogs` read that item 5 deliberately left alone.
+✅ **Batch 1 SMOKED 2026-09-14 — operator-verified end to end.** Mark ran `docs/briefs/CREW_SMOKE_WALKTHROUGH.md` in full. Crew signup confirmed working after the `20260914130000` fix; the rest of the walkthrough passed. Only step 14 was skipped — the component-heavy Order-margin check needs a Togal import with metal stud or grid, and there is no live job to test it against yet. That one carries over to the next such job.
+
+Batch 1 (1A–1D) is now applied **and** verified. The two regressions it produced — blocked crew signup, and the refresh that emptied a sent quote — were both found by this run and are both closed.
+
+_Superseded note, kept for the record:_ 🟡 **Batch 1 partially smoked 2026-09-13.** Mark opened the crew view for several crew members and everything loaded correctly. That covers the largest surface: 1B's read scoping resolving real linked ids through `crew_is_assigned_to_project`, 1D's revoke not touching the authenticated RPCs the crew workspace calls, and the `org_drywall_catalogs` read that item 5 deliberately left alone.
 
 **Still unproven, in priority order:** (1) **crew signup** — the only path through `consume_crew_invite_token`, the 1A trigger's definer exemption, and 1D's single `anon` carve-out, and the only one that matters before the next onboarding; (2) viewer/`tate` write refusal, which is a deliberate change needing sanction rather than a test; (3) deactivate/reactivate, clock in/out on a 1099 account, QuickBooks connect. Walk-through: `docs/briefs/CREW_SMOKE_WALKTHROUGH.md`.
 
