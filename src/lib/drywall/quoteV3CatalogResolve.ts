@@ -131,7 +131,12 @@ export function getCatalogDefaultComponentLaborRate(
     case 'acoustic':
       return catalogs.acoustic.find((e) => e.id === line.catalog_id)?.labor_rate ?? 0
     case 'metal_stud':
-      return catalogs.metal_stud.find((e) => e.id === line.catalog_id)?.labor_rate ?? 0
+      // Metal stud is catalogued by size + gauge, not by a per-line catalog_id.
+      // The pricing engine resolves it that way (see computeLineItem's metal_stud
+      // branch) and no live line carries a catalog_id, so looking one up here
+      // returned 0 — the rate cell and its tooltip read $0.00 while the line
+      // priced at the real rate. Same defaults as the engine.
+      return getMetalStudLaborRate(catalogs, line.ms_size || '3.625', line.ms_gauge || '20')
     case 'frp':
       return catalogs.frp.find((e) => e.id === line.catalog_id)?.labor_rate ?? 0
     case 'door_install':
