@@ -19,7 +19,11 @@ export function specialtyFromPositionName(name: string | null | undefined): Crew
   // Measurer first — explicit ordering per D.6.8 brief.
   if (n.includes('measure')) return 'measurer'
   const isHanger = n.includes('hang')
-  const isFinisher = n.includes('finish')
+  // "Pointup Specialist" is finish work, and finisherCapacityTier below already
+  // treats 'point' that way. This function not matching it left two real people
+  // (Robert Allen, Doug Ryman) resolving to 'unknown', which silently empties
+  // their materials list and blanks their pay.
+  const isFinisher = n.includes('finish') || n.includes('point')
   if (isHanger && isFinisher) return 'both'
   if (isHanger) return 'hanger'
   if (isFinisher) return 'finisher'

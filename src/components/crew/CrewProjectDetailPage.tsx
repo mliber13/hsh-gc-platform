@@ -789,6 +789,26 @@ export function CrewProjectDetailPage() {
                 })()
               : null}
 
+            {/*
+              An empty card with no explanation is what turned "I can't see the
+              material list" into a fortnight of argument — the office saw a full
+              list, the crew member saw nothing, and neither screen said why.
+              Only shown when there is genuinely nothing above it.
+            */}
+            {detail.materials.length === 0 && detail.orderMaterials.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {detail.materialsEmptyReason === 'no_quantities'
+                  ? 'Material is listed for this job but the quantities are still blank. Ask the office to fill them in.'
+                  : detail.materialsEmptyReason === 'trade_unresolved'
+                    ? "We couldn't match your trade to this job, so the list is hidden. Ask the office to check your account — this usually happens after a roster update."
+                    : detail.materialsEmptyReason === 'not_your_trade'
+                      ? 'Nothing on this job’s material list is for your trade.'
+                      : detail.materialsEmptyReason === 'measurer'
+                        ? 'Materials are handled by the crew working the job.'
+                        : 'No material recorded for this job yet.'}
+              </p>
+            ) : null}
+
             {!detail.showBoardCounts && detail.materials.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No materials listed for this job yet. Tap “Request more” to ask the office for

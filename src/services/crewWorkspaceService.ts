@@ -47,6 +47,7 @@ import type {
   CrewBoardAreaGroup,
   CrewLaborRateSource,
   CrewMeasurePageContext,
+  CrewMaterialsEmptyReason,
   CrewOrderMaterial,
   CrewOrderMaterialGroup,
   CrewProjectDetail,
@@ -846,24 +847,40 @@ export function resolveOrderMaterials(legacy: Record<string, unknown>): CrewOrde
   return groups
 }
 
-function resolveMaterials(
+/**
+ * Returns the list AND why it is empty when it is.
+ *
+ * An empty Materials card with no explanation is what turned a Laborer saying
+ * "I can't see the material list" into a fortnight of argument: the office saw a
+ * populated list, he saw a blank card, and neither screen said why. Every empty
+ * outcome below is now nameable on screen.
+ */
+export function resolveMaterials(
   field: FieldTakeoff | null,
   specialty: CrewSpecialty,
   preview: boolean,
-): CrewProjectDetail['materials'] {
+): { items: CrewProjectDetail['materials']; emptyReason: CrewMaterialsEmptyReason } {
   // Measurers don't handle materials on site.
-  if (!preview && specialty === 'measurer') return []
-  if (!field?.accessories?.length) return []
+  if (!preview && specialty === 'measurer') return { items: [], emptyReason: 'measurer' }
+  if (!field?.accessories?.length) return { items: [], emptyReason: 'none_recorded' }
   // Unknown specialty + not preview → no materials (we don't know who they are).
-  if (!preview && specialty === 'unknown') return []
+  if (!preview && specialty === 'unknown') return { items: [], emptyReason: 'trade_unresolved' }
 
-  return field.accessories
+  // Rows that are real regardless of who is looking: a type, and a usable
+  // quantity. Tracked separately so "the office listed material but left the
+  // quantities blank" can be said out loud instead of rendering as nothing.
+  const withQuantity = field.accessories.filter((acc) => {
+    if (!acc.type?.trim()) return false
+    const qtyNum = Number(acc.quantity)
+    return Number.isFinite(qtyNum) && qtyNum > 0
+  })
+  if (withQuantity.length === 0) {
+    return { items: [], emptyReason: 'no_quantities' }
+  }
+
+  const items = withQuantity
     .filter((acc) => {
-      const type = acc.type?.trim()
-      if (!type) return false
-      const qtyNum = Number(acc.quantity)
-      // Skip empty/zero rows — operator may have added a blank row.
-      if (!Number.isFinite(qtyNum) || qtyNum <= 0) return false
+      const type = (acc.type ?? '').trim()
       if (preview || specialty === 'both') return true
       if (specialty === 'hanger') return HANGER_MATERIAL_CATEGORIES.has(type)
       if (specialty === 'finisher') return !FINISHER_HIDE_CATEGORIES.has(type)
@@ -879,6 +896,11 @@ function resolveMaterials(
       threadType: acc.threadType?.trim() || null,
       facing: acc.facing?.trim() || null,
     }))
+
+  return {
+    items,
+    emptyReason: items.length === 0 ? 'not_your_trade' : null,
+  }
 }
 
 /** Board counts from field takeoff — hangers need these by area to stock/hang. */
@@ -1377,13 +1399,27 @@ async function mapProjectDetail(
   const sharedMaterials =
     context.personId != null && personSeesSharedMaterials(context.personId, scheduleRows)
   const showMaterials = showJobInfo || isForeman || sharedMaterials
-  const unfilteredMaterials = context.preview === true || isForeman || sharedMaterials
+  // An explicit operator grant outranks an inferred trade. Putting someone on
+  // show_job_info_person_ids IS the decision that they should see this job's
+  // material; losing that to a position-name substring is what left a Laborer
+  // staring at an empty card on 87 of his 88 jobs. Only unfilter when the trade
+  // is unresolved — a hanger with job info still gets the hanger-relevant list,
+  // because narrowing by a KNOWN trade is useful rather than obstructive.
+  const unfilteredMaterials =
+    context.preview === true ||
+    isForeman ||
+    sharedMaterials ||
+    (showJobInfo && context.specialty === 'unknown')
   const hasMeasureAssignment =
     context.preview === true || scheduleRows.some(scheduleRowHasMeasurePhase)
   const measureWorkflowStatus =
     context.preview === true || isMeasurerSpecialty(context.specialty)
       ? crewMeasureWorkflowStatus(field)
       : null
+
+  const materialsResult = showMaterials
+    ? resolveMaterials(field, context.specialty, unfilteredMaterials)
+    : { items: [], emptyReason: null as CrewMaterialsEmptyReason }
 
   const emptyRates = {
     hangerRate: null as number | null,
@@ -1407,9 +1443,8 @@ async function mapProjectDetail(
     scopeOfWork: showScope ? resolveScopeOfWork(legacy, intakeSource, po) : '',
     structuredScope: showScope ? resolveStructuredScope(legacy) : null,
     totalSqft,
-    materials: showMaterials
-      ? resolveMaterials(field, context.specialty, unfilteredMaterials)
-      : [],
+    materials: materialsResult.items,
+    materialsEmptyReason: showMaterials ? materialsResult.emptyReason : null,
     // Only when the operator explicitly shared the list, or for an operator
     // preview. showJobInfo alone does not unlock the order.
     orderMaterials:

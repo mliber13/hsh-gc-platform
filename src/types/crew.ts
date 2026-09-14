@@ -101,6 +101,24 @@ export interface CrewMaterial {
   facing: string | null
 }
 
+/**
+ * Why the Materials card has nothing in it. Rendered verbatim reasoning on the
+ * phone so "I can't see the material list" is answerable from the screen instead
+ * of by argument.
+ */
+export type CrewMaterialsEmptyReason =
+  /** No accessory rows recorded on the field takeoff at all. */
+  | 'none_recorded'
+  /** Rows exist but every one has a blank or zero quantity. */
+  | 'no_quantities'
+  /** Rows exist with quantities, but none belong to this person's trade. */
+  | 'not_your_trade'
+  /** Position name didn't match a trade, so we can't tell what to show. */
+  | 'trade_unresolved'
+  /** Measurers don't handle materials on site. */
+  | 'measurer'
+  | null
+
 /** One line off a supplier order, as shown to crew when the operator shares the list. */
 export interface CrewOrderMaterial {
   id: string
@@ -179,6 +197,8 @@ export interface CrewProjectDetail {
    * a delivery actually runs off — see resolveOrderMaterials.
    */
   orderMaterials: CrewOrderMaterialGroup[]
+  /** Set when `materials` is empty, so the card can say why rather than look broken. */
+  materialsEmptyReason: CrewMaterialsEmptyReason
   /** Field board counts by area — hangers / both / operator preview only. */
   boardCountsByArea: CrewBoardAreaGroup[]
   /** Whether the Boards by area section should render (even if empty). */
