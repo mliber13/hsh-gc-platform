@@ -162,7 +162,11 @@ Mark confirms **Metz is meant to be $95,439 and Preston $34,904 with a $1,193.85
 
 **Still unresolved:** the 2026-09-08 report remains unexplained. The scan reproduces no converter fault on any live project, so whatever was seen that day is either already fixed by `1db8d7b` or was not a converter problem.
 
-**Munson Twp - Wade** (`DW-2026-022`, still **drafted**) is the one Mark has not ruled on: one hand-built line at 10,467.97 sqft against a 14,072 sqft snapshot in two phases, $8,834 below the v2 figure. No customer exposure while it stays a draft.
+**Munson Twp - Wade also confirmed correct** — $23,160.34 with a $1,345.73 "Level 5 Smooth Ceilings" alternate, verified to the cent. Mark believes it simply never got marked sent, so its `drafted` outcome is a record-keeping gap rather than a pricing one.
+
+**All three carry an unselected Level 5 alternate and all three were hand-priced in v3.** That is not coincidence: for jobs with a Level 5 option the quote is built directly in v3 rather than converted, which is exactly why "diverges from its v2 snapshot" carried no signal — those quotes were never trying to match it.
+
+**Nothing to refresh. Nothing to fix. The scan's entire output is explained.**
 
 Re-run: `node scripts/scan-v2-v3-per-trade.mjs` with a payload at `scripts/.v2-v3-scan-payload.json` (gitignored — it holds live customer pricing).
 
