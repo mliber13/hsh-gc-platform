@@ -8,6 +8,32 @@ Full per-domain reports (with every finding, table, and line ref) are in `docs/a
 
 ---
 
+## 0b. Audit re-grounding — 2026-09-14
+
+Prompted by Mark, after three findings in this document turned out to be wrong in ways that cost real
+field time. **The code-inventory half was re-verified mechanically and passed:**
+
+| Claim class | Method | Result |
+|---|---|---|
+| `file.ext:NNN` references | Every citation resolved against a repo-wide index; line compared to file length | **103 of 104 correct.** One bad: `estimatedMaterial.ts:312` — that file is 145 lines |
+| Zero-caller / dead-code claims | `grep` for importers of each P2-DEL target | **All correct**, including cascades — `proformaSummaryService` and `importService` are imported only by `ProFormaGenerator` and `ImportEstimate`, which are themselves dead |
+| LOC counts | `wc -l` | Exact. 5,149 / 671 / 700 hold; the `ImportEstimate` bundle is 1,008 against "~1,000" |
+
+**So the failure mode is narrower than it felt.** Every claim that has bitten shares one property: it
+describes **live state, or why a shared resource exists** — not code inventory.
+
+- P1-SEC-6 called `quote-documents` a vendor-chain bucket. GC EstimateBuilder depends on it via `getPublicUrl`.
+- The 1B brief said the photo write policy scoped uploads by project. It never did.
+- The 1B brief said `org_drywall_catalogs` had no crew reader. `crewWorkspaceService` reads it through a service wrapper; the grep looked for the table name in the consumer.
+
+None of those were findable by reading migrations, which is how this document was produced. The remaining
+live-state claims are being verified separately — see `docs/briefs/DIAG_REGROUND_AUDIT.md`.
+
+**Standing rule from this:** a claim about what the database contains, or about who consumes a shared
+bucket/table/function, is a hypothesis until queried. Trace the call graph, not the string.
+
+---
+
 ## 0a. Status — reviewed 2026-09-10
 
 **No batch has started.** The seven days since this plan was written went entirely to field interrupts, all of them legitimate and none of them in the plan: comms lanes + forwarding + whole-job view, foreman schedule rename, Photos & Files tab, honest push-send reporting, the A2P rejection, the v2→v3 per-phase converter loss, the $0 quote option, crew deactivation, insulation facing + R-11, and the v3 duration summary.
