@@ -128,6 +128,20 @@ The guard now names the operator roles it means (`owner`, `office_gc`, `office_d
 >
 > **Rule: an RPC proven against a hand-built fixture is not proven against a real row.** Column defaults, triggers and prior state live in the app path and not in the fixture. When a brief names a check as highest-risk, that is exactly the one that does not get skipped for time.
 
+🔴 **Data-loss incident 2026-09-14 — a sent customer quote was emptied, recovered from its archive.**
+
+**5084 Neptune Oval** (`DW-2026-074`, sent, **$52,295.95**) lost its only priced line to a "Refresh from v2 snapshot". The quote was priced **directly in v3**, so its `legacyV2Snapshot` is an empty husk — `sqft: ""`, zero breakdowns — and rebuilding from it yields nothing. Recovered from `quote_v3_archive_2026-09-14T17-57-38-039Z` (`docs/briefs/RECOVER_NEPTUNE_OVAL_QUOTE.md`); the archive also came back `drafted`, and Mark restored the `sent` outcome by hand.
+
+**A sweep found 59 more quotes one click from the same fate** — 19 sent or approved, the largest (Bridgeworks, `DW-2026-106`, sent) carrying **17 priced lines**. Closed by `acf1326`: the service refuses before archiving, and the button is hidden in that state. The check runs the same builder the write path uses and asks only "would this leave zero lines", so it cannot drift from what the write actually does.
+
+> **The lesson, and it is about the guard I had shipped hours earlier.** `5ad20e0` added a confirmation dialog to this exact button — and it fired correctly on this exact click. It asked *"has this quote been sent?"*, which is a question about **how risky the context looks**. The question that mattered was *"would this destroy the quote?"* — about **the outcome of the operation**. A quote can be a draft and still be destroyed; a sent quote with a real snapshot refreshes harmlessly. Guarding the context let a correct-looking dialog escort the operator through a destructive write.
+>
+> **Guard the destructive outcome, not the risky-looking context.** Where both are cheap, do both: refuse impossible operations outright, and confirm consequential ones.
+>
+> Two smaller contributors, both mine: my smoke step said "Cancel it" without saying why, and the dialog copy said the refresh *"can be undone"* when no restore UI exists anywhere — recovery is a hand-written UPDATE. Wording a destructive act as reversible is how it gets clicked.
+
+**Not damage:** Wick Lofts and Moreland Hills - Mario also show zero lines; Mark confirms no quote data was ever entered for either. 122 Sherman St remains the known legacy-GC exception.
+
 🟡 **Batch 1 partially smoked 2026-09-13.** Mark opened the crew view for several crew members and everything loaded correctly. That covers the largest surface: 1B's read scoping resolving real linked ids through `crew_is_assigned_to_project`, 1D's revoke not touching the authenticated RPCs the crew workspace calls, and the `org_drywall_catalogs` read that item 5 deliberately left alone.
 
 **Still unproven, in priority order:** (1) **crew signup** — the only path through `consume_crew_invite_token`, the 1A trigger's definer exemption, and 1D's single `anon` carve-out, and the only one that matters before the next onboarding; (2) viewer/`tate` write refusal, which is a deliberate change needing sanction rather than a test; (3) deactivate/reactivate, clock in/out on a 1099 account, QuickBooks connect. Walk-through: `docs/briefs/CREW_SMOKE_WALKTHROUGH.md`.
