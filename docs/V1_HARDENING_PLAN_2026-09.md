@@ -127,7 +127,13 @@ The revoke has to target the **default privilege**, not just current grants: `an
 
 **Batch 1 is done.** Then Batch 2 (money).
 
-**Batch 2A brief written 2026-09-11:** `docs/briefs/BATCH_2A_ONE_NUMBER_FOUR_WAYS.md`.
+**Batch 2A SHIPPED 2026-09-11** (`c405ce6`, `b3c1416`, `0ef6dca`, `2f30ee3`; brief `docs/briefs/BATCH_2A_ONE_NUMBER_FOUR_WAYS.md`). Closes **P0-MONEY-1**, **P1-MONEY-1**, **P1-MONEY-2**, tests **T1** and **T4**.
+
+**Verified 2026-09-14 by reverting the fix and re-running**, rather than by reading the diff: with `projectV3QuoteToV2Shape` restored to its pre-fix state, T4 fails at **totalLaborCost $231.75 against $475.50**. Component labor was not misattributed — it was absent — so a mixed-trade job reported less than half its true labor cost to the D.4 margin-floor gate.
+
+The shim now reads `routine.materialSubtotal` / `accessoriesSubtotal` / the three labor subtotals off the `QuoteV3MarkupBreakdown` and nets accepted alternates from `summary.breakdown`, instead of recomputing from `type === 'drywall'` lines. `laborBurdenFromQuote` is exported from `quoteV3Math` and the three divergent copies are gone. `estimatedLabor.ts:145` passes `quote.bead_sticks`.
+
+⚠️ **Still open from 2A:** `scripts/scan-v2-v3-per-trade.mjs` is committed but **has never been run against live data** — it needs a payload dump. That leaves the "still not working quite right" converter report of 2026-09-08 **undiagnosed**.
 
 **Scope correction — P0-MONEY-2 and P0-MONEY-3 are already DONE** (`1db8d7b`, 2026-09-08). FRP uses `customRateFromV2Total(calc.frpMaterialCost, sqft)` at `convertQuoteV2ToV3.ts:341`; RC sets `waste_pct` from `v2.rcChannelWastePercentage` and `accessories_in_material_rate: true` at `:163-164`. Batch 2 is smaller than this plan assumed.
 
