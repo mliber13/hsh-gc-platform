@@ -69,3 +69,27 @@ Only the first, sixth and seventh rows implicate a migration. The rest is pre-ex
 Everything above except signup can be proven in SQL as a real `authenticated` caller, and should be —
 it is faster and safer. What SQL cannot prove is the **app wiring**: `signUp` → `consumeCrewInviteToken`
 → hard reload → `/crew` bootstrapping with the freshly-linked org. That sequence is why this doc exists.
+
+---
+
+## Added 2026-09-14 — the week's crew fixes
+
+Everything above proves Batch 1's signup path. These cover what shipped on top of it.
+**All of these are frontend and need the Vercel deploy to have landed.** The tell: the Materials card
+now prints a sentence when it is empty (e.g. "No material recorded for this job yet"). If you see a bare
+empty card, you are on the old bundle and nothing below will be meaningful.
+
+| # | Check | Pass |
+|---|---|---|
+| 12 | **View as → Shane Plats** on a job with the material list shared | Materials card shows a **Material order** block, grouped by area |
+| 13 | **View as → Shane Plats** on any *other* job (toggle off) | Still shows the trade list — job info now outranks the unresolved trade |
+| 14 | The amber banner in Shane's view | Says **pay** is hidden. It must not claim materials are hidden while a list sits under it |
+| 15 | **View as → Robert Allen** or **Doug Ryman** (Pointup Specialists) | Materials visible — point-up now resolves as finisher instead of unknown |
+| 16 | A job with no material recorded | Card says why, rather than rendering blank |
+| 17 | **Jeremy uploads a photo** from his own phone | Upload succeeds. Nothing has landed in storage since 2026-09-09, so this is genuinely unproven |
+| 18 | Open a **sent** quote → Refresh from v2 snapshot | Dialog appears with current total, total after refresh, and the change. **Cancel it** |
+| 19 | A **Togal / component-heavy** job → Order tab | Margin matches the quote-stage sidebar for the same job |
+| 20 | A **drywall-only** job → Order tab | Margin **unchanged** from before. If it moved, Batch 2A is wrong |
+
+Steps 12–16 are quickest through **View as** on real accounts rather than a throwaway — those people already
+have the assignments and the position names that make the test meaningful.
