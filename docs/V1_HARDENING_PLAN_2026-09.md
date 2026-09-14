@@ -144,13 +144,25 @@ The shim now reads `routine.materialSubtotal` / `accessoriesSubtotal` / the thre
 
 > **A fix for Kinsler was written, tested and reverted.** Carrying the 835 sqft difference as an "Unphased" line made all four per-trade rows match — and pushed the grand total **+24.5% ($2,644) over what v2 charged**, because 1.245 is exactly 4242.36/3407.31. The per-trade baseline was the wrong target: on this project v2's decomposition is the number that is wrong. Recorded so nobody re-fixes it from the same evidence.
 
-⚠️ **What the scan DID find, and it is actionable.** Three projects hold **stored v3 quotes with fewer drywall lines than a fresh convert produces** — they were converted before `1db8d7b` and never refreshed:
+**The three "stale" quotes are not stale — they are hand-priced, and refreshing them would have destroyed real work.** Confirmed by Mark 2026-09-14.
 
-- **Munson Twp - Wade** — stored 1 line, fresh convert 2
-- **Preston** — stored 1 line, fresh convert 2
-- **Russell Township - Metz** — stored 3 lines, fresh convert 4
+I first read them as quotes that had lost phases and were $18,026 under-priced between them. That was wrong twice over, and the evidence that settled it was in the line descriptions:
 
-Each needs **"Refresh from v2 snapshot"** in the quote stage. **This is the most likely explanation for the 2026-09-08 report** ("still not working quite right", quote sent from v2 instead): the fix shipped that day corrects the *converter*, but a quote converted before it keeps its old collapsed lines until refreshed.
+| Project | Stored line descriptions | What it actually is |
+|---|---|---|
+| Munson Twp - Wade | `""` (empty) | **Never converted.** The converter always writes "Migrated from v2 — review and refine" |
+| Preston | `""` (empty) | Never converted — built by hand in v3 |
+| Russell Township - Metz | "Migrated from v2 — review and refine" | Converted, then **hand-edited**: every quantity changed and a fourth line deleted |
+
+Mark confirms **Metz is meant to be $95,439 and Preston $34,904 with a $1,193.85 alternate** — both verified against the stored quotes, alternates intact and correctly unselected. Nothing to refresh.
+
+**So the converter is clean on all 69 live projects with no caveat.** Every delta the scan flagged is explained: two manual `totalQuoteAmount` overrides, 11¢ of rounding, one known v2 decomposition bug, and three deliberately hand-priced quotes.
+
+**The lesson, since I reached for the fix twice before reaching for the evidence:** a divergence between a stored v3 quote and its v2 snapshot is not by itself a fault. `legacyV2Snapshot` is a *rollback record*, not a source of truth the live quote must agree with — operators price in v3 after converting, and that is the intended workflow. Check `description` on the line items before concluding anything: empty means hand-built, "Migrated from v2" means converter output. Only the second is evidence about the converter.
+
+**Still unresolved:** the 2026-09-08 report remains unexplained. The scan reproduces no converter fault on any live project, so whatever was seen that day is either already fixed by `1db8d7b` or was not a converter problem.
+
+**Munson Twp - Wade** (`DW-2026-022`, still **drafted**) is the one Mark has not ruled on: one hand-built line at 10,467.97 sqft against a 14,072 sqft snapshot in two phases, $8,834 below the v2 figure. No customer exposure while it stays a draft.
 
 Re-run: `node scripts/scan-v2-v3-per-trade.mjs` with a payload at `scripts/.v2-v3-scan-payload.json` (gitignored — it holds live customer pricing).
 
