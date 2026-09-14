@@ -133,7 +133,26 @@ The revoke has to target the **default privilege**, not just current grants: `an
 
 The shim now reads `routine.materialSubtotal` / `accessoriesSubtotal` / the three labor subtotals off the `QuoteV3MarkupBreakdown` and nets accepted alternates from `summary.breakdown`, instead of recomputing from `type === 'drywall'` lines. `laborBurdenFromQuote` is exported from `quoteV3Math` and the three divergent copies are gone. `estimatedLabor.ts:145` passes `quote.bead_sticks`.
 
-⚠️ **Still open from 2A:** `scripts/scan-v2-v3-per-trade.mjs` is committed but **has never been run against live data** — it needs a payload dump. That leaves the "still not working quite right" converter report of 2026-09-08 **undiagnosed**.
+**Converter scan RUN 2026-09-14 against all 69 live projects. The converter is sound.** 65 of 69 are clean to the cent on every trade, and all four exceptions are explained without a code change:
+
+| Project | Delta | Cause |
+|---|---|---|
+| Bay Village - Dills | grand_total **+2.7%** | v2 has a **manual total override** — `totalQuoteAmount = 9681.63` typed by the operator. `buildDrywallQuoteCalculations:974` returns that instead of the computed total, while v3 recomputes from lines. Expected divergence, not a fault |
+| Chagrin Falls - Vallone | grand_total **−0.1%** ($4.13) | Same — `totalQuoteAmount = 7416.34` |
+| Chagrin Falls - Stangl | 3 trades, **11¢ total** | Rounding across 5 phases (`v2.sqft` 7304.74 vs phases 7304.89) |
+| Pepper Pike - Kinsler | 4 trades, **−19.7%** | **v2's own decomposition is the broken half**, and this is the project already on record for it (memory, 2026-06-15: "grand total correct, only Total direct cost decomposition misleading"). v2 prices components on `sqft` 4242.36 while its phases carry 3407.31; the converter matches v2's **grand total exactly** and only differs against the decomposition |
+
+> **A fix for Kinsler was written, tested and reverted.** Carrying the 835 sqft difference as an "Unphased" line made all four per-trade rows match — and pushed the grand total **+24.5% ($2,644) over what v2 charged**, because 1.245 is exactly 4242.36/3407.31. The per-trade baseline was the wrong target: on this project v2's decomposition is the number that is wrong. Recorded so nobody re-fixes it from the same evidence.
+
+⚠️ **What the scan DID find, and it is actionable.** Three projects hold **stored v3 quotes with fewer drywall lines than a fresh convert produces** — they were converted before `1db8d7b` and never refreshed:
+
+- **Munson Twp - Wade** — stored 1 line, fresh convert 2
+- **Preston** — stored 1 line, fresh convert 2
+- **Russell Township - Metz** — stored 3 lines, fresh convert 4
+
+Each needs **"Refresh from v2 snapshot"** in the quote stage. **This is the most likely explanation for the 2026-09-08 report** ("still not working quite right", quote sent from v2 instead): the fix shipped that day corrects the *converter*, but a quote converted before it keeps its old collapsed lines until refreshed.
+
+Re-run: `node scripts/scan-v2-v3-per-trade.mjs` with a payload at `scripts/.v2-v3-scan-payload.json` (gitignored — it holds live customer pricing).
 
 **Scope correction — P0-MONEY-2 and P0-MONEY-3 are already DONE** (`1db8d7b`, 2026-09-08). FRP uses `customRateFromV2Total(calc.frpMaterialCost, sqft)` at `convertQuoteV2ToV3.ts:341`; RC sets `waste_pct` from `v2.rcChannelWastePercentage` and `accessories_in_material_rate: true` at `:163-164`. Batch 2 is smaller than this plan assumed.
 

@@ -95,3 +95,7 @@ jspm_packages/
 /p?.json
 /p??.json
 tmp/
+
+# Live quote dumps for the v2/v3 scan — never commit customer pricing
+scripts/.v2-v3-scan-payload.json
+scripts/.parity-payload.tmp.json
