@@ -424,7 +424,8 @@ export class DrywallScheduleCascadeError extends Error {
 }
 
 async function persistCascadedDates(items: ScheduleItem[]): Promise<void> {
-  await Promise.all(
+  if (items.length === 0) return
+  const results = await Promise.all(
     items.map((item) =>
       supabase
         .from('schedule_items')
@@ -437,6 +438,12 @@ async function persistCascadedDates(items: ScheduleItem[]): Promise<void> {
         .eq('id', item.id),
     ),
   )
+  const failed = results.find((r) => r.error)
+  if (failed?.error) {
+    throw new Error(
+      `Schedule cascade partially failed — some dates may not have saved: ${failed.error.message}`,
+    )
+  }
 }
 
 async function runCascadeForProject(projectId: string): Promise<{
@@ -458,7 +465,11 @@ async function runCascadeForProject(projectId: string): Promise<{
   }
 
   if (result.changes.length > 0) {
-    await persistCascadedDates(result.items)
+    // Write only the rows the cascade actually moved. Writing every row churns
+    // updated_at on untouched items and, on a mixed-division project, would have
+    // this cascade rewrite dates it does not own.
+    const changedIds = new Set(result.changes.map((c) => c.itemId))
+    await persistCascadedDates(result.items.filter((item) => changedIds.has(item.id)))
   }
 
   return {
