@@ -30,6 +30,7 @@ import {
   CrewForemanScheduleAddSheet,
   type ForemanAddSheetProject,
 } from '@/components/crew/CrewForemanScheduleAddSheet'
+import { fetchForemanPickerProjects } from '@/services/foremanScheduleService'
 import { CrewScheduleCalendar } from '@/components/crew/CrewScheduleCalendar'
 import {
   fetchPersonUnavailability,
@@ -444,17 +445,9 @@ export function CrewProjectListPage() {
   const openAdd = async () => {
     setAddOpen(true)
     try {
-      // All foreman-visible jobs for the picker, independent of current scope/filters.
-      const all = await fetchCrewProjectList({ scope: 'all' })
-      const byId = new Map<string, string>()
-      for (const it of all) {
-        if (!byId.has(it.projectId)) byId.set(it.projectId, it.projectName)
-      }
-      setPickerProjects(
-        [...byId.entries()]
-          .map(([id, name]) => ({ id, name }))
-          .sort((a, b) => a.name.localeCompare(b.name)),
-      )
+      // Every open drywall job — not the crew list, which hides finished work and so
+      // would omit exactly the stale jobs a foreman needs to reschedule.
+      setPickerProjects(await fetchForemanPickerProjects())
     } catch {
       setPickerProjects(jobOptions.map((j) => ({ id: j.projectId, name: j.projectName })))
     }

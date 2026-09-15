@@ -17,6 +17,9 @@ import {
 } from '@/services/scheduleService'
 import { notifyAndReport } from '@/services/pushService'
 import type { AssignedPersonOption } from '@/components/schedule/AssignedPersonsPicker'
+import { belongsInDrywallWorkspaceFromListScalars } from '@/services/projectVisibility'
+import { requireUserOrgId } from '@/services/userService'
+import { isDrywallProjectClosed } from '@/types/drywall'
 
 export type ForemanNewScheduleItem = {
   name: string
@@ -182,4 +185,86 @@ export async function applyForemanScheduleEdit(
   }
 
   return preview
+}
+
+// ============================================================================
+// Job picker source
+// ============================================================================
+// Deliberately NOT fetchCrewProjectList: that list answers "what is on my
+// plate" and hides work that has already finished, so a job whose schedule has
+// gone stale — or one with no items at all — could never be picked, which is
+// exactly when a foreman needs to add work to it. This answers "where can I add
+// work" instead: every open drywall job. Foremen hold an org-wide projects
+// SELECT via user_is_field_foreman() (20260911120000).
+
+export type ForemanPickerProject = { id: string; name: string }
+
+/** Scalar-only projection — never select full metadata (multi-MB per row). */
+const PICKER_PROJECT_SELECT =
+  'id, name, status, type, app_scope:metadata->>app_scope, quote_outcome:metadata->legacy->quote->>outcome, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_first_line_item:metadata->legacy->quote->lineItems->0'
+
+type PickerProjectRow = {
+  id: string
+  name: string | null
+  status: string | null
+  type: string | null
+  app_scope: unknown
+  quote_outcome: unknown
+  quote_sqft: unknown
+  quote_final_total: unknown
+  quote_total_amount: unknown
+  quote_version: unknown
+  quote_first_line_item?: unknown
+}
+
+function isDrywallJob(row: PickerProjectRow): boolean {
+  if (row.type === 'drywall') return true
+  if (row.app_scope === 'DRYWALL_ONLY') return true
+  return belongsInDrywallWorkspaceFromListScalars({
+    app_scope: row.app_scope,
+    quote_sqft: row.quote_sqft,
+    quote_final_total: row.quote_final_total,
+    quote_total_amount: row.quote_total_amount,
+    quote_version: row.quote_version,
+    quote_has_line_items: row.quote_first_line_item != null,
+  })
+}
+
+/**
+ * Pickable = a drywall job that is open, and is actually being worked.
+ *
+ * The last clause matters: a job still sitting at 'quote' status can already
+ * have scheduled work on it (Willoughby Hills, Neptune Oval, Moreland Hills as
+ * of 2026-09-15), so stage alone would hide exactly the jobs someone is mid-way
+ * through. Anything with an item on it stays pickable no matter its stage or how
+ * old that item is.
+ */
+function isPickableJob(row: PickerProjectRow, hasScheduledWork: boolean): boolean {
+  if (!isDrywallJob(row)) return false
+  if (isDrywallProjectClosed(row.status)) return false
+  if (row.quote_outcome === 'lost') return false
+  if ((row.status ?? '').trim() !== 'quote') return true
+  return row.quote_outcome === 'approved' || hasScheduledWork
+}
+
+export async function fetchForemanPickerProjects(): Promise<ForemanPickerProject[]> {
+  if (!isOnlineMode()) return []
+  const organizationId = await requireUserOrgId()
+
+  const [projects, scheduled] = await Promise.all([
+    supabase.from('projects').select(PICKER_PROJECT_SELECT).eq('organization_id', organizationId),
+    supabase.from('schedule_items').select('project_id').eq('organization_id', organizationId),
+  ])
+
+  if (projects.error) throw new Error(projects.error.message || 'Failed to load jobs')
+  if (scheduled.error) throw new Error(scheduled.error.message || 'Failed to load jobs')
+
+  const hasWork = new Set(
+    ((scheduled.data ?? []) as Array<{ project_id: string }>).map((row) => row.project_id),
+  )
+
+  return ((projects.data ?? []) as PickerProjectRow[])
+    .filter((row) => isPickableJob(row, hasWork.has(row.id)))
+    .map((row) => ({ id: row.id, name: row.name?.trim() || 'Untitled' }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
