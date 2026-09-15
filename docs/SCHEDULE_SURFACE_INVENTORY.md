@@ -27,14 +27,14 @@ the GC portfolio survived three steps unnoticed. This is the list to check a ste
 | Surface | Component | Division-aware? |
 |---|---|---|
 | `/crew` job list + detail | `CrewProjectDetailPage`, `CrewScheduleCalendar` | **No** — filters by *project* drywall-ness (`crewWorkspaceService.ts:467,577`). Step 7. |
-| foreman add / edit item | `CrewForemanScheduleAddSheet`, `CrewForemanScheduleEditSheet` | edit sheet filters siblings to drywall; **add sheet writes via RPC that relies on the column default** |
+| foreman add / edit item | `CrewForemanScheduleAddSheet`, `CrewForemanScheduleEditSheet` | edit sheet filters siblings to drywall; **add RPC stamps `division = 'drywall'` explicitly** (step 3a) |
 | schedule-item photos | `CrewScheduleItemPhotos`, `drywallPhotosService` | no (2 direct `schedule_items` reads) |
 
 ## C. External surfaces (no login)
 
 | Surface | Path | Division-aware? |
 |---|---|---|
-| Customer portal | `/customer/:token` → `CustomerSchedulePage` → RPC `customer_share_schedule` | **NO — see gap 1 below** |
+| Customer portal | `/customer/:token` → `CustomerSchedulePage` → RPC `customer_share_schedule` | **yes** — join filters `division = 'drywall'` (step 3a) |
 | Supplier share | edge fn → `supplier_share_orders` | incidentally safe (`supplier_id IS NOT NULL`) |
 | Supplier digest cron | RPC `drywall_supplier_delivery_schedule` | incidentally safe, same reason |
 
@@ -49,7 +49,7 @@ the GC portfolio survived three steps unnoticed. This is the list to check a ste
 | `services/smsService.ts` | 2 | no — review at step 6 |
 | `services/drywallPhotosService.ts` | 2 | no |
 | `functions/send-sms`, `functions/send-push` | 1 each | no |
-| `services/productionReadyService.ts` | 1 | no — see gap 4 |
+| `services/productionReadyService.ts` | 1 | **yes** — `.eq('division', 'drywall')` (step 3a) |
 | `services/drywallScheduleAggregateService.ts` | 1 | yes (hardcoded drywall; 5b makes it a lens) |
 | `components/SchedulePortfolioItemModal.tsx` | 1 | **writes `schedule_items` directly**, bypassing `scheduleService` — no cascade, no division |
 | `components/SchedulePortfolio.tsx` | 1 | deleted by 5b |
@@ -71,24 +71,22 @@ RPCs reading: `customer_share_schedule`, `drywall_supplier_delivery_schedule`,
 
 ## Gaps found by this inventory
 
-**1. `customer_share_schedule` has no division filter — external, no-login.** It
-`LEFT JOIN public.schedule_items si ON si.project_id = p.id` and returns everything
-(`20260724140000:56`). On a crossover job, whoever holds the customer share link sees the GC
-schedule too. Harmless today (2 test rows) — **but it goes live the moment Goodwill Multi is
-seeded from Buildertrend.** Fix before step 3, not after.
+**1. `customer_share_schedule` had no division filter — closed in step 3a.** Join now
+requires `si.division = 'drywall'`. Filter is the safe default for an unauthenticated
+drywall portal, not a permanent dual-role product answer.
 
-**2. Two portfolios.** Step 5b, in flight.
+**2. Two portfolios.** Closed in step 5b.
 
-**3. `foreman_create_schedule_item` doesn't name `division`** — it relies on the column
-default, so every foreman-created item is `'drywall'` forever. Correct today because foremen
-are drywall. Silently wrong the day a GC foreman exists. Make it explicit.
+**3. `foreman_create_schedule_item` didn't name `division` — closed in step 3a.** Insert
+now stamps `'drywall'` explicitly. `foreman_apply_schedule_changes` and
+`foreman_delete_schedule_item` are scoped `division = 'drywall'` on the write (part 2);
+delete's predecessor-strip stays unfiltered.
 
-**4. `productionReadyService` counts every item on a project**, so GC items would feed
-drywall production-readiness. Small, but wrong once GC items exist on shared jobs.
+**4. `productionReadyService` counted every item on a project — closed in step 3a.**
 
 **5. `SchedulePortfolioItemModal` writes `schedule_items` directly**, bypassing
-`scheduleService` — meaning no cascade and no division stamp. It dies with 5b; noted so it
-isn't resurrected.
+`scheduleService` — meaning no cascade and no division stamp. Survives only through
+`ResourceCompare`; flagged for the sweep.
 
 ## Dead or dying (flag, don't delete without row-count evidence)
 

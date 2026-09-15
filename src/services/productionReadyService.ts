@@ -56,6 +56,7 @@ export async function fetchProductionReadyNudges(): Promise<ProductionReadyNudge
     .from('schedule_items')
     .select('project_id, name, type, start_date')
     .eq('organization_id', orgId)
+    .eq('division', 'drywall')
     .in('project_id', projectIds)
     .lte('start_date', today)
     .order('start_date', { ascending: true })
