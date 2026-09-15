@@ -365,8 +365,14 @@ export function ScheduleItemDialog({
       toast.error('Start date is required')
       return null
     }
-    // Drop dangling ghost ids so save self-heals deleted-predecessor refs.
-    const validPredecessorIds = predecessorIds.filter((id) => siblingIdSet.has(id))
+    // Drop dangling ghost ids so save self-heals deleted-predecessor refs — but only
+    // when there are siblings to check against. An empty siblingItems means the
+    // schedule failed to load (ScheduleEditor clears it on error), not that every
+    // predecessor vanished, and filtering against it would silently sever them all.
+    const validPredecessorIds =
+      siblingItems.length === 0
+        ? predecessorIds
+        : predecessorIds.filter((id) => siblingIdSet.has(id))
     return {
       name: trimmed,
       type,
