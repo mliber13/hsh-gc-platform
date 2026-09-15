@@ -74,7 +74,7 @@ import { ProjectForms } from '@/components/ProjectForms'
 import { ProjectDocuments } from '@/components/ProjectDocuments'
 import { SelectionBook } from '@/components/SelectionBook'
 import { SelectionSchedules } from '@/components/SelectionSchedules'
-import { ScheduleBuilder } from '@/components/ScheduleBuilder'
+import { ScheduleEditor } from '@/components/schedule/ScheduleEditor'
 import { ResourceCompare } from '@/components/ResourceCompare'
 import { SchedulePortfolio } from '@/components/SchedulePortfolio'
 import { ProjectQuotesView } from '@/components/quotes/ProjectQuotesView'
@@ -859,14 +859,26 @@ function SelectionSchedulesRoute() {
   )
 }
 
+function formatGcProjectAddress(project: { address?: { street?: string; city?: string; state?: string; zip?: string } }): string {
+  const a = project.address
+  if (!a) return ''
+  return [a.street, a.city, a.state, a.zip].filter(Boolean).join(', ')
+}
+
 function ScheduleRoute() {
   const { project } = useProjectContext()
   const navigate = useNavigate()
+  usePageTitle('Schedule')
   return (
-    <ScheduleBuilder
-      project={project}
-      onBack={() => navigate(`/projects/${project.id}`)}
-    />
+    <div className="p-6">
+      <ScheduleEditor
+        division="gc"
+        projectId={project.id}
+        projectName={project.name}
+        projectAddress={formatGcProjectAddress(project)}
+        onBack={() => navigate(`/projects/${project.id}`)}
+      />
+    </div>
   )
 }
 

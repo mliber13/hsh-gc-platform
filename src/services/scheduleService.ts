@@ -176,6 +176,8 @@ export async function fetchActiveSubcontractors(): Promise<ActiveSubcontractor[]
 // D.6.4 — Per-project drywall schedule CRUD + cascade
 // ============================================================================
 
+export type ScheduleDivision = 'gc' | 'drywall'
+
 export type DrywallScheduleItemStatus = 'not-started' | 'in-progress' | 'complete' | 'delayed'
 
 /** How a task's completion is tracked. */
@@ -403,9 +405,9 @@ async function getOrCreateScheduleForProject(
 const DRYWALL_SCHEDULE_SELECT =
   'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, share_material_list, notes, predecessors, tasks, lead_person_ids, supplier_id'
 
-export async function fetchScheduleItemsForDrywallProject(
+export async function fetchScheduleItemsForProject(
   projectId: string,
-  opts?: { division?: 'gc' | 'drywall' },
+  opts?: { division?: ScheduleDivision },
 ): Promise<DrywallProjectScheduleItem[]> {
   const organizationId = await requireUserOrgId()
 
@@ -465,7 +467,7 @@ async function runCascadeForProject(projectId: string): Promise<{
   items: DrywallProjectScheduleItem[]
 }> {
   // Cascade is division-blind: never filter this fetch, or a GC date move silently fails to push dependent drywall work.
-  const items = await fetchScheduleItemsForDrywallProject(projectId)
+  const items = await fetchScheduleItemsForProject(projectId)
   if (items.length === 0) return { changedItemIds: [], items }
 
   const models = items.map(toScheduleItemModel)
@@ -496,6 +498,7 @@ async function runCascadeForProject(projectId: string): Promise<{
 function buildInsertRow(
   input: NewScheduleItemInput,
   ids: { itemId: string; scheduleId: string; projectId: string; organizationId: string },
+  division: ScheduleDivision,
 ) {
   const start = toDateOnly(input.startDate)
   const end = toDateOnly(input.endDate || input.startDate)
@@ -527,13 +530,14 @@ function buildInsertRow(
     lead_person_ids: input.leadPersonIds ?? [],
     supplier_id: input.supplierId ?? null,
     notes: input.notes?.trim() || null,
-    division: 'drywall' as const,
+    division,
   }
 }
 
-export async function createScheduleItemForDrywallProject(
+export async function createScheduleItemForProject(
   projectId: string,
   input: NewScheduleItemInput,
+  division: ScheduleDivision,
 ): Promise<DrywallProjectScheduleItem> {
   const organizationId = await requireUserOrgId()
   const scheduleId = await getOrCreateScheduleForProject(projectId, organizationId)
@@ -541,7 +545,7 @@ export async function createScheduleItemForDrywallProject(
 
   const { data, error } = await supabase
     .from('schedule_items')
-    .insert(buildInsertRow(input, { itemId, scheduleId, projectId, organizationId }))
+    .insert(buildInsertRow(input, { itemId, scheduleId, projectId, organizationId }, division))
     .select(DRYWALL_SCHEDULE_SELECT)
     .single()
 
@@ -554,7 +558,7 @@ export async function createScheduleItemForDrywallProject(
     throw e
   }
 
-  const refreshed = await fetchScheduleItemsForDrywallProject(projectId, { division: 'drywall' })
+  const refreshed = await fetchScheduleItemsForProject(projectId, { division })
   const created =
     refreshed.find((item) => item.id === itemId) ??
     mapDrywallScheduleRow(data as DrywallScheduleItemRow)
@@ -591,7 +595,7 @@ async function notifySchedulePush(opts: {
   })
 }
 
-export async function updateScheduleItemForDrywallProject(
+export async function updateScheduleItemForProject(
   itemId: string,
   patch: Partial<NewScheduleItemInput>,
 ): Promise<void> {
@@ -749,7 +753,7 @@ async function stripDeletedPredecessorFromSiblings(
   )
 }
 
-export async function deleteScheduleItemForDrywallProject(itemId: string): Promise<void> {
+export async function deleteScheduleItemForProject(itemId: string): Promise<void> {
   const organizationId = await requireUserOrgId()
 
   const { data: existing, error: fetchError } = await supabase
@@ -823,6 +827,7 @@ export async function generateStandardDrywallSchedule(
         lagWorkDays: step.lagDays,
       },
       { itemId: id, scheduleId, projectId, organizationId },
+      'drywall',
     )
   })
 
@@ -830,5 +835,5 @@ export async function generateStandardDrywallSchedule(
   if (error) throw error
 
   await runCascadeForProject(projectId)
-  return fetchScheduleItemsForDrywallProject(projectId, { division: 'drywall' })
+  return fetchScheduleItemsForProject(projectId, { division: 'drywall' })
 }

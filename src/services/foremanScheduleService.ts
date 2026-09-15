@@ -11,7 +11,7 @@ import {
   type ForemanScheduleEditInput,
 } from '@/lib/drywall/foremanScheduleEdit'
 import {
-  fetchScheduleItemsForDrywallProject,
+  fetchScheduleItemsForProject,
   type DrywallProjectScheduleItem,
   type DrywallScheduleItemStatus,
 } from '@/services/scheduleService'
@@ -120,7 +120,7 @@ export async function previewForemanScheduleEdit(
   siblings: DrywallProjectScheduleItem[]
   preview: ForemanCascadePreview
 }> {
-  const siblings = await fetchScheduleItemsForDrywallProject(projectId)
+  const siblings = await fetchScheduleItemsForProject(projectId)
   if (!siblings.some((s) => s.id === itemId)) {
     throw new Error('Schedule item not found on this project')
   }

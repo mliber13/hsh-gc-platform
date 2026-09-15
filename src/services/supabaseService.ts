@@ -290,6 +290,9 @@ export async function fetchScheduleByProjectId(projectId: string): Promise<Proje
 }
 
 export async function upsertScheduleForProject(projectId: string, schedule: ProjectSchedule): Promise<void> {
+  // DELETION SWEEP: dead after the GC editor swap. Only caller is updateProject
+  // when updates.schedule is passed; that bulk-save path no longer has a UI.
+  // Leave until a sweep with evidence. Do not remove in this step.
   if (!isOnlineMode()) return
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return

@@ -14,7 +14,8 @@ export interface ScheduleDateMathOptions {
   /**
    * How predecessor lag is interpreted in cascadeSchedule:
    *   'sequential' (default) — `lag` = work days AFTER predecessor end, with +1 implicit gap.
-   *                            Matches existing GC ScheduleBuilder behavior.
+   *                            DELETION SWEEP: unused after the GC editor swap (2026-09-15).
+   *                            Leave in place; drop later with call-site evidence.
    *   'parallel-zero'         — `lag=0` means same start day as predecessor (parallel work).
    *                            `lag>=1` means N work days after predecessor end (no implicit gap).
    *                            Drywall uses this so lag=0 = same-day Stock+Scaffold/Prep pattern.

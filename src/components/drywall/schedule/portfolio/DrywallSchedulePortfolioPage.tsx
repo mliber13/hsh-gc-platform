@@ -33,7 +33,7 @@ import {
   type CrossProjectScheduleItem,
 } from '@/services/drywallScheduleAggregateService'
 import {
-  fetchScheduleItemsForDrywallProject,
+  fetchScheduleItemsForProject,
   type DrywallProjectScheduleItem,
 } from '@/services/scheduleService'
 import { fetchTeam } from '@/services/hrTeamService'
@@ -289,7 +289,7 @@ export function DrywallSchedulePortfolioPage() {
 
   const handleItemClick = async (item: CrossProjectScheduleItem) => {
     try {
-      const siblings = await fetchScheduleItemsForDrywallProject(item.projectId)
+      const siblings = await fetchScheduleItemsForProject(item.projectId, { division: 'drywall' })
       const editing = siblings.find((s) => s.id === item.id) ?? null
       if (!editing) {
         toast.error('Schedule item no longer exists. Refresh the calendar.')
@@ -312,7 +312,7 @@ export function DrywallSchedulePortfolioPage() {
     setAddProjectOpen(false)
     setAddProjectOpenMobile(false)
     try {
-      const siblings = await fetchScheduleItemsForDrywallProject(projectId)
+      const siblings = await fetchScheduleItemsForProject(projectId, { division: 'drywall' })
       const sourceItem = items.find((i) => i.projectId === projectId)
       setDialog({
         open: true,
@@ -1128,6 +1128,7 @@ export function DrywallSchedulePortfolioPage() {
           projectAddress={dialog.projectAddress}
           siblingItems={dialog.siblings}
           editing={dialog.editing}
+          division="drywall"
           onSaved={handleDialogSaved}
         />
       )}

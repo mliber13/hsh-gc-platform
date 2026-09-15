@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils'
 import { CrewScheduleItemPhotos } from '@/components/crew/CrewScheduleItemPhotos'
 import { TimeOffConflictWarning } from '@/components/schedule/TimeOffConflictWarning'
 import {
-  fetchScheduleItemsForDrywallProject,
+  fetchScheduleItemsForProject,
   type DrywallProjectScheduleItem,
   type DrywallScheduleItemStatus,
   type ScheduleItemTask,
@@ -126,7 +126,7 @@ export function CrewForemanScheduleEditSheet({
   useEffect(() => {
     if (!open || !entry) return
     let cancelled = false
-    void fetchScheduleItemsForDrywallProject(projectId, { division: 'drywall' })
+    void fetchScheduleItemsForProject(projectId, { division: 'drywall' })
       .then((rows) => {
         if (cancelled) return
         setSiblings(rows)

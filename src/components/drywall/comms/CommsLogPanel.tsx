@@ -33,7 +33,7 @@ import {
   type CommsLane,
   type ProjectCommsMessage,
 } from '@/services/projectCommsService'
-import { fetchScheduleItemsForDrywallProject } from '@/services/scheduleService'
+import { fetchScheduleItemsForProject } from '@/services/scheduleService'
 import {
   ForwardMessageDialog,
   JOB_WIDE_KEY,
@@ -163,7 +163,7 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
       try {
         const [team, items] = await Promise.all([
           fetchTeam(),
-          fetchScheduleItemsForDrywallProject(projectId),
+          fetchScheduleItemsForProject(projectId),
         ])
         if (cancelled) return
         const map = new Map<string, string>()

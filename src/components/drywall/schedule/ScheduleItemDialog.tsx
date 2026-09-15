@@ -32,12 +32,15 @@ import { AssignedPersonsPicker } from '@/components/schedule/AssignedPersonsPick
 import { TimeOffConflictWarning } from '@/components/schedule/TimeOffConflictWarning'
 import {
   DrywallScheduleCascadeError,
-  createScheduleItemForDrywallProject,
-  deleteScheduleItemForDrywallProject,
-  updateScheduleItemForDrywallProject,
+  createScheduleItemForProject,
+  deleteScheduleItemForProject,
+  fetchActiveSubcontractors,
+  updateScheduleItemForProject,
+  type ActiveSubcontractor,
   type DrywallProjectScheduleItem,
   type DrywallScheduleItemStatus,
   type NewScheduleItemInput,
+  type ScheduleDivision,
   type ScheduleItemTask,
 } from '@/services/scheduleService'
 import { ScheduleItemOrderSheet } from './ScheduleItemOrderSheet'
@@ -56,6 +59,8 @@ type Props = {
   projectName?: string
   /** Job address shown under the title with an "open in maps" link — saves a trip to Project Info. */
   projectAddress?: string
+  /** Lens that created/edits this item. Stamps division on create; orders assignee pickers. */
+  division: ScheduleDivision
 }
 
 
@@ -80,6 +85,7 @@ export function ScheduleItemDialog({
   onSaved,
   projectName,
   projectAddress,
+  division,
 }: Props) {
   const [name, setName] = useState('')
   const [type, setType] = useState<'field' | 'office'>('field')
@@ -89,6 +95,8 @@ export function ScheduleItemDialog({
   const [status, setStatus] = useState<DrywallScheduleItemStatus>('not-started')
   const [notes, setNotes] = useState('')
   const [assignedPersons, setAssignedPersons] = useState<string[]>([])
+  const [assignedCompanyId, setAssignedCompanyId] = useState<string | null>(null)
+  const [companies, setCompanies] = useState<ActiveSubcontractor[]>([])
   const [showJobInfoPersonIds, setShowJobInfoPersonIds] = useState<string[]>([])
   const [shareMaterialList, setShareMaterialList] = useState(false)
   const [predecessorIds, setPredecessorIds] = useState<string[]>([])
@@ -153,6 +161,7 @@ export function ScheduleItemDialog({
       setStatus(editing.status)
       setNotes(editing.notes ?? '')
       setAssignedPersons(editing.assigned_persons)
+      setAssignedCompanyId(editing.assigned_company_id)
       setShowJobInfoPersonIds(editing.show_job_info_person_ids)
       setShareMaterialList(editing.share_material_list === true)
       setPredecessorIds(editing.predecessor_ids)
@@ -170,6 +179,7 @@ export function ScheduleItemDialog({
       setStatus('not-started')
       setNotes('')
       setAssignedPersons([])
+      setAssignedCompanyId(null)
       setShowJobInfoPersonIds([])
       setShareMaterialList(false)
       setPredecessorIds([])
@@ -187,9 +197,11 @@ export function ScheduleItemDialog({
   useEffect(() => {
     if (!open) return
     let cancelled = false
-    void fetchSuppliers()
-      .then((s) => {
-        if (!cancelled) setSuppliers(s)
+    void Promise.all([fetchSuppliers(), fetchActiveSubcontractors()])
+      .then(([s, c]) => {
+        if (cancelled) return
+        setSuppliers(s)
+        setCompanies(c)
       })
       .catch(() => undefined)
     return () => {
@@ -319,7 +331,7 @@ export function ScheduleItemDialog({
       percentComplete: draftStatus === 'complete' ? 100 : 0,
       confirmation_status: 'unsent',
       assignedPersons: payload.assignedPersons ?? [],
-      assignedCompanyId: null,
+      assignedCompanyId: payload.assignedCompanyId ?? null,
       assignedTo: [],
       notes: payload.notes ?? undefined,
     })
@@ -363,6 +375,7 @@ export function ScheduleItemDialog({
       status,
       notes,
       assignedPersons,
+      assignedCompanyId,
       showJobInfoPersonIds,
       shareMaterialList,
       predecessorIds: validPredecessorIds,
@@ -377,10 +390,10 @@ export function ScheduleItemDialog({
 
   const persistPayload = async (payload: NewScheduleItemInput) => {
     if (editing) {
-      await updateScheduleItemForDrywallProject(editing.id, payload)
+      await updateScheduleItemForProject(editing.id, payload)
       toast.success('Schedule item updated')
     } else {
-      await createScheduleItemForDrywallProject(projectId, payload)
+      await createScheduleItemForProject(projectId, payload, division)
       toast.success('Schedule item added')
     }
     onSaved()
@@ -455,6 +468,7 @@ export function ScheduleItemDialog({
       status: pred.status,
       notes: pred.notes ?? '',
       assignedPersons: pred.assigned_persons,
+      assignedCompanyId: pred.assigned_company_id,
       predecessorIds: pred.predecessor_ids,
       lagWorkDays: pred.lag_work_days,
     }
@@ -462,7 +476,7 @@ export function ScheduleItemDialog({
     setSaving(true)
     try {
       // Shift the predecessor first — cascade fires, current item will move to the user's intended start.
-      await updateScheduleItemForDrywallProject(pred.id, predPayload)
+      await updateScheduleItemForProject(pred.id, predPayload)
       // Then persist any non-date edits on the current item (dates will match cascade result).
       await persistPayload(conflict.payload)
       setConflict(null)
@@ -533,7 +547,7 @@ export function ScheduleItemDialog({
     if (!window.confirm(`Delete "${editing.name}" from the schedule?`)) return
     setDeleting(true)
     try {
-      await deleteScheduleItemForDrywallProject(editing.id)
+      await deleteScheduleItemForProject(editing.id)
       toast.success('Schedule item deleted')
       onSaved()
       onOpenChange(false)
@@ -551,6 +565,29 @@ export function ScheduleItemDialog({
   }
 
   const busy = saving || deleting
+
+  const companyPicker = (
+    <div className="space-y-1.5">
+      <Label>Assigned company</Label>
+      <Select
+        value={assignedCompanyId ?? 'none'}
+        onValueChange={(value) => setAssignedCompanyId(value === 'none' ? null : value)}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Unassigned" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Unassigned</SelectItem>
+          {companies.map((company) => (
+            <SelectItem key={company.id} value={company.id}>
+              {company.name}
+              {company.is_internal ? ' (internal)' : ''}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -786,6 +823,8 @@ export function ScheduleItemDialog({
             </Select>
           </div>
 
+          {division === 'gc' ? companyPicker : null}
+
           <AssignedPersonsPicker
             value={assignedPersons}
             onChange={setAssignedPersons}
@@ -849,6 +888,8 @@ export function ScheduleItemDialog({
               </PopoverContent>
             </Popover>
           )}
+
+          {division !== 'gc' ? companyPicker : null}
 
           <div className="space-y-1.5">
             <AssignedPersonsPicker
