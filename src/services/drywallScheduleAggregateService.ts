@@ -1,10 +1,12 @@
 // ============================================================================
-// Cross-project drywall schedule aggregate (D.6.7)
+// Cross-project schedule aggregate
 // ============================================================================
+// Project list is derived from schedule_items.division, never from project
+// classification (unification plan decision 4 / invariant 4).
 
 import { supabase, isOnlineMode } from '@/lib/supabase'
-import { belongsInDrywallWorkspaceFromListScalars } from '@/services/projectVisibility'
 import { requireUserOrgId } from '@/services/userService'
+import type { PortfolioTypeFilter } from '@/services/scheduleService'
 import { normalizeDrywallProjectStatus } from '@/types/drywall'
 
 export interface CrossProjectScheduleItem {
@@ -24,24 +26,18 @@ export interface CrossProjectScheduleItem {
   supplierId: string | null
   /** Assigned subcontractor company — also counts as assigned. */
   assignedCompanyId: string | null
+  assignedCompanyName: string | null
+  division: 'gc' | 'drywall'
 }
 
 type ProjectRow = {
   id: string
   name: string
   status: string
-  type: string | null
   address: unknown
   city: string | null
   state: string | null
   zip_code: string | null
-  app_scope: unknown
-  quote_sqft: unknown
-  quote_final_total: unknown
-  quote_total_amount: unknown
-  quote_version: unknown
-  /** First v3 line item only — presence probe; never the full array. */
-  quote_first_line_item?: unknown
 }
 
 type ScheduleItemRow = {
@@ -55,23 +51,12 @@ type ScheduleItemRow = {
   assigned_persons: string[] | null
   supplier_id: string | null
   assigned_company_id: string | null
-}
-
-function isDrywallProjectRow(row: ProjectRow): boolean {
-  if (row.type === 'drywall') return true
-  return belongsInDrywallWorkspaceFromListScalars({
-    app_scope: row.app_scope,
-    quote_sqft: row.quote_sqft,
-    quote_final_total: row.quote_final_total,
-    quote_total_amount: row.quote_total_amount,
-    quote_version: row.quote_version,
-    quote_has_line_items: row.quote_first_line_item != null,
-  })
+  division: 'gc' | 'drywall' | null
+  subcontractors?: { name: string | null } | Array<{ name: string | null }> | null
 }
 
 /** Scalar-only project projection — never select full metadata (can be multi-MB per row). */
-const SCHEDULE_PROJECT_SELECT =
-  'id, name, status, type, address, city, state, zip_code, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_first_line_item:metadata->legacy->quote->lineItems->0'
+const SCHEDULE_PROJECT_SELECT = 'id, name, status, address, city, state, zip_code'
 
 /** Best-effort address string from the project row (mirrors crewWorkspaceService.formatAddress). */
 function formatProjectAddress(row: ProjectRow): string {
@@ -89,25 +74,60 @@ function formatProjectAddress(row: ProjectRow): string {
   return [row.city, row.state, row.zip_code].filter(Boolean).join(', ')
 }
 
-export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectScheduleItem[]> {
+function assignedCompanyName(
+  subcontractors: ScheduleItemRow['subcontractors'],
+): string | null {
+  if (Array.isArray(subcontractors)) return subcontractors[0]?.name ?? null
+  return subcontractors?.name ?? null
+}
+
+/**
+ * Cross-project schedule items for a portfolio lens.
+ * `'all'` adds no division clause (invariant 4 — the orphan-work guard).
+ * Default `'drywall'` keeps the dashboard and crew calendar on drywall items.
+ */
+export async function fetchCrossProjectScheduleItems(
+  lens: PortfolioTypeFilter = 'drywall',
+): Promise<CrossProjectScheduleItem[]> {
   if (!isOnlineMode()) return []
 
   const organizationId = await requireUserOrgId()
+
+  let itemsQuery = supabase
+    .from('schedule_items')
+    .select(
+      'id, project_id, name, type, start_date, end_date, status, assigned_persons, supplier_id, assigned_company_id, division, subcontractors:assigned_company_id(name)',
+    )
+    .eq('organization_id', organizationId)
+
+  if (lens === 'gc' || lens === 'drywall') {
+    itemsQuery = itemsQuery.eq('division', lens)
+  }
+
+  const { data: items, error: itemsError } = await itemsQuery
+    .order('start_date', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (itemsError) {
+    throw new Error(itemsError.message || 'Failed to load schedule items')
+  }
+
+  const rows = (items ?? []) as ScheduleItemRow[]
+  const projectIds = [...new Set(rows.map((row) => row.project_id))]
+  if (projectIds.length === 0) return []
 
   const { data: projects, error: projectsError } = await supabase
     .from('projects')
     .select(SCHEDULE_PROJECT_SELECT)
     .eq('organization_id', organizationId)
+    .in('id', projectIds)
 
   if (projectsError) {
-    throw new Error(projectsError.message || 'Failed to load drywall projects')
+    throw new Error(projectsError.message || 'Failed to load projects')
   }
 
-  const drywallProjects = ((projects ?? []) as ProjectRow[]).filter(isDrywallProjectRow)
-  if (drywallProjects.length === 0) return []
-
   const projectById = new Map(
-    drywallProjects.map((p) => [
+    ((projects ?? []) as ProjectRow[]).map((p) => [
       p.id,
       {
         name: p.name?.trim() || 'Untitled',
@@ -116,25 +136,9 @@ export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectSche
       },
     ]),
   )
-  const projectIds = drywallProjects.map((p) => p.id)
-
-  const { data: items, error: itemsError } = await supabase
-    .from('schedule_items')
-    .select(
-      'id, project_id, name, type, start_date, end_date, status, assigned_persons, supplier_id, assigned_company_id',
-    )
-    .eq('organization_id', organizationId)
-    .eq('division', 'drywall')
-    .in('project_id', projectIds)
-    .order('start_date', { ascending: true })
-    .order('created_at', { ascending: true })
-
-  if (itemsError) {
-    throw new Error(itemsError.message || 'Failed to load schedule items')
-  }
 
   const results: CrossProjectScheduleItem[] = []
-  for (const row of (items ?? []) as ScheduleItemRow[]) {
+  for (const row of rows) {
     const project = projectById.get(row.project_id)
     if (!project) continue
     results.push({
@@ -151,6 +155,8 @@ export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectSche
       assignedPersons: row.assigned_persons ?? [],
       supplierId: row.supplier_id ?? null,
       assignedCompanyId: row.assigned_company_id ?? null,
+      assignedCompanyName: assignedCompanyName(row.subcontractors),
+      division: row.division === 'gc' ? 'gc' : 'drywall',
     })
   }
   return results

@@ -77,6 +77,10 @@ function assignedCompanyName(
 export async function fetchPortfolioProjects(
   typeFilter: PortfolioTypeFilter,
 ): Promise<PortfolioProject[]> {
+  // DELETION SWEEP: the unified portfolio (SchedulePortfolioPage) derives its project
+  // list from schedule_items.division via fetchCrossProjectScheduleItems, not from
+  // this project-metadata probe. ResourceCompare (/schedule/resource) is still a
+  // caller — do not delete until that surface is replaced. Flagged 2026-09-15.
   const organizationId = await requireUserOrgId()
   let query = supabase
     .from('projects')
@@ -221,6 +225,7 @@ export interface DrywallProjectScheduleItem {
   lead_person_ids: string[]
   /** Supplier (Suppliers directory id) this item is for — e.g. a stock delivery to L&W. */
   supplier_id: string | null
+  division: ScheduleDivision
 }
 
 export interface NewScheduleItemInput {
@@ -263,6 +268,7 @@ type DrywallScheduleItemRow = {
   tasks: unknown
   lead_person_ids: string[] | null
   supplier_id: string | null
+  division: 'gc' | 'drywall' | null
 }
 
 function toDateOnly(value: string): string {
@@ -340,6 +346,7 @@ function mapDrywallScheduleRow(row: DrywallScheduleItemRow): DrywallProjectSched
     tasks: parseScheduleItemTasks(row.tasks),
     lead_person_ids: row.lead_person_ids ?? [],
     supplier_id: row.supplier_id ?? null,
+    division: row.division === 'gc' ? 'gc' : 'drywall',
   }
 }
 
@@ -403,7 +410,7 @@ async function getOrCreateScheduleForProject(
 }
 
 const DRYWALL_SCHEDULE_SELECT =
-  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, share_material_list, notes, predecessors, tasks, lead_person_ids, supplier_id'
+  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, share_material_list, notes, predecessors, tasks, lead_person_ids, supplier_id, division'
 
 export async function fetchScheduleItemsForProject(
   projectId: string,

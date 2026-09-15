@@ -34,7 +34,7 @@
 //   /deals/workspace                               → DealWorkspace (no deal, tab nav)
 //   /deals/workspace/:dealId                       → DealWorkspace (specific)
 //   /tenants                                       → TenantPipeline
-//   /schedule                                      → SchedulePortfolio
+//   /schedule                                      → SchedulePortfolioPage
 //   /feedback                                      → MyFeedback
 //   /privacy                                       → PrivacyPolicy        (public)
 //   /terms                                         → TermsOfUse           (public)
@@ -76,7 +76,7 @@ import { SelectionBook } from '@/components/SelectionBook'
 import { SelectionSchedules } from '@/components/SelectionSchedules'
 import { ScheduleEditor } from '@/components/schedule/ScheduleEditor'
 import { ResourceCompare } from '@/components/ResourceCompare'
-import { SchedulePortfolio } from '@/components/SchedulePortfolio'
+import { SchedulePortfolioPage } from '@/components/schedule/SchedulePortfolioPage'
 import { ProjectQuotesView } from '@/components/quotes/ProjectQuotesView'
 import { ClientQuoteBuilder } from '@/components/quotes/ClientQuoteBuilder'
 import { ClientQuoteReadOnlyView } from '@/components/quotes/ClientQuoteReadOnlyView'
@@ -122,7 +122,6 @@ import { OrderPage } from '@/components/drywall/order/OrderPage'
 import { ProductionStagePage } from '@/components/drywall/production/ProductionStagePage'
 import { FieldMeasurementPage } from '@/components/drywall/field/FieldMeasurementPage'
 import { DrywallScheduleEditor } from '@/components/drywall/schedule/DrywallScheduleEditor'
-import { DrywallSchedulePortfolioPage } from '@/components/drywall/schedule/portfolio/DrywallSchedulePortfolioPage'
 import { CommsInboxPage } from '@/components/comms/CommsInboxPage'
 import { CustomerInboxPage } from '@/components/comms/CustomerInboxPage'
 import { DashboardPage } from '@/components/drywall/dashboard/DashboardPage'
@@ -308,7 +307,7 @@ export function AppRoutes() {
             path="/drywall/schedule"
             element={
               <RequireWorkspaceAccess workspace="drywall">
-                <DrywallSchedulePortfolioPage />
+                <SchedulePortfolioPage lens="drywall" lockLens />
               </RequireWorkspaceAccess>
             }
           />
@@ -1008,7 +1007,7 @@ function TenantPipelineRoute() {
 
 function SchedulePortfolioRoute() {
   usePageTitle('Schedule')
-  return <SchedulePortfolio />
+  return <SchedulePortfolioPage lens="all" />
 }
 
 function ResourceCompareRoute() {

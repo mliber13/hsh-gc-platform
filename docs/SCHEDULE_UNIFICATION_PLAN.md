@@ -98,6 +98,7 @@ backfill unconditional: every existing row is drywall.
 | 1 | Cascade writes only changed rows; write errors surface (P0-DATA-4) | **done 2026-09-15** |
 | 2 | `division` column + backfill + drywall reads filter on it; drop Garden of Eatin's 6 items | **done 2026-09-15** |
 | 4+5 | GC uses the shared editor; estimate-trade generation deleted | **done 2026-09-15** |
+| 5b | One portfolio surface; project list from item `division` | **done 2026-09-15** |
 | 3 | Seed Goodwill Multi GC work from Buildertrend | after 4+5, so it lands in the editor we keep |
 | 6 | Sub SMS confirmations in the shared dialog | A2P approved 2026-09-15 |
 | 7 | Crew visibility by assignment | |

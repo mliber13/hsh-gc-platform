@@ -28,6 +28,7 @@ function item(
     tasks: [],
     lead_person_ids: [],
     supplier_id: null,
+    division: 'drywall',
     ...partial,
   }
 }

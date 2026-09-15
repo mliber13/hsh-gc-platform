@@ -1,3 +1,13 @@
+// ============================================================================
+// SchedulePortfolioItemModal
+// ============================================================================
+// DELETION SWEEP: the unified portfolio no longer mounts this modal
+// (SchedulePortfolioPage uses ScheduleItemDialog). ResourceCompare
+// (/schedule/resource) is still a live caller — do not delete. This is also
+// the only live consumer of smsService and CascadePreviewModal; step 6 wires
+// sub confirmations into ScheduleItemDialog and they get resolved then.
+// Flagged 2026-09-15.
+
 import { useEffect, useMemo, useState } from 'react'
 import { differenceInCalendarDays, format, parseISO } from 'date-fns'
 import { AlertCircle, CheckCircle, Clock, PlayCircle } from 'lucide-react'

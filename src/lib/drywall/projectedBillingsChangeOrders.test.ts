@@ -46,6 +46,8 @@ function draw(id: string, name: string, startDate: string): CrossProjectSchedule
     assignedPersons: [],
     supplierId: null,
     assignedCompanyId: null,
+    assignedCompanyName: null,
+    division: 'drywall',
   }
 }
 

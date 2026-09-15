@@ -1,3 +1,6 @@
+// DELETION SWEEP: live only through SchedulePortfolioItemModal (ResourceCompare).
+// Step 6 wires sub confirmations into ScheduleItemDialog; resolve then.
+// Flagged 2026-09-15.
 import { supabase } from '@/lib/supabase'
 import { requireUserOrgId } from '@/services/userService'
 import type {

@@ -121,7 +121,11 @@ export function DrywallPortfolioList({ items, personNames, rangeLabel, onItemCli
                         ))
                       ) : (
                         <span className="rounded-full border bg-muted/40 px-1.5 py-0.5">
-                          {item.supplierId ? 'Supplier assigned' : 'Sub assigned'}
+                          {item.assignedCompanyName
+                            ? item.assignedCompanyName
+                            : item.supplierId
+                              ? 'Supplier assigned'
+                              : 'Sub assigned'}
                         </span>
                       )}
                     </div>
@@ -200,9 +204,7 @@ export function DrywallPortfolioList({ items, personNames, rangeLabel, onItemCli
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {item.assignedPersons.length === 0 ? (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      ) : (
+                      {item.assignedPersons.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {item.assignedPersons.map((id) => (
                             <span
@@ -213,6 +215,10 @@ export function DrywallPortfolioList({ items, personNames, rangeLabel, onItemCli
                             </span>
                           ))}
                         </div>
+                      ) : item.assignedCompanyName ? (
+                        <span className="text-xs">{item.assignedCompanyName}</span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </td>
                   </tr>

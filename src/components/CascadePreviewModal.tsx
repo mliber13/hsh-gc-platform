@@ -1,3 +1,6 @@
+// DELETION SWEEP: live only through SchedulePortfolioItemModal (ResourceCompare).
+// Step 6 wires sub confirmations into ScheduleItemDialog; resolve then.
+// Flagged 2026-09-15.
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'

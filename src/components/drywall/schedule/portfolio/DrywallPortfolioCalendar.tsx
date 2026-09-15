@@ -53,9 +53,11 @@ function formatItemDates(item: CrossProjectScheduleItem): string {
 
 function buildTooltip(item: CrossProjectScheduleItem): string {
   const assigned =
-    item.assignedPersons.length === 0
-      ? 'Unassigned'
-      : `${item.assignedPersons.length} assigned`
+    item.assignedPersons.length > 0
+      ? `${item.assignedPersons.length} assigned`
+      : item.assignedCompanyName
+        ? item.assignedCompanyName
+        : 'Unassigned'
   return `${item.projectName}\n${item.name}\n${formatItemDates(item)}\n${assigned}`
 }
 

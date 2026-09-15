@@ -596,6 +596,8 @@ export async function fetchCrewCalendarItems(
       assignedPersons: (sched.assigned_persons ?? []).filter(Boolean),
       supplierId: null,
       assignedCompanyId: null,
+      assignedCompanyName: null,
+      division: 'drywall',
     })
   }
   return items

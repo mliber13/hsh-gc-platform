@@ -6,6 +6,8 @@ import {
   ChevronRight,
   History,
   MoreHorizontal,
+  Inbox,
+  PanelRightClose,
   Plus,
   RefreshCw,
   SlidersHorizontal,
@@ -22,6 +24,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { CommsLogPanel } from '@/components/CommsLogPanel'
+import { SchedulePortfolioInbox } from '@/components/SchedulePortfolioInbox'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -32,9 +36,12 @@ import {
   fetchCrossProjectScheduleItems,
   type CrossProjectScheduleItem,
 } from '@/services/drywallScheduleAggregateService'
+import type { InboxEntry } from '@/services/communicationLogService'
 import {
   fetchScheduleItemsForProject,
   type DrywallProjectScheduleItem,
+  type PortfolioTypeFilter,
+  type ScheduleDivision,
 } from '@/services/scheduleService'
 import { fetchTeam } from '@/services/hrTeamService'
 import { isDrywallProjectClosed } from '@/types/drywall'
@@ -45,15 +52,15 @@ import {
   SCHEDULE_PHASE_ORDER,
   type SchedulePhase,
 } from '@/components/drywall/schedule/scheduleItemStatusStyles'
-import { ScheduleItemDialog } from '../ScheduleItemDialog'
-import { ScheduleChangeLogSheet } from '../ScheduleChangeLogSheet'
-import { DrywallPortfolioCalendar } from './DrywallPortfolioCalendar'
-import { TimeOffManagerSheet } from '../TimeOffManagerSheet'
+import { ScheduleItemDialog } from '@/components/drywall/schedule/ScheduleItemDialog'
+import { ScheduleChangeLogSheet } from '@/components/drywall/schedule/ScheduleChangeLogSheet'
+import { DrywallPortfolioCalendar } from '@/components/drywall/schedule/portfolio/DrywallPortfolioCalendar'
+import { TimeOffManagerSheet } from '@/components/drywall/schedule/TimeOffManagerSheet'
 import {
   fetchPersonUnavailability,
   type ScheduleUnavailability,
 } from '@/services/personUnavailabilityService'
-import { DrywallPortfolioList } from './DrywallPortfolioList'
+import { DrywallPortfolioList } from '@/components/drywall/schedule/portfolio/DrywallPortfolioList'
 import {
   computePortfolioRange,
   filterPortfolioItemsInRange,
@@ -61,7 +68,7 @@ import {
   shiftPortfolioAnchor,
   toggleSetMembership,
   type PortfolioViewWindow,
-} from './portfolioScheduleRange'
+} from '@/components/drywall/schedule/portfolio/portfolioScheduleRange'
 
 type DialogState =
   | { open: false }
@@ -72,10 +79,16 @@ type DialogState =
       projectAddress?: string
       siblings: DrywallProjectScheduleItem[]
       editing: DrywallProjectScheduleItem | null
+      division: ScheduleDivision
     }
 
 type ScopeFilter = 'active' | 'all'
 type DisplayMode = 'calendar' | 'list'
+
+type SchedulePortfolioPageProps = {
+  lens: PortfolioTypeFilter
+  lockLens?: boolean
+}
 
 const VIEW_WINDOW_OPTIONS: { value: PortfolioViewWindow; label: string }[] = [
   { value: 'week', label: 'Week' },
@@ -83,10 +96,44 @@ const VIEW_WINDOW_OPTIONS: { value: PortfolioViewWindow; label: string }[] = [
   { value: 'month', label: 'Month' },
 ]
 
-export function DrywallSchedulePortfolioPage() {
-  usePageTitle('Drywall — Schedule')
+const TYPE_FILTERS: Array<{ label: string; value: PortfolioTypeFilter }> = [
+  { label: 'All', value: 'all' },
+  { label: 'GC', value: 'gc' },
+  { label: 'Drywall', value: 'drywall' },
+]
+
+const INBOX_OPEN_KEY = 'hsh.schedule.inboxOpen'
+
+export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfolioPageProps) {
+  usePageTitle(lockLens ? 'Drywall — Schedule' : 'Schedule')
   const { effectiveRole } = usePermissions()
   const canViewActivity = canWriteDrywallProject(effectiveRole)
+  const [activeLens, setActiveLens] = useState<PortfolioTypeFilter>(lens)
+  const effectiveLens = lockLens ? lens : activeLens
+
+  // Comms inbox costs 360px of a schedule that wants every pixel, so it starts
+  // closed and remembers the choice. Per-browser only — localStorage can throw
+  // or come back empty (private window, cleared site data), so never trust it.
+  const [inboxOpen, setInboxOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem(INBOX_OPEN_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleInbox = () => {
+    setInboxOpen((open) => {
+      const next = !open
+      try {
+        window.localStorage.setItem(INBOX_OPEN_KEY, next ? '1' : '0')
+      } catch {
+        // non-fatal: the panel just won't remember next time
+      }
+      return next
+    })
+  }
+  const canAddItems = effectiveLens === 'gc' || effectiveLens === 'drywall'
 
   const isMobile = useIsMobile()
 
@@ -125,6 +172,12 @@ export function DrywallSchedulePortfolioPage() {
   const [selectedPhases, setSelectedPhases] = useState<Set<SchedulePhase>>(() => new Set())
   const [showUnassignedOnly, setShowUnassignedOnly] = useState(false)
   const [expandAll, setExpandAll] = useState(false)
+  const [inboxRefreshKey, setInboxRefreshKey] = useState(0)
+  const [commsPanelState, setCommsPanelState] = useState<{
+    open: boolean
+    projectId: string
+    scheduleItem: { id: string; name: string } | null
+  }>({ open: false, projectId: '', scheduleItem: null })
 
   const { rangeStart, rangeEnd, referenceMonth } = useMemo(
     () => computePortfolioRange(anchorDate, viewWindow),
@@ -139,7 +192,7 @@ export function DrywallSchedulePortfolioPage() {
     setLoading(true)
     try {
       const [rows, timeOff] = await Promise.all([
-        fetchCrossProjectScheduleItems(),
+        fetchCrossProjectScheduleItems(effectiveLens),
         fetchPersonUnavailability().catch(() => []),
       ])
       setItems(rows)
@@ -150,7 +203,11 @@ export function DrywallSchedulePortfolioPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [effectiveLens])
+
+  useEffect(() => {
+    setSelectedProjectIds(new Set())
+  }, [effectiveLens])
 
   const reloadTimeOff = useCallback(async () => {
     setUnavailability(await fetchPersonUnavailability().catch(() => []))
@@ -289,7 +346,9 @@ export function DrywallSchedulePortfolioPage() {
 
   const handleItemClick = async (item: CrossProjectScheduleItem) => {
     try {
-      const siblings = await fetchScheduleItemsForProject(item.projectId, { division: 'drywall' })
+      const siblings = await fetchScheduleItemsForProject(item.projectId, {
+        division: item.division,
+      })
       const editing = siblings.find((s) => s.id === item.id) ?? null
       if (!editing) {
         toast.error('Schedule item no longer exists. Refresh the calendar.')
@@ -302,6 +361,7 @@ export function DrywallSchedulePortfolioPage() {
         projectAddress: item.projectAddress,
         siblings,
         editing,
+        division: item.division,
       })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to open schedule item')
@@ -309,10 +369,11 @@ export function DrywallSchedulePortfolioPage() {
   }
 
   const handleAddItem = async (projectId: string) => {
+    if (effectiveLens !== 'gc' && effectiveLens !== 'drywall') return
     setAddProjectOpen(false)
     setAddProjectOpenMobile(false)
     try {
-      const siblings = await fetchScheduleItemsForProject(projectId, { division: 'drywall' })
+      const siblings = await fetchScheduleItemsForProject(projectId, { division: effectiveLens })
       const sourceItem = items.find((i) => i.projectId === projectId)
       setDialog({
         open: true,
@@ -321,14 +382,59 @@ export function DrywallSchedulePortfolioPage() {
         projectAddress: sourceItem?.projectAddress,
         siblings,
         editing: null,
+        division: effectiveLens,
       })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to start a new schedule item')
     }
   }
 
+  const refreshInbox = () => {
+    setInboxRefreshKey((key) => key + 1)
+  }
+
+  const handleInboxClick = async (entry: InboxEntry) => {
+    if (!entry.schedule_item_id) {
+      setCommsPanelState({
+        open: true,
+        projectId: entry.project_id,
+        scheduleItem: null,
+      })
+      return
+    }
+
+    try {
+      const fromList = items.find((item) => item.id === entry.schedule_item_id)
+      let division: ScheduleDivision = fromList?.division ?? 'drywall'
+      let siblings = fromList
+        ? await fetchScheduleItemsForProject(entry.project_id, { division })
+        : await fetchScheduleItemsForProject(entry.project_id)
+      const editing = siblings.find((s) => s.id === entry.schedule_item_id) ?? null
+      if (!editing) {
+        toast.error('Could not open that schedule item.')
+        return
+      }
+      if (!fromList) {
+        division = editing.division === 'gc' ? 'gc' : 'drywall'
+        siblings = siblings.filter((s) => (s.division ?? 'drywall') === division)
+      }
+      setDialog({
+        open: true,
+        projectId: entry.project_id,
+        projectName: fromList?.projectName ?? entry.project_name,
+        projectAddress: fromList?.projectAddress,
+        siblings,
+        editing,
+        division,
+      })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not open that schedule item.')
+    }
+  }
+
   const handleDialogSaved = () => {
     setDialog({ open: false })
+    refreshInbox()
     void load()
   }
 
@@ -340,8 +446,22 @@ export function DrywallSchedulePortfolioPage() {
     )
   }
 
-  return (
+  const page = (
     <div className="space-y-2 pt-2 pb-10">
+      {!lockLens && (
+        <div className="flex flex-wrap gap-1.5">
+          {TYPE_FILTERS.map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              onClick={() => setActiveLens(filter.value)}
+              className={chipClass(effectiveLens === filter.value)}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+      )}
       {/* ── Mobile toolbar ── */}
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/60 p-2 shadow-sm md:hidden">
         <div className="flex items-center gap-2">
@@ -386,7 +506,7 @@ export function DrywallSchedulePortfolioPage() {
             )}
           </Button>
 
-          {legendProjects.length > 0 && (
+          {canAddItems && legendProjects.length > 0 && (
             <Popover open={addProjectOpenMobile} onOpenChange={setAddProjectOpenMobile}>
               <PopoverTrigger asChild>
                 <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0">
@@ -1021,7 +1141,7 @@ export function DrywallSchedulePortfolioPage() {
           >
             {expandAll ? 'Collapse all' : 'Expand all'}
           </Button>
-          {legendProjects.length > 0 && (
+          {canAddItems && legendProjects.length > 0 && (
             <Popover open={addProjectOpen} onOpenChange={setAddProjectOpen}>
               <PopoverTrigger asChild>
                 <Button type="button" size="sm" className="h-8 gap-1 text-xs">
@@ -1128,7 +1248,7 @@ export function DrywallSchedulePortfolioPage() {
           projectAddress={dialog.projectAddress}
           siblingItems={dialog.siblings}
           editing={dialog.editing}
-          division="drywall"
+          division={dialog.division}
           onSaved={handleDialogSaved}
         />
       )}
@@ -1138,6 +1258,58 @@ export function DrywallSchedulePortfolioPage() {
           open={activityOpen}
           onOpenChange={setActivityOpen}
           projectNames={projectNamesById}
+        />
+      ) : null}
+    </div>
+  )
+
+  if (lockLens) return page
+
+  return (
+    <div className="flex h-full min-h-0">
+      <div className="min-w-0 flex-1 overflow-y-auto">{page}</div>
+      {inboxOpen ? (
+        <aside className="hidden w-[360px] shrink-0 flex-col border-l border-border/60 xl:flex">
+          <div className="flex items-center justify-end border-b border-border/60 px-2 py-1.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={toggleInbox}
+              title="Hide comms inbox"
+            >
+              <PanelRightClose className="mr-1.5 size-4" />
+              Hide
+            </Button>
+          </div>
+          <SchedulePortfolioInbox
+            onEntryClick={(entry) => void handleInboxClick(entry)}
+            refreshKey={inboxRefreshKey}
+          />
+        </aside>
+      ) : (
+        <aside className="hidden w-12 shrink-0 flex-col items-center border-l border-border/60 py-2 xl:flex">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={toggleInbox}
+            title="Show comms inbox"
+            aria-label="Show comms inbox"
+          >
+            <Inbox className="size-4" />
+          </Button>
+        </aside>
+      )}
+      {commsPanelState.projectId ? (
+        <CommsLogPanel
+          open={commsPanelState.open}
+          onClose={() => {
+            setCommsPanelState({ open: false, projectId: '', scheduleItem: null })
+            refreshInbox()
+          }}
+          projectId={commsPanelState.projectId}
+          scheduleItem={commsPanelState.scheduleItem}
         />
       ) : null}
     </div>
