@@ -124,6 +124,7 @@ export async function fetchCrossProjectScheduleItems(): Promise<CrossProjectSche
       'id, project_id, name, type, start_date, end_date, status, assigned_persons, supplier_id, assigned_company_id',
     )
     .eq('organization_id', organizationId)
+    .eq('division', 'drywall')
     .in('project_id', projectIds)
     .order('start_date', { ascending: true })
     .order('created_at', { ascending: true })

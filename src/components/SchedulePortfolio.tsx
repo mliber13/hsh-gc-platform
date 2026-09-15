@@ -233,6 +233,7 @@ export function SchedulePortfolio() {
           visibleProjectIds,
           isoDate(windowStart),
           isoDate(windowEnd),
+          typeFilter,
         )
         if (!cancelled) setItems(nextItems)
       } catch (loadError) {
@@ -250,7 +251,7 @@ export function SchedulePortfolio() {
     return () => {
       cancelled = true
     }
-  }, [visibleProjectIds, windowStart, windowEnd])
+  }, [visibleProjectIds, windowStart, windowEnd, typeFilter])
 
   const toggleProject = (projectId: string) => {
     setIncludedProjectIds((current) => {

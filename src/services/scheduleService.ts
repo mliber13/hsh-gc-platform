@@ -115,10 +115,11 @@ export async function fetchPortfolioScheduleItems(
   projectIds: string[],
   startDate: string,
   endDate: string,
+  typeFilter?: PortfolioTypeFilter,
 ): Promise<PortfolioItem[]> {
   if (projectIds.length === 0) return []
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('schedule_items')
     .select(
       'id, project_id, schedule_id, name, start_date, end_date, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, notes, subcontractors:assigned_company_id(name)',
@@ -126,7 +127,13 @@ export async function fetchPortfolioScheduleItems(
     .in('project_id', projectIds)
     .lte('start_date', endDate)
     .gte('end_date', startDate)
-    .order('start_date', { ascending: true })
+
+  // 'all' (and omitted) stay unfiltered — invariant 4, the orphan-work guard.
+  if (typeFilter === 'gc' || typeFilter === 'drywall') {
+    query = query.eq('division', typeFilter)
+  }
+
+  const { data, error } = await query.order('start_date', { ascending: true })
 
   if (error) throw error
 
@@ -398,14 +405,21 @@ const DRYWALL_SCHEDULE_SELECT =
 
 export async function fetchScheduleItemsForDrywallProject(
   projectId: string,
+  opts?: { division?: 'gc' | 'drywall' },
 ): Promise<DrywallProjectScheduleItem[]> {
   const organizationId = await requireUserOrgId()
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('schedule_items')
     .select(DRYWALL_SCHEDULE_SELECT)
     .eq('project_id', projectId)
     .eq('organization_id', organizationId)
+
+  if (opts?.division) {
+    query = query.eq('division', opts.division)
+  }
+
+  const { data, error } = await query
     .order('start_date', { ascending: true })
     .order('created_at', { ascending: true })
 
@@ -450,6 +464,7 @@ async function runCascadeForProject(projectId: string): Promise<{
   changedItemIds: string[]
   items: DrywallProjectScheduleItem[]
 }> {
+  // Cascade is division-blind: never filter this fetch, or a GC date move silently fails to push dependent drywall work.
   const items = await fetchScheduleItemsForDrywallProject(projectId)
   if (items.length === 0) return { changedItemIds: [], items }
 
@@ -512,6 +527,7 @@ function buildInsertRow(
     lead_person_ids: input.leadPersonIds ?? [],
     supplier_id: input.supplierId ?? null,
     notes: input.notes?.trim() || null,
+    division: 'drywall' as const,
   }
 }
 
@@ -538,7 +554,7 @@ export async function createScheduleItemForDrywallProject(
     throw e
   }
 
-  const refreshed = await fetchScheduleItemsForDrywallProject(projectId)
+  const refreshed = await fetchScheduleItemsForDrywallProject(projectId, { division: 'drywall' })
   const created =
     refreshed.find((item) => item.id === itemId) ??
     mapDrywallScheduleRow(data as DrywallScheduleItemRow)
@@ -814,5 +830,5 @@ export async function generateStandardDrywallSchedule(
   if (error) throw error
 
   await runCascadeForProject(projectId)
-  return fetchScheduleItemsForDrywallProject(projectId)
+  return fetchScheduleItemsForDrywallProject(projectId, { division: 'drywall' })
 }

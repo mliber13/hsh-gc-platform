@@ -56,7 +56,7 @@ export function DrywallScheduleEditor() {
     setLoading(true)
     try {
       const [rows, team] = await Promise.all([
-        fetchScheduleItemsForDrywallProject(projectId),
+        fetchScheduleItemsForDrywallProject(projectId, { division: 'drywall' }),
         fetchTeam().catch(() => null),
       ])
       setItems(rows)

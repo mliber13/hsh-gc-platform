@@ -121,6 +121,7 @@ export function ResourceCompare() {
                 ids,
                 isoDate(windowStart),
                 isoDate(windowEnd),
+                typeFilter,
               )
             : []
 

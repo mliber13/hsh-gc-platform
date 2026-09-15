@@ -126,7 +126,7 @@ export function CrewForemanScheduleEditSheet({
   useEffect(() => {
     if (!open || !entry) return
     let cancelled = false
-    void fetchScheduleItemsForDrywallProject(projectId)
+    void fetchScheduleItemsForDrywallProject(projectId, { division: 'drywall' })
       .then((rows) => {
         if (cancelled) return
         setSiblings(rows)

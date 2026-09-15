@@ -238,6 +238,7 @@ function mapScheduleItemModelToRowInput(
     assigned_persons: item.assignedPersons ?? [],
     assigned_company_id: item.assignedCompanyId ?? null,
     notes: item.notes ?? null,
+    division: 'gc' as const,
   }
 }
 
