@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -477,11 +477,20 @@ function RateInput({
   step?: number
   placeholder?: string
 }) {
+  // Commit on change, not on blur. The quantity, height and spacing inputs in the rows
+  // below already recalculate per keystroke, so a rate that only took effect once the
+  // field lost focus read as "changing the labor rate does nothing" — you watch the
+  // totals while typing and they sit still.
   const [draft, setDraft] = useState(value == null ? '' : String(value))
+  const focused = useRef(false)
+  const display = value == null ? '' : String(value)
+
   useEffect(() => {
-    setDraft(value == null ? '' : String(value))
-  }, [value])
-  const commit = () => onChange(draft === '' ? undefined : parseFloat(draft) || 0)
+    // Never overwrite what someone is mid-way through typing — "1." would become "1".
+    if (focused.current) return
+    setDraft(display)
+  }, [display])
+
   return (
     <Input
       type="number"
@@ -491,8 +500,19 @@ function RateInput({
       className={cn('h-8 text-right text-xs tabular-nums', className)}
       value={draft}
       placeholder={placeholder}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
+      onFocus={() => {
+        focused.current = true
+      }}
+      onChange={(e) => {
+        const raw = e.target.value
+        setDraft(raw)
+        onChange(raw === '' ? undefined : parseFloat(raw) || 0)
+      }}
+      onBlur={() => {
+        focused.current = false
+        // Show the committed value once they leave: "1.20" → "1.2".
+        setDraft(value == null ? '' : String(value))
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') e.currentTarget.blur()
       }}
