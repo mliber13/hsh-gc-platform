@@ -175,6 +175,8 @@ export interface QuoteV3TotalsSummary {
     totalAdd: number
     /** Drywall sqft this alternate adds/removes; negative when `'deduct'`. */
     sqft: number
+    /** Same, with each line's waste applied; negative when `'deduct'`. */
+    sqftWithWaste: number
     /** Whether the customer has accepted this alternate. */
     selected: boolean
     /** This alternate's own cost breakdown (unsigned magnitudes) for netting. */
@@ -185,6 +187,12 @@ export interface QuoteV3TotalsSummary {
   acceptedTotal: number
   /** Base drywall sqft + only the ACCEPTED alternates' sqft — the estimate sqft. */
   acceptedSqft: number
+  /**
+   * Same, with waste — what actually gets hung, and what the field-measurement and
+   * order stages compare against. Kept alongside acceptedSqft because the quote
+   * header reports raw and with-waste side by side.
+   */
+  acceptedSqftWithWaste: number
 }
 
 export interface QuoteV3LaborBurdenOptions {
@@ -762,6 +770,10 @@ export function computeQuoteV3Totals(
     )
     const pricingMode = alternatePricingMode(alt)
     const magnitude = marked.total
+    const altSqftWithWaste = alt.lineItems.reduce(
+      (s, l) => s + (l.type === 'drywall' ? (l.quantity || 0) * (1 + (l.waste_pct ?? 10) / 100) : 0),
+      0,
+    )
     const altSqft = alt.lineItems.reduce(
       (s, l) => s + (l.type === 'drywall' ? l.quantity || 0 : 0),
       0,
@@ -772,6 +784,7 @@ export function computeQuoteV3Totals(
       pricingMode,
       totalAdd: pricingMode === 'deduct' ? -magnitude : magnitude,
       sqft: pricingMode === 'deduct' ? -altSqft : altSqft,
+      sqftWithWaste: pricingMode === 'deduct' ? -altSqftWithWaste : altSqftWithWaste,
       selected: Boolean(alt.selected),
       breakdown: marked,
     }
@@ -780,6 +793,8 @@ export function computeQuoteV3Totals(
   const selectedAlts = alternates.filter((a) => a.selected)
   const acceptedTotal = routine.total + selectedAlts.reduce((s, a) => s + a.totalAdd, 0)
   const acceptedSqft = totalSqft + selectedAlts.reduce((s, a) => s + a.sqft, 0)
+  const acceptedSqftWithWaste =
+    totalSqftWithWaste + selectedAlts.reduce((s, a) => s + a.sqftWithWaste, 0)
   const grandTotalAllAlternates =
     routine.total + alternates.reduce((s, a) => s + a.totalAdd, 0)
 
@@ -791,6 +806,7 @@ export function computeQuoteV3Totals(
     grandTotalAllAlternates,
     acceptedTotal,
     acceptedSqft,
+    acceptedSqftWithWaste,
   }
 }
 
