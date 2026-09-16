@@ -1,4 +1,5 @@
 import type { FieldTakeoff } from '@/types/drywall'
+import { subtypeNeedsCategory } from '@/lib/drywall/fieldAccessoryUi'
 
 export interface FieldMaterialsBoardRow {
   id: string
@@ -175,7 +176,13 @@ export function extractMaterialsFromFieldTakeoff(takeoff: FieldTakeoff): {
 export function formatAccessoryLineDescription(
   acc: Pick<FieldMaterialsAccessoryRow, 'subtype' | 'type' | 'length' | 'threadType' | 'facing'>,
 ): string {
+  // Lead with the category when the item name alone is ambiguous — '20 Gauge - 3-5/8"'
+  // is a stud, a track and a deflection track, so an order listing it twice looked like
+  // a duplicate with no way to tell which was which.
   let description = acc.subtype || acc.type || 'Accessory'
+  if (acc.subtype && acc.type && subtypeNeedsCategory(acc.subtype)) {
+    description = `${acc.type} — ${acc.subtype}`
+  }
   if (acc.facing) description += ` - ${acc.facing}`
   if (acc.length) description += ` (${acc.length})`
   if (acc.threadType) description += ` - ${acc.threadType}`

@@ -139,6 +139,39 @@ export const FIELD_MATERIAL_OPTIONS: { category: string; items: string[] }[] = [
   { category: 'RC Channel', items: ['RC-1 Channel', 'RC Deluxe'] },
 ]
 
+/**
+ * Item names that exist under more than one category, where the name alone does not
+ * say what the thing is. `20 Gauge - 3-5/8"` is a stud, a track and a deflection track;
+ * `Main Runners` belongs to both ceiling systems. An order line showing only the item
+ * name leaves the supplier — and whoever is checking the order — unable to tell them
+ * apart, and two such lines look like a duplicate.
+ *
+ * Derived from the catalog rather than listed by hand, so a category added later is
+ * covered without anyone remembering this rule exists.
+ */
+let ambiguousSubtypes: Set<string> | null = null
+
+export function subtypeNeedsCategory(subtype: string): boolean {
+  if (!subtype) return false
+  if (!ambiguousSubtypes) {
+    const categoriesByItem = new Map<string, Set<string>>()
+    for (const group of FIELD_MATERIAL_OPTIONS) {
+      for (const item of group.items) {
+        let cats = categoriesByItem.get(item)
+        if (!cats) {
+          cats = new Set()
+          categoriesByItem.set(item, cats)
+        }
+        cats.add(group.category)
+      }
+    }
+    ambiguousSubtypes = new Set(
+      [...categoriesByItem.entries()].filter(([, cats]) => cats.size > 1).map(([item]) => item),
+    )
+  }
+  return ambiguousSubtypes.has(subtype)
+}
+
 export function getSubtypeOptions(type: string): string[] {
   const category = FIELD_MATERIAL_OPTIONS.find((cat) => cat.category === type)
   return category ? category.items : []
