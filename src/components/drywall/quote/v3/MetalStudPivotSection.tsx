@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -9,7 +9,10 @@ import {
   formatQuoteMoney,
   type QuoteV3LaborBurdenOptions,
 } from '@/lib/drywall/quoteV3Math'
-import { isBlendedComponentLine } from '@/lib/drywall/quoteV3CatalogResolve'
+import {
+  getCatalogDefaultComponentLaborRate,
+  isBlendedComponentLine,
+} from '@/lib/drywall/quoteV3CatalogResolve'
 import { createQuoteLineItem } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import {
   METAL_STUD_GAUGES,
@@ -135,7 +138,7 @@ export function MetalStudPivotSection({
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1000px] text-xs">
+                <table className="w-full min-w-[1120px] text-xs">
                   <thead>
                     <tr className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       <th className="px-2 py-1.5 text-left font-medium">Size</th>
@@ -146,6 +149,7 @@ export function MetalStudPivotSection({
                       <th className="px-2 py-1.5 text-left font-medium">Defl. tracks</th>
                       <th className="px-2 py-1.5 text-right font-medium">Wall LF</th>
                       <th className="px-2 py-1.5 text-right font-medium">Waste %</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Labor $/LF</th>
                       <th className="px-2 py-1.5 text-right font-medium">Studs</th>
                       <th className="px-2 py-1.5 text-right font-medium">Track LF</th>
                       <th className="px-2 py-1.5 text-right font-medium">Defl. LF</th>
@@ -166,6 +170,12 @@ export function MetalStudPivotSection({
                           (m.metalStudBreakdown?.deflectionTrackLf ?? 0),
                       )
                       const deflectionLf = Math.round(m.metalStudBreakdown?.deflectionTrackLf ?? 0)
+                      // Labor is wall LF x this rate x burden. It used to live only in the
+                      // catalog (by size x gauge), so the quote never showed what it was
+                      // charging — RC and suspended grid both show theirs inline.
+                      const catalogLaborRate = getCatalogDefaultComponentLaborRate(l, catalogs)
+                      const laborRateOverridden = l.custom_labor_rate != null
+                      const effectiveLaborRate = l.custom_labor_rate ?? catalogLaborRate
                       return (
                         <tr key={l.id} className="border-t">
                           <td className="px-2 py-1.5">
@@ -294,6 +304,44 @@ export function MetalStudPivotSection({
                                 updateLine(l.id, { waste_pct: parseFloat(e.target.value) || 0 })
                               }
                             />
+                          </td>
+                          <td className="px-2 py-1.5 text-right">
+                            <div className="flex items-center justify-end gap-0.5">
+                              <Input
+                                type="number"
+                                min={0}
+                                step={0.25}
+                                disabled={readOnly}
+                                className={cn(
+                                  'h-7 w-[80px] text-right text-xs tabular-nums',
+                                  laborRateOverridden && 'border-amber-500/60',
+                                )}
+                                title={
+                                  laborRateOverridden
+                                    ? `Overridden — catalog rate is ${formatQuoteMoney(catalogLaborRate)}/LF`
+                                    : 'Catalog rate for this size and gauge'
+                                }
+                                value={effectiveLaborRate}
+                                onChange={(e) => {
+                                  const raw = e.target.value
+                                  updateLine(l.id, {
+                                    custom_labor_rate: raw === '' ? undefined : parseFloat(raw) || 0,
+                                  })
+                                }}
+                              />
+                              {laborRateOverridden && !readOnly ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0 text-amber-700 hover:text-amber-900 dark:text-amber-400"
+                                  title="Reset to catalog rate"
+                                  onClick={() => updateLine(l.id, { custom_labor_rate: undefined })}
+                                >
+                                  <RotateCcw className="h-3 w-3" />
+                                </Button>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
                             {studs}
