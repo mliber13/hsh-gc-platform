@@ -301,3 +301,30 @@ export function formatScheduleChangeGroup(
   const detail = formatScheduleChange(group.primary, opts)
   return `${actor} ${detail}${dep}${projectBit}`
 }
+
+/**
+ * Which of these schedule items still exist.
+ *
+ * The activity feed is append-only history, so it keeps showing items that have
+ * since been deleted — and a "created" entry for a since-deleted item looks exactly
+ * like one you should be able to go open. Callers use this to mark those entries as
+ * gone instead of leaving someone hunting the calendar for a row that is not there.
+ */
+export async function fetchExistingScheduleItemIds(
+  ids: string[],
+): Promise<Set<string>> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (!isOnlineMode() || unique.length === 0) return new Set()
+
+  const { data, error } = await supabase
+    .from('schedule_items')
+    .select('id')
+    .in('id', unique)
+
+  if (error) {
+    console.error('fetchExistingScheduleItemIds failed:', error)
+    // Fail open: treat everything as present rather than mislabel live items deleted.
+    return new Set(unique)
+  }
+  return new Set(((data ?? []) as Array<{ id: string }>).map((row) => row.id))
+}

@@ -393,6 +393,46 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
     setInboxRefreshKey((key) => key + 1)
   }
 
+  /**
+   * Open one schedule item by id, wherever it lives. Shared by the comms inbox and
+   * the activity feed — both hand us an id from outside the current lens, so the
+   * item's own division decides which siblings the dialog gets, not the lens.
+   */
+  const openScheduleItemById = async (
+    projectId: string,
+    scheduleItemId: string,
+    projectNameFallback?: string,
+  ) => {
+    try {
+      const fromList = items.find((item) => item.id === scheduleItemId)
+      let division: ScheduleDivision = fromList?.division ?? 'drywall'
+      let siblings = fromList
+        ? await fetchScheduleItemsForProject(projectId, { division })
+        : await fetchScheduleItemsForProject(projectId)
+      const editing = siblings.find((s) => s.id === scheduleItemId) ?? null
+      if (!editing) {
+        toast.error('That schedule item no longer exists.')
+        return
+      }
+      if (!fromList) {
+        division = editing.division === 'gc' ? 'gc' : 'drywall'
+        siblings = siblings.filter((s) => (s.division ?? 'drywall') === division)
+      }
+      setDialog({
+        open: true,
+        projectId,
+        projectName:
+          fromList?.projectName ?? projectNamesById.get(projectId) ?? projectNameFallback,
+        projectAddress: fromList?.projectAddress,
+        siblings,
+        editing,
+        division,
+      })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not open that schedule item.')
+    }
+  }
+
   const handleInboxClick = async (entry: InboxEntry) => {
     if (!entry.schedule_item_id) {
       setCommsPanelState({
@@ -402,34 +442,7 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
       })
       return
     }
-
-    try {
-      const fromList = items.find((item) => item.id === entry.schedule_item_id)
-      let division: ScheduleDivision = fromList?.division ?? 'drywall'
-      let siblings = fromList
-        ? await fetchScheduleItemsForProject(entry.project_id, { division })
-        : await fetchScheduleItemsForProject(entry.project_id)
-      const editing = siblings.find((s) => s.id === entry.schedule_item_id) ?? null
-      if (!editing) {
-        toast.error('Could not open that schedule item.')
-        return
-      }
-      if (!fromList) {
-        division = editing.division === 'gc' ? 'gc' : 'drywall'
-        siblings = siblings.filter((s) => (s.division ?? 'drywall') === division)
-      }
-      setDialog({
-        open: true,
-        projectId: entry.project_id,
-        projectName: fromList?.projectName ?? entry.project_name,
-        projectAddress: fromList?.projectAddress,
-        siblings,
-        editing,
-        division,
-      })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not open that schedule item.')
-    }
+    await openScheduleItemById(entry.project_id, entry.schedule_item_id, entry.project_name)
   }
 
   const handleDialogSaved = () => {
@@ -1258,6 +1271,9 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
           open={activityOpen}
           onOpenChange={setActivityOpen}
           projectNames={projectNamesById}
+          onEntryClick={({ scheduleItemId, projectId }) =>
+            void openScheduleItemById(projectId, scheduleItemId)
+          }
         />
       ) : null}
     </div>

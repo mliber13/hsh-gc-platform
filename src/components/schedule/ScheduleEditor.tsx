@@ -115,6 +115,16 @@ export function ScheduleEditor({
     setDialogOpen(true)
   }
 
+  /** Jump from an activity-feed entry to the item it describes. */
+  const openFromActivity = ({ scheduleItemId }: { scheduleItemId: string }) => {
+    const item = items.find((i) => i.id === scheduleItemId)
+    if (!item) {
+      toast.error('That schedule item is no longer on this schedule.')
+      return
+    }
+    openEdit(item)
+  }
+
   const handleDelete = async (item: DrywallProjectScheduleItem) => {
     if (!window.confirm(`Delete "${item.name}" from the schedule?`)) return
     setDeletingId(item.id)
@@ -413,6 +423,7 @@ export function ScheduleEditor({
           projectId={projectId}
           projectName={projectName}
           title="Schedule history"
+          onEntryClick={openFromActivity}
         />
       ) : null}
     </div>

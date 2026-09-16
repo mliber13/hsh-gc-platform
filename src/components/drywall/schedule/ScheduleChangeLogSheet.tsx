@@ -16,6 +16,7 @@ import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import { fetchTeam } from '@/services/hrTeamService'
 import { isArchivedMember } from '@/lib/hrTeamUtils'
 import {
+  fetchExistingScheduleItemIds,
   fetchScheduleChanges,
   formatScheduleChange,
   formatScheduleChangeGroup,
@@ -34,6 +35,11 @@ type Props = {
   /** Optional project id → name map for the global feed. */
   projectNames?: Map<string, string>
   title?: string
+  /**
+   * Open the schedule item an entry refers to. Entries whose item no longer
+   * exists are rendered as deleted and never call this.
+   */
+  onEntryClick?: (target: { scheduleItemId: string; projectId: string }) => void
 }
 
 const FILTER_ALL = 'all'
@@ -53,6 +59,7 @@ export function ScheduleChangeLogSheet({
   projectName,
   projectNames,
   title,
+  onEntryClick,
 }: Props) {
   const { effectiveRole } = usePermissions()
   const canView = canWriteDrywallProject(effectiveRole)
@@ -62,6 +69,7 @@ export function ScheduleChangeLogSheet({
   const [personNames, setPersonNames] = useState<Map<string, string>>(() => new Map())
   const [personFilter, setPersonFilter] = useState(FILTER_ALL)
   const [projectFilter, setProjectFilter] = useState(FILTER_ALL)
+  const [liveItemIds, setLiveItemIds] = useState<Set<string>>(() => new Set())
 
   const isGlobal = !projectId
   const sheetTitle =
@@ -79,10 +87,14 @@ export function ScheduleChangeLogSheet({
         limit: 200,
       })
       setEntries(rows)
+      // Mark entries whose item has since been deleted so nobody goes looking for it.
+      const ids = rows.map((r) => r.scheduleItemId).filter((id): id is string => !!id)
+      setLiveItemIds(await fetchExistingScheduleItemIds(ids))
     } catch (e) {
       console.error('fetchScheduleChanges failed:', e)
       toast.error(e instanceof Error ? e.message : 'Failed to load schedule activity')
       setEntries([])
+      setLiveItemIds(new Set())
     } finally {
       setLoading(false)
     }
@@ -239,6 +251,21 @@ export function ScheduleChangeLogSheet({
                   key={group.txid}
                   group={group}
                   personNames={personNames}
+                  itemExists={
+                    !!group.primary.scheduleItemId &&
+                    liveItemIds.has(group.primary.scheduleItemId)
+                  }
+                  onOpen={
+                    onEntryClick && group.primary.scheduleItemId && group.primary.projectId
+                      ? () => {
+                          onOpenChange(false)
+                          onEntryClick({
+                            scheduleItemId: group.primary.scheduleItemId as string,
+                            projectId: group.primary.projectId as string,
+                          })
+                        }
+                      : undefined
+                  }
                   projectName={
                     group.projectId
                       ? (projectNames?.get(group.projectId) ??
@@ -262,21 +289,57 @@ function ChangeGroupCard({
   personNames,
   projectName,
   showProject,
+  itemExists,
+  onOpen,
 }: {
   group: ScheduleChangeGroup
   personNames: Map<string, string>
   projectName: string | null
   showProject: boolean
+  itemExists: boolean
+  onOpen?: () => void
 }) {
   const headline = formatScheduleChangeGroup(group, {
     personNames,
     projectName: showProject ? projectName : null,
   })
 
+  // An append-only feed keeps showing items that were later deleted, and a "created"
+  // entry for one looks identical to a live item. Say so rather than let someone hunt.
+  const gone = !itemExists
+  const clickable = !gone && !!onOpen
+
   return (
-    <div className="rounded-lg border border-border/70 bg-card p-3 shadow-sm">
+    <div
+      className={cn(
+        'rounded-lg border border-border/70 bg-card p-3 shadow-sm',
+        gone && 'opacity-60',
+        clickable &&
+          'cursor-pointer transition-colors hover:border-primary/60 hover:bg-accent/40',
+      )}
+      onClick={clickable ? onOpen : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onOpen?.()
+              }
+            }
+          : undefined
+      }
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+    >
       <p className="text-sm font-medium leading-snug text-foreground">{headline}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{formatWhen(group.changedAt)}</p>
+      <div className="mt-1 flex items-center gap-2">
+        <p className="text-xs text-muted-foreground">{formatWhen(group.changedAt)}</p>
+        {gone ? (
+          <span className="rounded border border-border/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            deleted
+          </span>
+        ) : null}
+      </div>
       {group.dependentsCount > 0 ? (
         <ul className="mt-2 space-y-1 border-t border-border/50 pt-2">
           {group.entries
