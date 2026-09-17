@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Calculator, CheckCircle2, Clock, FileDown, TrendingUp, XCircle } from 'lucide-react'
+import { Calculator, CheckCircle2, Clock, TrendingUp, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -13,7 +13,6 @@ import {
   type OrderLaborRateSet,
   type OrderReviewLaborRatesInput,
 } from '@/lib/drywall/orderFinancialComparison'
-import { downloadDrywallLaborRateCardPdf } from '@/lib/drywallOrderPdf'
 import type { DrywallChangeOrder, DrywallQuote, FieldTakeoff } from '@/types/drywall'
 
 function money(n: number): string {
@@ -427,19 +426,6 @@ export function OrderFinancialCard({
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                downloadDrywallLaborRateCardPdf({ name: projectName }, fin, {
-                  reviewNotes: laborRates.reviewNotes,
-                })
-                toast.success('Labor rate card PDF downloaded')
-              }}
-            >
-              <FileDown className="mr-2 h-4 w-4" />
-              Download rate card PDF
-            </Button>
             {!readOnly && (
               <Button type="button" variant="secondary" disabled={saving} onClick={() => void handleSaveRates()}>
                 {saving ? 'Saving…' : 'Save labor rates'}

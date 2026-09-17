@@ -21,7 +21,6 @@ import { buildOrderFinancialComparison } from '@/lib/drywall/orderFinancialCompa
 import { downloadDrywallChangeOrderPdf } from '@/lib/drywallChangeOrderPdf'
 import {
   downloadDrywallFieldMaterialsPdf,
-  downloadDrywallLaborRateCardPdf,
 } from '@/lib/drywallOrderPdf'
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
@@ -340,24 +339,6 @@ export function OrderPage() {
     toast.success('Order PDF downloaded')
   }
 
-  const handleLaborRateCardPdf = () => {
-    if (!quote || !fieldTakeoff) return
-    if ((fieldTakeoff.totalMeasuredSqft || 0) <= 0) {
-      toast.error('Add field measurements before downloading the labor rate card')
-      return
-    }
-    const approved = fieldTakeoff.reviewApprovedRates as Record<string, unknown> | undefined
-    const fin = buildOrderFinancialComparison(quote, fieldTakeoff, changeOrders, {
-      hangerRate: String(approved?.hangerRate ?? quote.hangerRate ?? ''),
-      finisherRate: String(approved?.finisherRate ?? quote.finisherRate ?? ''),
-      prepCleanRate: String(approved?.prepCleanRate ?? quote.prepCleanRate ?? ''),
-      reviewNotes: String(fieldTakeoff.rejectionNotes ?? ''),
-    })
-    downloadDrywallLaborRateCardPdf(projectPdfMeta, fin, {
-      reviewNotes: String(fieldTakeoff.rejectionNotes ?? ''),
-    })
-    toast.success('Labor rate card PDF downloaded')
-  }
 
   const handleChangeOrderPdf = async (changeOrder: DrywallChangeOrder) => {
     if (!project) return
@@ -425,15 +406,6 @@ export function OrderPage() {
           >
             <FileDown className="mr-2 h-4 w-4" />
             Field materials PDF
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleLaborRateCardPdf}
-            disabled={!fieldTakeoff || !quote || (fieldTakeoff.totalMeasuredSqft || 0) <= 0}
-          >
-            <FileDown className="mr-2 h-4 w-4" />
-            Labor rate card PDF
           </Button>
           {!readOnly && (
             <>
