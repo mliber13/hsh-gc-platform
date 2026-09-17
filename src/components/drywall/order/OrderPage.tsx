@@ -208,6 +208,26 @@ export function OrderPage() {
 
   const handleCreateOrder = () => {
     if (readOnly || !fieldTakeoff) return
+
+    // A draft with no supplier is an order someone started and has not finished. Creating
+    // a second one silently is how ten jobs ended up with an abandoned draft alongside the
+    // order that was actually sent — same day, same job, one of them forgotten. Offer the
+    // existing draft instead of quietly adding to the pile; a second order is still
+    // reachable for the jobs that genuinely need one.
+    const openDraft = orders.find((o) => !o.supplierId && o.status !== 'sent' && o.status !== 'complete')
+    if (openDraft) {
+      const count = (openDraft.items ?? []).length
+      const proceed = window.confirm(
+        `This job already has an order draft with no supplier (${count} item${count === 1 ? '' : 's'}).\n\n` +
+          'OK — create a second order anyway.\n' +
+          'Cancel — open the existing draft instead.',
+      )
+      if (!proceed) {
+        setEditingOrderId(openDraft.id)
+        return
+      }
+    }
+
     const suggested = suggestOrderItemsFromFieldTakeoff(fieldTakeoff)
     const now = new Date().toISOString()
     const order: DrywallOrder = {
