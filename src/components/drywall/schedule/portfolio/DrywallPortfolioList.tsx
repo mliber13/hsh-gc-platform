@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { format, parseISO } from 'date-fns'
+import { Fragment, useEffect, useMemo, useRef } from 'react'
+import { format, isSameMonth, parseISO } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { projectColorClass } from '@/lib/drywall/projectColor'
 import { cn } from '@/lib/utils'
@@ -14,7 +14,8 @@ import {
 type Props = {
   items: CrossProjectScheduleItem[]
   personNames: Map<string, string>
-  rangeLabel: string
+  /** Null when the list is showing the whole schedule rather than one window. */
+  rangeLabel: string | null
   onItemClick: (item: CrossProjectScheduleItem) => void
 }
 
@@ -47,15 +48,49 @@ export function DrywallPortfolioList({ items, personNames, rangeLabel, onItemCli
     [items],
   )
 
+  // Unbounded, the list runs the length of the job — months apart at either end. Break
+  // it up so it reads as a schedule instead of 400 undifferentiated rows.
+  const monthHeadings = useMemo(() => {
+    const labels = new Map<string, string>()
+    let previous: Date | null = null
+    for (const item of sortedItems) {
+      const start = parseISO(item.startDate)
+      if (!previous || !isSameMonth(previous, start)) {
+        labels.set(item.id, format(start, 'MMMM yyyy'))
+        previous = start
+      }
+    }
+    return labels
+  }, [sortedItems])
+
+  // Open on today's work. Without this an unbounded list lands on the oldest item,
+  // which on a job that started in February is nowhere near what you came to see.
+  const todayAnchorId = useMemo(() => {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    return sortedItems.find((item) => item.endDate >= today)?.id ?? null
+  }, [sortedItems])
+
+  const anchorRef = useRef<HTMLTableRowElement | null>(null)
+  const scrolledFor = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (rangeLabel !== null) return
+    if (!todayAnchorId || scrolledFor.current === todayAnchorId) return
+    scrolledFor.current = todayAnchorId
+    anchorRef.current?.scrollIntoView({ block: 'center' })
+  }, [rangeLabel, todayAnchorId])
+
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Schedule items ({items.length})</CardTitle>
+        <CardTitle className="text-base">
+          Schedule items ({items.length}){rangeLabel === null ? ' · whole schedule' : ''}
+        </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         {sortedItems.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            No schedule items for {rangeLabel}.
+            {rangeLabel === null ? 'No schedule items.' : `No schedule items for ${rangeLabel}.`}
           </p>
         ) : (
           <>
@@ -66,9 +101,15 @@ export function DrywallPortfolioList({ items, personNames, rangeLabel, onItemCli
                 const phase = phaseForScheduleItem(item)
                 const trulyUnassigned =
                   item.assignedPersons.length === 0 && !item.supplierId && !item.assignedCompanyId
+                const heading = monthHeadings.get(item.id)
                 return (
+                  <div key={item.id} className="space-y-2">
+                  {heading ? (
+                    <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {heading}
+                    </p>
+                  ) : null}
                   <button
-                    key={item.id}
                     type="button"
                     onClick={() => onItemClick(item)}
                     className="flex w-full flex-col gap-1.5 rounded-lg border bg-card p-3 text-left transition-colors active:bg-muted/50"
@@ -130,6 +171,7 @@ export function DrywallPortfolioList({ items, personNames, rangeLabel, onItemCli
                       )}
                     </div>
                   </button>
+                  </div>
                 )
               })}
             </div>
@@ -150,10 +192,22 @@ export function DrywallPortfolioList({ items, personNames, rangeLabel, onItemCli
               {sortedItems.map((item) => {
                 const projectColors = projectColorClass(item.projectId)
                 const phase = phaseForScheduleItem(item)
+                const heading = monthHeadings.get(item.id)
 
                 return (
+                  <Fragment key={item.id}>
+                  {heading ? (
+                    <tr className="border-b bg-muted/40">
+                      <td
+                        colSpan={5}
+                        className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                      >
+                        {heading}
+                      </td>
+                    </tr>
+                  ) : null}
                   <tr
-                    key={item.id}
+                    ref={item.id === todayAnchorId ? anchorRef : undefined}
                     className="cursor-pointer border-b last:border-0 hover:bg-muted/10"
                     onClick={() => onItemClick(item)}
                     onKeyDown={(e) => {
@@ -222,6 +276,7 @@ export function DrywallPortfolioList({ items, personNames, rangeLabel, onItemCli
                       )}
                     </td>
                   </tr>
+                  </Fragment>
                 )
               })}
                 </tbody>

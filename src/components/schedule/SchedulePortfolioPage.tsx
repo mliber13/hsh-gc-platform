@@ -244,9 +244,18 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
     return items.filter((item) => !isDrywallProjectClosed(item.projectStatus))
   }, [items, scope])
 
+  // The window exists because a calendar grid needs one. A list does not — it inherited
+  // the restriction, which is why looking at a job in list view showed one month of it
+  // and nothing else. Every item for the lens is already loaded, so the list just stops
+  // filtering. The per-project Schedule tab has always behaved this way.
+  const listIsUnbounded = displayMode === 'list'
+
   const itemsInRange = useMemo(
-    () => filterPortfolioItemsInRange(scopedItems, rangeStart, rangeEnd),
-    [scopedItems, rangeStart, rangeEnd],
+    () =>
+      listIsUnbounded
+        ? scopedItems
+        : filterPortfolioItemsInRange(scopedItems, rangeStart, rangeEnd),
+    [listIsUnbounded, scopedItems, rangeStart, rangeEnd],
   )
 
   // Project filter list spans every in-scope project (not just the selected month) so a
@@ -462,7 +471,9 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
   const page = (
     <div className="space-y-2 pt-2 pb-10">
       {!lockLens && (
-        <div className="flex flex-wrap gap-1.5">
+        // Inset to the toolbar's inner padding below (p-2 mobile, px-3 desktop) —
+        // bare chips at the container edge read as a layout slip next to a card.
+        <div className="flex flex-wrap gap-1.5 px-2 md:px-3">
           {TYPE_FILTERS.map((filter) => (
             <button
               key={filter.value}
@@ -572,7 +583,12 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
           </DropdownMenu>
         </div>
 
-        <div className="flex items-center justify-center gap-1">
+        <div
+          className={cn(
+            'flex items-center justify-center gap-1',
+            listIsUnbounded && 'hidden',
+          )}
+        >
           <Button
             type="button"
             variant="outline"
@@ -609,7 +625,7 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
             <SheetTitle>Filters &amp; view</SheetTitle>
           </SheetHeader>
           <div className="space-y-4 py-3">
-            <section>
+            <section className="px-3">
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 View
               </p>
@@ -627,7 +643,7 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
               </div>
             </section>
 
-            <section>
+            <section className="px-3">
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Jobs shown
               </p>
@@ -826,18 +842,21 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-2 border-t pt-3">
-              <button
-                type="button"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-40"
-                onClick={clearAllFilters}
-                disabled={activeFilterCount === 0}
-              >
-                Clear filters
-              </button>
-              <Button type="button" size="sm" onClick={() => setMobileFiltersOpen(false)}>
-                Done
-              </Button>
+            {/* Divider stays full width; the buttons inset to match the sections above. */}
+            <div className="border-t pt-3">
+              <div className="flex items-center justify-between gap-2 px-3">
+                <button
+                  type="button"
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-40"
+                  onClick={clearAllFilters}
+                  disabled={activeFilterCount === 0}
+                >
+                  Clear filters
+                </button>
+                <Button type="button" size="sm" onClick={() => setMobileFiltersOpen(false)}>
+                  Done
+                </Button>
+              </div>
             </div>
           </div>
         </SheetContent>
@@ -873,7 +892,12 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
             </button>
           </div>
 
-          <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
+          <div
+            className={cn(
+              'flex rounded-lg border border-border/60 bg-muted/30 p-0.5',
+              listIsUnbounded && 'hidden',
+            )}
+          >
             {VIEW_WINDOW_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
@@ -1225,7 +1249,7 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
         <DrywallPortfolioList
           items={filteredItems}
           personNames={personNames}
-          rangeLabel={rangeLabel}
+          rangeLabel={listIsUnbounded ? null : rangeLabel}
           onItemClick={handleItemClick}
         />
       ) : (
