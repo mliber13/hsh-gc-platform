@@ -100,7 +100,7 @@ backfill unconditional: every existing row is drywall.
 | 4+5 | GC uses the shared editor; estimate-trade generation deleted | **done 2026-09-15** |
 | 5b | One portfolio surface; project list from item `division` | **done 2026-09-15** |
 | 3a | Close division gaps (customer share, foreman create/write scope, production-ready) | **done 2026-09-15** |
-| 3 | Seed Goodwill Multi GC work from Buildertrend | after 4+5, so it lands in the editor we keep |
+| 3 | Seed Goodwill Multi GC work from Buildertrend | **done 2026-09-17** — 24 rows, `scripts/seed-goodwill-gc-schedule.mjs` |
 | 6 | Sub SMS confirmations in the shared dialog | A2P approved 2026-09-15 |
 | 7 | Crew visibility by assignment | |
 | 8 | Decide the context-bar question from real Goodwill Multi use | |
