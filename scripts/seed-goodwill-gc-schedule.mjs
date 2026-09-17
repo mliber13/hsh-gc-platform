@@ -50,7 +50,17 @@ const PERSON_PROBABLE = new Map()
 
 const OFFICE_TITLES = [/quote meeting/i]
 
-const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+/**
+ * Company names collapse to a comparable key. "&" becomes "and" BEFORE the strip:
+ * without it "P & D Painting" keys as pdpainting and "P and D Painting" as
+ * panddpainting, so the seed created a duplicate company on 2026-09-17 and a unique
+ * phone index was what eventually caught it.
+ */
+const norm = (s) =>
+  String(s ?? '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]/g, '')
 
 const serial = (n) =>
   typeof n === 'number'
