@@ -327,3 +327,93 @@ Small, and it serves the twelve:
 
 The Order page's misfiled blocks (§3) are a separate, smaller cleanup and do not depend on
 any of this.
+
+---
+
+## 11. Revised material from the catalog (2026-09-18) — decided, not started
+
+Mark: *"We need to get to the point where the material for field/revised comes from the
+pricing in our catalog of the actual pieces ordered."*
+
+Today revised material is the quote's non-labour direct cost scaled by the field/quote sqft
+ratio. It is an estimate wearing the name of a cost.
+
+### Decisions
+
+| Question | Answer |
+|---|---|
+| Price the ordered pieces at what? | **Catalog rate per item** |
+| Who closes the catalog gap? | **Mark fills it in; build against a complete catalog** |
+| Do order items carry structure? | **Yes — worth doing on its own, regardless of the rest** |
+
+### Blocker 1 — order items are display strings
+
+`DrywallOrderItem` is `{ id, description, quantity, unit, notes?, area? }`. The takeoff it is
+built from *is* structured — `FieldMeasurementBoard` carries `boardType, thickness, width,
+length, quantity`; `FieldAccessoryEntry` carries `type, subtype, length, threadType, facing`
+— and `suggestOrderItemsFromFieldTakeoff` flattens all of it into a sentence.
+
+So there is nothing to look a price up by. **This is the same failure as two other bugs this
+week**: stud-vs-track lost when the category was dropped from the description (fixed
+2026-09-16), and the per-line labour rate lost when the quote was flattened to one project
+rate (fixed 2026-09-18). Three times in three days, structure rendered to a display string and
+then needed back.
+
+Mark has said to fix this independently of the pricing work.
+
+### Blocker 2 — the catalog is not currently the price source
+
+**114 of 121 v3 drywall lines set `custom_material_rate`**, overriding the catalog, across
+16 distinct rates (0.46 … 0.725). Only 7 lines fall through to a catalog rate. Choosing the
+catalog as the price source is therefore a change of practice, not just a lookup.
+
+Consequence worth being deliberate about: original material would come from the quote's line
+rates and revised from the catalog. If catalog rates differ systematically from quoted rates,
+every job shows a variance that is really a price-source mismatch. The catalog should hold
+what HSH actually pays, so the comparison reads as estimate-vs-actual rather than noise.
+
+### The gap Mark is filling
+
+Boards actually used in the field, and whether a priced catalog row exists:
+
+| Board | Used | Row | State |
+|---|---|---|---|
+| 5/8" Standard | **248×** | `5_8_regular` | **no price** |
+| 5/8" Moisture-Resistant | 10× | `5_8_mr` | **no price** |
+| 1/2" Cement | 1× | `1_2_cement` | **no price** |
+| 1/2" Standard | 392× | `1_2_regular` | 0.43 |
+| 1/2" Moisture-Resistant | 121× | `1_2_mr` | 0.63 |
+| 1/4" Standard | 9× | `1_4_regular` | 0.55 |
+| 5/8" Fire-Resistant | 1× | `5_8_type_x` | 0.455 |
+
+Seven further catalog rows (DensGlass, Sound, 3/8", 1/2" Type X) have no price and have never
+been used — they block nothing.
+
+Accessories used in the field with no catalog price: **Square Bead (108×)**, Spray Adhesive
+(54×), Tearaway (31×), Splay (14×), Arch (9×), No Coat 325 (7×), then a tail of one-and-twos
+— metal studs and track, RC Deluxe, R-11/R-19 batts, powder-actuated pins, self-tapping
+screws, 1-5/8" and 3" drywall screws.
+
+**Check before adding:** the catalog holds `corner_bead_metal` at $0.85/lf, which is probably
+Square Bead under another name. That is a mapping, not a missing price.
+
+### The vocabularies do not match
+
+The field picker says **Standard**, the catalog says **Regular**. Field says
+**Fire-Resistant**, catalog says **Type X**. Square Bead vs Metal Corner Bead.
+
+A mapping between the two is needed no matter how complete the catalog gets — roughly 8 board
+combinations and a couple of dozen accessories. Renaming catalog rows will not remove the
+need for it.
+
+### Sequence
+
+1. Order items carry structure (agreed, independent, not started).
+2. Mark fills the catalog.
+3. Revised material prices the ordered pieces from the catalog.
+
+Also outstanding from the same area, both small and both unstarted: the material row is
+labelled *Material* but holds material + accessories + sales tax and scales accessories by
+area when bead follows linear feet of corner (§9 of `briefs/LABOR_RATES_MOVE.md`); and
+`LaborRateAdjustmentsCard` renders unconditionally on the Field Measurement page, gated only
+by the drywall workspace route — a gate that has slipped once before.
