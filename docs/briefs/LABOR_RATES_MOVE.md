@@ -113,3 +113,106 @@ Operator-side (Mark):
 
 Exclude, as always: `.claude/settings.local.json`, `supabase/.temp/cli-latest`.
 Message drafted by Claude after the verification report.
+
+---
+
+## 9. Added 2026-09-18 — the per-line rate override is dropped, and material absorbs it
+
+Found on **Moreland Hills - Stearns** while Mark was reviewing the Order page. This is not a
+placement problem; it is a correctness bug in the same math this brief reshapes, so it is
+fixed here rather than patched alongside.
+
+### What happens
+
+The quote has one drywall line, a soffit, carrying `custom_hanger_rate: 10` — correct, a
+soffit is labour-heavy. The quote engine charges it properly: 39.27 sqft × $10 × 1.25 burden
+= **$490.88**, which is what the quote page shows.
+
+`projectV3QuoteToV2Shape` then flattens the v3 quote to the v2 shape the comparison expects:
+
+```ts
+const hangerRate =
+  projectHanger != null && projectHanger > 0
+    ? projectHanger                                   // takes 1 and stops
+    : avgPositive(drywallLines.map((line) =>
+        getEffectiveHangerRate(line, catalogs, projectHanger)))  // never reached
+```
+
+`project_hanger_rate` is `1`, non-null and positive, so the projection returns **$1** and
+never inspects the lines. The `avgPositive` branch — which *does* call
+`getEffectiveHangerRate` and would have found the 10 — only runs when there is no project
+rate at all. `getEffectiveHangerRate` has the precedence right (line override beats project
+rate); the projection inverts it.
+
+### Why one dropped field wrecks the whole panel
+
+`buildOrderFinancialComparison` does not read material from the quote. It infers it:
+
+```ts
+const originalMaterialCost = Math.max(0, baselineDirect - baselineLaborWithTax)
+const revisedMaterialCost  = originalMaterialCost * sqftScale
+```
+
+So any labour the projection fails to see **silently becomes material**, and is then
+multiplied by the field/quote sqft ratio:
+
+| Step | Value | |
+|---|---|---|
+| Quote line charges | $10/sqft | correct |
+| Projection reports | $1/sqft | override dropped |
+| Baseline labour | 39 × 2.52 × 1.25 = $122.85 | short by ~$442 |
+| Material, by subtraction | 695.92 − 122.85 = **$573.07** | absorbs the gap; real material is **$16.89** |
+| × sqftScale 144 ÷ 39 = 3.69 | **$2,115.95** | error scaled 3.7× |
+| Profit / margin | −$1,808.15 / −181% | inherited |
+
+### The fix
+
+1. **Compute baseline labour per line**, using `getEffectiveHangerRate` /
+   `getEffectiveFinisherRate` against each line the way the quote engine does. Do not take a
+   single project-wide rate. A quote whose lines differ cannot be represented by one number,
+   which is the real reason the flattening loses information.
+2. **Read material from the quote's own direct costs** rather than inferring it by
+   subtraction. Subtraction means every future gap in the labour calculation lands silently
+   in material — this bug is that hazard already firing once.
+3. `quoteSqft` is `Math.round(baseQuoteSqft * (1 + waste/100))` — 35.7 → **39**, a rounded
+   value used as a divisor in `sqftScale`. Minor beside the rest; fix while you are there.
+
+Leave `projectV3QuoteToV2Shape` alone unless something else forces it. Other callers depend
+on its current behaviour, and the correct move is for the comparison to stop needing a
+flattened quote, not to make the flattening smarter.
+
+### Blast radius
+
+Four v3 quotes carry a per-line rate override today:
+
+| Job | Status | Override |
+|---|---|---|
+| Moreland Hills - Stearns | order | Soffit, hanger 10 |
+| Kent - Murphy | production | Main, hanger 0.28 / finisher 0.28 |
+| Streetsboro - Post | quote | 4 lines, hanger 0.28 |
+| 11459 Fox Grove | quote | Main, finisher 4.5 |
+
+Contained — but it recurs on every soffit that gets its own rate, which is routine.
+
+### Verification for this part
+
+- **Stearns is the fixture.** After the fix its Order panel must read: original labour ≈
+  **$565** (not $122.85), original material ≈ **$16.89** (not $573.07), and a revised
+  material that is that figure scaled — not $2,115.95.
+- Kent - Murphy is in **production**, so its margin tiles are live. Check them before and
+  after; the numbers will move, and Mark should see the corrected ones rather than discover
+  them later.
+- A quote with **no** line override must be unchanged. That is most of them, and it is the
+  regression risk.
+
+### Not a bug, for the record
+
+Two other things Mark flagged on the same screen were checked and are correct:
+
+- **Field sqft 144.** The takeoff holds one board, 48" × 12' × 3 = 4ft × 12ft × 3 = 144 sqft.
+  A genuine 4× variance against the 35.7 quoted, reported faithfully. The negative margin
+  follows from it.
+- **The labour rate "reverting" on save.** `reviewApprovedRates` holds
+  `{hangerRate: 2.32, ...}` in the database; the write succeeded. The card re-derives its
+  inputs when the `fieldTakeoff` prop changes after save, which reads as a snap-back. Worth
+  making the saved value obviously stick when the card is rebuilt under §2.
