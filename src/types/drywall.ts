@@ -735,6 +735,18 @@ export type FieldTakeoffReviewStatus =
   | 'rejected'
   | null
 
+/** Append-only log of order-stage labor rate changes (next to reviewApprovedRates). */
+export interface LaborRateAdjustmentLogEntry {
+  at: string
+  byUserId: string
+  byName: string
+  from: { hanger: number; finisher: number; prepClean: number }
+  to: { hanger: number; finisher: number; prepClean: number }
+  reason: string
+  marginAtChange: number
+  sqftVarianceAtChange: number
+}
+
 /** Full field takeoff blob stored at metadata.legacy.fieldTakeoff */
 export interface FieldTakeoff {
   siteContact?: string
@@ -760,6 +772,7 @@ export interface FieldTakeoff {
   rejectionNotes?: string | null
   reviewBaselineRates?: Record<string, unknown>
   reviewApprovedRates?: Record<string, unknown>
+  rateAdjustmentLog?: LaborRateAdjustmentLogEntry[]
   [key: string]: unknown
 }
 

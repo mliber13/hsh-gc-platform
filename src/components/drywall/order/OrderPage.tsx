@@ -17,7 +17,6 @@ import type { DrywallProjectShellContext } from '@/components/drywall/DrywallPro
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import { extractMaterialsFromFieldTakeoff } from '@/lib/drywall/fieldMaterialsPdfData'
 import { suggestOrderItemsFromFieldTakeoff } from '@/lib/drywall/orderSuggest'
-import { buildOrderFinancialComparison } from '@/lib/drywall/orderFinancialComparison'
 import { downloadDrywallChangeOrderPdf } from '@/lib/drywallChangeOrderPdf'
 import {
   downloadDrywallFieldMaterialsPdf,
@@ -35,7 +34,6 @@ import {
   fetchOrders,
   markDrywallProjectComplete,
   markOrderStatus,
-  saveFieldTakeoff,
   saveOrderStageSnapshot,
   transitionDrywallChangeOrder,
 } from '@/services/drywallProjectsService'
@@ -436,12 +434,6 @@ export function OrderPage() {
         quote={quote}
         fieldTakeoff={fieldTakeoff}
         changeOrders={changeOrders}
-        readOnly={readOnly}
-        projectName={projectPdfMeta.name}
-        onSaveFieldTakeoff={async (takeoff) => {
-          await saveFieldTakeoff(projectId, takeoff)
-          setFieldTakeoff(takeoff)
-        }}
       />
 
       <Card>

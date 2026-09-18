@@ -1020,7 +1020,7 @@ function readOrderApprovedLaborRates(field: FieldTakeoff | null): {
   prepCleanRate: number | null
 } | null {
   const approved = field?.reviewApprovedRates as Record<string, unknown> | undefined
-  // Order stage always persists all three rates together (see OrderFinancialCard.handleSaveRates).
+  // Rate saves always persist all three rates together.
   if (!approved || approved.hangerRate == null) return null
   return {
     hangerRate: num(approved.hangerRate),

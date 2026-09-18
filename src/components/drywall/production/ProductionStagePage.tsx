@@ -24,11 +24,19 @@ import {
 import {
   DrywallProjectPermissionError,
   fetchDrywallProjectById,
+  fieldTakeoffFromLegacy,
+  getChangeOrdersFromLegacy,
   markProductionComplete,
   markProductionStarted,
+  quoteV2V3FromLegacy,
   revertProductionComplete,
+  saveFieldTakeoff,
 } from '@/services/drywallProjectsService'
+import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
+import { LaborRateAdjustmentsCard } from '@/components/drywall/labor/LaborRateAdjustmentsCard'
+import type { DrywallChangeOrder, DrywallQuoteV2V3, FieldTakeoff } from '@/types/drywall'
 import { normalizeDrywallProjectStatus } from '@/types/drywall'
+import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { cn } from '@/lib/utils'
 
 function todayDateInput(): string {
@@ -59,13 +67,18 @@ export function ProductionStagePage() {
   const [productionCompletedAt, setProductionCompletedAt] = useState<string | null>(null)
   const [completeDateInput, setCompleteDateInput] = useState(todayDateInput)
   const [assessment, setAssessment] = useState<DrywallProjectAssessment | null>(null)
+  const [quote, setQuote] = useState<DrywallQuoteV2V3 | null>(null)
+  const [fieldTakeoff, setFieldTakeoff] = useState<FieldTakeoff | null>(null)
+  const [changeOrders, setChangeOrders] = useState<DrywallChangeOrder[]>([])
+  const [catalogs, setCatalogs] = useState<OrgDrywallCatalogs | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [project, nextAssessment] = await Promise.all([
+      const [project, nextAssessment, cats] = await Promise.all([
         fetchDrywallProjectById(projectId),
         fetchDrywallProjectAssessment(projectId).catch(() => null),
+        fetchOrgDrywallCatalogs().catch(() => null),
       ])
       if (!project) {
         toast.error('Project not found')
@@ -87,6 +100,10 @@ export function ProductionStagePage() {
         setCompleteDateInput(todayDateInput())
       }
       setAssessment(nextAssessment)
+      setQuote(quoteV2V3FromLegacy(project.legacy))
+      setFieldTakeoff(fieldTakeoffFromLegacy(project.legacy))
+      setChangeOrders(getChangeOrdersFromLegacy(project.legacy))
+      setCatalogs(cats)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to load project')
     } finally {
@@ -282,6 +299,18 @@ export function ProductionStagePage() {
           </Button>
         </CardContent>
       </Card>
+
+      <LaborRateAdjustmentsCard
+        quote={quote}
+        fieldTakeoff={fieldTakeoff}
+        changeOrders={changeOrders}
+        catalogs={catalogs}
+        readOnly={readOnly}
+        onSaveFieldTakeoff={async (next) => {
+          await saveFieldTakeoff(projectId, next)
+          setFieldTakeoff(next)
+        }}
+      />
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <RunningCostTile

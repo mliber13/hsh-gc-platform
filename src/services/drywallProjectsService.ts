@@ -749,11 +749,9 @@ export async function fetchDrywallQuote(projectId: string): Promise<DrywallQuote
   return hydrateDrywallQuote({})
 }
 
-/** Read quote as v2 or v3 discriminated union (Phase Q.B quote stage). */
-export async function fetchDrywallQuoteV2V3(projectId: string): Promise<DrywallQuoteV2V3> {
-  const project = await fetchDrywallProjectById(projectId)
-  if (!project) throw new Error('Project not found')
-  const raw = project.legacy.quote
+/** Sync parse of legacy.quote — for callers that already hold the project. */
+export function quoteV2V3FromLegacy(legacy: Record<string, unknown>): DrywallQuoteV2V3 {
+  const raw = legacy.quote
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const q = raw as Record<string, unknown>
     if (q.version === 3) return hydrateDrywallQuoteV3(q)
@@ -762,6 +760,13 @@ export async function fetchDrywallQuoteV2V3(projectId: string): Promise<DrywallQ
     return hydrateDrywallQuote({ ...legacyCompat, version: 2 })
   }
   return hydrateDrywallQuote({})
+}
+
+/** Read quote as v2 or v3 discriminated union (Phase Q.B quote stage). */
+export async function fetchDrywallQuoteV2V3(projectId: string): Promise<DrywallQuoteV2V3> {
+  const project = await fetchDrywallProjectById(projectId)
+  if (!project) throw new Error('Project not found')
+  return quoteV2V3FromLegacy(project.legacy)
 }
 
 /** JSONB-merge v3 quote into metadata.legacy (preserves fieldTakeoff, orders, etc.). */
@@ -993,12 +998,8 @@ export async function saveDrywallQuoteAndAdvance(
   await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
 }
 
-/** Read metadata.legacy.fieldTakeoff (normalized defaults). */
-export async function fetchFieldTakeoff(projectId: string): Promise<FieldTakeoff> {
-  const project = await fetchDrywallProjectById(projectId)
-  if (!project) throw new Error('Project not found')
-
-  const legacy = project.legacy
+/** Sync parse of legacy.fieldTakeoff — for callers that already hold the project. */
+export function fieldTakeoffFromLegacy(legacy: Record<string, unknown>): FieldTakeoff {
   const prepared =
     legacy.fieldMeasurementPrep &&
     typeof legacy.fieldMeasurementPrep === 'object' &&
@@ -1012,6 +1013,13 @@ export async function fetchFieldTakeoff(projectId: string): Promise<FieldTakeoff
       : null
 
   return fieldTakeoffWithTotals(mergeFieldTakeoff(raw, prepared))
+}
+
+/** Read metadata.legacy.fieldTakeoff (normalized defaults). */
+export async function fetchFieldTakeoff(projectId: string): Promise<FieldTakeoff> {
+  const project = await fetchDrywallProjectById(projectId)
+  if (!project) throw new Error('Project not found')
+  return fieldTakeoffFromLegacy(project.legacy)
 }
 
 /** JSONB-merge fieldTakeoff into metadata.legacy (preserves quote, orders, etc.). */
@@ -1314,11 +1322,15 @@ export function parseLegacyOrders(legacy: Record<string, unknown>): DrywallOrder
   return legacy.orders.map(normalizeOrder).filter((o): o is DrywallOrder => o != null)
 }
 
-function parseLegacyChangeOrders(legacy: Record<string, unknown>): DrywallChangeOrder[] {
+export function getChangeOrdersFromLegacy(legacy: Record<string, unknown>): DrywallChangeOrder[] {
   if (!Array.isArray(legacy.changeOrders)) return []
   return legacy.changeOrders
     .map(normalizeChangeOrder)
     .filter((co): co is DrywallChangeOrder => co != null)
+}
+
+function parseLegacyChangeOrders(legacy: Record<string, unknown>): DrywallChangeOrder[] {
+  return getChangeOrdersFromLegacy(legacy)
 }
 
 /** Read metadata.legacy.orders (normalized). */

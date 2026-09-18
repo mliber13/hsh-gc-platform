@@ -12,10 +12,11 @@ import {
   type MarginFloorEvaluation,
 } from '@/lib/drywall/marginFloor'
 import { usePermissions } from '@/hooks/usePermissions'
-import { canReviewDrywallFieldTakeoff, canWriteDrywallField } from '@/routes/RequirePermission'
+import { canReviewDrywallFieldTakeoff, canWriteDrywallField, canWriteDrywallProject } from '@/routes/RequirePermission'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import {
   DrywallProjectPermissionError,
+  fetchChangeOrders,
   fetchDrywallProjectById,
   fetchDrywallQuoteV2V3,
   fetchFieldTakeoff,
@@ -28,7 +29,7 @@ import {
 } from '@/services/drywallProjectsService'
 import { isDrywallQuoteV3 } from '@/types/drywall'
 import { v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
-import type { DrywallQuote, DrywallQuoteV2V3, FieldTakeoff } from '@/types/drywall'
+import type { DrywallChangeOrder, DrywallQuote, DrywallQuoteV2V3, FieldTakeoff } from '@/types/drywall'
 import {
   FieldAccessoriesSection,
   FieldChecklistSection,
@@ -38,6 +39,8 @@ import {
 } from './inputs'
 import { FieldVarianceSummary } from './FieldVarianceSummary'
 import { FieldTakeoffReviewBanner } from './FieldTakeoffReviewBanner'
+import { LaborRateAdjustmentsCard } from '@/components/drywall/labor/LaborRateAdjustmentsCard'
+import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type { SetFieldTakeoff } from './fieldTakeoffState'
 
 export function FieldMeasurementPage() {
@@ -46,6 +49,7 @@ export function FieldMeasurementPage() {
   const { effectiveRole } = usePermissions()
   const readOnly = !canWriteDrywallField(effectiveRole)
   const canReview = canReviewDrywallFieldTakeoff(effectiveRole)
+  const ratesReadOnly = !canWriteDrywallProject(effectiveRole)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -59,6 +63,8 @@ export function FieldMeasurementPage() {
   const [savedAddress, setSavedAddress] = useState('')
   const [quote, setQuote] = useState<DrywallQuoteV2V3 | null>(null)
   const [takeoff, setTakeoff] = useState<FieldTakeoff | null>(null)
+  const [changeOrders, setChangeOrders] = useState<DrywallChangeOrder[]>([])
+  const [catalogs, setCatalogs] = useState<OrgDrywallCatalogs | null>(null)
   const [savedSnapshot, setSavedSnapshot] = useState('')
   const [intakeSource, setIntakeSource] = useState<'po' | 'quote' | null>(null)
   const [poBidTotal, setPoBidTotal] = useState<number | null>(null)
@@ -70,10 +76,12 @@ export function FieldMeasurementPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [project, q, t] = await Promise.all([
+      const [project, q, t, co, cats] = await Promise.all([
         fetchDrywallProjectById(projectId),
         fetchDrywallQuoteV2V3(projectId),
         fetchFieldTakeoff(projectId),
+        fetchChangeOrders(projectId),
+        fetchOrgDrywallCatalogs().catch(() => null),
       ])
       if (!project) {
         toast.error('Project not found')
@@ -90,6 +98,8 @@ export function FieldMeasurementPage() {
       })
       setQuote(q)
       setTakeoff(t)
+      setChangeOrders(co)
+      setCatalogs(cats)
       setSavedSnapshot(JSON.stringify(t))
       setIntakeSource(getIntakeSourceFromLegacy(project.legacy))
       const { bidSnapshot } = getQuoteOutcomeFromLegacy(project.legacy)
@@ -350,6 +360,19 @@ export function FieldMeasurementPage() {
         busy={reviewBusy || saving}
         onApprove={handleApproveTakeoff}
         onReject={handleRejectTakeoff}
+      />
+
+      <LaborRateAdjustmentsCard
+        quote={quote}
+        fieldTakeoff={takeoff}
+        changeOrders={changeOrders}
+        catalogs={catalogs}
+        readOnly={ratesReadOnly}
+        onSaveFieldTakeoff={async (next) => {
+          await saveFieldTakeoff(projectId, next)
+          setTakeoff(next)
+          setSavedSnapshot(JSON.stringify(next))
+        }}
       />
 
       <div className="flex flex-wrap gap-3">

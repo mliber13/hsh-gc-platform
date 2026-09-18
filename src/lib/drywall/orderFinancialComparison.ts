@@ -2,7 +2,9 @@
 import { applyLaborBurden } from '@/lib/drywall/calculations/quantityUtils'
 import { calculateQuoteTotals } from '@/lib/drywall/quoteCalculations'
 import { computeContractValue } from '@/lib/drywall/contractValue'
-import type { DrywallChangeOrder, DrywallQuote, FieldTakeoff } from '@/types/drywall'
+import { computeQuoteV3Totals } from '@/lib/drywall/quoteV3Math'
+import type { DrywallChangeOrder, DrywallQuote, DrywallQuoteV3, FieldTakeoff } from '@/types/drywall'
+import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 
 export interface OrderReviewLaborRatesInput {
   hangerRate: string
@@ -15,6 +17,11 @@ export interface OrderLaborRateSet {
   hangerRate: number
   finisherRate: number
   prepCleanRate: number
+}
+
+export interface OrderFinancialComparisonContext {
+  v3Quote?: DrywallQuoteV3 | null
+  catalogs?: OrgDrywallCatalogs | null
 }
 
 export interface OrderFinancialComparison {
@@ -83,6 +90,64 @@ function ratesFromQuoteCalc(quote: DrywallQuote): Partial<OrderLaborRateSet> {
   }
 }
 
+/** Quoted sqft with waste, not rounded — rounding this value made it a bad sqftScale divisor. */
+export function quotedSqftForComparison(quote: DrywallQuote): number {
+  const baseQuoteSqft = num(quote.sqft)
+  const wastePct = num(quote.wastePercentage)
+  return baseQuoteSqft * (1 + wastePct / 100)
+}
+
+/**
+ * Accepted v3 labour and material from the quote engine (per-line hanger/finisher
+ * via getEffectiveHangerRate / getEffectiveFinisherRate, plus component labour and cleanup).
+ * Material is the quote's own direct costs — never inferred by subtracting labour.
+ */
+function acceptedV3LaborAndMaterial(
+  v3Quote: DrywallQuoteV3,
+  catalogs: OrgDrywallCatalogs,
+): { labor: number; material: number; quoteSqft: number } {
+  const totals = computeQuoteV3Totals(v3Quote, catalogs)
+  let material =
+    totals.routine.materialSubtotal +
+    totals.routine.accessoriesSubtotal +
+    totals.routine.salesTaxAmount
+  let labor =
+    totals.routine.hangerLaborSubtotal +
+    totals.routine.finisherLaborSubtotal +
+    totals.routine.componentLaborSubtotal +
+    totals.routine.cleanupTotal
+  for (const summary of totals.alternates) {
+    if (!summary.selected) continue
+    const sign = summary.pricingMode === 'deduct' ? -1 : 1
+    const b = summary.breakdown
+    material += sign * (b.materialSubtotal + b.accessoriesSubtotal + b.salesTaxAmount)
+    labor +=
+      sign *
+      (b.hangerLaborSubtotal +
+        b.finisherLaborSubtotal +
+        b.componentLaborSubtotal +
+        b.cleanupTotal)
+  }
+  return { labor, material, quoteSqft: totals.acceptedSqftWithWaste }
+}
+
+function materialFromQuoteDirectCosts(quote: DrywallQuote, fallback: number): number {
+  const calc = quote.calculations as Record<string, unknown> | undefined
+  const totalMaterial = num(calc?.totalMaterialCost)
+  if (totalMaterial > 0) return totalMaterial
+  const bare = num(calc?.materialCost)
+  const tax = num(calc?.salesTax)
+  if (bare + tax > 0) return bare + tax
+  return fallback
+}
+
+function laborFromQuoteDirectCosts(quote: DrywallQuote, fallback: number): number {
+  const calc = quote.calculations as Record<string, unknown> | undefined
+  const totalLabor = num(calc?.totalLaborCost)
+  if (totalLabor > 0) return totalLabor
+  return fallback
+}
+
 export function resolveOrderBaselineRates(
   quote: DrywallQuote,
   fieldTakeoff: FieldTakeoff,
@@ -110,27 +175,20 @@ export function resolveOrderRevisedRates(
 ): OrderLaborRateSet {
   const baseline = resolveOrderBaselineRates(quote, fieldTakeoff)
   const approved = fieldTakeoff.reviewApprovedRates as Record<string, unknown> | undefined
-
-  if (fieldTakeoff.reviewStatus === 'pending_review') {
-    return {
-      hangerRate: num(reviewLaborRates.hangerRate, baseline.hangerRate),
-      finisherRate: num(reviewLaborRates.finisherRate, baseline.finisherRate),
-      prepCleanRate: num(reviewLaborRates.prepCleanRate, baseline.prepCleanRate),
-    }
-  }
-
-  if (approved && approved.hangerRate != null) {
-    return {
-      hangerRate: num(approved.hangerRate, baseline.hangerRate),
-      finisherRate: num(approved.finisherRate, baseline.finisherRate),
-      prepCleanRate: num(approved.prepCleanRate, baseline.prepCleanRate),
-    }
-  }
-
+  const approvedSet: OrderLaborRateSet | null =
+    approved && approved.hangerRate != null
+      ? {
+          hangerRate: num(approved.hangerRate, baseline.hangerRate),
+          finisherRate: num(approved.finisherRate, baseline.finisherRate),
+          prepCleanRate: num(approved.prepCleanRate, baseline.prepCleanRate),
+        }
+      : null
+  const fallback = approvedSet ?? baseline
+  // Live inputs always win so headroom updates while typing — including after takeoff approval.
   return {
-    hangerRate: num(reviewLaborRates.hangerRate, num(quote.hangerRate, baseline.hangerRate)),
-    finisherRate: num(reviewLaborRates.finisherRate, num(quote.finisherRate, baseline.finisherRate)),
-    prepCleanRate: num(reviewLaborRates.prepCleanRate, num(quote.prepCleanRate, baseline.prepCleanRate)),
+    hangerRate: num(reviewLaborRates.hangerRate, fallback.hangerRate),
+    finisherRate: num(reviewLaborRates.finisherRate, fallback.finisherRate),
+    prepCleanRate: num(reviewLaborRates.prepCleanRate, fallback.prepCleanRate),
   }
 }
 
@@ -139,11 +197,15 @@ export function buildOrderFinancialComparison(
   fieldTakeoff: FieldTakeoff,
   changeOrders: DrywallChangeOrder[],
   reviewLaborRates: OrderReviewLaborRatesInput,
+  context?: OrderFinancialComparisonContext,
 ): OrderFinancialComparison {
   const fieldSqft = fieldTakeoff.totalMeasuredSqft || 0
-  const baseQuoteSqft = num(quote.sqft)
-  const wastePct = Math.round(num(quote.wastePercentage))
-  const quoteSqft = Math.round(baseQuoteSqft * (1 + wastePct / 100))
+  const v3Quote = context?.v3Quote
+  const catalogs = context?.catalogs
+  const v3Direct =
+    v3Quote && catalogs ? acceptedV3LaborAndMaterial(v3Quote, catalogs) : null
+
+  const quoteSqft = v3Direct ? v3Direct.quoteSqft : quotedSqftForComparison(quote)
 
   const baselineRates = resolveOrderBaselineRates(quote, fieldTakeoff)
   const revisedRates = resolveOrderRevisedRates(quote, fieldTakeoff, reviewLaborRates)
@@ -174,11 +236,17 @@ export function buildOrderFinancialComparison(
   const effectiveSqft = fieldSqft > 0 ? fieldSqft : quoteSqft
   const sqftScale = quoteSqft > 0 && effectiveSqft > 0 ? effectiveSqft / quoteSqft : 1
 
-  const baselineLaborWithTax = laborWithBurdenForSqft(quoteSqft, baselineRates, quote)
+  const rateBasedLabor = laborWithBurdenForSqft(quoteSqft, baselineRates, quote)
+  const baselineLaborWithTax = v3Direct
+    ? v3Direct.labor
+    : laborFromQuoteDirectCosts(quote, rateBasedLabor)
   const adjustedLaborWithTax = laborWithBurdenForSqft(effectiveSqft, revisedRates, quote)
 
   const deltaLaborWithTax = adjustedLaborWithTax - baselineLaborWithTax
-  const originalMaterialCost = Math.max(0, baselineDirect - baselineLaborWithTax)
+  const subtractedMaterial = Math.max(0, baselineDirect - baselineLaborWithTax)
+  const originalMaterialCost = v3Direct
+    ? v3Direct.material
+    : materialFromQuoteDirectCosts(quote, subtractedMaterial)
   const revisedMaterialCost = originalMaterialCost * sqftScale
   const adjustedDirect = revisedMaterialCost + adjustedLaborWithTax
   const deltaDirect = adjustedDirect - baselineDirect
@@ -188,6 +256,7 @@ export function buildOrderFinancialComparison(
 
   const adjustedSubtotal = baselineSubtotal + subtotalDelta
   const adjustedTotal = baselineTotal + acceptedChangeOrderRevenue
+  void adjustedSubtotal
   // Decision #21 — same formula as baseline; adjustedDirect already reflects field sqft + revised rates.
   const adjustedProfit = adjustedTotal - adjustedDirect
   const adjustedMargin = adjustedTotal > 0 ? (adjustedProfit / adjustedTotal) * 100 : 0
