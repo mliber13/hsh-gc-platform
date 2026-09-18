@@ -20,6 +20,7 @@ import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CrewScopeOfWorkCard } from '@/components/crew/CrewScopeOfWorkCard'
+import { CrewJobDocumentsCard } from '@/components/crew/CrewJobDocumentsCard'
 import { FieldPhotosSection } from '@/components/drywall/field/inputs'
 import { drywallStatusLabel, drywallStatusPillClass } from '@/lib/drywall/crewStatusStyles'
 import { isMeasurerSpecialty } from '@/lib/drywall/crewSpecialty'
@@ -451,6 +452,8 @@ export function CrewProjectDetailPage() {
         specialty={detail.specialty}
         isOperatorExplainer={isOperatorExplainer}
       />
+
+      <CrewJobDocumentsCard projectId={projectId} />
 
       {!detail.showJobInfo ? (
         <Card>
