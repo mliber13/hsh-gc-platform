@@ -372,6 +372,8 @@ export function HangerRateCell({
 
       unitSuffix="/sqft"
 
+      inheritedSource={projectRate != null ? 'project rate' : 'board catalog'}
+
       onChange={handleChange}
 
       onReset={isOverridden ? () => onPatch({ custom_hanger_rate: undefined }) : undefined}
@@ -527,6 +529,8 @@ export function FinisherRateCell({
 
       unitSuffix="/sqft"
 
+      inheritedSource={projectRate != null ? 'project rate' : 'finish scope'}
+
       onChange={handleChange}
 
       onReset={isOverridden ? () => onPatch({ custom_finisher_rate: undefined }) : undefined}
@@ -625,6 +629,9 @@ function RateInput({
 
   unitSuffix,
 
+  /** Where a non-overridden rate comes from, for the tooltips (e.g. "project rate"). */
+  inheritedSource,
+
   onChange,
 
   onReset,
@@ -641,73 +648,80 @@ function RateInput({
 
   unitSuffix: string
 
+  inheritedSource?: string
+
   onChange: (raw: string) => void
 
   onReset?: () => void
 
 }) {
 
+  const source = inheritedSource ?? 'catalog default'
+
+  const showReset = isOverridden && Boolean(onReset)
+
+  // The reset button sits inside the input's trailing padding rather than beside it.
+  // As a flex sibling it added 30px to an 82px column and overlapped the next cell,
+  // and it also made the field jump narrower the moment a rate was overridden.
   return (
 
-    <div className="flex items-center gap-0.5">
+    <div className="relative w-[80px]">
 
-      <div className="relative">
+      <span className="text-muted-foreground pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px]">
 
-        <span className="text-muted-foreground pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px]">
+        $
 
-          $
+      </span>
 
-        </span>
+      <Input
 
-        <Input
+        type="number"
 
-          type="number"
+        min={0}
 
-          min={0}
+        step={0.01}
 
-          step={0.01}
+        value={value}
 
-          value={value}
+        title={
 
-          title={
+          catalogUnset
 
-            catalogUnset
+            ? `No rate set — add one in Settings → Catalogs, or set a project rate${unitSuffix}`
 
-              ? `Catalog rate is $0 — update in Settings → Catalogs${unitSuffix}`
+            : isOverridden
 
-              : isOverridden
+              ? `Overridden on this line${unitSuffix}`
 
-                ? `Overridden${unitSuffix}`
+              : `From ${source}${unitSuffix}`
 
-                : `Catalog default${unitSuffix}`
+        }
 
-          }
+        className={cn(
 
-          className={cn(
+          'h-7 w-full pl-4 text-right text-xs tabular-nums',
 
-            'h-7 w-[80px] pl-4 pr-1 text-right text-xs tabular-nums',
+          showReset ? 'pr-5' : 'pr-1',
 
-            compact && 'text-[11px]',
+          compact && 'text-[11px]',
 
-            isOverridden &&
+          isOverridden &&
 
-              'border-amber-400/80 bg-amber-50/80 dark:border-amber-600/60 dark:bg-amber-950/40',
+            'border-amber-400/80 bg-amber-50/80 dark:border-amber-600/60 dark:bg-amber-950/40',
 
-            catalogUnset &&
+          catalogUnset &&
 
-              !isOverridden &&
+            !isOverridden &&
 
-              'border-amber-300/70 text-amber-700 dark:border-amber-700/50 dark:text-amber-400',
+            'border-amber-300/70 text-amber-700 dark:border-amber-700/50 dark:text-amber-400',
 
-          )}
+        )}
 
-          onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
 
-        />
+      />
 
-      </div>
-
-      {isOverridden && onReset && (
+      {showReset && (
 
         <Button
 
@@ -717,9 +731,9 @@ function RateInput({
 
           size="icon"
 
-          className="h-7 w-7 shrink-0 text-amber-700 hover:text-amber-900 dark:text-amber-400"
+          className="absolute right-0.5 top-1/2 h-5 w-5 -translate-y-1/2 text-amber-700 hover:bg-transparent hover:text-amber-900 dark:text-amber-400"
 
-          title="Reset to catalog rate"
+          title={`Reset to ${source}`}
 
           onClick={onReset}
 
