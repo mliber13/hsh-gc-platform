@@ -307,8 +307,10 @@ function TypeSectionTable({
           {/* Catalog/Component: drywall boards need room; short for RC; hidden for grid (itemized). */}
           {!hideComponent && <col style={{ width: isDrywall ? 148 : 100 }} />}
           {!hideMatRate && <col style={{ width: 82 }} />}
+          {/* Finish scope — narrowed to make room for the two rate columns; the select
+              truncates and carries the full name in its title. */}
           {isDrywall ? (
-            <col style={{ width: 128 }} />
+            <col style={{ width: 96 }} />
           ) : (
             <col style={{ width: 82 }} />
           )}
@@ -321,7 +323,8 @@ function TypeSectionTable({
           )}
           {/* Setup (components) — grid gets extra room from the dropped Component/Mat columns. */}
           {!isDrywall && <col style={{ width: hideComponent ? 320 : 238 }} />}
-          {isDrywall && <col style={{ width: 180 }} />}
+          {/* Description — narrowed for the same reason; it is free text and wraps. */}
+          {isDrywall && <col style={{ width: 130 }} />}
           {/* Qty — drywall 118, RC 170, grid narrower (6-digit sqft). */}
           <col style={{ width: isDrywall ? 118 : hideComponent ? 130 : 170 }} />
           {isDrywall && <col style={{ width: 64 }} />}
