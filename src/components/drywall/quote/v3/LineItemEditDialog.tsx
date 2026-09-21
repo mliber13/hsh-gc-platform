@@ -21,8 +21,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 import type { QuoteLineItem } from '@/types/drywall'
+import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { V3_LINE_MIGRATION_OVERRIDE_REASON } from '@/lib/drywall/convertQuoteV2ToV3'
 import { calcAcousticCeilingGridCounts } from '@/lib/drywall/calculations/acousticCeilingGridCalc'
+import {
+  getCatalogDefaultFinisherRate,
+  getCatalogDefaultHangerRate,
+} from '@/lib/drywall/quoteV3CatalogResolve'
 
 
 
@@ -34,6 +39,13 @@ type Props = {
 
   line: QuoteLineItem | null
 
+  catalogs: OrgDrywallCatalogs
+
+  /** Quote-wide rates from the totals sidebar, shown as what a blank field inherits. */
+  projectHangerRate?: number
+
+  projectFinisherRate?: number
+
   readOnly: boolean
 
   onSave: (line: QuoteLineItem) => void
@@ -42,7 +54,35 @@ type Props = {
 
 
 
-export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave }: Props) {
+/**
+ * What a blank custom-rate field actually falls back to.
+ *
+ * Not the catalog. The sidebar rate outranks it (see getEffectiveHangerRate), and in
+ * practice every board carries hanger_rate 0 — so naming the catalog here told the
+ * operator the override was departing from a number that never applies.
+ */
+function inheritedRateLabel(
+  projectRate: number | undefined,
+  catalogDefault: number,
+  catalogSource: string,
+): string {
+  if (projectRate != null) return `${projectRate} — project rate`
+  if (catalogDefault > 0) return `${catalogDefault} — ${catalogSource}`
+  return 'No rate set'
+}
+
+
+
+export function LineItemEditDialog({
+  open,
+  onOpenChange,
+  line,
+  catalogs,
+  projectHangerRate,
+  projectFinisherRate,
+  readOnly,
+  onSave,
+}: Props) {
 
   const [draft, setDraft] = useState<QuoteLineItem | null>(line)
 
@@ -503,7 +543,11 @@ export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave 
 
                   value={draft.custom_hanger_rate ?? ''}
 
-                  placeholder="Board catalog default"
+                  placeholder={inheritedRateLabel(
+                    projectHangerRate,
+                    getCatalogDefaultHangerRate(draft, catalogs),
+                    'board catalog',
+                  )}
 
                   onChange={(e) => {
 
@@ -535,7 +579,11 @@ export function LineItemEditDialog({ open, onOpenChange, line, readOnly, onSave 
 
                   value={draft.custom_finisher_rate ?? ''}
 
-                  placeholder="Finish scope default"
+                  placeholder={inheritedRateLabel(
+                    projectFinisherRate,
+                    getCatalogDefaultFinisherRate(draft, catalogs),
+                    'finish scope',
+                  )}
 
                   onChange={(e) => {
 

@@ -234,6 +234,9 @@ type HangerRateCellProps = {
 
   catalogs: OrgDrywallCatalogs
 
+  /** Quote-wide rate from the totals sidebar; the line inherits it when it has no override. */
+  projectRate?: number
+
   readOnly: boolean
 
   compact?: boolean
@@ -250,6 +253,8 @@ export function HangerRateCell({
 
   catalogs,
 
+  projectRate,
+
   readOnly,
 
   compact,
@@ -260,15 +265,18 @@ export function HangerRateCell({
 
   const enabled = isHangerRateEnabled(line)
 
-  const catalogDefault = getCatalogDefaultHangerRate(line, catalogs)
+  // What this line prices at with no override of its own. The sidebar rate outranks
+  // the catalog, so comparing against the catalog alone marked every line on a
+  // quote with sidebar rates as overridden.
+  const inherited = projectRate ?? getCatalogDefaultHangerRate(line, catalogs)
 
-  const effective = getEffectiveHangerRate(line, catalogs)
+  const effective = getEffectiveHangerRate(line, catalogs, projectRate)
 
   const isOverridden =
 
-    line.custom_hanger_rate != null && !ratesEqual(line.custom_hanger_rate, catalogDefault)
+    line.custom_hanger_rate != null && !ratesEqual(line.custom_hanger_rate, inherited)
 
-  const catalogUnset = enabled && !isOverridden && catalogDefault === 0
+  const catalogUnset = enabled && !isOverridden && inherited === 0
 
 
 
@@ -336,7 +344,7 @@ export function HangerRateCell({
 
     }
 
-    if (ratesEqual(parsed, catalogDefault)) {
+    if (ratesEqual(parsed, inherited)) {
 
       onPatch({ custom_hanger_rate: undefined })
 
@@ -382,6 +390,9 @@ type FinisherRateCellProps = {
 
   catalogs: OrgDrywallCatalogs
 
+  /** Quote-wide rate from the totals sidebar; the line inherits it when it has no override. */
+  projectRate?: number
+
   readOnly: boolean
 
   compact?: boolean
@@ -398,6 +409,8 @@ export function FinisherRateCell({
 
   catalogs,
 
+  projectRate,
+
   readOnly,
 
   compact,
@@ -408,15 +421,17 @@ export function FinisherRateCell({
 
   const enabled = isFinisherRateEnabled(line)
 
-  const catalogDefault = getCatalogDefaultFinisherRate(line, catalogs)
+  // See HangerRateCell: the sidebar rate, not the finish scope, is what an
+  // un-overridden line actually prices at.
+  const inherited = projectRate ?? getCatalogDefaultFinisherRate(line, catalogs)
 
-  const effective = getEffectiveFinisherRate(line, catalogs)
+  const effective = getEffectiveFinisherRate(line, catalogs, projectRate)
 
   const isOverridden =
 
-    line.custom_finisher_rate != null && !ratesEqual(line.custom_finisher_rate, catalogDefault)
+    line.custom_finisher_rate != null && !ratesEqual(line.custom_finisher_rate, inherited)
 
-  const catalogUnset = enabled && !isOverridden && catalogDefault === 0
+  const catalogUnset = enabled && !isOverridden && inherited === 0
 
 
 
@@ -484,7 +499,7 @@ export function FinisherRateCell({
 
     }
 
-    if (ratesEqual(parsed, catalogDefault)) {
+    if (ratesEqual(parsed, inherited)) {
 
       onPatch({ custom_finisher_rate: undefined })
 

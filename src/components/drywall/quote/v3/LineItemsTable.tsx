@@ -15,6 +15,8 @@ import {
   materialRateHeaderForType,
   componentLaborRateHeaderForType,
   componentLaborRateColumnTitle,
+  hangerRateColumnTitle,
+  finisherRateColumnTitle,
 } from '@/lib/drywall/quoteV3CatalogResolve'
 import { allocateQuoteBeadSticksAcrossLines } from '@/lib/drywall/quoteV3Accessories'
 import { computeLineItem, formatQuoteMoney, type QuoteV3LaborBurdenOptions } from '@/lib/drywall/quoteV3Math'
@@ -29,6 +31,8 @@ import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { LineItemEditDialog } from './LineItemEditDialog'
 import {
   ComponentLaborRateCell,
+  FinisherRateCell,
+  HangerRateCell,
   MaterialRateCell,
 } from './LineRateCells'
 import {
@@ -216,6 +220,9 @@ export function LineItemsTable({
         open={editOpen}
         onOpenChange={setEditOpen}
         line={editLine}
+        catalogs={catalogs}
+        projectHangerRate={projectHangerRate}
+        projectFinisherRate={projectFinisherRate}
         readOnly={readOnly}
         onSave={saveEdit}
       />
@@ -262,8 +269,9 @@ function TypeSectionTable({
   // Mat-rate column — both are hidden, freeing room for its Setup (perimeter/waste) and qty.
   const hideMatRate = type === 'suspended_grid'
   const hideComponent = type === 'suspended_grid'
-  // Drywall = 12 cols; components drop Description (11); grid also drops Component + Mat rate (9).
-  const colSpan = isDrywall ? 12 : 11 - (hideMatRate ? 1 : 0) - (hideComponent ? 1 : 0)
+  // Drywall = 14 cols (incl. its own Hang rate + Finish rate); components drop Description
+  // and those two (11); grid also drops Component + Mat rate (9).
+  const colSpan = isDrywall ? 14 : 11 - (hideMatRate ? 1 : 0) - (hideComponent ? 1 : 0)
   const matRateHeader = materialRateHeaderForType(type)
   const laborRateHeader = componentLaborRateHeaderForType(type)
   const theme = TRADE_SECTION_THEMES[type]
@@ -304,6 +312,13 @@ function TypeSectionTable({
           ) : (
             <col style={{ width: 82 }} />
           )}
+          {/* Hang rate + Finish rate — drywall only; same width as the Mat rate column. */}
+          {isDrywall && (
+            <>
+              <col style={{ width: 82 }} />
+              <col style={{ width: 82 }} />
+            </>
+          )}
           {/* Setup (components) — grid gets extra room from the dropped Component/Mat columns. */}
           {!isDrywall && <col style={{ width: hideComponent ? 320 : 238 }} />}
           {isDrywall && <col style={{ width: 180 }} />}
@@ -332,6 +347,16 @@ function TypeSectionTable({
             )}
             {isDrywall && (
               <th className="px-1.5 py-2 font-medium">Finish</th>
+            )}
+            {isDrywall && (
+              <>
+                <th className="px-1.5 py-2 font-medium" title={hangerRateColumnTitle()}>
+                  Hang rate
+                </th>
+                <th className="px-1.5 py-2 font-medium" title={finisherRateColumnTitle()}>
+                  Finish rate
+                </th>
+              </>
             )}
             {!isDrywall && (
               <th className="px-1.5 py-2 font-medium" title={laborRateHeader}>
@@ -552,6 +577,30 @@ function LineRow({
             </select>
           )}
         </td>
+      )}
+      {isDrywall && (
+        <>
+          <td className="px-1.5 py-1" title={hangerRateColumnTitle()}>
+            <HangerRateCell
+              line={line}
+              catalogs={catalogs}
+              projectRate={lineComputeOptions.projectHangerRate}
+              readOnly={readOnly}
+              compact={compact}
+              onPatch={patch}
+            />
+          </td>
+          <td className="px-1.5 py-1" title={finisherRateColumnTitle()}>
+            <FinisherRateCell
+              line={line}
+              catalogs={catalogs}
+              projectRate={lineComputeOptions.projectFinisherRate}
+              readOnly={readOnly}
+              compact={compact}
+              onPatch={patch}
+            />
+          </td>
+        </>
       )}
       {!isDrywall && (
         <td className="px-1.5 py-1" title={componentLaborRateColumnTitle(line, catalogs)}>
