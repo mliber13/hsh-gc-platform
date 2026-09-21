@@ -91,7 +91,65 @@ For helpers, pointup, clean/prep (**not** piece hangers/finishers). Replaces the
 
 ---
 
-## 6. Payroll integration & review (Monday)
+## 6. Flow C — The crew's own pay view
+
+**Asked for 2026-09-21 (Mark):** crew should be able to see their pay for a week.
+
+Today a hanger or finisher has no way to check what they earned without asking the office
+— the same phone call this spec set out to remove, just pointed the other way.
+
+### 6.1 Most of this is already built, and unused
+
+`list_my_paystubs` and `get_my_paystub_entries`
+(`20260529000001_payroll_read_own_rpc.sql`) already return **only the caller's own**
+entries, resolving the person through `user_hr_person_id()`. `fetchMyPaystubs` /
+`fetchMyPaystubEntries` wrap them in `hrPayrollService.ts`, and `MyPaystub` is typed.
+
+**Nothing in the app calls any of it.** There is no paystub UI on the operator side or the
+crew side. So this is largely a UI job on an existing read-own path, not new plumbing.
+
+Two things to verify before trusting that:
+
+- `consume_crew_invite_token` sets `hr_person_id = COALESCE(linked_employee_id,
+  linked_contractor_id)`, so a crew account *should* resolve through
+  `user_hr_person_id()` — but that has never been exercised. Confirm it against a real
+  crew login first. The `hr_person_id` vs `linked_employee_id` split has already caused
+  two bugs.
+- The RPCs return whole pay-period entries. "A week" needs period boundaries the crew
+  member recognises, which may not be how the periods are cut.
+
+### 6.2 What it must not do
+
+**Never show an unapproved draft as "your pay".** §7 is explicit that everything lands as
+drafts Mark reviews and edits before approving. A finisher who sees a draft number and
+then gets paid something different has been handed a grievance by the software. Show
+approved periods only, or label in-progress work unmistakably.
+
+**The helper deduction is the landmine.** A journeyman's piece is reduced by the helper's
+day rate on that job (§4.4). A finisher shown their gross piece before the deduction will
+anchor on the wrong number. Either show the deduction as its own line or don't show the
+job until it is netted.
+
+### 6.3 Two parts, different readiness
+
+| Part | Shows | Depends on |
+|---|---|---|
+| **A — hours** | Their own punches for the week, per job, with a total | Nothing new. `crew_clock_in`/`crew_clock_out` ship today and `time_entries` already holds the data. **Buildable now.** |
+| **B — piece** | Per job: sqft, rate, steps credited, amount | Phase 3. There is no piece data to show until progress deltas exist. |
+
+Part A is worth shipping on its own. The pointup and clean/prep crew clock in today and
+still cannot see what they logged.
+
+### 6.4 Where it lives
+
+A **My pay** tab in `CrewShell`, week-scoped with a back/forward week control. Mobile
+first, like the rest of `/crew`. Strictly read-only — no disputes filed in the app. A
+"this looks wrong" action should drop into the existing comms lane rather than invent a
+workflow.
+
+---
+
+## 7. Payroll integration & review (Monday)
 
 Everything lands as **drafts Mark reviews/edits/approves** — nothing auto-finalizes.
 - Piece: the task-progress deltas pre-fill piece entries (per person, job, step).
@@ -102,7 +160,7 @@ Everything lands as **drafts Mark reviews/edits/approves** — nothing auto-fina
 
 ---
 
-## 7. Data model summary (new)
+## 8. Data model summary (new)
 - `schedule_items.tasks` JSONB: `[{ id, label, payLinked, pieceKey?, progressMode }]`.
 - `task_progress`: `(id, organization_id, schedule_item_id, task_id, project_id, person_id, person_type, pct, updated_at)` + a per-payroll **paid-% snapshot** (column or sibling table).
 - `time_entries` additions: geofence lat/lng + in-fence flags; (lunch auto-deduct can be computed at import, not stored).
@@ -111,19 +169,24 @@ Everything lands as **drafts Mark reviews/edits/approves** — nothing auto-fina
 
 ---
 
-## 8. Phasing (build order)
+## 9. Phasing (build order)
 - **Phase 1 — Tasks on schedule items (office side):** add task authoring to `ScheduleItemDialog` (pay-linked vs check, pieceKey, %/check). No crew/pay yet. Immediately useful for schedule progress + captures the finish-step sets.
 - **Phase 2 — Crew progress log:** `/crew` UI to mark % / check tasks + `crew_update_task_progress` RPC. Drives **schedule + analytics** now; pay wiring next. (Highest-value, lower-risk — the Monday-text replacement.)
-- **Phase 3 — Piece pay from progress:** cumulative-% → delta → draft piece entries + paid-% snapshot + payroll review. Helper deductions. (The careful payroll one.)
+- **Phase 3 — Piece pay from progress:** cumulative-% → delta → draft piece entries + paid-% snapshot + payroll review. Helper deductions. (The careful payroll one.) **Also unlocks Flow C part B** — the crew pay view can show piece once this exists.
 - **Phase 4 — Attendance clock:** crew clock in/out + lunch auto-deduct + pay-mode → payroll (hourly/day-rate crew).
+- **Phase 4b — Crew pay view, hours (Flow C part A):** a week-scoped **My pay** tab in `CrewShell` showing the crew member's own punches per job. Independent of Phases 1–3 — the clock and `time_entries` already ship, and the read-own RPCs already exist unused, so this can jump the queue whenever it is wanted.
 - **Phase 5 — Soft geofence:** location capture + job fence + flags.
 - **Phase 6 — Salaried clean/prep allocation** by schedule (if/when that role goes salary).
 
 ---
 
-## 9. Open questions / decisions before the phases that need them
+## 10. Open questions / decisions before the phases that need them
 1. **Delta mechanic edge cases (Phase 3):** worked examples — a finisher who reports 40% skim this week, 100% next; two finishers splitting a job's steps; a job that carries across a payroll boundary. Confirm pay = delta handles each.
 2. **Hang task = whole-job sqft** — confirm hanger just marks it complete (pays full field-measure sqft), with partial % only as a rare exception.
 3. **Day-rate "days present"** source — from the clock (Flow B) or a lightweight "days on job" entry for helpers who don't otherwise clock.
 4. **Task authoring convenience:** default task sets per scope (auto-add the finish steps when a Finish item is created) so the office isn't retyping them each job.
 5. **Lunch rule** exact threshold; **geofence** default radius.
+6. **What a crew member may see of their own pay (Flow C):** approved periods only, or the
+   current one in progress too? And does a 1099 hanger see only the job total that pays
+   him, or anything about the sub-crew he runs off our books? The second one decides
+   whether "my pay" and "what this job paid" are the same screen.
