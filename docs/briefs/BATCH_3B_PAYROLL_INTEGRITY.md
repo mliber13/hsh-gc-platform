@@ -180,3 +180,72 @@ Operator-side (Mark):
 
 Exclude, as always: `.claude/settings.local.json`, `supabase/.temp/cli-latest`.
 Two commits, one per part. Messages drafted by Claude after each verification report.
+
+---
+
+# Addendum to Part 1 — the delete path (added 2026-09-23)
+
+Found after part 1 was verified. My §1.3 asked about *writers*, and `deletePayPeriod` is not
+one — so it was correctly reported as out of scope and correctly left alone. It is also the
+most destructive path in the file, and it still has everything part 1 just fixed.
+
+Do this **before** the §1.5 operator smoke. A guarded save sitting next to an unguarded
+delete reads as protected and is not.
+
+## A.1 What is unguarded
+
+`deletePayPeriod` (`hrPayrollService.ts:275`) is a plain `.delete()` on `id` +
+`organization_id`, and then:
+
+- **No lock check.** `PayrollHistoryTab.tsx:284` hides the button with `{!run.locked && …}`,
+  which is a client-only gate — exactly the class of protection part 1 replaced for saves. A
+  stale `runs` list whose `locked` has not refreshed is enough to get through it.
+- **No version check.** It deletes whatever is on the server, not what the operator was
+  looking at.
+- **The reverse banked-hours delta still uses the old path.** `:302` calls
+  `applyBankedHoursDeltaToTeam`, the whole-`org_team`-payload rewrite, outside any
+  transaction. So the run can be gone while the balances fail to move — which the code knows,
+  because it returns a `teamSyncWarning` and `PayrollPage.tsx:601` toasts it. "Run deleted,
+  but the balances may be wrong" is not a state payroll should be able to reach.
+
+## A.2 What to build
+
+`delete_pay_period(p_id uuid, p_expected_updated_at timestamptz)`, SECURITY DEFINER, mirroring
+the three guards already written for `save_pay_period` — org, stored `payload->>'locked'`
+(**no exception here**; a locked run is simply not deletable), and the page-held
+`updated_at`. Reuse the same error prefixes so the client mapping stays in one place.
+
+The reverse delta applies inside that transaction with `jsonb_set` on the individual member,
+the same way §1.4 does it for saves.
+
+`PayrollPage.handleDelete` passes the `updated_at` it holds for that run.
+
+**Delete the `teamSyncWarning` return and its toast.** Once the delete and the delta are one
+transaction, the state it warns about cannot occur, and leaving the warning in implies a
+partial failure mode that no longer exists.
+
+## A.3 The clamp is load-bearing here
+
+P1-HR-1 notes that `Math.max(0, current + delta)` makes the delta non-invertible. Deleting a
+run is *precisely* the operation that depends on invertibility: if a balance was clamped to
+zero on the way in, reversing it restores the wrong number, silently.
+
+This is the strongest argument for recording the pre-clamp value. T12 should assert the round
+trip through a **clamped** case, not just a clean one — a test that only round-trips positive
+balances will pass while the bug is fully present.
+
+## A.4 Verification — STOP and report
+
+Cursor-side:
+
+1. `npx tsc --noEmit` clean; `npx vitest run` — 389 passing, report after.
+2. Prove both refusals fire on throwaway rows: deleting a **locked** run, and deleting with a
+   stale `updated_at`. As before, observed failing, not inferred.
+3. `grep` for `from('pay_periods')` — only the `select` at `:99` should remain.
+4. Delete a throwaway run that consumed banked hours and show the balance moved back in the
+   same transaction, with no warning path taken.
+
+Operator-side (Mark), folded into the §1.5 smoke:
+
+5. Delete an ordinary run — still works, balances return.
+6. A locked run offers no delete, and is refused if one is attempted anyway.
