@@ -22,6 +22,8 @@ import {
 
   buildPayrollPeople,
 
+  formatUnmatchedPayrollMessage,
+
   getCalculationDetail,
 
   nextPeriodDateRangeFromRun,
@@ -35,6 +37,12 @@ import {
   fieldMeasuredSqftFromProjectMetadata,
 
   laborRatesFromProjectMetadata,
+
+  rosterPersonKeys,
+
+  UnmatchedPayrollPeopleError,
+
+  BankedHoursOverdrawError,
 
 } from '@/lib/payrollMath'
 
@@ -52,6 +60,8 @@ import {
 import { fetchEntriesForPayrollImport } from '@/services/hrTimeService'
 
 import { fetchAllOrgProjectsForPayroll } from '@/services/supabaseService'
+
+import { setUnsavedWork } from '@/lib/unsavedWork'
 
 import type { PayPeriod, PayrollProjectOption } from '@/types/payroll'
 
@@ -285,29 +295,73 @@ export function PayrollPage() {
 
   const draftSnapshot = useMemo(() => {
 
-    const payload = buildRunPayloadFromDraft(
+    try {
 
-      periodStart,
+      const payload = buildRunPayloadFromDraft(
 
-      periodEnd,
+        periodStart,
 
-      entries,
+        periodEnd,
 
-      employees,
+        entries,
 
-      contractors,
+        employees,
 
-      editingRun ?? undefined,
+        contractors,
 
-    )
+        editingRun ?? undefined,
 
-    return JSON.stringify(payload)
+      )
+
+      return JSON.stringify(payload)
+
+    } catch (e) {
+
+      if (e instanceof UnmatchedPayrollPeopleError || e instanceof BankedHoursOverdrawError) {
+
+        return `blocked:${e.name}:${JSON.stringify({ periodStart, periodEnd, entries })}`
+
+      }
+
+      throw e
+
+    }
 
   }, [periodStart, periodEnd, entries, employees, contractors, editingRun])
 
 
 
   const isDirty = draftSnapshot !== savedSnapshot
+
+
+
+  useEffect(() => {
+
+    setUnsavedWork('payroll', isDirty)
+
+    return () => setUnsavedWork('payroll', false)
+
+  }, [isDirty])
+
+
+
+  useEffect(() => {
+
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+
+      if (!isDirty) return
+
+      e.preventDefault()
+
+      e.returnValue = ''
+
+    }
+
+    window.addEventListener('beforeunload', onBeforeUnload)
+
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+
+  }, [isDirty])
 
 
 
@@ -715,7 +769,51 @@ export function PayrollPage() {
 
 
 
-  const applyImportRowsToDraft = (rows: PayrollTimeImportRow[]) => {
+  const applyImportRowsToDraft = (rows: PayrollTimeImportRow[]): boolean => {
+
+    const allowed = rosterPersonKeys(employees, contractors)
+
+    const unmatchedByKey = new Map<string, { personKey: string; personId: string; personType: string; personName: string; hours: number }>()
+
+    for (const row of rows) {
+
+      const key = row.personType === 'w2' ? `w2-${row.personId}` : `c-${row.personId}`
+
+      if (allowed.has(key)) continue
+
+      const prev = unmatchedByKey.get(key)
+
+      if (prev) {
+
+        prev.hours += row.hours
+
+      } else {
+
+        unmatchedByKey.set(key, {
+
+          personKey: key,
+
+          personId: row.personId,
+
+          personType: row.personType,
+
+          personName: row.personName || key,
+
+          hours: row.hours,
+
+        })
+
+      }
+
+    }
+
+    if (unmatchedByKey.size > 0) {
+
+      toast.error(formatUnmatchedPayrollMessage([...unmatchedByKey.values()], 'import'))
+
+      return false
+
+    }
 
     const grouped = new Map<string, PayrollTimeImportRow[]>()
 
@@ -792,6 +890,8 @@ export function PayrollPage() {
     setEntries(nextEntries)
 
     setShowManualRows(true)
+
+    return true
 
   }
 
@@ -1095,7 +1195,7 @@ export function PayrollPage() {
 
         onConfirm={(start, end) => {
 
-          applyImportRowsToDraft(importRows)
+          if (!applyImportRowsToDraft(importRows)) return
 
           setPeriodStart(start)
 

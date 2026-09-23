@@ -18,8 +18,12 @@ import {
   calculateHoursTotal,
   getNetPieceTotal,
   isPayrollDraftEmpty,
+  listBankedHoursOverdraws,
+  listUnmatchedDraftEntries,
   payrollRowVisibleWhenHidingEmpty,
   personKey,
+  UnmatchedPayrollPeopleError,
+  BankedHoursOverdrawError,
   type PayrollRowPerson,
 } from '@/lib/payrollMath'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
@@ -215,6 +219,16 @@ export function PayrollRunTab({
 
   const draftEmpty = isPayrollDraftEmpty(entries) && !showManualRows
 
+  const unmatchedDraft = useMemo(
+    () => listUnmatchedDraftEntries(entries, employees, contractors, editingRun),
+    [entries, employees, contractors, editingRun],
+  )
+  const bankedOverdraws = useMemo(
+    () => listBankedHoursOverdraws(entries, employees, contractors),
+    [entries, employees, contractors],
+  )
+  const cannotSave = saveBlocked || unmatchedDraft.length > 0 || bankedOverdraws.length > 0
+
   useEffect(() => {
     if (draftEmpty) return
     let cancelled = false
@@ -315,6 +329,19 @@ export function PayrollRunTab({
         entryCount={withPay}
       />
 
+      {unmatchedDraft.length > 0 && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          Hours for people not on the team roster: {unmatchedDraft.map((u) => `${u.personName} (${u.hours} hrs)`).join('; ')}.
+          This run will not save until they are restored. Check Crew accounts if the crew link is stale.
+        </p>
+      )}
+      {bankedOverdraws.length > 0 && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          Banked hours used exceed the person&apos;s balance: {bankedOverdraws.map((o) => `${o.personName} (used ${o.used}, bal. ${o.balance})`).join('; ')}.
+          Reduce the used hours before saving.
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-3">
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
@@ -338,10 +365,20 @@ export function PayrollRunTab({
         </div>
         <Button
           type="button"
-          disabled={locked || saving || saveBlocked || !periodStart || !periodEnd}
+          disabled={locked || saving || cannotSave || !periodStart || !periodEnd}
           onClick={onSave}
         >
-          {saving ? 'Saving…' : saveBlocked ? 'Reload before saving' : isDirty ? 'Save payroll' : 'Save payroll (no changes)'}
+          {saving
+            ? 'Saving…'
+            : unmatchedDraft.length > 0
+              ? 'Fix unmatched people before saving'
+              : bankedOverdraws.length > 0
+                ? 'Fix banked hours before saving'
+                : saveBlocked
+                  ? 'Reload before saving'
+                  : isDirty
+                    ? 'Save payroll'
+                    : 'Save payroll (no changes)'}
         </Button>
       </div>
 
@@ -433,6 +470,14 @@ export function buildRunPayloadFromDraft(
   }
 
   const people = buildPayrollPeople(employees, contractors, false, retainedPersonKeys)
+  const unmatched = listUnmatchedDraftEntries(entries, employees, contractors, existing)
+  if (unmatched.length > 0) {
+    throw new UnmatchedPayrollPeopleError(unmatched)
+  }
+  const overdraws = listBankedHoursOverdraws(entries, employees, contractors)
+  if (overdraws.length > 0) {
+    throw new BankedHoursOverdrawError(overdraws)
+  }
   const runEntries: PayrollEntry[] = people.map((person) => {
     const entry =
       entries[person.personKey] || {

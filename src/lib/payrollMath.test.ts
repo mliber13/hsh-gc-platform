@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyBankedDelta,
+  BankedHoursOverdrawError,
   buildDraftFromPreviousRun,
   buildPayrollPeople,
+  calculateGross,
+  calculateHourlyPayWithOvertimeCap,
   defaultHelperAssignRate,
   entryHasNonZeroAdjustments,
   fieldMeasuredSqftFromProjectMetadata,
@@ -10,9 +13,11 @@ import {
   getNetPieceTotal,
   getRateFromJob,
   getSqftFromJob,
+  getToolDeductionThisWeek,
   helperAssignDeductionAmount,
   isPayrollDraftEmpty,
   laborRatesFromProjectMetadata,
+  listBankedHoursOverdraws,
   nextPeriodDateRangeFromRun,
   payrollLastWeekRange,
   payrollThisWeekRange,
@@ -433,5 +438,150 @@ describe('T12 applyBankedDelta', () => {
     // Reversing `delta` is not an inverse once the clamp has fired.
     expect(applyBankedDelta(fwd.after, -fwd.delta).after).not.toBe(2)
     expect(reverseBankedDelta(fwd.after, fwd.applied).after).toBe(2)
+  })
+})
+
+describe('T9 calculateHourlyPayWithOvertimeCap', () => {
+  it('keeps overtime at straight-time unless the row is flagged (48h mixed regular)', () => {
+    const result = calculateHourlyPayWithOvertimeCap(
+      {
+        personId: 'e1',
+        personType: 'w2',
+        hourEntries: [
+          { id: 'a', hours: 30, overtimeType: 'regular' },
+          { id: 'b', hours: 18, overtimeType: 'regular' },
+        ],
+      },
+      20,
+    )
+    expect(result.hourlyBase).toBe(960)
+    expect(result.otPremium).toBe(0)
+    expect(result.entryPayments[0].asRegular).toBe(30)
+    expect(result.entryPayments[0].asOT).toBe(0)
+    expect(result.entryPayments[1].asRegular).toBe(10)
+    expect(result.entryPayments[1].asOT).toBe(8)
+    expect(result.entryPayments[1].pay).toBe(360)
+  })
+
+  it('applies 1.5x only when overtimeType is flagged, and honors a rate override', () => {
+    const flagged = calculateHourlyPayWithOvertimeCap(
+      {
+        personId: 'e1',
+        personType: 'w2',
+        hourEntries: [
+          { id: 'a', hours: 40, overtimeType: 'regular' },
+          { id: 'b', hours: 8, overtimeType: '1.5' },
+        ],
+      },
+      20,
+    )
+    expect(flagged.hourlyBase).toBe(1040)
+    expect(flagged.otPremium).toBe(80)
+
+    const overridden = calculateHourlyPayWithOvertimeCap(
+      {
+        personId: 'e1',
+        personType: 'w2',
+        hourEntries: [{ id: 'a', hours: 8, overtimeType: 'regular', rateOverride: 30 }],
+      },
+      20,
+    )
+    expect(overridden.hourlyBase).toBe(240)
+    expect(overridden.entryPayments[0].rate).toBe(30)
+  })
+})
+
+describe('T9 calculateGross', () => {
+  it('W2: salary + piece minus helper deduction + banked payout + tool repayment + per diem', () => {
+    const leadKey = personKey('lead', 'w2')
+    const helperKey = personKey('helper', 'w2')
+    const leadEntry = {
+      personId: 'lead',
+      personType: 'w2' as const,
+      personName: 'Lead',
+      pieceEntries: [{ id: 'p1', jobId: 'j1', jobName: 'Oak', amount: 1000 }],
+      perDiem: 50,
+      reimbursement: 25,
+      bankedHoursUsed: 2,
+    }
+    const helperEntry = {
+      personId: 'helper',
+      personType: 'w2' as const,
+      personName: 'Helper',
+      hourEntries: [
+        {
+          id: 'h1',
+          jobId: 'j1',
+          jobName: 'Oak',
+          hours: 8,
+          assignToPersonId: leadKey,
+          assignRate: 25,
+        },
+      ],
+    }
+    const all = { [leadKey]: leadEntry, [helperKey]: helperEntry }
+    const person = {
+      id: 'lead',
+      name: 'Lead',
+      payType: 'salary' as const,
+      salaryAmount: 1000,
+      hourlyRate: 20,
+      toolRepayments: [{ totalAmount: 200, amountPaid: 0, weeklyAmount: 50 }],
+    }
+    // 1000 salary + (1000 - 200 helper) + 50 per diem + 25 reimbursement + 40 banked - 50 tool
+    expect(calculateGross(person, leadEntry, false, all, leadKey)).toBe(1865)
+  })
+
+  it('1099 does not take a tool deduction', () => {
+    const person = {
+      id: 'c1',
+      name: 'Sub',
+      payType: 'hourly' as const,
+      hourlyRate: 0,
+      toolRepayments: [{ totalAmount: 200, amountPaid: 0, weeklyAmount: 50 }],
+    }
+    const entry = {
+      personId: 'c1',
+      personType: '1099' as const,
+      personName: 'Sub',
+      pieceEntries: [{ id: 'p1', jobId: 'j1', jobName: 'Oak', amount: 400 }],
+    }
+    expect(calculateGross(person, entry, true, { [personKey('c1', '1099')]: entry })).toBe(400)
+  })
+})
+
+describe('getToolDeductionThisWeek', () => {
+  it('stops at the remaining balance instead of repeating the full weekly amount', () => {
+    expect(
+      getToolDeductionThisWeek({
+        toolRepayments: [{ totalAmount: 200, amountPaid: 180, weeklyAmount: 50 }],
+      }),
+    ).toBe(20)
+    expect(
+      getToolDeductionThisWeek({
+        toolRepayments: [{ totalAmount: 200, amountPaid: 200, weeklyAmount: 50 }],
+      }),
+    ).toBe(0)
+  })
+})
+
+describe('listBankedHoursOverdraws', () => {
+  it('rejects used hours above the person balance', () => {
+    const employees = [{ id: 'e1', name: 'Pat', bankedHours: 4 }]
+    const entries = {
+      [personKey('e1', 'w2')]: {
+        personId: 'e1',
+        personType: 'w2' as const,
+        personName: 'Pat',
+        bankedHoursUsed: 10,
+      },
+    }
+    const over = listBankedHoursOverdraws(entries, employees as Employee[], [])
+    expect(over).toHaveLength(1)
+    expect(over[0].used).toBe(10)
+    expect(over[0].balance).toBe(4)
+    expect(() => {
+      throw new BankedHoursOverdrawError(over)
+    }).toThrow(/Pat/)
   })
 })

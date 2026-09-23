@@ -101,4 +101,27 @@ describe('buildRunPayloadFromDraft', () => {
     expect(archived?.gross).toBe(1500)
     expect(payload.totalGross).toBe(1700)
   })
+
+  it('refuses unmatched draft hours instead of dropping them from the payload', () => {
+    const draft = {
+      ...entriesFromRun(existing),
+      [personKey('ghost-punch', 'w2')]: {
+        personId: 'ghost-punch',
+        personType: 'w2' as const,
+        personName: 'Orphaned Punch',
+        hourEntries: [{ id: 'h-orphan', jobId: 'job-x', jobName: 'Site A', hours: 8, overtimeType: 'regular' as const }],
+      },
+    }
+
+    expect(() =>
+      buildRunPayloadFromDraft(
+        existing.startDate,
+        existing.endDate,
+        draft,
+        [activeEmployee],
+        [archivedContractor],
+        undefined,
+      ),
+    ).toThrow(/Orphaned Punch|ghost-punch/)
+  })
 })

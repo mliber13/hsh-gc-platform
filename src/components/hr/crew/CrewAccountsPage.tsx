@@ -362,6 +362,14 @@ export function CrewAccountsPage() {
       kind: 'contractor' as const,
     }))
 
+  const knownEmployeeIds = new Set(employees.map((e) => e.id))
+  const knownContractorIds = new Set(contractors.map((c) => c.id))
+  const orphanLinks = links.filter((l) =>
+    l.personType === 'employee'
+      ? !knownEmployeeIds.has(l.personId)
+      : !knownContractorIds.has(l.personId),
+  )
+
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-muted-foreground">
@@ -407,6 +415,45 @@ export function CrewAccountsPage() {
         onSetActive={handleSetActive}
         busyPersonId={busyPersonId}
       />
+
+      {orphanLinks.length > 0 && (
+        <Card className="border-destructive/40">
+          <CardHeader>
+            <CardTitle>Orphaned crew links</CardTitle>
+            <CardDescription>
+              These crew accounts are linked to a team member id that is no longer on the roster.
+              Time-clock punches from them are refused at payroll import until the link is fixed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50 text-left">
+                    <th className="px-4 py-3 font-medium">Account</th>
+                    <th className="px-4 py-3 font-medium">Linked as</th>
+                    <th className="px-4 py-3 font-medium">Missing id</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orphanLinks.map((link) => (
+                    <tr key={link.userId} className="border-b last:border-0">
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{link.personName}</div>
+                        <div className="text-xs text-muted-foreground">{link.email}</div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {link.personType === 'employee' ? 'W2 employee' : '1099 contractor'}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">{link.personId}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={!!inviteDialogUrl} onOpenChange={(open) => !open && setInviteDialogUrl(null)}>
         <DialogContent>

@@ -84,8 +84,13 @@ export function getToolDeductionThisWeek(
   return reps.reduce((sum, r) => {
     const total = parseFloat(String(r.totalAmount ?? r.amount ?? '')) || 0
     const paid = parseFloat(String(r.amountPaid ?? '')) || 0
-    if (total > 0 && paid >= total) return sum
-    return sum + (parseFloat(String(r.weeklyAmount ?? '')) || 0)
+    const weekly = parseFloat(String(r.weeklyAmount ?? '')) || 0
+    if (total > 0) {
+      const remaining = total - paid
+      if (remaining <= 0) return sum
+      return sum + Math.min(weekly, remaining)
+    }
+    return sum + weekly
   }, 0)
 }
 
@@ -606,6 +611,125 @@ export function buildPayrollPeople(
     })
   }
   return sortPayrollReportEntries(rows, (r) => r.name || '', (r) => r.personType)
+}
+
+export function rosterPersonKeys(
+  employees: Employee[],
+  contractors: Contractor1099[],
+): Set<string> {
+  const keys = new Set<string>()
+  for (const e of employees) keys.add(personKey(e.id, 'w2'))
+  for (const c of contractors) keys.add(personKey(c.id, '1099'))
+  return keys
+}
+
+export type UnmatchedDraftPerson = {
+  personKey: string
+  personId: string
+  personType: string
+  personName: string
+  hours: number
+}
+
+export class UnmatchedPayrollPeopleError extends Error {
+  unmatched: UnmatchedDraftPerson[]
+  constructor(unmatched: UnmatchedDraftPerson[]) {
+    super(formatUnmatchedPayrollMessage(unmatched, 'save'))
+    this.name = 'UnmatchedPayrollPeopleError'
+    this.unmatched = unmatched
+  }
+}
+
+export function formatUnmatchedPayrollMessage(
+  unmatched: UnmatchedDraftPerson[],
+  action: 'save' | 'import',
+): string {
+  const names = unmatched
+    .map((u) => `${u.personName} (${u.personKey}, ${u.hours} hrs)`)
+    .join('; ')
+  const verb = action === 'import' ? 'Cannot import time-clock hours' : 'Cannot save payroll'
+  return `${verb}: people not on the team roster: ${names}. Restore them on the team (or Crew accounts if the crew link is stale) before continuing.`
+}
+
+export function listUnmatchedDraftEntries(
+  entries: Record<string, PayrollEntry>,
+  employees: Employee[],
+  contractors: Contractor1099[],
+  existing?: PayPeriod | null,
+): UnmatchedDraftPerson[] {
+  const allowed = rosterPersonKeys(employees, contractors)
+  for (const prev of existing?.entries ?? []) {
+    allowed.add(personKey(prev.personId, prev.personType))
+  }
+  const unmatched: UnmatchedDraftPerson[] = []
+  for (const [k, entry] of Object.entries(entries)) {
+    if (allowed.has(k)) continue
+    if (!entryHasHourOrPieceRows(entry) && !entryHasNonZeroAdjustments(entry)) continue
+    const parsed = parsePersonKey(k)
+    unmatched.push({
+      personKey: k,
+      personId: String(entry.personId || parsed.personId),
+      personType: String(entry.personType || parsed.personType),
+      personName: entry.personName || k,
+      hours: calculateHoursTotal(entry.hourEntries, entry.hours),
+    })
+  }
+  return unmatched
+}
+
+export type BankedHoursOverdraw = {
+  personKey: string
+  personName: string
+  used: number
+  balance: number
+}
+
+export class BankedHoursOverdrawError extends Error {
+  overdraws: BankedHoursOverdraw[]
+  constructor(overdraws: BankedHoursOverdraw[]) {
+    const names = overdraws
+      .map((o) => `${o.personName} (used ${o.used}, balance ${o.balance})`)
+      .join('; ')
+    super(`Cannot save payroll: banked hours used exceed the person's balance: ${names}.`)
+    this.name = 'BankedHoursOverdrawError'
+    this.overdraws = overdraws
+  }
+}
+
+export function listBankedHoursOverdraws(
+  entries: Record<string, PayrollEntry>,
+  employees: Employee[],
+  contractors: Contractor1099[],
+): BankedHoursOverdraw[] {
+  const byKey = new Map<string, { name: string; balance: number }>()
+  for (const e of employees) {
+    byKey.set(personKey(e.id, 'w2'), {
+      name: e.name,
+      balance: parseFloat(String(e.bankedHours)) || 0,
+    })
+  }
+  for (const c of contractors) {
+    byKey.set(personKey(c.id, '1099'), {
+      name: c.name,
+      balance: parseFloat(String(c.bankedHours)) || 0,
+    })
+  }
+  const overdraws: BankedHoursOverdraw[] = []
+  for (const [k, entry] of Object.entries(entries)) {
+    const used = parseFloat(String(entry.bankedHoursUsed ?? '')) || 0
+    if (used <= 0) continue
+    const person = byKey.get(k)
+    if (!person) continue
+    if (used > person.balance + 1e-9) {
+      overdraws.push({
+        personKey: k,
+        personName: entry.personName || person.name,
+        used,
+        balance: person.balance,
+      })
+    }
+  }
+  return overdraws
 }
 
 export function quoteFromProjectMetadata(metadata: unknown): Record<string, unknown> | undefined {

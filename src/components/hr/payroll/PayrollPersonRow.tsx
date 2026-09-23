@@ -754,6 +754,11 @@ export function PayrollPersonRow({
                 </span>
               )}
             </div>
+            {bankedHoursUsed > bankedHoursBalance + 1e-9 && (
+              <p className="mt-0.5 text-[10px] text-destructive">
+                Only {bankedHoursBalance} banked hours on this person. Used hours will be refused on save.
+              </p>
+            )}
           </div>
           <div>
             <Label className="text-[11px] text-muted-foreground">
