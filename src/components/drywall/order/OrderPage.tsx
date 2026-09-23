@@ -144,10 +144,11 @@ export function OrderPage() {
   )
 
   const handleSave = async () => {
-    if (readOnly) return
+    if (readOnly || !project) return
     setSaving(true)
     try {
-      await saveOrderStageSnapshot(projectId, { orders, changeOrders })
+      const nextRaw = await saveOrderStageSnapshot(projectId, { orders, changeOrders }, project.updatedAtRaw)
+      setProject((prev) => (prev ? { ...prev, updatedAtRaw: nextRaw } : prev))
       const snap: StageSnapshot = { orders, changeOrders }
       setSavedSnapshot(JSON.stringify(snap))
       toast.success('Orders saved')
@@ -172,12 +173,16 @@ export function OrderPage() {
       | { action: 'accept'; acceptedAmount: string; acceptanceReference: string }
       | { action: 'reject'; rejectionNotes: string },
   ) => {
-    if (readOnly) return
+    if (readOnly || !project) return
     setChangeOrderBusyId(changeOrder.id)
     try {
       // Persist current draft fields first; the transition service then validates the latest JSON.
-      await saveOrderStageSnapshot(projectId, { orders, changeOrders })
-      await transitionDrywallChangeOrder(projectId, changeOrder.id, transition)
+      const afterSnap = await saveOrderStageSnapshot(
+        projectId,
+        { orders, changeOrders },
+        project.updatedAtRaw,
+      )
+      await transitionDrywallChangeOrder(projectId, changeOrder.id, transition, afterSnap)
       toast.success(
         transition.action === 'submit'
           ? 'Change order submitted'
@@ -307,7 +312,7 @@ export function OrderPage() {
 
   const confirmSendToSupplier = async (withEmail: boolean) => {
     const order = sendConfirm
-    if (!order) return
+    if (!order || !project) return
     setSending(true)
     try {
       let sentTo = ''
@@ -315,7 +320,7 @@ export function OrderPage() {
         const res = await sendSupplierOrderEmail(projectId, projectPdfMeta, order, fieldTakeoff)
         sentTo = res.to
       }
-      await markOrderStatus(projectId, order.id, 'sent')
+      await markOrderStatus(projectId, order.id, 'sent', project.updatedAtRaw)
       toast.success(
         withEmail
           ? `PO emailed to ${sentTo || 'the supplier'} and marked sent`
@@ -360,14 +365,14 @@ export function OrderPage() {
   }
 
   const handleMarkComplete = async () => {
-    if (readOnly) return
+    if (readOnly || !project) return
     if (isDirty) {
       toast.error('Save pending changes before marking the project complete')
       return
     }
     setCompleting(true)
     try {
-      await markDrywallProjectComplete(projectId)
+      await markDrywallProjectComplete(projectId, project.updatedAtRaw)
       toast.success('Project marked complete')
       await load()
     } catch (e) {
@@ -566,6 +571,7 @@ export function OrderPage() {
         open={reopenDialogOpen}
         onOpenChange={setReopenDialogOpen}
         projectId={projectId}
+        loadedAt={project?.updatedAtRaw ?? ''}
         onReopened={load}
       />
 

@@ -18,6 +18,7 @@ interface ReopenProjectConfirmDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   projectId: string
+  loadedAt: string
   onReopened?: () => void | Promise<void>
 }
 
@@ -25,6 +26,7 @@ export function ReopenProjectConfirmDialog({
   open,
   onOpenChange,
   projectId,
+  loadedAt,
   onReopened,
 }: ReopenProjectConfirmDialogProps) {
   const [busy, setBusy] = useState(false)
@@ -32,7 +34,7 @@ export function ReopenProjectConfirmDialog({
   const handleReopen = async () => {
     setBusy(true)
     try {
-      await revertDrywallProjectComplete(projectId)
+      await revertDrywallProjectComplete(projectId, loadedAt)
       toast.success('Project reopened')
       onOpenChange(false)
       await onReopened?.()

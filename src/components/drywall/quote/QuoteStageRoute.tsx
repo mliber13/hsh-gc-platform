@@ -51,7 +51,7 @@ export function QuoteStageRoute() {
         return
       }
 
-      await convertQuoteToV3(projectId)
+      await convertQuoteToV3(projectId, project.updatedAtRaw)
       setIsV3(true)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to load quote')

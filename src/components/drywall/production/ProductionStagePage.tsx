@@ -72,6 +72,7 @@ export function ProductionStagePage() {
   const [fieldTakeoff, setFieldTakeoff] = useState<FieldTakeoff | null>(null)
   const [changeOrders, setChangeOrders] = useState<DrywallChangeOrder[]>([])
   const [catalogs, setCatalogs] = useState<OrgDrywallCatalogs | null>(null)
+  const [loadedAt, setLoadedAt] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -105,6 +106,7 @@ export function ProductionStagePage() {
       setFieldTakeoff(fieldTakeoffFromLegacy(project.legacy))
       setChangeOrders(getChangeOrdersFromLegacy(project.legacy))
       setCatalogs(cats)
+      setLoadedAt(project.updatedAtRaw)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to load project')
     } finally {
@@ -132,7 +134,7 @@ export function ProductionStagePage() {
     if (readOnly) return
     setBusy(true)
     try {
-      await markProductionStarted(projectId)
+      await markProductionStarted(projectId, loadedAt)
       toast.success('Production started')
       await load()
     } catch (e: unknown) {
@@ -154,7 +156,7 @@ export function ProductionStagePage() {
     }
     setBusy(true)
     try {
-      await markProductionComplete(projectId, isoFromDateInput(completeDateInput))
+      await markProductionComplete(projectId, loadedAt, isoFromDateInput(completeDateInput))
       toast.success('Production marked complete')
       await load()
     } catch (e: unknown) {
@@ -176,7 +178,7 @@ export function ProductionStagePage() {
     }
     setBusy(true)
     try {
-      await markProductionComplete(projectId, isoFromDateInput(completeDateInput))
+      await markProductionComplete(projectId, loadedAt, isoFromDateInput(completeDateInput))
       toast.success('Completion date updated')
       await load()
     } catch (e: unknown) {
@@ -194,7 +196,7 @@ export function ProductionStagePage() {
     if (readOnly) return
     setBusy(true)
     try {
-      await revertProductionComplete(projectId)
+      await revertProductionComplete(projectId, loadedAt)
       toast.success('Reverted to in-progress production')
       await load()
     } catch (e: unknown) {
@@ -308,7 +310,8 @@ export function ProductionStagePage() {
         catalogs={catalogs}
         readOnly={readOnly}
         onSaveFieldTakeoff={async (next) => {
-          await saveFieldTakeoff(projectId, next)
+          const nextRaw = await saveFieldTakeoff(projectId, next, loadedAt)
+          setLoadedAt(nextRaw)
           setFieldTakeoff(next)
         }}
       />

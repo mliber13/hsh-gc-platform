@@ -73,6 +73,7 @@ export function FieldMeasurementPage() {
   const [belowFloorReason, setBelowFloorReason] = useState('')
   const [marginEval, setMarginEval] = useState<MarginFloorEvaluation | null>(null)
   const [checkingMargin, setCheckingMargin] = useState(false)
+  const [loadedAt, setLoadedAt] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -105,6 +106,7 @@ export function FieldMeasurementPage() {
       setIntakeSource(getIntakeSourceFromLegacy(project.legacy))
       const { bidSnapshot } = getQuoteOutcomeFromLegacy(project.legacy)
       setPoBidTotal(bidSnapshot?.total ?? null)
+      setLoadedAt(project.updatedAtRaw)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load field measurement')
     } finally {
@@ -156,15 +158,21 @@ export function FieldMeasurementPage() {
 
     setSaving(true)
     try {
-      await saveFieldTakeoff(projectId, takeoff)
+      let at = await saveFieldTakeoff(projectId, takeoff, loadedAt)
       const addr = projectAddress.trim()
       if (addr !== savedAddress) {
-        await updateDrywallProjectInfo(projectId, {
-          ...projectInfo,
-          address: addr,
-        })
+        const updated = await updateDrywallProjectInfo(
+          projectId,
+          {
+            ...projectInfo,
+            address: addr,
+          },
+          at,
+        )
+        at = updated.updatedAtRaw
         setSavedAddress(addr)
       }
+      setLoadedAt(at)
       setSavedSnapshot(JSON.stringify(takeoff))
       toast.success('Field measurement saved')
     } catch (e) {
@@ -178,9 +186,10 @@ export function FieldMeasurementPage() {
     }
   }
 
-  const advanceToOrder = async () => {
+  const advanceToOrder = async (at = loadedAt) => {
     if (!takeoff) return
-    await saveFieldTakeoffAndAdvance(projectId, takeoff)
+    const nextRaw = await saveFieldTakeoffAndAdvance(projectId, takeoff, at)
+    setLoadedAt(nextRaw)
     toast.success('Advanced to Order')
     navigate(`/drywall/projects/${projectId}/order`)
   }
@@ -236,21 +245,28 @@ export function FieldMeasurementPage() {
     if (!takeoff || !marginEval || !belowFloorReason.trim()) return
     setSaving(true)
     try {
-      await recordBelowFloorApproval(projectId, {
-        trigger: 'field_measurement_to_order',
-        marginAtApproval: marginEval.marginPct ?? 0,
-        bidTotal: marginEval.bidTotal,
-        estimatedCost: marginEval.estimatedCost,
-        floorTarget: marginEval.floorTarget,
-        reason: belowFloorReason.trim(),
-      })
-      await advanceToOrder()
+      const { updatedAtRaw } = await recordBelowFloorApproval(
+        projectId,
+        {
+          trigger: 'field_measurement_to_order',
+          marginAtApproval: marginEval.marginPct ?? 0,
+          bidTotal: marginEval.bidTotal,
+          estimatedCost: marginEval.estimatedCost,
+          floorTarget: marginEval.floorTarget,
+          reason: belowFloorReason.trim(),
+        },
+        loadedAt,
+      )
+      await advanceToOrder(updatedAtRaw)
       setBelowFloorOpen(false)
       setBelowFloorReason('')
       setMarginEval(null)
     } catch (e) {
-      if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
-      else toast.error(e instanceof Error ? e.message : 'Could not advance stage')
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
+        toast.error(e.message)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Could not advance stage')
+      }
     } finally {
       setSaving(false)
     }
@@ -282,12 +298,16 @@ export function FieldMeasurementPage() {
     setReviewBusy(true)
     try {
       const updated = fieldTakeoffWithTotals({ ...takeoff, ...patch })
-      await saveFieldTakeoff(projectId, updated)
+      const nextRaw = await saveFieldTakeoff(projectId, updated, loadedAt)
+      setLoadedAt(nextRaw)
       setTakeoff(updated)
       setSavedSnapshot(JSON.stringify(updated))
       toast.success(toastMessage)
     } catch (e) {
-      if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
+      if (
+        e instanceof DrywallProjectPermissionError ||
+        e instanceof DrywallProjectStaleError
+      ) toast.error(e.message)
       else toast.error(e instanceof Error ? e.message : 'Review action failed')
     } finally {
       setReviewBusy(false)
@@ -373,7 +393,8 @@ export function FieldMeasurementPage() {
         catalogs={catalogs}
         readOnly={ratesReadOnly}
         onSaveFieldTakeoff={async (next) => {
-          await saveFieldTakeoff(projectId, next)
+          const nextRaw = await saveFieldTakeoff(projectId, next, loadedAt)
+          setLoadedAt(nextRaw)
           setTakeoff(next)
           setSavedSnapshot(JSON.stringify(next))
         }}
@@ -417,6 +438,8 @@ export function FieldMeasurementPage() {
           <FieldPhotosSection
             projectId={projectId}
             readOnly={readOnly}
+            loadedAt={loadedAt}
+            onLoadedAtChange={setLoadedAt}
             onPhotosChange={() => void load()}
           />
         </div>

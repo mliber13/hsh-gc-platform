@@ -44,6 +44,7 @@ function estimatingProject(
     quoteOverheadAmount: overrides.quoteOverheadAmount ?? null,
     quoteProfitAmount: overrides.quoteProfitAmount ?? null,
     drywallScopeRevenue: overrides.drywallScopeRevenue ?? null,
+    updatedAtRaw: overrides.updatedAtRaw ?? NOW.toISOString(),
   }
 }
 

@@ -111,6 +111,10 @@ export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
 
   const { calculations, totals } = useDrywallQuoteCalculations(quote ?? { version: 2 })
 
+  const advanceLoadedAt = useCallback((next: string) => {
+    setProject((prev) => (prev ? { ...prev, updatedAtRaw: next } : prev))
+  }, [])
+
   const currentBidTotal = useMemo(() => {
     const finalTotal = parseFloat(String(calculations.finalTotal ?? ''))
     if (Number.isFinite(finalTotal) && finalTotal > 0) return finalTotal
@@ -124,12 +128,13 @@ export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
   }, [calculations.totalDirectCost])
 
   const handleSave = async () => {
-    if (!quote || readOnly) return
+    if (!quote || !project || readOnly) return
     setSaving(true)
     try {
       const payload = { ...quote, version: 2 }
-      await saveDrywallQuote(projectId, payload)
-      await saveDrywallQuoteCalculations(projectId, calculations)
+      const afterQuote = await saveDrywallQuote(projectId, payload, project.updatedAtRaw)
+      const afterCalcs = await saveDrywallQuoteCalculations(projectId, calculations, afterQuote)
+      advanceLoadedAt(afterCalcs)
       const refreshed = await fetchDrywallQuote(projectId)
       const withFlags = deriveAddonFlagsFromData(refreshed)
       setQuote(withFlags)
@@ -151,9 +156,13 @@ export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
     try {
       let quoteForPdf = quote
       if (!drywallQuoteNumberLabel(quote.quoteNumber)) {
-        const quoteNumber = await assignDrywallQuoteNumberIfMissing(projectId)
+        const { quoteNumber, updatedAtRaw } = await assignDrywallQuoteNumberIfMissing(
+          projectId,
+          project.updatedAtRaw,
+        )
         quoteForPdf = { ...quote, quoteNumber }
         setQuote((prev) => (prev ? { ...prev, quoteNumber } : prev))
+        advanceLoadedAt(updatedAtRaw)
       }
       await downloadDrywallQuotePdf(project, quoteForPdf, calculations)
     } catch (e: unknown) {
@@ -162,16 +171,18 @@ export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
   }
 
   const handleContinueField = async () => {
-    if (!quote || readOnly) return
+    if (!quote || !project || readOnly) return
     setSaving(true)
     try {
       const payload = { ...quote, version: 2 }
-      await saveDrywallQuoteAndAdvance(
+      const nextRaw = await saveDrywallQuoteAndAdvance(
         projectId,
         payload,
         calculations,
         'field-measurement',
+        project.updatedAtRaw,
       )
+      advanceLoadedAt(nextRaw)
       setSavedSnapshot(JSON.stringify(payload))
       toast.success('Saved — continue to field measurement')
       navigate(`/drywall/projects/${projectId}/field`)
@@ -183,20 +194,23 @@ export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
   }
 
   const handleConvertConfirm = async () => {
-    if (readOnly) return
+    if (readOnly || !project) return
     setConverting(true)
     try {
+      let at = project.updatedAtRaw
       if (isDirty) {
         const payload = { ...quote!, version: 2 }
-        await saveDrywallQuote(projectId, payload)
-        await saveDrywallQuoteCalculations(projectId, calculations)
+        at = await saveDrywallQuote(projectId, payload, at)
+        at = await saveDrywallQuoteCalculations(projectId, calculations, at)
       }
-      await convertQuoteToV3(projectId)
+      const converted = await convertQuoteToV3(projectId, at)
+      advanceLoadedAt(converted.updatedAtRaw)
       setConvertOpen(false)
       toast.success('Converted to line-item quote')
       onConverted?.()
     } catch (e: unknown) {
       if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
+      else if (e instanceof DrywallProjectStaleError) toast.error(e.message)
       else toast.error(e instanceof Error ? e.message : 'Conversion failed')
     } finally {
       setConverting(false)
@@ -219,7 +233,7 @@ export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
     toast.success(`Imported ${n.toLocaleString()} sqft`)
   }
 
-  if (loading || !quote) {
+  if (loading || !quote || !project) {
     return <p className="text-muted-foreground p-6">Loading quote…</p>
   }
 
@@ -230,6 +244,8 @@ export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
         currentBidTotal={currentBidTotal}
         quoteEstimatedCost={quoteEstimatedCost}
         isDirty={isDirty}
+        loadedAt={project.updatedAtRaw}
+        onLoadedAtChange={advanceLoadedAt}
         onOutcomeChange={handleOutcomeChange}
       />
 

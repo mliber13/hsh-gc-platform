@@ -59,6 +59,7 @@ export function CloseoutStagePage() {
   const [closeDateInput, setCloseDateInput] = useState(todayDateInput)
   const [editingClosedDate, setEditingClosedDate] = useState(false)
   const [assessment, setAssessment] = useState<DrywallProjectAssessment | null>(null)
+  const [loadedAt, setLoadedAt] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -79,6 +80,7 @@ export function CloseoutStagePage() {
       setCloseDateInput(dateInputFromIso(ts.closedAt ?? null))
       setEditingClosedDate(false)
       setAssessment(nextAssessment)
+      setLoadedAt(project.updatedAtRaw)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to load project')
     } finally {
@@ -110,7 +112,7 @@ export function CloseoutStagePage() {
     }
     setBusy(true)
     try {
-      await markFullyClosed(projectId, isoFromDateInput(closeDateInput))
+      await markFullyClosed(projectId, loadedAt, isoFromDateInput(closeDateInput))
       toast.success('Project fully closed')
       await load()
     } catch (e: unknown) {
@@ -132,7 +134,7 @@ export function CloseoutStagePage() {
     }
     setBusy(true)
     try {
-      await markFullyClosed(projectId, isoFromDateInput(closeDateInput))
+      await markFullyClosed(projectId, loadedAt, isoFromDateInput(closeDateInput))
       toast.success('Close date updated')
       await load()
     } catch (e: unknown) {
@@ -150,7 +152,7 @@ export function CloseoutStagePage() {
     if (readOnly) return
     setBusy(true)
     try {
-      await revertCloseoutToProductionComplete(projectId)
+      await revertCloseoutToProductionComplete(projectId, loadedAt)
       toast.success('Reopened to production complete')
       await load()
     } catch (e: unknown) {

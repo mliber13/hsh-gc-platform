@@ -173,6 +173,8 @@ export interface DrywallProjectListItem {
   address: string
   status: DrywallProjectStatus | string
   updatedAt: Date
+  /** PostgREST timestamptz string — use for optimistic concurrency, never via Date. */
+  updatedAtRaw: string
   /** From metadata.legacy.quote.sqft when present. */
   sqft: number | null
   /** From metadata.legacy.quote.calculations.finalTotal when present. */
@@ -219,6 +221,8 @@ export interface DrywallProject {
   organizationId: string
   createdAt: Date
   updatedAt: Date
+  /** PostgREST timestamptz string — page-held value for blob-write concurrency. */
+  updatedAtRaw: string
   /** Wrapper metadata (app_scope, visibility, source). */
   metadata: Record<string, unknown>
   /** Full in-app project blob under metadata.legacy. */

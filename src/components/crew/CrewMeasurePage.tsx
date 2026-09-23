@@ -34,7 +34,7 @@ import { formatReviewTimestamp } from '@/components/drywall/field/FieldTakeoffRe
 import { fieldTakeoffWithTotals, computeMeasuredSqft } from '@/lib/drywall/fieldMeasurementUtils'
 import { isCrewRole } from '@/lib/rbac'
 import { setUnsavedWork } from '@/lib/unsavedWork'
-import { saveFieldTakeoff } from '@/services/drywallProjectsService'
+import { saveFieldTakeoff, fetchDrywallProjectById } from '@/services/drywallProjectsService'
 import {
   CrewFieldTakeoffSaveError,
   CrewWorkspacePermissionError,
@@ -76,6 +76,7 @@ export function CrewMeasurePage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitOpen, setSubmitOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadedAt, setLoadedAt] = useState('')
   const redirectingRef = useRef(false)
 
   const pageTitle = context ? `Measure — ${context.projectName}` : 'Measure'
@@ -110,6 +111,10 @@ export function CrewMeasurePage() {
 
       setContext(data)
       syncFormFromContext(data)
+      if (isOperatorExplainer) {
+        const project = await fetchDrywallProjectById(projectId)
+        setLoadedAt(project?.updatedAtRaw ?? '')
+      }
       setPhase('ready')
     } catch (e) {
       if (redirectingRef.current) return
@@ -225,7 +230,8 @@ export function CrewMeasurePage() {
     try {
       const payload = fieldTakeoffWithTotals(takeoff)
       if (isOperatorExplainer) {
-        await saveFieldTakeoff(projectId, payload)
+        const nextRaw = await saveFieldTakeoff(projectId, payload, loadedAt)
+        setLoadedAt(nextRaw)
       } else {
         await saveFieldTakeoffAsMeasurer(projectId, payload)
       }
@@ -479,6 +485,8 @@ export function CrewMeasurePage() {
       <FieldPhotosSection
         projectId={projectId}
         readOnly={formReadOnly}
+        loadedAt={loadedAt}
+        onLoadedAtChange={setLoadedAt}
         onPhotosChange={() => void syncPhotosFromServer()}
       />
 

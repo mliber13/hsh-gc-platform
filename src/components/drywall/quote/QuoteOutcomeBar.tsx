@@ -31,6 +31,7 @@ import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import {
   DrywallProjectPermissionError,
+  DrywallProjectStaleError,
   fetchDrywallProjectById,
   getQuoteOutcomeFromLegacy,
   markQuoteApproved,
@@ -54,6 +55,9 @@ interface QuoteOutcomeBarProps {
   quoteEstimatedCost: number | null
   /** Form has unsaved edits — disables outcome actions to prevent data loss. */
   isDirty?: boolean
+  /** Page-held projects.updated_at from the quote stage load. */
+  loadedAt: string
+  onLoadedAtChange: (next: string) => void
   onOutcomeChange: () => void | Promise<void>
 }
 
@@ -134,6 +138,8 @@ export function QuoteOutcomeBar({
   currentBidTotal,
   quoteEstimatedCost,
   isDirty = false,
+  loadedAt,
+  onLoadedAtChange,
   onOutcomeChange,
 }: QuoteOutcomeBarProps) {
   const { effectiveRole } = usePermissions()
@@ -189,10 +195,11 @@ export function QuoteOutcomeBar({
   const money = (n: number | null | undefined) =>
     n != null && Number.isFinite(n) ? formatQuoteMoney(n) : '—'
 
-  const runAction = async (fn: () => Promise<void>) => {
+  const runAction = async (fn: (at: string) => Promise<string>) => {
     setBusy(true)
     try {
-      await fn()
+      const next = await fn(loadedAt)
+      onLoadedAtChange(next)
       await reload()
       await onOutcomeChange()
       setDialog(null)
@@ -202,8 +209,11 @@ export function QuoteOutcomeBar({
       setMarginEval(null)
       toast.success('Quote outcome updated')
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
-      else toast.error(e instanceof Error ? e.message : 'Action failed')
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
+        toast.error(e.message)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Action failed')
+      }
     } finally {
       setBusy(false)
     }
@@ -234,15 +244,24 @@ export function QuoteOutcomeBar({
     if (!marginEval || !belowFloorReason.trim()) return
     setBusy(true)
     try {
-      await recordBelowFloorApproval(projectId, {
-        trigger: 'quote_send',
-        marginAtApproval: marginEval.marginPct ?? 0,
-        bidTotal: marginEval.bidTotal,
-        estimatedCost: marginEval.estimatedCost,
-        floorTarget: marginEval.floorTarget,
-        reason: belowFloorReason.trim(),
-      })
-      await markQuoteSent(projectId, effectiveDateToIso(effectiveDate))
+      const { updatedAtRaw } = await recordBelowFloorApproval(
+        projectId,
+        {
+          trigger: 'quote_send',
+          marginAtApproval: marginEval.marginPct ?? 0,
+          bidTotal: marginEval.bidTotal,
+          estimatedCost: marginEval.estimatedCost,
+          floorTarget: marginEval.floorTarget,
+          reason: belowFloorReason.trim(),
+        },
+        loadedAt,
+      )
+      const next = await markQuoteSent(
+        projectId,
+        updatedAtRaw,
+        effectiveDateToIso(effectiveDate),
+      )
+      onLoadedAtChange(next)
       await reload()
       await onOutcomeChange()
       setDialog(null)
@@ -251,8 +270,11 @@ export function QuoteOutcomeBar({
       setMarginEval(null)
       toast.success('Quote marked sent (below floor approval recorded)')
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
-      else toast.error(e instanceof Error ? e.message : 'Failed to mark sent')
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
+        toast.error(e.message)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Failed to mark sent')
+      }
     } finally {
       setBusy(false)
     }
@@ -397,7 +419,9 @@ export function QuoteOutcomeBar({
             <Button
               type="button"
               onClick={() =>
-                void runAction(() => markQuoteSent(projectId, effectiveDateToIso(effectiveDate)))
+                void runAction((at) =>
+                  markQuoteSent(projectId, at, effectiveDateToIso(effectiveDate)),
+                )
               }
               disabled={busy}
             >
@@ -456,8 +480,8 @@ export function QuoteOutcomeBar({
             <Button
               type="button"
               onClick={() =>
-                void runAction(() =>
-                  markQuoteApproved(projectId, effectiveDateToIso(effectiveDate)),
+                void runAction((at) =>
+                  markQuoteApproved(projectId, at, effectiveDateToIso(effectiveDate)),
                 )
               }
               disabled={busy}
@@ -499,9 +523,10 @@ export function QuoteOutcomeBar({
               type="button"
               variant="destructive"
               onClick={() =>
-                void runAction(() =>
+                void runAction((at) =>
                   markQuoteLost(
                     projectId,
+                    at,
                     lostReason.trim() || undefined,
                     effectiveDateToIso(effectiveDate),
                   ),
@@ -531,7 +556,7 @@ export function QuoteOutcomeBar({
             </Button>
             <Button
               type="button"
-              onClick={() => void runAction(() => unlockQuoteForRevision(projectId))}
+              onClick={() => void runAction((at) => unlockQuoteForRevision(projectId, at))}
               disabled={busy}
             >
               {busy ? 'Saving…' : 'Unlock'}

@@ -90,6 +90,8 @@ interface PoIntakeDialogProps {
   mode?: 'create' | 'edit'
   projectId?: string
   initialValues?: Partial<PoIntakeFormValues>
+  /** Page-held projects.updated_at — required for edit saves. */
+  loadedAt?: string
   onCreated?: (projectId: string) => void
   onUpdated?: () => void
 }
@@ -100,6 +102,7 @@ export function PoIntakeDialog({
   mode = 'create',
   projectId,
   initialValues,
+  loadedAt,
   onCreated,
   onUpdated,
 }: PoIntakeDialogProps) {
@@ -145,7 +148,7 @@ export function PoIntakeDialog({
     try {
       const input = toSubmitInput(form)
       if (mode === 'edit' && projectId) {
-        await updateDrywallProjectPoData(projectId, input)
+        await updateDrywallProjectPoData(projectId, input, loadedAt ?? '')
         toast.success('PO updated')
         onOpenChange(false)
         await onUpdated?.()

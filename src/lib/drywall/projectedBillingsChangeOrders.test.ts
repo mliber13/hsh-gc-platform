@@ -27,6 +27,7 @@ function project(overrides: Partial<DrywallProjectListItem> = {}): DrywallProjec
     quoteOverheadAmount: null,
     quoteProfitAmount: null,
     drywallScopeRevenue: null,
+    updatedAtRaw: '2026-07-15T12:00:00.000Z',
     ...overrides,
   }
 }

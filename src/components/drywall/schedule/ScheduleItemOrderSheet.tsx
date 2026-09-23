@@ -45,6 +45,7 @@ export function ScheduleItemOrderSheet({
   const [order, setOrder] = useState<DrywallOrder | null>(null)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [projectMeta, setProjectMeta] = useState<ProjectMeta>({ name: '', address: '', client: '' })
+  const [loadedAt, setLoadedAt] = useState('')
   const [draft, setDraft] = useState<DrywallOrder | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [attaching, setAttaching] = useState(false)
@@ -60,6 +61,7 @@ export function ScheduleItemOrderSheet({
       setSuppliers(sup)
       if (project) {
         setProjectMeta({ name: project.name, address: project.address, client: project.client })
+        setLoadedAt(project.updatedAtRaw)
         const orders = getOrdersFromLegacy(project.legacy)
         setOrder(orders.find((o) => o.scheduleItemId === scheduleItemId) ?? null)
       }
@@ -127,7 +129,8 @@ export function ScheduleItemOrderSheet({
     try {
       // Keep the link tied to this schedule item regardless of edits.
       const toSave: DrywallOrder = { ...draft, scheduleItemId }
-      await saveOrder(projectId, toSave)
+      const nextRaw = await saveOrder(projectId, toSave, loadedAt)
+      setLoadedAt(nextRaw)
       setOrder(toSave)
       toast.success('Order sheet saved')
     } catch (e) {
@@ -138,7 +141,8 @@ export function ScheduleItemOrderSheet({
   const handleDelete = async () => {
     if (!draft) return
     try {
-      await deleteOrder(projectId, draft.id)
+      const nextRaw = await deleteOrder(projectId, draft.id, loadedAt)
+      setLoadedAt(nextRaw)
       setOrder(null)
       setEditorOpen(false)
       toast.success('Order sheet removed')

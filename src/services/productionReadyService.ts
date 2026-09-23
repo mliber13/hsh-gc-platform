@@ -27,6 +27,8 @@ const PRODUCTION_PHASES: ReadonlySet<SchedulePhase> = new Set<SchedulePhase>([
 export interface ProductionReadyNudge {
   projectId: string
   projectName: string
+  /** Page-held projects.updated_at for the production-started write. */
+  updatedAtRaw: string
   /** Earliest production-phase schedule item that has already started ("stock date"). */
   startedItemName: string
   /** yyyy-MM-dd of that item's start. */
@@ -41,7 +43,7 @@ export async function fetchProductionReadyNudges(): Promise<ProductionReadyNudge
 
   const { data: projects, error: projErr } = await supabase
     .from('projects')
-    .select('id, name')
+    .select('id, name, updated_at')
     .eq('organization_id', orgId)
     .eq('status', 'order')
   if (projErr) throw new Error(projErr.message || 'Failed to load projects')
@@ -49,6 +51,9 @@ export async function fetchProductionReadyNudges(): Promise<ProductionReadyNudge
 
   const nameById = new Map<string, string>(
     projects.map((p) => [p.id as string, ((p.name as string) ?? '').trim() || 'Untitled']),
+  )
+  const updatedAtById = new Map<string, string>(
+    projects.map((p) => [p.id as string, String(p.updated_at ?? '')]),
   )
   const projectIds = [...nameById.keys()]
 
@@ -84,6 +89,7 @@ export async function fetchProductionReadyNudges(): Promise<ProductionReadyNudge
     nudges.push({
       projectId: pid,
       projectName: nameById.get(pid) ?? 'Untitled',
+      updatedAtRaw: updatedAtById.get(pid) ?? '',
       startedItemName: info.name,
       startedDate: info.date,
     })

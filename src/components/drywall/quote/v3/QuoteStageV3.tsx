@@ -143,6 +143,10 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
     setQuote((prev) => (prev ? { ...prev, ...patch, version: 3 } : prev))
   }, [])
 
+  const advanceLoadedAt = useCallback((next: string) => {
+    setProject((prev) => (prev ? { ...prev, updatedAtRaw: next } : prev))
+  }, [])
+
   const totals = useMemo(() => {
     if (!quote || !catalogs) return null
     return computeQuoteV3Totals(quote, catalogs)
@@ -198,17 +202,24 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
   }
 
   const handleRefreshFromSnapshot = async () => {
-    if (readOnly || !isOwner) return
+    if (readOnly || !isOwner || !project) return
     setRefreshConfirmOpen(false)
     setRefreshing(true)
     try {
-      const refreshed = await refreshQuoteV3FromSnapshot(projectId)
+      const { quote: refreshed, updatedAtRaw } = await refreshQuoteV3FromSnapshot(
+        projectId,
+        project.updatedAtRaw,
+      )
+      advanceLoadedAt(updatedAtRaw)
       setQuote(refreshed)
       setSavedSnapshot(JSON.stringify(refreshed))
       toast.success('Quote refreshed from v2 snapshot')
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
-      else toast.error(e instanceof Error ? e.message : 'Refresh failed')
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
+        toast.error(e.message)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Refresh failed')
+      }
     } finally {
       setRefreshing(false)
     }
@@ -247,25 +258,31 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
   }
 
   const handleRevertToV2 = async () => {
-    if (readOnly || !isOwner) return
+    if (readOnly || !isOwner || !project) return
     setRevertingToV2(true)
     try {
-      await revertQuoteToV2(projectId)
+      const reverted = await revertQuoteToV2(projectId, project.updatedAtRaw)
+      advanceLoadedAt(reverted.updatedAtRaw)
+      advanceLoadedAt(reverted.updatedAtRaw)
       toast.success('Restored v2 quote — reloading editor')
       onRevertToV2?.()
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
-      else toast.error(e instanceof Error ? e.message : 'Could not restore v2 quote')
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
+        toast.error(e.message)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Could not restore v2 quote')
+      }
     } finally {
       setRevertingToV2(false)
     }
   }
 
   const handleSave = async () => {
-    if (!quote || readOnly) return
+    if (!quote || !project || readOnly) return
     setSaving(true)
     try {
-      await saveDrywallQuoteV3(projectId, quote)
+      const nextRaw = await saveDrywallQuoteV3(projectId, quote, project.updatedAtRaw)
+      advanceLoadedAt(nextRaw)
       setSavedSnapshot(JSON.stringify(quote))
       toast.success('Quote saved')
     } catch (e: unknown) {
@@ -294,6 +311,8 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
           totals.routine.salesTaxAmount
         }
         isDirty={isDirty}
+        loadedAt={project.updatedAtRaw}
+        onLoadedAtChange={advanceLoadedAt}
         onOutcomeChange={handleOutcomeChange}
       />
 

@@ -94,6 +94,7 @@ export function ProjectInfoPage() {
   const [site, setSite] = useState<FieldTakeoffSiteInfo>(EMPTY_SITE)
   const [savedSnapshot, setSavedSnapshot] = useState('')
   const [savedSiteSnapshot, setSavedSiteSnapshot] = useState('')
+  const [loadedAt, setLoadedAt] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -114,6 +115,7 @@ export function ProjectInfoPage() {
       const nextSite = extractSite(project.legacy)
       setSite(nextSite)
       setSavedSiteSnapshot(JSON.stringify(nextSite))
+      setLoadedAt(project.updatedAtRaw)
       setProjectName(project.name)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to load project')
@@ -145,14 +147,19 @@ export function ProjectInfoPage() {
     if (readOnly || validationError) return
     setSaving(true)
     try {
-      const updated = await updateDrywallProjectInfo(projectId, {
-        ...form,
-        name: form.name.trim(),
-        client: form.client.trim(),
-        address: form.address.trim(),
-        notes: form.notes.trim(),
-        ...(advanceToQuote ? { status: 'quote' as const } : {}),
-      })
+      const updated = await updateDrywallProjectInfo(
+        projectId,
+        {
+          ...form,
+          name: form.name.trim(),
+          client: form.client.trim(),
+          address: form.address.trim(),
+          notes: form.notes.trim(),
+          ...(advanceToQuote ? { status: 'quote' as const } : {}),
+        },
+        loadedAt,
+      )
+      let nextRaw = updated.updatedAtRaw
       // Site/access info lives in the shared field takeoff — save it only when it changed so
       // we don't bump the takeoff's updated timestamp on every project-info save.
       if (siteDirty) {
@@ -163,10 +170,11 @@ export function ProjectInfoPage() {
           accessNotes: site.accessNotes.trim(),
           hazards: site.hazards.trim(),
         }
-        await saveFieldTakeoffSiteInfo(projectId, trimmedSite)
+        nextRaw = await saveFieldTakeoffSiteInfo(projectId, trimmedSite, nextRaw)
         setSite(trimmedSite)
         setSavedSiteSnapshot(JSON.stringify(trimmedSite))
       }
+      setLoadedAt(nextRaw)
       const next = toForm(updated)
       setForm(next)
       setSavedSnapshot(JSON.stringify(next))

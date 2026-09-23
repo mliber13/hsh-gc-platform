@@ -39,7 +39,7 @@ export function ProductionReadyNudge() {
   const advance = async (nudge: Nudge) => {
     setBusyId(nudge.projectId)
     try {
-      await markProductionStarted(nudge.projectId)
+      await markProductionStarted(nudge.projectId, nudge.updatedAtRaw)
       setNudges((cur) => cur.filter((n) => n.projectId !== nudge.projectId))
       toast.success(`${nudge.projectName} moved to Production`)
     } catch (e) {

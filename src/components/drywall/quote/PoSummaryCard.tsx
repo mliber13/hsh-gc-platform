@@ -60,6 +60,7 @@ export function PoSummaryCard({ projectId }: PoSummaryCardProps) {
   const [formInitial, setFormInitial] = useState<ReturnType<typeof poDataToFormValues> | null>(
     null,
   )
+  const [loadedAt, setLoadedAt] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -90,6 +91,7 @@ export function PoSummaryCard({ projectId }: PoSummaryCardProps) {
       setIntakeAt(po.intakeAt)
       setBidTotal(bidSnapshot?.total ?? po.customerSqft * po.agreedUnitRate)
       setFormInitial(poDataToFormValues(project, po))
+      setLoadedAt(project.updatedAtRaw)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to load PO summary')
     } finally {
@@ -204,6 +206,7 @@ export function PoSummaryCard({ projectId }: PoSummaryCardProps) {
           mode="edit"
           projectId={projectId}
           initialValues={formInitial}
+          loadedAt={loadedAt}
           onUpdated={() => setReloadKey((k) => k + 1)}
         />
       )}

@@ -91,7 +91,11 @@ async function assertProjectInOrg(projectId: string, orgId: string): Promise<voi
 }
 
 /** Crew measurers persist full takeoff via SECURITY DEFINER RPC; operators use direct merge. */
-async function persistFieldTakeoffPhotos(projectId: string, takeoff: FieldTakeoff): Promise<void> {
+async function persistFieldTakeoffPhotos(
+  projectId: string,
+  takeoff: FieldTakeoff,
+  loadedAt: string,
+): Promise<string> {
   const profile = await getCurrentUserProfile()
   const roles = profile?.roles ?? []
   const isCrewOnly =
@@ -100,10 +104,17 @@ async function persistFieldTakeoffPhotos(projectId: string, takeoff: FieldTakeof
 
   if (isCrewOnly) {
     await saveFieldTakeoffAsMeasurer(projectId, takeoff)
-    return
+    const { data } = await supabase
+      .from('projects')
+      .select('updated_at')
+      .eq('id', projectId)
+      .maybeSingle()
+    return typeof data?.updated_at === 'string' && data.updated_at.length > 0
+      ? data.updated_at
+      : loadedAt
   }
 
-  await saveFieldTakeoff(projectId, takeoff)
+  return saveFieldTakeoff(projectId, takeoff, loadedAt)
 }
 
 function isCrewOnlyProfile(roles: string[] | null | undefined): boolean {
@@ -118,8 +129,9 @@ function isCrewOnlyProfile(roles: string[] | null | undefined): boolean {
 export async function uploadFieldPhoto(
   projectId: string,
   file: File,
+  loadedAt: string,
   label?: string,
-): Promise<FieldPhotoRef> {
+): Promise<{ photo: FieldPhotoRef; updatedAtRaw: string }> {
   if (!isOnlineMode()) throw new DrywallPhotoError('Photo uploads require an online connection.')
 
   const orgId = await requireUserOrgId()
@@ -176,13 +188,24 @@ export async function uploadFieldPhoto(
       if (error) {
         throw new DrywallPhotoError(error.message || 'Failed to save photo to project.')
       }
-      return ref
+      const { data } = await supabase
+        .from('projects')
+        .select('updated_at')
+        .eq('id', projectId)
+        .maybeSingle()
+      return {
+        photo: ref,
+        updatedAtRaw:
+          typeof data?.updated_at === 'string' && data.updated_at.length > 0
+            ? data.updated_at
+            : loadedAt,
+      }
     }
 
     const takeoff = await fetchFieldTakeoff(projectId)
     const photos = [...(takeoff.photos ?? []), ref]
-    await persistFieldTakeoffPhotos(projectId, { ...takeoff, photos })
-    return ref
+    const updatedAtRaw = await persistFieldTakeoffPhotos(projectId, { ...takeoff, photos }, loadedAt)
+    return { photo: ref, updatedAtRaw }
   } catch (e) {
     try {
       await supabase.storage.from(BUCKET).remove([storagePath])
@@ -214,9 +237,13 @@ export async function getSignedPhotoUrl(
 }
 
 /** Remove Storage object and drop ref from fieldTakeoff.photos[]. */
-export async function deleteFieldPhoto(projectId: string, storagePath: string): Promise<void> {
+export async function deleteFieldPhoto(
+  projectId: string,
+  storagePath: string,
+  loadedAt: string,
+): Promise<{ updatedAtRaw: string }> {
   if (!isOnlineMode()) throw new DrywallPhotoError('Photo deletes require an online connection.')
-  if (!storagePath) return
+  if (!storagePath) return { updatedAtRaw: loadedAt }
 
   const orgId = await requireUserOrgId()
   if (!storagePath.startsWith(`${orgId}/`)) {
@@ -233,7 +260,8 @@ export async function deleteFieldPhoto(projectId: string, storagePath: string): 
   const photos = (takeoff.photos ?? []).filter(
     (p) => p.storagePath !== storagePath && p.id !== storagePath,
   )
-  await persistFieldTakeoffPhotos(projectId, { ...takeoff, photos })
+  const updatedAtRaw = await persistFieldTakeoffPhotos(projectId, { ...takeoff, photos }, loadedAt)
+  return { updatedAtRaw }
 }
 
 // ============================================================================

@@ -37,6 +37,7 @@ import {
   type CrewTaskProgressMap,
   type CrewOpenPunch,
 } from '@/services/crewWorkspaceService'
+import { fetchDrywallProjectById } from '@/services/drywallProjectsService'
 import { getSignedPhotoUrl } from '@/services/drywallPhotosService'
 import type { CrewProjectDetail } from '@/types/crew'
 import { isCrewRole } from '@/lib/rbac'
@@ -142,6 +143,7 @@ export function CrewProjectDetailPage() {
   const [editEntry, setEditEntry] = useState<CrewProjectScheduleEntry | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [loadedAt, setLoadedAt] = useState('')
 
   usePageTitle(detail?.projectName ?? 'Job detail')
 
@@ -160,6 +162,10 @@ export function CrewProjectDetailPage() {
           ? await fetchCrewProjectDetail(projectId)
           : await fetchCrewProjectDetailForPreview(projectId)
       setDetail(data)
+      if (isOperatorExplainer) {
+        const project = await fetchDrywallProjectById(projectId)
+        setLoadedAt(project?.updatedAtRaw ?? '')
+      }
       // Task progress + open punch — skip for the unfiltered operator preview (no linked person).
       if (isViewAs || isCrewRole(effectiveRole)) {
         const viewOpts = isViewAs ? { viewAsPersonId: viewAsPersonId! } : undefined
@@ -188,7 +194,7 @@ export function CrewProjectDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, effectiveRole, isViewAs, viewAsPersonId])
+  }, [projectId, effectiveRole, isViewAs, viewAsPersonId, isOperatorExplainer])
 
   useEffect(() => {
     void load()
@@ -634,6 +640,8 @@ export function CrewProjectDetailPage() {
         <FieldPhotosSection
           projectId={projectId}
           readOnly={photosReadOnly}
+          loadedAt={loadedAt}
+          onLoadedAtChange={setLoadedAt}
           onPhotosChange={() => void load()}
         />
       ) : detail.photos.length > 0 ? (

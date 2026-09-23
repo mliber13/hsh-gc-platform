@@ -28,6 +28,7 @@ import { ReopenProjectConfirmDialog } from '@/components/drywall/ReopenProjectCo
 import {
   createDrywallProject,
   DrywallProjectPermissionError,
+  DrywallProjectStaleError,
   fetchDrywallProjects,
   updateDrywallProjectStatus,
 } from '@/services/drywallProjectsService'
@@ -156,17 +157,17 @@ export function DrywallProjectsListPage() {
     setUpdatingStatusId(project.id)
     setStatusMenuProjectId(null)
     try {
-      await updateDrywallProjectStatus(project.id, newStatus)
+      const nextRaw = await updateDrywallProjectStatus(project.id, newStatus, project.updatedAtRaw)
       setProjects((prev) =>
         prev.map((p) =>
           p.id === project.id
-            ? { ...p, status: newStatus, updatedAt: new Date() }
+            ? { ...p, status: newStatus, updatedAt: new Date(), updatedAtRaw: nextRaw }
             : p,
         ),
       )
       toast.success('Status updated.')
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) {
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
         toast.error(e.message)
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to update status')
@@ -290,6 +291,9 @@ export function DrywallProjectsListPage() {
           if (!open) setReopenProjectId(null)
         }}
         projectId={reopenProjectId ?? ''}
+        loadedAt={
+          projects.find((p) => p.id === reopenProjectId)?.updatedAtRaw ?? ''
+        }
         onReopened={reloadProjects}
       />
 

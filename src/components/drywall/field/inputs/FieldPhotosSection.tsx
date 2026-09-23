@@ -21,6 +21,8 @@ import type { FieldPhotoRef } from '@/types/drywall'
 interface FieldPhotosSectionProps {
   projectId: string
   readOnly: boolean
+  loadedAt: string
+  onLoadedAtChange: (next: string) => void
   onPhotosChange: () => void
 }
 
@@ -94,7 +96,13 @@ function PhotoThumb({
   )
 }
 
-export function FieldPhotosSection({ projectId, readOnly, onPhotosChange }: FieldPhotosSectionProps) {
+export function FieldPhotosSection({
+  projectId,
+  readOnly,
+  loadedAt,
+  onLoadedAtChange,
+  onPhotosChange,
+}: FieldPhotosSectionProps) {
   const cameraRef = useRef<HTMLInputElement>(null)
   const libraryRef = useRef<HTMLInputElement>(null)
   const [photos, setPhotos] = useState<FieldPhotoRef[]>([])
@@ -122,9 +130,12 @@ export function FieldPhotosSection({ projectId, readOnly, onPhotosChange }: Fiel
     if (!files?.length || readOnly) return
     setUploading(true)
     try {
+      let at = loadedAt
       for (const file of Array.from(files)) {
-        await uploadFieldPhoto(projectId, file)
+        const result = await uploadFieldPhoto(projectId, file, at)
+        at = result.updatedAtRaw
       }
+      onLoadedAtChange(at)
       await refresh()
       onPhotosChange()
       toast.success(files.length > 1 ? 'Photos uploaded' : 'Photo uploaded')
@@ -141,7 +152,8 @@ export function FieldPhotosSection({ projectId, readOnly, onPhotosChange }: Fiel
     if (!photo.storagePath || readOnly) return
     if (!window.confirm('Remove this photo?')) return
     try {
-      await deleteFieldPhoto(projectId, photo.storagePath)
+      const result = await deleteFieldPhoto(projectId, photo.storagePath, loadedAt)
+      onLoadedAtChange(result.updatedAtRaw)
       await refresh()
       onPhotosChange()
       toast.success('Photo removed')
