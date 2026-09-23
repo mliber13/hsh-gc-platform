@@ -48,6 +48,28 @@ export function personKey(personId: string, personType: string): string {
   return personType === 'w2' ? `w2-${personId}` : `c-${personId}`
 }
 
+export type BankedDeltaResult = {
+  before: number
+  delta: number
+  applied: number
+  after: number
+}
+
+/**
+ * Banked-hours clamp. `applied` is what actually moved; reversing `delta`
+ * after a clamp does not restore `before`.
+ */
+export function applyBankedDelta(current: number, delta: number): BankedDeltaResult {
+  const before = current
+  const after = Math.max(0, before + delta)
+  return { before, delta, applied: after - before, after }
+}
+
+/** Inverse of applyBankedDelta using `applied`, not `delta`. */
+export function reverseBankedDelta(after: number, applied: number): BankedDeltaResult {
+  return applyBankedDelta(after, -applied)
+}
+
 export function parsePersonKey(key: string): { personId: string; personType: 'w2' | '1099' } {
   if (key.startsWith('w2-')) return { personId: key.slice(3), personType: 'w2' }
   if (key.startsWith('c-')) return { personId: key.slice(2), personType: '1099' }

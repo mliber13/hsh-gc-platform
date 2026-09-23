@@ -5,7 +5,7 @@ import { formatPayPeriodRange } from '@/components/hr/payroll/payrollFormat'
 import { isOnlineMode, supabase } from '@/lib/supabase'
 import { recalcPieceEntryAmount } from '@/lib/payrollMath'
 import { fetchPayPeriodsForDrywallLabor } from '@/services/drywallLaborService'
-import { fetchPayPeriods, savePayPeriod, HrPayrollPermissionError } from '@/services/hrPayrollService'
+import { fetchPayPeriods, savePayPeriod, HrPayrollPermissionError, PayPeriodLockedError, PayPeriodStaleError } from '@/services/hrPayrollService'
 import { fetchDrywallProjects } from '@/services/drywallProjectsService'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import { requireUserOrgId } from '@/services/userService'
@@ -585,16 +585,10 @@ async function persistPayPeriodChange(
   previousPeriod?: PayPeriod | null,
 ): Promise<void> {
   const previous = previousPeriod ?? periods.find((p) => p.id === period.id) ?? null
-  const now = new Date().toISOString()
-  try {
-    await savePayPeriod(period, previous)
-  } catch (e) {
-    if (e instanceof HrPayrollPermissionError) throw e
-    throw e
-  }
+  const result = await savePayPeriod(period, previous)
   const idx = periods.findIndex((p) => p.id === period.id)
   if (idx >= 0) {
-    periods[idx] = { ...period, updated_at: now }
+    periods[idx] = { ...period, updated_at: result.updatedAtRaw }
   }
 }
 
@@ -731,7 +725,13 @@ async function batchedApplyToRows(
       done += periodDone
       failed += periodFailed
     } catch (e) {
-      if (e instanceof HrPayrollPermissionError) throw e
+      if (
+        e instanceof HrPayrollPermissionError ||
+        e instanceof PayPeriodStaleError ||
+        e instanceof PayPeriodLockedError
+      ) {
+        throw e
+      }
       failed += periodDone + periodFailed
     }
   }

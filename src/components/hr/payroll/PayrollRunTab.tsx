@@ -85,6 +85,7 @@ interface PayrollRunTabProps {
   onBeginManualEntry: () => void
   saving: boolean
   isDirty: boolean
+  saveBlocked?: boolean
   importingTimeClock: boolean
   rowResetKey: string
 }
@@ -143,6 +144,7 @@ export function PayrollRunTab({
   onBeginManualEntry,
   saving,
   isDirty,
+  saveBlocked = false,
   importingTimeClock,
   rowResetKey,
 }: PayrollRunTabProps) {
@@ -336,10 +338,10 @@ export function PayrollRunTab({
         </div>
         <Button
           type="button"
-          disabled={locked || saving || !periodStart || !periodEnd}
+          disabled={locked || saving || saveBlocked || !periodStart || !periodEnd}
           onClick={onSave}
         >
-          {saving ? 'Saving…' : isDirty ? 'Save payroll' : 'Save payroll (no changes)'}
+          {saving ? 'Saving…' : saveBlocked ? 'Reload before saving' : isDirty ? 'Save payroll' : 'Save payroll (no changes)'}
         </Button>
       </div>
 

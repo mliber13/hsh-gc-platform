@@ -100,3 +100,4 @@ tmp/
 scripts/.v2-v3-scan-payload.json
 scripts/.parity-payload.tmp.json
 scripts/profile-display-names-backup-*.json
+scripts/.prove-page-held-state.json

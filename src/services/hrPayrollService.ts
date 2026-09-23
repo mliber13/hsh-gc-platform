@@ -4,8 +4,6 @@
 
 import { supabase, isOnlineMode } from '@/lib/supabase'
 import type { MyPaystub, PayPeriod, PayrollEntry } from '@/types/payroll'
-import { prepareOrgTeamPayload } from '@/lib/hrTeamUtils'
-import type { OrgTeamPayload } from '@/types/hr'
 import { requireUserOrgId } from './userService'
 
 export class HrPayrollPermissionError extends Error {
@@ -15,8 +13,45 @@ export class HrPayrollPermissionError extends Error {
   }
 }
 
+export class PayPeriodStaleError extends Error {
+  constructor(
+    message = 'This payroll run changed somewhere else. Reload and try again.',
+  ) {
+    super(message)
+    this.name = 'PayPeriodStaleError'
+  }
+}
+
+export class PayPeriodLockedError extends Error {
+  constructor(message = 'This payroll run is locked. Unlock it before saving.') {
+    super(message)
+    this.name = 'PayPeriodLockedError'
+  }
+}
+
 export interface PayrollWriteResult {
-  teamSyncWarning?: string
+  updatedAtRaw?: string
+}
+
+const payPeriodWriteListeners = new Set<() => void>()
+
+/** PayrollPage subscribes so audit/modal writes refresh `runs` (and the Run-tab held timestamp). */
+export function subscribePayPeriodWrites(listener: () => void): () => void {
+  payPeriodWriteListeners.add(listener)
+  return () => {
+    payPeriodWriteListeners.delete(listener)
+  }
+}
+
+function notifyPayPeriodWrites() {
+  for (const listener of payPeriodWriteListeners) listener()
+}
+
+function requireRawUpdatedAt(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('Pay period is missing updated_at')
+  }
+  return value
 }
 
 function isRlsOrPermissionError(error: { code?: string; message?: string }): boolean {
@@ -112,99 +147,18 @@ export async function fetchMyPaystubEntries(periodId: string): Promise<PayrollEn
   return data as PayrollEntry[]
 }
 
-function personKey(personId: string, personType: string): string {
-  return personType === 'w2' ? `w2-${personId}` : `c-${personId}`
-}
-
-function entryHours(entry: PayrollEntry): number {
-  const fromHourEntries = (entry.hourEntries || []).reduce(
-    (sum, he) => sum + (parseFloat(String(he.hours)) || 0),
-    0,
-  )
-  if (fromHourEntries > 0) return fromHourEntries
-  return parseFloat(String(entry.hours)) || 0
-}
-
-function contributionFromEntry(entry: PayrollEntry): number {
-  const used = parseFloat(String(entry.bankedHoursUsed)) || 0
-  const hours = entryHours(entry)
-  const banked = Math.min(parseFloat(String(entry.hoursToBank)) || 0, hours)
-  return banked - used
-}
-
-function runContributionsByPerson(run: Pick<PayPeriod, 'entries'> | null | undefined): Record<string, number> {
-  const out: Record<string, number> = {}
-  for (const e of run?.entries || []) {
-    const key = personKey(e.personId, e.personType)
-    out[key] = (out[key] || 0) + contributionFromEntry(e)
+function mapPayPeriodWriteError(error: { code?: string; message?: string }): never {
+  const msg = error.message ?? ''
+  if (msg.includes('pay_period_stale') || msg.includes('pay_period_exists')) {
+    throw new PayPeriodStaleError()
   }
-  return out
-}
-
-function contributionDelta(
-  nextRun: Pick<PayPeriod, 'entries'> | null | undefined,
-  prevRun: Pick<PayPeriod, 'entries'> | null | undefined,
-): Record<string, number> {
-  const next = runContributionsByPerson(nextRun)
-  const prev = runContributionsByPerson(prevRun)
-  const keys = new Set([...Object.keys(next), ...Object.keys(prev)])
-  const out: Record<string, number> = {}
-  for (const key of keys) {
-    const delta = (next[key] || 0) - (prev[key] || 0)
-    if (delta !== 0) out[key] = delta
+  if (msg.includes('pay_period_locked')) {
+    throw new PayPeriodLockedError()
   }
-  return out
-}
-
-async function applyBankedHoursDeltaToTeam(
-  organizationId: string,
-  deltaByPerson: Record<string, number>,
-): Promise<void> {
-  if (Object.keys(deltaByPerson).length === 0) return
-
-  const { data, error } = await supabase
-    .from('org_team')
-    .select('payload')
-    .eq('organization_id', organizationId)
-    .maybeSingle()
-
-  if (error) {
-    throw new Error(error.message || 'Failed to load team for banked-hours update')
+  if (msg.includes('pay_period_forbidden') || isRlsOrPermissionError(error)) {
+    throw new HrPayrollPermissionError()
   }
-
-  const payloadRaw = data?.payload && typeof data.payload === 'object' ? data.payload : {}
-  const payload = prepareOrgTeamPayload(payloadRaw as OrgTeamPayload)
-
-  const employees = payload.employees.map((emp) => {
-    const delta = deltaByPerson[`w2-${emp.id}`] || 0
-    if (!delta) return emp
-    const current = parseFloat(String(emp.bankedHours)) || 0
-    return { ...emp, bankedHours: Math.max(0, current + delta) }
-  })
-
-  const contractors1099 = payload.contractors1099.map((c) => {
-    const delta = deltaByPerson[`c-${c.id}`] || 0
-    if (!delta) return c
-    const current = parseFloat(String(c.bankedHours)) || 0
-    return { ...c, bankedHours: Math.max(0, current + delta) }
-  })
-
-  const { error: upsertError } = await supabase.from('org_team').upsert(
-    {
-      organization_id: organizationId,
-      payload: {
-        employees,
-        contractors1099,
-        positions: payload.positions,
-      },
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'organization_id' },
-  )
-
-  if (upsertError) {
-    throw new Error(upsertError.message || 'Failed to save banked-hours team update')
-  }
+  throw new Error(msg || 'Failed to save pay period')
 }
 
 export async function savePayPeriod(
@@ -215,76 +169,46 @@ export async function savePayPeriod(
     throw new Error('Payroll requires an online connection to Supabase.')
   }
 
-  const organizationId = await requireUserOrgId()
-  const now = new Date().toISOString()
-  const { id, updated_at: _u, ...payloadFields } = period
+  await requireUserOrgId()
+  const { id, updated_at: expectedFromPeriod, ...payloadFields } = period
+  const expectedRaw = expectedFromPeriod || previousPeriod?.updated_at || null
 
-  const row = {
-    id,
-    organization_id: organizationId,
-    payload: { ...payloadFields, id },
-    updated_at: now,
-  }
-
-  const { error } = await supabase.from('pay_periods').upsert(row, { onConflict: 'id' })
+  const { data, error } = await supabase.rpc('save_pay_period', {
+    p_id: id,
+    p_payload: { ...payloadFields, id },
+    p_expected_updated_at: expectedRaw,
+  })
 
   if (error) {
     console.error('savePayPeriod:', error)
-    if (isRlsOrPermissionError(error)) throw new HrPayrollPermissionError()
-    throw new Error(error.message || 'Failed to save pay period')
+    mapPayPeriodWriteError(error)
   }
 
-  try {
-    const delta = contributionDelta(period, previousPeriod)
-    await applyBankedHoursDeltaToTeam(organizationId, delta)
-    return {}
-  } catch (teamError) {
-    console.error('savePayPeriod banked-hours team sync:', teamError)
-    return {
-      teamSyncWarning:
-        teamError instanceof Error
-          ? teamError.message
-          : 'Payroll saved, but banked-hours team balance update failed.',
-    }
-  }
+  const updatedAtRaw = requireRawUpdatedAt(data)
+  notifyPayPeriodWrites()
+  return { updatedAtRaw }
 }
 
 export async function deletePayPeriod(
   periodId: string,
-  deletedPeriod?: PayPeriod | null,
-): Promise<PayrollWriteResult> {
+  expectedUpdatedAt?: string | null,
+): Promise<void> {
   if (!isOnlineMode()) {
     throw new Error('Payroll requires an online connection to Supabase.')
   }
 
-  const organizationId = await requireUserOrgId()
+  await requireUserOrgId()
+  const expectedRaw = expectedUpdatedAt || null
 
-  const { error } = await supabase
-    .from('pay_periods')
-    .delete()
-    .eq('id', periodId)
-    .eq('organization_id', organizationId)
+  const { error } = await supabase.rpc('delete_pay_period', {
+    p_id: periodId,
+    p_expected_updated_at: expectedRaw,
+  })
 
   if (error) {
     console.error('deletePayPeriod:', error)
-    if (isRlsOrPermissionError(error)) throw new HrPayrollPermissionError()
-    throw new Error(error.message || 'Failed to delete pay period')
+    mapPayPeriodWriteError(error)
   }
 
-  try {
-    const reverseDelta: Record<string, number> = {}
-    for (const [key, value] of Object.entries(runContributionsByPerson(deletedPeriod))) {
-      reverseDelta[key] = -value
-    }
-    await applyBankedHoursDeltaToTeam(organizationId, reverseDelta)
-    return {}
-  } catch (teamError) {
-    console.error('deletePayPeriod banked-hours team sync:', teamError)
-    return {
-      teamSyncWarning:
-        teamError instanceof Error
-          ? teamError.message
-          : 'Payroll run deleted, but banked-hours team balance update failed.',
-    }
-  }
+  notifyPayPeriodWrites()
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyBankedDelta,
   buildDraftFromPreviousRun,
   buildPayrollPeople,
   defaultHelperAssignRate,
@@ -17,6 +18,7 @@ import {
   payrollThisWeekRange,
   personKey,
   pieceRowHelperDeduction,
+  reverseBankedDelta,
   splitGrossByDivisions,
 } from './payrollMath'
 import { projectLaborRateForPieceKey } from './drywall/payrollPieceKeys'
@@ -412,5 +414,24 @@ describe('helper assign / piece deduction', () => {
     expect(raw).toBe(500)
     expect(helperShare).toBe(100)
     expect(net).toBe(400)
+  })
+})
+
+describe('T12 applyBankedDelta', () => {
+  it('round-trips a positive balance back to the start', () => {
+    const fwd = applyBankedDelta(5, 3)
+    expect(fwd.after).toBe(8)
+    expect(fwd.applied).toBe(3)
+    expect(reverseBankedDelta(fwd.after, fwd.applied).after).toBe(5)
+  })
+
+  it('round-trips a clamped overdraw using applied, not delta', () => {
+    const fwd = applyBankedDelta(2, -10)
+    expect(fwd.after).toBe(0)
+    expect(fwd.applied).toBe(-2)
+    expect(fwd.delta).toBe(-10)
+    // Reversing `delta` is not an inverse once the clamp has fired.
+    expect(applyBankedDelta(fwd.after, -fwd.delta).after).not.toBe(2)
+    expect(reverseBankedDelta(fwd.after, fwd.applied).after).toBe(2)
   })
 })

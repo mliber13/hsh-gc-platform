@@ -71,6 +71,7 @@ const CATEGORY_LABELS: Record<DrywallLaborCategory, string> = {
 
 type Props = {
   readOnly?: boolean
+  onPayPeriodsMutated?: () => void
 }
 
 function rowKey(row: MislabeledLaborEntry): string {
@@ -403,7 +404,7 @@ const AuditTable = memo(function AuditTable({
   )
 })
 
-export function LaborAssignmentAudit({ readOnly = false }: Props) {
+export function LaborAssignmentAudit({ readOnly = false, onPayPeriodsMutated }: Props) {
   const periodsRef = useRef<PayPeriod[]>([])
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<MislabeledLaborEntry[]>([])
@@ -579,6 +580,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     try {
       await reassignLaborEntryJob(row, project.id, project.name, periodsRef.current)
       toast.success(`Assigned to ${project.name}`)
+      onPayPeriodsMutated?.()
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Reassignment failed'
       toast.error(message)
@@ -600,6 +602,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     try {
       await markLaborEntryOffSystem(row, periodsRef.current)
       toast.success('Marked off-system')
+      onPayPeriodsMutated?.()
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to mark off-system'
       toast.error(message)
@@ -617,6 +620,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     try {
       const result = await markLaborEntriesOffSystem(batch, periodsRef.current)
       toast.success(formatBatchToast(result, 'Marked'))
+      onPayPeriodsMutated?.()
       if (result.failed > 0) void load()
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Bulk off-system failed'
@@ -642,6 +646,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
         periodsRef.current,
       )
       toast.success(formatBatchToast(result, 'Assigned'))
+      onPayPeriodsMutated?.()
       if (result.failed > 0) void load()
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Bulk assign failed'
@@ -667,6 +672,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
     try {
       await clearLaborEntryOffSystem(row, periodsRef.current)
       toast.success('Returned to unassigned')
+      onPayPeriodsMutated?.()
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to un-mark'
       toast.error(message)
@@ -695,6 +701,7 @@ export function LaborAssignmentAudit({ readOnly = false }: Props) {
         periodsRef.current,
       )
       toast.success('Type updated')
+      onPayPeriodsMutated?.()
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Type update failed'
       toast.error(message)

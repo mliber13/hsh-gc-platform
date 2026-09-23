@@ -41,13 +41,12 @@ import {
 import { fetchTeam } from '@/services/hrTeamService'
 
 import {
-
   deletePayPeriod,
-
   fetchPayPeriods,
-
+  PayPeriodLockedError,
+  PayPeriodStaleError,
   savePayPeriod,
-
+  subscribePayPeriodWrites,
 } from '@/services/hrPayrollService'
 
 import { fetchEntriesForPayrollImport } from '@/services/hrTimeService'
@@ -136,6 +135,8 @@ export function PayrollPage() {
 
   const [calcRun, setCalcRun] = useState<PayPeriod | null>(null)
 
+  const [heldUpdatedAt, setHeldUpdatedAt] = useState<string | null>(null)
+
 
 
   const editingRun = useMemo(
@@ -143,6 +144,18 @@ export function PayrollPage() {
     () => runs.find((r) => r.id === editingRunId) ?? null,
 
     [runs, editingRunId],
+
+  )
+
+  const runIsBehind = Boolean(
+
+    editingRunId &&
+
+      editingRun?.updated_at &&
+
+      heldUpdatedAt &&
+
+      editingRun.updated_at !== heldUpdatedAt,
 
   )
 
@@ -242,11 +255,31 @@ export function PayrollPage() {
 
 
 
+  const refreshRuns = useCallback(async () => {
+
+    try {
+
+      setRuns(await fetchPayPeriods())
+
+    } catch (e: unknown) {
+
+      console.error('refreshRuns:', e)
+
+    }
+
+  }, [])
+
+
+
   useEffect(() => {
 
     void load()
 
   }, [load])
+
+
+
+  useEffect(() => subscribePayPeriodWrites(() => { void refreshRuns() }), [refreshRuns])
 
 
 
@@ -300,6 +333,8 @@ export function PayrollPage() {
 
       setEditingRunId(run.id)
 
+      setHeldUpdatedAt(run.updated_at ?? null)
+
       setShowManualRows(true)
 
       const snap = JSON.stringify(
@@ -336,6 +371,8 @@ export function PayrollPage() {
 
       setEditingRunId(null)
 
+      setHeldUpdatedAt(null)
+
       setSavedSnapshot('')
 
       setShowManualRows(false)
@@ -363,6 +400,8 @@ export function PayrollPage() {
     setEntries(draft)
 
     setEditingRunId(null)
+
+    setHeldUpdatedAt(null)
 
     setShowManualRows(true)
 
@@ -422,6 +461,8 @@ export function PayrollPage() {
 
     setEditingRunId(null)
 
+    setHeldUpdatedAt(null)
+
     setShowManualRows(true)
 
     setActiveTab('run')
@@ -445,6 +486,14 @@ export function PayrollPage() {
     if (periodStart > periodEnd) {
 
       toast.error('Period start must be on or before period end')
+
+      return
+
+    }
+
+    if (runIsBehind) {
+
+      toast.error('This payroll run changed somewhere else. Reload it before saving.')
 
       return
 
@@ -474,23 +523,29 @@ export function PayrollPage() {
 
       const id = editingRunId ?? generateHrId()
 
-      const run: PayPeriod = { ...payload, id }
+      const run: PayPeriod = {
+
+        ...payload,
+
+        id,
+
+        updated_at: heldUpdatedAt ?? previousRun?.updated_at,
+
+      }
 
       const result = await savePayPeriod(run, previousRun)
 
       toast.success(editingRunId ? 'Payroll updated' : 'Payroll saved')
 
-      if (result.teamSyncWarning) {
-
-        toast.warning(`Payroll saved, but team banked-hours sync failed: ${result.teamSyncWarning}`)
-
-      }
-
       const next = await fetchPayPeriods()
 
       setRuns(next)
 
+      const saved = next.find((r) => r.id === id)
+
       setEditingRunId(id)
+
+      setHeldUpdatedAt(saved?.updated_at ?? result.updatedAtRaw ?? null)
 
       setSavedSnapshot(JSON.stringify(payload))
 
@@ -507,6 +562,10 @@ export function PayrollPage() {
         setSavedSnapshot('')
 
         setShowManualRows(false)
+
+        setHeldUpdatedAt(null)
+
+        setEditingRunId(null)
 
       }
 
@@ -530,15 +589,9 @@ export function PayrollPage() {
 
       const deletedRun = runs.find((r) => r.id === runId) ?? null
 
-      const result = await deletePayPeriod(runId, deletedRun)
+      await deletePayPeriod(runId, deletedRun?.updated_at)
 
       toast.success('Payroll run deleted')
-
-      if (result.teamSyncWarning) {
-
-        toast.warning(`Run deleted, but team banked-hours sync failed: ${result.teamSyncWarning}`)
-
-      }
 
       const next = await fetchPayPeriods()
 
@@ -566,17 +619,15 @@ export function PayrollPage() {
 
       toast.success(lock ? 'Payroll locked' : 'Payroll unlocked')
 
-      if (result.teamSyncWarning) {
-
-        toast.warning(`Payroll updated, but team banked-hours sync failed: ${result.teamSyncWarning}`)
-
-      }
-
       const next = await fetchPayPeriods()
 
       setRuns(next)
 
       if (editingRunId === run.id) {
+
+        const saved = next.find((r) => r.id === run.id)
+
+        setHeldUpdatedAt(saved?.updated_at ?? result.updatedAtRaw ?? null)
 
         setSavedSnapshot(
 
@@ -606,7 +657,15 @@ export function PayrollPage() {
 
     } catch (e: unknown) {
 
-      toast.error(e instanceof Error ? e.message : 'Update failed')
+      if (e instanceof PayPeriodStaleError || e instanceof PayPeriodLockedError) {
+
+        toast.error(e.message)
+
+      } else {
+
+        toast.error(e instanceof Error ? e.message : 'Update failed')
+
+      }
 
     }
 
@@ -812,6 +871,48 @@ export function PayrollPage() {
 
         <TabsContent value="run" className="mt-0 space-y-3">
 
+          {editingRunId && editingRun && runIsBehind && (
+
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+
+              This run changed somewhere else. Saving is blocked so those changes are not overwritten.
+
+              <button
+
+                type="button"
+
+                className="ml-2 text-primary underline"
+
+                onClick={() => {
+
+                  if (
+
+                    !confirmOverwriteDraft(
+
+                      'Reload this run? Unsaved edits on this form will be replaced with the saved copy.',
+
+                    )
+
+                  ) {
+
+                    return
+
+                  }
+
+                  resetDraft(editingRun)
+
+                }}
+
+              >
+
+                Reload this run
+
+              </button>
+
+            </p>
+
+          )}
+
           {editingRunId && editingRun && (
 
             <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
@@ -902,6 +1003,8 @@ export function PayrollPage() {
 
             isDirty={isDirty}
 
+            saveBlocked={runIsBehind}
+
             importingTimeClock={importLoading}
 
             rowResetKey={rowResetKey}
@@ -940,7 +1043,7 @@ export function PayrollPage() {
 
         <TabsContent value="labor-audit" className="mt-0">
 
-          <LaborAssignmentAudit readOnly={!allowed} />
+          <LaborAssignmentAudit readOnly={!allowed} onPayPeriodsMutated={() => void refreshRuns()} />
 
         </TabsContent>
 
