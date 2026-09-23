@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { usePermissions } from '@/hooks/usePermissions'
+import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import {
   buildOrderFinancialComparison,
   resolveOrderBaselineRates,
@@ -107,7 +108,7 @@ export function LaborRateAdjustmentsCard({
   catalogs = null,
   onSaveFieldTakeoff,
 }: Props) {
-  const { profile } = usePermissions()
+  const { profile, effectiveRole } = usePermissions()
   const [saving, setSaving] = useState(false)
   const [laborRates, setLaborRates] = useState<OrderReviewLaborRatesInput>({
     hangerRate: '',
@@ -162,6 +163,14 @@ export function LaborRateAdjustmentsCard({
       reviewNotes: String(storedReviewNotes ?? (v2Quote as Record<string, unknown>).reviewNotes ?? ''),
     })
   }, [v2Quote, approvedRates, storedBaselineRates, storedReviewNotes])
+
+  // What the card holds is what we pay the crew, plus the job's margin headroom —
+  // owner and office_drywall business, the same bar as approving a takeoff or editing
+  // the catalogs. `readOnly` was never enough: it stopped the edit but still rendered
+  // the rates to every office_gc who can reach Field Measurement (canWriteDrywallField
+  // admits them) and to anyone on Production. Gated here rather than at the two mount
+  // sites so a third mount cannot forget it.
+  if (!canWriteDrywallProject(effectiveRole)) return null
 
   if (!quote || !fieldTakeoff) {
     return (

@@ -303,9 +303,12 @@ function TypeSectionTable({
         style={{ minWidth: isDrywall ? 1210 : hideComponent ? 1080 : 1170 }}
       >
         <colgroup>
-          <col style={{ width: 110 }} />
+          {/* Location holds scope names the operator types — "Tennis Building", "Finished
+              Basement" — which clipped at 110. The 20px comes off the drywall Board select,
+              which truncates gracefully and keeps the full name in its title. */}
+          <col style={{ width: isDrywall ? 130 : 110 }} />
           {/* Catalog/Component: drywall boards need room; short for RC; hidden for grid (itemized). */}
-          {!hideComponent && <col style={{ width: isDrywall ? 148 : 100 }} />}
+          {!hideComponent && <col style={{ width: isDrywall ? 128 : 100 }} />}
           {!hideMatRate && <col style={{ width: 82 }} />}
           {/* Finish scope — narrowed to make room for the two rate columns; the select
               truncates and carries the full name in its title. */}
