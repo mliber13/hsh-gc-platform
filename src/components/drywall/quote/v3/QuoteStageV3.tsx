@@ -26,6 +26,7 @@ import { downloadDrywallQuoteV3Pdf } from '@/lib/drywallQuotePdfV3'
 import { computeQuoteV3Totals } from '@/lib/drywall/quoteV3Math'
 import {
   DrywallProjectPermissionError,
+  DrywallProjectStaleError,
   fetchDrywallProjectById,
   fetchDrywallQuoteV2V3,
   getQuoteOutcomeFromLegacy,
@@ -268,7 +269,10 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
       setSavedSnapshot(JSON.stringify(quote))
       toast.success('Quote saved')
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
+      if (
+        e instanceof DrywallProjectPermissionError ||
+        e instanceof DrywallProjectStaleError
+      ) toast.error(e.message)
       else toast.error(e instanceof Error ? e.message : 'Save failed')
     } finally {
       setSaving(false)

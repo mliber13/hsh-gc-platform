@@ -27,6 +27,7 @@ import { ReopenProjectConfirmDialog } from '@/components/drywall/ReopenProjectCo
 import { projectV3QuoteToV2Shape } from '@/lib/drywall/projectV3QuoteToV2Shape'
 import {
   DrywallProjectPermissionError,
+  DrywallProjectStaleError,
   fetchChangeOrders,
   fetchDrywallProjectById,
   fetchDrywallQuoteV2V3,
@@ -151,7 +152,10 @@ export function OrderPage() {
       setSavedSnapshot(JSON.stringify(snap))
       toast.success('Orders saved')
     } catch (e) {
-      if (e instanceof DrywallProjectPermissionError) {
+      if (
+        e instanceof DrywallProjectPermissionError ||
+        e instanceof DrywallProjectStaleError
+      ) {
         toast.error(e.message)
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to save orders')

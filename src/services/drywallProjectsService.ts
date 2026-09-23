@@ -65,6 +65,24 @@ export class DrywallProjectPermissionError extends Error {
   }
 }
 
+const DRYWALL_PROJECT_STALE_MESSAGE =
+  'This project changed somewhere else while you were editing. Reload to see the current version, then reapply your change.'
+
+export class DrywallProjectStaleError extends Error {
+  constructor(message = DRYWALL_PROJECT_STALE_MESSAGE) {
+    super(message)
+    this.name = 'DrywallProjectStaleError'
+  }
+}
+
+/** Pass the PostgREST timestamptz string through untouched — never via Date. */
+function requireLoadedUpdatedAt(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('Project is missing updated_at')
+  }
+  return value
+}
+
 const DRYWALL_LIST_SELECT =
   'id, name, address, client, status, updated_at, app_scope:metadata->>app_scope, quote_sqft:metadata->legacy->quote->>sqft, quote_final_total:metadata->legacy->quote->calculations->>finalTotal, quote_total_amount:metadata->legacy->quote->>totalQuoteAmount, quote_version:metadata->legacy->quote->>version, quote_outcome:metadata->legacy->quote->>outcome, quote_approved_at:metadata->legacy->quote->outcomeTimestamps->>approvedAt, quote_sent_at:metadata->legacy->quote->outcomeTimestamps->>sentAt, quote_lost_at:metadata->legacy->quote->outcomeTimestamps->>lostAt, quote_overhead_amt:metadata->legacy->quote->calculations->>overheadAmount, quote_profit_amt:metadata->legacy->quote->calculations->>profitAmount, quote_bid_total:metadata->legacy->quote->bidSnapshot->>total, quote_bid_overhead:metadata->legacy->quote->bidSnapshot->payload->>overhead, quote_bid_profit:metadata->legacy->quote->bidSnapshot->payload->>profit'
 
@@ -471,7 +489,7 @@ export async function updateDrywallProjectInfo(
 
   const { data: existing, error: fetchError } = await supabase
     .from('projects')
-    .select('id, name, status, metadata')
+    .select('id, name, status, metadata, updated_at')
     .eq('id', projectId)
     .eq('organization_id', orgId)
     .maybeSingle()
@@ -487,6 +505,8 @@ export async function updateDrywallProjectInfo(
   if (!existing) {
     throw new Error('Project not found')
   }
+
+  const loadedAt = requireLoadedUpdatedAt(existing.updated_at)
 
   const prevMeta =
     existing.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata)
@@ -511,7 +531,7 @@ export async function updateDrywallProjectInfo(
     (estimateCount ?? 0) > 0,
   )
 
-  const { error: updateError } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from('projects')
     .update({
       name: patch.name.trim(),
@@ -523,6 +543,8 @@ export async function updateDrywallProjectInfo(
     })
     .eq('id', projectId)
     .eq('organization_id', orgId)
+    .eq('updated_at', loadedAt)
+    .select('id')
 
   if (updateError) {
     console.error('updateDrywallProjectInfo:', updateError)
@@ -530,6 +552,9 @@ export async function updateDrywallProjectInfo(
       throw new DrywallProjectPermissionError()
     }
     throw new Error(updateError.message || 'Failed to save project info')
+  }
+  if (!updated || updated.length === 0) {
+    throw new DrywallProjectStaleError()
   }
 
   const refreshed = await fetchDrywallProjectById(projectId)
@@ -608,10 +633,11 @@ async function loadProjectLegacyForMerge(
   prevMeta: Record<string, unknown>
   prevLegacy: Record<string, unknown>
   status: string
+  updatedAt: string
 }> {
   const { data: existing, error: fetchError } = await supabase
     .from('projects')
-    .select('id, status, metadata')
+    .select('id, status, metadata, updated_at')
     .eq('id', projectId)
     .eq('organization_id', orgId)
     .maybeSingle()
@@ -632,7 +658,12 @@ async function loadProjectLegacyForMerge(
       ? (prevMeta.legacy as Record<string, unknown>)
       : {}
 
-  return { prevMeta, prevLegacy, status: existing.status }
+  return {
+    prevMeta,
+    prevLegacy,
+    status: existing.status,
+    updatedAt: requireLoadedUpdatedAt(existing.updated_at),
+  }
 }
 
 async function persistLegacyMetadata(
@@ -640,8 +671,10 @@ async function persistLegacyMetadata(
   orgId: string,
   mergedLegacy: Record<string, unknown>,
   prevMeta: Record<string, unknown>,
+  loadedAt: string,
   status?: string,
 ): Promise<void> {
+  const guardedAt = requireLoadedUpdatedAt(loadedAt)
   const now = new Date().toISOString()
   const legacyCopy = { ...mergedLegacy, updatedAt: now }
 
@@ -656,7 +689,7 @@ async function persistLegacyMetadata(
     (estimateCount ?? 0) > 0,
   )
 
-  const { error: updateError } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from('projects')
     .update({
       ...(status ? { status } : {}),
@@ -665,11 +698,16 @@ async function persistLegacyMetadata(
     })
     .eq('id', projectId)
     .eq('organization_id', orgId)
+    .eq('updated_at', guardedAt)
+    .select('id')
 
   if (updateError) {
     console.error('persistLegacyMetadata:', updateError)
     if (isRlsOrPermissionError(updateError)) throw new DrywallProjectPermissionError()
     throw new Error(updateError.message || 'Failed to save project')
+  }
+  if (!updated || updated.length === 0) {
+    throw new DrywallProjectStaleError()
   }
 }
 
@@ -710,7 +748,7 @@ export async function assignDrywallQuoteNumberIfMissing(projectId: string): Prom
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
   const prevQuote =
     prevLegacy.quote && typeof prevLegacy.quote === 'object' && !Array.isArray(prevLegacy.quote)
       ? (prevLegacy.quote as Record<string, unknown>)
@@ -728,7 +766,7 @@ export async function assignDrywallQuoteNumberIfMissing(projectId: string): Prom
       version: 2,
     },
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
   return quoteNumber
 }
 
@@ -774,7 +812,7 @@ export async function saveDrywallQuoteV3(projectId: string, quote: DrywallQuoteV
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
 
   const prevQuote =
     prevLegacy.quote && typeof prevLegacy.quote === 'object' && !Array.isArray(prevLegacy.quote)
@@ -797,7 +835,7 @@ export async function saveDrywallQuoteV3(projectId: string, quote: DrywallQuoteV
     quote: mergedQuote,
   }
 
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
 }
 
 /** Re-run buildV3FromV2 from legacyV2Snapshot; archive current v3 quote first. */
@@ -805,7 +843,7 @@ export async function refreshQuoteV3FromSnapshot(projectId: string): Promise<Dry
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
 
   const prevQuote =
     prevLegacy.quote && typeof prevLegacy.quote === 'object' && !Array.isArray(prevLegacy.quote)
@@ -849,7 +887,7 @@ export async function refreshQuoteV3FromSnapshot(projectId: string): Promise<Dry
     quote: mergedQuote,
   }
 
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
   return hydrateDrywallQuoteV3(mergedQuote)
 }
 
@@ -861,7 +899,7 @@ export async function revertQuoteToV2(projectId: string): Promise<DrywallQuote> 
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
 
   const prevQuote =
     prevLegacy.quote && typeof prevLegacy.quote === 'object' && !Array.isArray(prevLegacy.quote)
@@ -892,7 +930,7 @@ export async function revertQuoteToV2(projectId: string): Promise<DrywallQuote> 
     },
   }
 
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
   return hydrateDrywallQuote(mergedLegacy.quote)
 }
 
@@ -913,7 +951,7 @@ export async function saveDrywallQuote(projectId: string, quote: DrywallQuote): 
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
 
   const prevQuote =
     prevLegacy.quote && typeof prevLegacy.quote === 'object' && !Array.isArray(prevLegacy.quote)
@@ -934,7 +972,7 @@ export async function saveDrywallQuote(projectId: string, quote: DrywallQuote): 
     quote: mergedQuote,
   }
 
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
 }
 
 /** Persist computed calculations blob on legacy.quote (for hasDrywallWorkspaceData). */
@@ -945,7 +983,7 @@ export async function saveDrywallQuoteCalculations(
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
 
   const prevQuote =
     prevLegacy.quote && typeof prevLegacy.quote === 'object' && !Array.isArray(prevLegacy.quote)
@@ -961,7 +999,7 @@ export async function saveDrywallQuoteCalculations(
     },
   }
 
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
 }
 
 /** Save quote + advance workflow status (e.g. quote → field-measurement). */
@@ -974,7 +1012,7 @@ export async function saveDrywallQuoteAndAdvance(
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
 
   const prevQuote =
     prevLegacy.quote && typeof prevLegacy.quote === 'object' && !Array.isArray(prevLegacy.quote)
@@ -995,7 +1033,7 @@ export async function saveDrywallQuoteAndAdvance(
     },
   }
 
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, nextStatus)
 }
 
 /** Sync parse of legacy.fieldTakeoff — for callers that already hold the project. */
@@ -1027,7 +1065,7 @@ export async function saveFieldTakeoff(projectId: string, takeoff: FieldTakeoff)
   if (!isOnlineMode()) throw new Error('Field measurement requires an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
 
   const prevTakeoff =
     prevLegacy.fieldTakeoff &&
@@ -1048,7 +1086,7 @@ export async function saveFieldTakeoff(projectId: string, takeoff: FieldTakeoff)
     fieldTakeoff: mergedTakeoff,
   }
 
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
 }
 
 /**
@@ -1073,7 +1111,7 @@ export async function saveFieldTakeoffSiteInfo(
   if (!isOnlineMode()) throw new Error('Saving site info requires an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
 
   const prevTakeoff =
     prevLegacy.fieldTakeoff &&
@@ -1093,7 +1131,7 @@ export async function saveFieldTakeoffSiteInfo(
     fieldTakeoff: mergedTakeoff,
   }
 
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
 }
 
 /** Save field takeoff and advance workflow to Order. */
@@ -1104,7 +1142,7 @@ export async function saveFieldTakeoffAndAdvance(
   if (!isOnlineMode()) throw new Error('Field measurement requires an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
 
   const prevTakeoff =
     prevLegacy.fieldTakeoff &&
@@ -1137,7 +1175,7 @@ export async function saveFieldTakeoffAndAdvance(
     ...(autoOrder ? { orders: [autoOrder, ...existingOrders] } : {}),
   }
 
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, nextStatus)
 }
 
 /**
@@ -1357,7 +1395,7 @@ export async function saveOrder(projectId: string, order: DrywallOrder): Promise
   if (!isOnlineMode()) throw new Error('Orders require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
   const orders = parseLegacyOrders(prevLegacy)
   const now = new Date().toISOString()
   const payload: DrywallOrder = {
@@ -1370,7 +1408,7 @@ export async function saveOrder(projectId: string, order: DrywallOrder): Promise
   const nextOrders = idx >= 0 ? orders.map((o, i) => (i === idx ? payload : o)) : [...orders, payload]
 
   const mergedLegacy = { ...prevLegacy, orders: nextOrders }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
 }
 
 /** Explicit-save snapshot: replace orders + changeOrders arrays (JSONB-merge siblings). */
@@ -1381,7 +1419,7 @@ export async function saveOrderStageSnapshot(
   if (!isOnlineMode()) throw new Error('Orders require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
   const now = new Date().toISOString()
   const orders = snapshot.orders.map((o) => ({
     ...o,
@@ -1415,7 +1453,7 @@ export async function saveOrderStageSnapshot(
     orders,
     changeOrders,
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
 }
 
 /** Persist an audited change-order workflow transition against the latest project JSON. */
@@ -1431,7 +1469,7 @@ export async function transitionDrywallChangeOrder(
   const canAccept = effectiveRole === 'owner' || effectiveRole === 'office_drywall'
   if (!canAccept) throw new DrywallProjectPermissionError()
 
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
   const changeOrders = parseLegacyChangeOrders(prevLegacy)
   const index = changeOrders.findIndex((co) => co.id === changeOrderId)
   if (index < 0) throw new Error('Change order not found. Save the draft before continuing.')
@@ -1449,6 +1487,7 @@ export async function transitionDrywallChangeOrder(
     orgId,
     { ...prevLegacy, changeOrders: nextChangeOrders },
     prevMeta,
+    updatedAt,
   )
   return next
 }
@@ -1458,10 +1497,10 @@ export async function deleteOrder(projectId: string, orderId: string): Promise<v
   if (!isOnlineMode()) throw new Error('Orders require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
   const orders = parseLegacyOrders(prevLegacy).filter((o) => o.id !== orderId)
   const mergedLegacy = { ...prevLegacy, orders }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
 }
 
 /** Update order status (convenience wrapper around saveOrder). */
@@ -1488,9 +1527,9 @@ export async function updateDrywallProjectStatus(
   }
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
   const mergedLegacy = { ...prevLegacy, status }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, status)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, status)
 }
 
 /** @deprecated use markFullyClosed — legacy shortcut that sets `closed` + closedAt from Order. */
@@ -1498,7 +1537,7 @@ export async function markDrywallProjectComplete(projectId: string): Promise<voi
   if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
   const now = new Date().toISOString()
   const timestamps = parseProductionTimestamps(prevLegacy)
   const nextStatus: DrywallProjectStatus = 'closed'
@@ -1507,7 +1546,7 @@ export async function markDrywallProjectComplete(projectId: string): Promise<voi
     status: nextStatus,
     productionTimestamps: { ...timestamps, closedAt: now },
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, nextStatus)
 }
 
 /** Revert complete → active at Order stage (preserves quote, fieldTakeoff, orders, etc.). */
@@ -1516,7 +1555,7 @@ export async function revertDrywallProjectComplete(projectId: string): Promise<v
   if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy, status: rawStatus } = await loadProjectLegacyForMerge(
+  const { prevMeta, prevLegacy, updatedAt, status: rawStatus } = await loadProjectLegacyForMerge(
     projectId,
     orgId,
   )
@@ -1532,7 +1571,7 @@ export async function revertDrywallProjectComplete(projectId: string): Promise<v
     status: nextStatus,
     productionTimestamps: restTimestamps,
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, nextStatus)
 }
 
 function assertProjectStatus(
@@ -1552,7 +1591,7 @@ export async function markProductionStarted(projectId: string): Promise<void> {
   if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy, status: rawStatus } = await loadProjectLegacyForMerge(
+  const { prevMeta, prevLegacy, updatedAt, status: rawStatus } = await loadProjectLegacyForMerge(
     projectId,
     orgId,
   )
@@ -1565,7 +1604,7 @@ export async function markProductionStarted(projectId: string): Promise<void> {
     status: nextStatus,
     productionTimestamps: { ...timestamps, productionStartedAt: now },
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, nextStatus)
 }
 
 export async function markProductionComplete(
@@ -1575,7 +1614,7 @@ export async function markProductionComplete(
   if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy, status: rawStatus } = await loadProjectLegacyForMerge(
+  const { prevMeta, prevLegacy, updatedAt, status: rawStatus } = await loadProjectLegacyForMerge(
     projectId,
     orgId,
   )
@@ -1589,14 +1628,14 @@ export async function markProductionComplete(
     status: nextStatus,
     productionTimestamps: { ...timestamps, productionCompletedAt: at },
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, nextStatus)
 }
 
 export async function markFullyClosed(projectId: string, closedAt?: string): Promise<void> {
   if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy, status: rawStatus } = await loadProjectLegacyForMerge(
+  const { prevMeta, prevLegacy, updatedAt, status: rawStatus } = await loadProjectLegacyForMerge(
     projectId,
     orgId,
   )
@@ -1610,14 +1649,14 @@ export async function markFullyClosed(projectId: string, closedAt?: string): Pro
     status: nextStatus,
     productionTimestamps: { ...timestamps, closedAt: at },
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, nextStatus)
 }
 
 export async function revertProductionStarted(projectId: string): Promise<void> {
   if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy, status: rawStatus } = await loadProjectLegacyForMerge(
+  const { prevMeta, prevLegacy, updatedAt, status: rawStatus } = await loadProjectLegacyForMerge(
     projectId,
     orgId,
   )
@@ -1630,14 +1669,14 @@ export async function revertProductionStarted(projectId: string): Promise<void> 
     status: nextStatus,
     productionTimestamps: restTimestamps,
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, nextStatus)
 }
 
 export async function revertProductionComplete(projectId: string): Promise<void> {
   if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy, status: rawStatus } = await loadProjectLegacyForMerge(
+  const { prevMeta, prevLegacy, updatedAt, status: rawStatus } = await loadProjectLegacyForMerge(
     projectId,
     orgId,
   )
@@ -1650,14 +1689,14 @@ export async function revertProductionComplete(projectId: string): Promise<void>
     status: nextStatus,
     productionTimestamps: restTimestamps,
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, nextStatus)
 }
 
 export async function revertCloseoutToProductionComplete(projectId: string): Promise<void> {
   if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy, status: rawStatus } = await loadProjectLegacyForMerge(
+  const { prevMeta, prevLegacy, updatedAt, status: rawStatus } = await loadProjectLegacyForMerge(
     projectId,
     orgId,
   )
@@ -1670,7 +1709,7 @@ export async function revertCloseoutToProductionComplete(projectId: string): Pro
     status: nextStatus,
     productionTimestamps: restTimestamps,
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, nextStatus)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, nextStatus)
 }
 
 export function getProductionTimestampsFromLegacy(
@@ -1728,7 +1767,7 @@ async function persistQuoteOutcomePatch(
   clearKeys: string[] = [],
 ): Promise<void> {
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
   const prevQuote = parseQuoteRecord(prevLegacy)
   const mergedQuote = { ...prevQuote, ...quotePatch }
   for (const key of clearKeys) {
@@ -1739,7 +1778,7 @@ async function persistQuoteOutcomePatch(
     quote: mergedQuote,
     ...(projectStatus ? { status: projectStatus } : {}),
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, projectStatus)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt, projectStatus)
 }
 
 export async function markQuoteSent(projectId: string, effectiveDate?: string): Promise<void> {
@@ -2042,7 +2081,7 @@ export async function updateDrywallProjectPoData(
   }
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
 
   if (prevLegacy.intakeSource !== 'po') {
     throw new Error('This project was not created from a purchase order')
@@ -2090,7 +2129,7 @@ export async function updateDrywallProjectPoData(
     updatedAt: now,
   }
 
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
 
   const { error: columnError } = await supabase
     .from('projects')
@@ -2166,12 +2205,12 @@ export async function recordBelowFloorApproval(
     ...(approvedByName ? { approvedByName } : {}),
   }
 
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, updatedAt } = await loadProjectLegacyForMerge(projectId, orgId)
   const mergedLegacy = {
     ...prevLegacy,
     below_floor_approvals: [...getBelowFloorApprovalsFromLegacy(prevLegacy), approved],
   }
-  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta)
+  await persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, updatedAt)
   return approved
 }
 

@@ -112,47 +112,24 @@ serve(async (req) => {
       const orderId = String(body.order_id ?? '').trim()
       if (!projectId || !orderId) return json({ error: 'Missing project/order id' }, 400)
 
-      const { data: project } = await admin
-        .from('projects')
-        .select('id, metadata')
-        .eq('id', projectId)
-        .eq('organization_id', link.organization_id)
-        .maybeSingle()
-      if (!project) return json({ error: 'Order not found' }, 404)
-
-      const metadata = (project.metadata ?? {}) as Record<string, unknown>
-      const legacy = (metadata.legacy ?? {}) as Record<string, unknown>
-      const orders = Array.isArray(legacy.orders) ? (legacy.orders as Record<string, unknown>[]) : []
-      const idx = orders.findIndex((o) => o && o.id === orderId)
-      if (idx < 0) return json({ error: 'Order not found' }, 404)
-
-      const order = orders[idx]
-      // The order must belong to this supplier (token owner).
-      if (String(order.supplierId ?? '') !== String(link.supplier_id)) {
-        return json({ error: 'Not authorized for this order' }, 403)
-      }
-
-      const now = new Date().toISOString()
-      const status = String(order.status ?? 'draft')
-      if (action === 'confirm') {
-        if (status !== 'sent') return json({ error: 'This order is not awaiting confirmation.' }, 409)
-        orders[idx] = { ...order, status: 'confirmed', supplierConfirmedAt: now, updatedAt: now }
-      } else {
-        if (status !== 'confirmed' && status !== 'partial') {
-          return json({ error: 'This order is not ready to mark delivered.' }, 409)
+      const { data, error } = await admin.rpc('supplier_share_set_order_status', {
+        p_project_id: projectId,
+        p_order_id: orderId,
+        p_supplier_id: link.supplier_id,
+        p_status: action === 'confirm' ? 'confirmed' : 'complete',
+        p_stamp_field: action === 'confirm' ? 'supplierConfirmedAt' : 'supplierDeliveredAt',
+      })
+      if (error) {
+        const msg = error.message || 'Failed to update order'
+        if (msg.includes('not awaiting confirmation') || msg.includes('not ready to mark delivered')) {
+          return json({ error: msg.replace(/^[^:]+:\s*/, '') }, 409)
         }
-        orders[idx] = { ...order, status: 'complete', supplierDeliveredAt: now, updatedAt: now }
+        if (msg.includes('Not authorized')) return json({ error: 'Not authorized for this order' }, 403)
+        if (msg.includes('Order not found')) return json({ error: 'Order not found' }, 404)
+        return json({ error: msg }, 500)
       }
 
-      // Only legacy.orders changes; visibility/app_scope/quote/etc. are preserved.
-      const newMetadata = { ...metadata, legacy: { ...legacy, orders } }
-      const { error: upErr } = await admin
-        .from('projects')
-        .update({ metadata: newMetadata, updated_at: now })
-        .eq('id', projectId)
-      if (upErr) return json({ error: upErr.message }, 500)
-
-      return json({ success: true, status: orders[idx].status })
+      return json({ success: true, status: data })
     }
 
     return json({ error: 'Unknown action' }, 400)

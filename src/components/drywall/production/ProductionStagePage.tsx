@@ -23,6 +23,7 @@ import {
 } from '@/services/drywallProjectCostService'
 import {
   DrywallProjectPermissionError,
+  DrywallProjectStaleError,
   fetchDrywallProjectById,
   fieldTakeoffFromLegacy,
   getChangeOrdersFromLegacy,
@@ -135,7 +136,7 @@ export function ProductionStagePage() {
       toast.success('Production started')
       await load()
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) {
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
         toast.error(e.message)
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to start production')
@@ -157,7 +158,7 @@ export function ProductionStagePage() {
       toast.success('Production marked complete')
       await load()
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) {
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
         toast.error(e.message)
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to complete production')
@@ -179,7 +180,7 @@ export function ProductionStagePage() {
       toast.success('Completion date updated')
       await load()
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) {
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
         toast.error(e.message)
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to update completion date')
@@ -197,7 +198,7 @@ export function ProductionStagePage() {
       toast.success('Reverted to in-progress production')
       await load()
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) {
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
         toast.error(e.message)
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to revert production')

@@ -16,6 +16,7 @@ import { canReviewDrywallFieldTakeoff, canWriteDrywallField, canWriteDrywallProj
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import {
   DrywallProjectPermissionError,
+  DrywallProjectStaleError,
   fetchChangeOrders,
   fetchDrywallProjectById,
   fetchDrywallQuoteV2V3,
@@ -167,7 +168,10 @@ export function FieldMeasurementPage() {
       setSavedSnapshot(JSON.stringify(takeoff))
       toast.success('Field measurement saved')
     } catch (e) {
-      if (e instanceof DrywallProjectPermissionError) toast.error(e.message)
+      if (
+        e instanceof DrywallProjectPermissionError ||
+        e instanceof DrywallProjectStaleError
+      ) toast.error(e.message)
       else toast.error(e instanceof Error ? e.message : 'Save failed')
     } finally {
       setSaving(false)

@@ -29,6 +29,7 @@ import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import {
   deleteDrywallProject,
   DrywallProjectPermissionError,
+  DrywallProjectStaleError,
   type FieldTakeoffSiteInfo,
   fetchDrywallProjectById,
   saveFieldTakeoffSiteInfo,
@@ -175,7 +176,7 @@ export function ProjectInfoPage() {
         navigate(`/drywall/projects/${projectId}/quote`)
       }
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) {
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
         toast.error(e.message)
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to save')
@@ -194,7 +195,7 @@ export function ProjectInfoPage() {
       setDeleteOpen(false)
       navigate('/drywall', { replace: true })
     } catch (e: unknown) {
-      if (e instanceof DrywallProjectPermissionError) {
+      if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
         toast.error(e.message)
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to delete project')
