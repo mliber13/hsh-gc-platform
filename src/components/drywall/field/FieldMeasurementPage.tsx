@@ -386,20 +386,6 @@ export function FieldMeasurementPage() {
         onReject={handleRejectTakeoff}
       />
 
-      <LaborRateAdjustmentsCard
-        quote={quote}
-        fieldTakeoff={takeoff}
-        changeOrders={changeOrders}
-        catalogs={catalogs}
-        readOnly={ratesReadOnly}
-        onSaveFieldTakeoff={async (next) => {
-          const nextRaw = await saveFieldTakeoff(projectId, next, loadedAt)
-          setLoadedAt(nextRaw)
-          setTakeoff(next)
-          setSavedSnapshot(JSON.stringify(next))
-        }}
-      />
-
       <div className="flex flex-wrap gap-3">
         <div className="rounded-lg border px-4 py-2">
           <p className="text-xs uppercase text-muted-foreground">Quoted sqft</p>
@@ -453,6 +439,22 @@ export function FieldMeasurementPage() {
           />
         </div>
       </div>
+
+      {/* Below the measurement, deliberately: the rates and the headroom are read off
+          what was just measured, so they follow the numbers they depend on. */}
+      <LaborRateAdjustmentsCard
+        quote={quote}
+        fieldTakeoff={takeoff}
+        changeOrders={changeOrders}
+        catalogs={catalogs}
+        readOnly={ratesReadOnly}
+        onSaveFieldTakeoff={async (next) => {
+          const nextRaw = await saveFieldTakeoff(projectId, next, loadedAt)
+          setLoadedAt(nextRaw)
+          setTakeoff(next)
+          setSavedSnapshot(JSON.stringify(next))
+        }}
+      />
 
       {isDirty && !readOnly && (
         <p className="text-sm text-amber-700">You have unsaved changes.</p>
