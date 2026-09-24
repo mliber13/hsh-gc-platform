@@ -417,3 +417,68 @@ labelled *Material* but holds material + accessories + sales tax and scales acce
 area when bead follows linear feet of corner (§9 of `briefs/LABOR_RATES_MOVE.md`); and
 `LaborRateAdjustmentsCard` renders unconditionally on the Field Measurement page, gated only
 by the drywall workspace route — a gate that has slipped once before.
+
+---
+
+## 12. Multi-delivery jobs — the suggestion cannot subtract (2026-09-24)
+
+Found on **Lisbon Opportunity Homes**. All the metal framing was delivered on 18 Sep against
+one order; the cement board goes on a later load. Mark asked what the workflow is "to keep
+all the numbers correct."
+
+### 12.1 The numbers are not the problem
+
+`DrywallOrderItem` is `{ id, description, quantity, unit, notes?, area? }`. **There is no
+cost field anywhere on an order or an order item**, and nothing reads `legacy.orders` for
+money. Material cost in Budget headroom and the D.4 margin gate comes from the quote's direct
+costs, and from `po_estimated_cost_per_sqft` on PO-intake jobs.
+
+So a second order cannot double-count, skew a margin, or move a total. What an order drives
+is operational: what the supplier is asked for, when it arrives, and what the crew sees on
+their materials card. Worth writing down because the instinct — "another order will mess up
+the numbers" — is reasonable and wrong, and it is the kind of thing that stops someone using
+the feature correctly.
+
+### 12.2 What is actually wrong
+
+`suggestOrderItemsFromFieldTakeoff(takeoff)` (`orderSuggest.ts:11`) suggests the **entire**
+field takeoff, every time. It takes only the takeoff. It has no idea what has already been
+ordered, sent, or delivered.
+
+Both callers hit this — `OrderPage.tsx:237` on Create order, and
+`ScheduleItemOrderSheet.tsx:92` when an order is attached to a stock schedule item. So the
+second delivery arrives pre-filled with everything from the first, and the operator has to
+remember to delete it. On Lisbon that is ten lines of framing and fasteners to strip out
+before the cement board can be sent.
+
+Get that wrong in the quiet direction and L&W delivers a second load of metal studs.
+
+### 12.3 The fix
+
+`suggestOrderItemsFromFieldTakeoff(takeoff, alreadyOrdered)` — subtract the quantities already
+committed on other orders, and suggest the remainder.
+
+- **Count against `sent`, `confirmed`, `partial` and `complete`.** Not `draft`: a draft is not
+  a commitment and two drafts open at once should not hide material from each other.
+- **Match on `description`.** Both sides are produced by `formatBoardLineDescription` /
+  `formatAccessoryLineDescription`, so they agree exactly — until an operator edits one by
+  hand, at which point the match fails and the line is suggested in full. That is the **safe**
+  failure direction: over-suggesting is a delete, under-suggesting is a shortfall discovered
+  on site. Keep it that way, and do not get clever with fuzzy matching.
+- **Suppress a line that is fully covered** rather than showing it at zero. A zero-quantity
+  row is a line someone has to reason about; an absent row is not.
+- **Say what was subtracted.** "3 of 11 lines already on earlier orders" as a note on the
+  suggestion, so the absence is visible and does not read as the takeoff being wrong.
+
+### 12.4 Not in scope, but adjacent
+
+This is the shallow version. The deeper question is §9's: the takeoff is performed per stock
+event, so a job with three deliveries wants three takeoffs, not one takeoff diffed three ways.
+Subtracting quantities makes the current model survive multi-delivery jobs; it does not make
+them first-class. Do the subtraction now because it is small and stops a real error, and keep
+§9 as the thing that eventually replaces it.
+
+### 12.5 Until it is built
+
+Create the second order, delete every line that is not on this delivery, then send. Nothing
+financial is at stake — the only cost of getting it wrong is a wrong truck.
