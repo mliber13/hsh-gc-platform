@@ -19,6 +19,7 @@ import {
 } from '@/services/drywallProjectsService'
 import { suggestOrderItemsFromFieldTakeoff } from '@/lib/drywall/orderSuggest'
 import { downloadDrywallFieldMaterialsPdf } from '@/lib/drywall/fieldMaterialsOrderPdf'
+import { downloadDrywallOrderPdf } from '@/lib/drywallOrderPdf'
 import { fetchSuppliers } from '@/services/partnerDirectoryService'
 import type { DrywallOrder, DrywallProject } from '@/types/drywall'
 import type { Supplier } from '@/types/partners'
@@ -170,7 +171,18 @@ export function ScheduleItemOrderSheet({
    * the delivery — an employee running material out to a small job — without
    * inventing a supplier record for them.
    */
+  /**
+   * The PDF for whatever this card is showing.
+   *
+   * With an order attached that is the order itself — the card is about that order, and a
+   * button beside "L&W Supply · 5 items" that produced the whole job's takeoff read as the
+   * order being wrong. Without one there is nothing to print but the field materials list.
+   */
   const downloadMaterialList = async () => {
+    if (order) {
+      downloadDrywallOrderPdf(projectMeta, order)
+      return
+    }
     setDownloading(true)
     try {
       const takeoff = await fetchFieldTakeoff(projectId)
@@ -207,10 +219,14 @@ export function ScheduleItemOrderSheet({
             className="h-7 gap-1 px-2 text-xs"
             onClick={() => void downloadMaterialList()}
             disabled={loading || downloading}
-            title="Materials by area from the field measurements — no supplier needed"
+            title={
+              order
+                ? 'This order sheet, grouped by area'
+                : 'Materials by area from the field measurements — no supplier needed'
+            }
           >
             <FileDown className="h-3.5 w-3.5" />
-            {downloading ? 'Building…' : 'Material list PDF'}
+            {downloading ? 'Building…' : order ? 'Order PDF' : 'Material list PDF'}
           </Button>
         </div>
       </div>
