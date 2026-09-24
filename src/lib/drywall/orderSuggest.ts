@@ -118,6 +118,89 @@ export function suggestOrderItemsFromFieldTakeoff(
   return { items, suppressed, reduced }
 }
 
+export interface MaterialReconcileRow {
+  description: string
+  unit: string
+  area?: string
+  /** From the field takeoff — what the job measured out at. */
+  needed: number
+  /** Committed across sent / confirmed / partial / complete orders. */
+  ordered: number
+  /** needed − ordered, floored at zero. */
+  outstanding: number
+}
+
+export interface MaterialReconciliation {
+  rows: MaterialReconcileRow[]
+  /** Rows still owing material. */
+  outstandingCount: number
+  /**
+   * Lines on committed orders with no matching takeoff line — hand-added material, or a
+   * description someone edited. Surfaced rather than hidden: the view would otherwise
+   * claim a job is fully covered while quietly ignoring half of what was bought.
+   */
+  unmatched: MaterialReconcileRow[]
+}
+
+/**
+ * Measured against ordered, for a job delivered in stages.
+ *
+ * Shares `coverageKey` and the committed-status set with the suggestion above, so the two
+ * can never disagree about what counts as already ordered.
+ */
+export function reconcileOrderedAgainstTakeoff(
+  takeoff: FieldTakeoff,
+  orders: DrywallOrder[],
+): MaterialReconciliation {
+  const { boards, accessories } = extractMaterialsFromFieldTakeoff(takeoff)
+  const committed = committedQuantities(orders)
+
+  // Aggregate the need by description + unit before comparing. The same board can appear in
+  // several areas, and material is ordered by description, not by area — comparing row by
+  // row would credit the first area with the whole order and show the rest as outstanding.
+  const needs = new Map<string, MaterialReconcileRow>()
+  const want = (description: string, unit: string, needed: number, area?: string) => {
+    const key = coverageKey(description, unit)
+    const existing = needs.get(key)
+    if (existing) {
+      existing.needed += needed
+      // More than one area contributes — the description is the useful label now.
+      if (existing.area && existing.area !== area) existing.area = undefined
+      return
+    }
+    needs.set(key, { description, unit, area, needed, ordered: 0, outstanding: 0 })
+  }
+
+  for (const board of boards) {
+    want(formatBoardLineDescription(board), 'pcs', board.quantity, board.area || undefined)
+  }
+  for (const acc of accessories) {
+    if (acc.quantity <= 0 && !acc.subtype) continue
+    want(formatAccessoryLineDescription(acc), normalizeOrderUnit(acc.unit), acc.quantity || 0)
+  }
+
+  const rows: MaterialReconcileRow[] = []
+  for (const [key, row] of needs) {
+    row.ordered = committed.get(key) ?? 0
+    row.outstanding = Math.max(0, row.needed - row.ordered)
+    committed.delete(key)
+    rows.push(row)
+  }
+
+  // Whatever is left in the map was ordered without a takeoff line behind it.
+  const unmatched: MaterialReconcileRow[] = []
+  for (const [key, ordered] of committed) {
+    const [description, unit] = key.split('|')
+    unmatched.push({ description, unit, needed: 0, ordered, outstanding: 0 })
+  }
+
+  return {
+    rows,
+    outstandingCount: rows.filter((r) => r.outstanding > 0).length,
+    unmatched,
+  }
+}
+
 export interface OrderItemAreaGroup {
   area: string
   items: DrywallOrderItem[]

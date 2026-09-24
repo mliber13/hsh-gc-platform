@@ -52,6 +52,7 @@ import { isDrywallProjectClosed, isDrywallQuoteV3 } from '@/types/drywall'
 import { ChangeOrdersSection } from './ChangeOrdersSection'
 import { OrderEditorDialog } from './OrderEditorDialog'
 import { OrderFinancialCard } from './OrderFinancialCard'
+import { MaterialReconcileCard } from './MaterialReconcileCard'
 import { OrderStatusBadge } from './OrderStatusBadge'
 
 type StageSnapshot = {
@@ -449,6 +450,8 @@ export function OrderPage() {
           This project is marked complete.
         </p>
       )}
+
+      <MaterialReconcileCard fieldTakeoff={fieldTakeoff} orders={orders} />
 
       <OrderFinancialCard
         quote={quote}
