@@ -351,7 +351,10 @@ export function OrderPage() {
       return
     }
     downloadDrywallFieldMaterialsPdf(projectPdfMeta, fieldTakeoff)
-    toast.success('Order PDF downloaded')
+    // Not an order — this prints the whole field takeoff, regardless of what has been
+    // ordered. Calling it an order PDF sent an operator looking for one order's lines in a
+    // document that never had them.
+    toast.success('Field materials PDF downloaded')
   }
 
 
