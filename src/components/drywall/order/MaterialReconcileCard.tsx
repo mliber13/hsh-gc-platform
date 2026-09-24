@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { PackageCheck, PackageOpen } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { reconcileOrderedAgainstTakeoff } from '@/lib/drywall/orderSuggest'
@@ -22,6 +23,11 @@ function qty(n: number): string {
  * committed orders (sent / confirmed / partial / complete) — a draft is not material.
  */
 export function MaterialReconcileCard({ fieldTakeoff, orders }: Props) {
+  // Outstanding first, because that is the question the card answers. But the covered lines
+  // are the evidence that it read the whole takeoff — without them it looks like the card
+  // only knows about six things.
+  const [showAll, setShowAll] = useState(false)
+
   const reconciliation = useMemo(
     () => (fieldTakeoff ? reconcileOrderedAgainstTakeoff(fieldTakeoff, orders) : null),
     [fieldTakeoff, orders],
@@ -30,8 +36,10 @@ export function MaterialReconcileCard({ fieldTakeoff, orders }: Props) {
   if (!reconciliation || reconciliation.rows.length === 0) return null
 
   const { rows, outstandingCount, unmatched } = reconciliation
-  const outstanding = rows.filter((r) => r.outstanding > 0)
   const covered = rows.length - outstandingCount
+  const visible = showAll
+    ? [...rows].sort((a, b) => b.outstanding - a.outstanding)
+    : rows.filter((r) => r.outstanding > 0)
 
   return (
     <Card>
@@ -44,16 +52,27 @@ export function MaterialReconcileCard({ fieldTakeoff, orders }: Props) {
           )}
           Measured vs ordered
         </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          {outstandingCount > 0
-            ? `${outstandingCount} line${outstandingCount === 1 ? '' : 's'} still to order · ${covered} covered`
-            : `All ${rows.length} measured line${rows.length === 1 ? '' : 's'} are on an order.`}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted-foreground">
+            {outstandingCount > 0
+              ? `${outstandingCount} line${outstandingCount === 1 ? '' : 's'} still to order · ${covered} covered`
+              : `All ${rows.length} measured line${rows.length === 1 ? '' : 's'} are on an order.`}
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setShowAll((prev) => !prev)}
+          >
+            {showAll ? 'Show outstanding only' : `Show all ${rows.length} measured lines`}
+          </Button>
+        </div>
       </CardHeader>
 
-      {(outstanding.length > 0 || unmatched.length > 0) && (
+      {(visible.length > 0 || unmatched.length > 0) && (
         <CardContent className="space-y-4 text-sm">
-          {outstanding.length > 0 && (
+          {visible.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -65,28 +84,45 @@ export function MaterialReconcileCard({ fieldTakeoff, orders }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {outstanding.map((row) => (
-                    <tr key={`${row.description}|${row.unit}`} className="border-b last:border-0">
-                      <td className="py-1.5 pr-3">
-                        <span className="block">{row.description}</span>
-                        {row.area ? (
-                          <span className="text-xs text-muted-foreground">{row.area}</span>
-                        ) : null}
-                      </td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums">{qty(row.needed)}</td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">
-                        {qty(row.ordered)}
-                      </td>
-                      <td
-                        className={cn(
-                          'py-1.5 text-right font-medium tabular-nums',
-                          'text-amber-700 dark:text-amber-400',
-                        )}
-                      >
-                        {qty(row.outstanding)} {row.unit}
-                      </td>
-                    </tr>
-                  ))}
+                  {visible.map((row) => {
+                    const over = row.ordered - row.needed
+                    return (
+                      <tr key={`${row.description}|${row.unit}`} className="border-b last:border-0">
+                        <td className="py-1.5 pr-3">
+                          <span className="block">{row.description}</span>
+                          {row.area ? (
+                            <span className="text-xs text-muted-foreground">{row.area}</span>
+                          ) : null}
+                        </td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums">{qty(row.needed)}</td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">
+                          {qty(row.ordered)}
+                        </td>
+                        <td
+                          className={cn(
+                            'py-1.5 text-right font-medium tabular-nums',
+                            row.outstanding > 0
+                              ? 'text-amber-700 dark:text-amber-400'
+                              : 'text-muted-foreground',
+                          )}
+                        >
+                          {row.outstanding > 0 ? (
+                            <>
+                              {qty(row.outstanding)} {row.unit}
+                            </>
+                          ) : over > 0 ? (
+                            // Ordered more than measured — deliberate overage or a typo, but
+                            // "covered" alone would hide it.
+                            <span title="Ordered more than the field measurement">
+                              +{qty(over)} {row.unit}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
