@@ -234,7 +234,9 @@ export function OrderPage() {
       }
     }
 
-    const suggested = suggestOrderItemsFromFieldTakeoff(fieldTakeoff)
+    // `orders` is every order on the job; the suggestion ignores drafts itself.
+    const suggestion = suggestOrderItemsFromFieldTakeoff(fieldTakeoff, orders)
+    const suggested = suggestion.items
     const now = new Date().toISOString()
     const order: DrywallOrder = {
       id: generateFieldId(),
@@ -255,8 +257,14 @@ export function OrderPage() {
     }
     setOrders((prev) => sortOrders([order, ...prev]))
     setEditingOrderId(order.id)
-    if (suggested.length > 0) {
-      toast.message('Line items suggested from field takeoff')
+    // Name what was left out. An absent line otherwise reads as the takeoff being wrong.
+    const alreadyOrdered = suggestion.suppressed + suggestion.reduced
+    if (suggested.length > 0 || alreadyOrdered > 0) {
+      toast.message(
+        alreadyOrdered > 0
+          ? `Line items suggested from field takeoff — ${alreadyOrdered} already on earlier orders`
+          : 'Line items suggested from field takeoff',
+      )
     }
   }
 

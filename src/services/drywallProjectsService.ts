@@ -1216,7 +1216,9 @@ export async function saveFieldTakeoffAndAdvance(
 async function buildAutoDraftOrderFromTakeoff(
   takeoff: FieldTakeoff,
 ): Promise<DrywallOrder | null> {
-  const items = suggestOrderItemsFromFieldTakeoff(takeoff)
+  // No committed orders to subtract: the caller only reaches here when the job has none
+  // at all (see the existingOrders guard), which is what stops a re-advance duplicating.
+  const { items } = suggestOrderItemsFromFieldTakeoff(takeoff)
   if (items.length === 0) return null
 
   let supplierFields: Partial<DrywallOrder> = {}

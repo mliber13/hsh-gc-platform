@@ -43,6 +43,7 @@ export function ScheduleItemOrderSheet({
 }: ScheduleItemOrderSheetProps) {
   const [loading, setLoading] = useState(true)
   const [order, setOrder] = useState<DrywallOrder | null>(null)
+  const [otherOrders, setOtherOrders] = useState<DrywallOrder[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [projectMeta, setProjectMeta] = useState<ProjectMeta>({ name: '', address: '', client: '' })
   const [loadedAt, setLoadedAt] = useState('')
@@ -64,6 +65,9 @@ export function ScheduleItemOrderSheet({
         setLoadedAt(project.updatedAtRaw)
         const orders = getOrdersFromLegacy(project.legacy)
         setOrder(orders.find((o) => o.scheduleItemId === scheduleItemId) ?? null)
+        // Every other order on the job, so the suggestion can subtract what is already
+        // committed — this sheet is the usual way a second delivery gets created.
+        setOtherOrders(orders.filter((o) => o.scheduleItemId !== scheduleItemId))
       }
     } finally {
       setLoading(false)
@@ -89,7 +93,15 @@ export function ScheduleItemOrderSheet({
     try {
       let suggestedItems: DrywallOrder['items'] = []
       try {
-        suggestedItems = suggestOrderItemsFromFieldTakeoff(await fetchFieldTakeoff(projectId))
+        const suggestion = suggestOrderItemsFromFieldTakeoff(
+          await fetchFieldTakeoff(projectId),
+          otherOrders,
+        )
+        suggestedItems = suggestion.items
+        const alreadyOrdered = suggestion.suppressed + suggestion.reduced
+        if (alreadyOrdered > 0) {
+          toast.message(`${alreadyOrdered} line(s) already on earlier orders — not suggested here`)
+        }
       } catch {
         suggestedItems = []
       }
