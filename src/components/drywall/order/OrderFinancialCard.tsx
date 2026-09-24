@@ -5,6 +5,7 @@ import {
   type OrderReviewLaborRatesInput,
 } from '@/lib/drywall/orderFinancialComparison'
 import { projectV3QuoteToV2Shape } from '@/lib/drywall/projectV3QuoteToV2Shape'
+import { computeMeasuredSqft } from '@/lib/drywall/fieldMeasurementUtils'
 import type { DrywallChangeOrder, DrywallQuote, DrywallQuoteV2V3, FieldTakeoff } from '@/types/drywall'
 import { isDrywallQuoteV3 } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
@@ -58,7 +59,9 @@ export function OrderFinancialCard({
     )
   }
 
-  const fieldSqft = fieldTakeoff.totalMeasuredSqft || 0
+  // Areas first, stored scalar as fallback — same staleness the rate card had.
+  const measuredFromAreas = computeMeasuredSqft(fieldTakeoff.measurements ?? [])
+  const fieldSqft = measuredFromAreas > 0 ? measuredFromAreas : fieldTakeoff.totalMeasuredSqft || 0
   if (fieldSqft <= 0) {
     return (
       <Card className="border-amber-500/30 bg-amber-500/5">

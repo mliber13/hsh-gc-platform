@@ -173,7 +173,12 @@ export function FieldMeasurementPage() {
         setSavedAddress(addr)
       }
       setLoadedAt(at)
-      setSavedSnapshot(JSON.stringify(takeoff))
+      // saveFieldTakeoff recomputes totalMeasuredSqft before writing, so page state was
+      // left holding whatever the total was at load — stale for the rest of the session
+      // once areas were added. Adopt what was actually stored.
+      const stored = fieldTakeoffWithTotals(takeoff)
+      setTakeoff(stored)
+      setSavedSnapshot(JSON.stringify(stored))
       toast.success('Field measurement saved')
     } catch (e) {
       if (

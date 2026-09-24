@@ -3,6 +3,7 @@ import { applyLaborBurden } from '@/lib/drywall/calculations/quantityUtils'
 import { calculateQuoteTotals } from '@/lib/drywall/quoteCalculations'
 import { computeContractValue } from '@/lib/drywall/contractValue'
 import { computeQuoteV3Totals } from '@/lib/drywall/quoteV3Math'
+import { computeMeasuredSqft } from '@/lib/drywall/fieldMeasurementUtils'
 import type { DrywallChangeOrder, DrywallQuote, DrywallQuoteV3, FieldTakeoff } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 
@@ -199,7 +200,19 @@ export function buildOrderFinancialComparison(
   reviewLaborRates: OrderReviewLaborRatesInput,
   context?: OrderFinancialComparisonContext,
 ): OrderFinancialComparison {
-  const fieldSqft = fieldTakeoff.totalMeasuredSqft || 0
+  // Compute from the areas rather than trusting the stored scalar.
+  //
+  // totalMeasuredSqft is only refreshed when the takeoff is written — the page never
+  // puts the recomputed value back into its own state after a save. So an operator who
+  // loaded the page with one area measured, then added seven more and saved, kept a
+  // totalMeasuredSqft frozen at the first area while the Measured sqft tile beside it
+  // recomputed live. Goodwill Multi read 7,296 here against 38,928 on the tile.
+  //
+  // The areas are the source of truth; the scalar is a cache. Fall back to it only when
+  // there are no areas to add up (a legacy takeoff, or a crew draft that carries the
+  // total without the detail).
+  const measuredFromAreas = computeMeasuredSqft(fieldTakeoff.measurements ?? [])
+  const fieldSqft = measuredFromAreas > 0 ? measuredFromAreas : fieldTakeoff.totalMeasuredSqft || 0
   const v3Quote = context?.v3Quote
   const catalogs = context?.catalogs
   const v3Direct =
