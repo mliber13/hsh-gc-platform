@@ -160,6 +160,9 @@ export function ProjectInfoPage() {
         loadedAt,
       )
       let nextRaw = updated.updatedAtRaw
+      // Publish immediately — a failure in the site write below must not throw away a
+      // timestamp this write already earned, or the page wedges on a stale conflict.
+      setLoadedAt(nextRaw)
       // Site/access info lives in the shared field takeoff — save it only when it changed so
       // we don't bump the takeoff's updated timestamp on every project-info save.
       if (siteDirty) {
@@ -171,10 +174,10 @@ export function ProjectInfoPage() {
           hazards: site.hazards.trim(),
         }
         nextRaw = await saveFieldTakeoffSiteInfo(projectId, trimmedSite, nextRaw)
+        setLoadedAt(nextRaw)
         setSite(trimmedSite)
         setSavedSiteSnapshot(JSON.stringify(trimmedSite))
       }
-      setLoadedAt(nextRaw)
       const next = toForm(updated)
       setForm(next)
       setSavedSnapshot(JSON.stringify(next))

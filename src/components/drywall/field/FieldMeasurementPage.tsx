@@ -158,7 +158,11 @@ export function FieldMeasurementPage() {
 
     setSaving(true)
     try {
+      // Publish the new timestamp after each write. A failure in the second must not
+      // discard what the first already told us, or the page is wedged on "changed
+      // somewhere else" until a reload throws the operator's measurement away.
       let at = await saveFieldTakeoff(projectId, takeoff, loadedAt)
+      setLoadedAt(at)
       const addr = projectAddress.trim()
       if (addr !== savedAddress) {
         const updated = await updateDrywallProjectInfo(
@@ -170,9 +174,9 @@ export function FieldMeasurementPage() {
           at,
         )
         at = updated.updatedAtRaw
+        setLoadedAt(at)
         setSavedAddress(addr)
       }
-      setLoadedAt(at)
       // saveFieldTakeoff recomputes totalMeasuredSqft before writing, so page state was
       // left holding whatever the total was at load — stale for the rest of the session
       // once areas were added. Adopt what was actually stored.

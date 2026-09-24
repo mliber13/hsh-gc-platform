@@ -133,6 +133,7 @@ export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
     try {
       const payload = { ...quote, version: 2 }
       const afterQuote = await saveDrywallQuote(projectId, payload, project.updatedAtRaw)
+      advanceLoadedAt(afterQuote)
       const afterCalcs = await saveDrywallQuoteCalculations(projectId, calculations, afterQuote)
       advanceLoadedAt(afterCalcs)
       const refreshed = await fetchDrywallQuote(projectId)
@@ -200,8 +201,12 @@ export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
       let at = project.updatedAtRaw
       if (isDirty) {
         const payload = { ...quote!, version: 2 }
+        // Publish after each write. A conversion that fails must not leave the page
+        // holding a timestamp the two saves above already moved past.
         at = await saveDrywallQuote(projectId, payload, at)
+        advanceLoadedAt(at)
         at = await saveDrywallQuoteCalculations(projectId, calculations, at)
+        advanceLoadedAt(at)
       }
       const converted = await convertQuoteToV3(projectId, at)
       advanceLoadedAt(converted.updatedAtRaw)

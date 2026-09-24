@@ -134,8 +134,12 @@ export function FieldPhotosSection({
       for (const file of Array.from(files)) {
         const result = await uploadFieldPhoto(projectId, file, at)
         at = result.updatedAtRaw
+        // Publish after every upload, not once at the end. Each upload writes the project
+        // row, so a later file failing used to leave the page holding a timestamp two
+        // versions behind — and every save after that reported "changed somewhere else"
+        // until the operator reloaded and lost whatever they had typed.
+        onLoadedAtChange(at)
       }
-      onLoadedAtChange(at)
       await refresh()
       onPhotosChange()
       toast.success(files.length > 1 ? 'Photos uploaded' : 'Photo uploaded')
