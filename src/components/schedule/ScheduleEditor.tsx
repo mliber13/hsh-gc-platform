@@ -252,6 +252,21 @@ export function ScheduleEditor({
               Schedule history
             </Button>
           ) : null}
+          {/* Also offered when the schedule already has items: a job that has been measured
+              and nothing else is exactly the one that needs the rest of the chain generated,
+              and until now the button vanished the moment the first item existed. The dialog
+              skips what is already there and hangs the rest off it. */}
+          {!readOnly && !empty && division === 'drywall' ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setGenerateOpen(true)}
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Generate standard schedule
+            </Button>
+          ) : null}
           {!readOnly && !empty && (
             <Button type="button" size="sm" onClick={openCreate}>
               <Plus className="mr-2 h-4 w-4" />
