@@ -12,6 +12,7 @@ import {
   postProjectComms,
   type ProjectCommsMessage,
 } from '@/services/projectCommsService'
+import { filterMessagesForCrewViewer } from '@/lib/drywall/commsLaneVisibility'
 
 interface CrewCommsPanelProps {
   projectId: string
@@ -20,6 +21,14 @@ interface CrewCommsPanelProps {
   prefillText?: string
   /** Bump this to (re-)apply prefillText — lets the same text re-prefill if user clicks again. */
   prefillToken?: number
+  /**
+   * Operator previewing as this crew member. RLS answers as the *operator's* session, which
+   * for office is every lane, so without this the preview shows private conversations the
+   * person cannot actually see. See `commsLaneVisibility`.
+   */
+  viewAsPersonId?: string | null
+  /** Whether that person is assigned to this project — decides the job-wide lane. */
+  viewAsAssigned?: boolean
 }
 
 export function CrewCommsPanel({
@@ -27,6 +36,8 @@ export function CrewCommsPanel({
   readOnly = false,
   prefillText,
   prefillToken,
+  viewAsPersonId = null,
+  viewAsAssigned = false,
 }: CrewCommsPanelProps) {
   const [entries, setEntries] = useState<ProjectCommsMessage[]>([])
   const [body, setBody] = useState('')
@@ -81,6 +92,14 @@ export function CrewCommsPanel({
     }
   }
 
+  // In a preview, show what that person can see rather than what this session can read.
+  const { visible: shownEntries, hiddenCount } = viewAsPersonId
+    ? filterMessagesForCrewViewer(entries, {
+        personId: viewAsPersonId,
+        isAssignedToProject: viewAsAssigned,
+      })
+    : { visible: entries, hiddenCount: 0 }
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -88,6 +107,12 @@ export function CrewCommsPanel({
           <MessageSquare className="size-4" />
           Messages
         </CardTitle>
+        {viewAsPersonId && hiddenCount > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            {hiddenCount} message{hiddenCount === 1 ? '' : 's'} on this job {hiddenCount === 1 ? 'is' : 'are'}{' '}
+            in a lane this person cannot see.
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         {!readOnly ? (
@@ -115,11 +140,11 @@ export function CrewCommsPanel({
 
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : entries.length === 0 ? (
+        ) : shownEntries.length === 0 ? (
           <p className="text-sm text-muted-foreground">No messages yet.</p>
         ) : (
           <ul className="space-y-3">
-            {entries.map((entry) => (
+            {shownEntries.map((entry) => (
               <li key={entry.id} className="rounded-lg border bg-muted/20 p-3">
                 <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">{entry.author}</span>

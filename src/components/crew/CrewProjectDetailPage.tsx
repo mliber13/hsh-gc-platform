@@ -1004,6 +1004,10 @@ export function CrewProjectDetailPage() {
         readOnly={readOnly}
         prefillText={prefillText}
         prefillToken={prefillToken}
+        viewAsPersonId={viewAsPersonId}
+        // The detail loaded under this person's id, so they reach this project — which is
+        // what the job-wide lane keys on.
+        viewAsAssigned={Boolean(viewAsPersonId && detail)}
       />
 
       {canEditSchedule ? (
