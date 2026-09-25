@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { addWorkdays, cascadeSchedule, workdaysBetween } from '@/lib/scheduleDateMath'
 import {
   DEFAULT_STANDARD_SCHEDULE_TEMPLATE,
+  type StandardScheduleStep,
   type StandardScheduleTemplate,
 } from '@/lib/drywall/standardScheduleTemplate'
 import { fetchStandardScheduleTemplate } from '@/services/standardScheduleTemplateService'
@@ -797,24 +798,77 @@ export async function deleteScheduleItemForProject(itemId: string): Promise<void
   }
 }
 
+/** Compare step and item names the way an operator would — case and spacing aside. */
+function scheduleNameKey(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+export interface StandardScheduleGenerationPlan {
+  /** Template steps that will be created. */
+  stepsToCreate: StandardScheduleStep[]
+  /** Steps skipped because an item with that name is already on the schedule. */
+  skipped: StandardScheduleStep[]
+  /** Existing item the first created step will hang off, when there is one. */
+  anchor: DrywallProjectScheduleItem | null
+}
+
+/**
+ * What generating would do, without doing it.
+ *
+ * A job that has been measured but not yet scheduled is the common case — running the
+ * generator on it used to add a second Measure and chain everything off that, because the
+ * generator only ever built the full template from an empty start.
+ *
+ * Skipping is by name against the existing items, so a template step already on the
+ * schedule is left alone rather than duplicated. The anchor is the latest existing item by
+ * end date: the new chain continues from where the schedule actually stops.
+ */
+export async function planStandardDrywallSchedule(
+  projectId: string,
+): Promise<StandardScheduleGenerationPlan> {
+  const template: StandardScheduleTemplate =
+    (await fetchStandardScheduleTemplate()) ?? DEFAULT_STANDARD_SCHEDULE_TEMPLATE
+  const existing = await fetchScheduleItemsForProject(projectId, { division: 'drywall' })
+  const existingNames = new Set(existing.map((item) => scheduleNameKey(item.name)))
+
+  const stepsToCreate: StandardScheduleStep[] = []
+  const skipped: StandardScheduleStep[] = []
+  for (const step of template) {
+    if (existingNames.has(scheduleNameKey(step.name))) skipped.push(step)
+    else stepsToCreate.push(step)
+  }
+
+  const anchor =
+    existing.length === 0
+      ? null
+      : existing.reduce((latest, item) => (item.end_date > latest.end_date ? item : latest))
+
+  return { stepsToCreate, skipped, anchor }
+}
+
 export async function generateStandardDrywallSchedule(
   projectId: string,
   measureDate: string,
 ): Promise<DrywallProjectScheduleItem[]> {
   const organizationId = await requireUserOrgId()
   const scheduleId = await getOrCreateScheduleForProject(projectId, organizationId)
-  const start = toDateOnly(measureDate)
 
-  // Org-configured template (Settings → Standard Schedule); falls back to the
-  // built-in default. Steps form a linear chain: each depends on the previous.
-  const template: StandardScheduleTemplate =
-    (await fetchStandardScheduleTemplate()) ?? DEFAULT_STANDARD_SCHEDULE_TEMPLATE
+  const { stepsToCreate: template, anchor } = await planStandardDrywallSchedule(projectId)
+  if (template.length === 0) {
+    throw new Error('Every step in the standard schedule is already on this job.')
+  }
+
+  // With an anchor, the chain continues from it and the typed date is ignored — the
+  // cascade repositions from the predecessor anyway, so honouring a date here would only
+  // be overwritten a moment later.
+  const start = toDateOnly(anchor ? anchor.end_date : measureDate)
 
   const createdIds: string[] = []
   const rows = template.map((step, index) => {
     const id = uuidv4()
     createdIds.push(id)
-    const predecessorIds = index > 0 ? [createdIds[index - 1]] : []
+    const predecessorIds =
+      index > 0 ? [createdIds[index - 1]] : anchor ? [anchor.id] : []
     // Seed each item's span from its duration; the cascade then repositions
     // starts by predecessor + lag while preserving these durations.
     const endDate = toDateOnly(
