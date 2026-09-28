@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { toDateKey, todayKey } from '@/lib/dateFormat'
 import { addWorkdays, cascadeSchedule, endDateForDuration, workdaysBetween } from '@/lib/scheduleDateMath'
 import { mapsUrl } from '@/lib/mapsUrl'
 import type { ScheduleItem } from '@/types'
@@ -170,7 +171,7 @@ export function ScheduleItemDialog({
       setLeadPersonIds(editing.lead_person_ids ?? [])
       setSupplierId(editing.supplier_id ?? null)
     } else {
-      const today = new Date().toISOString().slice(0, 10)
+      const today = todayKey()
       setName('')
       setType('field')
       setStartDate(today)
@@ -228,11 +229,11 @@ export function ScheduleItemDialog({
       if (!maxStart || candidate > maxStart) maxStart = candidate
     }
     if (maxStart) {
-      const iso = maxStart.toISOString().slice(0, 10)
+      const iso = toDateKey(maxStart)
       setStartDate(iso)
       // Preserve workDays — recompute end based on the cascaded start + current workDays.
       const newEnd = endDateForDuration(maxStart, workDays)
-      setEndDate(newEnd.toISOString().slice(0, 10))
+      setEndDate(toDateKey(newEnd))
     }
   }, [open, predecessorIds, lagWorkDays, siblingItems, editing, workDays])
 
@@ -249,7 +250,7 @@ export function ScheduleItemDialog({
     if (!value) return
     const start = parseISO(value)
     const newEnd = endDateForDuration(start, workDays)
-    setEndDate(newEnd.toISOString().slice(0, 10))
+    setEndDate(toDateKey(newEnd))
   }
 
   const handleWorkDaysChange = (value: number) => {
@@ -257,7 +258,7 @@ export function ScheduleItemDialog({
     if (!startDate) return
     const start = parseISO(startDate)
     const newEnd = endDateForDuration(start, value)
-    setEndDate(newEnd.toISOString().slice(0, 10))
+    setEndDate(toDateKey(newEnd))
   }
 
   const handleEndDateChange = (value: string) => {
@@ -339,7 +340,7 @@ export function ScheduleItemDialog({
     const result = cascadeSchedule(models, { lagSemantic: 'parallel-zero' })
     const cascaded = result.items.find((i) => i.id === draftId)
     if (!cascaded) return payload.startDate
-    return cascaded.startDate.toISOString().slice(0, 10)
+    return toDateKey(cascaded.startDate)
   }
 
   const addTask = () => {
@@ -465,7 +466,7 @@ export function ScheduleItemDialog({
     const newPredEnd = lag === 0 ? userStart : addWorkdays(userStart, -lag)
     const newPredStart = addWorkdays(newPredEnd, -(pred.duration - 1))
 
-    const isoDate = (d: Date) => d.toISOString().slice(0, 10)
+    const isoDate = (d: Date) => toDateKey(d)
     const predPayload: NewScheduleItemInput = {
       name: pred.name,
       type: pred.type,

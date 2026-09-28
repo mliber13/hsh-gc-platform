@@ -6,6 +6,7 @@
 // It replaces localStorage when online mode is enabled
 //
 
+import { toDateKey, todayKey } from '@/lib/dateFormat'
 import { supabase, isOnlineMode } from '@/lib/supabase'
 import { parseISO } from 'date-fns'
 import { v4 as uuidv4 } from 'uuid'
@@ -138,9 +139,11 @@ export type ScheduleItemQuickPatch = {
 }
 
 function toISODate(value: Date | string | undefined): string {
-  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  // Schedule dates are local-midnight Dates. toISOString shifts them a day in
+  // a positive UTC offset; toDateKey keeps the calendar day they were built as.
+  if (value instanceof Date) return toDateKey(value)
   if (typeof value === 'string' && value.length >= 10) return value.slice(0, 10)
-  return new Date().toISOString().slice(0, 10)
+  return todayKey()
 }
 
 function mapSchedulePredecessorRowToModel(row: SchedulePredecessorRow): SchedulePredecessor | null {

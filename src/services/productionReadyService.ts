@@ -7,6 +7,7 @@
 // skews the COO dashboard (backlog vs. capacity). This surfaces those jobs so
 // the office can one-click advance them; it never changes status on its own.
 
+import { todayKey } from '@/lib/dateFormat'
 import { supabase, isOnlineMode } from '@/lib/supabase'
 import { requireUserOrgId } from '@/services/userService'
 import {
@@ -39,7 +40,7 @@ export async function fetchProductionReadyNudges(): Promise<ProductionReadyNudge
   if (!isOnlineMode()) return []
 
   const orgId = await requireUserOrgId()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayKey()
 
   const { data: projects, error: projErr } = await supabase
     .from('projects')

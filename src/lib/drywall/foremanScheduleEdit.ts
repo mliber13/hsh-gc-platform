@@ -4,6 +4,7 @@
  */
 
 import { parseISO } from 'date-fns'
+import { toDateKey } from '@/lib/dateFormat'
 import {
   addWorkdays,
   cascadeSchedule,
@@ -146,7 +147,7 @@ export function predictCascadeStartForEdit(
   const result = cascadeSchedule(models, { lagSemantic: 'parallel-zero' })
   const cascaded = result.items.find((i) => i.id === editingId)
   if (!cascaded) return edit.startDate
-  return cascaded.startDate.toISOString().slice(0, 10)
+  return toDateKey(cascaded.startDate)
 }
 
 /**
@@ -200,7 +201,7 @@ export function shiftPredecessorForConflict(
   const lag = editing?.lag_work_days ?? 0
   const newPredEnd = lag === 0 ? userStart : addWorkdays(userStart, -lag)
   const newPredStart = addWorkdays(newPredEnd, -(pred.duration - 1))
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  const iso = (d: Date) => toDateKey(d)
 
   return siblings.map((s) => {
     if (s.id !== pred.id) return s
@@ -248,8 +249,8 @@ export function buildCascadePreview(
   const cascadedItems: DrywallProjectScheduleItem[] = result.items.map((model) => {
     const base = byId.get(model.id)
     if (!base) return base as unknown as DrywallProjectScheduleItem
-    const start = model.startDate.toISOString().slice(0, 10)
-    const end = model.endDate.toISOString().slice(0, 10)
+    const start = toDateKey(model.startDate)
+    const end = toDateKey(model.endDate)
     return {
       ...base,
       start_date: start,
@@ -265,10 +266,10 @@ export function buildCascadePreview(
   const changes = result.changes.map((c: CascadeChange) => ({
     itemId: c.itemId,
     name: nameById.get(c.itemId) ?? c.itemId,
-    oldStartDate: c.oldStartDate.toISOString().slice(0, 10),
-    newStartDate: c.newStartDate.toISOString().slice(0, 10),
-    oldEndDate: c.oldEndDate.toISOString().slice(0, 10),
-    newEndDate: c.newEndDate.toISOString().slice(0, 10),
+    oldStartDate: toDateKey(c.oldStartDate),
+    newStartDate: toDateKey(c.newStartDate),
+    oldEndDate: toDateKey(c.oldEndDate),
+    newEndDate: toDateKey(c.newEndDate),
   }))
 
   return { items: cascadedItems, changes, conflict: null }

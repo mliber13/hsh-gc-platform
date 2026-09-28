@@ -12,6 +12,7 @@ import {
 import { Clock, Link2, Pencil, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
+import { addDaysToDateKey, todayKey } from '@/lib/dateFormat'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
 import { Button } from '@/components/ui/button'
@@ -58,9 +59,7 @@ function formatHours(value: number) {
 }
 
 function isoDateFromNow(daysOffset: number) {
-  const d = new Date()
-  d.setDate(d.getDate() + daysOffset)
-  return d.toISOString().slice(0, 10)
+  return addDaysToDateKey(todayKey(), daysOffset)
 }
 
 const ISO = 'yyyy-MM-dd'

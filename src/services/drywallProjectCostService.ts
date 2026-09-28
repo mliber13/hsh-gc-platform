@@ -2,6 +2,7 @@
 // Drywall project cost — Supabase read layer (D.1.4)
 // ============================================================================
 
+import { orgDateKey, todayKey } from '@/lib/dateFormat'
 import { isOnlineMode, supabase } from '@/lib/supabase'
 import {
   combineProjectCost,
@@ -76,10 +77,12 @@ function toIsoDate(raw: unknown): string {
   if (typeof raw === 'string' && raw.length >= 10) {
     return raw.slice(0, 10)
   }
+  // Transaction timestamps are instants. The date on the cost row is the org day,
+  // not the UTC day — a late-evening Eastern posting stays on that evening's date.
   if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
-    return raw.toISOString().slice(0, 10)
+    return orgDateKey(raw)
   }
-  return new Date().toISOString().slice(0, 10)
+  return todayKey()
 }
 
 function qbMaterialDescription(row: {

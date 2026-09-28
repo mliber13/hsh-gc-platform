@@ -123,5 +123,11 @@ export interface PayrollTimeImportRow {
   personName: string
   projectId: string | null
   projectName: string
+  /** Quarter-hour rounded hours. A long punch is NOT reduced. */
   hours: number
+  /**
+   * True when any punch in the group ran longer than a working day (16h).
+   * The row is still imported in full so someone can review it.
+   */
+  needsReview: boolean
 }

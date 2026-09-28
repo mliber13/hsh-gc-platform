@@ -14,6 +14,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { usePermissions } from '@/hooks/usePermissions'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
+import { todayKey } from '@/lib/dateFormat'
 import { isCrewRole } from '@/lib/rbac'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -101,12 +102,12 @@ export function CrewProjectListPage() {
       return
     }
     let cancelled = false
-    const todayKey = new Date().toISOString().slice(0, 10)
+    const today = todayKey()
     void fetchPersonUnavailability()
       .then((all) => {
         if (cancelled) return
         setMyTimeOff(
-          all.filter((u) => u.personId === timeOffPersonId && u.endDate >= todayKey),
+          all.filter((u) => u.personId === timeOffPersonId && u.endDate >= today),
         )
       })
       .catch(() => {

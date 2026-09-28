@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { todayKey } from '@/lib/dateFormat'
 import {
   DrywallScheduleCascadeError,
   generateStandardDrywallSchedule,
@@ -30,7 +31,7 @@ export function GenerateStandardScheduleDialog({
   projectId,
   onGenerated,
 }: Props) {
-  const [measureDate, setMeasureDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [measureDate, setMeasureDate] = useState(() => todayKey())
   const [generating, setGenerating] = useState(false)
   const [plan, setPlan] = useState<StandardScheduleGenerationPlan | null>(null)
   const [loadingPlan, setLoadingPlan] = useState(false)

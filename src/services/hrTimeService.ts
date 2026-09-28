@@ -1,3 +1,4 @@
+import { instantFallsOnOrgDate, orgDateRangeBounds } from '@/lib/dateFormat'
 import { isOnlineMode, supabase } from '@/lib/supabase'
 import type {
   PayrollTimeImportQuery,
@@ -94,6 +95,21 @@ export async function clockIn(input: {
   const personName = await resolvePersonName(organizationId, input.personId, input.personType)
   const projectName = input.projectId ? await resolveProjectName(input.projectId) : null
 
+  const { data: openRows, error: openError } = await supabase
+    .from('time_entries')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('person_id', input.personId)
+    .is('clock_out', null)
+    .limit(1)
+  if (openError) {
+    console.error('clockIn open-punch check:', openError)
+    throw new Error(openError.message || 'Failed to clock in')
+  }
+  if (openRows && openRows.length > 0) {
+    throw new Error('Already clocked in — clock out first.')
+  }
+
   const row = {
     organization_id: organizationId,
     person_id: input.personId,
@@ -112,6 +128,7 @@ export async function clockIn(input: {
   if (error) {
     console.error('clockIn:', error)
     if (isRlsOrPermissionError(error)) throw new HrTimePermissionError()
+    if (error.code === '23505') throw new Error('Already clocked in — clock out first.')
     throw new Error(error.message || 'Failed to clock in')
   }
   return mapRow((data ?? {}) as Record<string, unknown>)
@@ -169,12 +186,18 @@ export async function fetchMyOpenPunch(): Promise<PunchState> {
 export async function fetchEntriesForRange(query: TimeEntriesRangeQuery): Promise<TimeEntry[]> {
   if (!isOnlineMode()) throw new Error('Time Clock requires an online connection to Supabase.')
   const organizationId = await requireUserOrgId()
+  // Explicit America/New_York bounds, not an RPC. PostgREST can filter timestamptz
+  // once the instants are real offsets; a bare 'T00:00:00' is midnight UTC, so a
+  // Sunday punch after 8pm Eastern landed in the next week's import. The same
+  // helper decides groupPunchesForImport, so the query and the pure grouping agree.
+  // DST is computed per day (EDT −4 / EST −5), not hardcoded.
+  const bounds = orgDateRangeBounds(query.from, query.to)
   let q = supabase
     .from('time_entries')
     .select(TIME_SELECT)
     .eq('organization_id', organizationId)
-    .gte('clock_in', `${query.from}T00:00:00`)
-    .lte('clock_in', `${query.to}T23:59:59`)
+    .gte('clock_in', bounds.startIso)
+    .lte('clock_in', bounds.endIso)
     .order('clock_in', { ascending: false })
 
   if (query.personId) q = q.eq('person_id', query.personId)
@@ -208,35 +231,60 @@ export function roundHoursToQuarter(hours: number): number {
   return Math.round(hours * 4) / 4
 }
 
-export async function fetchEntriesForPayrollImport(
-  query: PayrollTimeImportQuery,
-): Promise<PayrollTimeImportRow[]> {
-  const entries = await fetchEntriesForRange({ from: query.start, to: query.end })
+/**
+ * A closed punch longer than this is flagged for review. It is not truncated
+ * and not dropped — shortening it would be a silent edit to someone's pay.
+ */
+export const LONG_PUNCH_REVIEW_HOURS = 16
+
+/**
+ * Group closed punches in an org-local date window into payroll import rows.
+ * Open punches (no clock-out) are excluded. Hours are quarter-rounded and kept
+ * in full even when a punch is flagged.
+ */
+export function groupPunchesForImport(
+  entries: TimeEntry[],
+  from: string,
+  to: string,
+): PayrollTimeImportRow[] {
   const map = new Map<string, PayrollTimeImportRow>()
   for (const entry of entries) {
-    const personName = entry.person_name || 'Unknown'
-    const projectName = entry.project_name || 'Unassigned'
-    const projectId = entry.project_id ?? null
-    const hours = roundHoursToQuarter(diffHours(entry.clock_in, entry.clock_out))
+    const clockIn = new Date(entry.clock_in)
+    if (Number.isNaN(clockIn.getTime())) continue
+    if (!instantFallsOnOrgDate(clockIn, from, to)) continue
+    if (!entry.clock_out) continue
+    const rawHours = diffHours(entry.clock_in, entry.clock_out)
+    const hours = roundHoursToQuarter(rawHours)
     if (hours <= 0) continue
+    const longPunch = rawHours > LONG_PUNCH_REVIEW_HOURS
+    const projectId = entry.project_id ?? null
     const key = `${entry.person_type}:${entry.person_id}:${projectId ?? 'none'}`
     const current = map.get(key)
     if (current) {
       current.hours += hours
+      if (longPunch) current.needsReview = true
     } else {
       map.set(key, {
         personId: entry.person_id,
         personType: entry.person_type,
-        personName,
+        personName: entry.person_name || 'Unknown',
         projectId,
-        projectName,
+        projectName: entry.project_name || 'Unassigned',
         hours,
+        needsReview: longPunch,
       })
     }
   }
   return Array.from(map.values()).sort((a, b) =>
     a.personName.localeCompare(b.personName) || a.projectName.localeCompare(b.projectName),
   )
+}
+
+export async function fetchEntriesForPayrollImport(
+  query: PayrollTimeImportQuery,
+): Promise<PayrollTimeImportRow[]> {
+  const entries = await fetchEntriesForRange({ from: query.start, to: query.end })
+  return groupPunchesForImport(entries, query.start, query.end)
 }
 
 export async function updateEntry(entryId: string, patch: TimeEntryEditDraft): Promise<TimeEntry> {

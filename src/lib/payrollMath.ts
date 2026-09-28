@@ -11,6 +11,7 @@ import type {
 } from '@/types/payroll'
 import type { Employee, Contractor1099 } from '@/types/hr'
 import { generateHrId, isArchivedMember } from '@/lib/hrTeamUtils'
+import { resolveCrewPaySqftFromMetadata } from '@/lib/drywall/crewPayBasis'
 
 /** First N hours per employee per run at 1× before OT multiplier applies. */
 export const REGULAR_HOURS_CAP = 40
@@ -814,9 +815,13 @@ export function fieldMeasuredSqftFromProjectMetadata(metadata: unknown): number 
 }
 
 export function getSqftFromJob(
-  project: { fieldMeasuredSqft?: number | null } | null | undefined,
+  project: { metadata?: unknown; fieldMeasuredSqft?: number | null } | null | undefined,
 ): number | null {
-  const n = project?.fieldMeasuredSqft
+  if (!project) return null
+  // Metadata is the shared crew basis (measured, else quote/PO, plus accepted
+  // change-order sqft). Callers that only have the measured number still work.
+  if (project.metadata != null) return resolveCrewPaySqftFromMetadata(project.metadata).sqft
+  const n = project.fieldMeasuredSqft
   if (n == null || n <= 0) return null
   return n
 }

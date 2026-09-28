@@ -1,5 +1,6 @@
 import { addDays, differenceInCalendarDays, isAfter, isBefore, parseISO } from 'date-fns'
 import type { ScheduleItem } from '@/types'
+import { toDateKey } from '@/lib/dateFormat'
 
 export interface UnavailabilityWindow {
   companyId: string
@@ -42,7 +43,7 @@ const DEFAULT_WORKDAYS: ReadonlyArray<0 | 1 | 2 | 3 | 4 | 5 | 6> = [1, 2, 3, 4, 
 const MAX_DATE_WALK_ITERATIONS = 365
 
 function toDateOnlyKey(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  return toDateKey(date)
 }
 
 function normalizeWorkdays(options?: ScheduleDateMathOptions): ReadonlyArray<0 | 1 | 2 | 3 | 4 | 5 | 6> {

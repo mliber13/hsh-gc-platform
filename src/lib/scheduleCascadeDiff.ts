@@ -1,4 +1,5 @@
 import type { ScheduleItem } from '@/types'
+import { toDateKey } from '@/lib/dateFormat'
 
 export interface CascadeChangeRow {
   item_id: string
@@ -25,7 +26,7 @@ export interface CascadeRowWithSmsContext extends CascadeChangeRow {
 }
 
 function dateKey(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  return toDateKey(date)
 }
 
 export function computeCascadeDiff(

@@ -1,6 +1,7 @@
 // DELETION SWEEP: live only through SchedulePortfolioItemModal (ResourceCompare).
 // Step 6 wires sub confirmations into ScheduleItemDialog; resolve then.
 // Flagged 2026-09-15.
+import { toDateKey } from '@/lib/dateFormat'
 import { supabase } from '@/lib/supabase'
 import { requireUserOrgId } from '@/services/userService'
 import type {
@@ -297,8 +298,8 @@ export async function persistCascadeChanges(params: {
     const { error } = await supabase
       .from('schedule_items')
       .update({
-        start_date: row.new_start.toISOString().slice(0, 10),
-        end_date: row.new_end.toISOString().slice(0, 10),
+        start_date: toDateKey(row.new_start),
+        end_date: toDateKey(row.new_end),
       })
       .eq('id', row.item_id)
     if (error) throw error

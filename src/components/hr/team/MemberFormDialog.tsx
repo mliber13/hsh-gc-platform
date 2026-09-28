@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { Contractor1099, Employee, JobPosition, MemberStatus } from '@/types/hr'
+import { todayKey } from '@/lib/dateFormat'
 import { formatPayType, generateHrId, normalizeMemberStatus, resolveEffectiveSalary } from '@/lib/hrTeamUtils'
 import { DIVISIONS, type DivisionCode } from '@/lib/divisions'
 
@@ -163,7 +164,7 @@ export function MemberFormDialog({
         effectiveDate: r.effectiveDate,
         salaryAmount: Number(r.salaryAmount),
       }))
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayKey()
 
     const base: Employee | Contractor1099 = {
       ...(member ?? { id: generateHrId() }),

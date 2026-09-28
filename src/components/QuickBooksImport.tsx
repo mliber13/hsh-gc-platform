@@ -3,6 +3,7 @@
 // ============================================================================
 
 import React, { useState, useEffect } from 'react'
+import { todayKey } from '@/lib/dateFormat'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -799,7 +800,7 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                     disabled={laborBurdenSaving}
                     onClick={async () => {
                       const pct = laborBurdenPercentInput.trim() === '' ? null : parseFloat(laborBurdenPercentInput)
-                      const date = laborBurdenDateInput.trim() || new Date().toISOString().slice(0, 10)
+                      const date = laborBurdenDateInput.trim() || todayKey()
                       if (pct == null || Number.isNaN(pct) || pct < 0 || pct > 100) {
                         setError('Enter a burden % between 0 and 100')
                         return

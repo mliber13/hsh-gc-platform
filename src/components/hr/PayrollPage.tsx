@@ -247,6 +247,8 @@ export function PayrollPage() {
 
           fieldMeasuredSqft: fieldMeasuredSqftFromProjectMetadata(p.metadata),
 
+          metadata: p.metadata,
+
           laborRates: laborRatesFromProjectMetadata(p.metadata),
 
         })),
@@ -1206,7 +1208,14 @@ export function PayrollPage() {
 
           setImportOpen(false)
 
+          const reviewRows = importRows.filter((row) => row.needsReview)
           toast.success(`Imported ${importRows.length} grouped time rows from TimeClock`)
+          if (reviewRows.length > 0) {
+            const names = reviewRows.map((row) => row.personName).join(', ')
+            toast.warning(
+              `${reviewRows.length} imported ${reviewRows.length === 1 ? 'row has' : 'rows have'} a punch over 16 hours (${names}). Hours were not shortened — review before locking.`,
+            )
+          }
 
         }}
 

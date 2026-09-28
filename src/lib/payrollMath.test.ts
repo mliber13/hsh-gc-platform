@@ -236,6 +236,20 @@ describe('getSqftFromJob', () => {
     expect(getSqftFromJob({ fieldMeasuredSqft: null })).toBeNull()
     expect(getSqftFromJob(null)).toBeNull()
   })
+
+  it('adds accepted change-order sqft when metadata is present', () => {
+    expect(
+      getSqftFromJob({
+        fieldMeasuredSqft: 4954,
+        metadata: {
+          legacy: {
+            fieldTakeoff: { totalMeasuredSqft: 4954 },
+            changeOrders: [{ status: 'accepted', additionalCrewSqft: 540 }],
+          },
+        },
+      }),
+    ).toBe(5494)
+  })
 })
 
 describe('laborRatesFromProjectMetadata', () => {

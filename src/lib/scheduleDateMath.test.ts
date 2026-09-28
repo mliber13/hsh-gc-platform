@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ScheduleItem } from '@/types'
+import { toDateKey } from '@/lib/dateFormat'
 import {
   addWorkdays,
   cascadeSchedule,
@@ -50,30 +51,30 @@ describe('scheduleDateMath', () => {
   })
 
   it('nextWorkday snaps to current-or-next workday', () => {
-    expect(nextWorkday(d('2026-05-08')).toISOString().slice(0, 10)).toBe('2026-05-08')
-    expect(nextWorkday(d('2026-05-09')).toISOString().slice(0, 10)).toBe('2026-05-11')
-    expect(nextWorkday(d('2026-05-10')).toISOString().slice(0, 10)).toBe('2026-05-11')
-    expect(nextWorkday(d('2026-05-11')).toISOString().slice(0, 10)).toBe('2026-05-11')
+    expect(toDateKey(nextWorkday(d('2026-05-08')))).toBe('2026-05-08')
+    expect(toDateKey(nextWorkday(d('2026-05-09')))).toBe('2026-05-11')
+    expect(toDateKey(nextWorkday(d('2026-05-10')))).toBe('2026-05-11')
+    expect(toDateKey(nextWorkday(d('2026-05-11')))).toBe('2026-05-11')
   })
 
   it('addWorkdays handles positive, negative, zero and holidays', () => {
-    expect(addWorkdays(d('2026-05-04'), 0).toISOString().slice(0, 10)).toBe('2026-05-04')
-    expect(addWorkdays(d('2026-05-04'), 1).toISOString().slice(0, 10)).toBe('2026-05-05')
-    expect(addWorkdays(d('2026-05-04'), 5).toISOString().slice(0, 10)).toBe('2026-05-11')
-    expect(addWorkdays(d('2026-05-08'), 1).toISOString().slice(0, 10)).toBe('2026-05-11')
-    expect(addWorkdays(d('2026-05-04'), -1).toISOString().slice(0, 10)).toBe('2026-05-01')
-    expect(addWorkdays(d('2026-05-04'), 3, { holidays: ['2026-05-06'] }).toISOString().slice(0, 10)).toBe('2026-05-08')
+    expect(toDateKey(addWorkdays(d('2026-05-04'), 0))).toBe('2026-05-04')
+    expect(toDateKey(addWorkdays(d('2026-05-04'), 1))).toBe('2026-05-05')
+    expect(toDateKey(addWorkdays(d('2026-05-04'), 5))).toBe('2026-05-11')
+    expect(toDateKey(addWorkdays(d('2026-05-08'), 1))).toBe('2026-05-11')
+    expect(toDateKey(addWorkdays(d('2026-05-04'), -1))).toBe('2026-05-01')
+    expect(toDateKey(addWorkdays(d('2026-05-04'), 3, { holidays: ['2026-05-06'] }))).toBe('2026-05-08')
   })
 
   it('endDateForDuration keeps a one-day task on its start day, even a weekend', () => {
     // 2026-05-09 is a Saturday. A 1-work-day task placed there must END Saturday,
     // not roll forward to Monday (the addWorkdays(start, 0) snap that caused the bug).
-    expect(endDateForDuration(d('2026-05-09'), 1).toISOString().slice(0, 10)).toBe('2026-05-09')
+    expect(toDateKey(endDateForDuration(d('2026-05-09'), 1))).toBe('2026-05-09')
     // Weekday one-day task unchanged.
-    expect(endDateForDuration(d('2026-05-04'), 1).toISOString().slice(0, 10)).toBe('2026-05-04')
+    expect(toDateKey(endDateForDuration(d('2026-05-04'), 1))).toBe('2026-05-04')
     // Multi-day still skips weekends for the remaining days.
-    expect(endDateForDuration(d('2026-05-04'), 3).toISOString().slice(0, 10)).toBe('2026-05-06')
-    expect(endDateForDuration(d('2026-05-09'), 2).toISOString().slice(0, 10)).toBe('2026-05-11')
+    expect(toDateKey(endDateForDuration(d('2026-05-04'), 3))).toBe('2026-05-06')
+    expect(toDateKey(endDateForDuration(d('2026-05-09'), 2))).toBe('2026-05-11')
   })
 
   it('cascadeSchedule keeps a Saturday one-day item ending Saturday', () => {
@@ -86,8 +87,8 @@ describe('scheduleDateMath', () => {
     })
     const result = cascadeSchedule([sat])
     const item = result.items[0]
-    expect(item.startDate.toISOString().slice(0, 10)).toBe('2026-05-09')
-    expect(item.endDate.toISOString().slice(0, 10)).toBe('2026-05-09')
+    expect(toDateKey(item.startDate)).toBe('2026-05-09')
+    expect(toDateKey(item.endDate)).toBe('2026-05-09')
     expect(result.changes).toHaveLength(0)
   })
 
@@ -103,8 +104,8 @@ describe('scheduleDateMath', () => {
     const anchored = makeItem({ id: 'a', name: 'A', startDate: d('2026-05-04'), endDate: d('2026-05-06'), duration: 3 })
     const result = cascadeSchedule([anchored])
     expect(result.changes).toHaveLength(0)
-    expect(result.items[0].startDate.toISOString().slice(0, 10)).toBe('2026-05-04')
-    expect(result.items[0].endDate.toISOString().slice(0, 10)).toBe('2026-05-06')
+    expect(toDateKey(result.items[0].startDate)).toBe('2026-05-04')
+    expect(toDateKey(result.items[0].endDate)).toBe('2026-05-06')
   })
 
   it('cascadeSchedule applies linear and multi-predecessor rules', () => {
@@ -124,7 +125,7 @@ describe('scheduleDateMath', () => {
     })
     const result = cascadeSchedule([a, b, c])
     const movedB = result.items.find((item) => item.id === 'b') as ScheduleItem
-    expect(movedB.startDate.toISOString().slice(0, 10)).toBe('2026-05-11')
+    expect(toDateKey(movedB.startDate)).toBe('2026-05-11')
   })
 
   it('cascadeSchedule respects lag and weekend skip', () => {
@@ -140,7 +141,7 @@ describe('scheduleDateMath', () => {
     })
     const result = cascadeSchedule([a, b])
     const movedB = result.items.find((item) => item.id === 'b') as ScheduleItem
-    expect(movedB.startDate.toISOString().slice(0, 10)).toBe('2026-05-11')
+    expect(toDateKey(movedB.startDate)).toBe('2026-05-11')
 
     const friday = makeItem({ id: 'f', name: 'F', startDate: d('2026-05-08'), endDate: d('2026-05-08'), duration: 1 })
     const mondayDep = makeItem({
@@ -154,7 +155,7 @@ describe('scheduleDateMath', () => {
     })
     const weekendResult = cascadeSchedule([friday, mondayDep])
     const movedM = weekendResult.items.find((item) => item.id === 'm') as ScheduleItem
-    expect(movedM.startDate.toISOString().slice(0, 10)).toBe('2026-05-11')
+    expect(toDateKey(movedM.startDate)).toBe('2026-05-11')
   })
 
   it('cascadeSchedule handles diamond dependencies and cycles', () => {
@@ -191,7 +192,7 @@ describe('scheduleDateMath', () => {
     })
     const diamond = cascadeSchedule([a, b, c, dItem])
     const movedD = diamond.items.find((item) => item.id === 'd') as ScheduleItem
-    expect(movedD.startDate.toISOString().slice(0, 10)).toBe('2026-05-08')
+    expect(toDateKey(movedD.startDate)).toBe('2026-05-08')
 
     const cycleA = makeItem({
       id: 'x',

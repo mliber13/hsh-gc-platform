@@ -28,6 +28,7 @@ import {
   createForemanScheduleItem,
   fetchForemanTeamRoster,
 } from '@/services/foremanScheduleService'
+import { toDateKey, todayKey } from '@/lib/dateFormat'
 import { addWorkdays } from '@/lib/scheduleDateMath'
 import { parseISO } from 'date-fns'
 
@@ -73,7 +74,7 @@ export function CrewForemanScheduleAddSheet({
 
   useEffect(() => {
     if (!open) return
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayKey()
     // Preselect when the picker has exactly one job; otherwise force a choice.
     setSelectedProjectId(projectId ?? (projects?.length === 1 ? projects[0].id : ''))
     setName('')
@@ -218,7 +219,7 @@ export function CrewForemanScheduleAddSheet({
                 onClick={() => {
                   if (!startDate) return
                   const end = addWorkdays(parseISO(startDate), days - 1)
-                  setEndDate(end.toISOString().slice(0, 10))
+                  setEndDate(toDateKey(end))
                 }}
               >
                 {days} {days === 1 ? 'day' : 'days'}

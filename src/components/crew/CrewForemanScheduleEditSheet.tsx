@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseISO } from 'date-fns'
 import { toast } from 'sonner'
 import { Check, ChevronsUpDown, Plus, Trash2, X } from 'lucide-react'
+import { toDateKey } from '@/lib/dateFormat'
 import { addWorkdays, endDateForDuration } from '@/lib/scheduleDateMath'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -201,8 +202,8 @@ export function CrewForemanScheduleEditSheet({
     }
     if (!maxStart) return
     const duration = siblings.find((s) => s.id === entry?.id)?.duration ?? 1
-    setStartDate(maxStart.toISOString().slice(0, 10))
-    setEndDate(endDateForDuration(maxStart, duration).toISOString().slice(0, 10))
+    setStartDate(toDateKey(maxStart))
+    setEndDate(toDateKey(endDateForDuration(maxStart, duration)))
   }, [open, predecessorIds, lagWorkDays, siblings, entry?.id])
 
   useEffect(() => {

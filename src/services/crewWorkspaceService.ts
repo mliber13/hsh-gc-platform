@@ -35,8 +35,8 @@ import { crewMeasureWorkflowStatus } from '@/lib/drywall/crewMeasureStatus'
 import {
   fieldTakeoffWithTotals,
   mergeFieldTakeoff,
-  quotedSqftWithWaste,
 } from '@/lib/drywall/fieldMeasurementUtils'
+import { resolveCrewPaySqft } from '@/lib/drywall/crewPayBasis'
 import {
   extractMaterialsFromFieldTakeoff,
   formatBoardLineDescription,
@@ -401,6 +401,9 @@ export async function crewClockIn(projectId: string): Promise<void> {
     const msg = error.message || ''
     if (msg.includes('already clocked in')) {
       throw new Error("You're already clocked in — clock out first.")
+    }
+    if (msg.includes('no current assignment')) {
+      throw new Error("This job isn't on your current schedule.")
     }
     if (msg.includes('not assigned')) {
       throw new Error("You're not assigned to this job.")
@@ -949,69 +952,13 @@ function shouldShowBoardCounts(
   return scheduleRows.some(scheduleRowIsHang)
 }
 
-/** Sum of accepted change orders' additional crew sqft (added scope the crew hangs/finishes). */
-function acceptedChangeOrderCrewSqft(legacy: Record<string, unknown>): number {
-  const raw = legacy.changeOrders
-  if (!Array.isArray(raw)) return 0
-  let sum = 0
-  for (const co of raw) {
-    if (!co || typeof co !== 'object' || Array.isArray(co)) continue
-    const c = co as Record<string, unknown>
-    const status = String(c.status ?? '').toLowerCase()
-    if (status !== 'accepted' && status !== 'approved') continue
-    const sqft = Number(c.additionalCrewSqft)
-    if (Number.isFinite(sqft) && sqft > 0) sum += sqft
-  }
-  return sum
-}
-
-/** Crew piece-pay sqft basis: field-measured/quoted sqft PLUS accepted change-order crew sqft. */
+/** Crew piece-pay sqft. Same resolver payroll uses — accepted change-order sqft included. */
 function resolveTotalSqft(
   legacy: Record<string, unknown>,
   intakeSource: 'quote' | 'po',
   po: DrywallPoData | null,
 ): number | null {
-  const base = resolveBaseTotalSqft(legacy, intakeSource, po)
-  const coSqft = acceptedChangeOrderCrewSqft(legacy)
-  if (base == null) return coSqft > 0 ? coSqft : null
-  return base + coSqft
-}
-
-function resolveBaseTotalSqft(
-  legacy: Record<string, unknown>,
-  intakeSource: 'quote' | 'po',
-  po: DrywallPoData | null,
-): number | null {
-  const field = parseFieldTakeoff(legacy)
-  const measured = num(field?.totalMeasuredSqft)
-  if (measured != null && measured > 0) return measured
-
-  // Prefer quote sqft with waste — matches quote labor pay basis (qty × (1 + waste%)).
-  const v3 = v3QuoteFromLegacy(legacy)
-  if (v3?.lineItems?.length) {
-    const withWaste = quotedSqftWithWaste(v3)
-    if (withWaste > 0) return withWaste
-  }
-
-  const v2 = v2QuoteFromLegacy(legacy)
-  if (v2) {
-    const withWaste = quotedSqftWithWaste(v2)
-    if (withWaste > 0) return withWaste
-    const direct = num(v2.sqft)
-    if (direct != null && direct > 0) return direct
-    const breakdownSum = (v2.breakdowns ?? []).reduce(
-      (acc, b) => acc + (num(b.sqft) ?? 0),
-      0,
-    )
-    if (breakdownSum > 0) return breakdownSum
-  }
-
-  if (intakeSource === 'po' && po) {
-    const poSqft = num(po.customerSqft)
-    if (poSqft != null && poSqft > 0) return poSqft
-  }
-
-  return null
+  return resolveCrewPaySqft({ legacy, intakeSource, po }).sqft
 }
 
 function readOrderApprovedLaborRates(field: FieldTakeoff | null): {

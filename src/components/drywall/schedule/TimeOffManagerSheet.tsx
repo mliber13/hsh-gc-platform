@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { todayKey } from '@/lib/dateFormat'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -53,7 +54,7 @@ export function TimeOffManagerSheet({ open, onOpenChange, onChanged }: Props) {
 
   useEffect(() => {
     if (!open) return
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayKey()
     setPersonId('')
     setStartDate(today)
     setEndDate(today)

@@ -80,6 +80,11 @@ export interface PayrollProjectOption {
   /** Field measurement total sqft (metadata.legacy.fieldTakeoff.totalMeasuredSqft). */
   fieldMeasuredSqft?: number | null
   /**
+   * Project metadata. When present, piece-pay sqft comes from the shared crew
+   * basis (measured or quote/PO, plus accepted change-order sqft).
+   */
+  metadata?: unknown
+  /**
    * Effective crew pay rates for this job: order-approved rates when set,
    * otherwise quote project rates (v3 project_* or v2 hanger/finisher).
    */

@@ -46,6 +46,7 @@ export function TimeClockImportDialog({
     () => rows.reduce((sum, row) => sum + row.hours, 0),
     [rows],
   )
+  const reviewCount = rows.filter((row) => row.needsReview).length
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -54,6 +55,7 @@ export function TimeClockImportDialog({
           <DialogTitle>Import from TimeClock</DialogTitle>
           <DialogDescription>
             Preview aggregated hours by person and project, then import into this payroll run.
+            A punch over 16 hours is flagged and imported in full — it is not shortened.
           </DialogDescription>
         </DialogHeader>
 
@@ -97,6 +99,11 @@ export function TimeClockImportDialog({
                 <div>
                   <p className="font-medium">{row.personName}</p>
                   <p className="text-xs text-muted-foreground">{row.projectName || 'Unassigned'}</p>
+                  {row.needsReview ? (
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      Review — a punch ran over 16 hours. Hours are not trimmed.
+                    </p>
+                  ) : null}
                 </div>
                 <p className="font-medium tabular-nums">{row.hours.toFixed(2)} hrs</p>
               </div>
@@ -105,6 +112,12 @@ export function TimeClockImportDialog({
         </div>
 
         <p className="text-xs text-muted-foreground">Preview total: {totalHours.toFixed(2)} hrs</p>
+        {reviewCount > 0 ? (
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            {reviewCount} {reviewCount === 1 ? 'row includes' : 'rows include'} a punch over 16
+            hours. Import keeps the full hours so you can review them before locking the run.
+          </p>
+        ) : null}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

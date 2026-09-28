@@ -1,7 +1,8 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
-import { addWorkdays, cascadeSchedule, workdaysBetween } from '@/lib/scheduleDateMath'
+import { addDaysToDateKey, toDateKey, todayKey } from '@/lib/dateFormat'
+import { addWorkdays, cascadeSchedule, workdaysBetween, type CascadeResult } from '@/lib/scheduleDateMath'
 import {
   DEFAULT_STANDARD_SCHEDULE_TEMPLATE,
   type StandardScheduleStep,
@@ -391,8 +392,8 @@ async function getOrCreateScheduleForProject(
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  const start = new Date().toISOString().slice(0, 10)
-  const end = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const start = todayKey()
+  const end = addDaysToDateKey(start, 90)
 
   const { data: inserted, error: insertError } = await supabase
     .from('schedules')
@@ -447,27 +448,59 @@ export class DrywallScheduleCascadeError extends Error {
   }
 }
 
-async function persistCascadedDates(items: ScheduleItem[]): Promise<void> {
+/** Rows the cascade actually moved. Untouched items are not written. */
+export function changedItemsFromCascade(result: CascadeResult): ScheduleItem[] {
+  if (result.changes.length === 0) return []
+  const changedIds = new Set(result.changes.map((c) => c.itemId))
+  return result.items.filter((item) => changedIds.has(item.id))
+}
+
+export function scheduleItemDateColumns(item: Pick<ScheduleItem, 'startDate' | 'endDate' | 'duration'>): {
+  start_date: string
+  end_date: string
+  duration: number
+} {
+  return {
+    start_date: toDateKey(item.startDate),
+    end_date: toDateKey(item.endDate),
+    duration: item.duration,
+  }
+}
+
+/**
+ * Write cascaded dates. `update` is the per-row writer so a failed save can be
+ * tested without Supabase. The first error is thrown.
+ */
+export async function writeCascadedDateRows(
+  items: Array<Pick<ScheduleItem, 'id' | 'startDate' | 'endDate' | 'duration'>>,
+  update: (
+    id: string,
+    patch: { start_date: string; end_date: string; duration: number; updated_at: string },
+  ) => Promise<{ error: { message: string } | null }>,
+): Promise<void> {
   if (items.length === 0) return
   const results = await Promise.all(
-    items.map((item) =>
-      supabase
-        .from('schedule_items')
-        .update({
-          start_date: toDateOnly(item.startDate.toISOString()),
-          end_date: toDateOnly(item.endDate.toISOString()),
-          duration: item.duration,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', item.id),
-    ),
+    items.map(async (item) => {
+      const res = await update(item.id, {
+        ...scheduleItemDateColumns(item),
+        updated_at: new Date().toISOString(),
+      })
+      return res.error
+    }),
   )
-  const failed = results.find((r) => r.error)
-  if (failed?.error) {
+  const failed = results.find((error) => error)
+  if (failed) {
     throw new Error(
-      `Schedule cascade partially failed — some dates may not have saved: ${failed.error.message}`,
+      `Schedule cascade partially failed — some dates may not have saved: ${failed.message}`,
     )
   }
+}
+
+async function persistCascadedDates(items: ScheduleItem[]): Promise<void> {
+  await writeCascadedDateRows(items, async (id, patch) => {
+    const { error } = await supabase.from('schedule_items').update(patch).eq('id', id)
+    return { error: error ? { message: error.message } : null }
+  })
 }
 
 async function runCascadeForProject(projectId: string): Promise<{
@@ -489,13 +522,10 @@ async function runCascadeForProject(projectId: string): Promise<{
     )
   }
 
-  if (result.changes.length > 0) {
-    // Write only the rows the cascade actually moved. Writing every row churns
-    // updated_at on untouched items and, on a mixed-division project, would have
-    // this cascade rewrite dates it does not own.
-    const changedIds = new Set(result.changes.map((c) => c.itemId))
-    await persistCascadedDates(result.items.filter((item) => changedIds.has(item.id)))
-  }
+  // Write only the rows the cascade actually moved. Writing every row churns
+  // updated_at on untouched items and, on a mixed-division project, would have
+  // this cascade rewrite dates it does not own.
+  await persistCascadedDates(changedItemsFromCascade(result))
 
   return {
     changedItemIds: result.changes.map((c) => c.itemId),
@@ -871,9 +901,7 @@ export async function generateStandardDrywallSchedule(
       index > 0 ? [createdIds[index - 1]] : anchor ? [anchor.id] : []
     // Seed each item's span from its duration; the cascade then repositions
     // starts by predecessor + lag while preserving these durations.
-    const endDate = toDateOnly(
-      addWorkdays(parseISO(start), Math.max(1, step.durationDays) - 1).toISOString(),
-    )
+    const endDate = toDateKey(addWorkdays(parseISO(start), Math.max(1, step.durationDays) - 1))
 
     return buildInsertRow(
       {
