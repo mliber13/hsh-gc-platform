@@ -111,6 +111,7 @@ export function PayrollPage() {
 
   const [employees, setEmployees] = useState(() => [] as Awaited<ReturnType<typeof fetchTeam>>['employees'])
 
+  const [positions, setPositions] = useState(() => [] as Awaited<ReturnType<typeof fetchTeam>>['positions'])
   const [contractors, setContractors] = useState(
 
     () => [] as Awaited<ReturnType<typeof fetchTeam>>['contractors1099'],
@@ -230,6 +231,7 @@ export function PayrollPage() {
       setEmployees(team.employees)
 
       setContractors(team.contractors1099)
+      setPositions(team.positions)
 
       setRuns(periods)
 
@@ -1058,6 +1060,7 @@ export function PayrollPage() {
             employees={employees}
 
             contractors={contractors}
+            positions={positions}
 
             projects={projects}
 

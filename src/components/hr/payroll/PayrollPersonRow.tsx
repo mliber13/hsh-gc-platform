@@ -46,6 +46,7 @@ import type {
 } from '@/types/payroll'
 import { formatCurrency } from './payrollFormat'
 import { JobCombobox } from './JobCombobox'
+import { defaultPieceTypeForPositionName } from '@/lib/drywall/payrollPieceKeys'
 
 interface PayrollPersonRowProps {
   person: PayrollRowPerson
@@ -60,6 +61,8 @@ interface PayrollPersonRowProps {
   /** Full draft map — needed so lead piece rows can show helper deductions. */
   allEntries: Record<string, PayrollEntry>
   drywallCatalogs: OrgDrywallCatalogs | null
+  /** HR position name, so a new piece row starts on the trade this person does. */
+  positionName?: string | null
   onChange: (entry: PayrollEntry) => void
   onToggleDone: () => void
 }
@@ -119,6 +122,7 @@ export function PayrollPersonRow({
   allPeople,
   allEntries,
   drywallCatalogs,
+  positionName,
   onChange,
   onToggleDone,
 }: PayrollPersonRowProps) {
@@ -191,12 +195,17 @@ export function PayrollPersonRow({
   }
 
   const addPiece = () => {
+    // Start on the trade this person actually does. The roster knows — a hanger's row
+    // used to arrive as "finisher" and be corrected by hand on every run.
+    const { workType, catalogSource, totalPhases } = defaultPieceTypeForPositionName(positionName)
     const row: PayrollPieceEntry = {
       id: generateHrId(),
       jobId: '',
       jobName: '',
-      workType: 'finisher',
-      totalPhases: 5,
+      workType,
+      piece_key: catalogSource === 'v3_drywall' ? workType : undefined,
+      catalog_source: catalogSource,
+      totalPhases,
       phasesCompleted: '',
       jobTotalSqft: '',
       rate: '',

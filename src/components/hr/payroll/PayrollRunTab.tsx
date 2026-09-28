@@ -29,7 +29,7 @@ import {
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type { PayPeriod, PayrollEntry, PayrollProjectOption } from '@/types/payroll'
-import type { Contractor1099, Employee } from '@/types/hr'
+import type { Contractor1099, Employee, JobPosition } from '@/types/hr'
 import { PayrollPersonRow } from './PayrollPersonRow'
 import { PayrollSummaryBar } from './PayrollSummaryBar'
 
@@ -78,6 +78,8 @@ interface PayrollRunTabProps {
   locked: boolean
   employees: Employee[]
   contractors: Contractor1099[]
+  /** Org job positions, so a person's trade can be resolved from their positionId. */
+  positions: JobPosition[]
   projects: PayrollProjectOption[]
   onSave: () => void
   onImportTimeClock: () => void
@@ -137,6 +139,7 @@ export function PayrollRunTab({
   locked,
   employees,
   contractors,
+  positions,
   projects,
   onSave,
   onImportTimeClock,
@@ -165,6 +168,22 @@ export function PayrollRunTab({
     () => buildPayrollPeople(employees, contractors, false, retainedPersonKeys),
     [employees, contractors, retainedPersonKeys],
   )
+
+  // personKey → HR position name, so a new piece row can start on the right trade.
+  const positionNameByPersonKey = useMemo(() => {
+    const nameById = new Map(positions.map((p) => [p.id, p.name]))
+    const out = new Map<string, string>()
+    for (const [list, type] of [
+      [employees, 'w2'],
+      [contractors, '1099'],
+    ] as const) {
+      for (const member of list) {
+        const name = member.positionId ? nameById.get(member.positionId) : undefined
+        if (name) out.set(personKey(member.id, type), name)
+      }
+    }
+    return out
+  }, [employees, contractors, positions])
 
   const rows = useMemo(() => {
     return people.map((person) => {
@@ -439,6 +458,7 @@ export function PayrollRunTab({
               allPeople={people as PayrollRowPerson[]}
               allEntries={entries}
               drywallCatalogs={drywallCatalogs}
+              positionName={positionNameByPersonKey.get(r.person.personKey) ?? null}
               onChange={(e) => setEntry(r.person.personKey, e)}
               onToggleDone={() => togglePersonDone(r.person.personKey)}
             />

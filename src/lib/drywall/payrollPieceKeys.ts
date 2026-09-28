@@ -12,6 +12,7 @@
 import { PAYROLL_WORK_TYPES } from '@/lib/payrollMath'
 import type { FinishScopeCatalogEntry, OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type { PayrollPieceCatalogSource } from '@/types/payroll'
+import { specialtyFromPositionName } from '@/lib/drywall/crewSpecialty'
 
 /** Payroll labor buckets used when aggregating project labor costs. */
 export type DrywallLaborCategory =
@@ -294,4 +295,25 @@ export function labelForPieceKey(
   if (pieceKey === DRYWALL_HANGER_PIECE_KEY) return 'Drywall — Hanging'
 
   return pieceKey
+}
+
+/**
+ * The piece type a new payroll row should start on, from the person's HR position.
+ *
+ * Every new piece row used to start as "finisher" regardless of who it belonged to, so a
+ * hanger's row arrived carrying the finisher rate and had to be corrected by hand on every
+ * run — while the roster has said "Hanger" the whole time.
+ *
+ * Only hangers are redirected. Finish work covers most of the roster and several position
+ * names (Finisher, Pointup Specialist, Apprentice Finisher, Assistant Finisher), and the
+ * legacy 'finisher' default already handles them; changing that would move rates for
+ * people this is not about.
+ */
+export function defaultPieceTypeForPositionName(
+  positionName: string | null | undefined,
+): { workType: string; catalogSource: PayrollPieceCatalogSource; totalPhases: number } {
+  if (specialtyFromPositionName(positionName) === 'hanger') {
+    return { workType: DRYWALL_HANGER_PIECE_KEY, catalogSource: 'v3_drywall', totalPhases: 1 }
+  }
+  return { workType: 'finisher', catalogSource: 'legacy', totalPhases: 5 }
 }
