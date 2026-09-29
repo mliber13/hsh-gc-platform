@@ -137,78 +137,9 @@ export async function deleteProject_Hybrid(projectId: string): Promise<boolean> 
 // WORK PACKAGES
 // ============================================================================
 
-export async function fetchWorkPackages_Hybrid(projectId: string): Promise<WorkPackage[]> {
-  if (isOnlineMode()) {
-    return await supabaseService.fetchWorkPackages(projectId)
-  }
-  return []
-}
-
-export async function createWorkPackage_Hybrid(
-  projectId: string,
-  input: CreateWorkPackageInput
-): Promise<WorkPackage | null> {
-  if (isOnlineMode()) {
-    return await supabaseService.createWorkPackage(projectId, input)
-  }
-  return null
-}
-
-export async function updateWorkPackage_Hybrid(
-  id: string,
-  updates: UpdateWorkPackageInput
-): Promise<WorkPackage | null> {
-  if (isOnlineMode()) {
-    return await supabaseService.updateWorkPackage(id, updates)
-  }
-  return null
-}
-
-export async function deleteWorkPackage_Hybrid(id: string): Promise<boolean> {
-  if (isOnlineMode()) {
-    return await supabaseService.deleteWorkPackage(id)
-  }
-  return false
-}
-
 // ============================================================================
 // PROJECT MILESTONES
 // ============================================================================
-
-export async function fetchMilestones_Hybrid(projectId: string): Promise<ProjectMilestone[]> {
-  if (isOnlineMode()) {
-    return await supabaseService.fetchMilestones(projectId)
-  }
-  return []
-}
-
-export async function upsertMilestone_Hybrid(
-  projectId: string,
-  sourceApp: MilestoneSourceApp,
-  input: CreateMilestoneInput
-): Promise<ProjectMilestone | null> {
-  if (isOnlineMode()) {
-    return await supabaseService.upsertMilestone(projectId, sourceApp, input)
-  }
-  return null
-}
-
-export async function updateMilestone_Hybrid(
-  id: string,
-  updates: UpdateMilestoneInput
-): Promise<ProjectMilestone | null> {
-  if (isOnlineMode()) {
-    return await supabaseService.updateMilestone(id, updates)
-  }
-  return null
-}
-
-export async function deleteMilestone_Hybrid(id: string): Promise<boolean> {
-  if (isOnlineMode()) {
-    return await supabaseService.deleteMilestone(id)
-  }
-  return false
-}
 
 // ============================================================================
 // TRADE OPERATIONS
