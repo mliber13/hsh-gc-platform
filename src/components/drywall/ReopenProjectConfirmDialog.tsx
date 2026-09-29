@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   DrywallProjectPermissionError,
-  revertDrywallProjectComplete,
+  revertCloseoutToProductionComplete,
 } from '@/services/drywallProjectsService'
 
 interface ReopenProjectConfirmDialogProps {
@@ -34,8 +34,10 @@ export function ReopenProjectConfirmDialog({
   const handleReopen = async () => {
     setBusy(true)
     try {
-      await revertDrywallProjectComplete(projectId, loadedAt)
-      toast.success('Project reopened')
+      // closed → production-complete, the one step back the lifecycle allows. The old
+      // shortcut jumped all the way to order and stripped the closeout timestamps with it.
+      await revertCloseoutToProductionComplete(projectId, loadedAt)
+      toast.success('Reopened to production complete')
       onOpenChange(false)
       await onReopened?.()
     } catch (e) {
@@ -55,7 +57,8 @@ export function ReopenProjectConfirmDialog({
         <DialogHeader>
           <DialogTitle>Reopen project?</DialogTitle>
           <DialogDescription>
-            Reopen this project? It will return to the Order stage and reappear in the active list.
+            It returns to Production Complete and reappears in the active list. The
+            production dates are kept; only the closeout is undone.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">

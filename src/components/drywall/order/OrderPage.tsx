@@ -23,7 +23,6 @@ import {
 } from '@/lib/drywallOrderPdf'
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
-import { ReopenProjectConfirmDialog } from '@/components/drywall/ReopenProjectConfirmDialog'
 import { projectV3QuoteToV2Shape } from '@/lib/drywall/projectV3QuoteToV2Shape'
 import {
   DrywallProjectPermissionError,
@@ -33,7 +32,7 @@ import {
   fetchDrywallQuoteV2V3,
   fetchFieldTakeoff,
   fetchOrders,
-  markDrywallProjectComplete,
+  markProductionStarted,
   markOrderStatus,
   saveOrderStageSnapshot,
   transitionDrywallChangeOrder,
@@ -84,7 +83,6 @@ export function OrderPage() {
   const [changeOrders, setChangeOrders] = useState<DrywallChangeOrder[]>([])
   const [savedSnapshot, setSavedSnapshot] = useState('')
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
-  const [reopenDialogOpen, setReopenDialogOpen] = useState(false)
   const [changeOrderBusyId, setChangeOrderBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -376,19 +374,28 @@ export function OrderPage() {
     }
   }
 
-  const handleMarkComplete = async () => {
+  /**
+   * Order → production, the one step the lifecycle actually allows from here.
+   *
+   * This used to jump straight to `closed` with no guard and no productionCompletedAt, so
+   * the job vanished from Financials, Labor and Estimating — they key off that timestamp.
+   * Closing out now happens where closing out belongs, on the Closeout stage, after
+   * production has actually run.
+   */
+  const handleStartProduction = async () => {
     if (readOnly || !project) return
     if (isDirty) {
-      toast.error('Save pending changes before marking the project complete')
+      toast.error('Save pending changes before starting production')
       return
     }
     setCompleting(true)
     try {
-      await markDrywallProjectComplete(projectId, project.updatedAtRaw)
-      toast.success('Project marked complete')
+      const nextRaw = await markProductionStarted(projectId, project.updatedAtRaw)
+      setProject((prev) => (prev ? { ...prev, updatedAtRaw: nextRaw } : prev))
+      toast.success('Production started')
       await load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to mark project complete')
+      toast.error(e instanceof Error ? e.message : 'Failed to start production')
     } finally {
       setCompleting(false)
     }
@@ -402,6 +409,8 @@ export function OrderPage() {
     )
   }
 
+  const isOrderStage =
+    String(project?.legacy?.status ?? project?.status ?? '') === 'order'
   const isComplete =
     isDrywallProjectClosed(project?.status) ||
     isDrywallProjectClosed(String(project?.legacy?.status ?? ''))
@@ -562,32 +571,15 @@ export function OrderPage() {
         onDownloadPdf={handleChangeOrderPdf}
       />
 
-      {!readOnly && (
+      {/* Closing out is not an Order-stage action. The only forward step from here is into
+          production; Closeout owns the end of the job, after production has run. */}
+      {!readOnly && !isComplete && isOrderStage ? (
         <div className="flex justify-end border-t border-border pt-4">
-          {isComplete ? (
-            <Button type="button" variant="outline" onClick={() => setReopenDialogOpen(true)}>
-              Reopen project
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void handleMarkComplete()}
-              disabled={completing}
-            >
-              {completing ? 'Updating…' : 'Mark project complete'}
-            </Button>
-          )}
+          <Button type="button" onClick={() => void handleStartProduction()} disabled={completing}>
+            {completing ? 'Starting…' : 'Start production'}
+          </Button>
         </div>
-      )}
-
-      <ReopenProjectConfirmDialog
-        open={reopenDialogOpen}
-        onOpenChange={setReopenDialogOpen}
-        projectId={projectId}
-        loadedAt={project?.updatedAtRaw ?? ''}
-        onReopened={load}
-      />
+      ) : null}
 
       <Dialog
         open={Boolean(sendConfirm)}

@@ -1552,6 +1552,28 @@ export async function markOrderStatus(
 }
 
 /** Update workflow stage from list card status pill (status column + legacy mirror). */
+/** Lifecycle order. The status pill may move a job one step along it, either way. */
+const DRYWALL_STATUS_FLOW: DrywallProjectStatus[] = [
+  'project-info',
+  'quote',
+  'field-measurement',
+  'order',
+  'production',
+  'production-complete',
+  'closed',
+]
+
+/**
+ * Move a project one step along the lifecycle.
+ *
+ * This used to write any status over any other with no guard and no timestamps, so the
+ * list pill could drop a job straight from `order` to `closed` — leaving it with no
+ * `productionCompletedAt`, which is what Financials, Labor and Estimating key off. The job
+ * then simply stopped appearing in them, with nothing to say why.
+ *
+ * Steps that own a timestamp delegate to the function that stamps it rather than
+ * duplicating the logic, so the pill and the stage pages cannot drift apart.
+ */
 export async function updateDrywallProjectStatus(
   projectId: string,
   status: DrywallProjectStatus,
@@ -1562,51 +1584,32 @@ export async function updateDrywallProjectStatus(
   }
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
-  const mergedLegacy = { ...prevLegacy, status }
-  return persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, loadedAt, status)
-}
-
-/** @deprecated use markFullyClosed — legacy shortcut that sets `closed` + closedAt from Order. */
-export async function markDrywallProjectComplete(projectId: string, loadedAt: string): Promise<string> {
-  if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
-
-  const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
-  const now = new Date().toISOString()
-  const timestamps = parseProductionTimestamps(prevLegacy)
-  const nextStatus: DrywallProjectStatus = 'closed'
-  const mergedLegacy = {
-    ...prevLegacy,
-    status: nextStatus,
-    productionTimestamps: { ...timestamps, closedAt: now },
-  }
-  return persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, loadedAt, nextStatus)
-}
-
-/** Revert complete → active at Order stage (preserves quote, fieldTakeoff, orders, etc.). */
-/** @deprecated use revertCloseoutToProductionComplete or revertProductionStarted */
-export async function revertDrywallProjectComplete(projectId: string, loadedAt: string): Promise<string> {
-  if (!isOnlineMode()) throw new Error('Drywall projects require an online connection.')
-
-  const orgId = await requireUserOrgId()
   const { prevMeta, prevLegacy, status: rawStatus } = await loadProjectLegacyForMerge(
     projectId,
     orgId,
   )
-  const normalized = normalizeDrywallProjectStatus(rawStatus)
-  if (normalized !== 'closed') {
-    throw new Error('Project is not closed')
+  const current = normalizeDrywallProjectStatus(rawStatus)
+  if (current === status) return persistLegacyMetadata(projectId, orgId, prevLegacy, prevMeta, loadedAt)
+
+  const from = DRYWALL_STATUS_FLOW.indexOf(current)
+  const to = DRYWALL_STATUS_FLOW.indexOf(status)
+  if (from < 0 || to < 0 || Math.abs(to - from) !== 1) {
+    throw new Error(
+      `A job moves one stage at a time. ${current} → ${status} skips a step; take it through the stages instead.`,
+    )
   }
-  const nextStatus: DrywallProjectStatus = 'order'
-  const timestamps = parseProductionTimestamps(prevLegacy)
-  const { closedAt: _cleared, ...restTimestamps } = timestamps
-  const mergedLegacy = {
-    ...prevLegacy,
-    status: nextStatus,
-    productionTimestamps: restTimestamps,
-  }
-  return persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, loadedAt, nextStatus)
+
+  // The four boundaries that carry a timestamp — production start, production complete,
+  // closeout, and their reverts. Anything earlier in the flow has none to keep.
+  if (status === 'production' && current === 'order') return markProductionStarted(projectId, loadedAt)
+  if (status === 'production-complete') return markProductionComplete(projectId, loadedAt)
+  if (status === 'closed') return markFullyClosed(projectId, loadedAt)
+  if (current === 'closed') return revertCloseoutToProductionComplete(projectId, loadedAt)
+  if (current === 'production-complete') return revertProductionComplete(projectId, loadedAt)
+  if (current === 'production') return revertProductionStarted(projectId, loadedAt)
+
+  const mergedLegacy = { ...prevLegacy, status }
+  return persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, loadedAt, status)
 }
 
 function assertProjectStatus(
