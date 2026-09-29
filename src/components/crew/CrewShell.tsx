@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronsUpDown, Clock, LogOut } from 'lucide-react'
+import { ChevronsUpDown, Clock, LogOut, Wallet } from 'lucide-react'
 import { PageTitleProvider } from '@/contexts/PageTitleContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -173,6 +173,10 @@ export function CrewShell() {
                 <DropdownMenuContent align="end">
                   {/* Their own hours. In the account menu rather than the main nav because
                       it is about them, not about a job. */}
+                  <DropdownMenuItem onClick={() => navigate('/crew/pay')}>
+                    <Wallet className="mr-2 size-4" />
+                    My pay
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate('/crew/hours')}>
                     <Clock className="mr-2 size-4" />
                     My hours

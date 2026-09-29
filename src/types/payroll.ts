@@ -70,6 +70,9 @@ export interface PayPeriod {
 export interface MyPaystub {
   period_id: string
   period_label: string
+  /** Locked periods only — list_my_paystubs filters drafts out server-side. */
+  start_date: string | null
+  end_date: string | null
   entries: PayrollEntry[]
 }
 

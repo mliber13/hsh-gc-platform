@@ -133,6 +133,7 @@ import { usePageTitle } from '@/contexts/PageTitleContext'
 import { getCurrentWeekOf } from '@/services/meetingService'
 const CrewSignupPage = lazyRoute(() => import('@/routes/CrewSignupPage'), 'CrewSignupPage')
 import { CrewShell } from '@/components/crew/CrewShell'
+const CrewPayPage = lazyRoute(() => import('@/components/crew/CrewPayPage'), 'CrewPayPage')
 const CrewHoursPage = lazyRoute(() => import('@/components/crew/CrewHoursPage'), 'CrewHoursPage')
 const CrewProjectListPage = lazyRoute(() => import('@/components/crew/CrewProjectListPage'), 'CrewProjectListPage')
 const CrewProjectDetailPage = lazyRoute(() => import('@/components/crew/CrewProjectDetailPage'), 'CrewProjectDetailPage')
@@ -195,6 +196,7 @@ export function AppRoutes() {
         >
           <Route index element={<CrewProjectListPage />} />
           <Route path="comms" element={<CommsInboxPage variant="crew" />} />
+          <Route path="pay" element={<CrewPayPage />} />
           <Route path="hours" element={<CrewHoursPage />} />
           <Route path="projects/:projectId" element={<CrewProjectDetailPage />} />
           <Route path="projects/:projectId/measure" element={<CrewMeasurePage />} />
