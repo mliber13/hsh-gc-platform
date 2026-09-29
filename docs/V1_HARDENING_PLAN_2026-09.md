@@ -194,6 +194,8 @@ The revoke has to target the **default privilege**, not just current grants: `an
 | **`drywallLaborEntryEditService` (P2-DEL-7)** | Not a deletion — it repoints `LaborBreakdownModal` at the audit service, a behaviour change in payroll editing. Given this project's payroll history that wants its own pass and its own smoke test. |
 | **Root `deno.lock`** | The Supabase CLI can read a lockfile when deploying edge functions, and this repo has live functions whose source exists only in the Dashboard. 212 KB of noise beats changing what deploys next time. |
 
+**Deal workspace — decided 2026-09-29 (Mark): parked, not dead.** "Something we will eventually get back to but not a priority." So , the 16 rows in , the  bucket,  and the five live deal-proforma functions all STAY. They are unfinished work, not residue, and the two open questions from this batch are closed as "leave alone". A later sweep should not re-propose them.
+
 **The blind spot that still applies:** `backupService` reads `feedback`, `form_responses`, `form_templates`, `project_forms`, `sow_templates` and `quote_requests` as **runtime strings**, invisible to `tsc`. Deleting `formService.ts` and `FeedbackManagement.tsx` was safe because the tables stayed. Dropping any of those tables would break org backup silently — the same trap recorded against P2-DEL-3.
 
 🟡 **Batch 4 — GC active-core: four parts shipped 2026-09-29, one item left.** `3bf2cab` (P0-GC-1 + P1-MONEY-7 + T14), `1dd86d5` (P1-GC-1 + P1-GC-3 + P1-GC-5), `156d862` (P1-GC-2 + P1-GC-4 + P1-EGRESS-7), `770f87f` (P0-GC-2); migration `20260929190000_gc_change_orders_and_actuals_guards.sql` applied via `db push`. **Remaining: the `quote-documents` signed-URL move** (the open half of P1-SEC-6) — see below.
