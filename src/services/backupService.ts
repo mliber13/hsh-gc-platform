@@ -85,19 +85,27 @@ export async function exportAllData(): Promise<BackupData> {
     return uuidRegex.test(str)
   }
 
-  // Build organization filter for tables that use TEXT organization_id
-  const orgFilter = organizationId 
-    ? (table: string, orderBy: string = 'created_at') => supabase.from(table).select('*').eq('organization_id', organizationId).order(orderBy, { ascending: false })
-    : (table: string, orderBy: string = 'created_at') => supabase.from(table).select('*').order(orderBy, { ascending: false })
-
-  // For tables that use UUID organization_id, only filter if organizationId is a valid UUID
-  const orgFilterUUID = (table: string, orderBy: string = 'created_at') => {
-    if (organizationId && isValidUUID(organizationId)) {
-      return supabase.from(table).select('*').eq('organization_id', organizationId).order(orderBy, { ascending: false })
-    }
-    // If not a valid UUID (e.g., "default-org"), fetch all without filtering
-    return supabase.from(table).select('*').order(orderBy, { ascending: false })
+  // Both filters used to fall through to an UNFILTERED select('*') — `orgFilter` when
+  // organization_id was empty, `orgFilterUUID` when it was not a UUID (the comment said
+  // "e.g. default-org"). A backup is the one place that reads every table at once, so a
+  // fall-through there is the widest possible read.
+  //
+  // Refuse instead. Measured before changing it: unreachable today — one organization in the
+  // database and all 25 profiles carry its valid UUID — so this is a guard against a second
+  // org arriving, not a leak being closed. RLS is the real boundary and Batch 1D scoped it;
+  // this stops the export quietly widening if that boundary ever slips (P0-GC-2).
+  if (!organizationId || !isValidUUID(organizationId)) {
+    throw new Error(
+      'Your account is not linked to an organization, so a backup cannot be exported safely.',
+    )
   }
+
+  const orgFilter = (table: string, orderBy: string = 'created_at') =>
+    supabase.from(table).select('*').eq('organization_id', organizationId).order(orderBy, { ascending: false })
+
+  // Kept as a separate name because the call sites distinguish TEXT from UUID columns, but
+  // both are now the same scoped query — the org id has been proven a UUID above.
+  const orgFilterUUID = orgFilter
 
   // Fetch all data in parallel
   const [
