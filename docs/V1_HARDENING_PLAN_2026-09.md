@@ -169,6 +169,33 @@ The revoke has to target the **default privilege**, not just current grants: `an
 **Batch 0 SHIPPED 2026-09-29** (`bc4add7`). Closes **P1-QA-1**: `.github/workflows/ci.yml` runs typecheck, the suite in **two zones** (America/New_York and Europe/Berlin — runners are UTC, making three), and a build, on push to master and every PR. Until this commit nothing ran tsc or the 439 tests except a person remembering to. Also: `supabase/.temp` and `.claude/settings.local.json` untracked (both had to be excluded by hand from every commit), `CLAUDE.md` and `docs/INDEX.md` written, the stray door-install brief moved into `docs/briefs/`, dead `findOrCreateQBVendor` deleted (its `qb-find-vendor` function is not even deployed), two unused radix packages removed. **postcss and autoprefixer were flagged unused and deliberately kept** — referenced from `postcss.config.js`, which depcheck cannot see; removing them breaks the CSS build. The three empty `supabase/functions` directories remain untouched per the batch note: `qb-suggest-allocation` is ACTIVE at v14 with no source in git, so recovering or deleting it is a decision.
 
 
+
+🟡 **Batch 6 — dead-code sweep: the code-only tier shipped 2026-09-29** (`c3bcbba`, `9d8199b`), **−8,000 lines**. **No table, bucket or storage object was touched, and that was deliberate.**
+
+**Grounding caught three entries in the list below that were wrong, two of which would have broken something:**
+
+- **P2-DEL-8's `fetchMyPaystubs` is no longer unwired.** It says "never wired to a page" — true when written, false since `CrewPayPage` shipped on 2026-09-29. Deleting it breaks the crew pay view. **Not deleted.**
+- **`drywallScopeRevenue` is a name collision.** The *module* is dead (only its own test imported it) and is gone. The *field* of the same name is live in the KPI dashboard and stays. A reference count alone reports twelve uses and concludes "leave it".
+- **`buildDivisionMarginJob` is dead in the bundle and load-bearing in the suite** — no production caller, but it builds the fixtures for four live describes. It was a one-line alias for `buildDivisionExecutionJob`, so the fixtures now call the real function.
+- P2-DEL-3 (vendor RFQ) shipped in batch 1C; `VarianceReport.tsx` and the two radix packages went in batch 4 and batch 0.
+
+**Shipped:** `ProFormaGenerator.tsx` (5,149), `ProjectMilestonesSection.tsx`, `WorkPackagesSection.tsx`, `FeedbackManagement.tsx`, `formService.ts`, `drywallScopeRevenue.ts`, both `src/scripts` migrations, the 8 `_Hybrid` wrappers, 13 `supabaseService` functions (work package + milestone CRUD, and the five **project** proforma functions — the five **deal** ones are live and stay), 6 drywall functions, the `drywall_quote_v3` flag, `@types/uuid` + `workbox-window`, and two stray files.
+
+**Technique note for the next pass:** a brace-counting script cannot find the end of these functions, because their bodies contain braces inside strings and template literals — it silently produced a syntactically broken file. A top-level function ends at the first line that is exactly `}` at column zero.
+
+**Deliberately NOT done, and why:**
+
+| Item | Reason |
+|---|---|
+| **`work_packages` (1 row) / `project_milestones` (0 rows) table drops** | Irreversible, and the tables are inert. Batch 1C made the same call for `quote_requests`. Tables are not what is slowing this codebase down. |
+| **`DealDocuments.tsx` (P2-DEL-2)** | Deleting it leaves **16 deal documents** (newest Apr 2026) and their files in the `deal-documents` bucket with no UI to reach them. That is a data-reachability decision, not cleanup. |
+| **`convertDealToProjects`, `restoreFromBackup` (P2-DEL-9)** | The plan itself calls this a decision — "or wire them". Both are unbuilt features, not residue from a removed surface. |
+| **`deleteQuotePDF`, `getQuotePDFSignedUrl`** | The outstanding `quote-documents` signed-URL work needs exactly these. Deleting a signed-URL helper immediately before the signed-URL migration is backwards. |
+| **`drywallLaborEntryEditService` (P2-DEL-7)** | Not a deletion — it repoints `LaborBreakdownModal` at the audit service, a behaviour change in payroll editing. Given this project's payroll history that wants its own pass and its own smoke test. |
+| **Root `deno.lock`** | The Supabase CLI can read a lockfile when deploying edge functions, and this repo has live functions whose source exists only in the Dashboard. 212 KB of noise beats changing what deploys next time. |
+
+**The blind spot that still applies:** `backupService` reads `feedback`, `form_responses`, `form_templates`, `project_forms`, `sow_templates` and `quote_requests` as **runtime strings**, invisible to `tsc`. Deleting `formService.ts` and `FeedbackManagement.tsx` was safe because the tables stayed. Dropping any of those tables would break org backup silently — the same trap recorded against P2-DEL-3.
+
 🟡 **Batch 4 — GC active-core: four parts shipped 2026-09-29, one item left.** `3bf2cab` (P0-GC-1 + P1-MONEY-7 + T14), `1dd86d5` (P1-GC-1 + P1-GC-3 + P1-GC-5), `156d862` (P1-GC-2 + P1-GC-4 + P1-EGRESS-7), `770f87f` (P0-GC-2); migration `20260929190000_gc_change_orders_and_actuals_guards.sql` applied via `db push`. **Remaining: the `quote-documents` signed-URL move** (the open half of P1-SEC-6) — see below.
 
 **Grounding first, and it rewrote three of the nine items.** Mark confirmed the GC side is fully in use ("still using everything, just haven't synced to QuickBooks in a while"), so the empty tables were broken features, not unused ones.
