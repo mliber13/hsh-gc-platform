@@ -3,6 +3,10 @@
 // ============================================================================
 
 import { resolveQbProject } from '@/lib/qbProjectMatch'
+import {
+  fetchDrywallCapturedQbLineKeys,
+  qbLineKey,
+} from '@/services/drywallQbMaterialsService'
 import React, { useState, useEffect } from 'react'
 import { todayKey } from '@/lib/dateFormat'
 import { toast } from 'sonner'
@@ -59,6 +63,11 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
   const open = isControlled ? controlledOpen : internalOpen
   const setOpen = (v: boolean) => (isControlled ? onOpenChange?.(v) : setInternalOpen(v))
   const [transactions, setTransactions] = useState<QBJobTransaction[]>([])
+  // QuickBooks lines already booked against a drywall job. The two ledgers are separate
+  // (drywall_qb_materials vs material_entries), so without this every drywall transaction
+  // sits here as pending forever and allocating one books the cost twice.
+  const [drywallKeys, setDrywallKeys] = useState<Set<string>>(new Set())
+  const [showDrywallAllocated, setShowDrywallAllocated] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
@@ -121,7 +130,17 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
     setHelp(null)
     setYourAccounts([])
     setYourClasses([])
-    const { transactions: list, error: err, help: helpMsg, yourAccounts: accounts, yourClasses: classes } = await getQBJobTransactions(undefined, includeUnassigned)
+    const [{ transactions: list, error: err, help: helpMsg, yourAccounts: accounts, yourClasses: classes }, captured] =
+      await Promise.all([
+        getQBJobTransactions(undefined, includeUnassigned),
+        fetchDrywallCapturedQbLineKeys().catch((e) => {
+          // Never block the GC list on this: worst case the drywall rows stay visible,
+          // which is exactly how it behaved before.
+          console.warn('Could not load drywall-allocated QuickBooks lines:', e)
+          return new Set<string>()
+        }),
+      ])
+    setDrywallKeys(captured)
     setTransactions(list)
     if (err) setError(err)
     if (helpMsg) setHelp(helpMsg)
@@ -421,6 +440,12 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
     }
     setAllocating(false)
   }
+
+  // Split rather than filter, so the count of what is hidden can be shown honestly.
+  const drywallAllocated = transactions.filter((t) => drywallKeys.has(qbLineKey(t)))
+  const visibleTransactions = showDrywallAllocated
+    ? transactions
+    : transactions.filter((t) => !drywallKeys.has(qbLineKey(t)))
 
   const qbMatch = selectedTxn ? resolveQbProject(projects, selectedTxn) : null
   const mappedProject = qbMatch?.project ?? null
@@ -1052,6 +1077,18 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                   />
                   Include unassigned from QuickBooks
                 </label>
+                {/* Only offered when there is something to reveal, so the control does not
+                    invite a question nobody has. */}
+                {drywallAllocated.length > 0 && (
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showDrywallAllocated}
+                      onChange={(e) => setShowDrywallAllocated(e.target.checked)}
+                    />
+                    Show {drywallAllocated.length} already allocated to drywall
+                  </label>
+                )}
                 <Button variant="outline" size="sm" onClick={() => loadPending()} disabled={loading}>
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh'}
                 </Button>
@@ -1117,10 +1154,18 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                   )}
                 </div>
               )}
-              {!loading && transactions.length === 0 && !error && (
-                <p className="text-sm text-muted-foreground py-4">No pending transactions. Add bills or expenses to Job Materials, Subcontractor Expense, or Utilities in QuickBooks.</p>
+              {!loading && visibleTransactions.length === 0 && !error && (
+                <p className="text-sm text-muted-foreground py-4">
+                  {drywallAllocated.length > 0
+                    ? /* Otherwise this read "No pending transactions" while the list was
+                         merely hidden, which is a different and alarming statement. */
+                      `Nothing to allocate here. All ${drywallAllocated.length} pending ${
+                        drywallAllocated.length === 1 ? 'transaction is' : 'transactions are'
+                      } already allocated to a drywall job.`
+                    : 'No pending transactions. Add bills or expenses to Job Materials, Subcontractor Expense, or Utilities in QuickBooks.'}
+                </p>
               )}
-              {!loading && transactions.length > 0 && (
+              {!loading && visibleTransactions.length > 0 && (
                 <div className="border rounded overflow-auto max-h-[50vh]">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/40 sticky top-0">
@@ -1136,8 +1181,10 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                       </tr>
                     </thead>
                     <tbody>
-                      {transactions.map((txn) => (
-                        <tr key={`${txn.qbTransactionType}:${txn.qbTransactionId}:${txn.qbLineId ?? ''}`} className="border-t hover:bg-muted/40">
+                      {visibleTransactions.map((txn) => {
+                        const onDrywall = drywallKeys.has(qbLineKey(txn))
+                        return (
+                        <tr key={`${txn.qbTransactionType}:${txn.qbTransactionId}:${txn.qbLineId ?? ''}`} className={onDrywall ? 'border-t bg-muted/30 text-muted-foreground' : 'border-t hover:bg-muted/40'}>
                           <td className="p-2">{txn.vendorName}</td>
                           <td className="p-2">{txn.txnDate}</td>
                           <td className="p-2">{txn.docNumber || '—'}</td>
@@ -1150,12 +1197,20 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                             {txn.description || '—'}
                           </td>
                           <td className="p-2">
-                            <Button size="sm" variant="outline" onClick={() => handleSelectTransaction(txn)}>
-                              Allocate
-                            </Button>
+                            {/* Allocating a line already booked against a drywall job would
+                                count the cost twice, so the button is gone rather than
+                                merely discouraged. */}
+                            {onDrywall ? (
+                              <span className="text-xs">On drywall</span>
+                            ) : (
+                              <Button size="sm" variant="outline" onClick={() => handleSelectTransaction(txn)}>
+                                Allocate
+                              </Button>
+                            )}
                           </td>
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>

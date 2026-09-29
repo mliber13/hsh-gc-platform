@@ -276,3 +276,63 @@ export async function syncDrywallQbMaterials(
     unmatchedNames: Array.from(unmatchedNamesSet).sort((a, b) => a.localeCompare(b)),
   }
 }
+
+// ----------------------------------------------------------------------------
+// Cross-ledger de-duplication for the GC importer
+// ----------------------------------------------------------------------------
+
+/**
+ * Key for one QuickBooks expense line, shared by both ledgers.
+ *
+ * A QuickBooks bill can carry several lines, so the transaction id alone is not unique —
+ * "Beachwood - Bannet" appears twice in one pending list under two different documents.
+ */
+export function qbLineKey(txn: {
+  qbTransactionId?: string | null
+  qbTransactionType?: string | null
+  qbLineId?: string | null
+}): string {
+  return [
+    String(txn.qbTransactionType ?? '').trim(),
+    String(txn.qbTransactionId ?? '').trim(),
+    String(txn.qbLineId ?? '').trim(),
+  ].join('|')
+}
+
+/**
+ * The QuickBooks lines already booked as cost against a DRYWALL job.
+ *
+ * Drywall material lives in `drywall_qb_materials`; GC material lives in `material_entries`.
+ * The two ledgers do not know about each other, so the GC importer listed every drywall
+ * transaction as pending forever and allocating one would book the cost twice.
+ *
+ * Only rows that are BOTH accepted AND matched to a project count. The other two states have
+ * to stay visible on the GC side:
+ *   - accepted but unmatched — the job is not a drywall project, which is exactly the GC
+ *     work waiting to be allocated (five jobs, $18,399.84 when this was written);
+ *   - rejected — actively ruled out as drywall cost, so it may well be GC cost.
+ */
+export async function fetchDrywallCapturedQbLineKeys(): Promise<Set<string>> {
+  const orgId = await requireUserOrgId()
+  const { data, error } = await supabase
+    .from('drywall_qb_materials')
+    .select('qb_transaction_id, qb_transaction_type, qb_line_id')
+    .eq('organization_id', orgId)
+    .eq('review_status', 'accepted')
+    .not('matched_project_id', 'is', null)
+
+  if (error) throw new Error(error.message || 'Failed to load drywall-allocated materials')
+
+  const keys = new Set<string>()
+  for (const row of data ?? []) {
+    const r = row as { qb_transaction_id?: string; qb_transaction_type?: string; qb_line_id?: string | null }
+    keys.add(
+      qbLineKey({
+        qbTransactionId: r.qb_transaction_id,
+        qbTransactionType: r.qb_transaction_type,
+        qbLineId: r.qb_line_id,
+      }),
+    )
+  }
+  return keys
+}
