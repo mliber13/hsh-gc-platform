@@ -478,6 +478,39 @@ export async function fetchDrywallProjectById(projectId: string): Promise<Drywal
   return mapDetailRow(data as Parameters<typeof mapDetailRow>[0])
 }
 
+/**
+ * The same read for many projects at once.
+ *
+ * The division dashboard walked its candidate list calling fetchDrywallProjectById per
+ * project, so an org with thirty active jobs issued thirty full-blob round trips to build
+ * one page. One query, same columns, same mapper.
+ */
+export async function fetchDrywallProjectsByIds(
+  projectIds: string[],
+): Promise<Map<string, DrywallProject>> {
+  const out = new Map<string, DrywallProject>()
+  if (!isOnlineMode() || projectIds.length === 0) return out
+
+  const orgId = await requireUserOrgId()
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select(DRYWALL_DETAIL_SELECT)
+    .in('id', projectIds)
+    .eq('organization_id', orgId)
+
+  if (error) {
+    console.error('fetchDrywallProjectsByIds:', error)
+    throw new Error(error.message || 'Failed to load drywall projects')
+  }
+
+  for (const row of data ?? []) {
+    const project = mapDetailRow(row as Parameters<typeof mapDetailRow>[0])
+    out.set(project.id, project)
+  }
+  return out
+}
+
 export async function updateDrywallProjectInfo(
   projectId: string,
   patch: UpdateDrywallProjectInfoPatch,

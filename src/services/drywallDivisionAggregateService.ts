@@ -51,7 +51,7 @@ import {
   type SubEntryFlat,
 } from '@/services/drywallProjectCostService'
 import {
-  fetchDrywallProjectById,
+  fetchDrywallProjectsByIds,
   fetchDrywallProjects,
   getProductionTimestampsFromLegacy,
   getQuoteOutcomeFromLegacy,
@@ -704,9 +704,12 @@ export async function fetchDivisionExecution(now = new Date()): Promise<Division
     return { jobs: [], computedAt }
   }
 
+  // One read for every candidate, rather than one read per candidate.
+  const projectsById = await fetchDrywallProjectsByIds(candidates.map((row) => row.id))
+
   const details = await Promise.all(
     candidates.map(async (row) => {
-      const project = await fetchDrywallProjectById(row.id)
+      const project = projectsById.get(row.id)
       if (!project) return null
       const timestamps = getProductionTimestampsFromLegacy(project.legacy ?? {})
       if (shouldDropJobOutsideExecutionWindow(project.status, timestamps, now)) return null

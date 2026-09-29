@@ -20,7 +20,9 @@ import {
 } from '@/lib/drywall/projectCostMath'
 import { computeContractValueFromLegacy } from '@/lib/drywall/contractValue'
 import {
+  buildDrywallLaborContext,
   fetchDrywallProjectLaborSummary,
+  type DrywallLaborContext,
   type DrywallLaborWindow,
 } from '@/services/drywallLaborService'
 import {
@@ -309,7 +311,7 @@ async function filterMaterialAndSubByWindow(
 
 export async function fetchDrywallProjectCostSummary(
   projectId: string,
-  options?: { window?: DrywallCostWindow },
+  options?: { window?: DrywallCostWindow; context?: DrywallLaborContext },
 ): Promise<DrywallProjectCostSummary> {
   if (!isOnlineMode()) {
     throw new Error('Drywall project cost requires an online connection to Supabase.')
@@ -319,7 +321,7 @@ export async function fetchDrywallProjectCostSummary(
 
   const window = options?.window ?? 'all'
 
-  const laborPromise = fetchDrywallProjectLaborSummary(projectId, { window })
+  const laborPromise = fetchDrywallProjectLaborSummary(projectId, { window, context: options?.context })
 
   if (window === 'all') {
     const [labor, materialEntries, subEntries] = await Promise.all([
@@ -409,14 +411,19 @@ export async function fetchDrywallProjectAssessment(
   const hasProductionStart = Boolean(timestamps.productionStartedAt)
   const hasProductionComplete = Boolean(timestamps.productionCompletedAt)
 
+  // One context for all three windows. They are slices of the same dataset, but each call
+  // used to re-fetch every pay period in the org, the whole team twice over, and this
+  // project's blob again — so opening Production or Closeout cost three of each.
+  const context = await buildDrywallLaborContext(projectId)
+
   const [currentCost, productionComplete, afterProductionSummary, billedToDate, estimates] =
     await Promise.all([
-      fetchDrywallProjectCostSummary(projectId, { window: 'all' }),
+      fetchDrywallProjectCostSummary(projectId, { window: 'all', context }),
       hasProductionStart
-        ? fetchDrywallProjectCostSummary(projectId, { window: 'production' })
+        ? fetchDrywallProjectCostSummary(projectId, { window: 'production', context })
         : Promise.resolve(null),
       hasProductionComplete
-        ? fetchDrywallProjectCostSummary(projectId, { window: 'after-production' })
+        ? fetchDrywallProjectCostSummary(projectId, { window: 'after-production', context })
         : Promise.resolve(null),
       fetchDrywallProjectBilledToDate(projectId),
       fetchEstimatedCostBreakdownsForProject(projectId),

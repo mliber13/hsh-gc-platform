@@ -87,9 +87,42 @@ export async function fetchPayPeriodsForDrywallLabor(): Promise<PayPeriodForLabo
     .sort((a, b) => b.endDate.localeCompare(a.endDate))
 }
 
+/**
+ * Everything a labor summary needs that is the same for every window.
+ *
+ * Built once by a caller that wants several windows. Without it, asking for `all`,
+ * `production` and `after-production` fetched every pay period in the org three times, the
+ * whole team three times (twice each, for rates and specialty), and the project blob again
+ * per window — for three answers that are slices of one dataset.
+ */
+export interface DrywallLaborContext {
+  periods: Awaited<ReturnType<typeof fetchPayPeriodsForDrywallLabor>>
+  catalogs: Awaited<ReturnType<typeof fetchOrgDrywallCatalogs>> | null
+  profileRates: ProfileRatesByPersonKey
+  specialtyByPersonKey: Map<string, DrywallLaborCategory>
+  timestamps: ReturnType<typeof getProductionTimestampsFromLegacy>
+}
+
+export async function buildDrywallLaborContext(projectId: string): Promise<DrywallLaborContext> {
+  const [periods, catalogs, profileRates, specialtyByPersonKey, project] = await Promise.all([
+    fetchPayPeriodsForDrywallLabor(),
+    fetchOrgDrywallCatalogs().catch(() => null),
+    buildProfileRatesByPersonKey().catch(() => ({} as ProfileRatesByPersonKey)),
+    buildSpecialtyByPersonKeyForLabor().catch(() => new Map<string, DrywallLaborCategory>()),
+    fetchDrywallProjectById(projectId),
+  ])
+  return {
+    periods,
+    catalogs,
+    profileRates,
+    specialtyByPersonKey,
+    timestamps: getProductionTimestampsFromLegacy(project?.legacy ?? {}),
+  }
+}
+
 export async function fetchDrywallProjectLaborSummary(
   projectId: string,
-  options?: { window?: DrywallLaborWindow },
+  options?: { window?: DrywallLaborWindow; context?: DrywallLaborContext },
 ): Promise<DrywallProjectLaborSummary> {
   if (!isOnlineMode()) {
     throw new Error('Drywall labor summary requires an online connection to Supabase.')
@@ -97,12 +130,17 @@ export async function fetchDrywallProjectLaborSummary(
 
   await requireUserOrgId()
 
-  const [periods, catalogs, profileRates, specialtyByPersonKey] = await Promise.all([
-    fetchPayPeriodsForDrywallLabor(),
-    fetchOrgDrywallCatalogs().catch(() => null),
-    buildProfileRatesByPersonKey().catch(() => ({} as ProfileRatesByPersonKey)),
-    buildSpecialtyByPersonKeyForLabor().catch(() => new Map<string, DrywallLaborCategory>()),
-  ])
+  const { periods, catalogs, profileRates, specialtyByPersonKey } =
+    options?.context ??
+    (await (async () => {
+      const [p, c, r, s] = await Promise.all([
+        fetchPayPeriodsForDrywallLabor(),
+        fetchOrgDrywallCatalogs().catch(() => null),
+        buildProfileRatesByPersonKey().catch(() => ({} as ProfileRatesByPersonKey)),
+        buildSpecialtyByPersonKeyForLabor().catch(() => new Map<string, DrywallLaborCategory>()),
+      ])
+      return { periods: p, catalogs: c, profileRates: r, specialtyByPersonKey: s }
+    })())
 
   let entries = extractProjectLaborEntries(
     periods,
@@ -114,8 +152,11 @@ export async function fetchDrywallProjectLaborSummary(
 
   const window = options?.window ?? 'all'
   if (window !== 'all') {
-    const project = await fetchDrywallProjectById(projectId)
-    const timestamps = getProductionTimestampsFromLegacy(project?.legacy ?? {})
+    // With a context the timestamps came with it; without one this is the same read it
+    // always did.
+    const timestamps =
+      options?.context?.timestamps ??
+      getProductionTimestampsFromLegacy((await fetchDrywallProjectById(projectId))?.legacy ?? {})
     const split = splitLaborByProductionWindow(entries, timestamps)
 
     switch (window) {
