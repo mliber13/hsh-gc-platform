@@ -20,7 +20,7 @@ import {
   type DrywallChangeOrderTransition,
 } from '@/lib/drywall/changeOrderWorkflow'
 import {
-  archiveKeyForTimestamp,
+  withSingleQuoteArchive,
   refreshWouldEmptyQuote,
   buildFreshV3FromSnapshot,
 } from '@/lib/drywall/staleV3ConvertAudit'
@@ -880,7 +880,6 @@ export async function refreshQuoteV3FromSnapshot(
     )
   }
 
-  const archiveKey = archiveKeyForTimestamp(new Date().toISOString())
   const fresh = buildFreshV3FromSnapshot(prevQuote, prevQuote.legacyV2Snapshot)
   const quoteNumber = await resolveDrywallQuoteNumber(orgId, fresh, prevQuote)
   const prepared = prepareDrywallQuoteV3ForSave({ ...fresh, quoteNumber })
@@ -893,8 +892,7 @@ export async function refreshQuoteV3FromSnapshot(
   }
 
   const mergedLegacy = {
-    ...prevLegacy,
-    [archiveKey]: prevQuote,
+    ...withSingleQuoteArchive(prevLegacy, prevQuote),
     quote: mergedQuote,
   }
 
@@ -927,15 +925,13 @@ export async function revertQuoteToV2(
     throw new Error('No v2 snapshot on this project — cannot restore v2 quote.')
   }
 
-  const archiveKey = archiveKeyForTimestamp(new Date().toISOString())
   let v2 = deriveAddonFlagsFromData(v2QuoteFromV3Snapshot(prevQuote.legacyV2Snapshot))
   const quoteNumber = await resolveDrywallQuoteNumber(orgId, v2, prevQuote)
   v2 = { ...v2, quoteNumber, version: 2 }
   const calculations = buildDrywallQuoteCalculations(v2)
 
   const mergedLegacy = {
-    ...prevLegacy,
-    [archiveKey]: prevQuote,
+    ...withSingleQuoteArchive(prevLegacy, prevQuote),
     quote: {
       ...v2,
       calculations,

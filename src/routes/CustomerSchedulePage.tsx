@@ -208,12 +208,17 @@ export function CustomerSchedulePage() {
     void load()
   }, [load])
 
-  // Live-update: silently re-fetch every 20s while the tab is visible, and on regaining focus.
+  // Live-update while the tab is visible, and on regaining focus.
+  //
+  // Ninety seconds, not twenty. This is an anonymous share link on a public page — a
+  // customer leaving it open all day was 180 reads an hour off a schedule that changes a
+  // handful of times a week. The visibility gate already stops background tabs; the
+  // interval is what made an idle foreground tab expensive.
   useEffect(() => {
     const tick = () => {
       if (document.visibilityState === 'visible') void refresh()
     }
-    const id = window.setInterval(tick, 20_000)
+    const id = window.setInterval(tick, 90_000)
     document.addEventListener('visibilitychange', tick)
     return () => {
       window.clearInterval(id)

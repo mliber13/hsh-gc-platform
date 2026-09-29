@@ -65,79 +65,80 @@ import { getCurrentUserProfile, UserProfile } from '@/services/userService'
 import { useAuth } from '@/contexts/AuthContext'
 
 // Pages
-import { ProjectsDashboard } from '@/components/ProjectsDashboard'
-import { ProjectDetailView } from '@/components/ProjectDetailView'
-import { EstimateBuilder } from '@/components/EstimateBuilder'
-import { ProjectActuals } from '@/components/ProjectActuals'
-import { ChangeOrders } from '@/components/ChangeOrders'
-import { ProjectForms } from '@/components/ProjectForms'
-import { ProjectDocuments } from '@/components/ProjectDocuments'
-import { SelectionBook } from '@/components/SelectionBook'
-import { SelectionSchedules } from '@/components/SelectionSchedules'
-import { ScheduleEditor } from '@/components/schedule/ScheduleEditor'
-import { ResourceCompare } from '@/components/ResourceCompare'
-import { SchedulePortfolioPage } from '@/components/schedule/SchedulePortfolioPage'
-import { ProjectQuotesView } from '@/components/quotes/ProjectQuotesView'
-import { ClientQuoteBuilder } from '@/components/quotes/ClientQuoteBuilder'
-import { ClientQuoteReadOnlyView } from '@/components/quotes/ClientQuoteReadOnlyView'
+const ProjectsDashboard = lazyRoute(() => import('@/components/ProjectsDashboard'), 'ProjectsDashboard')
+const ProjectDetailView = lazyRoute(() => import('@/components/ProjectDetailView'), 'ProjectDetailView')
+const EstimateBuilder = lazyRoute(() => import('@/components/EstimateBuilder'), 'EstimateBuilder')
+const ProjectActuals = lazyRoute(() => import('@/components/ProjectActuals'), 'ProjectActuals')
+const ChangeOrders = lazyRoute(() => import('@/components/ChangeOrders'), 'ChangeOrders')
+const ProjectForms = lazyRoute(() => import('@/components/ProjectForms'), 'ProjectForms')
+const ProjectDocuments = lazyRoute(() => import('@/components/ProjectDocuments'), 'ProjectDocuments')
+const SelectionBook = lazyRoute(() => import('@/components/SelectionBook'), 'SelectionBook')
+const SelectionSchedules = lazyRoute(() => import('@/components/SelectionSchedules'), 'SelectionSchedules')
+const ScheduleEditor = lazyRoute(() => import('@/components/schedule/ScheduleEditor'), 'ScheduleEditor')
+const ResourceCompare = lazyRoute(() => import('@/components/ResourceCompare'), 'ResourceCompare')
+const SchedulePortfolioPage = lazyRoute(() => import('@/components/schedule/SchedulePortfolioPage'), 'SchedulePortfolioPage')
+const ProjectQuotesView = lazyRoute(() => import('@/components/quotes/ProjectQuotesView'), 'ProjectQuotesView')
+const ClientQuoteBuilder = lazyRoute(() => import('@/components/quotes/ClientQuoteBuilder'), 'ClientQuoteBuilder')
+const ClientQuoteReadOnlyView = lazyRoute(() => import('@/components/quotes/ClientQuoteReadOnlyView'), 'ClientQuoteReadOnlyView')
 import { CreateProjectForm, ProjectFormData } from '@/components/CreateProjectForm'
-import { PlanLibrary } from '@/components/PlanLibrary'
-import { PlanEditor } from '@/components/PlanEditor'
-import { ItemLibrary } from '@/components/ItemLibrary'
-import { QuickBooksConnect } from '@/components/QuickBooksConnect'
-import { QuickBooksImport } from '@/components/QuickBooksImport'
-import { QuickBooksCallback } from '@/components/QuickBooksCallback'
-import { PurchaseOrdersView } from '@/components/PurchaseOrdersView'
-import { ContactDirectory } from '@/components/ContactDirectory'
-import { SOWManagement } from '@/components/SOWManagement'
-import { HolidaysAdmin } from '@/components/HolidaysAdmin'
-import { SubUnavailabilityAdmin } from '@/components/SubUnavailabilityAdmin'
-import { DealWorkspace } from '@/components/DealWorkspace'
-import { DealsDashboard } from '@/components/DealsDashboard'
-import { TenantPipeline } from '@/components/TenantPipeline'
-import { MyFeedback } from '@/components/MyFeedback'
-import { FeedbackForm } from '@/components/FeedbackForm'
+const PlanLibrary = lazyRoute(() => import('@/components/PlanLibrary'), 'PlanLibrary')
+const PlanEditor = lazyRoute(() => import('@/components/PlanEditor'), 'PlanEditor')
+const ItemLibrary = lazyRoute(() => import('@/components/ItemLibrary'), 'ItemLibrary')
+const QuickBooksConnect = lazyRoute(() => import('@/components/QuickBooksConnect'), 'QuickBooksConnect')
+const QuickBooksImport = lazyRoute(() => import('@/components/QuickBooksImport'), 'QuickBooksImport')
+const QuickBooksCallback = lazyRoute(() => import('@/components/QuickBooksCallback'), 'QuickBooksCallback')
+const PurchaseOrdersView = lazyRoute(() => import('@/components/PurchaseOrdersView'), 'PurchaseOrdersView')
+const ContactDirectory = lazyRoute(() => import('@/components/ContactDirectory'), 'ContactDirectory')
+const SOWManagement = lazyRoute(() => import('@/components/SOWManagement'), 'SOWManagement')
+const HolidaysAdmin = lazyRoute(() => import('@/components/HolidaysAdmin'), 'HolidaysAdmin')
+const SubUnavailabilityAdmin = lazyRoute(() => import('@/components/SubUnavailabilityAdmin'), 'SubUnavailabilityAdmin')
+const DealWorkspace = lazyRoute(() => import('@/components/DealWorkspace'), 'DealWorkspace')
+const DealsDashboard = lazyRoute(() => import('@/components/DealsDashboard'), 'DealsDashboard')
+const TenantPipeline = lazyRoute(() => import('@/components/TenantPipeline'), 'TenantPipeline')
+const MyFeedback = lazyRoute(() => import('@/components/MyFeedback'), 'MyFeedback')
+const FeedbackForm = lazyRoute(() => import('@/components/FeedbackForm'), 'FeedbackForm')
 import { emitFeedbackChange } from '@/lib/feedbackEventBus'
-import { PrivacyPolicy } from '@/components/PrivacyPolicy'
-import { TermsOfUse } from '@/components/TermsOfUse'
-import { SmsOptIn } from '@/components/SmsOptIn'
-import { MeetingPreRead } from '@/components/meeting/MeetingPreRead'
-import { MeetingView } from '@/components/meeting/MeetingView'
-import { MyActionItems } from '@/components/meeting/MyActionItems'
-import { MeetingAdmin } from '@/components/meeting/MeetingAdmin'
-import { MeetingsList } from '@/components/meeting/MeetingsList'
-import { TeamPage } from '@/components/hr/TeamPage'
-import { CrewAccountsPage } from '@/components/hr/crew/CrewAccountsPage'
-import { PayrollPage } from '@/components/hr/PayrollPage'
-import { TimeClockPage } from '@/components/hr/TimeClockPage'
+const PrivacyPolicy = lazyRoute(() => import('@/components/PrivacyPolicy'), 'PrivacyPolicy')
+const TermsOfUse = lazyRoute(() => import('@/components/TermsOfUse'), 'TermsOfUse')
+const SmsOptIn = lazyRoute(() => import('@/components/SmsOptIn'), 'SmsOptIn')
+const MeetingPreRead = lazyRoute(() => import('@/components/meeting/MeetingPreRead'), 'MeetingPreRead')
+const MeetingView = lazyRoute(() => import('@/components/meeting/MeetingView'), 'MeetingView')
+const MyActionItems = lazyRoute(() => import('@/components/meeting/MyActionItems'), 'MyActionItems')
+const MeetingAdmin = lazyRoute(() => import('@/components/meeting/MeetingAdmin'), 'MeetingAdmin')
+const MeetingsList = lazyRoute(() => import('@/components/meeting/MeetingsList'), 'MeetingsList')
+const TeamPage = lazyRoute(() => import('@/components/hr/TeamPage'), 'TeamPage')
+const CrewAccountsPage = lazyRoute(() => import('@/components/hr/crew/CrewAccountsPage'), 'CrewAccountsPage')
+const PayrollPage = lazyRoute(() => import('@/components/hr/PayrollPage'), 'PayrollPage')
+const TimeClockPage = lazyRoute(() => import('@/components/hr/TimeClockPage'), 'TimeClockPage')
 import { HrWorkspaceShell } from '@/components/hr/HrWorkspaceShell'
-import { DrywallProjectsListPage } from '@/components/drywall/DrywallProjectsListPage'
-import { DrywallSupplierOrdersPage } from '@/components/drywall/supplier/DrywallSupplierOrdersPage'
-import { SupplierOrderSharePage } from '@/routes/SupplierOrderSharePage'
-import { CustomerSchedulePage } from '@/routes/CustomerSchedulePage'
+const DrywallProjectsListPage = lazyRoute(() => import('@/components/drywall/DrywallProjectsListPage'), 'DrywallProjectsListPage')
+const DrywallSupplierOrdersPage = lazyRoute(() => import('@/components/drywall/supplier/DrywallSupplierOrdersPage'), 'DrywallSupplierOrdersPage')
+const SupplierOrderSharePage = lazyRoute(() => import('@/routes/SupplierOrderSharePage'), 'SupplierOrderSharePage')
+const CustomerSchedulePage = lazyRoute(() => import('@/routes/CustomerSchedulePage'), 'CustomerSchedulePage')
 import { DrywallProjectShell } from '@/components/drywall/DrywallProjectShell'
-import { CloseoutStagePage } from '@/components/drywall/closeout/CloseoutStagePage'
-import { JobFilesPage } from '@/components/drywall/files/JobFilesPage'
-import { OrderPage } from '@/components/drywall/order/OrderPage'
-import { ProductionStagePage } from '@/components/drywall/production/ProductionStagePage'
-import { FieldMeasurementPage } from '@/components/drywall/field/FieldMeasurementPage'
-import { DrywallScheduleEditor } from '@/components/drywall/schedule/DrywallScheduleEditor'
-import { CommsInboxPage } from '@/components/comms/CommsInboxPage'
-import { CustomerInboxPage } from '@/components/comms/CustomerInboxPage'
-import { DashboardPage } from '@/components/drywall/dashboard/DashboardPage'
-import { QuoteStageRoute } from '@/components/drywall/quote/QuoteStageRoute'
-import { CatalogsPage } from '@/components/drywall/settings/CatalogsPage'
-import { DrywallQuickBooksPage } from '@/components/drywall/settings/DrywallQuickBooksPage'
-import { ProjectInfoPage } from '@/components/drywall/info/ProjectInfoPage'
+const CloseoutStagePage = lazyRoute(() => import('@/components/drywall/closeout/CloseoutStagePage'), 'CloseoutStagePage')
+const JobFilesPage = lazyRoute(() => import('@/components/drywall/files/JobFilesPage'), 'JobFilesPage')
+const OrderPage = lazyRoute(() => import('@/components/drywall/order/OrderPage'), 'OrderPage')
+const ProductionStagePage = lazyRoute(() => import('@/components/drywall/production/ProductionStagePage'), 'ProductionStagePage')
+const FieldMeasurementPage = lazyRoute(() => import('@/components/drywall/field/FieldMeasurementPage'), 'FieldMeasurementPage')
+const DrywallScheduleEditor = lazyRoute(() => import('@/components/drywall/schedule/DrywallScheduleEditor'), 'DrywallScheduleEditor')
+const CommsInboxPage = lazyRoute(() => import('@/components/comms/CommsInboxPage'), 'CommsInboxPage')
+const CustomerInboxPage = lazyRoute(() => import('@/components/comms/CustomerInboxPage'), 'CustomerInboxPage')
+const DashboardPage = lazyRoute(() => import('@/components/drywall/dashboard/DashboardPage'), 'DashboardPage')
+const QuoteStageRoute = lazyRoute(() => import('@/components/drywall/quote/QuoteStageRoute'), 'QuoteStageRoute')
+const CatalogsPage = lazyRoute(() => import('@/components/drywall/settings/CatalogsPage'), 'CatalogsPage')
+const DrywallQuickBooksPage = lazyRoute(() => import('@/components/drywall/settings/DrywallQuickBooksPage'), 'DrywallQuickBooksPage')
+const ProjectInfoPage = lazyRoute(() => import('@/components/drywall/info/ProjectInfoPage'), 'ProjectInfoPage')
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { getCurrentWeekOf } from '@/services/meetingService'
-import { CrewSignupPage } from '@/routes/CrewSignupPage'
+const CrewSignupPage = lazyRoute(() => import('@/routes/CrewSignupPage'), 'CrewSignupPage')
 import { CrewShell } from '@/components/crew/CrewShell'
-import { CrewProjectListPage } from '@/components/crew/CrewProjectListPage'
-import { CrewProjectDetailPage } from '@/components/crew/CrewProjectDetailPage'
-import { CrewMeasurePage } from '@/components/crew/CrewMeasurePage'
+const CrewProjectListPage = lazyRoute(() => import('@/components/crew/CrewProjectListPage'), 'CrewProjectListPage')
+const CrewProjectDetailPage = lazyRoute(() => import('@/components/crew/CrewProjectDetailPage'), 'CrewProjectDetailPage')
+const CrewMeasurePage = lazyRoute(() => import('@/components/crew/CrewMeasurePage'), 'CrewMeasurePage')
 
 import { AppLayout } from '@/components/AppLayout'
+import { lazyRoute, RouteSuspense } from './lazyRoute'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { AuthedLayout } from './AuthedLayout'
 import { ProjectScope, useProjectContext } from './ProjectScope'
@@ -161,6 +162,7 @@ import {
 
 export function AppRoutes() {
   return (
+    <RouteSuspense>
     <Routes>
       {/* Public — no AuthGate */}
       <Route path="/supplier/:token" element={<SupplierOrderSharePage />} />
@@ -496,6 +498,7 @@ export function AppRoutes() {
         </Route>
       </Route>
     </Routes>
+    </RouteSuspense>
   )
 }
 

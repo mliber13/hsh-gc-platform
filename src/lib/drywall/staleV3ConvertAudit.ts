@@ -207,3 +207,28 @@ export function archiveKeyForTimestamp(iso: string): string {
   const slug = iso.replace(/[:.]/g, '-')
   return `quote_v3_archive_${slug}`
 }
+
+/**
+ * Keep exactly one archived quote, dropping any earlier ones.
+ *
+ * Every refresh and revert used to add a fresh `quote_v3_archive_<timestamp>` key holding
+ * a whole quote, so a project accumulated a copy per attempt — the same bloat class that
+ * was cleaned out of `projects.metadata` on 2026-07-21 and then quietly re-created. One
+ * archive is what anybody has ever needed: the thing you were looking at before you
+ * pressed the button.
+ *
+ * Old timestamped keys are stripped here too, so the next refresh on a project cleans up
+ * whatever it has been carrying.
+ */
+export function withSingleQuoteArchive(
+  legacy: Record<string, unknown>,
+  previousQuote: unknown,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(legacy)) {
+    if (key.startsWith('quote_v3_archive')) continue
+    next[key] = value
+  }
+  next.quote_v3_archive = previousQuote
+  return next
+}
