@@ -211,7 +211,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           // A failed read leaves the rollup at zero, which is why it says so out loud rather
           // than quietly under-reporting the cost of the job.
           toast.error(
-            e instanceof Error ? e.message : 'Could not load change orders for this project',
+          e instanceof Error ? e.message : 'Could not load change orders for this project',
           )
         }
       }
@@ -223,67 +223,73 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   // Load actual entries from project.actuals
   useEffect(() => {
     const loadActuals = async () => {
-      const actuals = await getProjectActuals_Hybrid(project.id)
+      try {
+        const actuals = await getProjectActuals_Hybrid(project.id)
       
-      if (actuals) {
-        const entries: ActualEntry[] = []
+        if (actuals) {
+          const entries: ActualEntry[] = []
         
-        // Convert labor entries
-        actuals.laborEntries?.forEach((labor: LaborEntry & { grossWages?: number; burdenAmount?: number }) => {
-          entries.push({
-            id: labor.id,
-            type: 'labor',
-            date: labor.date,
-            amount: labor.totalCost,
-            description: labor.description,
-            category: labor.trade,
-            tradeId: labor.tradeId,
-            subItemId: labor.subItemId,
-            payrollPeriod: labor.date.toLocaleDateString(),
-            grossWages: labor.grossWages,
-            burdenAmount: labor.burdenAmount,
+          // Convert labor entries
+          actuals.laborEntries?.forEach((labor: LaborEntry & { grossWages?: number; burdenAmount?: number }) => {
+            entries.push({
+              id: labor.id,
+              type: 'labor',
+              date: labor.date,
+              amount: labor.totalCost,
+              description: labor.description,
+              category: labor.trade,
+              tradeId: labor.tradeId,
+              subItemId: labor.subItemId,
+              payrollPeriod: labor.date.toLocaleDateString(),
+              grossWages: labor.grossWages,
+              burdenAmount: labor.burdenAmount,
+            })
           })
-        })
         
-        // Convert material entries
-        actuals.materialEntries?.forEach((material: MaterialEntry) => {
-          entries.push({
-            id: material.id,
-            type: 'material',
-            date: material.date,
-            amount: material.totalCost,
-            description: material.materialName,
-            category: material.category,
-            tradeId: material.tradeId,
-            subItemId: material.subItemId,
-            vendor: material.vendor,
-            invoiceNumber: material.invoiceNumber,
+          // Convert material entries
+          actuals.materialEntries?.forEach((material: MaterialEntry) => {
+            entries.push({
+              id: material.id,
+              type: 'material',
+              date: material.date,
+              amount: material.totalCost,
+              description: material.materialName,
+              category: material.category,
+              tradeId: material.tradeId,
+              subItemId: material.subItemId,
+              vendor: material.vendor,
+              invoiceNumber: material.invoiceNumber,
+            })
           })
-        })
         
-        // Convert subcontractor entries
-        actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
-          entries.push({
-            id: sub.id,
-            type: 'subcontractor',
-            date: sub.createdAt,
-            amount: sub.totalPaid,
-            description: sub.scopeOfWork,
-            category: sub.trade,
-            tradeId: sub.tradeId,
-            subItemId: sub.subItemId,
-            subcontractorName: sub.subcontractor.name,
-            invoiceNumber: (sub as any).invoiceNumber,
-            isSplitEntry: (sub as any).isSplitEntry,
-            splitParentId: (sub as any).splitParentId,
-            splitAllocation: (sub as any).splitAllocation,
+          // Convert subcontractor entries
+          actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
+            entries.push({
+              id: sub.id,
+              type: 'subcontractor',
+              date: sub.createdAt,
+              amount: sub.totalPaid,
+              description: sub.scopeOfWork,
+              category: sub.trade,
+              tradeId: sub.tradeId,
+              subItemId: sub.subItemId,
+              subcontractorName: sub.subcontractor.name,
+              invoiceNumber: (sub as any).invoiceNumber,
+              isSplitEntry: (sub as any).isSplitEntry,
+              splitParentId: (sub as any).splitParentId,
+              splitAllocation: (sub as any).splitAllocation,
+            })
           })
-        })
         
-        // Sort by date, newest first
-        entries.sort((a, b) => b.date.getTime() - a.date.getTime())
+          // Sort by date, newest first
+          entries.sort((a, b) => b.date.getTime() - a.date.getTime())
         
-        setActualEntries(entries)
+          setActualEntries(entries)
+        }
+      } catch (e) {
+        // The service throws now instead of quietly writing to localStorage, so the failure
+        // has to be shown rather than swallowed (P1-GC-1).
+        toast.error(e instanceof Error ? e.message : 'Could not load the actuals for this project')
       }
     }
     
@@ -538,93 +544,99 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   }
 
   const handleDeleteEntry = async (entry: ActualEntry) => {
-    // Check if this is a parent entry with split children
-    const splitChildren = ((entry.type === 'material' || entry.type === 'subcontractor') && entry.invoiceNumber)
-      ? actualEntries.filter(e => e.isSplitEntry && e.splitParentId === entry.id)
-      : []
+    try {
+      // Check if this is a parent entry with split children
+      const splitChildren = ((entry.type === 'material' || entry.type === 'subcontractor') && entry.invoiceNumber)
+        ? actualEntries.filter(e => e.isSplitEntry && e.splitParentId === entry.id)
+        : []
     
-    const confirmMessage = splitChildren.length > 0
-      ? `Delete this invoice and all ${splitChildren.length} split allocations (${formatCurrency(entry.amount)} total)?`
-      : `Delete this ${entry.type} entry for ${formatCurrency(entry.amount)}?`
+      const confirmMessage = splitChildren.length > 0
+        ? `Delete this invoice and all ${splitChildren.length} split allocations (${formatCurrency(entry.amount)} total)?`
+        : `Delete this ${entry.type} entry for ${formatCurrency(entry.amount)}?`
     
-    if (!confirm(confirmMessage)) {
-      return
-    }
+      if (!confirm(confirmMessage)) {
+        return
+      }
 
-    // Delete split children first
-    if (splitChildren.length > 0) {
-      for (const child of splitChildren) {
-        if (child.type === 'material') {
-          await deleteMaterialEntry_Hybrid(child.id)
-        } else if (child.type === 'subcontractor') {
-          await deleteSubcontractorEntry_Hybrid(child.id)
+      // Delete split children first
+      if (splitChildren.length > 0) {
+        for (const child of splitChildren) {
+          if (child.type === 'material') {
+            await deleteMaterialEntry_Hybrid(child.id)
+          } else if (child.type === 'subcontractor') {
+            await deleteSubcontractorEntry_Hybrid(child.id)
+          }
         }
       }
-    }
 
-    let deleted = false
-    if (entry.type === 'labor') {
-      deleted = await deleteLaborEntry_Hybrid(entry.id)
-    } else if (entry.type === 'material') {
-      deleted = await deleteMaterialEntry_Hybrid(entry.id)
-    } else if (entry.type === 'subcontractor') {
-      deleted = await deleteSubcontractorEntry_Hybrid(entry.id)
-    }
-
-    if (deleted) {
-      // Reload actuals
-      const actuals = await getProjectActuals_Hybrid(project.id)
-      if (actuals) {
-        const entries: ActualEntry[] = []
-        
-        actuals.laborEntries?.forEach((labor: LaborEntry & { grossWages?: number; burdenAmount?: number }) => {
-          entries.push({
-            id: labor.id,
-            type: 'labor',
-            date: labor.date,
-            amount: labor.totalCost,
-            description: labor.description,
-            category: labor.trade,
-            tradeId: labor.tradeId,
-            payrollPeriod: labor.date.toLocaleDateString(),
-            grossWages: labor.grossWages,
-            burdenAmount: labor.burdenAmount,
-          })
-        })
-        
-        actuals.materialEntries?.forEach((material: MaterialEntry) => {
-          entries.push({
-            id: material.id,
-            type: 'material',
-            date: material.date,
-            amount: material.totalCost,
-            description: material.materialName,
-            category: material.category,
-            tradeId: material.tradeId,
-            vendor: material.vendor,
-            invoiceNumber: material.invoiceNumber,
-            isSplitEntry: material.isSplitEntry,
-            splitParentId: material.splitParentId,
-            splitAllocation: material.splitAllocation,
-          })
-        })
-        
-        actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
-          entries.push({
-            id: sub.id,
-            type: 'subcontractor',
-            date: sub.createdAt,
-            amount: sub.totalPaid,
-            description: sub.scopeOfWork,
-            category: sub.trade,
-            tradeId: sub.tradeId,
-            subcontractorName: sub.subcontractor.name,
-          })
-        })
-        
-        entries.sort((a, b) => b.date.getTime() - a.date.getTime())
-        setActualEntries(entries)
+      let deleted = false
+      if (entry.type === 'labor') {
+        deleted = await deleteLaborEntry_Hybrid(entry.id)
+      } else if (entry.type === 'material') {
+        deleted = await deleteMaterialEntry_Hybrid(entry.id)
+      } else if (entry.type === 'subcontractor') {
+        deleted = await deleteSubcontractorEntry_Hybrid(entry.id)
       }
+
+      if (deleted) {
+        // Reload actuals
+        const actuals = await getProjectActuals_Hybrid(project.id)
+        if (actuals) {
+          const entries: ActualEntry[] = []
+        
+          actuals.laborEntries?.forEach((labor: LaborEntry & { grossWages?: number; burdenAmount?: number }) => {
+            entries.push({
+              id: labor.id,
+              type: 'labor',
+              date: labor.date,
+              amount: labor.totalCost,
+              description: labor.description,
+              category: labor.trade,
+              tradeId: labor.tradeId,
+              payrollPeriod: labor.date.toLocaleDateString(),
+              grossWages: labor.grossWages,
+              burdenAmount: labor.burdenAmount,
+            })
+          })
+        
+          actuals.materialEntries?.forEach((material: MaterialEntry) => {
+            entries.push({
+              id: material.id,
+              type: 'material',
+              date: material.date,
+              amount: material.totalCost,
+              description: material.materialName,
+              category: material.category,
+              tradeId: material.tradeId,
+              vendor: material.vendor,
+              invoiceNumber: material.invoiceNumber,
+              isSplitEntry: material.isSplitEntry,
+              splitParentId: material.splitParentId,
+              splitAllocation: material.splitAllocation,
+            })
+          })
+        
+          actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
+            entries.push({
+              id: sub.id,
+              type: 'subcontractor',
+              date: sub.createdAt,
+              amount: sub.totalPaid,
+              description: sub.scopeOfWork,
+              category: sub.trade,
+              tradeId: sub.tradeId,
+              subcontractorName: sub.subcontractor.name,
+            })
+          })
+        
+          entries.sort((a, b) => b.date.getTime() - a.date.getTime())
+          setActualEntries(entries)
+        }
+      }
+    } catch (e) {
+      // The service throws now instead of quietly writing to localStorage, so the failure
+      // has to be shown rather than swallowed (P1-GC-1).
+      toast.error(e instanceof Error ? e.message : 'Could not delete that entry')
     }
   }
 
@@ -725,7 +737,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                   } catch (e) {
                     console.error(e)
                     toast.error('Failed to reassign entry.')
-                  } finally {
+                    } finally {
                     setReassigning(false)
                   }
                 }}
@@ -2042,167 +2054,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           actualEntries={actualEntries}
           byKey={byKey}
           onSave={async (entry, splitAllocations) => {
-            // Handle split invoices
-            if ((entry.type === 'material' || entry.type === 'subcontractor') && splitAllocations && splitAllocations.length > 0) {
-              if (entry.type === 'material') {
-                // Create parent entry first
-                const materialCategory = entry.category as Trade['category'] | undefined
-                const parentEntry = await addMaterialEntry_Hybrid(project.id, {
-                  date: entry.date,
-                  materialName: entry.description,
-                  totalCost: entry.amount,
-                  category: materialCategory,
-                  tradeId: entry.tradeId,
-                  subItemId: entry.subItemId,
-                  vendor: entry.vendor,
-                  invoiceNumber: entry.invoiceNumber,
-                  isSplitEntry: false,
-                })
-
-                if (!parentEntry) {
-                  toast.error('Failed to create parent invoice entry')
-                  return
-                }
-
-                // Create split entries for each allocation
-                for (const allocation of splitAllocations) {
-                  const allocCategory = allocation.category as Trade['category'] | undefined
-                  await addMaterialEntry_Hybrid(project.id, {
-                    date: entry.date,
-                    materialName: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
-                    totalCost: allocation.amount,
-                    category: allocCategory,
-                    tradeId: allocation.tradeId,
-                    subItemId: allocation.subItemId,
-                    vendor: entry.vendor,
-                    invoiceNumber: entry.invoiceNumber,
-                    isSplitEntry: true,
-                    splitParentId: parentEntry.id,
-                    splitAllocation: allocation.amount,
-                  })
-                }
-              } else if (entry.type === 'subcontractor') {
-                // Create parent entry first
-                const subCategory = entry.category as Trade['category'] | undefined
-                const parentEntry = await addSubcontractorEntry_Hybrid(project.id, {
-                  subcontractorName: entry.subcontractorName || 'Unknown',
-                  scopeOfWork: entry.description,
-                  contractAmount: entry.amount,
-                  totalPaid: entry.amount,
-                  trade: subCategory as any,
-                  tradeId: entry.tradeId,
-                  subItemId: entry.subItemId,
-                  invoiceNumber: entry.invoiceNumber,
-                  isSplitEntry: false,
-                })
-
-                if (!parentEntry) {
-                  toast.error('Failed to create parent invoice entry')
-                  return
-                }
-
-                // Create split entries for each allocation
-                for (const allocation of splitAllocations) {
-                  const allocCategory = allocation.category as Trade['category'] | undefined
-                  await addSubcontractorEntry_Hybrid(project.id, {
-                    subcontractorName: entry.subcontractorName || 'Unknown',
-                    scopeOfWork: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
-                    contractAmount: allocation.amount,
-                    totalPaid: allocation.amount,
-                    trade: allocCategory as any,
-                    tradeId: allocation.tradeId,
-                    subItemId: allocation.subItemId,
-                    invoiceNumber: entry.invoiceNumber,
-                    isSplitEntry: true,
-                    splitParentId: parentEntry.id,
-                    splitAllocation: allocation.amount,
-                  })
-                }
-              }
-
-              // Reload actuals
-              const actuals = await getProjectActuals_Hybrid(project.id)
-              if (actuals) {
-                const entries: ActualEntry[] = []
-                
-                actuals.laborEntries?.forEach((labor: LaborEntry & { grossWages?: number; burdenAmount?: number }) => {
-                  entries.push({
-                    id: labor.id,
-                    type: 'labor',
-                    date: labor.date,
-                    amount: labor.totalCost,
-                    description: labor.description,
-                    category: labor.trade,
-                    tradeId: labor.tradeId,
-                    subItemId: labor.subItemId,
-                    payrollPeriod: labor.date.toLocaleDateString(),
-                    grossWages: labor.grossWages,
-                    burdenAmount: labor.burdenAmount,
-                  })
-                })
-                
-                actuals.materialEntries?.forEach((material: MaterialEntry) => {
-                  entries.push({
-                    id: material.id,
-                    type: 'material',
-                    date: material.date,
-                    amount: material.totalCost,
-                    description: material.materialName,
-                    category: material.category,
-                    tradeId: material.tradeId,
-                    subItemId: material.subItemId,
-                    vendor: material.vendor,
-                    invoiceNumber: material.invoiceNumber,
-                    isSplitEntry: material.isSplitEntry,
-                    splitParentId: material.splitParentId,
-                    splitAllocation: material.splitAllocation,
-                  })
-                })
-                
-                actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
-                  entries.push({
-                    id: sub.id,
-                    type: 'subcontractor',
-                    date: sub.createdAt,
-                    amount: sub.totalPaid,
-                    description: sub.scopeOfWork,
-                    category: sub.trade,
-                    tradeId: sub.tradeId,
-                    subItemId: sub.subItemId,
-                    subcontractorName: sub.subcontractor.name,
-                    invoiceNumber: (sub as any).invoiceNumber,
-                    isSplitEntry: (sub as any).isSplitEntry,
-                    splitParentId: (sub as any).splitParentId,
-                    splitAllocation: (sub as any).splitAllocation,
-                  })
-                })
-                
-                entries.sort((a, b) => b.date.getTime() - a.date.getTime())
-                setActualEntries(entries)
-              }
-
-              setShowEntryForm(false)
-              setEditingEntry(null)
-              return
-            }
-
-            // Save to storage based on entry type
-            if (editingEntry) {
-              // If converting to split invoice, delete original and create parent + splits
+            try {
+              // Handle split invoices
               if ((entry.type === 'material' || entry.type === 'subcontractor') && splitAllocations && splitAllocations.length > 0) {
                 if (entry.type === 'material') {
-                  // Delete the original entry
-                  await deleteMaterialEntry_Hybrid(editingEntry.id)
-                  
-                  // Delete any existing split children
-                  const existingSplitChildren = actualEntries.filter(
-                    e => e.isSplitEntry && e.splitParentId === editingEntry.id
-                  )
-                  for (const child of existingSplitChildren) {
-                    await deleteMaterialEntry_Hybrid(child.id)
-                  }
-                  
-                  // Create parent entry
+                  // Create parent entry first
                   const materialCategory = entry.category as Trade['category'] | undefined
                   const parentEntry = await addMaterialEntry_Hybrid(project.id, {
                     date: entry.date,
@@ -2239,18 +2095,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     })
                   }
                 } else if (entry.type === 'subcontractor') {
-                  // Delete the original entry
-                  await deleteSubcontractorEntry_Hybrid(editingEntry.id)
-                  
-                  // Delete any existing split children
-                  const existingSplitChildren = actualEntries.filter(
-                    e => e.isSplitEntry && e.splitParentId === editingEntry.id
-                  )
-                  for (const child of existingSplitChildren) {
-                    await deleteSubcontractorEntry_Hybrid(child.id)
-                  }
-                  
-                  // Create parent entry
+                  // Create parent entry first
                   const subCategory = entry.category as Trade['category'] | undefined
                   const parentEntry = await addSubcontractorEntry_Hybrid(project.id, {
                     subcontractorName: entry.subcontractorName || 'Unknown',
@@ -2292,8 +2137,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 const actuals = await getProjectActuals_Hybrid(project.id)
                 if (actuals) {
                   const entries: ActualEntry[] = []
-                  
-                  actuals.laborEntries?.forEach((labor: LaborEntry) => {
+                
+                  actuals.laborEntries?.forEach((labor: LaborEntry & { grossWages?: number; burdenAmount?: number }) => {
                     entries.push({
                       id: labor.id,
                       type: 'labor',
@@ -2308,7 +2153,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       burdenAmount: labor.burdenAmount,
                     })
                   })
-                  
+                
                   actuals.materialEntries?.forEach((material: MaterialEntry) => {
                     entries.push({
                       id: material.id,
@@ -2326,7 +2171,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       splitAllocation: material.splitAllocation,
                     })
                   })
-                  
+                
                   actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
                     entries.push({
                       id: sub.id,
@@ -2344,7 +2189,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       splitAllocation: (sub as any).splitAllocation,
                     })
                   })
-                  
+                
                   entries.sort((a, b) => b.date.getTime() - a.date.getTime())
                   setActualEntries(entries)
                 }
@@ -2353,21 +2198,255 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 setEditingEntry(null)
                 return
               }
-              
-              // Check if type changed - if so, delete old and create new
-              const typeChanged = editingEntry && editingEntry.type !== entry.type
-              
-              if (typeChanged) {
-                // Delete the old entry
-                if (editingEntry.type === 'labor') {
-                  await deleteLaborEntry_Hybrid(editingEntry.id)
-                } else if (editingEntry.type === 'material') {
-                  await deleteMaterialEntry_Hybrid(editingEntry.id)
-                } else if (editingEntry.type === 'subcontractor') {
-                  await deleteSubcontractorEntry_Hybrid(editingEntry.id)
+
+              // Save to storage based on entry type
+              if (editingEntry) {
+                // If converting to split invoice, delete original and create parent + splits
+                if ((entry.type === 'material' || entry.type === 'subcontractor') && splitAllocations && splitAllocations.length > 0) {
+                  if (entry.type === 'material') {
+                    // Delete the original entry
+                    await deleteMaterialEntry_Hybrid(editingEntry.id)
+                  
+                    // Delete any existing split children
+                    const existingSplitChildren = actualEntries.filter(
+                      e => e.isSplitEntry && e.splitParentId === editingEntry.id
+                    )
+                    for (const child of existingSplitChildren) {
+                      await deleteMaterialEntry_Hybrid(child.id)
+                    }
+                  
+                    // Create parent entry
+                    const materialCategory = entry.category as Trade['category'] | undefined
+                    const parentEntry = await addMaterialEntry_Hybrid(project.id, {
+                      date: entry.date,
+                      materialName: entry.description,
+                      totalCost: entry.amount,
+                      category: materialCategory,
+                      tradeId: entry.tradeId,
+                      subItemId: entry.subItemId,
+                      vendor: entry.vendor,
+                      invoiceNumber: entry.invoiceNumber,
+                      isSplitEntry: false,
+                    })
+
+                    if (!parentEntry) {
+                      toast.error('Failed to create parent invoice entry')
+                      return
+                    }
+
+                    // Create split entries for each allocation
+                    for (const allocation of splitAllocations) {
+                      const allocCategory = allocation.category as Trade['category'] | undefined
+                      await addMaterialEntry_Hybrid(project.id, {
+                        date: entry.date,
+                        materialName: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
+                        totalCost: allocation.amount,
+                        category: allocCategory,
+                        tradeId: allocation.tradeId,
+                        subItemId: allocation.subItemId,
+                        vendor: entry.vendor,
+                        invoiceNumber: entry.invoiceNumber,
+                        isSplitEntry: true,
+                        splitParentId: parentEntry.id,
+                        splitAllocation: allocation.amount,
+                      })
+                    }
+                  } else if (entry.type === 'subcontractor') {
+                    // Delete the original entry
+                    await deleteSubcontractorEntry_Hybrid(editingEntry.id)
+                  
+                    // Delete any existing split children
+                    const existingSplitChildren = actualEntries.filter(
+                      e => e.isSplitEntry && e.splitParentId === editingEntry.id
+                    )
+                    for (const child of existingSplitChildren) {
+                      await deleteSubcontractorEntry_Hybrid(child.id)
+                    }
+                  
+                    // Create parent entry
+                    const subCategory = entry.category as Trade['category'] | undefined
+                    const parentEntry = await addSubcontractorEntry_Hybrid(project.id, {
+                      subcontractorName: entry.subcontractorName || 'Unknown',
+                      scopeOfWork: entry.description,
+                      contractAmount: entry.amount,
+                      totalPaid: entry.amount,
+                      trade: subCategory as any,
+                      tradeId: entry.tradeId,
+                      subItemId: entry.subItemId,
+                      invoiceNumber: entry.invoiceNumber,
+                      isSplitEntry: false,
+                    })
+
+                    if (!parentEntry) {
+                      toast.error('Failed to create parent invoice entry')
+                      return
+                    }
+
+                    // Create split entries for each allocation
+                    for (const allocation of splitAllocations) {
+                      const allocCategory = allocation.category as Trade['category'] | undefined
+                      await addSubcontractorEntry_Hybrid(project.id, {
+                        subcontractorName: entry.subcontractorName || 'Unknown',
+                        scopeOfWork: `${entry.description} - ${allocation.category}${allocation.tradeId ? ' - ' + trades.find(t => t.id === allocation.tradeId)?.name : ''}${allocation.subItemId ? ' - ' + subItemsByTrade[allocation.tradeId || '']?.find(si => si.id === allocation.subItemId)?.name : ''}`,
+                        contractAmount: allocation.amount,
+                        totalPaid: allocation.amount,
+                        trade: allocCategory as any,
+                        tradeId: allocation.tradeId,
+                        subItemId: allocation.subItemId,
+                        invoiceNumber: entry.invoiceNumber,
+                        isSplitEntry: true,
+                        splitParentId: parentEntry.id,
+                        splitAllocation: allocation.amount,
+                      })
+                    }
+                  }
+
+                  // Reload actuals
+                  const actuals = await getProjectActuals_Hybrid(project.id)
+                  if (actuals) {
+                    const entries: ActualEntry[] = []
+                  
+                    actuals.laborEntries?.forEach((labor: LaborEntry) => {
+                      entries.push({
+                        id: labor.id,
+                        type: 'labor',
+                        date: labor.date,
+                        amount: labor.totalCost,
+                        description: labor.description,
+                        category: labor.trade,
+                        tradeId: labor.tradeId,
+                        subItemId: labor.subItemId,
+                        payrollPeriod: labor.date.toLocaleDateString(),
+                        grossWages: labor.grossWages,
+                        burdenAmount: labor.burdenAmount,
+                      })
+                    })
+                  
+                    actuals.materialEntries?.forEach((material: MaterialEntry) => {
+                      entries.push({
+                        id: material.id,
+                        type: 'material',
+                        date: material.date,
+                        amount: material.totalCost,
+                        description: material.materialName,
+                        category: material.category,
+                        tradeId: material.tradeId,
+                        subItemId: material.subItemId,
+                        vendor: material.vendor,
+                        invoiceNumber: material.invoiceNumber,
+                        isSplitEntry: material.isSplitEntry,
+                        splitParentId: material.splitParentId,
+                        splitAllocation: material.splitAllocation,
+                      })
+                    })
+                  
+                    actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
+                      entries.push({
+                        id: sub.id,
+                        type: 'subcontractor',
+                        date: sub.createdAt,
+                        amount: sub.totalPaid,
+                        description: sub.scopeOfWork,
+                        category: sub.trade,
+                        tradeId: sub.tradeId,
+                        subItemId: sub.subItemId,
+                        subcontractorName: sub.subcontractor.name,
+                        invoiceNumber: (sub as any).invoiceNumber,
+                        isSplitEntry: (sub as any).isSplitEntry,
+                        splitParentId: (sub as any).splitParentId,
+                        splitAllocation: (sub as any).splitAllocation,
+                      })
+                    })
+                  
+                    entries.sort((a, b) => b.date.getTime() - a.date.getTime())
+                    setActualEntries(entries)
+                  }
+
+                  setShowEntryForm(false)
+                  setEditingEntry(null)
+                  return
                 }
+              
+                // Check if type changed - if so, delete old and create new
+                const typeChanged = editingEntry && editingEntry.type !== entry.type
+              
+                if (typeChanged) {
+                  // Delete the old entry
+                  if (editingEntry.type === 'labor') {
+                    await deleteLaborEntry_Hybrid(editingEntry.id)
+                  } else if (editingEntry.type === 'material') {
+                    await deleteMaterialEntry_Hybrid(editingEntry.id)
+                  } else if (editingEntry.type === 'subcontractor') {
+                    await deleteSubcontractorEntry_Hybrid(editingEntry.id)
+                  }
                 
-                // Create new entry with new type
+                  // Create new entry with new type
+                  if (entry.type === 'labor') {
+                    await addLaborEntry_Hybrid(project.id, {
+                      date: entry.date,
+                      description: entry.description,
+                      totalCost: entry.amount,
+                      trade: entry.category as any,
+                      tradeId: entry.tradeId,
+                      subItemId: entry.subItemId,
+                    })
+                  } else if (entry.type === 'material') {
+                    const materialCategory = entry.category as Trade['category'] | undefined
+                    await addMaterialEntry_Hybrid(project.id, {
+                      date: entry.date,
+                      materialName: entry.description,
+                      totalCost: entry.amount,
+                      category: materialCategory,
+                      tradeId: entry.tradeId,
+                      subItemId: entry.subItemId,
+                      vendor: entry.vendor,
+                      invoiceNumber: entry.invoiceNumber,
+                    })
+                  } else if (entry.type === 'subcontractor') {
+                    await addSubcontractorEntry_Hybrid(project.id, {
+                      subcontractorName: entry.subcontractorName || 'Unknown',
+                      scopeOfWork: entry.description,
+                      contractAmount: entry.amount,
+                      totalPaid: entry.amount,
+                      trade: entry.category as any,
+                      tradeId: entry.tradeId,
+                      subItemId: entry.subItemId,
+                    })
+                  }
+                } else {
+                  // Regular update (not converting to split, type unchanged)
+                  if (entry.type === 'labor') {
+                    await updateLaborEntry_Hybrid(entry.id, {
+                      date: entry.date,
+                      description: entry.description,
+                      totalCost: entry.amount,
+                      tradeId: entry.tradeId,
+                      subItemId: entry.subItemId,
+                    })
+                  } else if (entry.type === 'material') {
+                    const materialCategory = entry.category as Trade['category'] | undefined
+                    await updateMaterialEntry_Hybrid(entry.id, {
+                      date: entry.date,
+                      materialName: entry.description,
+                      totalCost: entry.amount,
+                      vendor: entry.vendor,
+                      invoiceNumber: entry.invoiceNumber,
+                      category: materialCategory,
+                      tradeId: entry.tradeId,
+                      subItemId: entry.subItemId,
+                    })
+                  } else if (entry.type === 'subcontractor') {
+                    await updateSubcontractorEntry_Hybrid(entry.id, {
+                      subcontractorName: entry.subcontractorName || 'Unknown',
+                      scopeOfWork: entry.description,
+                      totalPaid: entry.amount,
+                      tradeId: entry.tradeId,
+                      subItemId: entry.subItemId,
+                    })
+                  }
+                }
+              } else {
+                // Add new entry
                 if (entry.type === 'labor') {
                   await addLaborEntry_Hybrid(project.id, {
                     date: entry.date,
@@ -2400,130 +2479,69 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                     subItemId: entry.subItemId,
                   })
                 }
-              } else {
-                // Regular update (not converting to split, type unchanged)
-                if (entry.type === 'labor') {
-                  await updateLaborEntry_Hybrid(entry.id, {
-                    date: entry.date,
-                    description: entry.description,
-                    totalCost: entry.amount,
-                    tradeId: entry.tradeId,
-                    subItemId: entry.subItemId,
-                  })
-                } else if (entry.type === 'material') {
-                  const materialCategory = entry.category as Trade['category'] | undefined
-                  await updateMaterialEntry_Hybrid(entry.id, {
-                    date: entry.date,
-                    materialName: entry.description,
-                    totalCost: entry.amount,
-                    vendor: entry.vendor,
-                    invoiceNumber: entry.invoiceNumber,
-                    category: materialCategory,
-                    tradeId: entry.tradeId,
-                    subItemId: entry.subItemId,
-                  })
-                } else if (entry.type === 'subcontractor') {
-                  await updateSubcontractorEntry_Hybrid(entry.id, {
-                    subcontractorName: entry.subcontractorName || 'Unknown',
-                    scopeOfWork: entry.description,
-                    totalPaid: entry.amount,
-                    tradeId: entry.tradeId,
-                    subItemId: entry.subItemId,
-                  })
-                }
               }
-            } else {
-              // Add new entry
-              if (entry.type === 'labor') {
-                await addLaborEntry_Hybrid(project.id, {
-                  date: entry.date,
-                  description: entry.description,
-                  totalCost: entry.amount,
-                  trade: entry.category as any,
-                  tradeId: entry.tradeId,
-                  subItemId: entry.subItemId,
+            
+              // Reload actuals to reflect changes
+              const actuals = await getProjectActuals_Hybrid(project.id)
+              if (actuals) {
+                const entries: ActualEntry[] = []
+              
+                actuals.laborEntries?.forEach((labor: LaborEntry) => {
+                  entries.push({
+                    id: labor.id,
+                    type: 'labor',
+                    date: labor.date,
+                    amount: labor.totalCost,
+                    description: labor.description,
+                    category: labor.trade,
+                    tradeId: labor.tradeId,
+                    subItemId: labor.subItemId,
+                    payrollPeriod: labor.date.toLocaleDateString(),
+                    grossWages: labor.grossWages,
+                    burdenAmount: labor.burdenAmount,
+                  })
                 })
-              } else if (entry.type === 'material') {
-                const materialCategory = entry.category as Trade['category'] | undefined
-                await addMaterialEntry_Hybrid(project.id, {
-                  date: entry.date,
-                  materialName: entry.description,
-                  totalCost: entry.amount,
-                  category: materialCategory,
-                  tradeId: entry.tradeId,
-                  subItemId: entry.subItemId,
-                  vendor: entry.vendor,
-                  invoiceNumber: entry.invoiceNumber,
+              
+                actuals.materialEntries?.forEach((material: MaterialEntry) => {
+                  entries.push({
+                    id: material.id,
+                    type: 'material',
+                    date: material.date,
+                    amount: material.totalCost,
+                    description: material.materialName,
+                    category: material.category,
+                    tradeId: material.tradeId,
+                    subItemId: material.subItemId,
+                    vendor: material.vendor,
+                    invoiceNumber: material.invoiceNumber,
+                  })
                 })
-              } else if (entry.type === 'subcontractor') {
-                await addSubcontractorEntry_Hybrid(project.id, {
-                  subcontractorName: entry.subcontractorName || 'Unknown',
-                  scopeOfWork: entry.description,
-                  contractAmount: entry.amount,
-                  totalPaid: entry.amount,
-                  trade: entry.category as any,
-                  tradeId: entry.tradeId,
-                  subItemId: entry.subItemId,
+              
+                actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
+                  entries.push({
+                    id: sub.id,
+                    type: 'subcontractor',
+                    date: sub.createdAt,
+                    amount: sub.totalPaid,
+                    description: sub.scopeOfWork,
+                    category: sub.trade,
+                    tradeId: sub.tradeId,
+                    subItemId: sub.subItemId,
+                    subcontractorName: sub.subcontractor.name,
+                  })
                 })
+              
+                entries.sort((a, b) => b.date.getTime() - a.date.getTime())
+                setActualEntries(entries)
               }
-            }
             
-            // Reload actuals to reflect changes
-            const actuals = await getProjectActuals_Hybrid(project.id)
-            if (actuals) {
-              const entries: ActualEntry[] = []
-              
-              actuals.laborEntries?.forEach((labor: LaborEntry) => {
-                entries.push({
-                  id: labor.id,
-                  type: 'labor',
-                  date: labor.date,
-                  amount: labor.totalCost,
-                  description: labor.description,
-                  category: labor.trade,
-                  tradeId: labor.tradeId,
-                  subItemId: labor.subItemId,
-                  payrollPeriod: labor.date.toLocaleDateString(),
-                  grossWages: labor.grossWages,
-                  burdenAmount: labor.burdenAmount,
-                })
-              })
-              
-              actuals.materialEntries?.forEach((material: MaterialEntry) => {
-                entries.push({
-                  id: material.id,
-                  type: 'material',
-                  date: material.date,
-                  amount: material.totalCost,
-                  description: material.materialName,
-                  category: material.category,
-                  tradeId: material.tradeId,
-                  subItemId: material.subItemId,
-                  vendor: material.vendor,
-                  invoiceNumber: material.invoiceNumber,
-                })
-              })
-              
-              actuals.subcontractorEntries?.forEach((sub: SubcontractorEntry) => {
-                entries.push({
-                  id: sub.id,
-                  type: 'subcontractor',
-                  date: sub.createdAt,
-                  amount: sub.totalPaid,
-                  description: sub.scopeOfWork,
-                  category: sub.trade,
-                  tradeId: sub.tradeId,
-                  subItemId: sub.subItemId,
-                  subcontractorName: sub.subcontractor.name,
-                })
-              })
-              
-              entries.sort((a, b) => b.date.getTime() - a.date.getTime())
-              setActualEntries(entries)
+              setShowEntryForm(false)
+              setEditingEntry(null)
+            } catch (e) {
+              // The service throws now instead of quietly writing to localStorage, so the failure
+              // has to be shown rather than swallowed (P1-GC-1).
+              toast.error(e instanceof Error ? e.message : 'Could not save that entry')
             }
-            
-            setShowEntryForm(false)
-            setEditingEntry(null)
           }}
           onCancel={() => {
             setShowEntryForm(false)

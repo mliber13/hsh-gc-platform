@@ -27,7 +27,6 @@ import {
   Building2,
   Calendar,
   ClipboardList,
-  Copy,
   DollarSign,
   Edit,
   FileText,
@@ -40,7 +39,6 @@ import {
   Trash2,
 } from 'lucide-react'
 import { Project, ProjectType, ProjectStatus, Plan, PROJECT_TYPES, PROJECT_STATUS } from '@/types'
-import { duplicateProject } from '@/services/projectService'
 import {
   getTradesForEstimate_Hybrid,
   updateProject_Hybrid,
@@ -372,21 +370,9 @@ export function ProjectDetailView({
     }
   }
 
-  const handleDuplicate = () => {
-    const newName = prompt(
-      `Enter name for the duplicated project:`,
-      `${project.name} (Copy)`,
-    )
-    if (newName && newName.trim()) {
-      const newProject = duplicateProject(project.id, newName.trim())
-      if (newProject) {
-        toast.success('Project duplicated successfully!')
-        if (onProjectDuplicated) onProjectDuplicated(newProject)
-      } else {
-        toast.error('Failed to duplicate project. Please try again.')
-      }
-    }
-  }
+  // handleDuplicate removed with the menu item it served (P1-GC-3). The service behind it,
+  // projectService.duplicateProject, is localStorage-only and now has no caller — it goes
+  // with the rest of the dead localStorage project path in the batch 6 sweep.
 
   // ----------------------------------------------------------------------------
   // Computed
@@ -431,10 +417,11 @@ export function ProjectDetailView({
               <Edit className="size-4" />
               Edit Project
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleDuplicate}>
-              <Copy className="size-4" />
-              Duplicate
-            </DropdownMenuItem>
+            {/* "Duplicate" removed (P1-GC-3). `duplicateProject` reads and writes
+                localStorage only, so online it either fails — and invites a retry that can
+                never work — or, if this browser still holds an old local copy of the project,
+                "succeeds" by creating a project that exists nowhere but here and disappears
+                on the next load. Implementing it against the database would bring it back. */}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleDelete}

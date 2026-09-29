@@ -44,8 +44,9 @@ export async function addLaborEntry_Hybrid(projectId: string, entry: any): Promi
   if (isOnlineMode()) {
     const created = await createLaborEntryInDB(projectId, entry)
     if (!created) {
-      console.warn('Failed to create labor entry in Supabase, falling back to localStorage')
-      return addLaborEntryLS(projectId, entry)
+      // Was a localStorage fallback: the entry looked saved and was gone on the next
+      // reload, because online reads come from Supabase (P1-GC-1).
+      throw new Error('Could not save that labor entry. Nothing was saved — check your connection and try again.')
     }
     
     // Auto-sync to QuickBooks if connected
@@ -65,8 +66,9 @@ export async function updateLaborEntry_Hybrid(entryId: string, updates: any): Pr
   if (isOnlineMode()) {
     const updated = await updateLaborEntryInDB(entryId, updates)
     if (!updated) {
-      console.warn('Failed to update labor entry in Supabase, falling back to localStorage')
-      return updateLaborEntryLS(entryId, updates)
+      // Was a localStorage fallback: the entry looked saved and was gone on the next
+      // reload, because online reads come from Supabase (P1-GC-1).
+      throw new Error('Could not save that labor entry. Nothing was saved — check your connection and try again.')
     }
     return updated
   } else {
@@ -78,8 +80,9 @@ export async function deleteLaborEntry_Hybrid(entryId: string): Promise<boolean>
   if (isOnlineMode()) {
     const deleted = await deleteLaborEntryFromDB(entryId)
     if (!deleted) {
-      console.warn('Failed to delete labor entry in Supabase, falling back to localStorage')
-      return deleteLaborEntryLS(entryId)
+      // Was a localStorage fallback: the entry looked saved and was gone on the next
+      // reload, because online reads come from Supabase (P1-GC-1).
+      throw new Error('Could not delete that labor entry. Nothing was deleted — check your connection and try again.')
     }
     return deleted
   } else {
@@ -95,8 +98,9 @@ export async function addMaterialEntry_Hybrid(projectId: string, entry: any): Pr
   if (isOnlineMode()) {
     const created = await createMaterialEntryInDB(projectId, entry)
     if (!created) {
-      console.warn('Failed to create material entry in Supabase, falling back to localStorage')
-      return addMaterialEntryLS(projectId, entry)
+      // Was a localStorage fallback: the entry looked saved and was gone on the next
+      // reload, because online reads come from Supabase (P1-GC-1).
+      throw new Error('Could not save that material entry. Nothing was saved — check your connection and try again.')
     }
     
     // Auto-sync to QuickBooks if connected (skip when entry was imported from QB)
@@ -116,8 +120,9 @@ export async function updateMaterialEntry_Hybrid(entryId: string, updates: any):
   if (isOnlineMode()) {
     const updated = await updateMaterialEntryInDB(entryId, updates)
     if (!updated) {
-      console.warn('Failed to update material entry in Supabase, falling back to localStorage')
-      return updateMaterialEntryLS(entryId, updates)
+      // Was a localStorage fallback: the entry looked saved and was gone on the next
+      // reload, because online reads come from Supabase (P1-GC-1).
+      throw new Error('Could not save that material entry. Nothing was saved — check your connection and try again.')
     }
     return updated
   } else {
@@ -134,8 +139,9 @@ export async function deleteMaterialEntry_Hybrid(entryId: string): Promise<boole
   if (isOnlineMode()) {
     const deleted = await deleteMaterialEntryFromDB(entryId)
     if (!deleted) {
-      console.warn('Failed to delete material entry in Supabase, falling back to localStorage')
-      return deleteMaterialEntryLS(entryId)
+      // Was a localStorage fallback: the entry looked saved and was gone on the next
+      // reload, because online reads come from Supabase (P1-GC-1).
+      throw new Error('Could not delete that material entry. Nothing was deleted — check your connection and try again.')
     }
     return deleted
   } else {
@@ -151,8 +157,9 @@ export async function addSubcontractorEntry_Hybrid(projectId: string, entry: any
   if (isOnlineMode()) {
     const created = await createSubcontractorEntryInDB(projectId, entry)
     if (!created) {
-      console.warn('Failed to create subcontractor entry in Supabase, falling back to localStorage')
-      return addSubcontractorEntryLS(projectId, entry)
+      // Was a localStorage fallback: the entry looked saved and was gone on the next
+      // reload, because online reads come from Supabase (P1-GC-1).
+      throw new Error('Could not save that subcontractor entry. Nothing was saved — check your connection and try again.')
     }
     
     // Auto-sync to QuickBooks if connected (skip when entry was imported from QB)
@@ -172,8 +179,9 @@ export async function updateSubcontractorEntry_Hybrid(entryId: string, updates: 
   if (isOnlineMode()) {
     const updated = await updateSubcontractorEntryInDB(entryId, updates)
     if (!updated) {
-      console.warn('Failed to update subcontractor entry in Supabase, falling back to localStorage')
-      return updateSubcontractorEntryLS(entryId, updates)
+      // Was a localStorage fallback: the entry looked saved and was gone on the next
+      // reload, because online reads come from Supabase (P1-GC-1).
+      throw new Error('Could not save that subcontractor entry. Nothing was saved — check your connection and try again.')
     }
     return updated
   } else {
@@ -190,8 +198,9 @@ export async function deleteSubcontractorEntry_Hybrid(entryId: string): Promise<
   if (isOnlineMode()) {
     const deleted = await deleteSubcontractorEntryFromDB(entryId)
     if (!deleted) {
-      console.warn('Failed to delete subcontractor entry in Supabase, falling back to localStorage')
-      return deleteSubcontractorEntryLS(entryId)
+      // Was a localStorage fallback: the entry looked saved and was gone on the next
+      // reload, because online reads come from Supabase (P1-GC-1).
+      throw new Error('Could not delete that subcontractor entry. Nothing was deleted — check your connection and try again.')
     }
     return deleted
   } else {
@@ -414,10 +423,13 @@ export async function getProjectActuals_Hybrid(projectId: string): Promise<any |
       
       return result
     } catch (error) {
-      console.error('❌ Error fetching actuals from Supabase:', error)
-      // Fall back to localStorage
-      const localResult = getProjectActualsLS(projectId)
-      return localResult
+      // Was a localStorage fallback. Online, that meant a failed read quietly substituted
+      // whatever this browser happened to have — usually nothing, sometimes stale figures —
+      // and the page presented it as the job's actual cost (P1-GC-1).
+      console.error('Error fetching actuals from Supabase:', error)
+      throw error instanceof Error
+        ? error
+        : new Error('Could not load the actuals for this project')
     }
   } else {
     const localResult = getProjectActualsLS(projectId)

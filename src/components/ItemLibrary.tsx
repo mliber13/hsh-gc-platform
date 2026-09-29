@@ -37,7 +37,6 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
-  RotateCcw,
   Package,
   Layers,
   FileText,
@@ -122,12 +121,19 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
     setEditingItem(null)
   }
 
+  /**
+   * Not reachable — the button is gone (P1-GC-3).
+   *
+   * `resetToDefaults` writes the default templates to localStorage, while `loadItems` reads
+   * `getAllItemTemplates`, which online reads the `item_templates` table. So the frightening
+   * confirm ran, the operator accepted losing every custom item, and nothing happened. It is
+   * kept only so a future DB-backed reset has somewhere obvious to go.
+   */
   const handleResetToDefaults = async () => {
-    if (confirm('This will reset all items to defaults and DELETE any custom items you added. Are you sure?')) {
-      resetToDefaults()
-      await loadItems()
-    }
+    resetToDefaults()
+    await loadItems()
   }
+  void handleResetToDefaults
 
   const itemsByCategory = items.reduce((acc, item) => {
     const cat = item.category
@@ -228,14 +234,11 @@ export function ItemLibrary({ onBack }: ItemLibraryProps) {
               <PlusCircle className="w-4 h-4 mr-2" />
               Add New Item
             </Button>
-            <Button
-              onClick={handleResetToDefaults}
-              variant="outline"
-              className="flex-1 sm:flex-none text-amber-600 hover:text-amber-600"
-            >
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Reset to Defaults
-            </Button>
+            {/* "Reset to Defaults" removed (P1-GC-3). It asked the operator to confirm
+                deleting every custom item, then wrote defaults to localStorage while this
+                page reads `item_templates` from the database — so it destroyed nothing and
+                changed nothing, having taken consent for both. A DB-backed reset can bring
+                the button back; an inert one that asks for permission first cannot stay. */}
           </div>
 
           {/* Items by Category */}
