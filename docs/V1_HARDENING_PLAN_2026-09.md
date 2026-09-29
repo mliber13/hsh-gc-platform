@@ -198,7 +198,18 @@ The revoke has to target the **default privilege**, not just current grants: `an
 
 **The blind spot that still applies:** `backupService` reads `feedback`, `form_responses`, `form_templates`, `project_forms`, `sow_templates` and `quote_requests` as **runtime strings**, invisible to `tsc`. Deleting `formService.ts` and `FeedbackManagement.tsx` was safe because the tables stayed. Dropping any of those tables would break org backup silently — the same trap recorded against P2-DEL-3.
 
-🟡 **Batch 4 — GC active-core: four parts shipped 2026-09-29, one item left.** `3bf2cab` (P0-GC-1 + P1-MONEY-7 + T14), `1dd86d5` (P1-GC-1 + P1-GC-3 + P1-GC-5), `156d862` (P1-GC-2 + P1-GC-4 + P1-EGRESS-7), `770f87f` (P0-GC-2); migration `20260929190000_gc_change_orders_and_actuals_guards.sql` applied via `db push`. **Remaining: the `quote-documents` signed-URL move** (the open half of P1-SEC-6) — see below.
+
+✅ **P1-SEC-6 CLOSED — BATCH 4 IS COMPLETE.** `dab32e6` + migration `20260929200000_quote_documents_private.sql`, applied and operator-smoked 2026-09-29. `quote-documents` is private; uploads store the storage path and viewing mints a one-hour signed URL, with the reader accepting the old full-URL shape so the three legacy rows keep working.
+
+**The plan called this a flag flip plus a URL migration. It was neither.** This bucket had **no authenticated SELECT policy** — the previous storage migration says so in its own comment, "SELECT handled by qd_public_select". Reads worked *only* because the bucket was public. Setting `public = false` alone would have broken every read at once: the three trades and the client-quote download, which calls `.download()` and needs SELECT just the same. The migration adds the org-scoped SELECT, drops the anonymous policy under all four names it has carried across 006/017/the fixed variant, and flips the bucket in one transaction, then asserts all three and aborts rather than leaving it unreadable.
+
+**Verified from both sides.** Signed in: all three PDFs open (Ohio Mutual Building — Graft Electric, Chris Burkey Plumbing, Arrow Heating and Cooling). Anonymous, using the exact URLs previously stored on those trades: **400, no file**. Control: `quote-attachments`, still public, returns 200 application/pdf to the same anonymous fetch — so the refusal is the private bucket, not a stale path.
+
+Inventory at the time: 21 objects / 6.6 MB, of which 14 are `quote-drawings-*` from the RFQ chain deleted in batch 1C, one a 0-byte smoke test and one a `temp-` leftover. **Dead objects deliberately not deleted** — irreversible, and inert once the bucket is private; same call batch 1C made for the RFQ tables.
+
+**Not covered by the smoke test:** a *fresh* upload, which is the only exercise of the new storage-path format end to end. Worth doing the next time a real subcontractor quote is attached.
+
+✅ **Batch 4 — GC active-core: COMPLETE 2026-09-29.** `3bf2cab` (P0-GC-1 + P1-MONEY-7 + T14), `1dd86d5` (P1-GC-1 + P1-GC-3 + P1-GC-5), `156d862` (P1-GC-2 + P1-GC-4 + P1-EGRESS-7), `770f87f` (P0-GC-2); migration `20260929190000_gc_change_orders_and_actuals_guards.sql` applied via `db push`. **Remaining: none** — P1-SEC-6 closed the same day, recorded above.
 
 **Grounding first, and it rewrote three of the nine items.** Mark confirmed the GC side is fully in use ("still using everything, just haven't synced to QuickBooks in a while"), so the empty tables were broken features, not unused ones.
 
