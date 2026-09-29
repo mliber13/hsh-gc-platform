@@ -678,16 +678,21 @@ async function persistLegacyMetadata(
   const now = new Date().toISOString()
   const legacyCopy = { ...mergedLegacy, updatedAt: now }
 
-  const { count: estimateCount } = await supabase
-    .from('estimates')
-    .select('id', { count: 'exact', head: true })
-    .eq('project_id', projectId)
+  // buildDrywallProjectMetadata computes `dual = isGcLinkedMetadata(prev) || hasGcEstimate`,
+  // so on a project that is already GC-linked the count cannot change the answer. It ran on
+  // every drywall save regardless — an extra round trip on the hottest write path in the
+  // app. A project that is not yet linked still needs it: a GC estimate appearing is how
+  // one becomes dual.
+  let hasGcEstimate = false
+  if (!isGcLinkedMetadata(prevMeta)) {
+    const { count } = await supabase
+      .from('estimates')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+    hasGcEstimate = (count ?? 0) > 0
+  }
 
-  const mergedMetadata = buildDrywallProjectMetadata(
-    prevMeta,
-    legacyCopy,
-    (estimateCount ?? 0) > 0,
-  )
+  const mergedMetadata = buildDrywallProjectMetadata(prevMeta, legacyCopy, hasGcEstimate)
 
   const { data: updated, error: updateError } = await supabase
     .from('projects')
@@ -1832,7 +1837,10 @@ export async function markQuoteSent(
     throw new Error(`Cannot mark sent: quote outcome is "${outcome}"`)
   }
 
-  const quote = await fetchDrywallQuoteV2V3(projectId)
+  // Derive the quote from the legacy blob already loaded above. This called
+  // fetchDrywallQuoteV2V3, which runs fetchDrywallProjectById — a second full read of the
+  // same row, moments after the first, to reach a key that was already in hand.
+  const quote = quoteV2V3FromLegacy(prevLegacy)
   const catalogs = isDrywallQuoteV3(quote) ? await fetchOrgDrywallCatalogs() : null
   const now = new Date().toISOString()
   const sentAt = effectiveDate ?? now

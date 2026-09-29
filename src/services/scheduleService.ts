@@ -46,11 +46,14 @@ export interface PortfolioItem {
   notes: string | null
 }
 
-type ProjectRow = {
+/** Only the metadata keys the GC visibility check reads — see fetchPortfolioProjects. */
+type ProjectScalarRow = {
   id: string
   name: string
   type: string | null
-  metadata: Record<string, unknown> | null
+  app_scope: string | null
+  visibility: Record<string, unknown> | null
+  source: string | null
 }
 
 type PortfolioItemRow = {
@@ -86,7 +89,10 @@ export async function fetchPortfolioProjects(
   const organizationId = await requireUserOrgId()
   let query = supabase
     .from('projects')
-    .select('id, name, type, metadata')
+    // Three keys, not the blob. This selected all of `metadata` — quotes, takeoffs,
+    // orders, comms — for every project in the org, to read app_scope and run a
+    // visibility check that only looks at visibility, app_scope and source.
+    .select('id, name, type, app_scope:metadata->>app_scope, visibility:metadata->visibility, source:metadata->>source')
     .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
 
@@ -101,10 +107,16 @@ export async function fetchPortfolioProjects(
   const { data, error } = await query
   if (error) throw error
 
-  let rows = (data ?? []) as ProjectRow[]
+  let rows = (data ?? []) as ProjectScalarRow[]
   if (typeFilter !== 'drywall') {
+    // Rebuild the shape the visibility check expects from the projected columns. An empty
+    // object still means "visible", which is what a project with no metadata got before.
     rows = rows.filter((row) =>
-      isVisibleInGcApp((row.metadata ?? {}) as Record<string, unknown>),
+      isVisibleInGcApp({
+        ...(row.app_scope != null ? { app_scope: row.app_scope } : {}),
+        ...(row.visibility != null ? { visibility: row.visibility } : {}),
+        ...(row.source != null ? { source: row.source } : {}),
+      } as Record<string, unknown>),
     )
   }
 
@@ -112,8 +124,7 @@ export async function fetchPortfolioProjects(
     id: row.id,
     name: row.name,
     type: row.type,
-    app_scope:
-      typeof row.metadata?.app_scope === 'string' ? row.metadata.app_scope : null,
+    app_scope: typeof row.app_scope === 'string' ? row.app_scope : null,
   }))
 }
 

@@ -216,7 +216,8 @@ function summarizeMislabeled(rows: MislabeledLaborEntry[]): MislabeledLaborAudit
 
 async function fetchAllOrgProjectIds(): Promise<Set<string>> {
   await requireUserOrgId()
-  const { data, error } = await supabase.from('projects').select('id, name, metadata')
+  // It only ever built a Set of ids, and selected every project's full metadata to do it.
+  const { data, error } = await supabase.from('projects').select('id')
   if (error) throw error
   return new Set((data ?? []).map((row) => row.id as string))
 }
