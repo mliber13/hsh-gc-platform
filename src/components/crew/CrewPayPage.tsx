@@ -19,6 +19,29 @@ function num(value: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+/**
+ * Whether sqft × rate × steps actually produces the stored amount.
+ *
+ * It does for 205 of 211 live piece rows. The other six were adjusted by hand in payroll —
+ * two are paid at zero — so any formula printed beside them would contradict the figure
+ * that was actually paid.
+ */
+function reconciles(piece: {
+  jobTotalSqft?: unknown
+  rate?: unknown
+  phasesCompleted?: unknown
+  totalPhases?: unknown
+  amount?: unknown
+}): boolean {
+  const sqft = num(piece.jobTotalSqft)
+  const rate = num(piece.rate)
+  if (sqft <= 0 || rate <= 0) return false
+  const total = num(piece.totalPhases)
+  const done = num(piece.phasesCompleted)
+  const expected = sqft * rate * (total > 1 ? done / total : 1)
+  return Math.abs(expected - num(piece.amount)) <= 0.02
+}
+
 function weekLabel(stub: MyPaystub): string {
   if (!stub.start_date || !stub.end_date) return stub.period_label
   try {
@@ -169,14 +192,30 @@ export function CrewPayPage() {
                             </span>
                             <span className="shrink-0 tabular-nums">{money(num(piece.amount))}</span>
                           </div>
-                          {/* The sum they can check on their own: sqft × rate. */}
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {num(piece.jobTotalSqft).toLocaleString()} sqft × ${piece.rate}
-                            {piece.workType ? ` · ${piece.workType}` : ''}
-                            {num(piece.totalPhases) > 1
-                              ? ` · ${piece.phasesCompleted} of ${piece.totalPhases} steps`
-                              : ''}
-                          </p>
+                          {/*
+                            The sum they can check on their own, shown only when it
+                            actually reaches the amount beside it.
+
+                            The step fraction is the whole difference between a hanger and
+                            a finisher: 2 of 5 steps on 14,320 sqft at $0.27 is $773.28,
+                            not $3,866.40. And six of 211 live rows reconcile to neither,
+                            because the office adjusted the amount by hand — two are paid
+                            at zero. For those the arithmetic is fiction, so it is not
+                            printed; `amount` is what was paid and stays the headline.
+                          */}
+                          {reconciles(piece) ? (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {num(piece.jobTotalSqft).toLocaleString()} sqft × ${piece.rate}
+                              {num(piece.totalPhases) > 1
+                                ? ` × ${piece.phasesCompleted}/${piece.totalPhases} steps`
+                                : ''}
+                              {piece.workType ? ` · ${piece.workType}` : ''}
+                            </p>
+                          ) : (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {piece.workType ? `${piece.workType} · ` : ''}set by the office
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>
