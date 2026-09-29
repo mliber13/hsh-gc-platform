@@ -102,3 +102,11 @@ scripts/.parity-payload.tmp.json
 scripts/profile-display-names-backup-*.json
 scripts/.prove-page-held-state.json
 scripts/neff-takeoff-backup-*.json
+
+# Supabase CLI scratch — version stamps and the linked project ref, all regenerated
+# by `supabase link`. Tracked until 2026-09-29, which meant every commit had to
+# exclude it by hand.
+supabase/.temp/
+
+# Per-machine Claude Code settings; the shared ones live in .claude/settings.json
+.claude/settings.local.json

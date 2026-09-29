@@ -255,27 +255,6 @@ export async function getQBVendors(): Promise<QBVendor[]> {
   }
 }
 
-/**
- * Find or create vendor in QuickBooks
- */
-export async function findOrCreateQBVendor(vendorName: string): Promise<QBVendor | null> {
-  try {
-    const { data, error } = await supabase.functions.invoke('qb-find-vendor', {
-      body: { vendorName }
-    })
-    
-    if (error) {
-      console.error('Error finding/creating QB vendor:', error)
-      return null
-    }
-    
-    return data.vendor
-  } catch (error) {
-    console.error('Error finding/creating QB vendor:', error)
-    return null
-  }
-}
-
 // Job transactions (for Import from QuickBooks / pending list)
 export interface QBJobTransaction {
   qbTransactionId: string
