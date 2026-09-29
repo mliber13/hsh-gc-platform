@@ -2,6 +2,7 @@
 // Import from QuickBooks - Pending list and allocate flow
 // ============================================================================
 
+import { resolveQbProject } from '@/lib/qbProjectMatch'
 import React, { useState, useEffect } from 'react'
 import { todayKey } from '@/lib/dateFormat'
 import { toast } from 'sonner'
@@ -367,12 +368,10 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
     setCategory(suggestCategoryForTransaction(txn))
     setTradeId('')
     setSubItemId('')
-    const mappedById = projects.find((p) => (p as { qbProjectId?: string }).qbProjectId === txn.qbProjectId)
-    const jobName = (txn.qbProjectName ?? '').trim().toLowerCase()
-    const mappedByName = !mappedById && jobName
-      ? projects.find((p) => (p.name ?? '').trim().toLowerCase() === jobName)
-      : null
-    setProjectId(preSelectedProject?.id ?? mappedById?.id ?? mappedByName?.id ?? '')
+    // An ambiguous job name pre-selects nothing, so the operator picks rather than accepts
+    // a default that may be the wrong job (P1-GC-2).
+    const match = resolveQbProject(projects, txn)
+    setProjectId(preSelectedProject?.id ?? match.project?.id ?? '')
   }
 
   const handleAllocate = async () => {
@@ -423,12 +422,8 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
     setAllocating(false)
   }
 
-  const mappedProject = selectedTxn
-    ? projects.find((p) => (p as { qbProjectId?: string }).qbProjectId === selectedTxn.qbProjectId) ??
-        (selectedTxn.qbProjectName
-          ? projects.find((p) => (p.name ?? '').trim().toLowerCase() === (selectedTxn.qbProjectName ?? '').trim().toLowerCase())
-          : null)
-    : null
+  const qbMatch = selectedTxn ? resolveQbProject(projects, selectedTxn) : null
+  const mappedProject = qbMatch?.project ?? null
 
   return (
     <>
@@ -1192,6 +1187,18 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                       ))}
                     </SelectContent>
                   </Select>
+                  {/* Said nothing before, and silently pre-selected the first of the
+                      matches — so an expense could be filed against the wrong job on an
+                      operator's nod (P1-GC-2). */}
+                  {qbMatch?.ambiguous && (
+                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                      {qbMatch.candidates.length} projects are named
+                      {' "'}
+                      {selectedTxn.qbProjectName}
+                      {'" '}
+                      in the app, so nothing was pre-selected — pick the right one.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label>Type</Label>

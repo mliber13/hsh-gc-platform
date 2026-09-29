@@ -36,7 +36,7 @@ import {
   reassignSubcontractorEntryToProject_Hybrid,
 } from '@/services/actualsHybridService'
 import { getTradesForEstimate_Hybrid, getProjects_Hybrid } from '@/services/hybridService'
-import { fetchTradesForEstimate, fetchSubItemsForTrade } from '@/services/supabaseService'
+import { fetchTradesForEstimate, fetchSubItemsForTrades } from '@/services/supabaseService'
 import { isOnlineMode } from '@/lib/supabase'
 import { fetchSubcontractors, fetchSuppliers } from '@/services/partnerDirectoryService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -185,18 +185,21 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
         const loadedTrades = await getTradesForEstimate_Hybrid(project.estimate.id)
         setTrades(loadedTrades)
         
-        // Load sub-items for each trade
+        // Sub-items in one request. This awaited `fetchSubItemsForTrade` inside the loop, so
+        // a five-trade estimate paid five sequential round trips before the page could
+        // render (P1-GC-4).
         if (isOnlineMode() && loadedTrades.length > 0) {
           const subItemsMap: Record<string, SubItem[]> = {}
+          const needFetch: string[] = []
           for (const trade of loadedTrades) {
             if (trade.subItems && trade.subItems.length > 0) {
               subItemsMap[trade.id] = trade.subItems
             } else {
-              const subItems = await fetchSubItemsForTrade(trade.id)
-              subItemsMap[trade.id] = subItems
+              needFetch.push(trade.id)
             }
           }
-          setSubItemsByTrade(subItemsMap)
+          const fetched = needFetch.length > 0 ? await fetchSubItemsForTrades(needFetch) : {}
+          setSubItemsByTrade({ ...subItemsMap, ...fetched })
         }
         
         // Change orders come from the `change_orders` table. This read

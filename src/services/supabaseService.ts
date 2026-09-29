@@ -6,6 +6,7 @@
 // It replaces localStorage when online mode is enabled
 //
 
+import { uploadRejectionReason } from '@/lib/uploadLimits'
 import { toDateKey, todayKey } from '@/lib/dateFormat'
 import { supabase, isOnlineMode } from '@/lib/supabase'
 import { parseISO } from 'date-fns'
@@ -1728,6 +1729,41 @@ function transformSubItem(row: any): SubItem {
     quoteFileUrl: row.quote_file_url,
     notes: row.notes || '',
   }
+}
+
+/**
+ * Sub-items for many trades in one request, grouped by trade id (P1-GC-4).
+ *
+ * `fetchSubItemsForTrade` was called in a loop — once per trade — by EstimateBuilder and,
+ * serially, by ProjectActuals, so a five-trade estimate paid five round trips of latency to
+ * ask one question. Trades with no sub-items still get an entry, so a caller can tell
+ * "fetched, none" from "not fetched".
+ */
+export async function fetchSubItemsForTrades(
+  tradeIds: string[],
+): Promise<Record<string, SubItem[]>> {
+  const ids = [...new Set(tradeIds.filter(Boolean))]
+  const grouped: Record<string, SubItem[]> = {}
+  for (const id of ids) grouped[id] = []
+  if (!isOnlineMode() || ids.length === 0) return grouped
+
+  const { data, error } = await supabase
+    .from('sub_items')
+    .select('*')
+    .in('trade_id', ids)
+    .order('sort_order', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching sub-items:', error)
+    return grouped
+  }
+
+  for (const row of data ?? []) {
+    const sub = transformSubItem(row)
+    const tradeId = String((row as { trade_id?: string }).trade_id ?? '')
+    if (grouped[tradeId]) grouped[tradeId].push(sub)
+  }
+  return grouped
 }
 
 export async function fetchSubItemsForTrade(tradeId: string): Promise<SubItem[]> {
@@ -4256,9 +4292,14 @@ export async function uploadProjectDocument(
   tags?: string[]
 ): Promise<ProjectDocument | null> {
   if (!isOnlineMode()) {
-    console.warn('Cannot upload files in offline mode')
-    return null
+    throw new Error('Files cannot be uploaded while offline')
   }
+
+  // Refuse before transferring anything. Storage enforces the same size and type rules, but
+  // only after the whole file has gone up — so a 150 MB file used to cost 150 MB of upload
+  // to earn an error that went to the console and nowhere else (P1-EGRESS-7).
+  const rejection = uploadRejectionReason(file, 'project-documents')
+  if (rejection) throw new Error(rejection)
 
   try {
     // Get current user and their organization
@@ -4292,40 +4333,17 @@ export async function uploadProjectDocument(
     const fileName = `${timestamp}-${sanitizedName}`
     const filePath = `${profile.organization_id}/${projectId}/${fileName}`
 
-    // Try to list buckets for debugging (but don't fail if this doesn't work due to RLS)
-    const { data: buckets, error: bucketError } = await supabase.storage.listBuckets()
-    if (bucketError) {
-      console.warn('Could not list buckets (may be RLS restriction):', bucketError)
-    } else {
-      const bucketExists = buckets?.some(b => b.id === 'project-documents')
-      if (!bucketExists) {
-        console.warn('Bucket "project-documents" not found in list. Available buckets:', buckets?.map(b => b.id))
-        console.warn('Attempting upload anyway - bucket may exist but not be visible due to RLS')
-      }
-    }
-
-    // Try upload with primary bucket name
-    let bucketName = 'project-documents'
-    let { data: uploadData, error: uploadError } = await supabase.storage
+    // Deleted with P1-EGRESS-7: a `storage.listBuckets()` call ran on EVERY upload purely to
+    // log a warning, and a retry against a "project_documents" bucket (underscore) that does
+    // not exist — confirmed against the live project, which has exactly six buckets and only
+    // the hyphenated name. Two round trips and a dead branch per upload.
+    const bucketName = 'project-documents'
+    const { data: uploadData, error: uploadError } = await supabase.storage
       .from(bucketName)
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false
       })
-
-    // If that fails with "Bucket not found", try alternative bucket name (with underscore)
-    if (uploadError && uploadError.message?.includes('Bucket not found')) {
-      console.warn(`Bucket "${bucketName}" not found, trying "project_documents" (with underscore)`)
-      bucketName = 'project_documents'
-      const retryResult = await supabase.storage
-        .from(bucketName)
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        })
-      uploadData = retryResult.data
-      uploadError = retryResult.error
-    }
 
     if (uploadError) {
       console.error('Error uploading document:', uploadError)

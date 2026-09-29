@@ -52,6 +52,7 @@ import {
 } from '@/services/hybridService'
 import {
   fetchSubItemsForTrade,
+  fetchSubItemsForTrades,
   createSubItemInDB,
   updateSubItemInDB,
   deleteSubItemFromDB,
@@ -181,18 +182,21 @@ export function EstimateBuilder({ project, onSave, onBack }: EstimateBuilderProp
   // Load sub-items when trades change (if not already included)
   useEffect(() => {
     if (trades.length > 0) {
+      // One request for every trade that needs sub-items, instead of one request per trade
+      // each setting state as it lands (P1-GC-4).
       const subItemsMap: Record<string, SubItem[]> = {}
+      const needFetch: string[] = []
       for (const trade of trades) {
-        // Use subItems from trade if available, otherwise fetch them
         if (trade.subItems && trade.subItems.length > 0) {
           subItemsMap[trade.id] = trade.subItems
-        } else if (isOnlineMode()) {
-          // Fetch sub-items if not already included
-          fetchSubItemsForTrade(trade.id).then(subItems => {
-            subItemsMap[trade.id] = subItems
-            setSubItemsByTrade(prev => ({ ...prev, ...subItemsMap }))
-          })
+        } else {
+          needFetch.push(trade.id)
         }
+      }
+      if (needFetch.length > 0 && isOnlineMode()) {
+        void fetchSubItemsForTrades(needFetch).then((fetched) => {
+          setSubItemsByTrade((prev) => ({ ...prev, ...subItemsMap, ...fetched }))
+        })
       }
       // Update state with sub-items from trades
       if (Object.keys(subItemsMap).length > 0) {
