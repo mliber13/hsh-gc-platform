@@ -66,8 +66,13 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL),
-      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
+      // `?? ''` matters. Without a .env these are undefined, and JSON.stringify(undefined)
+      // is not a string — the define then injects something the `|| placeholder` fallback
+      // in lib/supabase.ts cannot rescue, and every test file that transitively imports
+      // the client dies at module load with "Invalid supabaseUrl". Passes locally where a
+      // .env exists; CI found it on its first run.
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL ?? ''),
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY ?? ''),
     },
     test: {
       include: [
