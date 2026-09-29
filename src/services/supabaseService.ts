@@ -6,6 +6,7 @@
 // It replaces localStorage when online mode is enabled
 //
 
+import { quoteDocumentPath } from '@/lib/quoteDocumentPath'
 import { uploadRejectionReason } from '@/lib/uploadLimits'
 import { toDateKey, todayKey } from '@/lib/dateFormat'
 import { supabase, isOnlineMode } from '@/lib/supabase'
@@ -3031,12 +3032,11 @@ export async function uploadQuotePDF(
       return null
     }
 
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('quote-documents')
-      .getPublicUrl(filePath)
-
-    return publicUrl
+    // Returns the storage PATH, not a public URL. `quote-documents` used to be a public
+    // bucket, so this handed back a link that downloaded the file for anyone who had it,
+    // signed in or not, and that link was then stored on the trade (P1-SEC-6). Viewing now
+    // mints a short-lived signed URL instead — see getQuotePDFSignedUrl.
+    return filePath
   } catch (error) {
     console.error('Error in uploadQuotePDF:', error)
     return null
@@ -3050,14 +3050,13 @@ export async function deleteQuotePDF(fileUrl: string): Promise<boolean> {
   if (!isOnlineMode()) return false
 
   try {
-    // Extract the file path from the URL
-    const urlParts = fileUrl.split('/quote-documents/')
-    if (urlParts.length < 2) {
-      console.error('Invalid file URL')
+    // Accepts either shape: a stored path (what uploads write now) or one of the old full
+    // public URLs still on three live trades.
+    const filePath = quoteDocumentPath(fileUrl)
+    if (!filePath) {
+      console.error('Not a quote-documents reference:', fileUrl)
       return false
     }
-
-    const filePath = urlParts[1]
 
     const { error } = await supabase.storage
       .from('quote-documents')
@@ -3083,14 +3082,13 @@ export async function getQuotePDFSignedUrl(fileUrl: string, expiresIn: number = 
   if (!isOnlineMode()) return null
 
   try {
-    // Extract the file path from the URL
-    const urlParts = fileUrl.split('/quote-documents/')
-    if (urlParts.length < 2) {
-      console.error('Invalid file URL')
+    // Accepts either shape: a stored path, or one of the old full public URLs. The three
+    // trades still holding a public URL keep working, and so does any tab that has one.
+    const filePath = quoteDocumentPath(fileUrl)
+    if (!filePath) {
+      console.error('Not a quote-documents reference:', fileUrl)
       return null
     }
-
-    const filePath = urlParts[1]
 
     const { data, error } = await supabase.storage
       .from('quote-documents')

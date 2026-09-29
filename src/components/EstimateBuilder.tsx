@@ -2251,14 +2251,29 @@ function TradeForm({ trade, onSave, onCancel, isAdding, projectId, availableSubc
                     <div className="flex items-center gap-2 text-sm text-green-600">
                       <FileText className="w-4 h-4" />
                       <span>Quote document attached</span>
-                      <a 
-                        href={formData.quoteFileUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
+                      {/* Was a plain href to a public URL — the bucket is private now, so
+                          the link is minted on click and expires in an hour (P1-SEC-6).
+                          Works for the three trades still holding an old full URL too. */}
+                      <button
+                        type="button"
                         className="text-blue-600 hover:underline"
+                        onClick={async () => {
+                          try {
+                            const { getQuotePDFSignedUrl } = await import('@/services/supabaseService')
+                            const url = await getQuotePDFSignedUrl(formData.quoteFileUrl!)
+                            if (!url) {
+                              toast.error('Could not open that document. It may have been removed.')
+                              return
+                            }
+                            window.open(url, '_blank', 'noopener,noreferrer')
+                          } catch (error) {
+                            console.error('Error opening quote document:', error)
+                            toast.error('Could not open that document.')
+                          }
+                        }}
                       >
                         View PDF
-                      </a>
+                      </button>
                     </div>
                   )}
                 </div>
