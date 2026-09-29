@@ -20,6 +20,7 @@ import {
 import { formatQuoteMoney } from '@/lib/drywall/quoteV3Math'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
 import { QuoteOutcomeBar, isQuoteOutcomeLocked } from '@/components/drywall/quote/QuoteOutcomeBar'
+import { computeQuoteEstimatedCost } from '@/lib/drywall/marginFloor'
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import { downloadDrywallQuoteV3Pdf } from '@/lib/drywallQuotePdfV3'
@@ -304,12 +305,15 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
     <div className="space-y-6 pb-8">
       <QuoteOutcomeBar
         projectId={projectId}
-        currentBidTotal={totals.routine.total}
-        quoteEstimatedCost={
-          totals.routine.linesSubtotal +
-          totals.routine.cleanupTotal +
-          totals.routine.salesTaxAmount
-        }
+        // acceptedTotal, not routine.total. The base total ignores accepted alternates,
+        // so a selected deduct was invisible to the margin-floor gate: the bid the
+        // customer is getting went down while the number the gate checked did not.
+        currentBidTotal={totals.acceptedTotal}
+        quoteEstimatedCost={computeQuoteEstimatedCost(
+          totals.routine.linesSubtotal,
+          totals.routine.cleanupTotal,
+          totals.routine.salesTaxAmount,
+        )}
         isDirty={isDirty}
         loadedAt={project.updatedAtRaw}
         onLoadedAtChange={advanceLoadedAt}

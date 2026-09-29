@@ -86,10 +86,22 @@ export function laborAmountTooltip(
     return `${sqftLabel} sqft${wasteNote} × ${hangerLabel} hanger + ${sqftLabel} sqft × ${finisherLabel} finisher${burdenNote} = ${formatQuoteMoney(computed.laborTotal)}`
   }
 
+  // Show the arithmetic that actually reaches the total. This used to read
+  // "qty × rate = total" while the engine applied waste and burden on top, so the numbers
+  // on screen could not be multiplied together to get the number beside them — which is
+  // exactly when someone stops trusting the quote.
   const unit = getLineUnit(line, catalogs)
   const laborRate = getEffectiveComponentLaborRate(line, catalogs)
   const rateLabel = formatRate(laborRate, componentLaborRateUnitSuffix(line, catalogs))
-  return `${formatQty(qty)} ${unit} × ${rateLabel} labor = ${formatQuoteMoney(computed.laborTotal)}`
+  // Doors are counted, not cut — waste does not reach their labor (see computeLineItem).
+  const laborWasteMult =
+    line.type === 'door_install' ? 1 : 1 + (line.waste_pct ?? 10) / 100
+  const wasteNote =
+    laborWasteMult !== 1 ? ` × ${laborWasteMult.toFixed(2)} waste` : ''
+  const burdenNote = includeLaborBurden(laborBurden?.componentIncludeLaborBurden)
+    ? ` incl. ${(LABOR_TAX_RATE * 100).toFixed(0)}% labor burden`
+    : ''
+  return `${formatQty(qty)} ${unit}${wasteNote} × ${rateLabel} labor${burdenNote} = ${formatQuoteMoney(computed.laborTotal)}`
 }
 
 export function accessoriesAmountTooltip(computed: QuoteV3LineComputed): string | undefined {

@@ -519,6 +519,16 @@ export function LineItemEditDialog({
 
             />
 
+            {/* Typing a rate here does more than change a number: for component trades it
+                switches the line to lump-sum pricing and the itemised parts stop being
+                computed. The pivot sections say so afterwards; this says so before. */}
+            {draft.type !== 'drywall' && draft.custom_material_rate != null ? (
+              <p className="text-xs text-sky-700 dark:text-sky-300">
+                A flat rate prices this line as a lump sum — its itemised parts are no longer
+                calculated. Clear the field to price from the takeoff again.
+              </p>
+            ) : null}
+
           </div>
 
           {draft.type === 'drywall' && (

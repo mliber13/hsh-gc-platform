@@ -459,11 +459,16 @@ export function computeLineItem(
       }
     }
   } else {
-    // insulation / frp / door_install — material already carries waste via wasteMult
-    // above; apply the same waste to labor.
+    // insulation / frp / door_install.
+    //
+    // Material carries waste via wasteMult above. Labor follows it for insulation and FRP,
+    // where the offcuts are real work — you cut the sheet, then fit it. Doors are counted,
+    // not cut: nine doors is nine installs, and paying 10% waste on that was 0.9 of a door
+    // nobody hangs. Mark's call 2026-09-29; the only live case was Lisbon at $292.50.
+    const laborWasteMult = line.type === 'door_install' ? 1 : wasteMult
     const laborRate = getEffectiveComponentLaborRate(line, catalogs)
     laborTotal = applyLaborBurden(
-      qty * wasteMult * laborRate,
+      qty * laborWasteMult * laborRate,
       laborBurden?.componentIncludeLaborBurden ?? true,
     )
   }
@@ -758,13 +763,19 @@ export function computeQuoteV3Totals(
   const alternates = quote.alternates.map((alt) => {
     const altDirect = lineDirectCostsFromLines(alt.lineItems, catalogs, laborBurden)
     const linesSub = linesSubtotalFromLines(alt.lineItems, catalogs, laborBurden)
+    // Alternates carry cleanup in proportion to their own drywall, on the same basis the
+    // routine quote uses (§8 Q3). They used to pass 0 for both, so adding 1,000 sqft as an
+    // alternate priced no prep or clean for it — and a deduct alternate took the sqft away
+    // while leaving the cleanup labour for sqft nobody would touch.
+    const altCleanupSqft = sumDrywallSqftWithWaste(alt.lineItems)
+    const altCleanupTotal = computeCleanupTotal(alt.lineItems, prepCleanRate, laborBurden)
     const marked = computeMarkupBreakdown(
       linesSub,
-      0,
+      altCleanupTotal,
       quote.overhead_pct,
       quote.profit_pct,
       quote.sales_tax_pct,
-      0,
+      altCleanupSqft,
       prepCleanRate,
       altDirect,
     )

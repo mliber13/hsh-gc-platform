@@ -48,8 +48,21 @@ export function evaluateMarginVsFloor(
   }
 }
 
-export function computeQuoteEstimatedCost(routineSubtotal: number, cleanupTotal: number): number {
-  return num(routineSubtotal) + num(cleanupTotal)
+/**
+ * The cost basis the margin floor is measured against.
+ *
+ * Sales tax is a third argument rather than being left out, because the v3 quote stage was
+ * already adding it inline while this helper excluded it — two definitions of "estimated
+ * cost", and the gate's answer depended on which surface you asked. Tax is money that
+ * leaves the business on this job, so it belongs in the cost. Callers with no tax to
+ * account for pass nothing and get the old behaviour.
+ */
+export function computeQuoteEstimatedCost(
+  routineSubtotal: number,
+  cleanupTotal: number,
+  salesTaxAmount = 0,
+): number {
+  return num(routineSubtotal) + num(cleanupTotal) + num(salesTaxAmount)
 }
 
 export function computePoEstimatedCost(fieldMeasuredSqft: number, costPerSqft: number): number {
