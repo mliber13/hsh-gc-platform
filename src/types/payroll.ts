@@ -35,7 +35,16 @@ export interface PayrollPieceEntry {
   phasesCompleted?: number | string
   jobTotalSqft?: number | string
   rate?: number | string
+  /** Piece BEFORE any helper deduction. Not what was paid — see netAmount. */
   amount?: number | string
+  /**
+   * What this job actually paid: `amount` less the helper day rate assigned to this person
+   * on this job. Added by paystub_entry_with_net_piece_pay, so it is present on paystub
+   * reads and absent on the payroll editor's own payload (which derives it in payrollMath).
+   */
+  netAmount?: number | string
+  /** The part of `amount` that went to a helper. `amount` − `netAmount`. */
+  helperDeduction?: number | string
 }
 
 export interface PayrollEntry {
