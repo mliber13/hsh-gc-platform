@@ -6,7 +6,6 @@ import {
   aggregateEstimatingAccuracy,
   buildDivisionExecutionJob,
   buildDivisionExecutionRollUp,
-  buildDivisionMarginJob,
   computeEstimatingVariancePct,
   computeLaborEfficiencyPct,
   estimatingAccuracyColor,
@@ -34,9 +33,12 @@ function bidSnapshot(total: number): BidSnapshot {
   }
 }
 
-describe('buildDivisionMarginJob', () => {
+// buildDivisionMarginJob was a one-line alias for buildDivisionExecutionJob with no caller
+// outside this file, so it went with the rest of the dead code; the fixtures call the real
+// function now.
+describe('buildDivisionExecutionJob margin fields', () => {
   it('includes W2 burden in actualLabor', () => {
-    const job = buildDivisionMarginJob({
+    const job = buildDivisionExecutionJob({
       projectId: 'p1',
       projectName: 'Site A',
       status: 'production-complete',
@@ -68,7 +70,7 @@ describe('buildDivisionMarginJob', () => {
 describe('aggregateDivisionExecutionRollUp', () => {
   it('aggregates completed jobs only and excludes in-progress from totals', () => {
     const jobs = [
-      buildDivisionMarginJob({
+      buildDivisionExecutionJob({
         projectId: 'done',
         projectName: 'Done Job',
         status: 'closed',
@@ -77,7 +79,7 @@ describe('aggregateDivisionExecutionRollUp', () => {
         materialEntries: [{ id: '1', date: '2026-01-01', description: 'Board', vendor: null, amount: 2_000 }],
         subEntries: [],
       }),
-      buildDivisionMarginJob({
+      buildDivisionExecutionJob({
         projectId: 'running',
         projectName: 'Running Job',
         status: 'production',
@@ -117,7 +119,7 @@ describe('aggregateDivisionExecutionRollUp', () => {
 describe('sortDivisionJobsWorstMarginFirst', () => {
   it('sorts by marginPct ascending with nulls last', () => {
     const jobs = [
-      buildDivisionMarginJob({
+      buildDivisionExecutionJob({
         projectId: 'a',
         projectName: 'High',
         status: 'closed',
@@ -126,7 +128,7 @@ describe('sortDivisionJobsWorstMarginFirst', () => {
         materialEntries: [{ id: '1', date: '2026-01-01', description: 'x', vendor: null, amount: 1_000 }],
         subEntries: [],
       }),
-      buildDivisionMarginJob({
+      buildDivisionExecutionJob({
         projectId: 'b',
         projectName: 'Low',
         status: 'closed',
@@ -135,7 +137,7 @@ describe('sortDivisionJobsWorstMarginFirst', () => {
         materialEntries: [{ id: '2', date: '2026-01-01', description: 'x', vendor: null, amount: 9_000 }],
         subEntries: [],
       }),
-      buildDivisionMarginJob({
+      buildDivisionExecutionJob({
         projectId: 'c',
         projectName: 'No bid',
         status: 'closed',
@@ -157,7 +159,7 @@ describe('buildDivisionExecutionRollUp', () => {
   it('returns worst-margin-first jobs with aggregate metadata', () => {
     const rollUp = buildDivisionExecutionRollUp(
       [
-        buildDivisionMarginJob({
+        buildDivisionExecutionJob({
           projectId: 'good',
           projectName: 'Good',
           status: 'production-complete',
@@ -166,7 +168,7 @@ describe('buildDivisionExecutionRollUp', () => {
           materialEntries: [{ id: '1', date: '2026-01-01', description: 'x', vendor: null, amount: 5_000 }],
           subEntries: [],
         }),
-        buildDivisionMarginJob({
+        buildDivisionExecutionJob({
           projectId: 'bad',
           projectName: 'Bad',
           status: 'closed',

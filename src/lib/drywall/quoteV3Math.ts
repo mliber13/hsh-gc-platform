@@ -489,20 +489,6 @@ export function computeLineItem(
   }
 }
 
-export function enrichLineWithComputed(
-  line: QuoteLineItem,
-  catalogs: OrgDrywallCatalogs,
-): QuoteLineItem {
-  const c = computeLineItem(line, catalogs)
-  return {
-    ...line,
-    computed_material_total: c.materialTotal,
-    computed_labor_total: c.laborTotal,
-    computed_accessories_total: c.accessoriesTotal,
-    computed_line_total: c.lineTotal,
-  }
-}
-
 export function computeMarkupBreakdown(
   linesSubtotal: number,
   cleanupTotal: number,
@@ -565,27 +551,6 @@ export function computeMarkupBreakdown(
     total,
     byTrade: directCosts?.byTrade,
   }
-}
-
-export function applyProjectMarkup(
-  markupBase: number,
-  overheadPct: number,
-  profitPct: number,
-  salesTaxPct: number,
-  linesSubtotal = markupBase,
-  cleanupTotal = 0,
-  cleanupDrywallSqft = 0,
-  prepCleanRate = DEFAULT_PREP_CLEAN_RATE,
-): QuoteV3MarkupBreakdown {
-  return computeMarkupBreakdown(
-    linesSubtotal,
-    cleanupTotal,
-    overheadPct,
-    profitPct,
-    salesTaxPct,
-    cleanupDrywallSqft,
-    prepCleanRate,
-  )
 }
 
 export function lineDirectCostsFromLines(
@@ -819,34 +784,6 @@ export function computeQuoteV3Totals(
     acceptedSqft,
     acceptedSqftWithWaste,
   }
-}
-
-export function enrichQuoteAlternates(
-  quote: DrywallQuoteV3,
-  catalogs: OrgDrywallCatalogs,
-): QuoteAlternate[] {
-  const laborBurden = laborBurdenFromQuote(quote)
-  return quote.alternates.map((alt) => {
-    const altDirect = lineDirectCostsFromLines(alt.lineItems, catalogs, laborBurden)
-    const linesSub = linesSubtotalFromLines(alt.lineItems, catalogs, laborBurden)
-    const marked = computeMarkupBreakdown(
-      linesSub,
-      0,
-      quote.overhead_pct,
-      quote.profit_pct,
-      quote.sales_tax_pct,
-      0,
-      quote.prep_clean_rate ?? DEFAULT_PREP_CLEAN_RATE,
-      altDirect,
-    )
-    const pricingMode = alternatePricingMode(alt)
-    const magnitude = marked.total
-    return {
-      ...alt,
-      pricingMode,
-      totalAdd: pricingMode === 'deduct' ? -magnitude : magnitude,
-    }
-  })
 }
 
 /** Resolve alternate add vs deduct; legacy quotes without the field are adds. */

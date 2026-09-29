@@ -22,7 +22,6 @@ import {
   convertQuoteToV3,
 } from '@/services/drywallProjectsService'
 import { deriveAddonFlagsFromData } from '@/lib/drywall/deriveAddonFlagsFromData'
-import { isDrywallQuoteV3FeatureEnabled } from '@/lib/drywall/quoteV3Feature'
 import type { DrywallProject, DrywallQuote, DrywallQuoteOutcome } from '@/types/drywall'
 import { QuoteConvertV3Dialog } from './QuoteConvertV3Dialog'
 import { QuoteBreakdownsSection } from './QuoteBreakdownsSection'
@@ -222,8 +221,9 @@ export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
     }
   }
 
-  const showConvertBanner =
-    isDrywallQuoteV3FeatureEnabled() && !viewerReadOnly && !outcomeLocked
+  // The drywall_quote_v3 flag was hardcoded true from phase Q.B and read in this one
+  // condition, so it only ever removed a term from it.
+  const showConvertBanner = !viewerReadOnly && !outcomeLocked
 
   const handleManualTakeoff = () => {
     if (readOnly) return

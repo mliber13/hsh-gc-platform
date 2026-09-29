@@ -212,20 +212,6 @@ export interface DivisionExecutionRollUp {
   computedAt: string
 }
 
-export function emptyDivisionExecutionRollUp(computedAt = new Date().toISOString()): DivisionExecutionRollUp {
-  return {
-    jobs: [],
-    completedCount: 0,
-    inProgressCount: 0,
-    totalBidCompleted: 0,
-    totalActualCompleted: 0,
-    aggregateMarginUsd: null,
-    aggregateMarginPct: null,
-    aggregateMarginColor: 'neutral',
-    computedAt,
-  }
-}
-
 export function isDivisionMarginCandidateStatus(status: string): boolean {
   const normalized = normalizeDrywallProjectStatus(status)
   return DIVISION_CANDIDATE_STATUSES.has(normalized)
@@ -620,12 +606,6 @@ export function buildDivisionExecutionJob(input: {
   }
 }
 
-export function buildDivisionMarginJob(
-  input: Parameters<typeof buildDivisionExecutionJob>[0],
-): DivisionMarginJob {
-  return buildDivisionExecutionJob(input)
-}
-
 export function aggregateDivisionExecutionRollUp(
   jobs: DivisionMarginJob[],
   computedAt: string,
@@ -767,9 +747,4 @@ export async function fetchDivisionExecution(now = new Date()): Promise<Division
   })
 
   return { jobs, computedAt }
-}
-
-export async function fetchDivisionMarginRollUp(now = new Date()): Promise<DivisionExecutionRollUp> {
-  const execution = await fetchDivisionExecution(now)
-  return buildDivisionExecutionRollUp(execution.jobs, execution.computedAt)
 }
