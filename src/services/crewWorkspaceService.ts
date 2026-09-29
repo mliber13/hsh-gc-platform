@@ -33,6 +33,13 @@ import {
 } from '@/lib/drywall/crewSpecialty'
 import { crewMeasureWorkflowStatus } from '@/lib/drywall/crewMeasureStatus'
 import {
+  CREW_PROJECT_SELECT,
+  crewMeasureStatusFromScalars,
+  isDrywallCrewProjectRow,
+  isExcludedCrewProjectRow,
+  type CrewProjectScalarRow,
+} from '@/lib/drywall/crewProjectScalars'
+import {
   fieldTakeoffWithTotals,
   mergeFieldTakeoff,
 } from '@/lib/drywall/fieldMeasurementUtils'
@@ -95,18 +102,8 @@ type ScheduleRow = {
   assigned_persons?: string[] | null
 }
 
-type ProjectRow = {
-  id: string
-  name: string
-  client: unknown
-  address: unknown
-  city?: string | null
-  state?: string | null
-  zip_code?: string | null
-  status: string
-  type: string
-  metadata: Record<string, unknown> | null
-}
+/** Scalar row + gates live in crewProjectScalars so they are testable without a client. */
+type ProjectRow = CrewProjectScalarRow
 
 function num(v: unknown): number | null {
   const n = typeof v === 'string' ? parseFloat(v) : Number(v)
@@ -156,27 +153,6 @@ function resolvePersonId(profile: Awaited<ReturnType<typeof getCurrentUserProfil
     throw new CrewProfileNotLinkedError()
   }
   return id
-}
-
-function isDrywallProjectRow(row: ProjectRow): boolean {
-  if (row.type === 'drywall') return true
-  const meta = row.metadata ?? {}
-  if (meta.app_scope === 'DRYWALL_ONLY') return true
-  return belongsInDrywallWorkspace(meta)
-}
-
-function isExcludedProject(row: ProjectRow): boolean {
-  if (isDrywallProjectClosed(row.status)) return true
-  const legacy =
-    row.metadata?.legacy && typeof row.metadata.legacy === 'object'
-      ? (row.metadata.legacy as Record<string, unknown>)
-      : {}
-  const quote = legacy.quote
-  if (quote && typeof quote === 'object' && !Array.isArray(quote)) {
-    const outcome = (quote as Record<string, unknown>).outcome
-    if (outcome === 'lost') return true
-  }
-  return false
 }
 
 function mapScheduleEntry(row: ScheduleRow): CrewProjectScheduleEntry {
@@ -458,7 +434,7 @@ export async function fetchCrewProjectList(
 
   const { data, error } = await supabase
     .from('projects')
-    .select('id, name, client, address, city, state, zip_code, status, type, metadata')
+    .select(CREW_PROJECT_SELECT)
     .eq('organization_id', orgId)
     .in('id', projectIds)
 
@@ -466,8 +442,9 @@ export async function fetchCrewProjectList(
 
   // Drywall, non-excluded projects only — keyed for per-item lookup below.
   const projectById = new Map<string, ProjectRow>()
-  for (const row of (data ?? []) as ProjectRow[]) {
-    if (!isDrywallProjectRow(row) || isExcludedProject(row)) continue
+  // A shared select constant means PostgREST cannot infer the row shape from the string.
+  for (const row of (data ?? []) as unknown as ProjectRow[]) {
+    if (!isDrywallCrewProjectRow(row) || isExcludedCrewProjectRow(row)) continue
     projectById.set(row.id, row)
   }
 
@@ -491,11 +468,7 @@ export async function fetchCrewProjectList(
 
     let measureWorkflowStatus: CrewProjectListItem['measureWorkflowStatus'] = null
     if (isMeasurerSpecialty(specialty) && scheduleRowHasMeasurePhase(sched)) {
-      const legacy =
-        project.metadata?.legacy && typeof project.metadata.legacy === 'object'
-          ? (project.metadata.legacy as Record<string, unknown>)
-          : {}
-      measureWorkflowStatus = crewMeasureWorkflowStatus(parseFieldTakeoff(legacy))
+      measureWorkflowStatus = crewMeasureStatusFromScalars(project)
     }
 
     // Foreman list only: keep ids/names parallel (empty name if roster miss) for person filter.
@@ -570,14 +543,15 @@ export async function fetchCrewCalendarItems(
 
   const { data, error } = await supabase
     .from('projects')
-    .select('id, name, client, address, city, state, zip_code, status, type, metadata')
+    .select(CREW_PROJECT_SELECT)
     .eq('organization_id', orgId)
     .in('id', projectIds)
   if (error) throw new Error(error.message || 'Failed to load projects')
 
   const projectById = new Map<string, ProjectRow>()
-  for (const row of (data ?? []) as ProjectRow[]) {
-    if (!isDrywallProjectRow(row) || isExcludedProject(row)) continue
+  // A shared select constant means PostgREST cannot infer the row shape from the string.
+  for (const row of (data ?? []) as unknown as ProjectRow[]) {
+    if (!isDrywallCrewProjectRow(row) || isExcludedCrewProjectRow(row)) continue
     projectById.set(row.id, row)
   }
 

@@ -85,12 +85,18 @@ export function CustomerCommsCard({
     }
   }, [projectId, loadMessages])
 
-  // Live-update the conversation: poll every 20s while the tab is visible.
+  // Live-update the conversation while the tab is visible.
+  //
+  // Was 20s, which is three reads a minute per open project page for a conversation that
+  // moves a few times a day (P1-EGRESS-6). Refocusing the tab still refreshes immediately
+  // via the visibilitychange listener, and that — not the timer — is how an operator
+  // actually comes back to check a reply. 60s rather than the public schedule page's 90s
+  // because this side of the conversation is being watched by someone who just sent.
   useEffect(() => {
     const tick = () => {
       if (document.visibilityState === 'visible') void loadMessages()
     }
-    const id = window.setInterval(tick, 20_000)
+    const id = window.setInterval(tick, 60_000)
     document.addEventListener('visibilitychange', tick)
     return () => {
       window.clearInterval(id)
