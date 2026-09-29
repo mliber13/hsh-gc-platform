@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { toast } from 'sonner'
+import { fetchChangeOrders } from '@/services/changeOrderService'
 import { v4 as uuidv4 } from 'uuid'
 import {
   Project,
@@ -198,11 +199,20 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
           setSubItemsByTrade(subItemsMap)
         }
         
-        // Load change orders
-        if (project.actuals?.changeOrders) {
-          setChangeOrders(project.actuals.changeOrders.filter(co => 
-            co.status === 'approved' || co.status === 'implemented'
-          ))
+        // Change orders come from the `change_orders` table. This read
+        // `project.actuals.changeOrders`, which nothing online populated, so the change-order
+        // impact on this page has always been $0 no matter what was entered (P0-GC-1).
+        try {
+          const cos = await fetchChangeOrders(project.id)
+          setChangeOrders(
+            cos.filter((co) => co.status === 'approved' || co.status === 'implemented'),
+          )
+        } catch (e) {
+          // A failed read leaves the rollup at zero, which is why it says so out loud rather
+          // than quietly under-reporting the cost of the job.
+          toast.error(
+            e instanceof Error ? e.message : 'Could not load change orders for this project',
+          )
         }
       }
     }

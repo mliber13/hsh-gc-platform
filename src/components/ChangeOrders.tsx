@@ -7,8 +7,15 @@
 
 import React, { useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
+import { toast } from 'sonner'
 import { Project, ChangeOrder, Trade } from '@/types'
-import { getTradesForEstimate, updateProject } from '@/services'
+import { getTradesForEstimate } from '@/services'
+import {
+  deleteChangeOrder,
+  fetchChangeOrders,
+  nextChangeOrderNumber,
+  saveChangeOrder,
+} from '@/services/changeOrderService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,18 +53,36 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
   const [showCOForm, setShowCOForm] = useState(false)
   const [editingCO, setEditingCO] = useState<ChangeOrder | null>(null)
   const [trades, setTrades] = useState<Trade[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   usePageTitle('Change Orders')
 
+  // Change orders come from the `change_orders` table now. They used to be read out of
+  // `project.actuals.changeOrders`, which nothing online ever populated, so the page always
+  // opened empty and every save went to localStorage (P0-GC-1).
   useEffect(() => {
-    // Load trades for linking
+    let cancelled = false
     const loadedTrades = getTradesForEstimate(project.estimate.id)
     setTrades(loadedTrades)
-    
-    // Load change orders from project actuals
-    if (project.actuals?.changeOrders) {
-      setChangeOrders(project.actuals.changeOrders)
+
+    setLoading(true)
+    fetchChangeOrders(project.id)
+      .then((rows) => {
+        if (!cancelled) setChangeOrders(rows)
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          toast.error(e instanceof Error ? e.message : 'Could not load change orders')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
     }
-  }, [project])
+  }, [project.id, project.estimate.id])
 
   const handleAddChangeOrder = () => {
     setEditingCO(null)
@@ -69,44 +94,38 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
     setShowCOForm(true)
   }
 
-  const handleDeleteChangeOrder = (coId: string) => {
-    if (confirm('Delete this change order?')) {
-      const updated = changeOrders.filter(co => co.id !== coId)
-      setChangeOrders(updated)
-      
-      // Update project
-      updateProject(project.id, {
-        actuals: {
-          ...project.actuals!,
-          changeOrders: updated,
-        },
-      })
+  const handleDeleteChangeOrder = async (coId: string) => {
+    if (!confirm('Delete this change order?')) return
+    try {
+      await deleteChangeOrder(coId)
+      setChangeOrders((prev) => prev.filter((co) => co.id !== coId))
+      toast.success('Change order deleted')
+    } catch (e) {
+      // Local state is left alone on failure, so the row stays visible and the operator can
+      // see that nothing happened.
+      toast.error(e instanceof Error ? e.message : 'Could not delete the change order')
     }
   }
 
-  const handleSaveChangeOrder = (co: ChangeOrder) => {
-    let updated: ChangeOrder[]
-    
-    if (editingCO) {
-      // Update existing
-      updated = changeOrders.map(item => item.id === co.id ? co : item)
-    } else {
-      // Add new
-      updated = [...changeOrders, co]
+  const handleSaveChangeOrder = async (co: ChangeOrder) => {
+    const isNew = !editingCO
+    setSaving(true)
+    try {
+      // Keep what the database stored, not what the form sent — a column it defaulted or
+      // rejected would otherwise sit in local state looking saved.
+      const stored = await saveChangeOrder(project.id, co, { isNew })
+      setChangeOrders((prev) =>
+        isNew ? [...prev, stored] : prev.map((item) => (item.id === stored.id ? stored : item)),
+      )
+      setShowCOForm(false)
+      setEditingCO(null)
+      toast.success(isNew ? 'Change order added' : 'Change order saved')
+    } catch (e) {
+      // The form stays open with the operator's input intact.
+      toast.error(e instanceof Error ? e.message : 'Could not save the change order')
+    } finally {
+      setSaving(false)
     }
-    
-    setChangeOrders(updated)
-    
-    // Update project
-    updateProject(project.id, {
-      actuals: {
-        ...project.actuals!,
-        changeOrders: updated,
-      },
-    })
-    
-    setShowCOForm(false)
-    setEditingCO(null)
   }
 
   const formatCurrency = (amount: number) =>
@@ -238,7 +257,11 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
 
         <Card className="border-border/60 bg-card/50">
           <CardContent className="p-4">
-            {changeOrders.length === 0 ? (
+            {loading ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">
+                Loading change orders…
+              </p>
+            ) : changeOrders.length === 0 ? (
               <div className="py-12 text-center">
                 <FileText className="mx-auto mb-3 size-12 text-muted-foreground/50" />
                 <p className="font-medium">No change orders yet</p>
@@ -344,6 +367,8 @@ export function ChangeOrders({ project, onBack }: ChangeOrdersProps) {
           project={project}
           trades={trades}
           changeOrder={editingCO}
+          existing={changeOrders}
+          saving={saving}
           onSave={handleSaveChangeOrder}
           onCancel={() => {
             setShowCOForm(false)
@@ -363,14 +388,26 @@ interface ChangeOrderFormProps {
   project: Project
   trades: Trade[]
   changeOrder: ChangeOrder | null
-  onSave: (co: ChangeOrder) => void
+  /** Already-saved change orders on this project — the next number is derived from them. */
+  existing: ChangeOrder[]
+  saving: boolean
+  onSave: (co: ChangeOrder) => void | Promise<void>
   onCancel: () => void
 }
 
-function ChangeOrderForm({ project, trades, changeOrder, onSave, onCancel }: ChangeOrderFormProps) {
-  // Generate next CO number
-  const existingCOs = project.actuals?.changeOrders || []
-  const nextNumber = changeOrder?.changeOrderNumber || `CO-${String(existingCOs.length + 1).padStart(3, '0')}`
+function ChangeOrderForm({
+  project,
+  trades,
+  changeOrder,
+  existing,
+  saving,
+  onSave,
+  onCancel,
+}: ChangeOrderFormProps) {
+  // Was derived from `project.actuals.changeOrders` — always empty online — and from the
+  // COUNT, which repeats a number as soon as one is deleted. The unique index now refuses
+  // the duplicate, so take the highest number in use instead.
+  const nextNumber = changeOrder?.changeOrderNumber || nextChangeOrderNumber(existing)
 
   const [formData, setFormData] = useState({
     changeOrderNumber: changeOrder?.changeOrderNumber || nextNumber,
@@ -560,11 +597,13 @@ function ChangeOrderForm({ project, trades, changeOrder, onSave, onCancel }: Cha
             </div>
 
             <div className="flex justify-end gap-2 border-t border-border/60 pt-4">
-              <Button type="button" variant="outline" onClick={onCancel}>
+              <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
                 Cancel
               </Button>
-              <Button type="submit">
-                {changeOrder ? 'Save Changes' : 'Add Change Order'}
+              {/* The save is a round trip now, so the button has to say so — and must not
+                  accept a second click that would insert the change order twice. */}
+              <Button type="submit" disabled={saving}>
+                {saving ? 'Saving…' : changeOrder ? 'Save Changes' : 'Add Change Order'}
               </Button>
             </div>
           </form>

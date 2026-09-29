@@ -2499,9 +2499,14 @@ export async function deleteSubcontractorEntryFromDB(entryId: string): Promise<b
 }
 
 // Helper to get or create actuals ID for a project
+//
+// Was a SELECT followed by an INSERT, with no unique constraint behind it — two tabs opening
+// the same project could each miss and each insert, and every later entry would attach to
+// whichever parent it happened to find. `project_actuals_project_id_key` (migration
+// 20260929190000) makes that impossible, and lets this be one atomic upsert instead of a
+// check-then-write (P1-MONEY-7).
 async function getOrCreateActualsId(projectId: string): Promise<string | null> {
-  // Check if project actuals exists
-  const { data: existing, error: fetchError } = await supabase
+  const { data: existing } = await supabase
     .from('project_actuals')
     .select('id')
     .eq('project_id', projectId)
@@ -2511,7 +2516,6 @@ async function getOrCreateActualsId(projectId: string): Promise<string | null> {
     return existing[0].id
   }
 
-  // Create new actuals
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
@@ -2523,26 +2527,39 @@ async function getOrCreateActualsId(projectId: string): Promise<string | null> {
 
   if (!profile) return null
 
-  const { data: newActuals, error: createError } = await supabase
+  // `ignoreDuplicates` keeps the row that is already there rather than overwriting its
+  // totals with zeros — losing a rollup is the failure this guard exists to prevent.
+  const { data: upserted, error: upsertError } = await supabase
     .from('project_actuals')
-    .insert({
-      project_id: projectId,
-      user_id: user.id,
-      organization_id: profile.organization_id,
-      labor_cost: 0,
-      material_cost: 0,
-      subcontractor_cost: 0,
-      total_actual: 0,
-    })
-    .select()
-    .single()
+    .upsert(
+      {
+        project_id: projectId,
+        user_id: user.id,
+        organization_id: profile.organization_id,
+        labor_cost: 0,
+        material_cost: 0,
+        subcontractor_cost: 0,
+        total_actual: 0,
+      },
+      { onConflict: 'project_id', ignoreDuplicates: true },
+    )
+    .select('id')
 
-  if (createError || !newActuals) {
-    console.error('Error creating actuals:', createError)
+  if (upsertError) {
+    console.error('Error creating actuals:', upsertError)
     return null
   }
 
-  return newActuals.id
+  if (upserted && upserted.length > 0) return upserted[0].id
+
+  // `ignoreDuplicates` returns no row when another caller won the race, so read theirs.
+  const { data: raced } = await supabase
+    .from('project_actuals')
+    .select('id')
+    .eq('project_id', projectId)
+    .limit(1)
+
+  return raced?.[0]?.id ?? null
 }
 
 /** Reassign a material entry to another project (updates project_id and actuals_id). */
