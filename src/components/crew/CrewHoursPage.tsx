@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { usePermissions } from '@/hooks/usePermissions'
 import { addDays, format, parseISO, startOfWeek } from 'date-fns'
 import { ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 import { toast } from 'sonner'
@@ -33,6 +35,15 @@ function formatHours(hours: number): string {
  * later moves would be worse than showing none.
  */
 export function CrewHoursPage() {
+  const [searchParams] = useSearchParams()
+  const { effectiveRole, profile } = usePermissions()
+  const isOperator = effectiveRole !== 'crew'
+  // Same pattern as CrewProjectListPage: in an operator preview show the previewed
+  // person, otherwise the signed-in crew member.
+  const viewAsPersonId = isOperator ? searchParams.get('as') : null
+  const myPersonId = profile?.linked_employee_id || profile?.linked_contractor_id || null
+  const personId = viewAsPersonId ?? myPersonId
+
   const [weekStart, setWeekStart] = useState(() =>
     toDateKey(startOfWeek(parseISO(todayKey()), { weekStartsOn: 1 })),
   )
@@ -44,13 +55,20 @@ export function CrewHoursPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setEntries(await fetchEntriesForRange({ from: weekStart, to: weekEnd }))
+      // Always scope to a person explicitly. RLS limits a crew account to its own rows,
+      // but an operator's session is not limited — so without this the page returned every
+      // punch in the business, and every "View as" preview showed the same list.
+      if (!personId) {
+        setEntries([])
+        return
+      }
+      setEntries(await fetchEntriesForRange({ from: weekStart, to: weekEnd, personId }))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not load your hours')
     } finally {
       setLoading(false)
     }
-  }, [weekStart, weekEnd])
+  }, [weekStart, weekEnd, personId])
 
   useEffect(() => {
     void load()

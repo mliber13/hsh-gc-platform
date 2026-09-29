@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { usePermissions } from '@/hooks/usePermissions'
 import { format, parseISO } from 'date-fns'
 import { ChevronDown, ChevronRight, Clock, Wallet } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -41,11 +43,24 @@ function weekLabel(stub: MyPaystub): string {
  * Only locked periods reach this page; list_my_paystubs filters drafts out server-side.
  */
 export function CrewPayPage() {
+  const [searchParams] = useSearchParams()
+  const { effectiveRole } = usePermissions()
+  const isOperator = effectiveRole !== 'crew'
+  const viewAsPersonId = isOperator ? searchParams.get('as') : null
+
   const [stubs, setStubs] = useState<MyPaystub[]>([])
   const [loading, setLoading] = useState(true)
   const [openId, setOpenId] = useState<string | null>(null)
 
   useEffect(() => {
+    // list_my_paystubs resolves the person from the session, so in an operator preview it
+    // returns the OPERATOR's pay — not the person on the banner. Rather than show one
+    // person's earnings under another's name, the preview says it cannot show this.
+    // Payroll itself is where an operator looks at somebody's pay.
+    if (viewAsPersonId) {
+      setLoading(false)
+      return
+    }
     let cancelled = false
     fetchMyPaystubs()
       .then((rows) => {
@@ -98,7 +113,15 @@ export function CrewPayPage() {
         </Button>
       </div>
 
-      {loading ? (
+      {viewAsPersonId ? (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardContent className="py-6 text-sm text-amber-900 dark:text-amber-200">
+            Pay cannot be previewed. This page reads the signed-in person's own payroll, so
+            it would show yours rather than theirs. Use the Payroll workspace to look at
+            someone else's pay.
+          </CardContent>
+        </Card>
+      ) : loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : weeks.length === 0 ? (
         <Card>
