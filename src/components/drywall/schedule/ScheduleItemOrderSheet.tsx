@@ -276,9 +276,7 @@ export function ScheduleItemOrderSheet({
         project={projectMeta}
         suppliers={suppliers}
         readOnly={readOnly}
-        allowDuplicate={false}
         onChange={setDraft}
-        onDuplicate={() => undefined}
         onDelete={() => void handleDelete()}
       />
     </div>

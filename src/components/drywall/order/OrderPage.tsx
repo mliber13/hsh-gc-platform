@@ -14,7 +14,6 @@ import {
 } from '@/components/ui/dialog'
 import { sendSupplierOrderEmail } from '@/services/supplierOrdersService'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
-import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import { extractMaterialsFromFieldTakeoff } from '@/lib/drywall/fieldMaterialsPdfData'
 import {
   downloadDrywallFieldMaterialsPdf,
@@ -173,21 +172,6 @@ export function OrderPage() {
     }
     return null
   }, [suppliers, orders])
-
-  const handleDuplicateOrder = (order: DrywallOrder) => {
-    const now = new Date().toISOString()
-    const copy: DrywallOrder = {
-      ...order,
-      id: generateFieldId(),
-      orderNumber: order.orderNumber ? `${order.orderNumber} (copy)` : undefined,
-      status: 'draft',
-      items: order.items.map((i) => ({ ...i, id: generateFieldId() })),
-      createdAt: now,
-      updatedAt: now,
-    }
-    setOrders((prev) => sortOrders([copy, ...prev]))
-    setEditingOrderId(copy.id)
-  }
 
   const handleDeleteOrder = (orderId: string) => {
     setOrders((prev) => prev.filter((o) => o.id !== orderId))
@@ -536,9 +520,6 @@ export function OrderPage() {
         readOnly={readOnly}
         onChange={(next) => {
           setOrders((prev) => prev.map((o) => (o.id === next.id ? next : o)))
-        }}
-        onDuplicate={() => {
-          if (editingOrder) handleDuplicateOrder(editingOrder)
         }}
         onDelete={() => {
           if (editingOrderId) handleDeleteOrder(editingOrderId)

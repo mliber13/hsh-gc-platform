@@ -1,4 +1,4 @@
-import { Copy, FileDown, Plus, Trash2 } from 'lucide-react'
+import { FileDown, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -36,10 +36,7 @@ interface OrderEditorDialogProps {
   project: Pick<DrywallProject, 'name' | 'address' | 'client'>
   suppliers: Supplier[]
   readOnly: boolean
-  /** Hide the Duplicate action (e.g. the schedule-item attach flow, which is one order per item). */
-  allowDuplicate?: boolean
   onChange: (order: DrywallOrder) => void
-  onDuplicate: () => void
   onDelete: () => void
 }
 
@@ -65,9 +62,7 @@ export function OrderEditorDialog({
   project,
   suppliers,
   readOnly,
-  allowDuplicate = true,
   onChange,
-  onDuplicate,
   onDelete,
 }: OrderEditorDialogProps) {
   if (!order) return null
@@ -306,12 +301,6 @@ export function OrderEditorDialog({
             </Button>
             {!readOnly && (
               <>
-                {allowDuplicate && (
-                  <Button type="button" variant="outline" onClick={onDuplicate}>
-                    <Copy className="mr-2 h-4 w-4" />
-                    Duplicate
-                  </Button>
-                )}
                 <Button type="button" variant="destructive" onClick={onDelete}>
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
