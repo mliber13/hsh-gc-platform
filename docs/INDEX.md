@@ -20,7 +20,7 @@ what, not why. This index says which are live.
 - [SCHEDULE_TARGET_MODEL.md](SCHEDULE_TARGET_MODEL.md) · [SCHEDULE_SURFACE_INVENTORY.md](SCHEDULE_SURFACE_INVENTORY.md) — the schedule model, and every surface that touches it.
 - [SUPABASE_HEALTH_AUDIT.md](SUPABASE_HEALTH_AUDIT.md) — the 2026-07 audit. Batch A done; `organizations` anon read and definer-fn `search_path` still open.
 - [AUDIT.md](AUDIT.md) — read its CHANGELOG; the body is stale.
-- [VERSION_1_5_ROADMAP.md](VERSION_1_5_ROADMAP.md) — what comes after v1.
+- [VERSION_1_5_ROADMAP.md](history/VERSION_1_5_ROADMAP.md) — what comes after v1. Archived to `history/` when v1.0 was tagged.
 
 ## Ideas, not scoped
 

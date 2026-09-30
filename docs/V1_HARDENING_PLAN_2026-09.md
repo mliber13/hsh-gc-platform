@@ -8,6 +8,30 @@ Full per-domain reports (with every finding, table, and line ref) are in `docs/a
 
 ---
 
+## v1.0 — tagged 2026-09-30
+
+**This document is now the changelog anchor.** The batch records below are the history; this is the line under them.
+
+**Shipped:** batches 0, 1, 2, 3 and 4 complete. Batch 5's egress half complete (main chunk 4,564 KB → 1,060 KB; crew list 1,160 KB → 23 KB; the dashboard's 60 round trips → 1). Batch 6's code tier complete (−8,000 lines, no table, bucket or storage object touched). 502 tests in 78 files, in two timezones, on every push.
+
+**Carried past v1.0, deliberately:**
+
+| Item | Why it waits |
+|---|---|
+| **P1-QA-2** migration baseline | Needs Docker to verify; the reconstruction is historical, not a live dump — see the grounding above. Least urgent item here: Supabase backups already cover the recovery case |
+| **P1-MONEY-5** pricing-mode flag | A data-model decision. Batch 2B added the warning at the point of typing; the flag itself is unmade |
+| `work_packages` / `project_milestones` table drops | Irreversible and inert. Recommended: never |
+| `drywallLaborEntryEditService` repoint | A payroll behaviour change, not a deletion. Wants its own smoke test |
+| `dfp_auth_insert` org-wide | Crew can upload a photo into any project's folder — same shape as the DELETE policy fixed in 1B |
+| `qb-suggest-allocation` | Live at v14 with source only in the Dashboard. Recover into git, or delete the remote function |
+| Deal workspace | Parked by Mark's decision 2026-09-29, not dead — P2-DEL-2 and P2-DEL-9 withdrawn |
+| The §7 structural list | v2 quote dual-path, the offline/localStorage fossil, the two service splits, time-clock unification, type generation |
+
+**The lesson this plan taught, worth more than any single fix:** an audit finding is a hypothesis. Grounding one against the live database before writing code corrected something in nearly every batch — `fetchMyPaystubs` was no longer unwired and deleting it would have broken the crew pay page; two dual-view projects were reachable only through a fallback a naive projection would have dropped; `quote-documents` had no authenticated SELECT policy, so the "flag flip" would have broken every read; `project_actuals` had no duplicates and every cost column was zero; the storage buckets already enforced size and MIME limits the plan said were missing. Batch 4's entire framing changed on one question to Mark, because empty tables meant broken writers rather than abandoned features.
+
+
+---
+
 ## 0b. Audit re-grounding — 2026-09-14
 
 Prompted by Mark, after three findings in this document turned out to be wrong in ways that cost real
