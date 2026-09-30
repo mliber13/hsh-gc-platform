@@ -16,7 +16,6 @@ import { sendSupplierOrderEmail } from '@/services/supplierOrdersService'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import { extractMaterialsFromFieldTakeoff } from '@/lib/drywall/fieldMaterialsPdfData'
-import { downloadDrywallChangeOrderPdf } from '@/lib/drywallChangeOrderPdf'
 import {
   downloadDrywallFieldMaterialsPdf,
 } from '@/lib/drywallOrderPdf'
@@ -34,7 +33,6 @@ import {
   markProductionStarted,
   markOrderStatus,
   saveOrderStageSnapshot,
-  transitionDrywallChangeOrder,
 } from '@/services/drywallProjectsService'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import { fetchSuppliers } from '@/services/partnerDirectoryService'
@@ -47,7 +45,6 @@ import type {
   FieldTakeoff,
 } from '@/types/drywall'
 import { isDrywallProjectClosed, isDrywallQuoteV3 } from '@/types/drywall'
-import { ChangeOrdersSection } from './ChangeOrdersSection'
 import { OrderEditorDialog } from './OrderEditorDialog'
 import { OrderFinancialCard } from './OrderFinancialCard'
 import { MaterialReconcileCard } from './MaterialReconcileCard'
@@ -55,7 +52,6 @@ import { OrderStatusBadge } from './OrderStatusBadge'
 
 type StageSnapshot = {
   orders: DrywallOrder[]
-  changeOrders: DrywallChangeOrder[]
 }
 
 function sortOrders(orders: DrywallOrder[]): DrywallOrder[] {
@@ -79,10 +75,11 @@ export function OrderPage() {
   const [quote, setQuote] = useState<DrywallQuote | null>(null)
   const [orders, setOrders] = useState<DrywallOrder[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  // Read-only here: the financial card needs accepted change orders to answer whether this
+  // order still fits the bid. Editing them lives with the quote (ProjectChangeOrdersCard).
   const [changeOrders, setChangeOrders] = useState<DrywallChangeOrder[]>([])
   const [savedSnapshot, setSavedSnapshot] = useState('')
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
-  const [changeOrderBusyId, setChangeOrderBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -110,7 +107,7 @@ export function OrderPage() {
       setOrders(sortOrders(o))
       setSuppliers(sup)
       setChangeOrders(co)
-      const snap: StageSnapshot = { orders: sortOrders(o), changeOrders: co }
+      const snap: StageSnapshot = { orders: sortOrders(o) }
       setSavedSnapshot(JSON.stringify(snap))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load order stage')
@@ -124,9 +121,9 @@ export function OrderPage() {
   }, [load])
 
   const isDirty = useMemo(() => {
-    const current: StageSnapshot = { orders, changeOrders }
+    const current: StageSnapshot = { orders }
     return JSON.stringify(current) !== savedSnapshot
-  }, [orders, changeOrders, savedSnapshot])
+  }, [orders, savedSnapshot])
 
   const editingOrder = useMemo(
     () => orders.find((o) => o.id === editingOrderId) ?? null,
@@ -145,9 +142,9 @@ export function OrderPage() {
     if (readOnly || !project) return
     setSaving(true)
     try {
-      const nextRaw = await saveOrderStageSnapshot(projectId, { orders, changeOrders }, project.updatedAtRaw)
+      const nextRaw = await saveOrderStageSnapshot(projectId, { orders }, project.updatedAtRaw)
       setProject((prev) => (prev ? { ...prev, updatedAtRaw: nextRaw } : prev))
-      const snap: StageSnapshot = { orders, changeOrders }
+      const snap: StageSnapshot = { orders }
       setSavedSnapshot(JSON.stringify(snap))
       toast.success('Orders saved')
     } catch (e) {
@@ -161,39 +158,6 @@ export function OrderPage() {
       }
     } finally {
       setSaving(false)
-    }
-  }
-
-  const handleChangeOrderTransition = async (
-    changeOrder: DrywallChangeOrder,
-    transition:
-      | { action: 'submit' }
-      | { action: 'accept'; acceptedAmount: string; acceptanceReference: string }
-      | { action: 'reject'; rejectionNotes: string },
-  ) => {
-    if (readOnly || !project) return
-    setChangeOrderBusyId(changeOrder.id)
-    try {
-      // Persist current draft fields first; the transition service then validates the latest JSON.
-      const afterSnap = await saveOrderStageSnapshot(
-        projectId,
-        { orders, changeOrders },
-        project.updatedAtRaw,
-      )
-      await transitionDrywallChangeOrder(projectId, changeOrder.id, transition, afterSnap)
-      toast.success(
-        transition.action === 'submit'
-          ? 'Change order submitted'
-          : transition.action === 'accept'
-            ? 'Change order accepted'
-            : 'Change order rejected',
-      )
-      await load()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to update change order')
-      throw e
-    } finally {
-      setChangeOrderBusyId(null)
     }
   }
 
@@ -299,23 +263,6 @@ export function OrderPage() {
     toast.success('Field materials PDF downloaded')
   }
 
-
-  const handleChangeOrderPdf = async (changeOrder: DrywallChangeOrder) => {
-    if (!project) return
-    try {
-      await downloadDrywallChangeOrderPdf({
-        project: projectPdfMeta,
-        quote,
-        po: project.legacy.poData ?? project.legacy.po,
-        changeOrder,
-        changeOrders,
-      })
-      toast.success('Change order PDF downloaded')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to generate change order PDF')
-      throw error
-    }
-  }
 
   /**
    * Order → production, the one step the lifecycle actually allows from here.
@@ -510,27 +457,6 @@ export function OrderPage() {
           )}
         </CardContent>
       </Card>
-
-      <ChangeOrdersSection
-        changeOrders={changeOrders}
-        readOnly={readOnly}
-        onChange={setChangeOrders}
-        busyId={changeOrderBusyId}
-        onSubmit={(changeOrder) =>
-          handleChangeOrderTransition(changeOrder, { action: 'submit' })
-        }
-        onAccept={(changeOrder, acceptedAmount, acceptanceReference) =>
-          handleChangeOrderTransition(changeOrder, {
-            action: 'accept',
-            acceptedAmount,
-            acceptanceReference,
-          })
-        }
-        onReject={(changeOrder, rejectionNotes) =>
-          handleChangeOrderTransition(changeOrder, { action: 'reject', rejectionNotes })
-        }
-        onDownloadPdf={handleChangeOrderPdf}
-      />
 
       {/* Closing out is not an Order-stage action. The only forward step from here is into
           production; Closeout owns the end of the job, after production has run. */}

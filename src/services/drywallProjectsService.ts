@@ -1477,9 +1477,16 @@ export async function saveOrder(projectId: string, order: DrywallOrder, loadedAt
 }
 
 /** Explicit-save snapshot: replace orders + changeOrders arrays (JSONB-merge siblings). */
+/**
+ * Persist the orders on a project.
+ *
+ * It used to write change orders in the same call, because both lived on the Order page.
+ * They now live with the quote and have their own writer — see saveChangeOrders. Two
+ * surfaces sharing one snapshot is how each would overwrite the other half.
+ */
 export async function saveOrderStageSnapshot(
   projectId: string,
-  snapshot: { orders: DrywallOrder[]; changeOrders: DrywallChangeOrder[] },
+  snapshot: { orders: DrywallOrder[] },
   loadedAt: string,
 ): Promise<string> {
   if (!isOnlineMode()) throw new Error('Orders require an online connection.')
@@ -1492,34 +1499,64 @@ export async function saveOrderStageSnapshot(
     updatedAt: o.updatedAt || now,
     createdAt: o.createdAt || now,
   }))
-  const existingChangeOrders = parseLegacyChangeOrders(prevLegacy)
-  const workflowFields = (co: DrywallChangeOrder): Partial<DrywallChangeOrder> => ({
-    status: co.status,
-    submittedAt: co.submittedAt,
-    acceptedAmount: co.acceptedAmount,
-    acceptedAt: co.acceptedAt,
-    acceptedByUserId: co.acceptedByUserId,
-    acceptedByName: co.acceptedByName,
-    acceptanceReference: co.acceptanceReference,
-    rejectedAt: co.rejectedAt,
-    rejectionNotes: co.rejectionNotes,
-  })
-  const changeOrders = snapshot.changeOrders.map((co) => {
-    const existing = existingChangeOrders.find((item) => item.id === co.id)
+
+  return persistLegacyMetadata(projectId, orgId, { ...prevLegacy, orders }, prevMeta, loadedAt)
+}
+
+/**
+ * Persist change orders on their own.
+ *
+ * They used to be written by `saveOrderStageSnapshot`, alongside orders, because both lived
+ * on the Order page. They no longer do — a change order restates the contract, so it sits
+ * with the quote. Two pages writing one snapshot is how each would overwrite the other's
+ * half, so the write is split the same way the surfaces are.
+ *
+ * Workflow fields are read back from what is stored rather than taken from the caller, the
+ * same rule `saveOrderStageSnapshot` applies: a page that has been open a while must not be
+ * able to un-accept a change order by saving a stale copy of it. `transitionDrywallChangeOrder`
+ * is the only thing that moves that status.
+ */
+export async function saveChangeOrders(
+  projectId: string,
+  changeOrders: DrywallChangeOrder[],
+  loadedAt: string,
+): Promise<string> {
+  if (!isOnlineMode()) throw new Error('Change orders require an online connection.')
+
+  const orgId = await requireUserOrgId()
+  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const now = new Date().toISOString()
+  const existing = parseLegacyChangeOrders(prevLegacy)
+
+  const next = changeOrders.map((co) => {
+    const stored = existing.find((item) => item.id === co.id)
     return {
       ...co,
-      ...(existing ? workflowFields(existing) : { status: 'draft' as const }),
+      ...(stored
+        ? {
+            status: stored.status,
+            submittedAt: stored.submittedAt,
+            acceptedAmount: stored.acceptedAmount,
+            acceptedAt: stored.acceptedAt,
+            acceptedByUserId: stored.acceptedByUserId,
+            acceptedByName: stored.acceptedByName,
+            acceptanceReference: stored.acceptanceReference,
+            rejectedAt: stored.rejectedAt,
+            rejectionNotes: stored.rejectionNotes,
+          }
+        : { status: 'draft' as const }),
       updatedAt: now,
       createdAt: co.createdAt || now,
     }
   })
 
-  const mergedLegacy = {
-    ...prevLegacy,
-    orders,
-    changeOrders,
-  }
-  return persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, loadedAt)
+  return persistLegacyMetadata(
+    projectId,
+    orgId,
+    { ...prevLegacy, changeOrders: next },
+    prevMeta,
+    loadedAt,
+  )
 }
 
 /** Persist an audited change-order workflow transition against the latest project JSON. */
