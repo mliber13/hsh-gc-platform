@@ -416,36 +416,24 @@ export function FieldMeasurementPage() {
         readOnly={readOnly}
       />
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <FieldMeasurementsSection
-            takeoff={takeoff}
-            readOnly={readOnly}
-            onChange={setTakeoffField}
-          />
-          <FieldAccessoriesSection
-            takeoff={takeoff}
-            measuredSqft={measuredSqft}
-            quote={legacyQuote}
-            readOnly={readOnly}
-            onChange={setTakeoffField}
-          />
-          <FieldPhotosSection
-            projectId={projectId}
-            readOnly={readOnly}
-            loadedAt={loadedAt}
-            onLoadedAtChange={setLoadedAt}
-            onPhotosChange={() => void load()}
-          />
-        </div>
-        <div className="space-y-6">
-          <FieldChecklistSection
-            takeoff={takeoff}
-            readOnly={readOnly}
-            onToggleItem={toggleChecklist}
-          />
-        </div>
-      </div>
+      {/* What was measured. The two-column grid went with the checklist: once the sidebar
+          held nothing, a narrow column of measurement tables served no one, least of all a
+          phone. */}
+      <FieldMeasurementsSection takeoff={takeoff} readOnly={readOnly} onChange={setTakeoffField} />
+      <FieldAccessoriesSection
+        takeoff={takeoff}
+        measuredSqft={measuredSqft}
+        quote={legacyQuote}
+        readOnly={readOnly}
+        onChange={setTakeoffField}
+      />
+      <FieldPhotosSection
+        projectId={projectId}
+        readOnly={readOnly}
+        loadedAt={loadedAt}
+        onLoadedAtChange={setLoadedAt}
+        onPhotosChange={() => void load()}
+      />
 
       {/*
         Review and approve — the second job this page does.
@@ -468,10 +456,20 @@ export function FieldMeasurementPage() {
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Review and approve</h2>
           <p className="text-sm text-muted-foreground">
-            Check the measurements against the quote, then set what the work pays. Approving
-            here locks the takeoff.
+            Confirm what was checked on site, compare against the quote, then set what the
+            work pays. Approving here locks the takeoff.
           </p>
         </div>
+
+        {/* The checklist reads as approval, not entry — "scope matches approved quote" is
+            the approval question, and the other three are what you confirm before
+            committing (Mark, 2026-09-30). It leads the section for the same reason: verify,
+            then compare, then decide. */}
+        <FieldChecklistSection
+          takeoff={takeoff}
+          readOnly={readOnly}
+          onToggleItem={toggleChecklist}
+        />
 
         <FieldVarianceSummary quoteSqft={quoteSqft} measuredSqft={measuredSqft} />
 
