@@ -439,8 +439,6 @@ export function FieldMeasurementPage() {
           />
         </div>
         <div className="space-y-6">
-          <FieldVarianceSummary quoteSqft={quoteSqft} measuredSqft={measuredSqft} />
-
           <FieldChecklistSection
             takeoff={takeoff}
             readOnly={readOnly}
@@ -449,21 +447,48 @@ export function FieldMeasurementPage() {
         </div>
       </div>
 
-      {/* Below the measurement, deliberately: the rates and the headroom are read off
-          what was just measured, so they follow the numbers they depend on. */}
-      <LaborRateAdjustmentsCard
-        quote={quote}
-        fieldTakeoff={takeoff}
-        changeOrders={changeOrders}
-        catalogs={catalogs}
-        readOnly={ratesReadOnly}
-        onSaveFieldTakeoff={async (next) => {
-          const nextRaw = await saveFieldTakeoff(projectId, next, loadedAt)
-          setLoadedAt(nextRaw)
-          setTakeoff(next)
-          setSavedSnapshot(JSON.stringify(next))
-        }}
-      />
+      {/*
+        Review and approve — the second job this page does.
+
+        Entering measurements and committing to them are different acts, and stacking them
+        as peer cards made the commit half read as financial clutter in the middle of a form
+        (Mark, 2026-09-30: "the financials being there makes no sense").
+
+        They are not clutter, they are the gate: LaborRateAdjustmentsCard is what actually
+        writes reviewStatus 'approved', and Mark checks the quoted-vs-measured variance and
+        the budget headroom when deciding what the crew gets paid. The variance used to sit
+        in the sidebar, away from the decision it feeds. It belongs here.
+
+        The rates stay on this page rather than moving to Production, which was the first
+        instinct: Production shows nothing until it is flipped at stock, and per the schedule
+        data that is a median of one day AFTER the first delivery — days or weeks after the
+        measurements are reviewed. The decision would have had no home at the moment it is made.
+      */}
+      <section className="space-y-4 border-t pt-6">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Review and approve</h2>
+          <p className="text-sm text-muted-foreground">
+            Check the measurements against the quote, then set what the work pays. Approving
+            here locks the takeoff.
+          </p>
+        </div>
+
+        <FieldVarianceSummary quoteSqft={quoteSqft} measuredSqft={measuredSqft} />
+
+        <LaborRateAdjustmentsCard
+          quote={quote}
+          fieldTakeoff={takeoff}
+          changeOrders={changeOrders}
+          catalogs={catalogs}
+          readOnly={ratesReadOnly}
+          onSaveFieldTakeoff={async (next) => {
+            const nextRaw = await saveFieldTakeoff(projectId, next, loadedAt)
+            setLoadedAt(nextRaw)
+            setTakeoff(next)
+            setSavedSnapshot(JSON.stringify(next))
+          }}
+        />
+      </section>
 
       {isDirty && !readOnly && (
         <p className="text-sm text-amber-700">You have unsaved changes.</p>
