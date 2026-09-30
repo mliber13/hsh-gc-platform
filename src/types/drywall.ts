@@ -69,8 +69,8 @@ export type DrywallStageRouteKey =
   | 'field'
   | 'schedule'
   | 'order'
-  | 'production'
-  | 'closeout'
+  // Production and Closeout collapsed into one money screen; the old paths redirect here.
+  | 'financials'
   | 'files'
 
 /** Maps legacy `complete` → `closed` on read; does not write back to DB. */

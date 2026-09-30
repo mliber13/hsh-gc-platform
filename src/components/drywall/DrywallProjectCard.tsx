@@ -1,6 +1,6 @@
 import type { MouseEvent } from 'react'
 import { format, formatDistanceToNow, parseISO } from 'date-fns'
-import { CalendarDays, FileText, Flag, Hammer, Info, Package, Ruler } from 'lucide-react'
+import { CalendarDays, FileText, Hammer, Info, Package, Ruler } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -26,8 +26,7 @@ export type DrywallProjectStage =
   | 'schedule'
   | 'field-measurement'
   | 'order'
-  | 'production'
-  | 'closeout'
+  | 'financials'
 
 interface StatusVisual {
   bg: string
@@ -172,29 +171,17 @@ const STAGE_BUTTONS: {
     hasData: listItemHasOrderData,
   },
   {
-    stage: 'production',
-    path: 'production',
-    label: 'Production',
+    // One entry, not two: Production and Closeout are a single money screen now.
+    stage: 'financials',
+    path: 'financials',
+    label: 'Financials',
     icon: Hammer,
     iconColor: 'text-emerald-500',
-    title: 'Production',
+    title: 'Job financials',
     emptyTooltip: 'Not in production yet',
     hasData: (project) => {
       const s = normalizeDrywallProjectStatus(project.status)
       return s === 'production' || s === 'production-complete' || s === 'closed'
-    },
-  },
-  {
-    stage: 'closeout',
-    path: 'closeout',
-    label: 'Closeout',
-    icon: Flag,
-    iconColor: 'text-slate-500',
-    title: 'Closeout',
-    emptyTooltip: 'Closeout not available yet',
-    hasData: (project) => {
-      const s = normalizeDrywallProjectStatus(project.status)
-      return s === 'production-complete' || s === 'closed'
     },
   },
 ]

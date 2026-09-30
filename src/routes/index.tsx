@@ -116,10 +116,9 @@ const DrywallSupplierOrdersPage = lazyRoute(() => import('@/components/drywall/s
 const SupplierOrderSharePage = lazyRoute(() => import('@/routes/SupplierOrderSharePage'), 'SupplierOrderSharePage')
 const CustomerSchedulePage = lazyRoute(() => import('@/routes/CustomerSchedulePage'), 'CustomerSchedulePage')
 import { DrywallProjectShell } from '@/components/drywall/DrywallProjectShell'
-const CloseoutStagePage = lazyRoute(() => import('@/components/drywall/closeout/CloseoutStagePage'), 'CloseoutStagePage')
 const JobFilesPage = lazyRoute(() => import('@/components/drywall/files/JobFilesPage'), 'JobFilesPage')
 const OrderPage = lazyRoute(() => import('@/components/drywall/order/OrderPage'), 'OrderPage')
-const ProductionStagePage = lazyRoute(() => import('@/components/drywall/production/ProductionStagePage'), 'ProductionStagePage')
+const JobFinancialsPage = lazyRoute(() => import('@/components/drywall/financials/JobFinancialsPage'), 'JobFinancialsPage')
 const FieldMeasurementPage = lazyRoute(() => import('@/components/drywall/field/FieldMeasurementPage'), 'FieldMeasurementPage')
 const DrywallScheduleEditor = lazyRoute(() => import('@/components/drywall/schedule/DrywallScheduleEditor'), 'DrywallScheduleEditor')
 const CommsInboxPage = lazyRoute(() => import('@/components/comms/CommsInboxPage'), 'CommsInboxPage')
@@ -379,8 +378,11 @@ export function AppRoutes() {
             <Route path="field" element={<FieldMeasurementPage />} />
             <Route path="schedule" element={<DrywallScheduleEditor />} />
             <Route path="order" element={<OrderPage />} />
-            <Route path="production" element={<ProductionStagePage />} />
-            <Route path="closeout" element={<CloseoutStagePage />} />
+            <Route path="financials" element={<JobFinancialsPage />} />
+            {/* Production and Closeout merged into one money screen. Kept as redirects so
+                bookmarks and anything still linking to them keep working. */}
+            <Route path="production" element={<Navigate to="../financials" replace />} />
+            <Route path="closeout" element={<Navigate to="../financials" replace />} />
             <Route path="files" element={<JobFilesPage />} />
           </Route>
 
