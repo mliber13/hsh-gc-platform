@@ -13,7 +13,7 @@
 // `saveOrderStageSnapshot`, so two surfaces holding one snapshot would each overwrite the
 // other's half.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ChangeOrdersSection } from '@/components/drywall/order/ChangeOrdersSection'
 import { downloadDrywallChangeOrderPdf } from '@/lib/drywallChangeOrderPdf'
@@ -41,6 +41,11 @@ export function ProjectChangeOrdersCard({ projectId, readOnly }: Props) {
   const [quote, setQuote] = useState<DrywallQuote | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  /** Latest row timestamp. A ref, because a chained save must read it after the fact. */
+  const updatedAtRef = useRef<string | null>(null)
+  const pendingRef = useRef<DrywallChangeOrder[] | null>(null)
+  const chainRef = useRef<Promise<void>>(Promise.resolve())
+  const timerRef = useRef<number | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -52,6 +57,7 @@ export function ProjectChangeOrdersCard({ projectId, readOnly }: Props) {
         fetchOrgDrywallCatalogs(),
       ])
       setProject(p)
+      updatedAtRef.current = p?.updatedAtRaw ?? null
       setChangeOrders(cos)
       setQuote(isDrywallQuoteV3(qRaw) ? projectV3QuoteToV2Shape(qRaw, catalogs) : qRaw)
     } catch (e) {
@@ -72,17 +78,54 @@ export function ProjectChangeOrdersCard({ projectId, readOnly }: Props) {
    * order could be typed and lost by navigating away. Nothing else on the quote route has a
    * save button for them to share.
    */
-  const persist = async (next: DrywallChangeOrder[]) => {
+  /**
+   * Autosave, debounced and serialised.
+   *
+   * Saving straight from onChange fired a write per keystroke, and every blob write is
+   * guarded on `updated_at`: the second keystroke still held the timestamp the first had
+   * already replaced, so the guard refused it and the page threw "changed somewhere else
+   * while you were editing" as Mark typed an amount. The guard was right; the caller was
+   * wrong.
+   *
+   * Two things fix it, and both are needed. The debounce collapses a burst of typing into
+   * one write. The promise chain guarantees only one write is ever in flight, so the next
+   * one reads the timestamp the previous one returned rather than a stale copy — a
+   * debounce alone still races whenever a save is slower than the pause between bursts.
+   *
+   * The timestamp lives in a ref, not state: a chained callback closes over whatever state
+   * held when it was created, which is exactly the stale value being avoided.
+   */
+  const flush = useCallback(async () => {
+    const next = pendingRef.current
+    if (!next || !updatedAtRef.current) return
+    pendingRef.current = null
+
+    chainRef.current = chainRef.current.then(async () => {
+      try {
+        updatedAtRef.current = await saveChangeOrders(projectId, next, updatedAtRef.current!)
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not save the change order')
+        await load()
+      }
+    })
+    await chainRef.current
+  }, [projectId, load])
+
+  const persist = (next: DrywallChangeOrder[]) => {
     setChangeOrders(next)
-    if (!project) return
-    try {
-      const after = await saveChangeOrders(projectId, next, project.updatedAtRaw)
-      setProject((prev) => (prev ? { ...prev, updatedAtRaw: after } : prev))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save the change order')
-      await load()
-    }
+    pendingRef.current = next
+    if (timerRef.current) window.clearTimeout(timerRef.current)
+    timerRef.current = window.setTimeout(() => void flush(), 700)
   }
+
+  // Leaving the page must not drop what is pending — losing a typed change order by
+  // navigating away is the failure this block was built to end.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current)
+      void flush()
+    }
+  }, [flush])
 
   const handleTransition = async (
     changeOrder: DrywallChangeOrder,
@@ -91,11 +134,19 @@ export function ProjectChangeOrdersCard({ projectId, readOnly }: Props) {
       | { action: 'accept'; acceptedAmount: string; acceptanceReference: string }
       | { action: 'reject'; rejectionNotes: string },
   ) => {
-    if (readOnly || !project) return
+    if (readOnly || !updatedAtRef.current) return
     setBusyId(changeOrder.id)
     try {
-      // Write the draft fields first; the transition then validates against stored JSON.
-      const after = await saveChangeOrders(projectId, changeOrders, project.updatedAtRaw)
+      // Land any debounced edit before transitioning, and wait for whatever is already in
+      // flight. Submitting while a keystroke save was still running would send the
+      // transition with a timestamp that save was about to replace — the same race that
+      // made typing an amount throw.
+      if (timerRef.current) window.clearTimeout(timerRef.current)
+      await flush()
+      await chainRef.current
+
+      const after = await saveChangeOrders(projectId, changeOrders, updatedAtRef.current)
+      updatedAtRef.current = after
       await transitionDrywallChangeOrder(projectId, changeOrder.id, transition, after)
       toast.success(
         transition.action === 'submit'
