@@ -36,6 +36,12 @@ export const ACCESSORY_CALC_CONSTANTS = {
     easySand90PerStick: 10,
     liteWeightPerStick: 15,
   },
+  /** Mirrors accessoryCalc's `adhesives` block so quote and field takeoff agree. */
+  adhesives: {
+    titeBondRate: 5760,
+    /** One can covers a job, not a line — see the rollup, not computeLineAccessories. */
+    sprayCansPerQuote: 1,
+  },
 } as const
 
 export interface AccessoryComputation {
@@ -158,6 +164,11 @@ function computeEasySand90Bags(sqft: number, cornerBeadQty: number): number {
 
 function computeScrewBoxes(sqft: number): number {
   return Math.ceil(sqft / ACCESSORY_CALC_CONSTANTS.fasteners.screwRate)
+}
+
+/** Same formula the field takeoff uses: one tube per 5,760 sqft, rounded up. */
+function computeTiteBondCans(sqft: number): number {
+  return Math.ceil(sqft / ACCESSORY_CALC_CONSTANTS.adhesives.titeBondRate)
 }
 
 function computePaperTapeRolls(sqft: number): number {
@@ -307,6 +318,12 @@ export function computeLineAccessories(
     }
   }
 
+  // Board adhesive. Deliberately NOT behind a finish-scope flag: it is a hanging material,
+  // and `accessories_applied` only models the four finishing categories. The field takeoff
+  // has always computed it from sqft alone (accessoryCalc), and quotes priced it at nothing
+  // at all — `adhesive_titebond_foam` sat in the catalog with no reader in the codebase.
+  pushItem(items, byCategory, catalog.get('adhesive_titebond_foam'), computeTiteBondCans(sqft))
+
   const totalCost = items.reduce((sum, i) => sum + i.cost, 0)
   return { byCategory, totalCost, items }
 }
@@ -400,6 +417,29 @@ export function computeQuoteAccessoryRollup(
   processLines(quote.lineItems, routineBeadAllocation)
   for (const alt of quote.alternates) {
     processLines(alt.lineItems, new Map())
+  }
+
+  // Spray adhesive is one can for the JOB, exactly as the field takeoff records it — putting
+  // it in computeLineAccessories would bill a can per line and a five-line quote would carry
+  // five. It sits outside `byLine` for the same reason: it belongs to no single line.
+  //
+  // Skipped when every drywall line folds accessories into its material rate, so it cannot
+  // reintroduce a cost those lines have already priced.
+  const anyLinePricesAccessories = [
+    ...quote.lineItems,
+    ...quote.alternates.flatMap((a) => a.lineItems),
+  ].some((l) => l.type === 'drywall' && !l.accessories_in_material_rate && (l.quantity || 0) > 0)
+
+  if (anyLinePricesAccessories) {
+    const sprayItems: AccessoryComputation[] = []
+    const sprayCategories = EMPTY_CATEGORY_MAP()
+    pushItem(
+      sprayItems,
+      sprayCategories,
+      catalogById(accessoryCatalog).get('adhesive_spray'),
+      ACCESSORY_CALC_CONSTANTS.adhesives.sprayCansPerQuote,
+    )
+    allItems.push(...sprayItems)
   }
 
   return {

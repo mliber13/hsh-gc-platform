@@ -183,7 +183,18 @@ export function createDefaultDrywallCatalogSeeds(): OrgDrywallCatalogs {
         'each',
         8,
         5760,
-        'v2 titeBondRate — not gated by accessories_applied in Q.C.1.',
+        'One tube per 5,760 sqft, the same formula the field takeoff uses. Priced per drywall line.',
+      ),
+      accessory(
+        'adhesive_spray',
+        'Spray Adhesive (can)',
+        'other',
+        // The catalog unit union has no "can" — TiteBond is 'each' for the same reason, and
+        // the display name carries the real unit.
+        'each',
+        16,
+        0,
+        'One can per JOB, not per line — added at the quote rollup, matching the field takeoff.',
       ),
     ],
     rc_channel: [],

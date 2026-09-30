@@ -110,3 +110,6 @@ supabase/.temp/
 
 # Per-machine Claude Code settings; the shared ones live in .claude/settings.json
 .claude/settings.local.json
+
+# Local scratch: recovery scripts and data backups, deliberately not in the repo
+payroll-recovery-scratch/

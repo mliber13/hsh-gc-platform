@@ -4,6 +4,7 @@ import {
   CORNER_BEAD_LF_PER_STICK,
   allocateQuoteBeadSticksAcrossLines,
   computeLineAccessories,
+  computeQuoteAccessoryRollup,
 } from './quoteV3Accessories'
 import type { QuoteLineItem } from '@/types/drywall'
 
@@ -72,5 +73,69 @@ describe('quote bead sticks → corner bead accessories', () => {
     const alloc = allocateQuoteBeadSticksAcrossLines(lines, 10)
     expect(alloc.has('a')).toBe(false)
     expect(alloc.get('b')).toBe(10)
+  })
+})
+
+describe('adhesives reach the quote (Mark, 2026-09-30)', () => {
+  it('prices TiteBond foam per drywall line, on the field-takeoff formula', () => {
+    // Quotes priced adhesive at nothing at all: adhesive_titebond_foam sat in the catalog
+    // with no reader anywhere in the codebase, while field takeoffs carried 126 adhesive rows.
+    const result = computeLineAccessories(drywallLine('line-1', 10000), level4, catalogs.accessories)
+    const foam = result.items.find((i) => i.catalogEntryId === 'adhesive_titebond_foam')
+    expect(foam).toBeDefined()
+    // 10,000 sqft + 10% waste = 11,000; one tube per 5,760, rounded up.
+    expect(foam!.units).toBe(Math.ceil(11000 / 5760))
+    expect(foam!.cost).toBeCloseTo(Math.ceil(11000 / 5760) * 8, 2)
+  })
+
+  it('does not price adhesive on a line that folds accessories into its rate', () => {
+    const line: QuoteLineItem = {
+      ...drywallLine('line-1', 10000),
+      accessories_in_material_rate: true,
+    }
+    const result = computeLineAccessories(line, level4, catalogs.accessories)
+    expect(result.items).toHaveLength(0)
+  })
+
+  it('charges spray adhesive ONCE per quote, however many lines there are', () => {
+    // The trap: it is one can for the job. Per-line would bill a five-line quote five cans.
+    const quote = {
+      lineItems: [drywallLine('a', 5000), drywallLine('b', 5000), drywallLine('c', 5000)],
+      alternates: [],
+      bead_sticks: 0,
+    } as unknown as Parameters<typeof computeQuoteAccessoryRollup>[0]
+    const rollup = computeQuoteAccessoryRollup(quote, catalogs)
+    const spray = rollup.byCategory.other.filter((i) => i.catalogEntryId === 'adhesive_spray')
+    expect(spray).toHaveLength(1)
+    expect(spray[0].units).toBe(1)
+    expect(spray[0].cost).toBeCloseTo(16, 2)
+  })
+
+  it('leaves spray adhesive out when every line already includes accessories', () => {
+    const quote = {
+      lineItems: [
+        { ...drywallLine('a', 5000), accessories_in_material_rate: true },
+        { ...drywallLine('b', 5000), accessories_in_material_rate: true },
+      ],
+      alternates: [],
+      bead_sticks: 0,
+    } as unknown as Parameters<typeof computeQuoteAccessoryRollup>[0]
+    const rollup = computeQuoteAccessoryRollup(quote, catalogs)
+    expect(rollup.byCategory.other.some((i) => i.catalogEntryId === 'adhesive_spray')).toBe(false)
+  })
+
+  it('keeps spray adhesive out of byLine — it belongs to no single line', () => {
+    const quote = {
+      lineItems: [drywallLine('a', 5000)],
+      alternates: [],
+      bead_sticks: 0,
+    } as unknown as Parameters<typeof computeQuoteAccessoryRollup>[0]
+    const rollup = computeQuoteAccessoryRollup(quote, catalogs)
+    const lineTotal = rollup.byLine['a']
+    const sprayCost = rollup.byCategory.other
+      .filter((i) => i.catalogEntryId === 'adhesive_spray')
+      .reduce((s, i) => s + i.cost, 0)
+    expect(sprayCost).toBeCloseTo(16, 2)
+    expect(rollup.totalCost).toBeCloseTo(lineTotal + sprayCost, 2)
   })
 })
