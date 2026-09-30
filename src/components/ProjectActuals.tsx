@@ -2374,16 +2374,15 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                 const typeChanged = editingEntry && editingEntry.type !== entry.type
               
                 if (typeChanged) {
-                  // Delete the old entry
-                  if (editingEntry.type === 'labor') {
-                    await deleteLaborEntry_Hybrid(editingEntry.id)
-                  } else if (editingEntry.type === 'material') {
-                    await deleteMaterialEntry_Hybrid(editingEntry.id)
-                  } else if (editingEntry.type === 'subcontractor') {
-                    await deleteSubcontractorEntry_Hybrid(editingEntry.id)
-                  }
-                
-                  // Create new entry with new type
+                  // Changing an entry's type is a delete plus an insert across two different
+                  // tables, and there is no transaction spanning them. The original order was
+                  // delete-then-create: if the create failed, the entry was already gone and
+                  // the cost vanished from the job.
+                  //
+                  // Creating first inverts which way a failure hurts. A failed create now
+                  // throws with the original still intact, and a failed delete leaves a
+                  // visible duplicate the operator can remove — a duplicate is recoverable,
+                  // a deletion is not.
                   if (entry.type === 'labor') {
                     await addLaborEntry_Hybrid(project.id, {
                       date: entry.date,
@@ -2415,6 +2414,15 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                       tradeId: entry.tradeId,
                       subItemId: entry.subItemId,
                     })
+                  }
+
+                  // The replacement exists, so the original can go.
+                  if (editingEntry.type === 'labor') {
+                    await deleteLaborEntry_Hybrid(editingEntry.id)
+                  } else if (editingEntry.type === 'material') {
+                    await deleteMaterialEntry_Hybrid(editingEntry.id)
+                  } else if (editingEntry.type === 'subcontractor') {
+                    await deleteSubcontractorEntry_Hybrid(editingEntry.id)
                   }
                 } else {
                   // Regular update (not converting to split, type unchanged)
