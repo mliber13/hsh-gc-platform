@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
-import { FileDown, Mail, Plus, Save, Truck } from 'lucide-react'
+import { Link, useOutletContext } from 'react-router-dom'
+import { FileDown, Mail, Save, Truck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,7 +16,6 @@ import { sendSupplierOrderEmail } from '@/services/supplierOrdersService'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import { extractMaterialsFromFieldTakeoff } from '@/lib/drywall/fieldMaterialsPdfData'
-import { suggestOrderItemsFromFieldTakeoff } from '@/lib/drywall/orderSuggest'
 import { downloadDrywallChangeOrderPdf } from '@/lib/drywallChangeOrderPdf'
 import {
   downloadDrywallFieldMaterialsPdf,
@@ -211,62 +210,6 @@ export function OrderPage() {
     return null
   }, [suppliers, orders])
 
-  const handleCreateOrder = () => {
-    if (readOnly || !fieldTakeoff) return
-
-    // A draft with no supplier is an order someone started and has not finished. Creating
-    // a second one silently is how ten jobs ended up with an abandoned draft alongside the
-    // order that was actually sent — same day, same job, one of them forgotten. Offer the
-    // existing draft instead of quietly adding to the pile; a second order is still
-    // reachable for the jobs that genuinely need one.
-    const openDraft = orders.find((o) => !o.supplierId && o.status !== 'sent' && o.status !== 'complete')
-    if (openDraft) {
-      const count = (openDraft.items ?? []).length
-      const proceed = window.confirm(
-        `This job already has an order draft with no supplier (${count} item${count === 1 ? '' : 's'}).\n\n` +
-          'OK — create a second order anyway.\n' +
-          'Cancel — open the existing draft instead.',
-      )
-      if (!proceed) {
-        setEditingOrderId(openDraft.id)
-        return
-      }
-    }
-
-    // `orders` is every order on the job; the suggestion ignores drafts itself.
-    const suggestion = suggestOrderItemsFromFieldTakeoff(fieldTakeoff, orders)
-    const suggested = suggestion.items
-    const now = new Date().toISOString()
-    const order: DrywallOrder = {
-      id: generateFieldId(),
-      status: 'draft',
-      items: suggested,
-      deliveryAddress: project?.address,
-      ...(defaultSupplier
-        ? {
-            supplierId: defaultSupplier.id,
-            supplier: defaultSupplier.name,
-            supplierContact:
-              [defaultSupplier.contactName, defaultSupplier.phone].filter(Boolean).join(' · ') ||
-              undefined,
-          }
-        : {}),
-      createdAt: now,
-      updatedAt: now,
-    }
-    setOrders((prev) => sortOrders([order, ...prev]))
-    setEditingOrderId(order.id)
-    // Name what was left out. An absent line otherwise reads as the takeoff being wrong.
-    const alreadyOrdered = suggestion.suppressed + suggestion.reduced
-    if (suggested.length > 0 || alreadyOrdered > 0) {
-      toast.message(
-        alreadyOrdered > 0
-          ? `Line items suggested from field takeoff — ${alreadyOrdered} already on earlier orders`
-          : 'Line items suggested from field takeoff',
-      )
-    }
-  }
-
   const handleDuplicateOrder = (order: DrywallOrder) => {
     const now = new Date().toISOString()
     const copy: DrywallOrder = {
@@ -421,8 +364,9 @@ export function OrderPage() {
         <div>
           <h2 className="text-xl font-semibold">Order</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Material supplier orders, change orders, and office review. Save explicitly before leaving
-            this page.
+            Orders for this job, and whether they still fit the bid. New orders start from a
+            stock or delivery item on the schedule, which supplies the date. Save explicitly
+            before leaving this page.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -437,9 +381,26 @@ export function OrderPage() {
           </Button>
           {!readOnly && (
             <>
-              <Button type="button" variant="outline" onClick={handleCreateOrder}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create order
+              {/*
+                Creating an order starts from the schedule, not here.
+
+                Both paths existed and the schedule one won on its own: of 51 orders, every
+                one created from a stock item carries a supplier, a delivery date and a real
+                status, while this page produced nine abandoned drafts — four of them exact
+                twins of the order that was actually sent, same job, same day, same item
+                count. The date and the supplier link come for free from the item; started
+                here they have to be set by hand, and usually never were.
+
+                Mark, 2026-09-30, on the one case that might have justified keeping it:
+                "If we need a top-up, we should still create the schedule item and have the
+                order attached to that schedule item." Their own driver delivering does not
+                change that.
+              */}
+              <Button type="button" variant="outline" asChild>
+                <Link to={`/drywall/projects/${projectId}/schedule`}>
+                  <Truck className="mr-2 h-4 w-4" />
+                  Order from a delivery
+                </Link>
               </Button>
               <Button
                 type="button"
