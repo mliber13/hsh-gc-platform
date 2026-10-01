@@ -25,6 +25,8 @@ export function QuoteStageRoute() {
   const [loading, setLoading] = useState(true)
   const [intakeSource, setIntakeSource] = useState<'po' | 'quote' | null>(null)
   const [isV3, setIsV3] = useState(false)
+  /** Last row timestamp written by the change-order card, relayed to the quote stage. */
+  const [externalUpdatedAt, setExternalUpdatedAt] = useState<string | null>(null)
 
   const detectVersion = useCallback(async () => {
     setLoading(true)
@@ -82,19 +84,39 @@ export function QuoteStageRoute() {
 
   // Change orders sit under whichever quote surface this project uses — including a PO
   // intake, because a PO job still gets change orders and they still restate the contract.
+  //
+  // `externalUpdatedAt` is how the two siblings stay in step. They both write
+  // `projects.metadata` and the guard is on the whole row, so a change-order save moves the
+  // timestamp out from under the quote stage; without this the next outcome action is
+  // refused as "changed somewhere else", by the page you are standing on.
   const stage =
     intakeSource === 'po' ? (
       <PoSummaryCard projectId={projectId} />
     ) : isV3 ? (
-      <QuoteStageV3 key={`v3-${projectId}`} onRevertToV2={() => void detectVersion()} />
+      <QuoteStageV3
+        key={`v3-${projectId}`}
+        externalUpdatedAt={externalUpdatedAt}
+        onProjectWritten={setExternalUpdatedAt}
+        onRevertToV2={() => void detectVersion()}
+      />
     ) : (
-      <QuoteStage key={`v2-${projectId}`} onConverted={() => void detectVersion()} />
+      <QuoteStage
+        key={`v2-${projectId}`}
+        externalUpdatedAt={externalUpdatedAt}
+        onProjectWritten={setExternalUpdatedAt}
+        onConverted={() => void detectVersion()}
+      />
     )
 
   return (
     <div className="space-y-6">
       {stage}
-      <ProjectChangeOrdersCard projectId={projectId} readOnly={readOnly} />
+      <ProjectChangeOrdersCard
+        projectId={projectId}
+        readOnly={readOnly}
+        externalUpdatedAt={externalUpdatedAt}
+        onProjectWritten={setExternalUpdatedAt}
+      />
     </div>
   )
 }

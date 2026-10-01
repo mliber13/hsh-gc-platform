@@ -34,7 +34,17 @@ import { QuotePdfOptionsSection } from './QuotePdfOptionsSection'
 import { QuoteTotalsSummary } from './QuoteTotalsSummary'
 import { useDrywallQuoteCalculations } from './useDrywallQuoteState'
 
-export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
+export function QuoteStage({
+  onConverted,
+  externalUpdatedAt,
+  onProjectWritten,
+}: {
+  onConverted?: () => void
+  /** Row timestamp written by a sibling on this route; adopted so the guard stays true. */
+  externalUpdatedAt?: string | null
+  /** Reports this page writes, so the sibling adopts them too. */
+  onProjectWritten?: (updatedAtRaw: string) => void
+}) {
   const { projectId, setProjectName, setProjectStatus } =
     useOutletContext<DrywallProjectShellContext>()
   const navigate = useNavigate()
@@ -110,9 +120,22 @@ export function QuoteStage({ onConverted }: { onConverted?: () => void }) {
 
   const { calculations, totals } = useDrywallQuoteCalculations(quote ?? { version: 2 })
 
-  const advanceLoadedAt = useCallback((next: string) => {
-    setProject((prev) => (prev ? { ...prev, updatedAtRaw: next } : prev))
-  }, [])
+  // Every write on this page funnels through here, which makes it the one place to tell
+  // the sibling card that the row moved.
+  const advanceLoadedAt = useCallback(
+    (next: string) => {
+      setProject((prev) => (prev ? { ...prev, updatedAtRaw: next } : prev))
+      onProjectWritten?.(next)
+    },
+    [onProjectWritten],
+  )
+
+  // A sibling on this route (the change-order card) writes the same project row, so the
+  // timestamp this page holds can move without this page doing anything. Adopt it rather
+  // than letting the next outcome action be refused as a conflict with ourselves.
+  useEffect(() => {
+    if (externalUpdatedAt) advanceLoadedAt(externalUpdatedAt)
+  }, [externalUpdatedAt, advanceLoadedAt])
 
   const currentBidTotal = useMemo(() => {
     const finalTotal = parseFloat(String(calculations.finalTotal ?? ''))

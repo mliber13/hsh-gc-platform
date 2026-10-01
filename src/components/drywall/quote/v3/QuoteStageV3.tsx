@@ -51,9 +51,13 @@ import { QuoteV3RevertToV2Button } from './QuoteV3RevertToV2Button'
 
 type QuoteStageV3Props = {
   onRevertToV2?: () => void
+  /** Row timestamp written by a sibling on this route; adopted so the guard stays true. */
+  externalUpdatedAt?: string | null
+  /** Reports this page writes, so the sibling adopts them too. */
+  onProjectWritten?: (updatedAtRaw: string) => void
 }
 
-export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
+export function QuoteStageV3({ onRevertToV2, externalUpdatedAt, onProjectWritten }: QuoteStageV3Props) {
   const { projectId, setProjectName, setProjectStatus } =
     useOutletContext<DrywallProjectShellContext>()
   const navigate = useNavigate()
@@ -144,9 +148,22 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
     setQuote((prev) => (prev ? { ...prev, ...patch, version: 3 } : prev))
   }, [])
 
-  const advanceLoadedAt = useCallback((next: string) => {
-    setProject((prev) => (prev ? { ...prev, updatedAtRaw: next } : prev))
-  }, [])
+  // Every write on this page funnels through here, which makes it the one place to tell
+  // the sibling card that the row moved.
+  const advanceLoadedAt = useCallback(
+    (next: string) => {
+      setProject((prev) => (prev ? { ...prev, updatedAtRaw: next } : prev))
+      onProjectWritten?.(next)
+    },
+    [onProjectWritten],
+  )
+
+// A sibling on this route (the change-order card) writes the same project row, so the
+  // timestamp this page holds can move without this page doing anything. Adopt it rather
+  // than letting the next outcome action be refused as a conflict with ourselves.
+  useEffect(() => {
+    if (externalUpdatedAt) advanceLoadedAt(externalUpdatedAt)
+  }, [externalUpdatedAt, advanceLoadedAt])
 
   const totals = useMemo(() => {
     if (!quote || !catalogs) return null
