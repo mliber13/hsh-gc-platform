@@ -32,26 +32,9 @@ import type { DrywallChangeOrder, DrywallProject, DrywallQuote } from '@/types/d
 interface Props {
   projectId: string
   readOnly: boolean
-  /**
-   * Called with the new row timestamp after every write.
-   *
-   * This card and the quote stage are siblings that both write `projects.metadata`, and the
-   * guard is on the whole row. Without telling the sibling what the row moved to, saving a
-   * change order leaves the quote stage holding a stale stamp and the next outcome action —
-   * Mark approved, say — is refused as "changed somewhere else". Which it was: by the page
-   * it is standing on.
-   */
-  onProjectWritten?: (updatedAtRaw: string) => void
-  /** Row timestamp written by the quote stage; adopted so this card does not go stale. */
-  externalUpdatedAt?: string | null
 }
 
-export function ProjectChangeOrdersCard({
-  projectId,
-  readOnly,
-  onProjectWritten,
-  externalUpdatedAt,
-}: Props) {
+export function ProjectChangeOrdersCard({ projectId, readOnly }: Props) {
   const [project, setProject] = useState<DrywallProject | null>(null)
   const [changeOrders, setChangeOrders] = useState<DrywallChangeOrder[]>([])
   /** v2 shape, because that is what the change-order PDF reads. */
@@ -88,12 +71,6 @@ export function ProjectChangeOrdersCard({
     void load()
   }, [load])
 
-  // The quote stage writes the same row. Adopt its timestamp instead of letting the next
-  // change-order save be refused as a conflict with the page it is sitting on.
-  useEffect(() => {
-    if (externalUpdatedAt) updatedAtRef.current = externalUpdatedAt
-  }, [externalUpdatedAt])
-
   /**
    * Edits save immediately rather than waiting for a page-level Save button.
    *
@@ -126,14 +103,13 @@ export function ProjectChangeOrdersCard({
     chainRef.current = chainRef.current.then(async () => {
       try {
         updatedAtRef.current = await saveChangeOrders(projectId, next, updatedAtRef.current!)
-        onProjectWritten?.(updatedAtRef.current)
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Could not save the change order')
         await load()
       }
     })
     await chainRef.current
-  }, [projectId, load, onProjectWritten])
+  }, [projectId, load])
 
   const persist = (next: DrywallChangeOrder[]) => {
     setChangeOrders(next)
@@ -171,9 +147,7 @@ export function ProjectChangeOrdersCard({
 
       const after = await saveChangeOrders(projectId, changeOrders, updatedAtRef.current)
       updatedAtRef.current = after
-      onProjectWritten?.(after)
-      const afterTransition = await transitionDrywallChangeOrder(projectId, changeOrder.id, transition, after)
-      if (typeof afterTransition === 'string') onProjectWritten?.(afterTransition)
+      await transitionDrywallChangeOrder(projectId, changeOrder.id, transition, after)
       toast.success(
         transition.action === 'submit'
           ? 'Change order submitted'

@@ -118,6 +118,7 @@ const CustomerSchedulePage = lazyRoute(() => import('@/routes/CustomerSchedulePa
 import { DrywallProjectShell } from '@/components/drywall/DrywallProjectShell'
 const JobFilesPage = lazyRoute(() => import('@/components/drywall/files/JobFilesPage'), 'JobFilesPage')
 const OrderPage = lazyRoute(() => import('@/components/drywall/order/OrderPage'), 'OrderPage')
+const ChangeOrdersStagePage = lazyRoute(() => import('@/components/drywall/changeorders/ChangeOrdersStagePage'), 'ChangeOrdersStagePage')
 const JobFinancialsPage = lazyRoute(() => import('@/components/drywall/financials/JobFinancialsPage'), 'JobFinancialsPage')
 const FieldMeasurementPage = lazyRoute(() => import('@/components/drywall/field/FieldMeasurementPage'), 'FieldMeasurementPage')
 const DrywallScheduleEditor = lazyRoute(() => import('@/components/drywall/schedule/DrywallScheduleEditor'), 'DrywallScheduleEditor')
@@ -378,6 +379,7 @@ export function AppRoutes() {
             <Route path="field" element={<FieldMeasurementPage />} />
             <Route path="schedule" element={<DrywallScheduleEditor />} />
             <Route path="order" element={<OrderPage />} />
+            <Route path="change-orders" element={<ChangeOrdersStagePage />} />
             <Route path="financials" element={<JobFinancialsPage />} />
             {/* Production and Closeout merged into one money screen. Kept as redirects so
                 bookmarks and anything still linking to them keep working. */}

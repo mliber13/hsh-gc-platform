@@ -18,6 +18,10 @@ const STAGE_ROUTES: { key: DrywallStageRouteKey; path: string; label: string }[]
   { key: 'schedule', path: 'schedule', label: 'Schedule' },
   { key: 'field', path: 'field', label: DRYWALL_STATUS_LABELS['field-measurement'] },
   { key: 'order', path: 'order', label: DRYWALL_STATUS_LABELS.order },
+  // Change orders get their own stage rather than living inside the quote. Measured: all 16
+  // live change orders sit on jobs already in production, so they are a build-time activity
+  // and the quote is the wrong moment to go looking for them.
+  { key: 'change-orders', path: 'change-orders', label: 'Change Orders' },
   // Production and Closeout were near-twins — three of five tiles were the same component.
   // One money screen now, with the status on it (Mark, 2026-09-30).
   { key: 'financials', path: 'financials', label: 'Financials' },

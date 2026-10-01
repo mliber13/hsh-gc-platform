@@ -70,6 +70,7 @@ export type DrywallStageRouteKey =
   | 'schedule'
   | 'order'
   // Production and Closeout collapsed into one money screen; the old paths redirect here.
+  | 'change-orders'
   | 'financials'
   | 'files'
 
