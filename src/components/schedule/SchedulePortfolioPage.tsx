@@ -43,6 +43,8 @@ import {
   type PortfolioTypeFilter,
   type ScheduleDivision,
 } from '@/services/scheduleService'
+import { isArchivedMember } from '@/lib/hrTeamUtils'
+import { toDateKey } from '@/lib/dateFormat'
 import { fetchTeam } from '@/services/hrTeamService'
 import { isDrywallProjectClosed } from '@/types/drywall'
 import {
@@ -167,6 +169,7 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
   const [unavailability, setUnavailability] = useState<ScheduleUnavailability[]>([])
   const [timeOffOpen, setTimeOffOpen] = useState(false)
   const [personNames, setPersonNames] = useState<Map<string, string>>(new Map())
+  const [activePersonIds, setActivePersonIds] = useState<Set<string>>(() => new Set())
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => new Set())
   const [selectedPersonIds, setSelectedPersonIds] = useState<Set<string>>(() => new Set())
   const [selectedPhases, setSelectedPhases] = useState<Set<SchedulePhase>>(() => new Set())
@@ -230,6 +233,13 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
         for (const e of team.employees) names.set(e.id, e.name)
         for (const c of team.contractors1099) names.set(c.id, c.name)
         setPersonNames(names)
+        // Names cover everyone, archived included, so that an existing assignment still
+        // renders a name rather than a raw id. "Not scheduled" must not list them though —
+        // someone who left is not available, they are gone.
+        const active = new Set<string>()
+        for (const e of team.employees) if (!isArchivedMember(e)) active.add(e.id)
+        for (const c of team.contractors1099) if (!isArchivedMember(c)) active.add(c.id)
+        setActivePersonIds(active)
       })
       .catch((e) => {
         console.warn('fetchTeam for schedule filters:', e)
@@ -278,6 +288,29 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
     return byId
   }, [items])
 
+  /**
+   * Who gets scheduled at all — anyone assigned to an item in the last 12 months.
+   *
+   * Observed rather than declared, because a job title does not separate field from office
+   * here: Erik Liber is Administrative and appears on 76 schedule items, more than anyone
+   * except Shane Plats. Filtering on position would have hidden him. This rule needs no new
+   * field and cannot go stale; its only gap is a brand-new hire, who is absent until the
+   * first time they are scheduled.
+   *
+   * `items` is the whole division unbounded, so the history is already in memory.
+   */
+  const everScheduledIds = useMemo(() => {
+    const cutoff = new Date()
+    cutoff.setMonth(cutoff.getMonth() - 12)
+    const cutoffKey = toDateKey(cutoff)
+    const ids = new Set<string>()
+    for (const item of items) {
+      if ((item.endDate || item.startDate) < cutoffKey) continue
+      for (const id of item.assignedPersons) ids.add(id)
+    }
+    return ids
+  }, [items])
+
   const personOptions = useMemo(() => {
     const ids = new Set<string>()
     for (const item of itemsInRange) {
@@ -287,6 +320,23 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
       .map((id) => ({ id, name: personNames.get(id) ?? id }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [itemsInRange, personNames])
+
+  /**
+   * Crew with nothing in the visible range.
+   *
+   * The filter list used to be built only from people assigned within the range, so someone
+   * with a quiet month vanished from it — Mark, 2026-10-01, missing Chuck Koons. That is
+   * backwards: a month view is largely for seeing who is free, and absence was being hidden
+   * by omission. They are listed separately rather than mixed in, so the common case stays
+   * short.
+   */
+  const unscheduledPersonOptions = useMemo(() => {
+    const inRange = new Set(personOptions.map((p) => p.id))
+    return [...everScheduledIds]
+      .filter((id) => !inRange.has(id) && activePersonIds.has(id))
+      .map((id) => ({ id, name: personNames.get(id) ?? id }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [everScheduledIds, personOptions, personNames, activePersonIds])
 
   const phaseOptions = useMemo(() => {
     const phases = new Set<SchedulePhase>()
@@ -673,7 +723,7 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
               </div>
             </section>
 
-            {(legendProjects.length > 0 || personOptions.length > 0 || phaseOptions.length > 0) && (
+            {(legendProjects.length > 0 || (personOptions.length > 0 || unscheduledPersonOptions.length > 0) || phaseOptions.length > 0) && (
               <div className="divide-y rounded-lg border">
                 {legendProjects.length > 0 && (
                   <div>
@@ -733,7 +783,7 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
                   </div>
                 )}
 
-                {personOptions.length > 0 && (
+                {(personOptions.length > 0 || unscheduledPersonOptions.length > 0) && (
                   <div>
                     <button
                       type="button"
@@ -778,6 +828,26 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
                             </button>
                           )
                         })}
+
+                        {/* Crew with nothing in this range. Listed, not hidden: the reason to
+                            open a month view is often to find who is free, and leaving them
+                            out answered that question by silence. Not selectable — filtering
+                            to someone with no items would empty the board. */}
+                        {unscheduledPersonOptions.length > 0 && (
+                          <>
+                            <p className="border-t px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground">
+                              Nothing scheduled this range
+                            </p>
+                            {unscheduledPersonOptions.map((person) => (
+                              <p
+                                key={person.id}
+                                className="truncate px-3 py-1.5 text-sm text-muted-foreground"
+                              >
+                                {person.name}
+                              </p>
+                            ))}
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
