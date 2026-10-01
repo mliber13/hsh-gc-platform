@@ -1105,7 +1105,7 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
             </Popover>
           )}
 
-          {personOptions.length > 0 && (
+          {(personOptions.length > 0 || unscheduledPersonOptions.length > 0) && (
             <Popover>
               <PopoverTrigger asChild>
                 <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs">
@@ -1156,6 +1156,26 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
                       </button>
                     )
                   })}
+
+                  {/* Same list as the sidebar filter: crew with nothing in this range are
+                      shown rather than omitted, because a month view is largely for finding
+                      who is free. Not selectable — filtering to someone with no items would
+                      empty the board. */}
+                  {unscheduledPersonOptions.length > 0 && (
+                    <>
+                      <p className="mt-1 border-t pt-2 text-[11px] font-medium text-muted-foreground">
+                        Nothing scheduled this range
+                      </p>
+                      {unscheduledPersonOptions.map((person) => (
+                        <p
+                          key={person.id}
+                          className="px-2.5 py-0.5 text-xs text-muted-foreground/70"
+                        >
+                          {person.name}
+                        </p>
+                      ))}
+                    </>
+                  )}
                 </div>
               </PopoverContent>
             </Popover>
