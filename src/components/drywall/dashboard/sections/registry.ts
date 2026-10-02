@@ -11,6 +11,21 @@ import { ManpowerSection } from './ManpowerSection'
 import { ProductionCapacitySection } from './ProductionCapacitySection'
 import { ProjectedBillingsSection } from './ProjectedBillingsSection'
 import { RevenuePaceSection } from './RevenuePaceSection'
+import type { SectionSummaryProps } from '../ui/KpiTile'
+import {
+  AlertsSummary,
+  BacklogSummary,
+  DivisionExecutionSummary,
+  EstimatingAccuracySummary,
+  EstimatingSummary,
+  FinancialsSummary,
+  LaborPerformanceSummary,
+  ManpowerSummary,
+  ProductionCapacitySummary,
+  ProjectedBillingsSummary,
+  RevenuePaceSummary,
+  TakeoffAccuracySummary,
+} from './summaries'
 
 export type DashboardSectionGroup = 'alerts' | 'sales' | 'capacity' | 'execution' | 'financials'
 export type DashboardSectionSpan = 'compact' | 'wide' | 'full'
@@ -22,6 +37,11 @@ export interface DashboardSectionDef {
   group: DashboardSectionGroup
   span: DashboardSectionSpan
   component: ComponentType
+  /**
+   * The one-glance form shown in the hub grid and the chip strip. Required, so a new
+   * section cannot be added that the overview has no way to represent.
+   */
+  summary: ComponentType<SectionSummaryProps>
   /** When false, the card sizes to its content instead of stretching to match
    *  taller cards in the same row (for lightweight summary cards). Default true. */
   stretch?: boolean
@@ -61,6 +81,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'alerts',
     span: 'full',
     component: AlertsSection,
+    summary: AlertsSummary,
   },
   {
     id: 'revenue-pace',
@@ -69,6 +90,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'sales',
     span: 'compact',
     component: RevenuePaceSection,
+    summary: RevenuePaceSummary,
   },
   {
     id: 'estimating',
@@ -78,6 +100,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     span: 'wide',
     stretch: false,
     component: EstimatingSection,
+    summary: EstimatingSummary,
   },
   {
     id: 'production-capacity',
@@ -86,6 +109,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'capacity',
     span: 'compact',
     component: ProductionCapacitySection,
+    summary: ProductionCapacitySummary,
   },
   {
     id: 'manpower',
@@ -94,6 +118,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'capacity',
     span: 'compact',
     component: ManpowerSection,
+    summary: ManpowerSummary,
   },
   {
     id: 'backlog',
@@ -102,6 +127,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'capacity',
     span: 'compact',
     component: BacklogSection,
+    summary: BacklogSummary,
   },
   {
     id: 'division-execution',
@@ -110,6 +136,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'execution',
     span: 'full',
     component: DivisionMarginSection,
+    summary: DivisionExecutionSummary,
   },
   {
     id: 'labor-performance',
@@ -118,6 +145,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'execution',
     span: 'full',
     component: LaborPerformanceSection,
+    summary: LaborPerformanceSummary,
   },
   {
     id: 'estimating-accuracy',
@@ -126,6 +154,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'execution',
     span: 'full',
     component: EstimatingAccuracySection,
+    summary: EstimatingAccuracySummary,
   },
   // Sits directly after Estimating Accuracy because it is the first thing to check when that
   // one goes red: a material overrun on a job that measured bigger than it was quoted is a
@@ -137,6 +166,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'execution',
     span: 'full',
     component: TakeoffAccuracySection,
+    summary: TakeoffAccuracySummary,
   },
   {
     id: 'financials',
@@ -145,6 +175,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'financials',
     span: 'full',
     component: FinancialsSection,
+    summary: FinancialsSummary,
   },
   {
     id: 'projected-billings',
@@ -153,6 +184,7 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'financials',
     span: 'full',
     component: ProjectedBillingsSection,
+    summary: ProjectedBillingsSummary,
   },
 ]
 
@@ -160,4 +192,15 @@ export function sectionsForGroup(group: DashboardSectionGroup): DashboardSection
   return DASHBOARD_SECTIONS.filter((section) => section.group === group).sort(
     (a, b) => a.order - b.order,
   )
+}
+
+/** Resolve a :sectionId route param. Returns undefined for an unknown id so the hub can fall back to the overview. */
+export function sectionById(id: string | undefined): DashboardSectionDef | undefined {
+  if (!id) return undefined
+  return DASHBOARD_SECTIONS.find((section) => section.id === id)
+}
+
+/** Every section in group order then section order — the order the chip strip reads in. */
+export function allSectionsInOrder(): DashboardSectionDef[] {
+  return DASHBOARD_GROUP_ORDER.flatMap((group) => sectionsForGroup(group))
 }

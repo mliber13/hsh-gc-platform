@@ -20,6 +20,19 @@ function formatEfficiency(pct: number | null): string {
   return `${pct.toFixed(1)}%`
 }
 
+/**
+ * The overall labour figure and the tile both need this ladder, so it lives here once rather
+ * than being re-typed in the summary. 100% means actual came in at estimate.
+ */
+export function overallEfficiencyPillStatus(
+  overallEfficiencyPct: number | null,
+): 'green' | 'yellow' | 'red' | null {
+  if (overallEfficiencyPct == null) return null
+  if (overallEfficiencyPct >= 100) return 'green'
+  if (overallEfficiencyPct >= 90) return 'yellow'
+  return 'red'
+}
+
 function efficiencyPillStatus(
   color: LaborPerformanceTradeRow['efficiencyColor'],
 ): 'green' | 'yellow' | 'red' | null {
@@ -49,15 +62,7 @@ export function LaborPerformanceSection() {
   }
 
   const hasData = jobCount > 0 && (totalEstLabor > 0 || totalActualLabor > 0)
-  const overallPill = efficiencyPillStatus(
-    overallEfficiencyPct == null
-      ? 'neutral'
-      : overallEfficiencyPct >= 100
-        ? 'green'
-        : overallEfficiencyPct >= 90
-          ? 'yellow'
-          : 'red',
-  )
+  const overallPill = overallEfficiencyPillStatus(overallEfficiencyPct)
 
   return (
     <KpiCard

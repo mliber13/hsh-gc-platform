@@ -333,8 +333,15 @@ export function AppRoutes() {
               </RequireWorkspaceAccess>
             }
           />
+          {/*
+            ONE route with an optional segment, deliberately not two routes sharing an
+            element. Two sibling routes unmount and remount on every open and close, which
+            would tear down DashboardPage's data providers and refetch every candidate
+            project's metadata on each tile click. One matching route keeps the element —
+            and its loaded data — mounted while the param changes.
+          */}
           <Route
-            path="/drywall/dashboard"
+            path="/drywall/dashboard/:sectionId?"
             element={
               <RequireWorkspaceAccess workspace="drywall">
                 <DashboardPage />

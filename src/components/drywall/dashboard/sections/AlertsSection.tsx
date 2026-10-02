@@ -21,7 +21,7 @@ const SEVERITY_ICON: Record<
   info: Info,
 }
 
-function headerStatus(criticalCount: number, warningCount: number): KpiStatus {
+export function alertsHeaderStatus(criticalCount: number, warningCount: number): KpiStatus {
   if (criticalCount > 0) return 'red'
   if (warningCount > 0) return 'yellow'
   return 'green'
@@ -88,7 +88,7 @@ export function AlertsSection() {
             {criticalCount} critical
           </span>
         ) : (
-          <StatusPill status={headerStatus(criticalCount, warningCount)} />
+          <StatusPill status={alertsHeaderStatus(criticalCount, warningCount)} />
         )
       }
     >

@@ -25,7 +25,7 @@ const MARGIN_COLOR_CLASS: Record<DivisionMarginJob['marginColor'], string> = {
   neutral: 'text-muted-foreground',
 }
 
-function marginPillStatus(
+export function marginPillStatus(
   color: DivisionMarginJob['marginColor'],
 ): 'green' | 'yellow' | 'red' | null {
   if (color === 'neutral') return null
