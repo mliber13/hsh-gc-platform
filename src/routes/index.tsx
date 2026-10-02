@@ -129,6 +129,7 @@ const QuoteStageRoute = lazyRoute(() => import('@/components/drywall/quote/Quote
 const CatalogsPage = lazyRoute(() => import('@/components/drywall/settings/CatalogsPage'), 'CatalogsPage')
 const DrywallQuickBooksPage = lazyRoute(() => import('@/components/drywall/settings/DrywallQuickBooksPage'), 'DrywallQuickBooksPage')
 const ProjectInfoPage = lazyRoute(() => import('@/components/drywall/info/ProjectInfoPage'), 'ProjectInfoPage')
+const ProjectOverviewPage = lazyRoute(() => import('@/components/drywall/overview/ProjectOverviewPage'), 'ProjectOverviewPage')
 import { usePageTitle } from '@/contexts/PageTitleContext'
 import { getCurrentWeekOf } from '@/services/meetingService'
 const CrewSignupPage = lazyRoute(() => import('@/routes/CrewSignupPage'), 'CrewSignupPage')
@@ -380,7 +381,7 @@ export function AppRoutes() {
               </RequireWorkspaceAccess>
             }
           >
-            <Route index element={<DrywallProjectIndexRedirect />} />
+            <Route index element={<ProjectOverviewPage />} />
             <Route path="info" element={<ProjectInfoPage />} />
             <Route path="quote" element={<QuoteStageRoute />} />
             <Route path="field" element={<FieldMeasurementPage />} />
@@ -1075,12 +1076,6 @@ function MeetingsListRoute() {
 
 function MeetingAdminRoute() {
   return <MeetingAdmin />
-}
-
-function DrywallProjectIndexRedirect() {
-  const { projectId } = useParams<{ projectId: string }>()
-  if (!projectId) return <Navigate to="/drywall" replace />
-  return <Navigate to={`/drywall/projects/${projectId}/info`} replace />
 }
 
 function MeetingRedirectRoute() {

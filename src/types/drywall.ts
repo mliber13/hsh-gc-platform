@@ -64,6 +64,7 @@ export const DRYWALL_LIST_STATUS_FILTER_OPTIONS: {
 ]
 
 export type DrywallStageRouteKey =
+  | 'overview'
   | 'info'
   | 'quote'
   | 'field'

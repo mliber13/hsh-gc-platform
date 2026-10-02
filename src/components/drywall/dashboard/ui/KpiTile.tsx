@@ -28,15 +28,16 @@ export interface SectionSummaryProps {
   to: string
 }
 
-type Props = SectionSummaryProps & {
-  title: string
-  /** The headline figure. Null renders an em dash rather than a blank tile. */
-  value: string | null
-  /** What the figure is of — "of monthly goal", "run heavy". Omitted on chips. */
-  caption?: string
-  status?: KpiStatus | null
-  loading?: boolean
-}
+type Props = Partial<SectionSummaryProps> &
+  Pick<SectionSummaryProps, 'to'> & {
+    title: string
+    /** The headline figure. Null renders an em dash rather than a blank tile. */
+    value: string | null
+    /** What the figure is of — "of monthly goal", "run heavy". Omitted on chips. */
+    caption?: string
+    status?: KpiStatus | null
+    loading?: boolean
+  }
 
 const VALUE_COLOR: Record<KpiStatus, string> = {
   green: 'text-emerald-600 dark:text-emerald-400',
@@ -49,8 +50,10 @@ function valueClass(status: KpiStatus | null | undefined): string {
 }
 
 export function KpiTile({
-  variant,
-  active,
+  // Optional so callers outside the hub — the project Overview — can pass just a link and a
+  // figure without restating that they want the ordinary tile shape.
+  variant = 'tile',
+  active = false,
   to,
   title,
   value,

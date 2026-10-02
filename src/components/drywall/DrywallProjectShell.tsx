@@ -13,6 +13,10 @@ import {
 import { fetchDrywallProjectById } from '@/services/drywallProjectsService'
 
 const STAGE_ROUTES: { key: DrywallStageRouteKey; path: string; label: string }[] = [
+  // The landing. Every stage already had its own route and rendered one at a time, so what
+  // the project page lacked was not navigation but a view of where the job stands without
+  // clicking seven tabs to find out (Mark, 2026-10-02).
+  { key: 'overview', path: '', label: 'Overview' },
   { key: 'info', path: 'info', label: DRYWALL_STATUS_LABELS['project-info'] },
   { key: 'quote', path: 'quote', label: DRYWALL_STATUS_LABELS.quote },
   { key: 'schedule', path: 'schedule', label: 'Schedule' },
@@ -50,8 +54,10 @@ export function DrywallProjectShell() {
   const [projectName, setProjectName] = useState<string>('Drywall Project')
   const [projectAddress, setProjectAddress] = useState<string>('')
   const [projectStatus, setProjectStatus] = useState<string>('project-info')
+  const [projectLegacy, setProjectLegacy] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
   const [wideContent, setWideContent] = useState(false)
+  const [reloadToken, setReloadToken] = useState(0)
 
   usePageTitle(projectName ? `Drywall — ${projectName}` : 'Drywall Project')
 
@@ -66,6 +72,10 @@ export function DrywallProjectShell() {
           setProjectName(project.name)
           setProjectAddress(project.address ?? '')
           setProjectStatus(normalizeDrywallProjectStatus(project.status))
+          // The shell already paid for the whole row to read three fields. Handing the blob
+          // down lets the Overview derive every stage summary from this one read instead of
+          // fetching the same project again per tile.
+          setProjectLegacy(project.legacy ?? {})
         } else {
           navigate('/drywall', { replace: true })
         }
@@ -79,7 +89,7 @@ export function DrywallProjectShell() {
     return () => {
       cancelled = true
     }
-  }, [projectId, navigate])
+  }, [projectId, navigate, reloadToken])
 
   if (!projectId) {
     return null
@@ -139,7 +149,12 @@ export function DrywallProjectShell() {
         {STAGE_ROUTES.map((stage) => (
           <NavLink
             key={stage.key}
-            to={`/drywall/projects/${projectId}/${stage.path}`}
+            to={
+              stage.path
+                ? `/drywall/projects/${projectId}/${stage.path}`
+                : `/drywall/projects/${projectId}`
+            }
+            end={stage.path === ''}
             className={({ isActive }) =>
               cn(
                 'rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
@@ -160,6 +175,8 @@ export function DrywallProjectShell() {
           projectName,
           projectAddress,
           projectStatus,
+          projectLegacy,
+          reloadProject: () => setReloadToken((n) => n + 1),
           setProjectName,
           setProjectStatus,
           setWideContent,
@@ -174,6 +191,19 @@ export type DrywallProjectShellContext = {
   projectName: string
   projectAddress: string
   projectStatus: string
+  /**
+   * The project's `metadata.legacy` from the shell's own read — **for display only.**
+   *
+   * Deliberately published WITHOUT the row's `updated_at`. Every blob write is guarded on a
+   * page-held timestamp, and a shell-level one would go stale the moment any stage saved,
+   * so a writer reaching for it would either false-conflict or, worse, overwrite. Stages
+   * that write still load the project themselves and own their own timestamp.
+   *
+   * Null until the first read lands.
+   */
+  projectLegacy: Record<string, unknown> | null
+  /** Re-read the project, for a surface that only reads and wants to see a stage's save. */
+  reloadProject: () => void
   setProjectName: (name: string) => void
   setProjectStatus: (status: string) => void
   setWideContent?: (wide: boolean) => void
