@@ -10,7 +10,10 @@ import {
   computeLaborEfficiencyPct,
   estimatingAccuracyColor,
   laborEfficiencyColor,
+  aggregateTakeoffAccuracy,
   scopeEstimatingAccuracyJobs,
+  scopeTakeoffAccuracyJobs,
+  TAKEOFF_ACCURACY_MIN_SQFT,
   sortDivisionJobsWorstMarginFirst,
 } from '@/services/drywallDivisionAggregateService'
 import type { BidSnapshot } from '@/types/drywall'
@@ -499,5 +502,185 @@ describe('aggregateEstimatingAccuracy', () => {
     expect(estimatingAccuracyColor(0.12)).toBe('yellow')
     expect(estimatingAccuracyColor(0.03)).toBe('green')
     expect(estimatingAccuracyColor(-0.2)).toBe('red')
+  })
+})
+
+describe('aggregateTakeoffAccuracy', () => {
+  const now = new Date('2026-10-02T12:00:00.000Z')
+
+  function measuredJob(overrides: {
+    projectId: string
+    quotedSqft: number
+    measuredSqft: number
+    measuredAt?: string | null
+  }): DivisionExecutionJob {
+    return buildDivisionExecutionJob({
+      projectId: overrides.projectId,
+      projectName: overrides.projectId,
+      status: 'production',
+      bidSnapshot: bidSnapshot(10_000),
+      laborEntries: [],
+      materialEntries: [],
+      subEntries: [],
+      quotedSqft: overrides.quotedSqft,
+      measuredSqft: overrides.measuredSqft,
+      measuredAt:
+        overrides.measuredAt === undefined ? '2026-09-15T00:00:00.000Z' : overrides.measuredAt,
+    })
+  }
+
+  it('carries quoted and measured sqft through buildDivisionExecutionJob', () => {
+    const job = measuredJob({ projectId: 'p1', quotedSqft: 10_000, measuredSqft: 9_000 })
+    expect(job.quotedSqft).toBe(10_000)
+    expect(job.measuredSqft).toBe(9_000)
+    expect(job.measuredAt).toBe('2026-09-15T00:00:00.000Z')
+  })
+
+  it('defaults the sqft fields to zero when a caller does not supply them', () => {
+    const job = buildDivisionExecutionJob({
+      projectId: 'p1',
+      projectName: 'p1',
+      status: 'production',
+      bidSnapshot: bidSnapshot(10_000),
+      laborEntries: [],
+      materialEntries: [],
+      subEntries: [],
+    })
+    expect(job.quotedSqft).toBe(0)
+    expect(job.measuredSqft).toBe(0)
+    expect(job.measuredAt).toBeNull()
+  })
+
+  // The exclusion that matters most: six live jobs measure the quoted sqft exactly, because
+  // the quote was written FROM the takeoff. Scoring those as perfect flatters the estimate
+  // with its own answer, so they are not judgeable at all.
+  it('drops jobs whose measured sqft equals the quote exactly', () => {
+    const scoped = scopeTakeoffAccuracyJobs(
+      [
+        measuredJob({ projectId: 'tie', quotedSqft: 4_049, measuredSqft: 4_049 }),
+        measuredJob({ projectId: 'real', quotedSqft: 4_049, measuredSqft: 3_900 }),
+      ],
+      now,
+    )
+    expect(scoped.map((j) => j.projectId)).toEqual(['real'])
+  })
+
+  it('drops jobs below the sqft floor, where a sheet or two swings the percentage', () => {
+    const scoped = scopeTakeoffAccuracyJobs(
+      [
+        // The live outlier: quoted 39 sqft, measured 144. Not a 269% estimating error.
+        measuredJob({ projectId: 'patch', quotedSqft: 39, measuredSqft: 144 }),
+        measuredJob({
+          projectId: 'floor',
+          quotedSqft: TAKEOFF_ACCURACY_MIN_SQFT,
+          measuredSqft: 400,
+        }),
+      ],
+      now,
+    )
+    expect(scoped.map((j) => j.projectId)).toEqual(['floor'])
+  })
+
+  it('drops unmeasured jobs and measurements older than 12 months', () => {
+    const scoped = scopeTakeoffAccuracyJobs(
+      [
+        measuredJob({ projectId: 'unmeasured', quotedSqft: 10_000, measuredSqft: 0 }),
+        measuredJob({ projectId: 'unquoted', quotedSqft: 0, measuredSqft: 9_000 }),
+        measuredJob({
+          projectId: 'stale',
+          quotedSqft: 10_000,
+          measuredSqft: 9_000,
+          measuredAt: '2024-01-01T00:00:00.000Z',
+        }),
+        measuredJob({
+          projectId: 'undated',
+          quotedSqft: 10_000,
+          measuredSqft: 9_000,
+          measuredAt: null,
+        }),
+        measuredJob({ projectId: 'ok', quotedSqft: 10_000, measuredSqft: 9_000 }),
+      ],
+      now,
+    )
+    expect(scoped.map((j) => j.projectId)).toEqual(['ok'])
+  })
+
+  it('reports a weighted and a median figure, and they can disagree', () => {
+    // Shaped like the live data: one big job measured in part drags the weighted number
+    // well past where the typical job sits. This is exactly why the card headlines median.
+    const accuracy = aggregateTakeoffAccuracy(
+      [
+        measuredJob({ projectId: 'partial', quotedSqft: 20_000, measuredSqft: 8_000 }),
+        measuredJob({ projectId: 'a', quotedSqft: 1_000, measuredSqft: 980 }),
+        measuredJob({ projectId: 'b', quotedSqft: 1_000, measuredSqft: 990 }),
+      ],
+      now,
+    )
+
+    expect(accuracy.jobCount).toBe(3)
+    expect(accuracy.totalQuotedSqft).toBe(22_000)
+    expect(accuracy.totalMeasuredSqft).toBe(9_970)
+    expect(accuracy.overallVariancePct).toBeCloseTo((9_970 - 22_000) / 22_000, 5)
+    // Median is the middle job (-2%), nowhere near the weighted -54.7%.
+    expect(accuracy.medianVariancePct).toBeCloseTo(-0.02, 5)
+    expect(accuracy.underCount).toBe(3)
+    expect(accuracy.overCount).toBe(0)
+  })
+
+  it('averages the median across two middle jobs on an even count', () => {
+    const accuracy = aggregateTakeoffAccuracy(
+      [
+        measuredJob({ projectId: 'a', quotedSqft: 1_000, measuredSqft: 900 }),
+        measuredJob({ projectId: 'b', quotedSqft: 1_000, measuredSqft: 1_100 }),
+      ],
+      now,
+    )
+    expect(accuracy.medianVariancePct).toBeCloseTo(0, 5)
+  })
+
+  it('buckets by the month measured and ranks the furthest off first', () => {
+    const accuracy = aggregateTakeoffAccuracy(
+      [
+        measuredJob({
+          projectId: 'sept',
+          quotedSqft: 10_000,
+          measuredSqft: 9_000,
+          measuredAt: '2026-09-15T00:00:00.000Z',
+        }),
+        measuredJob({
+          projectId: 'aug',
+          quotedSqft: 10_000,
+          measuredSqft: 13_000,
+          measuredAt: '2026-08-15T00:00:00.000Z',
+        }),
+      ],
+      now,
+    )
+
+    expect(accuracy.byMonth).toHaveLength(12)
+    const sept = accuracy.byMonth.find((m) => m.month === '2026-09')!
+    expect(sept.jobCount).toBe(1)
+    expect(sept.variancePct).toBeCloseTo(-0.1, 5)
+
+    const aug = accuracy.byMonth.find((m) => m.month === '2026-08')!
+    expect(aug.jobCount).toBe(1)
+    expect(aug.variancePct).toBeCloseTo(0.3, 5)
+
+    expect(accuracy.mostOff[0].projectId).toBe('aug')
+    expect(accuracy.overCount).toBe(1)
+    expect(accuracy.underCount).toBe(1)
+  })
+
+  it('returns an empty twelve-month shape when nothing is judgeable', () => {
+    const accuracy = aggregateTakeoffAccuracy(
+      [measuredJob({ projectId: 'tie', quotedSqft: 4_049, measuredSqft: 4_049 })],
+      now,
+    )
+    expect(accuracy.jobCount).toBe(0)
+    expect(accuracy.overallVariancePct).toBeNull()
+    expect(accuracy.medianVariancePct).toBeNull()
+    expect(accuracy.mostOff).toEqual([])
+    expect(accuracy.byMonth).toHaveLength(12)
+    expect(accuracy.byMonth.every((m) => m.variancePct === null)).toBe(true)
   })
 })

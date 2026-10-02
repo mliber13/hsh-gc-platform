@@ -3,6 +3,7 @@ import { AlertsSection } from './AlertsSection'
 import { BacklogSection } from './BacklogSection'
 import { DivisionMarginSection } from './DivisionMarginSection'
 import { EstimatingAccuracySection } from './EstimatingAccuracySection'
+import { TakeoffAccuracySection } from './TakeoffAccuracySection'
 import { FinancialsSection } from './FinancialsSection'
 import { LaborPerformanceSection } from './LaborPerformanceSection'
 import { EstimatingSection } from './EstimatingSection'
@@ -125,6 +126,17 @@ export const DASHBOARD_SECTIONS: DashboardSectionDef[] = [
     group: 'execution',
     span: 'full',
     component: EstimatingAccuracySection,
+  },
+  // Sits directly after Estimating Accuracy because it is the first thing to check when that
+  // one goes red: a material overrun on a job that measured bigger than it was quoted is a
+  // takeoff problem, not a buying problem.
+  {
+    id: 'takeoff-accuracy',
+    title: 'Takeoff Accuracy',
+    order: 4,
+    group: 'execution',
+    span: 'full',
+    component: TakeoffAccuracySection,
   },
   {
     id: 'financials',

@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import {
   aggregateDivisionLaborPerformance,
   aggregateEstimatingAccuracy,
+  aggregateTakeoffAccuracy,
   buildDivisionExecutionRollUp,
   fetchDivisionExecution,
   type DivisionExecution,
@@ -10,6 +11,7 @@ import {
   type DivisionExecutionRollUp,
   type DivisionLaborPerformance,
   type EstimatingAccuracy,
+  type TakeoffAccuracy,
 } from '@/services/drywallDivisionAggregateService'
 
 export interface DivisionExecutionState {
@@ -17,6 +19,7 @@ export interface DivisionExecutionState {
   marginRollUp: DivisionExecutionRollUp
   laborPerformance: DivisionLaborPerformance
   accuracy: EstimatingAccuracy
+  takeoffAccuracy: TakeoffAccuracy
   loading: boolean
   error: string | null
   refresh: () => void
@@ -74,17 +77,35 @@ export function DivisionExecutionProvider({ children }: { children: React.ReactN
     [execution.jobs, execution.computedAt],
   )
 
+  // Quoted sqft vs field-measured sqft — upstream of `accuracy`, and part of what explains
+  // it: a material overrun on a job that measured 10% bigger than it was quoted is
+  // arithmetic rather than a buying problem.
+  const takeoffAccuracy = useMemo(
+    () => aggregateTakeoffAccuracy(execution.jobs, new Date(execution.computedAt)),
+    [execution.jobs, execution.computedAt],
+  )
+
   const value: DivisionExecutionState = useMemo(
     () => ({
       jobs: execution.jobs,
       marginRollUp,
       laborPerformance,
       accuracy,
+      takeoffAccuracy,
       loading,
       error,
       refresh: () => void load(),
     }),
-    [execution.jobs, marginRollUp, laborPerformance, accuracy, loading, error, load],
+    [
+      execution.jobs,
+      marginRollUp,
+      laborPerformance,
+      accuracy,
+      takeoffAccuracy,
+      loading,
+      error,
+      load,
+    ],
   )
 
   return (

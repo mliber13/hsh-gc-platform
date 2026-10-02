@@ -14,6 +14,7 @@ import {
   computeEstimatedMaterial,
   emptyEstimatedMaterialBreakdown,
 } from '@/lib/drywall/estimatedMaterial'
+import { computeMeasuredSqft, quotedSqftWithWaste } from '@/lib/drywall/fieldMeasurementUtils'
 import type { DrywallLaborCategory } from '@/lib/drywall/payrollPieceKeys'
 import {
   combineProjectCost,
@@ -34,6 +35,7 @@ import type {
   BidSnapshot,
   DrywallProjectStatus,
   DrywallQuoteV2V3,
+  FieldMeasurementArea,
   ProductionTimestamps,
 } from '@/types/drywall'
 import { isDrywallQuoteV3, normalizeDrywallProjectStatus } from '@/types/drywall'
@@ -93,6 +95,12 @@ export interface DivisionExecutionJob {
   marginUsd: number | null
   marginPct: number | null
   marginColor: MarginVsBidResult['marginColor']
+  /** Quoted sqft WITH waste — the same basis FieldVarianceSummary compares on screen. */
+  quotedSqft: number
+  /** Field-measured sqft, 0 when the job has not been measured. */
+  measuredSqft: number
+  /** When the takeoff was last saved; the date the variance became known. */
+  measuredAt: string | null
 }
 
 /** Margin roll-up job shape — alias of execution job fields used by margin UI. */
@@ -431,6 +439,174 @@ function monthKeyFromIso(iso: string): string | null {
   return `${d.getFullYear()}-${month}`
 }
 
+/** Field-measured sqft off the stored takeoff, 0 when the job has not been measured. */
+function measuredSqftFromLegacy(legacy: Record<string, unknown>): number {
+  const takeoff = legacy.fieldTakeoff
+  if (!takeoff || typeof takeoff !== 'object' || Array.isArray(takeoff)) return 0
+  const t = takeoff as Record<string, unknown>
+  const stored = Number(t.totalMeasuredSqft)
+  if (Number.isFinite(stored) && stored > 0) return stored
+  // Older takeoffs predate the stored total; recompute the way the page does.
+  return computeMeasuredSqft(
+    (Array.isArray(t.measurements) ? t.measurements : []) as FieldMeasurementArea[],
+  )
+}
+
+/** When the takeoff was last saved — the date the variance became knowable. */
+function takeoffUpdatedAt(legacy: Record<string, unknown>): string | null {
+  const takeoff = legacy.fieldTakeoff
+  if (!takeoff || typeof takeoff !== 'object' || Array.isArray(takeoff)) return null
+  const raw = (takeoff as Record<string, unknown>).updatedAt
+  return typeof raw === 'string' && raw.trim() ? raw : null
+}
+
+export interface TakeoffAccuracyJob {
+  projectId: string
+  projectName: string
+  quotedSqft: number
+  measuredSqft: number
+  variancePct: number
+}
+
+export interface TakeoffAccuracy {
+  /** Weighted: total measured vs total quoted, so big jobs count for more. */
+  overallVariancePct: number | null
+  /**
+   * The middle job. Reported alongside the weighted figure and not instead of it, because
+   * one half-finished measurement on a big job moves the weighted number a long way — a
+   * single 20k sqft job measured in part accounts for a fifth of the division-wide gap.
+   */
+  medianVariancePct: number | null
+  jobCount: number
+  totalQuotedSqft: number
+  totalMeasuredSqft: number
+  overCount: number
+  underCount: number
+  byMonth: Array<{ month: string; variancePct: number | null; jobCount: number }>
+  mostOff: TakeoffAccuracyJob[]
+}
+
+/**
+ * Jobs too small to read a percentage off. A patch job quoted at 39 sqft that measures 144
+ * is not a 269% estimating error, it is two sheets — but it would dominate any average.
+ */
+export const TAKEOFF_ACCURACY_MIN_SQFT = 500
+
+/**
+ * Jobs where the takeoff can be judged: quoted AND measured, measured within 12 months.
+ *
+ * Deliberately NOT scoped to completed jobs, unlike estimating accuracy. A takeoff variance
+ * is final the moment the measure lands — waiting for the job to finish would delay the
+ * signal by months and hide everything currently in production.
+ *
+ * Two exclusions, both learned from the live data rather than guessed:
+ *
+ *  1. **Exact ties.** Six jobs measure the quoted sqft to the square foot, which is not
+ *     accuracy — it is the quote having been written FROM the takeoff. 3443 W. 136th St is
+ *     the giveaway: its drywall line reads 4,049, exactly the measured total, while the
+ *     quote's own `sqft` field still says 2,227. Scoring those as perfect flatters the
+ *     estimate with its own answer.
+ *  2. **Jobs under TAKEOFF_ACCURACY_MIN_SQFT**, per the constant above.
+ *
+ * Both rules are stated on screen, because a filtered denominator the reader cannot see is
+ * how a dashboard starts lying.
+ */
+export function scopeTakeoffAccuracyJobs(
+  jobs: DivisionExecutionJob[],
+  now = new Date(),
+): DivisionExecutionJob[] {
+  const cutoff = new Date(now.getFullYear(), now.getMonth() - 11, 1).getTime()
+  return jobs.filter((job) => {
+    if (job.quotedSqft < TAKEOFF_ACCURACY_MIN_SQFT || job.measuredSqft <= 0) return false
+    // Equal to the square foot — the quote was written from this takeoff.
+    if (Math.abs(job.measuredSqft - job.quotedSqft) < 1) return false
+    const when = job.measuredAt ?? job.completedAt
+    if (!when) return false
+    const ms = Date.parse(when)
+    return Number.isFinite(ms) && ms >= cutoff
+  })
+}
+
+/**
+ * Do the takeoffs run high or low?
+ *
+ * This sits upstream of estimating accuracy and explains part of it: if a job quotes 10,000
+ * sqft and measures 12,000, the material overrun is arithmetic rather than a buying problem.
+ * Separating the two says whether a miss came from the TAKEOFF or from the PURCHASE.
+ *
+ * Both a weighted and a median figure, because they answer different questions and on this
+ * data they disagree — the weighted number is dominated by a few large jobs while the median
+ * describes the typical one.
+ */
+export function aggregateTakeoffAccuracy(
+  jobs: DivisionExecutionJob[],
+  now = new Date(),
+): TakeoffAccuracy {
+  const scoped = scopeTakeoffAccuracyJobs(jobs, now)
+  const monthKeys = last12MonthKeys(now)
+
+  if (scoped.length === 0) {
+    return {
+      overallVariancePct: null,
+      medianVariancePct: null,
+      jobCount: 0,
+      totalQuotedSqft: 0,
+      totalMeasuredSqft: 0,
+      overCount: 0,
+      underCount: 0,
+      byMonth: monthKeys.map((month) => ({ month, variancePct: null, jobCount: 0 })),
+      mostOff: [],
+    }
+  }
+
+  const rows: TakeoffAccuracyJob[] = scoped.map((job) => ({
+    projectId: job.projectId,
+    projectName: job.projectName,
+    quotedSqft: job.quotedSqft,
+    measuredSqft: job.measuredSqft,
+    variancePct: (job.measuredSqft - job.quotedSqft) / job.quotedSqft,
+  }))
+
+  const totalQuotedSqft = rows.reduce((s, r) => s + r.quotedSqft, 0)
+  const totalMeasuredSqft = rows.reduce((s, r) => s + r.measuredSqft, 0)
+  const sortedPcts = rows.map((r) => r.variancePct).sort((a, b) => a - b)
+  const mid = Math.floor(sortedPcts.length / 2)
+  const medianVariancePct =
+    sortedPcts.length % 2 === 1
+      ? sortedPcts[mid]
+      : (sortedPcts[mid - 1] + sortedPcts[mid]) / 2
+
+  const byMonth = monthKeys.map((month) => {
+    const monthJobs = scoped.filter((job) => {
+      const when = job.measuredAt ?? job.completedAt
+      return when ? monthKeyFromIso(when) === month : false
+    })
+    if (monthJobs.length === 0) return { month, variancePct: null, jobCount: 0 }
+    const q = monthJobs.reduce((s, j) => s + j.quotedSqft, 0)
+    const m = monthJobs.reduce((s, j) => s + j.measuredSqft, 0)
+    return {
+      month,
+      variancePct: q > 0 ? (m - q) / q : null,
+      jobCount: monthJobs.length,
+    }
+  })
+
+  return {
+    overallVariancePct:
+      totalQuotedSqft > 0 ? (totalMeasuredSqft - totalQuotedSqft) / totalQuotedSqft : null,
+    medianVariancePct,
+    jobCount: rows.length,
+    totalQuotedSqft,
+    totalMeasuredSqft,
+    overCount: rows.filter((r) => r.variancePct > 0).length,
+    underCount: rows.filter((r) => r.variancePct < 0).length,
+    byMonth,
+    mostOff: [...rows]
+      .sort((a, b) => Math.abs(b.variancePct) - Math.abs(a.variancePct))
+      .slice(0, 5),
+  }
+}
+
 export function aggregateEstimatingAccuracy(
   jobs: DivisionExecutionJob[],
   now = new Date(),
@@ -569,6 +745,9 @@ export function buildDivisionExecutionJob(input: {
   estMaterial?: number
   estLabor?: number
   estLaborByTrade?: DivisionLaborByTradeEstimate
+  quotedSqft?: number
+  measuredSqft?: number
+  measuredAt?: string | null
 }): DivisionExecutionJob {
   const status = normalizeDrywallProjectStatus(input.status)
   const labor = summarizeProjectLabor(input.laborEntries)
@@ -600,6 +779,9 @@ export function buildDivisionExecutionJob(input: {
       components: 0,
       prepClean: 0,
     },
+    quotedSqft: input.quotedSqft ?? 0,
+    measuredSqft: input.measuredSqft ?? 0,
+    measuredAt: input.measuredAt ?? null,
     marginUsd: margin.marginUsd,
     marginPct: margin.marginPct,
     marginColor: margin.marginColor,
@@ -704,6 +886,11 @@ export async function fetchDivisionExecution(now = new Date()): Promise<Division
         effectiveContractValue: contract.effectiveContractValue,
         quote,
         completedAt: jobCompletedAt(timestamps),
+        // Same two functions FieldVarianceSummary uses on the project page, so the
+        // portfolio number cannot disagree with the per-job one.
+        quotedSqft: quotedSqftWithWaste(quote),
+        measuredSqft: measuredSqftFromLegacy(project.legacy ?? {}),
+        measuredAt: takeoffUpdatedAt(project.legacy ?? {}),
       }
     }),
   )
@@ -742,6 +929,9 @@ export async function fetchDivisionExecution(now = new Date()): Promise<Division
       materialEntries: materialByProject.get(row.projectId) ?? [],
       subEntries: subByProject.get(row.projectId) ?? [],
       completedAt: row.completedAt,
+      quotedSqft: row.quotedSqft,
+      measuredSqft: row.measuredSqft,
+      measuredAt: row.measuredAt,
       ...estimates,
     })
   })
