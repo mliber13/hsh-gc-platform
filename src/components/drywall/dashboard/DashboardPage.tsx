@@ -58,7 +58,7 @@ function GroupHeading({ label }: { label: string }) {
 /** The overview: North Star kept open above, everything else a tile. */
 function HubOverview() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <ProductionReadyNudge />
 
       <motion.div
@@ -74,7 +74,7 @@ function HubOverview() {
         if (sections.length === 0) return null
 
         return (
-          <section key={groupId} className="space-y-3">
+          <section key={groupId} className="space-y-2">
             <GroupHeading label={DASHBOARD_GROUP_LABELS[groupId]} />
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
               {sections.map((section) => {
@@ -180,7 +180,7 @@ export function DashboardPage() {
   return (
     <DashboardDataProvider>
       <DivisionExecutionProvider>
-        <div className="mx-auto max-w-screen-2xl space-y-5 p-4 md:p-6">
+        <div className="mx-auto max-w-screen-2xl space-y-4 p-4 md:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
