@@ -268,7 +268,7 @@ export function DrywallProjectsListPage() {
             <DrywallProjectCard
               key={project.id}
               project={project}
-              onSelect={(p) => navigate(`/drywall/projects/${p.id}/info`)}
+              onSelect={(p) => navigate(`/drywall/projects/${p.id}`)}
               statusMenuOpen={statusMenuProjectId === project.id}
               onToggleStatusMenu={() =>
                 setStatusMenuProjectId((prev) =>

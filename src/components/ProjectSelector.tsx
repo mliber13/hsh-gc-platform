@@ -211,7 +211,7 @@ export function ProjectSelector() {
             {drywallProjects.map((project) => (
               <DropdownMenuItem
                 key={project.id}
-                onClick={() => navigate(`/drywall/projects/${project.id}/info`)}
+                onClick={() => navigate(`/drywall/projects/${project.id}`)}
                 className={cn(
                   'flex flex-col items-start gap-0.5',
                   project.id === activeId && 'bg-accent',
