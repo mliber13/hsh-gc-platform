@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { fetchTeam } from '@/services/hrTeamService'
 import { isArchivedMember } from '@/lib/hrTeamUtils'
+import type { OrgTeamPayload } from '@/types/hr'
 import { cn } from '@/lib/utils'
 
 export interface AssignedPersonOption {
@@ -29,6 +30,34 @@ interface AssignedPersonsPickerProps {
   label?: string
   /** When provided, skip fetchTeam and use these options (foreman roster RPC). */
   options?: AssignedPersonOption[]
+}
+
+/**
+ * Active team members as picker options.
+ *
+ * Exported so a screen rendering more than one picker can fetch `org_team` once and pass the
+ * result in — the schedule item dialog has two (assignees and leads) and was fetching the
+ * whole team payload twice on every open.
+ */
+export function buildAssignedPersonOptions(team: OrgTeamPayload): AssignedPersonOption[] {
+  return [
+    ...team.employees
+      .filter((e) => !isArchivedMember(e))
+      .map((e) => ({
+        id: e.id,
+        name: e.name,
+        kind: 'employee' as const,
+        email: e.email,
+      })),
+    ...team.contractors1099
+      .filter((c) => !isArchivedMember(c))
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        kind: 'contractor' as const,
+        email: c.email,
+      })),
+  ].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export function AssignedPersonsPicker({
@@ -60,25 +89,7 @@ export function AssignedPersonsPicker({
     fetchTeam()
       .then((team) => {
         if (cancelled) return
-        const people: AssignedPersonOption[] = [
-          ...team.employees
-            .filter((e) => !isArchivedMember(e))
-            .map((e) => ({
-              id: e.id,
-              name: e.name,
-              kind: 'employee' as const,
-              email: e.email,
-            })),
-          ...team.contractors1099
-            .filter((c) => !isArchivedMember(c))
-            .map((c) => ({
-              id: c.id,
-              name: c.name,
-              kind: 'contractor' as const,
-              email: c.email,
-            })),
-        ].sort((a, b) => a.name.localeCompare(b.name))
-        setOptions(people)
+        setOptions(buildAssignedPersonOptions(team))
       })
       .catch(() => {
         if (!cancelled) setOptions([])

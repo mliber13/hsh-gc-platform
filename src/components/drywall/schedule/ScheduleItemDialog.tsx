@@ -29,7 +29,12 @@ import { addWorkdays, cascadeSchedule, endDateForDuration, workdaysBetween } fro
 import { mapsUrl } from '@/lib/mapsUrl'
 import type { ScheduleItem } from '@/types'
 import { cn } from '@/lib/utils'
-import { AssignedPersonsPicker } from '@/components/schedule/AssignedPersonsPicker'
+import {
+  AssignedPersonsPicker,
+  buildAssignedPersonOptions,
+  type AssignedPersonOption,
+} from '@/components/schedule/AssignedPersonsPicker'
+import { fetchTeam } from '@/services/hrTeamService'
 import { TimeOffConflictWarning } from '@/components/schedule/TimeOffConflictWarning'
 import {
   DrywallScheduleCascadeError,
@@ -146,11 +151,13 @@ function FieldZone({
         </div>
       )}
       {/*
-        Hidden rather than unmounted. The order sheet fetches its own order and reports back
-        whether one exists, which it cannot do if collapsing removes it — and keeping it
-        mounted also means nothing a half-filled form holds is lost by toggling a zone shut.
+        Unmounted while shut, not hidden. Everything in these zones is either bound to dialog
+        state or re-fetches on open, so nothing is lost — and the order sheet reads the whole
+        project row when it mounts, which was happening on every open for a panel most items
+        keep closed. Material defaults open whenever a supplier is set, which covers every
+        order in the live data, so no attached order can hide behind this.
       */}
-      <div className={cn(open ? 'space-y-4' : 'hidden')}>{children}</div>
+      {open ? <div className="space-y-4">{children}</div> : null}
     </section>
   )
 }
@@ -181,6 +188,11 @@ export function ScheduleItemDialog({
   const [assignedPersons, setAssignedPersons] = useState<string[]>([])
   const [assignedCompanyId, setAssignedCompanyId] = useState<string | null>(null)
   const [companies, setCompanies] = useState<ActiveSubcontractor[]>([])
+  // Fetched once here and handed to both pickers below. Each would otherwise pull the whole
+  // org_team payload itself, so opening this dialog read the team twice.
+  const [personOptions, setPersonOptions] = useState<AssignedPersonOption[] | undefined>(
+    undefined,
+  )
   const [showJobInfoPersonIds, setShowJobInfoPersonIds] = useState<string[]>([])
   const [shareMaterialList, setShareMaterialList] = useState(false)
   const [predecessorIds, setPredecessorIds] = useState<string[]>([])
@@ -196,7 +208,6 @@ export function ScheduleItemDialog({
   const [notifyOpen, setNotifyOpen] = useState(false)
   // An order can be attached without the item carrying a supplier_id, so the Material zone
   // asks the order sheet rather than inferring emptiness from supplierId alone.
-  const [hasAttachedOrder, setHasAttachedOrder] = useState(false)
   const [confirmation, setConfirmation] = useState<{
     status: ConfirmationStatus
     lastSentAt: string | null | undefined
@@ -293,6 +304,9 @@ export function ScheduleItemDialog({
   useEffect(() => {
     if (!open) return
     let cancelled = false
+    void fetchTeam()
+      .then((team) => setPersonOptions(buildAssignedPersonOptions(team)))
+      .catch(() => setPersonOptions([]))
     void Promise.all([fetchSuppliers(), fetchActiveSubcontractors()])
       .then(([s, c]) => {
         if (cancelled) return
@@ -963,6 +977,7 @@ export function ScheduleItemDialog({
             onChange={setAssignedPersons}
             showJobInfoPersonIds={showJobInfoPersonIds}
             onShowJobInfoPersonIdsChange={setShowJobInfoPersonIds}
+            options={personOptions}
           />
 
           <TimeOffConflictWarning
@@ -982,6 +997,7 @@ export function ScheduleItemDialog({
               value={leadPersonIds}
               onChange={setLeadPersonIds}
               label="Lead(s) — piece owner"
+              options={personOptions}
             />
             <p className="text-[11px] text-muted-foreground">
               The journeyman(s) doing the piece here. Day-rate helpers on this item split their
@@ -1073,7 +1089,7 @@ export function ScheduleItemDialog({
             label="Material"
             tone="material"
             collapsible
-            defaultOpen={Boolean(supplierId) || hasAttachedOrder}
+            defaultOpen={Boolean(supplierId)}
             summary="No supplier"
           >
 
@@ -1113,7 +1129,6 @@ export function ScheduleItemDialog({
               scheduleItemId={editing.id}
               scheduleItemDate={editing.start_date}
               readOnly={false}
-              onOrderPresenceChange={setHasAttachedOrder}
             />
           )}
 

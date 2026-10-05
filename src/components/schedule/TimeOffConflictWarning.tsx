@@ -26,7 +26,12 @@ function fmt(d: string): string {
 export function TimeOffConflictWarning({ assignedPersonIds, startDate, endDate }: Props) {
   const [unavailability, setUnavailability] = useState<ScheduleUnavailability[]>([])
 
+  // Nobody assigned means nothing to conflict with, so the lookup is skipped entirely —
+  // it used to run on every mount of the schedule item dialog regardless.
+  const hasAssignees = assignedPersonIds.length > 0
+
   useEffect(() => {
+    if (!hasAssignees) return
     let cancelled = false
     void fetchPersonUnavailability()
       .then((rows) => {
@@ -38,7 +43,7 @@ export function TimeOffConflictWarning({ assignedPersonIds, startDate, endDate }
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [hasAssignees])
 
   const conflicts = findTimeOffConflicts(
     unavailability,

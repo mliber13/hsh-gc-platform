@@ -34,12 +34,6 @@ interface ScheduleItemOrderSheetProps {
   /** The schedule item's start date — defaults the order's delivery date. */
   scheduleItemDate: string
   readOnly: boolean
-  /**
-   * Reports whether this item has an order attached. The dialog collapses its Material zone
-   * when the item has no supplier, and an order can exist without `supplier_id` being set —
-   * so without this the collapse could hide a real order.
-   */
-  onOrderPresenceChange?: (hasOrder: boolean) => void
 }
 
 export function ScheduleItemOrderSheet({
@@ -47,7 +41,6 @@ export function ScheduleItemOrderSheet({
   scheduleItemId,
   scheduleItemDate,
   readOnly,
-  onOrderPresenceChange,
 }: ScheduleItemOrderSheetProps) {
   const [loading, setLoading] = useState(true)
   const [order, setOrder] = useState<DrywallOrder | null>(null)
@@ -81,10 +74,6 @@ export function ScheduleItemOrderSheet({
       setLoading(false)
     }
   }, [projectId, scheduleItemId])
-
-  useEffect(() => {
-    onOrderPresenceChange?.(Boolean(order))
-  }, [order, onOrderPresenceChange])
 
   useEffect(() => {
     void load()
