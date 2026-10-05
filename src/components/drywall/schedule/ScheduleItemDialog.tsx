@@ -72,6 +72,21 @@ const STATUS_OPTIONS: { value: DrywallScheduleItemStatus; label: string }[] = [
   { value: 'delayed', label: 'Delayed' },
 ]
 
+/**
+ * A group heading inside the item form, matching the KPI hub's section dividers so the two
+ * surfaces read the same way.
+ */
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <p className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {children}
+      </p>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  )
+}
+
 function formatDateRange(start: string, end: string): string {
   if (start === end) return start
   return `${start} → ${end}`
@@ -599,6 +614,17 @@ export function ScheduleItemDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        {/*
+          Four groups, because this form asks for FOUR different parties — our crew, a lead
+          within that crew, a sub company, and a material supplier — and until now they sat in
+          one flat column with Notes and a checkbox between them. Mark, 2026-10-05: "it's hard
+          to delineate between some of the fields. Especially assign company and assigned
+          person. Then supplier is its own field also." A heading makes a field's KIND legible
+          before its label is read.
+
+          Rendered as siblings rather than wrappers: the parent already spaces its children, so
+          this groups the form visually without re-nesting every block.
+        */}
         <DialogHeader>
           <DialogTitle>{editing ? 'Edit schedule item' : 'Add schedule item'}</DialogTitle>
           {(projectName || projectAddress) && (
@@ -623,6 +649,8 @@ export function ScheduleItemDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          <GroupLabel>The work</GroupLabel>
+
           <div className="space-y-1.5">
             <Label htmlFor="schedule-item-name">Name</Label>
             <Input
@@ -651,6 +679,45 @@ export function ScheduleItemDialog({
                 <SelectItem value="office">Office</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/*
+            Dates before predecessors: the dates are what gets set on almost every item, and
+            predecessors are the occasional refinement. The cascade still drives the dates
+            regardless of which reads first.
+          */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="schedule-start">Start date</Label>
+              <Input
+                id="schedule-start"
+                type="date"
+                value={startDate}
+                onChange={(e) => handleStartDateChange(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="schedule-workdays">Work days</Label>
+              <Input
+                id="schedule-workdays"
+                type="number"
+                min={1}
+                value={workDays}
+                onChange={(e) =>
+                  handleWorkDaysChange(Math.max(1, parseInt(e.target.value, 10) || 1))
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="schedule-end">End date</Label>
+              <Input
+                id="schedule-end"
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={(e) => handleEndDateChange(e.target.value)}
+              />
+            </div>
           </div>
 
           {danglingPredecessorIds.length > 0 && (
@@ -777,39 +844,6 @@ export function ScheduleItemDialog({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="schedule-start">Start date</Label>
-              <Input
-                id="schedule-start"
-                type="date"
-                value={startDate}
-                onChange={(e) => handleStartDateChange(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="schedule-workdays">Work days</Label>
-              <Input
-                id="schedule-workdays"
-                type="number"
-                min={1}
-                value={workDays}
-                onChange={(e) =>
-                  handleWorkDaysChange(Math.max(1, parseInt(e.target.value, 10) || 1))
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="schedule-end">End date</Label>
-              <Input
-                id="schedule-end"
-                type="date"
-                value={endDate}
-                min={startDate}
-                onChange={(e) => handleEndDateChange(e.target.value)}
-              />
-            </div>
-          </div>
 
           <div className="space-y-1.5">
             <Label>Status</Label>
@@ -830,6 +864,16 @@ export function ScheduleItemDialog({
             </Select>
           </div>
 
+          <GroupLabel>Who&rsquo;s doing it</GroupLabel>
+
+          {/*
+            The sub company reads first on a GC item and after the crew on a drywall one,
+            because that is which party usually does the work in each division. The picker
+            itself does NOT move between positions any more — it used to render in two
+            different places depending on the lens, so the form's layout changed between
+            divisions and the control had to be hunted for twice. Order within one group is
+            enough emphasis.
+          */}
           {division === 'gc' ? companyPicker : null}
 
           <AssignedPersonsPicker
@@ -838,6 +882,32 @@ export function ScheduleItemDialog({
             showJobInfoPersonIds={showJobInfoPersonIds}
             onShowJobInfoPersonIdsChange={setShowJobInfoPersonIds}
           />
+
+          <TimeOffConflictWarning
+            assignedPersonIds={assignedPersons}
+            startDate={startDate}
+            endDate={endDate}
+          />
+
+          {/*
+            Directly under the crew picker, because a lead is one OF the people above — its own
+            help text says "A lead doesn't need to be assigned above". It used to sit after the
+            company picker and the notify button, which put two unrelated controls between a
+            field and the field it refers to.
+          */}
+          <div className="space-y-1.5 border-l-2 border-muted pl-3">
+            <AssignedPersonsPicker
+              value={leadPersonIds}
+              onChange={setLeadPersonIds}
+              label="Lead(s) — piece owner"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              The journeyman(s) doing the piece here. Day-rate helpers on this item split their
+              day rate out of the lead(s)&apos; piece. A lead doesn&apos;t need to be assigned above.
+            </p>
+          </div>
+
+          {division !== 'gc' ? companyPicker : null}
           <label className="flex items-start gap-2.5 rounded-md border p-3">
             <input
               type="checkbox"
@@ -855,11 +925,6 @@ export function ScheduleItemDialog({
             </span>
           </label>
 
-          <TimeOffConflictWarning
-            assignedPersonIds={assignedPersons}
-            startDate={startDate}
-            endDate={endDate}
-          />
 
           {editing && assignedPersons.length > 0 && (
             <Popover open={notifyOpen} onOpenChange={setNotifyOpen}>
@@ -896,31 +961,13 @@ export function ScheduleItemDialog({
             </Popover>
           )}
 
-          {division !== 'gc' ? companyPicker : null}
+          <GroupLabel>Material</GroupLabel>
 
-          <div className="space-y-1.5">
-            <AssignedPersonsPicker
-              value={leadPersonIds}
-              onChange={setLeadPersonIds}
-              label="Lead(s) — piece owner"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              The journeyman(s) doing the piece here. Day-rate helpers on this item split their
-              day rate out of the lead(s)&apos; piece. A lead doesn&apos;t need to be assigned above.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="schedule-notes">Notes</Label>
-            <Textarea
-              id="schedule-notes"
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional notes for crew or office"
-            />
-          </div>
-
+          {/*
+            Supplier is not a work assignee — it is who DELIVERS. It used to sit below Notes,
+            at the end of a run of four assignee-shaped fields, which is how it got read as a
+            fifth kind of assignment. It belongs next to the order sheet it feeds.
+          */}
           <div className="space-y-1.5">
             <Label>Supplier</Label>
             <Select
@@ -954,6 +1001,19 @@ export function ScheduleItemDialog({
               readOnly={false}
             />
           )}
+
+          <GroupLabel>Record</GroupLabel>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="schedule-notes">Notes</Label>
+            <Textarea
+              id="schedule-notes"
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional notes for crew or office"
+            />
+          </div>
 
           {/* Progress photos — saved items only (need the item id). */}
           {editing && (
