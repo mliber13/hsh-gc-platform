@@ -73,17 +73,45 @@ const STATUS_OPTIONS: { value: DrywallScheduleItemStatus; label: string }[] = [
 ]
 
 /**
- * A group heading inside the item form, matching the KPI hub's section dividers so the two
- * surfaces read the same way.
+ * Tints for the form's zones.
+ *
+ * Only the two zones that were being confused for each other carry a colour — the people and
+ * the material ones. The work and the record zones are neutral panels: four tinted blocks
+ * stacked in one dialog reads as decoration and stops separating anything, which is the
+ * failure mode a heading-only version already had in the other direction.
+ *
+ * Amber for material matches the Order stage badge, so the colour means the same thing in
+ * both places rather than being picked per screen.
  */
-function GroupLabel({ children }: { children: React.ReactNode }) {
+const ZONE_TONE = {
+  neutral: 'border-border bg-muted/30',
+  people: 'border-sky-500/30 bg-sky-500/[0.06]',
+  material: 'border-amber-500/30 bg-amber-500/[0.06]',
+} as const
+
+/**
+ * One zone of the item form. Headings alone did not separate the fields enough (Mark,
+ * 2026-10-05: "it still is a little tricky to read through"), so each group is a panel.
+ */
+function FieldZone({
+  label,
+  tone = 'neutral',
+  children,
+}: {
+  label: string
+  tone?: keyof typeof ZONE_TONE
+  children: React.ReactNode
+}) {
   return (
-    <div className="flex items-center gap-2 pt-1">
-      <p className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {children}
-      </p>
-      <div className="h-px flex-1 bg-border" />
-    </div>
+    <section className={cn('space-y-4 rounded-xl border p-3.5', ZONE_TONE[tone])}>
+      <div className="flex items-center gap-2">
+        <p className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -648,8 +676,8 @@ export function ScheduleItemDialog({
           )}
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          <GroupLabel>The work</GroupLabel>
+        <div className="space-y-3 py-2">
+          <FieldZone label="The work" tone="neutral">
 
           <div className="space-y-1.5">
             <Label htmlFor="schedule-item-name">Name</Label>
@@ -864,7 +892,9 @@ export function ScheduleItemDialog({
             </Select>
           </div>
 
-          <GroupLabel>Who&rsquo;s doing it</GroupLabel>
+          </FieldZone>
+
+          <FieldZone label={'Who\u2019s doing it'} tone="people">
 
           {/*
             The sub company reads first on a GC item and after the crew on a drywall one,
@@ -961,7 +991,9 @@ export function ScheduleItemDialog({
             </Popover>
           )}
 
-          <GroupLabel>Material</GroupLabel>
+          </FieldZone>
+
+          <FieldZone label="Material" tone="material">
 
           {/*
             Supplier is not a work assignee — it is who DELIVERS. It used to sit below Notes,
@@ -1002,7 +1034,9 @@ export function ScheduleItemDialog({
             />
           )}
 
-          <GroupLabel>Record</GroupLabel>
+          </FieldZone>
+
+          <FieldZone label="Record" tone="neutral">
 
           <div className="space-y-1.5">
             <Label htmlFor="schedule-notes">Notes</Label>
@@ -1082,6 +1116,7 @@ export function ScheduleItemDialog({
               </div>
             )}
           </div>
+          </FieldZone>
         </div>
 
         {conflict ? (
