@@ -23,7 +23,7 @@ import { CrewScopeOfWorkCard } from '@/components/crew/CrewScopeOfWorkCard'
 import { CrewJobDocumentsCard } from '@/components/crew/CrewJobDocumentsCard'
 import { FieldPhotosSection } from '@/components/drywall/field/inputs'
 import { drywallStatusLabel, drywallStatusPillClass } from '@/lib/drywall/crewStatusStyles'
-import { isMeasurerSpecialty } from '@/lib/drywall/crewSpecialty'
+import { isMeasurerSpecialty, isSupportSpecialty } from '@/lib/drywall/crewSpecialty'
 import { phaseForScheduleItem } from '@/components/drywall/schedule/scheduleItemStatusStyles'
 import {
   CrewWorkspacePermissionError,
@@ -488,6 +488,28 @@ export function CrewProjectDetailPage() {
             <p className="text-sm text-muted-foreground">
               Field measurer — pay tracked separately
             </p>
+          ) : !isOperatorExplainer && isSupportSpecialty(detail.specialty) ? (
+            /*
+              A laborer or carpenter has a correct account; drywall piece rates just are not
+              how they get paid. The job size still earns its place here — someone stocking
+              and papering a job wants to know how big it is — so this shows the sqft and
+              says plainly why there is no rate, instead of the old "contact office" line
+              that read as a fault.
+            */
+            <div className="space-y-2">
+              {detail.totalSqft != null && detail.totalSqft > 0 ? (
+                <p>
+                  <span className="text-3xl font-bold tabular-nums">
+                    {detail.totalSqft.toLocaleString()}
+                  </span>
+                  <span className="ml-1.5 text-sm text-muted-foreground">sqft on this job</span>
+                </p>
+              ) : null}
+              <p className="text-sm text-muted-foreground">
+                Your hours come off the clock — drywall piece rates don&apos;t apply to your
+                position.
+              </p>
+            </div>
           ) : !isOperatorExplainer && detail.specialty === 'unknown' ? (
             <p className="text-sm text-muted-foreground">
               Contact office to set your role before pay rates can be shown.

@@ -32,10 +32,15 @@ describe('position name → specialty', () => {
     expect(specialtyFromPositionName('Field Measurer')).toBe('measurer')
   })
 
-  it('still cannot resolve a Laborer — that is a real gap, not a bug', () => {
-    // Shane Plats. A Laborer is not a trade, so the answer is to grant access
-    // explicitly rather than infer it. See the showJobInfo case below.
-    expect(specialtyFromPositionName('Laborer')).toBe('unknown')
+  // REVISED 2026-10-05. This used to assert Laborer -> 'unknown', on the reasoning that a
+  // Laborer is not a trade so access should be granted explicitly. The explicit grant does
+  // work — but leaving him 'unknown' also told him his account was broken. Shane Plats had
+  // job info on 125 of his 130 schedule items, so for a year he saw an amber "we couldn't
+  // match your trade" warning and no job size on nearly every job. A Laborer is not an
+  // unresolved drywall trade; he is a known non-drywall one.
+  it('classifies a Laborer as support rather than unresolved', () => {
+    expect(specialtyFromPositionName('Laborer')).toBe('support')
+    expect(specialtyFromPositionName('Carpenter')).toBe('support')
   })
 })
 
@@ -94,6 +99,29 @@ describe('an explicit grant outranks an inferred trade', () => {
     const r = resolveMaterials(takeoff([BEAD, MUD]), 'unknown', true)
     expect(r.items).toHaveLength(2)
     expect(r.emptyReason).toBeNull()
+  })
+
+  it('shows a support position the whole list without any grant', () => {
+    // A laborer stocking and papering a job handles every line on it, so filtering by trade
+    // would match nothing and hand him an empty card — exactly backwards. No job-info grant
+    // needed: the position itself is the answer.
+    const r = resolveMaterials(
+      takeoff([
+        BEAD,
+        { id: 'x', type: 'Adhesives', subtype: 'TiteBond Foam', quantity: '4', unit: 'Tube' },
+      ]),
+      'support',
+      false,
+    )
+    expect(r.items).toHaveLength(2)
+    expect(r.emptyReason).toBeNull()
+  })
+
+  it('still tells a support position when the quantities are blank', () => {
+    // The unfiltered bypass must not paper over the Austintown case.
+    const r = resolveMaterials(takeoff([{ ...BEAD, quantity: '' }]), 'support', false)
+    expect(r.items).toEqual([])
+    expect(r.emptyReason).toBe('no_quantities')
   })
 
   it('still narrows for a trade we do know', () => {

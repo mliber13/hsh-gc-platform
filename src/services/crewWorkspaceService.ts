@@ -29,6 +29,7 @@ import type { CrossProjectScheduleItem } from '@/services/drywallScheduleAggrega
 import {
   specialtyFromPositionName,
   isMeasurerSpecialty,
+  isSupportSpecialty,
   type CrewSpecialty,
 } from '@/lib/drywall/crewSpecialty'
 import { crewMeasureWorkflowStatus } from '@/lib/drywall/crewMeasureStatus'
@@ -844,6 +845,10 @@ export function resolveMaterials(
   if (!field?.accessories?.length) return { items: [], emptyReason: 'none_recorded' }
   // Unknown specialty + not preview → no materials (we don't know who they are).
   if (!preview && specialty === 'unknown') return { items: [], emptyReason: 'trade_unresolved' }
+  // Support positions get the WHOLE list rather than a trade slice. A laborer stocking and
+  // papering a job handles every line on it, so filtering by trade — which would match
+  // nothing and leave them an empty card — is exactly backwards for them.
+  const unfiltered = preview || isSupportSpecialty(specialty)
 
   // Rows that are real regardless of who is looking: a type, and a usable
   // quantity. Tracked separately so "the office listed material but left the
@@ -860,7 +865,7 @@ export function resolveMaterials(
   const items = withQuantity
     .filter((acc) => {
       const type = (acc.type ?? '').trim()
-      if (preview || specialty === 'both') return true
+      if (unfiltered || specialty === 'both') return true
       if (specialty === 'hanger') return HANGER_MATERIAL_CATEGORIES.has(type)
       if (specialty === 'finisher') return !FINISHER_HIDE_CATEGORIES.has(type)
       return false
