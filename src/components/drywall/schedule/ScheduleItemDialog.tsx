@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseISO } from 'date-fns'
-import { Bell, Check, ChevronsUpDown, MapPin, Plus, X } from 'lucide-react'
+import { Bell, Check, ChevronDown, ChevronsUpDown, MapPin, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { requestPushNotify } from '@/services/pushService'
@@ -96,21 +96,59 @@ const ZONE_TONE = {
 function FieldZone({
   label,
   tone = 'neutral',
+  collapsible = false,
+  defaultOpen = true,
+  summary,
   children,
 }: {
   label: string
   tone?: keyof typeof ZONE_TONE
+  /** Collapses to its heading when it has nothing in it. */
+  collapsible?: boolean
+  defaultOpen?: boolean
+  /** Shown beside the heading while collapsed — says what is inside, so nothing is hidden. */
+  summary?: string
   children: React.ReactNode
 }) {
+  const [open, setOpen] = useState(defaultOpen)
+
   return (
-    <section className={cn('space-y-4 rounded-xl border p-3.5', ZONE_TONE[tone])}>
-      <div className="flex items-center gap-2">
-        <p className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {label}
-        </p>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-      {children}
+    <section className={cn('space-y-3 rounded-xl border p-3.5', ZONE_TONE[tone])}>
+      {collapsible ? (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex w-full items-center gap-2 text-left"
+        >
+          <p className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+          </p>
+          <div className="h-px flex-1 bg-border" />
+          {!open && summary ? (
+            <span className="shrink-0 text-[11px] text-muted-foreground">{summary}</span>
+          ) : null}
+          <ChevronDown
+            className={cn(
+              'size-3.5 shrink-0 text-muted-foreground transition-transform',
+              open && 'rotate-180',
+            )}
+          />
+        </button>
+      ) : (
+        <div className="flex items-center gap-2">
+          <p className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+          </p>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+      )}
+      {/*
+        Hidden rather than unmounted. The order sheet fetches its own order and reports back
+        whether one exists, which it cannot do if collapsing removes it — and keeping it
+        mounted also means nothing a half-filled form holds is lost by toggling a zone shut.
+      */}
+      <div className={cn(open ? 'space-y-4' : 'hidden')}>{children}</div>
     </section>
   )
 }
@@ -154,6 +192,9 @@ export function ScheduleItemDialog({
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [notifyOpen, setNotifyOpen] = useState(false)
+  // An order can be attached without the item carrying a supplier_id, so the Material zone
+  // asks the order sheet rather than inferring emptiness from supplierId alone.
+  const [hasAttachedOrder, setHasAttachedOrder] = useState(false)
   const [notifyMessage, setNotifyMessage] = useState('')
   const [notifying, setNotifying] = useState(false)
   const hasUserEditedPredecessorsRef = useRef(false)
@@ -993,7 +1034,14 @@ export function ScheduleItemDialog({
 
           </FieldZone>
 
-          <FieldZone label="Material" tone="material">
+          <FieldZone
+            key={`material-${editing?.id ?? 'new'}`}
+            label="Material"
+            tone="material"
+            collapsible
+            defaultOpen={Boolean(supplierId) || hasAttachedOrder}
+            summary="No supplier"
+          >
 
           {/*
             Supplier is not a work assignee — it is who DELIVERS. It used to sit below Notes,
@@ -1031,12 +1079,20 @@ export function ScheduleItemDialog({
               scheduleItemId={editing.id}
               scheduleItemDate={editing.start_date}
               readOnly={false}
+              onOrderPresenceChange={setHasAttachedOrder}
             />
           )}
 
           </FieldZone>
 
-          <FieldZone label="Record" tone="neutral">
+          <FieldZone
+            key={`record-${editing?.id ?? 'new'}`}
+            label="Record"
+            tone="neutral"
+            collapsible
+            defaultOpen={notes.trim() !== '' || tasks.length > 0}
+            summary="Notes, photos, tasks"
+          >
 
           <div className="space-y-1.5">
             <Label htmlFor="schedule-notes">Notes</Label>
