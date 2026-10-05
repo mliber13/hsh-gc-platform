@@ -101,7 +101,7 @@ backfill unconditional: every existing row is drywall.
 | 5b | One portfolio surface; project list from item `division` | **done 2026-09-15** |
 | 3a | Close division gaps (customer share, foreman create/write scope, production-ready) | **done 2026-09-15** |
 | 3 | Seed Goodwill Multi GC work from Buildertrend | **done 2026-09-17** — 24 rows, `scripts/seed-goodwill-gc-schedule.mjs` |
-| 6 | Sub SMS confirmations in the shared dialog | A2P approved 2026-09-15 |
+| 6 | Sub SMS confirmations in the shared dialog | **shipped 2026-10-05** (`ee5d7b6`) — no live message sent yet |
 | 7 | Crew visibility by assignment | |
 | 8 | Decide the context-bar question from real Goodwill Multi use | |
 
@@ -118,6 +118,35 @@ A2P 10DLC was **approved 2026-09-15**, so sub SMS confirmations are no longer bl
 get their own step rather than riding along with the editor swap — they need a test plan
 involving real messages to real subs, and nothing is lost meanwhile because `smsService` and
 `CascadePreviewModal` stay live through `SchedulePortfolioItemModal`.
+
+### Step 6 as built (2026-10-05)
+
+Only the **send** half was missing. `send-sms`, `receive-sms`, `smsService` and
+`ConfirmationDot` were all already built and deployed; all 534 items read `unsent` purely
+because nothing in the editor called the send path.
+
+**Per item, one at a time** (Mark's choice over the batch shape `buildPublishPreview`
+implies) — the first real sends go to real companies, so a per-item button with the message
+shown verbatim beforehand is the safer way in. `buildPublishPreview` stays unused for now.
+
+**A separate button from "Notify assigned crew", deliberately.** Mark: "there is an instance
+that a sub and crew member are both assigned and maybe I don't want to notify the crew
+member." Push-to-our-staff and SMS-to-an-outside-company are different acts; one adaptive
+control would have made that choice for him.
+
+Plumbing the dialog needed: `subcontractors.phone` on `ActiveSubcontractor`, and
+`confirmation_status` / `confirmation_last_sent_at` on `DrywallProjectScheduleItem` — the
+select already fetched the status but the type and mapper never carried it through, which is
+part of why this looked less finished than it was.
+
+**Compliance:** Twilio Advanced Opt-Out is on (Mark confirmed), so STOP is handled at the
+messaging-service level and never reaches our webhook. Consequence worth knowing: a message to
+an opted-out number fails at Twilio, so it surfaces as a generic "could not send" and the item
+stays `unsent`. If one sub starts failing consistently, suspect opt-out first.
+
+**Still untested:** no message has gone to anyone. The first live send is the remaining risk —
+send, reply Y, confirm the dot flips to green without a reload. That exercises send-sms, the
+webhook signature check, the phone-to-subcontractor match and the status write in one go.
 
 ### Step 3 constraints (recorded now, they are easy to get wrong)
 
