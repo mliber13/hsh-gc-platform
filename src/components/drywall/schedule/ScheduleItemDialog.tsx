@@ -45,6 +45,8 @@ import {
   type ScheduleItemTask,
 } from '@/services/scheduleService'
 import { ScheduleItemOrderSheet } from './ScheduleItemOrderSheet'
+import { SubConfirmationRequest } from './SubConfirmationRequest'
+import type { ConfirmationStatus } from '@/types'
 import { CrewScheduleItemPhotos } from '@/components/crew/CrewScheduleItemPhotos'
 import { fetchSuppliers } from '@/services/partnerDirectoryService'
 import type { Supplier } from '@/types/partners'
@@ -195,6 +197,10 @@ export function ScheduleItemDialog({
   // An order can be attached without the item carrying a supplier_id, so the Material zone
   // asks the order sheet rather than inferring emptiness from supplierId alone.
   const [hasAttachedOrder, setHasAttachedOrder] = useState(false)
+  const [confirmation, setConfirmation] = useState<{
+    status: ConfirmationStatus
+    lastSentAt: string | null | undefined
+  }>({ status: 'unsent', lastSentAt: null })
   const [notifyMessage, setNotifyMessage] = useState('')
   const [notifying, setNotifying] = useState(false)
   const hasUserEditedPredecessorsRef = useRef(false)
@@ -254,6 +260,11 @@ export function ScheduleItemDialog({
       setTasks(editing.tasks ?? [])
       setLeadPersonIds(editing.lead_person_ids ?? [])
       setSupplierId(editing.supplier_id ?? null)
+      // Seed from the row, or an item already asked would read "Not asked yet".
+      setConfirmation({
+        status: editing.confirmation_status ?? 'unsent',
+        lastSentAt: editing.confirmation_last_sent_at ?? null,
+      })
     } else {
       const today = todayKey()
       setName('')
@@ -979,6 +990,29 @@ export function ScheduleItemDialog({
           </div>
 
           {division !== 'gc' ? companyPicker : null}
+
+          {/*
+            Separate from "Notify assigned crew" above on purpose — an item can carry both a
+            sub and our own people, and Mark may want to text one without pushing the other.
+            Saved items only: the SMS payload needs the item id.
+          */}
+          {editing && assignedCompanyId ? (
+            <SubConfirmationRequest
+              scheduleItemId={editing.id}
+              projectId={projectId}
+              projectName={projectName ?? ''}
+              itemName={name}
+              startDate={startDate}
+              companyId={assignedCompanyId}
+              companyName={
+                companies.find((c) => c.id === assignedCompanyId)?.name ?? 'this sub'
+              }
+              companyPhone={companies.find((c) => c.id === assignedCompanyId)?.phone ?? null}
+              status={confirmation.status}
+              lastSentAt={confirmation.lastSentAt}
+              onStatusChange={(status, sentAt) => setConfirmation({ status, lastSentAt: sentAt })}
+            />
+          ) : null}
           <label className="flex items-start gap-2.5 rounded-md border p-3">
             <input
               type="checkbox"

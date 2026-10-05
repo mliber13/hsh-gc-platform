@@ -39,6 +39,8 @@ export interface PortfolioItem {
   end_date: string
   confirmation_status: ConfirmationStatus
   confirmation_notes: string | null
+  /** When a confirmation request last went out — null if never asked. */
+  confirmation_last_sent_at?: string | null
   status: 'not-started' | 'in-progress' | 'complete' | 'delayed'
   assigned_company_id: string | null
   assigned_company_name: string | null
@@ -65,6 +67,7 @@ type PortfolioItemRow = {
   end_date: string
   confirmation_status: ConfirmationStatus | null
   confirmation_notes: string | null
+  confirmation_last_sent_at?: string | null
   status: 'not-started' | 'in-progress' | 'complete' | 'delayed' | null
   assigned_company_id: string | null
   assigned_persons: string[] | null
@@ -139,7 +142,7 @@ export async function fetchPortfolioScheduleItems(
   let query = supabase
     .from('schedule_items')
     .select(
-      'id, project_id, schedule_id, name, start_date, end_date, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, notes, subcontractors:assigned_company_id(name)',
+      'id, project_id, schedule_id, name, start_date, end_date, confirmation_status, confirmation_notes, confirmation_last_sent_at, status, assigned_company_id, assigned_persons, notes, subcontractors:assigned_company_id(name)',
     )
     .in('project_id', projectIds)
     .lte('start_date', endDate)
@@ -163,6 +166,7 @@ export async function fetchPortfolioScheduleItems(
     end_date: item.end_date,
     confirmation_status: item.confirmation_status ?? 'unsent',
     confirmation_notes: item.confirmation_notes,
+    confirmation_last_sent_at: item.confirmation_last_sent_at ?? null,
     status: item.status ?? 'not-started',
     assigned_company_id: item.assigned_company_id,
     assigned_company_name: assignedCompanyName(item.subcontractors),
@@ -175,12 +179,14 @@ export interface ActiveSubcontractor {
   id: string
   name: string
   is_internal: boolean
+  /** Needed to ask them for a schedule confirmation; 25 of 36 active subs are phone-only. */
+  phone: string | null
 }
 
 export async function fetchActiveSubcontractors(): Promise<ActiveSubcontractor[]> {
   const { data, error } = await supabase
     .from('subcontractors')
-    .select('id, name, is_internal')
+    .select('id, name, is_internal, phone')
     .eq('is_active', true)
     .order('is_internal', { ascending: false })
     .order('name', { ascending: true })
@@ -219,6 +225,10 @@ export interface DrywallProjectScheduleItem {
   project_id: string
   schedule_id: string
   name: string
+  /** Sub schedule confirmation — the Y/N loop over SMS. 'unsent' until asked. */
+  confirmation_status?: ConfirmationStatus
+  /** When a confirmation request last went out to the assigned sub — null if never asked. */
+  confirmation_last_sent_at?: string | null
   type: 'field' | 'office'
   start_date: string
   end_date: string
@@ -270,6 +280,7 @@ type DrywallScheduleItemRow = {
   end_date: string
   duration: number
   confirmation_status: ConfirmationStatus | null
+  confirmation_last_sent_at: string | null
   confirmation_notes: string | null
   status: DrywallScheduleItemStatus | null
   assigned_company_id: string | null
@@ -342,6 +353,8 @@ function mapDrywallScheduleRow(row: DrywallScheduleItemRow): DrywallProjectSched
   return {
     id: row.id,
     project_id: row.project_id,
+    confirmation_status: row.confirmation_status ?? 'unsent',
+    confirmation_last_sent_at: row.confirmation_last_sent_at ?? null,
     schedule_id: row.schedule_id,
     name: row.name,
     type: row.type === 'office' ? 'office' : 'field',
@@ -423,7 +436,7 @@ async function getOrCreateScheduleForProject(
 }
 
 const DRYWALL_SCHEDULE_SELECT =
-  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, status, assigned_company_id, assigned_persons, show_job_info_person_ids, share_material_list, notes, predecessors, tasks, lead_person_ids, supplier_id, division'
+  'id, project_id, schedule_id, name, type, start_date, end_date, duration, confirmation_status, confirmation_notes, confirmation_last_sent_at, status, assigned_company_id, assigned_persons, show_job_info_person_ids, share_material_list, notes, predecessors, tasks, lead_person_ids, supplier_id, division'
 
 export async function fetchScheduleItemsForProject(
   projectId: string,
