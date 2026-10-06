@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, CalendarRange, History, LayoutList, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  CalendarRange,
+  Eye,
+  EyeOff,
+  History,
+  LayoutList,
+  Pencil,
+  Plus,
+  Sparkles,
+  Trash2,
+} from 'lucide-react'
 import { startOfMonth } from 'date-fns'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -9,6 +20,10 @@ import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import { fetchTeam } from '@/services/hrTeamService'
 import { isArchivedMember } from '@/lib/hrTeamUtils'
 import { cn } from '@/lib/utils'
+import {
+  applyHideCompleted,
+  useHideCompletedSchedule,
+} from '@/hooks/useHideCompletedSchedule'
 import {
   DrywallScheduleCascadeError,
   deleteScheduleItemForProject,
@@ -61,6 +76,15 @@ export function ScheduleEditor({
 
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<DrywallProjectScheduleItem[]>([])
+  const { hideCompleted, toggleHideCompleted } = useHideCompletedSchedule()
+  // Filtered for DISPLAY only. The dialog still gets the full list as predecessor options
+  // below — a completed item is a perfectly good predecessor, and hiding it there would
+  // make existing links look dangling.
+  const visibleItems = useMemo<DrywallProjectScheduleItem[]>(
+    () => applyHideCompleted(items, hideCompleted),
+    [items, hideCompleted],
+  )
+  const hiddenCount = items.length - visibleItems.length
   const [personNames, setPersonNames] = useState<Map<string, string>>(new Map())
   const [companyNames, setCompanyNames] = useState<Map<string, string>>(new Map())
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
@@ -212,6 +236,26 @@ export function ScheduleEditor({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!empty && (
+            <button
+              type="button"
+              onClick={toggleHideCompleted}
+              aria-pressed={hideCompleted}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
+                hideCompleted
+                  ? 'border-primary bg-primary/10 text-foreground'
+                  : 'border-border/60 bg-muted/30 text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {hideCompleted ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              Hide completed
+              {/* The count is the point: nothing should vanish without saying how much. */}
+              {hideCompleted && hiddenCount > 0 ? (
+                <span className="text-xs text-muted-foreground">({hiddenCount})</span>
+              ) : null}
+            </button>
+          )}
+          {!empty && (
             <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
               <button
                 type="button"
@@ -306,7 +350,7 @@ export function ScheduleEditor({
         </Card>
       ) : viewMode === 'calendar' ? (
         <DrywallScheduleCalendar
-          items={items}
+          items={visibleItems}
           personNames={personNames}
           readOnly={readOnly}
           month={calendarMonth}
@@ -316,7 +360,7 @@ export function ScheduleEditor({
       ) : (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Schedule items ({items.length})</CardTitle>
+            <CardTitle className="text-base">Schedule items ({visibleItems.length})</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0 sm:p-0">
             <table className="w-full min-w-[720px] text-sm">
@@ -332,7 +376,7 @@ export function ScheduleEditor({
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {visibleItems.map((item) => (
                   <tr key={item.id} className="border-b last:border-0 hover:bg-muted/10">
                     <td className="px-4 py-3 font-medium">
                       <span className="inline-flex items-center gap-2">

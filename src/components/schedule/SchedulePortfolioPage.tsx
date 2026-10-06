@@ -4,6 +4,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  EyeOff,
   History,
   MoreHorizontal,
   Inbox,
@@ -31,6 +33,10 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { projectColorClass } from '@/lib/drywall/projectColor'
 import { cn } from '@/lib/utils'
+import {
+  applyHideCompleted,
+  useHideCompletedSchedule,
+} from '@/hooks/useHideCompletedSchedule'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
 import {
   fetchCrossProjectScheduleItems,
@@ -249,10 +255,21 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
     }
   }, [])
 
+  const { hideCompleted, toggleHideCompleted } = useHideCompletedSchedule()
+
   const scopedItems = useMemo(() => {
-    if (scope === 'all') return items
-    return items.filter((item) => !isDrywallProjectClosed(item.projectStatus))
-  }, [items, scope])
+    const inScope =
+      scope === 'all' ? items : items.filter((item) => !isDrywallProjectClosed(item.projectStatus))
+    return applyHideCompleted(inScope, hideCompleted)
+  }, [items, scope, hideCompleted])
+
+  /** How many the filter is holding back, so nothing disappears without saying how much. */
+  const completedHiddenCount = useMemo(() => {
+    if (!hideCompleted) return 0
+    const inScope =
+      scope === 'all' ? items : items.filter((item) => !isDrywallProjectClosed(item.projectStatus))
+    return inScope.length - applyHideCompleted(inScope, hideCompleted).length
+  }, [items, scope, hideCompleted])
 
   // The window exists because a calendar grid needs one. A list does not — it inherited
   // the restriction, which is why looking at a job in list view showed one month of it
@@ -1233,6 +1250,24 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
               </PopoverContent>
             </Popover>
           )}
+
+          <Button
+            type="button"
+            variant={hideCompleted ? 'default' : 'outline'}
+            size="sm"
+            className="h-8 gap-1 text-xs"
+            aria-pressed={hideCompleted}
+            title="Hide schedule items marked complete"
+            onClick={toggleHideCompleted}
+          >
+            {hideCompleted ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            Hide done
+            {completedHiddenCount > 0 && (
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-foreground px-1 text-[10px] font-semibold text-primary">
+                {completedHiddenCount}
+              </span>
+            )}
+          </Button>
 
           <Button
             type="button"
