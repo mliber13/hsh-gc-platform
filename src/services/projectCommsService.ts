@@ -18,6 +18,14 @@ export interface ProjectCommsMessage {
   /** Set when this message is a copy the office routed into this lane. */
   forwardedFromId: string | null
   forwardedByName: string | null
+  /**
+   * 'sms' for a sub's schedule confirmation, which arrives over Twilio and lives in
+   * `communication_log_entries` rather than `project_comms`. The panel badges these,
+   * because replying in the composer posts a message the sub will never see.
+   */
+  channel?: 'sms'
+  /** Which way an SMS went, so a thread reads as a conversation. */
+  direction?: 'inbound' | 'outbound'
 }
 
 interface Row {
@@ -58,6 +66,57 @@ function mapRow(r: Row): ProjectCommsMessage {
   }
 }
 
+/**
+ * Sub SMS traffic, mapped into the lanes model.
+ *
+ * Sub schedule confirmations are written to `communication_log_entries` by the
+ * `receive-sms` and `send-sms` edge functions, not to `project_comms`. The unread bell
+ * already counts all three comms sources, so a sub's "Y" raised a notification that led to
+ * this panel and then showed nothing — Mark, 2026-10-06: "it doesn't render a message
+ * obviously so it's a bit misleading".
+ *
+ * **Filed to the office lane**, not job-wide: sub correspondence is office business, and
+ * putting it job-wide would show every crew member on the job a sub's reply.
+ */
+async function fetchSubSmsAsComms(projectId: string): Promise<ProjectCommsMessage[]> {
+  const { data, error } = await supabase
+    .from('communication_log_entries')
+    .select('id, project_id, created_at, direction, channel, body, author_company_id, subcontractors:author_company_id(name)')
+    .eq('project_id', projectId)
+    .eq('channel', 'sms')
+    .order('created_at', { ascending: false })
+
+  // Non-fatal: the lanes are the main event, and a missing SMS thread should not
+  // take the whole panel down.
+  if (error) {
+    console.error('fetchSubSmsAsComms:', error)
+    return []
+  }
+
+  return (data ?? []).map((row) => {
+    const r = row as Record<string, unknown>
+    const joined = r.subcontractors as { name?: string } | Array<{ name?: string }> | null
+    const subName = Array.isArray(joined) ? joined[0]?.name : joined?.name
+    const outbound = r.direction === 'outbound'
+    return {
+      id: String(r.id),
+      projectId: String(r.project_id),
+      at: String(r.created_at),
+      authorUserId: null,
+      authorPersonId: null,
+      author: outbound ? 'Office' : (subName ?? 'Sub'),
+      authorRole: outbound ? ('operator' as const) : ('sub' as const),
+      audience: 'office' as const,
+      audiencePersonId: null,
+      body: String(r.body ?? ''),
+      forwardedFromId: null,
+      forwardedByName: null,
+      channel: 'sms' as const,
+      direction: outbound ? ('outbound' as const) : ('inbound' as const),
+    }
+  })
+}
+
 /** Messages on a project the caller is allowed to see. RLS does the gating. */
 export async function fetchProjectComms(projectId: string): Promise<ProjectCommsMessage[]> {
   if (!isOnlineMode()) return []
@@ -71,7 +130,11 @@ export async function fetchProjectComms(projectId: string): Promise<ProjectComms
     if (isRlsOrPermissionError(error)) throw new DrywallProjectPermissionError()
     throw new Error(error.message || 'Failed to load messages')
   }
-  return ((data ?? []) as Row[]).map(mapRow)
+
+  const lanes = ((data ?? []) as Row[]).map(mapRow)
+  const sms = await fetchSubSmsAsComms(projectId)
+  // Newest first, matching the lane query's own ordering.
+  return [...lanes, ...sms].sort((a, b) => b.at.localeCompare(a.at))
 }
 
 /**

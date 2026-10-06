@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
-import { Forward, Layers, Lock, MessageSquarePlus, Megaphone, User } from 'lucide-react'
+import {
+  Forward,
+  Layers,
+  Lock,
+  MessageSquare,
+  MessageSquarePlus,
+  Megaphone,
+  User,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -450,7 +458,7 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
                         </button>
                       ) : null}
                     </p>
-                    {!readOnly ? (
+                    {!readOnly && entry.channel !== 'sms' ? (
                       <Button
                         type="button"
                         variant="ghost"
@@ -467,6 +475,19 @@ export function CommsLogPanel({ projectId }: CommsLogPanelProps) {
                   {entry.forwardedByName ? (
                     <p className="mt-1 text-xs italic text-muted-foreground">
                       Forwarded by {entry.forwardedByName}
+                    </p>
+                  ) : null}
+
+                  {/*
+                    Badged because the composer below posts to the lanes, not to Twilio —
+                    answering a sub's text here would write a message they never receive.
+                  */}
+                  {entry.channel === 'sms' ? (
+                    <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <MessageSquare className="size-3" />
+                      {entry.direction === 'outbound'
+                        ? 'Sent by text'
+                        : 'Replied by text — answer from the schedule item, not here'}
                     </p>
                   ) : null}
 
