@@ -780,7 +780,14 @@ export function ScheduleItemDialog({
             predecessors are the occasional refinement. The cascade still drives the dates
             regardless of which reads first.
           */}
-          <div className="grid gap-3 sm:grid-cols-3">
+          {/*
+            Work days takes a fixed narrow column rather than an equal third. Three equal
+            columns left each date input about 137px once the zone panel's padding came off
+            the width, and a native date input needs room for dd/mm/yyyy AND the browser's
+            calendar button — which clipped (Mark, screenshot 2026-10-06). Work days only ever
+            holds one or two digits, so the space belongs to the dates.
+          */}
+          <div className="grid gap-3 sm:grid-cols-[1fr_5rem_1fr]">
             <div className="space-y-1.5">
               <Label htmlFor="schedule-start">Start date</Label>
               <Input
