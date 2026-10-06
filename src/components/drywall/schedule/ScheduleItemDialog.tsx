@@ -1019,20 +1019,40 @@ export function ScheduleItemDialog({
             sub and our own people, and Mark may want to text one without pushing the other.
             Saved items only: the SMS payload needs the item id.
           */}
-          {editing && assignedCompanyId ? (
+          {/*
+            Gated on the SAVED company, and the message is built from SAVED values.
+
+            It used to read the draft, which let a request go out naming a sub the row did not
+            yet carry: the operator picked a company, the button appeared on local state, the
+            text sent, and the reply had nothing to match against — `receive-sms` looks items
+            up by `assigned_company_id`, so it logged "Sub has no schedule items" and dropped
+            a real confirmation on the floor. That is exactly what happened on the first live
+            test (2026-10-06): sent 17:15:50, replied 17:16:24, row not saved until 17:23:29.
+
+            The sub is being asked about the schedule as it stands, so unsaved edits must not
+            change what they are told.
+          */}
+          {editing?.assigned_company_id ? (
             <SubConfirmationRequest
               scheduleItemId={editing.id}
               projectId={projectId}
               projectName={projectName ?? ''}
-              itemName={name}
-              startDate={startDate}
-              companyId={assignedCompanyId}
+              itemName={editing.name}
+              startDate={editing.start_date}
+              companyId={editing.assigned_company_id}
               companyName={
-                companies.find((c) => c.id === assignedCompanyId)?.name ?? 'this sub'
+                companies.find((c) => c.id === editing.assigned_company_id)?.name ?? 'this sub'
               }
-              companyPhone={companies.find((c) => c.id === assignedCompanyId)?.phone ?? null}
+              companyPhone={
+                companies.find((c) => c.id === editing.assigned_company_id)?.phone ?? null
+              }
               status={confirmation.status}
               lastSentAt={confirmation.lastSentAt}
+              unsavedEdits={
+                assignedCompanyId !== editing.assigned_company_id ||
+                name !== editing.name ||
+                startDate !== editing.start_date
+              }
               onStatusChange={(status, sentAt) => setConfirmation({ status, lastSentAt: sentAt })}
             />
           ) : null}

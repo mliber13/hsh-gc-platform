@@ -58,6 +58,12 @@ type Props = {
   companyPhone: string | null
   status: ConfirmationStatus
   lastSentAt: string | null | undefined
+  /**
+   * The draft has changes the row does not carry yet. Sending now would tell the sub about a
+   * schedule that is not saved, and if the COMPANY is the unsaved part their reply cannot be
+   * matched back at all — `receive-sms` finds the item by `assigned_company_id`.
+   */
+  unsavedEdits?: boolean
   onStatusChange: (next: ConfirmationStatus, sentAt: string) => void
 }
 
@@ -72,6 +78,7 @@ export function SubConfirmationRequest({
   companyPhone,
   status,
   lastSentAt,
+  unsavedEdits = false,
   onStatusChange,
 }: Props) {
   const [open, setOpen] = useState(false)
@@ -134,7 +141,7 @@ export function SubConfirmationRequest({
               variant="outline"
               size="sm"
               className="shrink-0 gap-1.5"
-              disabled={!companyPhone}
+              disabled={!companyPhone || unsavedEdits}
             >
               <MessageSquare className="size-3.5" />
               {alreadyAsked ? 'Ask again' : 'Request confirmation'}
@@ -164,6 +171,13 @@ export function SubConfirmationRequest({
         <p className="text-[11px] text-muted-foreground">
           {companyName} has no phone number on file — add one in the subcontractor directory to
           text them.
+        </p>
+      ) : null}
+
+      {unsavedEdits ? (
+        <p className="text-[11px] text-amber-700 dark:text-amber-400">
+          Save this item first — a confirmation is sent about the saved schedule, and a reply is
+          matched back by the saved company.
         </p>
       ) : null}
     </div>
