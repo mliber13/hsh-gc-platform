@@ -257,6 +257,16 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
 
   const { hideCompleted, toggleHideCompleted } = useHideCompletedSchedule()
 
+  /**
+   * Projects belonging to the active lens. `items` is fetched per lens already, so this is
+   * the honest boundary — and on an unlocked portfolio it stays undefined so the inbox keeps
+   * showing every division.
+   */
+  const lensProjectIds = useMemo(
+    () => (lockLens ? new Set(items.map((item) => item.projectId)) : undefined),
+    [lockLens, items],
+  )
+
   const scopedItems = useMemo(() => {
     const inScope =
       scope === 'all' ? items : items.filter((item) => !isDrywallProjectClosed(item.projectStatus))
@@ -1428,8 +1438,9 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
     </div>
   )
 
-  if (lockLens) return page
-
+  // The inbox used to be skipped entirely on a locked lens, so /drywall/schedule had no
+  // comms sidebar at all. A locked lens is still a schedule that wants its own messages; it
+  // just wants ONLY its own, which `lensProjectIds` below provides.
   return (
     <div className="flex h-full min-h-0">
       <div className="min-w-0 flex-1 overflow-y-auto">{page}</div>
@@ -1450,6 +1461,7 @@ export function SchedulePortfolioPage({ lens, lockLens = false }: SchedulePortfo
           <SchedulePortfolioInbox
             onEntryClick={(entry) => void handleInboxClick(entry)}
             refreshKey={inboxRefreshKey}
+            projectIds={lensProjectIds}
           />
         </aside>
       ) : (

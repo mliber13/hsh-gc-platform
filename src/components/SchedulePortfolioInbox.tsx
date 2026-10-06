@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import {
   Bot,
@@ -20,6 +20,17 @@ import {
 interface SchedulePortfolioInboxProps {
   onEntryClick: (entry: InboxEntry) => void
   refreshKey?: number
+  /**
+   * Restrict the inbox to these projects. Passed on a lens-locked schedule — /drywall/schedule
+   * is a drywall view, so GC traffic in its inbox would be noise.
+   *
+   * Filtering by PROJECT rather than by the entry's schedule item on purpose: only 2 of 19
+   * live entries carry a schedule_item_id, so an item-division rule would hide nearly
+   * everything. The page already holds the lens's own project set, which covers both.
+   *
+   * Undefined means no restriction — the unlocked portfolio shows every division.
+   */
+  projectIds?: Set<string>
 }
 
 const channelIconMap: Record<InboxEntry['channel'], typeof Phone> = {
@@ -45,8 +56,16 @@ function relativeTimestamp(value: string) {
 export function SchedulePortfolioInbox({
   onEntryClick,
   refreshKey = 0,
+  projectIds,
 }: SchedulePortfolioInboxProps) {
   const [entries, setEntries] = useState<InboxEntry[]>([])
+
+  // Applied after the fetch rather than in the query: the entries are already a small, recent
+  // window, and the lens's project set changes as the page loads.
+  const visibleEntries = useMemo(
+    () => (projectIds ? entries.filter((e) => e.project_id && projectIds.has(e.project_id)) : entries),
+    [entries, projectIds],
+  )
   const [loading, setLoading] = useState(true)
   const [manualRefreshKey, setManualRefreshKey] = useState(0)
 
@@ -112,13 +131,13 @@ export function SchedulePortfolioInbox({
               </div>
             ))}
           </div>
-        ) : entries.length === 0 ? (
+        ) : visibleEntries.length === 0 ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
             No comms in the last 24 hours.
           </div>
         ) : (
           <div className="space-y-2">
-            {entries.map((entry) => {
+            {visibleEntries.map((entry) => {
               const Icon = channelIconMap[entry.channel]
               const arrow = directionArrow(entry.direction)
               const itemName = entry.schedule_item_name ?? '(job-level)'
