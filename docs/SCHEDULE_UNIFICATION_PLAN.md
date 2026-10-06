@@ -101,7 +101,7 @@ backfill unconditional: every existing row is drywall.
 | 5b | One portfolio surface; project list from item `division` | **done 2026-09-15** |
 | 3a | Close division gaps (customer share, foreman create/write scope, production-ready) | **done 2026-09-15** |
 | 3 | Seed Goodwill Multi GC work from Buildertrend | **done 2026-09-17** — 24 rows, `scripts/seed-goodwill-gc-schedule.mjs` |
-| 6 | Sub SMS confirmations in the shared dialog | **shipped 2026-10-05** (`ee5d7b6`) — no live message sent yet |
+| 6 | Sub SMS confirmations in the shared dialog | **DONE 2026-10-06** — proven end to end on a live reply |
 | 7 | Crew visibility by assignment | |
 | 8 | Decide the context-bar question from real Goodwill Multi use | |
 
@@ -144,9 +144,24 @@ messaging-service level and never reaches our webhook. Consequence worth knowing
 an opted-out number fails at Twilio, so it surfaces as a generic "could not send" and the item
 stays `unsent`. If one sub starts failing consistently, suspect opt-out first.
 
-**Still untested:** no message has gone to anyone. The first live send is the remaining risk —
-send, reply Y, confirm the dot flips to green without a reload. That exercises send-sms, the
-webhook signature check, the phone-to-subcontractor match and the status write in one go.
+**Proven end to end 2026-10-06.** Mark texted himself via a `ZZ Test - Mark` subcontractor
+record: outbound 17:15:50, inbound "Y" logged 17:38:57 parsed `confirm`, item `confirmed` with
+`confirmation_last_responded_at` stamped. Signature verification, the last-ten-digits phone
+match, the comms-log insert and the status write all work, and the function is reachable
+without a JWT.
+
+**The first attempt failed, and the cause is worth keeping.** The send button was gated on
+`assignedCompanyId` — unsaved dialog state — so it appeared the moment a sub was picked and
+sent before the row carried `assigned_company_id`. `receive-sms` finds the item BY that
+column, so it logged "Sub has no schedule items" and dropped a genuine confirmation. Sent
+17:15:50, replied 17:16:24, row not saved until 17:23:29. Fixed in `cf01e61`: the block now
+renders from `editing.assigned_company_id` and builds its message from the saved name and
+date, and unsaved edits disable the send.
+
+**The failure was invisible in the app** — the function returns 200 and warns only in its own
+logs, so the item sat on "Waiting on reply" with no hint. Surfacing an unmatched reply would
+need a `receive-sms` change and a redeploy; not done. If a confirmation ever seems to go
+missing, read the function logs first — they name the exact bail-out.
 
 ### Step 3 constraints (recorded now, they are easy to get wrong)
 
