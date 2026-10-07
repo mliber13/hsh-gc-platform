@@ -11,7 +11,6 @@ import {
 } from '@/lib/drywall/quoteV3CatalogResolve'
 import { belongsInDrywallWorkspace } from '@/services/projectVisibility'
 import {
-  fetchDrywallProjectById,
   getIntakeSourceFromLegacy,
   getPoDataFromLegacy,
   parseLegacyOrders,
@@ -1139,6 +1138,56 @@ function computeEstimatedTotalPay(
   return { hanger, finisher }
 }
 
+/**
+ * The crew's view of a project — a server-side projection, not the whole row.
+ *
+ * `fetchDrywallProjectById` returns every column including all of `metadata.legacy`. The
+ * crew detail page reads a handful of keys out of it and discards the rest, but the discard
+ * happens on the phone, after the data has arrived. Measured 2026-10-07: up to 52.7 KB a job,
+ * carrying ~45 money-bearing quote fields — totalQuoteAmount, bidSnapshot, profitPercentage,
+ * overheadPercentage, the whole rate card — plus the field takeoff's rateAdjustmentLog with
+ * its marginAtChange.
+ *
+ * `crew_project_detail` applies an allowlist in the database, so a field nobody has thought
+ * about defaults to hidden rather than exposed. The shape it returns is the same, minus those
+ * keys, so every helper below that takes a `legacy` object keeps working unchanged.
+ *
+ * Deliberately used for the operator PREVIEW paths too: the preview exists to show what the
+ * crew sees, so it should see exactly that.
+ */
+/**
+ * What the crew detail builders actually need off a project.
+ *
+ * Narrowed from `DrywallProject` on purpose: these are fed by `crew_project_detail`, which
+ * returns a sanitised subset, and typing them to the full row would have meant padding that
+ * subset with fields nobody uses just to satisfy the compiler — hiding the real dependency.
+ * If one of these builders ever needs another column, the type says so and the RPC has to
+ * return it deliberately.
+ */
+type CrewProjectView = {
+  id: string
+  name: string
+  address: string
+  client: string
+  status: string
+  legacy: Record<string, unknown>
+}
+
+async function fetchCrewProjectView(projectId: string): Promise<CrewProjectView | null> {
+  const { data, error } = await supabase.rpc('crew_project_detail', { p_project_id: projectId })
+  if (error) throw new Error(error.message || 'Failed to load the job')
+  if (!data) return null
+  const row = data as Record<string, unknown>
+  return {
+    id: String(row.id ?? projectId),
+    name: String(row.name ?? ''),
+    address: String(row.address ?? ''),
+    client: String(row.client ?? ''),
+    status: String(row.status ?? ''),
+    legacy: (row.legacy as Record<string, unknown>) ?? {},
+  }
+}
+
 export async function fetchCrewProjectDetail(
   projectId: string,
   opts?: CrewViewAsOpts,
@@ -1177,7 +1226,7 @@ export async function fetchCrewProjectDetail(
     throw new CrewWorkspacePermissionError()
   }
 
-  const project = await fetchDrywallProjectById(projectId)
+  const project = await fetchCrewProjectView(projectId)
   if (!project) {
     throw new CrewWorkspacePermissionError()
   }
@@ -1199,7 +1248,7 @@ function scheduleRowHasMeasurePhase(row: ScheduleRow): boolean {
   )
 }
 
-function resolveFieldTakeoffFromProject(project: DrywallProject): FieldTakeoff {
+function resolveFieldTakeoffFromProject(project: CrewProjectView): FieldTakeoff {
   const legacy = project.legacy
   const prepared =
     legacy.fieldMeasurementPrep &&
@@ -1212,7 +1261,7 @@ function resolveFieldTakeoffFromProject(project: DrywallProject): FieldTakeoff {
 }
 
 function buildCrewMeasurePageContext(
-  project: DrywallProject,
+  project: CrewProjectView,
   scheduleRows: ScheduleRow[],
   specialty: CrewSpecialty,
 ): CrewMeasurePageContext {
@@ -1250,7 +1299,7 @@ export async function fetchCrewMeasurePage(
     throw new CrewWorkspacePermissionError()
   }
 
-  const project = await fetchDrywallProjectById(projectId)
+  const project = await fetchCrewProjectView(projectId)
   if (!project) {
     throw new CrewWorkspacePermissionError()
   }
@@ -1262,7 +1311,7 @@ export async function fetchCrewMeasurePage(
 export async function fetchCrewMeasurePageForPreview(
   projectId: string,
 ): Promise<CrewMeasurePageContext> {
-  const project = await fetchDrywallProjectById(projectId)
+  const project = await fetchCrewProjectView(projectId)
   if (!project) throw new Error('Project not found')
 
   const orgId = await requireUserOrgId()
@@ -1280,7 +1329,7 @@ export async function fetchCrewMeasurePageForPreview(
 export async function fetchCrewProjectDetailForPreview(
   projectId: string,
 ): Promise<CrewProjectDetail> {
-  const project = await fetchDrywallProjectById(projectId)
+  const project = await fetchCrewProjectView(projectId)
   if (!project) throw new Error('Project not found')
 
   const orgId = await requireUserOrgId()
@@ -1300,7 +1349,7 @@ export async function fetchCrewProjectDetailForPreview(
 }
 
 async function mapProjectDetail(
-  project: DrywallProject,
+  project: CrewProjectView,
   scheduleRows: ScheduleRow[],
   context: {
     specialty: CrewSpecialty
