@@ -101,3 +101,43 @@ describe('resolveEffectiveDivisionAllocations', () => {
     expect(resolveEffectiveDivisionAllocations({}, '2026-09-01')).toEqual([])
   })
 })
+
+/**
+ * The form seeds its percentage boxes from whatever is in effect TODAY, and a blank
+ * "Effective from" corrects that same thing. Showing the baseline instead made the dialog
+ * read "Rich is on Drywall" while the dated entry below said he moved to Contractor in
+ * August — the payroll resolver was right and the screen was wrong.
+ */
+describe('what the member form should display', () => {
+  const rich = {
+    divisionAllocations: [{ division: 'hsh_drywall', pct: 100 }],
+    divisionAllocationHistory: [
+      { effectiveDate: '2026-08-04', allocations: [{ division: 'hsh_contractor', pct: 100 }] },
+    ],
+  }
+
+  it('shows the post-move division once the date has passed', () => {
+    expect(resolveEffectiveDivisionAllocations(rich, '2026-10-07')).toEqual([
+      { division: 'hsh_contractor', pct: 100 },
+    ])
+  })
+
+  it('still shows the baseline on a day before the move', () => {
+    expect(resolveEffectiveDivisionAllocations(rich, '2026-08-03')).toEqual([
+      { division: 'hsh_drywall', pct: 100 },
+    ])
+  })
+
+  // A change dated in the future must not be what the form shows today.
+  it('ignores a change that has not taken effect yet', () => {
+    const planned = {
+      divisionAllocations: [{ division: 'hsh_drywall', pct: 100 }],
+      divisionAllocationHistory: [
+        { effectiveDate: '2027-01-01', allocations: [{ division: '3d_printing', pct: 100 }] },
+      ],
+    }
+    expect(resolveEffectiveDivisionAllocations(planned, '2026-10-07')).toEqual([
+      { division: 'hsh_drywall', pct: 100 },
+    ])
+  })
+})

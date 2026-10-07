@@ -21,7 +21,7 @@ import type { Contractor1099, Employee, JobPosition, MemberStatus ,
   DivisionAllocationHistoryEntry,
 } from '@/types/hr'
 import { todayKey } from '@/lib/dateFormat'
-import { formatPayType, generateHrId, normalizeMemberStatus, resolveEffectiveSalary } from '@/lib/hrTeamUtils'
+import { formatPayType, generateHrId, normalizeMemberStatus, resolveEffectiveSalary, resolveEffectiveDivisionAllocations } from '@/lib/hrTeamUtils'
 import { DIVISIONS, type DivisionCode, divisionLabel } from '@/lib/divisions'
 
 export type MemberKind = 'employee' | 'contractor'
@@ -90,7 +90,10 @@ function memberToForm(
   if (!member) return emptyForm()
   const normalized = normalizeMemberStatus(member)
   const divisionPcts = emptyDivisionPcts()
-  for (const a of member.divisionAllocations ?? []) {
+  // What is true TODAY, not the baseline. Showing the baseline made the form read "Rich is
+  // on Drywall" while the dated change below said he moved to Contractor in August — the
+  // payroll resolver was right and the screen was wrong (Mark, 2026-10-07).
+  for (const a of resolveEffectiveDivisionAllocations(member, todayKey())) {
     const code = a.division as DivisionCode
     if (code in divisionPcts) divisionPcts[code] = String(a.pct ?? '')
   }
@@ -160,7 +163,27 @@ function buildDivisionFields(
   const effectiveFrom = form.divisionEffectiveFrom.trim()
 
   if (!effectiveFrom) {
-    return { divisionAllocations: next, divisionAllocationHistory: existingHistory.length ? existingHistory : null }
+    // "Correct what is in effect now". With no history that is the baseline; with history it
+    // is the latest entry that has taken effect — otherwise editing the visible percentages
+    // would quietly rewrite a person's pre-move past instead of their present.
+    const inEffect = [...existingHistory]
+      .filter((h) => h.effectiveDate <= todayKey())
+      .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+      .pop()
+
+    if (!inEffect) {
+      return {
+        divisionAllocations: next,
+        divisionAllocationHistory: existingHistory.length ? existingHistory : null,
+      }
+    }
+
+    return {
+      divisionAllocations: baseline,
+      divisionAllocationHistory: existingHistory.map((h) =>
+        h.effectiveDate === inEffect.effectiveDate ? { ...h, allocations: next } : h,
+      ),
+    }
   }
 
   // Replace any entry already on that date rather than stacking duplicates.
@@ -514,7 +537,7 @@ export function MemberFormDialog({
               <div className="space-y-2 rounded-md border bg-background/60 p-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Division allocation (%)
+                    Division allocation (%) — in effect now
                   </Label>
                   <span
                     className={`text-xs ${divisionTotal === 100 ? 'text-muted-foreground' : 'text-amber-600'}`}
@@ -582,6 +605,16 @@ export function MemberFormDialog({
                       Division changes on record
                     </p>
                     <ul className="mt-1 space-y-0.5">
+                      {/* The baseline, named as the period it covers rather than left implied. */}
+                      <li className="text-xs text-muted-foreground">
+                        <span className="tabular-nums">
+                          before {member.divisionAllocationHistory[0].effectiveDate}
+                        </span>
+                        {' — '}
+                        {(member.divisionAllocations ?? [])
+                          .map((a) => `${divisionLabel(a.division)} ${a.pct}%`)
+                          .join(', ') || 'unallocated'}
+                      </li>
                       {member.divisionAllocationHistory.map((h) => (
                         <li key={h.effectiveDate} className="text-xs text-muted-foreground">
                           <span className="tabular-nums">{h.effectiveDate}</span>
