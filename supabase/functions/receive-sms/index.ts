@@ -57,6 +57,60 @@ function parseBody(body: string): 'confirm' | 'decline' | 'ambiguous' {
   return 'ambiguous'
 }
 
+/**
+ * Tell the office about a text we could not attribute.
+ *
+ * Two paths below drop a real message: the sender matches no subcontractor, or the sub they
+ * match has no schedule items. Both used to return 200 and warn into this function's own log,
+ * which nobody reads — so a sub's "Y" vanished and the item sat on "Waiting on reply"
+ * indefinitely. That happened on the first live test (2026-10-06) and was only found by
+ * digging through these logs.
+ *
+ * Why an email and not a row: `communication_log_entries.project_id` is NOT NULL, and an
+ * unmatched reply has no project by definition. Storing it properly needs a migration and a
+ * queue UI; a loud failure is most of the value and needs neither.
+ *
+ * Silent when `UNMATCHED_SMS_ALERT_EMAIL` is unset — same behaviour as before, no surprise
+ * for anyone who deploys this without configuring it. Never throws: a failed alert must not
+ * change what Twilio is told.
+ */
+async function alertUnmatchedInbound(
+  reason: string,
+  from: string,
+  body: string,
+  detail: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const apiKey = Deno.env.get('RESEND_API_KEY')
+    const to = Deno.env.get('UNMATCHED_SMS_ALERT_EMAIL')
+    if (!apiKey || !to) return
+
+    const fromEmail = Deno.env.get('FROM_EMAIL') || 'onboarding@resend.dev'
+    const escape = (v: string) =>
+      v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [to],
+        subject: `Unmatched text from ${from}`,
+        html: [
+          '<p>A text came in that could not be matched to a schedule item, so no confirmation was recorded.</p>',
+          `<p><strong>From:</strong> ${escape(from)}<br/>`,
+          `<strong>Message:</strong> ${escape(body || '(empty)')}<br/>`,
+          `<strong>Why:</strong> ${escape(reason)}</p>`,
+          `<pre style="font-size:12px;color:#555">${escape(JSON.stringify(detail, null, 2))}</pre>`,
+          '<p>If this was a real reply, confirm the item by hand and check the number on the subcontractor record.</p>',
+        ].join(''),
+      }),
+    })
+  } catch (e) {
+    console.error('alertUnmatchedInbound failed', e)
+  }
+}
+
 function twilioSignatureUrl(req: Request): string {
   const fromEnv = Deno.env.get('TWILIO_WEBHOOK_URL')?.trim()
   if (fromEnv) return fromEnv.replace(/\/$/, '')
@@ -133,6 +187,14 @@ serve(async (req) => {
     const matches = (subs ?? []).filter((s) => normalizePhone(s.phone ?? '') === normalized)
     if (matches.length === 0) {
       console.warn('Unknown sender — no matching subcontractor', { from, normalized })
+      // Each subcontractor carries ONE phone number, so a sub replying from a second
+      // phone — the foreman's cell rather than the office line — lands here.
+      await alertUnmatchedInbound(
+        'No subcontractor has this phone number on file',
+        from,
+        body,
+        { normalized_last10: normalized },
+      )
       return new Response('', { status: 200 })
     }
 
@@ -165,6 +227,12 @@ serve(async (req) => {
 
     if (!target) {
       console.warn('Sub has no schedule items', { sub_id: sub.id, sub_name: sub.name })
+      await alertUnmatchedInbound(
+        `${sub.name} has no schedule items to confirm`,
+        from,
+        body,
+        { sub_id: sub.id, sub_name: sub.name },
+      )
       return new Response('', { status: 200 })
     }
 
