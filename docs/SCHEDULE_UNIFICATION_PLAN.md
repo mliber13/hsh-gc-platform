@@ -158,10 +158,27 @@ column, so it logged "Sub has no schedule items" and dropped a genuine confirmat
 renders from `editing.assigned_company_id` and builds its message from the saved name and
 date, and unsaved edits disable the send.
 
-**The failure was invisible in the app** — the function returns 200 and warns only in its own
-logs, so the item sat on "Waiting on reply" with no hint. Surfacing an unmatched reply would
-need a `receive-sms` change and a redeploy; not done. If a confirmation ever seems to go
-missing, read the function logs first — they name the exact bail-out.
+**The failure was invisible in the app**, and that is now fixed. `receive-sms` returns 200 and
+warns only in its own logs on every bail-out, so a sub's reply could vanish with the item left
+on "Waiting on reply". Both paths that discard a real message — unknown sender, and a matched
+sub with no schedule items — now email `UNMATCHED_SMS_ALERT_EMAIL` with the number, the text
+and the reason (`71aeaed`, deployed 2026-10-07 with `--no-verify-jwt`, alert verified by live
+test). Email rather than a row because `communication_log_entries.project_id` is NOT NULL and
+an unmatched reply has no project.
+
+**Deploying this function without `--no-verify-jwt` breaks inbound SMS.** There is no
+`supabase/config.toml`, so the CLI default (`verify_jwt = true`) applies and Supabase rejects
+Twilio's unauthenticated webhook with 401 before our code runs — silently. Verify after any
+deploy: an unsigned POST to the function must return **403 Forbidden** (our signature check),
+never 401.
+
+**Still open at source:** `subcontractors` has ONE phone column, so a sub replying from a
+second number is unmatched by construction. The `contacts` table already has
+`subcontractor_id` if that becomes routine. Also note `receive-sms` matches on phone with no
+`is_active` filter — deactivating a sub does not stop their texts matching.
+
+If a confirmation ever seems to go missing, read the function logs first — they name the exact
+bail-out.
 
 ### Step 3 constraints (recorded now, they are easy to get wrong)
 
