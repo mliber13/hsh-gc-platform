@@ -10,6 +10,8 @@ import type {
   OrgTeamPayload,
   PayType,
   SalaryHistoryEntry,
+  DivisionAllocation,
+  DivisionAllocationHistoryEntry,
 } from '@/types/hr'
 import { EMPTY_ORG_TEAM_PAYLOAD } from '@/types/hr'
 
@@ -174,6 +176,44 @@ export function resolveEffectiveSalary(
     return Number(chosen.salaryAmount) || 0
   }
   return Number(person.salaryAmount) || 0
+}
+
+
+/**
+ * The division split in effect for a pay period.
+ *
+ * **Deliberately differs from resolveEffectiveSalary on one point.** When a period predates
+ * every history entry, the salary resolver falls back to the EARLIEST entry; this one falls
+ * back to the member's `divisionAllocations` baseline instead.
+ *
+ * That is the whole point of the design Mark chose ("always been true", 2026-10-07): the flat
+ * field records what was true before anyone started dating changes, and history entries are
+ * departures from it. Using the earliest entry here would do the exact thing this feature
+ * exists to prevent — Rich Petrock moved to HSH Contractor on 2026-08-04, and a July period
+ * must still read HSH Drywall, not reach forward to the first dated change.
+ *
+ * Returns an empty array when there is nothing to go on, which splitGrossByDivisions already
+ * treats as "unallocated" rather than guessing.
+ */
+export function resolveEffectiveDivisionAllocations(
+  person: {
+    divisionAllocations?: DivisionAllocation[]
+    divisionAllocationHistory?: DivisionAllocationHistoryEntry[] | null
+  },
+  periodStartDate: string,
+): DivisionAllocation[] {
+  const history = (
+    Array.isArray(person.divisionAllocationHistory) ? person.divisionAllocationHistory : []
+  )
+    .filter((h) => h && h.effectiveDate && Array.isArray(h.allocations))
+    .sort((a, b) => String(a.effectiveDate).localeCompare(String(b.effectiveDate)))
+
+  const applicable = history.filter(
+    (h) => String(h.effectiveDate) <= String(periodStartDate),
+  )
+  if (applicable.length) return applicable[applicable.length - 1].allocations
+
+  return Array.isArray(person.divisionAllocations) ? person.divisionAllocations : []
 }
 
 export { EMPTY_ORG_TEAM_PAYLOAD }

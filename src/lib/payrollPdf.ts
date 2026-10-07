@@ -18,6 +18,7 @@ import {
   sortPayrollReportEntries,
 } from '@/lib/payrollMath'
 import { DIVISIONS, divisionLabel, UNALLOCATED_KEY } from '@/lib/divisions'
+import { resolveEffectiveDivisionAllocations } from '@/lib/hrTeamUtils'
 
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', {
@@ -338,8 +339,14 @@ export function exportPayrollRunPdf(
     const gross = parseFloat(String(e.gross)) || 0
     if (gross <= 0) continue
     const person = personById(e.personId, e.personType)
-    const allocations = person?.divisionAllocations
-    if (!allocations || allocations.length === 0) continue
+    // Resolved AS AT the period, not as the record stands today. Reading
+    // `person.divisionAllocations` directly meant moving someone between divisions
+    // re-attributed every past period the next time a report was generated — the pay period
+    // stores gross but never stored the split.
+    const allocations = person
+      ? resolveEffectiveDivisionAllocations(person, run.startDate)
+      : []
+    if (allocations.length === 0) continue
     const split = splitGrossByDivisions(gross, allocations)
     for (const [divisionKey, amount] of Object.entries(split)) {
       if (!(amount > 0)) continue

@@ -16,10 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Contractor1099, Employee, JobPosition, MemberStatus } from '@/types/hr'
+import type { Contractor1099, Employee, JobPosition, MemberStatus ,
+  DivisionAllocation,
+  DivisionAllocationHistoryEntry,
+} from '@/types/hr'
 import { todayKey } from '@/lib/dateFormat'
 import { formatPayType, generateHrId, normalizeMemberStatus, resolveEffectiveSalary } from '@/lib/hrTeamUtils'
-import { DIVISIONS, type DivisionCode } from '@/lib/divisions'
+import { DIVISIONS, type DivisionCode, divisionLabel } from '@/lib/divisions'
 
 export type MemberKind = 'employee' | 'contractor'
 
@@ -47,6 +50,8 @@ type FormState = {
   gasAllowance: string
   bankedHours: string
   divisionPcts: Record<DivisionCode, string>
+  /** Blank = correct the baseline. Set = record a dated change from that date. */
+  divisionEffectiveFrom: string
   status: MemberStatus
 }
 
@@ -73,6 +78,7 @@ function emptyForm(): FormState {
     gasAllowance: '',
     bankedHours: '',
     divisionPcts: emptyDivisionPcts(),
+    divisionEffectiveFrom: '',
     status: 'active',
   }
 }
@@ -115,7 +121,58 @@ function memberToForm(
     gasAllowance: member.gasAllowance != null ? String(member.gasAllowance) : '',
     bankedHours: member.bankedHours != null ? String(member.bankedHours) : '',
     divisionPcts,
+    divisionEffectiveFrom: '',
     status: normalized.status,
+  }
+}
+
+/**
+ * Division allocation on save: correct the baseline, or record a dated change.
+ *
+ * Where a person's labor cost lands is a fact about a point in time. The payroll report
+ * resolves it as at the pay period, so overwriting the baseline rewrites history — that is
+ * what moved Rich Petrock's 36 locked periods to GC in one edit.
+ *
+ * Blank date = you are fixing a mistake, so the baseline changes and history is untouched.
+ * A date = the person actually moved then, so the baseline stays as the older truth and a
+ * dated entry records the change.
+ *
+ * Existing history is carried through either way. The form used to rebuild the member object
+ * from its own fields alone, which would have silently dropped every dated entry on the next
+ * unrelated save.
+ */
+function buildDivisionFields(
+  member: Employee | Contractor1099 | null | undefined,
+  form: { divisionPcts: Record<DivisionCode, string>; divisionEffectiveFrom: string },
+): {
+  divisionAllocations: DivisionAllocation[]
+  divisionAllocationHistory: DivisionAllocationHistoryEntry[] | null
+} {
+  const next = DIVISIONS.map((d) => ({
+    division: d.code as string,
+    pct: parseFloat(form.divisionPcts[d.code]) || 0,
+  })).filter((a) => a.pct > 0)
+
+  const existingHistory = Array.isArray(member?.divisionAllocationHistory)
+    ? member!.divisionAllocationHistory!
+    : []
+  const baseline = Array.isArray(member?.divisionAllocations) ? member!.divisionAllocations! : []
+  const effectiveFrom = form.divisionEffectiveFrom.trim()
+
+  if (!effectiveFrom) {
+    return { divisionAllocations: next, divisionAllocationHistory: existingHistory.length ? existingHistory : null }
+  }
+
+  // Replace any entry already on that date rather than stacking duplicates.
+  const history = existingHistory
+    .filter((h) => h.effectiveDate !== effectiveFrom)
+    .concat([{ effectiveDate: effectiveFrom, allocations: next }])
+    .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+
+  return {
+    // The baseline is what was true BEFORE any dated change, so it is deliberately left alone.
+    divisionAllocations: baseline.length ? baseline : next,
+    divisionAllocationHistory: history,
   }
 }
 
@@ -187,10 +244,7 @@ export function MemberFormDialog({
       ownersDraw: member?.ownersDraw ?? null,
       gasAllowance: form.gasAllowance ? Number(form.gasAllowance) : 0,
       bankedHours: form.bankedHours ? Number(form.bankedHours) : 0,
-      divisionAllocations: DIVISIONS.map((d) => ({
-        division: d.code,
-        pct: parseFloat(form.divisionPcts[d.code]) || 0,
-      })).filter((a) => a.pct > 0),
+      ...buildDivisionFields(member, form),
       pieceRate: member?.pieceRate ?? null,
     }
 
@@ -496,6 +550,48 @@ export function MemberFormDialog({
                     </div>
                   ))}
                 </div>
+
+                {/*
+                  Blank means "fix the baseline"; a date means "they moved then". The payroll
+                  report resolves the split as at each pay period, so without this an edit
+                  silently re-attributes every past period — which is what happened to Rich
+                  Petrock's 36 locked periods.
+                */}
+                <div className="grid gap-1.5">
+                  <Label htmlFor="division-effective-from" className="text-xs">
+                    Effective from (optional)
+                  </Label>
+                  <Input
+                    id="division-effective-from"
+                    type="date"
+                    value={form.divisionEffectiveFrom}
+                    onChange={(e) =>
+                      setForm({ ...form, divisionEffectiveFrom: e.target.value })
+                    }
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    {form.divisionEffectiveFrom
+                      ? 'Recorded as a change from this date. Pay periods before it keep the old split.'
+                      : 'Leave blank to correct the existing split everywhere, including past payroll reports.'}
+                  </p>
+                </div>
+
+                {member?.divisionAllocationHistory?.length ? (
+                  <div className="rounded-md border bg-muted/30 p-2.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Division changes on record
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {member.divisionAllocationHistory.map((h) => (
+                        <li key={h.effectiveDate} className="text-xs text-muted-foreground">
+                          <span className="tabular-nums">{h.effectiveDate}</span>
+                          {' — '}
+                          {h.allocations.map((a) => `${divisionLabel(a.division)} ${a.pct}%`).join(', ')}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

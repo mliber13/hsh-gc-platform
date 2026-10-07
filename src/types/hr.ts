@@ -21,6 +21,25 @@ export interface DivisionAllocation {
   pct: number
 }
 
+/**
+ * A dated change of division allocation.
+ *
+ * Mirrors SalaryHistoryEntry, for the same reason: which division a person's labor cost
+ * lands in is a fact about a point in time, and the payroll split used to be recomputed from
+ * whatever the record said TODAY — so moving someone between divisions silently re-attributed
+ * every past period. Rich Petrock's 36 locked periods and $80,478 of 2026 gross were the case
+ * that forced this.
+ *
+ * `divisionAllocations` on the member stays as the ORIGINAL state — what was true before any
+ * dated change. Entries here are changes from that baseline, so a period predating all of
+ * them falls back to the baseline rather than to the earliest entry (where salary differs —
+ * see resolveEffectiveDivisionAllocations).
+ */
+export interface DivisionAllocationHistoryEntry {
+  effectiveDate: string // 'YYYY-MM-DD' — applies to pay periods whose startDate >= this
+  allocations: DivisionAllocation[]
+}
+
 export interface SalaryHistoryEntry {
   effectiveDate: string // 'YYYY-MM-DD' — applies to pay periods whose startDate >= this
   salaryAmount: number
@@ -41,7 +60,10 @@ export interface TeamMemberBase {
   ownersDraw?: number | string | null
   gasAllowance?: number | string | null
   bankedHours?: number | string | null
+  /** The baseline split — what was true before any dated change. */
   divisionAllocations?: DivisionAllocation[]
+  /** Dated changes away from that baseline. Empty or absent means it never changed. */
+  divisionAllocationHistory?: DivisionAllocationHistoryEntry[] | null
   status?: MemberStatus | string | null
   toolRepayments?: ToolRepayment[]
 }
