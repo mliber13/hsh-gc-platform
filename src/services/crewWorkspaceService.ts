@@ -422,11 +422,21 @@ export async function fetchCrewProjectList(
   // work, not an endless backlog. Measurers get a 5-day grace window so a measure scheduled a
   // couple days ago stays reachable for data entry; other crew (hangers/finishers) see strictly
   // current/upcoming so finished past jobs don't linger in their list.
+  //
+  // **A foreman's "All jobs" is exempt** (Mark, 2026-10-07). That view is for checking on the
+  // division, not for working a list, and the window made a live job disappear the moment its
+  // last scheduled item aged out: Twinsburg - Rubin is in production with nothing scheduled
+  // since 2026-09-15, so it vanished even with All jobs selected. Measured at the time, TEN
+  // production jobs were invisible this way. A job going quiet on the schedule is exactly
+  // when a foreman most needs to see it.
+  const applyWindow = !(foremanView && scope === 'all')
   const graceDays = isMeasurerSpecialty(specialty) ? 5 : 0
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - graceDays)
   const cutoff = format(cutoffDate, 'yyyy-MM-dd')
-  const upcomingRows = scheduleRows.filter((r) => (r.end_date || r.start_date) >= cutoff)
+  const upcomingRows = applyWindow
+    ? scheduleRows.filter((r) => (r.end_date || r.start_date) >= cutoff)
+    : scheduleRows
   if (upcomingRows.length === 0) return []
 
   const projectIds = [...new Set(upcomingRows.map((r) => r.project_id))]
