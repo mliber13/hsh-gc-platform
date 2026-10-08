@@ -706,6 +706,13 @@ export interface FieldMeasurementBoard {
   width?: string
   length?: string
   quantity?: string
+  /**
+   * Hung but never finished: Hardi/cement backer, or the base layer of a double layer.
+   * Absent on boards saved before 2026-10-08, which read as finished unless the board is
+   * Cement — see isHangOnlyBoard. Finisher pay, mud and tape exclude these; hanger pay and
+   * the material order include them.
+   */
+  hangOnly?: boolean
 }
 
 export interface FieldMeasurementArea {

@@ -814,13 +814,23 @@ export function fieldMeasuredSqftFromProjectMetadata(metadata: unknown): number 
   return n
 }
 
+/**
+ * Which sqft a piece is paid on. Hangers hang every board; finishers do not finish hang-only
+ * board (Hardi, a double layer's base layer), so a finish piece is paid on less.
+ */
+export type PieceSqftBasis = 'hang' | 'finish'
+
 export function getSqftFromJob(
   project: { metadata?: unknown; fieldMeasuredSqft?: number | null } | null | undefined,
+  basis: PieceSqftBasis = 'hang',
 ): number | null {
   if (!project) return null
   // Metadata is the shared crew basis (measured, else quote/PO, plus accepted
   // change-order sqft). Callers that only have the measured number still work.
-  if (project.metadata != null) return resolveCrewPaySqftFromMetadata(project.metadata).sqft
+  if (project.metadata != null) {
+    const r = resolveCrewPaySqftFromMetadata(project.metadata)
+    return basis === 'finish' ? r.finishSqft : r.sqft
+  }
   const n = project.fieldMeasuredSqft
   if (n == null || n <= 0) return null
   return n

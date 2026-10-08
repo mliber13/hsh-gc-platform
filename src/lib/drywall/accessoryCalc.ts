@@ -39,12 +39,20 @@ function resolveCeilingFinish(quote: AccessoryCalcQuoteInput): string {
 }
 
 /** Auto-calculated accessory rows from measured sqft + manual corner bead pcs. */
+/**
+ * `sqft` is every board hung; `finishSqft` is the part that gets finished, which leaves out
+ * hang-only board (Hardi, a double layer's base layer). Compound and tape are sized on what is
+ * finished; screws and adhesive on everything hung. Omitting `finishSqft` means all of it is
+ * finished, which is what this did before the split.
+ */
 export function calculateFieldAccessories(
   sqft: number,
   cornerBeadQty = 0,
   quote: AccessoryCalcQuoteInput = {},
+  finishSqft?: number,
 ): FieldAccessoryEntry[] {
   if (sqft === 0) return []
+  const finishBasis = Math.max(0, Math.min(sqft, finishSqft ?? sqft))
 
   const settings = DEFAULT_SETTINGS
   const actualCeilingFinish = resolveCeilingFinish(quote)
@@ -52,7 +60,7 @@ export function calculateFieldAccessories(
   let allPurposeBoxes = 0
   if (actualCeilingFinish.includes('Splatter Knockdown')) {
     allPurposeBoxes = Math.ceil(
-      (sqft / settings.jointCompound.allPurposeBaseRate) *
+      (finishBasis / settings.jointCompound.allPurposeBaseRate) *
         settings.jointCompound.allPurposeSplatterMultiplier,
     )
   } else if (
@@ -60,7 +68,7 @@ export function calculateFieldAccessories(
     actualCeilingFinish.includes('Knockdown')
   ) {
     allPurposeBoxes = Math.ceil(
-      (sqft / settings.jointCompound.allPurposeBaseRate) *
+      (finishBasis / settings.jointCompound.allPurposeBaseRate) *
         settings.jointCompound.allPurposeStompMultiplier,
     )
   } else if (
@@ -68,21 +76,21 @@ export function calculateFieldAccessories(
     actualCeilingFinish.includes('Level 5')
   ) {
     allPurposeBoxes = Math.ceil(
-      (sqft / settings.jointCompound.allPurposeBaseRate) *
+      (finishBasis / settings.jointCompound.allPurposeBaseRate) *
         settings.jointCompound.allPurposeLevel4Multiplier,
     )
   } else {
     allPurposeBoxes = Math.ceil(
-      (sqft / settings.jointCompound.allPurposeBaseRate) *
+      (finishBasis / settings.jointCompound.allPurposeBaseRate) *
         settings.jointCompound.allPurposeDefaultMultiplier,
     )
   }
 
   const baseLiteWeightBoxes = Math.ceil(
-    (sqft / settings.jointCompound.allPurposeBaseRate) *
+    (finishBasis / settings.jointCompound.allPurposeBaseRate) *
       settings.jointCompound.liteWeightMultiplier,
   )
-  const baseEasySand90Bags = Math.ceil(sqft / settings.jointCompound.easySand90Rate)
+  const baseEasySand90Bags = Math.ceil(finishBasis / settings.jointCompound.easySand90Rate)
   const additionalEasySand90Bags = Math.ceil(
     cornerBeadQty / settings.cornerBead.easySand90PerStick,
   )
@@ -93,13 +101,13 @@ export function calculateFieldAccessories(
   const easySand90Bags = baseEasySand90Bags + additionalEasySand90Bags
   const titeBondFoamCans = Math.ceil(sqft / settings.adhesives.titeBondRate)
   const screwBoxes = Math.ceil(sqft / settings.fasteners.screwRate)
-  const paperTapeRolls = Math.ceil(sqft / settings.tape.paperTapeRate)
+  const paperTapeRolls = Math.ceil(finishBasis / settings.tape.paperTapeRate)
 
   let meshTapeRolls: number
-  if (sqft < settings.tape.meshTapeSmallJobThreshold) {
-    meshTapeRolls = Math.ceil(sqft / settings.tape.meshTapeSmallJobRate)
+  if (finishBasis < settings.tape.meshTapeSmallJobThreshold) {
+    meshTapeRolls = Math.ceil(finishBasis / settings.tape.meshTapeSmallJobRate)
   } else {
-    meshTapeRolls = Math.ceil(sqft / settings.tape.meshTapeLargeJobRate)
+    meshTapeRolls = Math.ceil(finishBasis / settings.tape.meshTapeLargeJobRate)
   }
 
   return [

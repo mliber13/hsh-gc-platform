@@ -940,13 +940,17 @@ function shouldShowBoardCounts(
   return scheduleRows.some(scheduleRowIsHang)
 }
 
-/** Crew piece-pay sqft. Same resolver payroll uses — accepted change-order sqft included. */
-function resolveTotalSqft(
+/**
+ * Crew piece-pay sqft, hung and finished. Same resolver payroll uses — accepted change-order
+ * sqft included — so the phone and the paycheck cannot disagree.
+ */
+function resolvePaySqft(
   legacy: Record<string, unknown>,
   intakeSource: 'quote' | 'po',
   po: DrywallPoData | null,
-): number | null {
-  return resolveCrewPaySqft({ legacy, intakeSource, po }).sqft
+): { hang: number | null; finish: number | null } {
+  const r = resolveCrewPaySqft({ legacy, intakeSource, po })
+  return { hang: r.sqft, finish: r.finishSqft }
 }
 
 function readOrderApprovedLaborRates(field: FieldTakeoff | null): {
@@ -1152,6 +1156,7 @@ function roundMoney(value: number): number {
 
 function computeEstimatedTotalPay(
   totalSqft: number | null,
+  finishSqft: number | null,
   laborRates: CrewProjectDetail['laborRates'],
   specialty: CrewSpecialty,
   options?: { preview?: boolean },
@@ -1161,6 +1166,8 @@ function computeEstimatedTotalPay(
   }
 
   const sqft = totalSqft != null && totalSqft > 0 ? totalSqft : null
+  // Finishers are paid on what they finish; hang-only board is not theirs.
+  const finished = finishSqft != null && finishSqft > 0 ? finishSqft : null
   const preview = options?.preview === true
 
   const hangerEligible =
@@ -1178,10 +1185,10 @@ function computeEstimatedTotalPay(
 
   const finisher =
     finisherEligible &&
-    sqft != null &&
+    finished != null &&
     laborRates.finisherRate != null &&
     laborRates.finisherRate > 0
-      ? roundMoney(sqft * laborRates.finisherRate)
+      ? roundMoney(finished * laborRates.finisherRate)
       : null
 
   return { hanger, finisher }
@@ -1464,8 +1471,12 @@ async function mapProjectDetail(
   }
 
   // Suppress all $ figures for field foreman (cost-free /crew).
-  const totalSqft =
-    showJobInfo && !isForeman ? resolveTotalSqft(legacy, intakeSource, po) : null
+  const paySqft =
+    showJobInfo && !isForeman
+      ? resolvePaySqft(legacy, intakeSource, po)
+      : { hang: null, finish: null }
+  const totalSqft = paySqft.hang
+  const finishSqft = paySqft.finish
   const laborRates =
     showJobInfo && !isForeman ? await resolveLaborRates(legacy, field) : emptyRates
 
@@ -1478,6 +1489,7 @@ async function mapProjectDetail(
     scopeOfWork: showScope ? resolveScopeOfWork(legacy, intakeSource, po) : '',
     structuredScope: showScope ? resolveStructuredScope(legacy) : null,
     totalSqft,
+    finishSqft,
     materials: materialsResult.items,
     materialsEmptyReason: showMaterials ? materialsResult.emptyReason : null,
     // Only when the operator explicitly shared the list, or for an operator
@@ -1517,7 +1529,7 @@ async function mapProjectDetail(
     laborRates,
     estimatedTotalPay:
       showJobInfo && !isForeman
-        ? computeEstimatedTotalPay(totalSqft, laborRates, context.specialty, {
+        ? computeEstimatedTotalPay(totalSqft, finishSqft, laborRates, context.specialty, {
             preview: context.preview,
           })
         : { hanger: null, finisher: null },

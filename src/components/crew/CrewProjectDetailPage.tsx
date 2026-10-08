@@ -272,6 +272,12 @@ export function CrewProjectDetailPage() {
   }
 
   const contactPhone = detail.fieldNotes.contactPhone?.trim() || null
+  // Board hung but never finished (Hardi, a double layer's base layer). Zero on most jobs, in
+  // which case the card reads exactly as it did before the hang/finish split.
+  const hangOnlySqft =
+    detail.totalSqft != null && detail.finishSqft != null
+      ? Math.max(0, Math.round(detail.totalSqft - detail.finishSqft))
+      : 0
 
   // Which task did they tap in from? (the list passes ?item=<scheduleItemId>.) The measure
   // prompt should only surface when they came in from the measure task itself — a measurer
@@ -526,6 +532,12 @@ export function CrewProjectDetailPage() {
               ) : (
                 <p className="text-sm text-muted-foreground">Sqft not set yet.</p>
               )}
+              {hangOnlySqft > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {detail.finishSqft?.toLocaleString()} sqft gets finished;{' '}
+                  {hangOnlySqft.toLocaleString()} sqft is hang only (Hardi or a base layer).
+                </p>
+              ) : null}
               <p className="text-sm text-muted-foreground">
                 Pay rate is set by the office after measure and order — it will show here once
                 finalized.
@@ -543,7 +555,7 @@ export function CrewProjectDetailPage() {
                           {detail.totalSqft.toLocaleString()}
                         </span>
                         <span className="ml-1 text-base font-medium text-muted-foreground">
-                          sqft
+                          {hangOnlySqft > 0 ? 'sqft hung' : 'sqft'}
                         </span>
                       </p>
                     ) : null}
@@ -571,10 +583,20 @@ export function CrewProjectDetailPage() {
               detail.laborRates.finisherRate != null ? (
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
-                    {/* Only show sqft on the first eligible block — avoid double display for 'both' */}
-                    {detail.totalSqft != null &&
-                    detail.totalSqft > 0 &&
-                    !(isOperatorExplainer || detail.specialty === 'both') ? (
+                    {/* Only show sqft on the first eligible block — avoid double display for
+                        'both' — unless hang-only board makes the finisher's number different. */}
+                    {hangOnlySqft > 0 && detail.finishSqft != null ? (
+                      <p>
+                        <span className="text-3xl font-bold tabular-nums">
+                          {detail.finishSqft.toLocaleString()}
+                        </span>
+                        <span className="ml-1 text-base font-medium text-muted-foreground">
+                          sqft finished
+                        </span>
+                      </p>
+                    ) : detail.totalSqft != null &&
+                      detail.totalSqft > 0 &&
+                      !(isOperatorExplainer || detail.specialty === 'both') ? (
                       <p>
                         <span className="text-3xl font-bold tabular-nums">
                           {detail.totalSqft.toLocaleString()}
@@ -599,6 +621,12 @@ export function CrewProjectDetailPage() {
                       <span className="text-xl font-bold tabular-nums">
                         {formatPay(detail.estimatedTotalPay.finisher)}
                       </span>
+                    </p>
+                  ) : null}
+                  {hangOnlySqft > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {hangOnlySqft.toLocaleString()} sqft is hang only (Hardi or a base layer) and
+                      isn&apos;t finished, so it isn&apos;t in finisher pay.
                     </p>
                   ) : null}
                 </div>

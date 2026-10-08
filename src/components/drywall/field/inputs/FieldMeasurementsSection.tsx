@@ -21,6 +21,11 @@ import {
   getAvailableWidths,
 } from '@/lib/drywall/fieldBoardSpecs'
 import { computeMeasuredSqft, generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
+import {
+  defaultHangOnlyForBoardType,
+  hangOnlyMeasuredSqft,
+  isHangOnlyBoard,
+} from '@/lib/drywall/hangOnly'
 import type { FieldMeasurementArea, FieldMeasurementBoard, FieldTakeoff } from '@/types/drywall'
 import type { SetFieldTakeoff } from '../fieldTakeoffState'
 
@@ -30,23 +35,29 @@ interface FieldMeasurementsSectionProps {
   onChange: SetFieldTakeoff
 }
 
-/** UI-only grouping key — one group = boardType + thickness + width. */
+/**
+ * UI-only grouping key — one group = boardType + thickness + width + hang-only. Hang-only is
+ * part of the identity so a double layer can carry the same board twice in one area: the top
+ * layer finished, the base layer hang only.
+ */
 type SpecGroup = {
   id: string
   boardType: string
   thickness: string
   width: string
+  hangOnly: boolean
 }
 
-function specKey(g: { boardType?: string; thickness?: string; width?: string }): string {
-  return `${g.boardType ?? ''}|${g.thickness ?? ''}|${g.width ?? ''}`
+function specKey(board: FieldMeasurementBoard): string {
+  return `${board.boardType ?? ''}|${board.thickness ?? ''}|${board.width ?? ''}|${isHangOnlyBoard(board)}`
 }
 
 function boardMatchesSpec(board: FieldMeasurementBoard, group: SpecGroup): boolean {
   return (
     (board.boardType ?? '') === group.boardType &&
     (board.thickness ?? '') === group.thickness &&
-    (board.width ?? '') === group.width
+    (board.width ?? '') === group.width &&
+    isHangOnlyBoard(board) === group.hangOnly
   )
 }
 
@@ -63,6 +74,7 @@ function deriveGroupsFromBoards(boards: FieldMeasurementBoard[]): SpecGroup[] {
       boardType: board.boardType ?? '',
       thickness: board.thickness ?? '',
       width: board.width ?? '',
+      hangOnly: isHangOnlyBoard(board),
     })
   }
   return [...seen.values()]
@@ -83,6 +95,7 @@ export function FieldMeasurementsSection({
   onChange,
 }: FieldMeasurementsSectionProps) {
   const total = computeMeasuredSqft(takeoff.measurements)
+  const hangOnlyTotal = hangOnlyMeasuredSqft(takeoff.measurements)
 
   // Spec groups are UI state — empty/in-progress groups have no board rows yet, so they
   // cannot be re-derived from boards alone. Seed from boards when an area first appears.
@@ -145,7 +158,7 @@ export function FieldMeasurementsSection({
       ...prev,
       [areaId]: [
         ...(prev[areaId] ?? []),
-        { id: generateFieldId(), boardType: '', thickness: '', width: '' },
+        { id: generateFieldId(), boardType: '', thickness: '', width: '', hangOnly: false },
       ],
     }))
   }
@@ -184,11 +197,21 @@ export function FieldMeasurementsSection({
       field,
       value,
     )
+    const newType = cascaded.boardType ?? ''
+    // Cement is hang only by default, so picking it ticks the box and leaving it unticks it.
+    // Any other change keeps what the measurer set — a base layer stays a base layer when its
+    // thickness changes.
+    const hangOnly =
+      field === 'boardType' && newType !== oldGroup.boardType
+        ? defaultHangOnlyForBoardType(newType) ||
+          (oldGroup.hangOnly && !defaultHangOnlyForBoardType(oldGroup.boardType))
+        : oldGroup.hangOnly
     const newGroup: SpecGroup = {
       id: groupId,
-      boardType: cascaded.boardType ?? '',
+      boardType: newType,
       thickness: cascaded.thickness ?? '',
       width: cascaded.width ?? '',
+      hangOnly,
     }
     const availableLengths = getAvailableLengths(
       newGroup.boardType,
@@ -219,6 +242,7 @@ export function FieldMeasurementsSection({
               boardType: newGroup.boardType,
               thickness: newGroup.thickness,
               width: newGroup.width,
+              hangOnly: newGroup.hangOnly,
             })
           }
         }
@@ -260,12 +284,31 @@ export function FieldMeasurementsSection({
               boardType: group.boardType,
               thickness: group.thickness,
               width: group.width,
+              hangOnly: group.hangOnly,
               length,
               quantity: qty,
             },
           ],
         }
       }),
+    }))
+  }
+
+  const setGroupHangOnly = (areaId: string, group: SpecGroup, hangOnly: boolean) => {
+    setGroupsByArea((prev) => ({
+      ...prev,
+      [areaId]: (prev[areaId] ?? []).map((g) => (g.id === group.id ? { ...g, hangOnly } : g)),
+    }))
+    onChange((prev) => ({
+      ...prev,
+      measurements: prev.measurements.map((m) =>
+        m.id === areaId
+          ? {
+              ...m,
+              boards: m.boards.map((b) => (boardMatchesSpec(b, group) ? { ...b, hangOnly } : b)),
+            }
+          : m,
+      ),
     }))
   }
 
@@ -276,6 +319,13 @@ export function FieldMeasurementsSection({
         <CardDescription>
           Break the job into areas with board sizes. Total:{' '}
           <strong>{total.toLocaleString()} sqft</strong>
+          {hangOnlyTotal > 0 ? (
+            <>
+              {' '}
+              — {Math.round(total - hangOnlyTotal).toLocaleString()} finished,{' '}
+              {Math.round(hangOnlyTotal).toLocaleString()} hang only
+            </>
+          ) : null}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -293,12 +343,27 @@ export function FieldMeasurementsSection({
         ) : (
           takeoff.measurements.map((area) => {
             const areaSqft = computeMeasuredSqft([area])
+            const areaHangOnly = hangOnlyMeasuredSqft([area])
             const groups = groupsByArea[area.id] ?? deriveGroupsFromBoards(area.boards)
+            // Flipping a spec onto a twin that already exists would merge two rows' counts
+            // silently, so the box is disabled instead.
+            const twinOf = (group: SpecGroup) =>
+              groups.some(
+                (g) =>
+                  g.id !== group.id &&
+                  g.boardType === group.boardType &&
+                  g.thickness === group.thickness &&
+                  g.width === group.width &&
+                  g.hangOnly !== group.hangOnly,
+              )
             return (
               <div key={area.id} className="rounded-lg border bg-muted/20 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm text-muted-foreground">
                     {areaSqft.toLocaleString()} sqft in this area
+                    {areaHangOnly > 0
+                      ? ` · ${Math.round(areaHangOnly).toLocaleString()} hang only`
+                      : ''}
                   </span>
                   {!readOnly && (
                     <Button
@@ -438,6 +503,31 @@ export function FieldMeasurementsSection({
                               </Button>
                             )}
                           </div>
+
+                          <label
+                            className={`flex items-center gap-2 text-xs ${
+                              twinOf(group) ? 'text-muted-foreground' : ''
+                            }`}
+                            title={
+                              twinOf(group)
+                                ? 'This board already has a row for the other setting in this area — enter counts there.'
+                                : undefined
+                            }
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              checked={group.hangOnly}
+                              disabled={readOnly || !group.boardType || twinOf(group)}
+                              onChange={(e) => setGroupHangOnly(area.id, group, e.target.checked)}
+                            />
+                            <span>
+                              Hang only — not finished{' '}
+                              <span className="text-muted-foreground">
+                                (Hardi, or the base layer of a double layer)
+                              </span>
+                            </span>
+                          </label>
 
                           {lengths.length > 0 ? (
                             <div className="space-y-1.5">

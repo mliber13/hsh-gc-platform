@@ -187,7 +187,13 @@ export interface CrewProjectDetail {
   scopeOfWork: string
   /** Structured scope — present when v3 quote has structured fields filled. */
   structuredScope: CrewStructuredScope | null
+  /** Every board hung, hang-only board included. Hanger pay and the job size shown. */
   totalSqft: number | null
+  /**
+   * The part that gets finished — totalSqft less hang-only board (Hardi, a double layer's base
+   * layer). Finisher pay. Equal to totalSqft on any job without hang-only board.
+   */
+  finishSqft: number | null
   /** Total bead sticks on the job — operator's count typically excludes tearaway. */
   /** Materials list filtered by user's specialty (hanger sees install hardware, finisher sees all). */
   materials: CrewMaterial[]

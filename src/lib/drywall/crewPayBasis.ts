@@ -1,13 +1,22 @@
 import { hydrateDrywallQuoteV3 } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { quotedSqftWithWaste } from '@/lib/drywall/fieldMeasurementUtils'
+import { hangOnlyMeasuredSqft, quotedFinishSqftWithWaste } from '@/lib/drywall/hangOnly'
 import { getIntakeSourceFromLegacy, getPoDataFromLegacy } from '@/services/drywallProjectsService'
 import type { DrywallPoData, DrywallQuote, DrywallQuoteV3 } from '@/types/drywall'
 
 export type CrewPaySqftBaseSource = 'measured' | 'quoted' | 'po'
 
 export interface CrewPaySqftResult {
-  /** Piece-pay sqft: base plus accepted change-order crew sqft. Null when neither exists. */
+  /**
+   * HANG sqft — every board hung, hang-only boards included. Base plus accepted change-order
+   * crew sqft; null when neither exists. Hanger pay, and the "job size" a crew member sees.
+   */
   sqft: number | null
+  /**
+   * FINISH sqft — the same, less hang-only board (Hardi, a double layer's base layer). Finisher
+   * pay. Equal to `sqft` on any job without hang-only board.
+   */
+  finishSqft: number | null
   baseSqft: number | null
   baseSource: CrewPaySqftBaseSource | null
   acceptedChangeOrderSqft: number
@@ -43,15 +52,20 @@ export function resolveCrewPaySqft(input: {
   const base = resolveBaseSqft(legacy, intakeSource, po)
   const acceptedChangeOrderSqft = acceptedChangeOrderCrewSqft(legacy)
   if (base.sqft == null) {
+    const coOnly = acceptedChangeOrderSqft > 0 ? acceptedChangeOrderSqft : null
     return {
-      sqft: acceptedChangeOrderSqft > 0 ? acceptedChangeOrderSqft : null,
+      sqft: coOnly,
+      finishSqft: coOnly,
       baseSqft: null,
       baseSource: null,
       acceptedChangeOrderSqft,
     }
   }
+  // Change-order crew sqft is one number with no hang/finish split; it is treated as finished,
+  // which is what it was before this split.
   return {
     sqft: base.sqft + acceptedChangeOrderSqft,
+    finishSqft: base.finishSqft + acceptedChangeOrderSqft,
     baseSqft: base.sqft,
     baseSource: base.source,
     acceptedChangeOrderSqft,
@@ -112,32 +126,43 @@ function resolveBaseSqft(
   legacy: Record<string, unknown>,
   intakeSource: 'quote' | 'po',
   po: DrywallPoData | null,
-): { sqft: number; source: CrewPaySqftBaseSource } | { sqft: null; source: null } {
+):
+  | { sqft: number; finishSqft: number; source: CrewPaySqftBaseSource }
+  | { sqft: null; finishSqft: null; source: null } {
   const measured = measuredSqft(legacy)
-  if (measured != null) return { sqft: measured, source: 'measured' }
+  if (measured != null) {
+    // The stored total is every board; take the hang-only boards back out for the finisher.
+    const field = legacy.fieldTakeoff as Record<string, unknown>
+    const measurements = Array.isArray(field.measurements) ? field.measurements : []
+    const hangOnly = hangOnlyMeasuredSqft(measurements)
+    return { sqft: measured, finishSqft: Math.max(0, measured - hangOnly), source: 'measured' }
+  }
 
   const v3 = v3Quote(legacy)
   if (v3?.lineItems?.length) {
     const withWaste = quotedSqftWithWaste(v3)
-    if (withWaste > 0) return { sqft: withWaste, source: 'quoted' }
+    if (withWaste > 0) {
+      return { sqft: withWaste, finishSqft: quotedFinishSqftWithWaste(v3), source: 'quoted' }
+    }
   }
 
+  // v2 quotes and PO intake have no lines to tell hang-only from finished: both numbers match.
   const v2 = v2Quote(legacy)
   if (v2) {
     const withWaste = quotedSqftWithWaste(v2)
-    if (withWaste > 0) return { sqft: withWaste, source: 'quoted' }
+    if (withWaste > 0) return { sqft: withWaste, finishSqft: withWaste, source: 'quoted' }
     const direct = positive(num(v2.sqft))
-    if (direct != null) return { sqft: direct, source: 'quoted' }
+    if (direct != null) return { sqft: direct, finishSqft: direct, source: 'quoted' }
     const breakdownSum = (v2.breakdowns ?? []).reduce((acc, b) => acc + (num(b.sqft) ?? 0), 0)
-    if (breakdownSum > 0) return { sqft: breakdownSum, source: 'quoted' }
+    if (breakdownSum > 0) return { sqft: breakdownSum, finishSqft: breakdownSum, source: 'quoted' }
   }
 
   if (intakeSource === 'po' && po) {
     const poSqft = positive(num(po.customerSqft))
-    if (poSqft != null) return { sqft: poSqft, source: 'po' }
+    if (poSqft != null) return { sqft: poSqft, finishSqft: poSqft, source: 'po' }
   }
 
-  return { sqft: null, source: null }
+  return { sqft: null, finishSqft: null, source: null }
 }
 
 /** Sum of accepted change orders' additional crew sqft (scope the crew hangs and finishes). */

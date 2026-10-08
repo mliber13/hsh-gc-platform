@@ -35,7 +35,9 @@ import {
   pieceRowHelperDeduction,
   recalcPieceEntryAmount,
   type PayrollRowPerson,
+  type PieceSqftBasis,
 } from '@/lib/payrollMath'
+import { classifyLaborCategory } from '@/lib/drywall/projectLaborMath'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type {
   PayrollEntry,
@@ -86,6 +88,17 @@ function resolvePieceRate(
   }
 
   return project ? getRateFromJob(project, pieceKey) : null
+}
+
+/** A finish piece is paid on finish sqft; everything else on every board hung. */
+function sqftBasisForPiece(
+  pieceKey: string,
+  workType: string | undefined,
+  catalogs: OrgDrywallCatalogs | null,
+): PieceSqftBasis {
+  return classifyLaborCategory('piece', catalogs, pieceKey, workType) === 'finisher'
+    ? 'finish'
+    : 'hang'
 }
 
 function pieceTypePatchForSelection(
@@ -554,7 +567,12 @@ export function PayrollPersonRow({
                       project,
                       drywallCatalogs,
                     )
-                    const sqft = project ? getSqftFromJob(project) : null
+                    const sqft = project
+                      ? getSqftFromJob(
+                          project,
+                          sqftBasisForPiece(key, pe.workType, drywallCatalogs),
+                        )
+                      : null
                     patchPiece(idx, {
                       jobId: sel.jobId,
                       jobName: sel.jobName,
@@ -569,10 +587,31 @@ export function PayrollPersonRow({
                   onValueChange={(v) => {
                     const opt = pieceTypeOptionByValue.get(v)
                     const proj = projects.find((p) => p.id === pe.jobId)
-                    patchPiece(
-                      idx,
-                      pieceTypePatchForSelection(v, opt, drywallCatalogs, proj, pe.rate),
+                    const typePatch = pieceTypePatchForSelection(
+                      v,
+                      opt,
+                      drywallCatalogs,
+                      proj,
+                      pe.rate,
                     )
+                    // Switching hang <-> finish on a job already picked moves the sqft to the
+                    // matching basis — but only when it is still the number the job filled in.
+                    // A sqft typed by hand is the payroll clerk's call and is left alone.
+                    if (proj) {
+                      const was = getSqftFromJob(
+                        proj,
+                        sqftBasisForPiece(pieceKey, pe.workType, drywallCatalogs),
+                      )
+                      const now = getSqftFromJob(
+                        proj,
+                        sqftBasisForPiece(v, typePatch.workType, drywallCatalogs),
+                      )
+                      const current = String(pe.jobTotalSqft ?? '').trim()
+                      if (now != null && (current === '' || current === String(was))) {
+                        typePatch.jobTotalSqft = String(now)
+                      }
+                    }
+                    patchPiece(idx, typePatch)
                   }}
                 >
                   <SelectTrigger>

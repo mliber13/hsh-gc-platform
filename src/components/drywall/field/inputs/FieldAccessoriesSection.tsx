@@ -18,6 +18,7 @@ import {
   totalManualCornerBeadQuantity,
 } from '@/lib/drywall/accessoryCalc'
 import { isBeadRow } from '@/lib/drywall/fieldBeadGrid'
+import { hangOnlyMeasuredSqft } from '@/lib/drywall/hangOnly'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import {
   FIELD_MATERIAL_OPTIONS,
@@ -59,11 +60,20 @@ export function FieldAccessoriesSection({
 
   const quoteInput = useMemo(() => quoteInputFromDrywallQuote(quote), [quote])
 
+  // Mud and tape are sized on what gets finished; hang-only board (Hardi, a base layer) is hung
+  // and screwed but never taped.
+  const finishSqft = useMemo(
+    () => Math.max(0, measuredSqft - hangOnlyMeasuredSqft(takeoff.measurements)),
+    [measuredSqft, takeoff.measurements],
+  )
+
   /** What the current measurements imply, without writing it anywhere. */
   const autoNow = useMemo(
     () =>
-      measuredSqft > 0 ? calculateFieldAccessories(measuredSqft, cornerBeadQty, quoteInput) : [],
-    [measuredSqft, cornerBeadQty, quoteInput],
+      measuredSqft > 0
+        ? calculateFieldAccessories(measuredSqft, cornerBeadQty, quoteInput, finishSqft)
+        : [],
+    [measuredSqft, cornerBeadQty, quoteInput, finishSqft],
   )
 
   const hasAutoRows = takeoff.accessories.some((acc) => acc.autoCalculated)
@@ -181,7 +191,12 @@ export function FieldAccessoriesSection({
 
   const handleResetAccessory = (id: string) => {
     if (measuredSqft <= 0) return
-    const autoAccessories = calculateFieldAccessories(measuredSqft, cornerBeadQty, quoteInput)
+    const autoAccessories = calculateFieldAccessories(
+      measuredSqft,
+      cornerBeadQty,
+      quoteInput,
+      finishSqft,
+    )
 
     onChange((prev) => {
       const resetAcc = prev.accessories.find((acc) => acc.id === id)

@@ -34,7 +34,15 @@ export function computeMeasuredSqft(measurements: FieldMeasurementArea[]): numbe
   }, 0)
 }
 
-export function quotedSqftWithWaste(quote: DrywallQuoteV2V3 | Record<string, unknown> | null | undefined): number {
+/**
+ * Quoted sqft with waste. `includeLine` narrows which v3 drywall lines count — finish sqft
+ * leaves out hang-only lines (see quotedFinishSqftWithWaste). A v2 quote has no lines to tell
+ * apart, so the filter does not apply to it.
+ */
+export function quotedSqftWithWaste(
+  quote: DrywallQuoteV2V3 | Record<string, unknown> | null | undefined,
+  includeLine: (line: Record<string, unknown>) => boolean = () => true,
+): number {
   if (!quote || typeof quote !== 'object') return 0
   const q = quote as Record<string, unknown>
 
@@ -46,6 +54,7 @@ export function quotedSqftWithWaste(quote: DrywallQuoteV2V3 | Record<string, unk
       (Array.isArray(lines) ? (lines as Array<Record<string, unknown>>) : []).reduce(
         (sum, line) => {
           if (line.type !== 'drywall') return sum
+          if (!includeLine(line)) return sum
           const qty = parseFloat(String(line.quantity ?? 0)) || 0
           const wasteRaw = line.waste_pct
           const waste = wasteRaw == null || wasteRaw === '' ? 10 : parseFloat(String(wasteRaw)) || 0
