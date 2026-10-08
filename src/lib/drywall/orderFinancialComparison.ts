@@ -3,7 +3,8 @@ import { applyLaborBurden } from '@/lib/drywall/calculations/quantityUtils'
 import { calculateQuoteTotals } from '@/lib/drywall/quoteCalculations'
 import { computeContractValue } from '@/lib/drywall/contractValue'
 import { computeQuoteV3Totals } from '@/lib/drywall/quoteV3Math'
-import { computeMeasuredSqft } from '@/lib/drywall/fieldMeasurementUtils'
+import { computeMeasuredSqft, quotedSqftWithWaste } from '@/lib/drywall/fieldMeasurementUtils'
+import { hangOnlyMeasuredSqft, isHangOnlyQuoteLine } from '@/lib/drywall/hangOnly'
 import type { DrywallChangeOrder, DrywallQuote, DrywallQuoteV3, FieldTakeoff } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 
@@ -26,8 +27,15 @@ export interface OrderFinancialComparisonContext {
 }
 
 export interface OrderFinancialComparison {
+  /** Every board hung — hanger and prep/clean pay. */
   originalSqft: number
   revisedSqft: number
+  /**
+   * The part that gets finished — less hang-only board (Hardi, a double layer's base layer).
+   * Finisher pay. Equal to the sqft above on any job without hang-only board.
+   */
+  originalFinishSqft: number
+  revisedFinishSqft: number
   varianceSqft: number
   variancePercent: number
   originalHangerRate: number
@@ -68,15 +76,21 @@ function num(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback
 }
 
+/**
+ * Hanger and prep/clean on every board hung; finisher only on what gets finished. Before the
+ * hang/finish split one sqft fed all three, so Hardi on Chardon - Droblyen showed the finisher
+ * paid $357.75 to finish board nobody finishes.
+ */
 function laborWithBurdenForSqft(
-  sqft: number,
+  hangSqft: number,
+  finishSqft: number,
   rates: OrderLaborRateSet,
   quote: DrywallQuote,
 ): number {
   return (
-    applyLaborBurden(sqft * rates.hangerRate, quote.hangerIncludeLaborBurden) +
-    applyLaborBurden(sqft * rates.finisherRate, quote.finisherIncludeLaborBurden) +
-    applyLaborBurden(sqft * rates.prepCleanRate, quote.prepCleanIncludeLaborBurden)
+    applyLaborBurden(hangSqft * rates.hangerRate, quote.hangerIncludeLaborBurden) +
+    applyLaborBurden(finishSqft * rates.finisherRate, quote.finisherIncludeLaborBurden) +
+    applyLaborBurden(hangSqft * rates.prepCleanRate, quote.prepCleanIncludeLaborBurden)
   )
 }
 
@@ -220,6 +234,17 @@ export function buildOrderFinancialComparison(
 
   const quoteSqft = v3Direct ? v3Direct.quoteSqft : quotedSqftForComparison(quote)
 
+  // Hang-only board comes back out for the finisher, on each side. A v2 quote has no lines to
+  // tell apart, so its finish sqft is all of it.
+  const quoteHangOnly = v3Quote
+    ? quotedSqftWithWaste(v3Quote, (line) => isHangOnlyQuoteLine(line))
+    : 0
+  const quoteFinishSqft = Math.max(0, quoteSqft - quoteHangOnly)
+  const fieldFinishSqft =
+    measuredFromAreas > 0
+      ? Math.max(0, fieldSqft - hangOnlyMeasuredSqft(fieldTakeoff.measurements ?? []))
+      : fieldSqft
+
   const baselineRates = resolveOrderBaselineRates(quote, fieldTakeoff)
   const revisedRates = resolveOrderRevisedRates(quote, fieldTakeoff, reviewLaborRates)
 
@@ -247,13 +272,19 @@ export function buildOrderFinancialComparison(
   const overheadPct = num(quote.overheadPercentage)
 
   const effectiveSqft = fieldSqft > 0 ? fieldSqft : quoteSqft
+  const effectiveFinishSqft = fieldSqft > 0 ? fieldFinishSqft : quoteFinishSqft
   const sqftScale = quoteSqft > 0 && effectiveSqft > 0 ? effectiveSqft / quoteSqft : 1
 
-  const rateBasedLabor = laborWithBurdenForSqft(quoteSqft, baselineRates, quote)
+  const rateBasedLabor = laborWithBurdenForSqft(quoteSqft, quoteFinishSqft, baselineRates, quote)
   const baselineLaborWithTax = v3Direct
     ? v3Direct.labor
     : laborFromQuoteDirectCosts(quote, rateBasedLabor)
-  const adjustedLaborWithTax = laborWithBurdenForSqft(effectiveSqft, revisedRates, quote)
+  const adjustedLaborWithTax = laborWithBurdenForSqft(
+    effectiveSqft,
+    effectiveFinishSqft,
+    revisedRates,
+    quote,
+  )
 
   const deltaLaborWithTax = adjustedLaborWithTax - baselineLaborWithTax
   const subtractedMaterial = Math.max(0, baselineDirect - baselineLaborWithTax)
@@ -280,6 +311,8 @@ export function buildOrderFinancialComparison(
   return {
     originalSqft: quoteSqft,
     revisedSqft: effectiveSqft,
+    originalFinishSqft: quoteFinishSqft,
+    revisedFinishSqft: effectiveFinishSqft,
     varianceSqft,
     variancePercent,
     originalHangerRate: baselineRates.hangerRate,
@@ -302,8 +335,8 @@ export function buildOrderFinancialComparison(
     revisedMaterialCost,
     originalHangerPay: quoteSqft * baselineRates.hangerRate,
     revisedHangerPay: effectiveSqft * revisedRates.hangerRate,
-    originalFinisherPay: quoteSqft * baselineRates.finisherRate,
-    revisedFinisherPay: effectiveSqft * revisedRates.finisherRate,
+    originalFinisherPay: quoteFinishSqft * baselineRates.finisherRate,
+    revisedFinisherPay: effectiveFinishSqft * revisedRates.finisherRate,
     originalPrepPay: quoteSqft * baselineRates.prepCleanRate,
     revisedPrepPay: effectiveSqft * revisedRates.prepCleanRate,
     deltaTotal: acceptedChangeOrderRevenue,

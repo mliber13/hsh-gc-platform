@@ -357,6 +357,18 @@ export function LaborRateAdjustmentsCard({
       revised: fin.revisedSqft.toLocaleString(undefined, { maximumFractionDigits: 0 }),
       change: `${fin.varianceSqft >= 0 ? '+' : ''}${fin.varianceSqft.toLocaleString(undefined, { maximumFractionDigits: 1 })}`,
     },
+    // Only when hang-only board (Hardi, a base layer) makes the finisher's sqft different.
+    ...(Math.round(fin.originalFinishSqft) !== Math.round(fin.originalSqft) ||
+    Math.round(fin.revisedFinishSqft) !== Math.round(fin.revisedSqft)
+      ? [
+          {
+            label: 'Finished sqft',
+            original: fin.originalFinishSqft.toLocaleString(undefined, { maximumFractionDigits: 1 }),
+            revised: fin.revisedFinishSqft.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+            change: `${fin.revisedFinishSqft - fin.originalFinishSqft >= 0 ? '+' : ''}${(fin.revisedFinishSqft - fin.originalFinishSqft).toLocaleString(undefined, { maximumFractionDigits: 1 })}`,
+          },
+        ]
+      : []),
     {
       label: 'Hanger rate',
       original: rateMoney(fin.originalHangerRate),

@@ -194,3 +194,75 @@ describe('buildOrderFinancialComparison §9 per-line override', () => {
     expect(fin.originalSqft).toBeCloseTo(1100, 5)
   })
 })
+
+/**
+ * Hardi is hung but never finished. The budget-headroom card paid the finisher on every board
+ * in both columns — Chardon - Droblyen, 2026-10-08, showed field finisher pay $3,764.25
+ * (8,365 x $0.45) where the finished board was 7,570 sqft: $3,406.50.
+ */
+describe('buildOrderFinancialComparison — hang-only board is not finisher pay', () => {
+  function droblyenQuote(): DrywallQuoteV3 {
+    const quote = createEmptyDrywallQuoteV3()
+    quote.project_hanger_rate = 0.27
+    quote.project_finisher_rate = 0.5
+    quote.prep_clean_rate = 0.03
+    quote.lineItems = [
+      line('drywall', { id: 'cabin', location: 'Cabin', quantity: 1874, catalog_id: '1_2_mr', finish_scope_id: 'level_4', waste_pct: 2 }),
+      line('drywall', { id: 'garage', location: 'Garage', quantity: 5696, catalog_id: '1_2_mr', finish_scope_id: 'level_4', waste_pct: 2 }),
+      line('drywall', { id: 'hardi', location: 'Cabin', quantity: 795, catalog_id: '1_2_cement', finish_scope_id: 'firetape_only', custom_finisher_rate: 0, waste_pct: 2 }),
+    ]
+    return quote
+  }
+
+  /** 7,570 sqft of drywall (46 sheets of 4x12... kept simple as one row) plus 53 3x5 Hardi. */
+  function droblyenTakeoff(): FieldTakeoff {
+    return {
+      ...emptyTakeoff(0),
+      measurements: [
+        {
+          id: 'cabin',
+          area: 'Cabin',
+          boards: [
+            { id: 'dw', boardType: 'Standard', thickness: '1/2', width: '48', length: '10', quantity: String(7570 / 40) },
+            { id: 'hb', boardType: 'Cement', thickness: '1/2', width: '36', length: '5', quantity: '53' },
+          ],
+        },
+      ],
+    }
+  }
+
+  it('pays the finisher on finished sqft in both columns, the hanger on everything', () => {
+    const catalogs = createDefaultDrywallCatalogSeeds()
+    const v3 = droblyenQuote()
+    const flattened = projectV3QuoteToV2Shape(v3, catalogs)
+    const fin = buildOrderFinancialComparison(
+      flattened,
+      droblyenTakeoff(),
+      [],
+      { hangerRate: '0.27', finisherRate: '0.45', prepCleanRate: '0.03' },
+      { v3Quote: v3, catalogs },
+    )
+
+    expect(fin.revisedSqft).toBeCloseTo(8365, 0)
+    expect(fin.revisedFinishSqft).toBeCloseTo(7570, 0)
+    expect(cents(fin.revisedFinisherPay)).toBe(3406.5)
+    expect(cents(fin.revisedHangerPay)).toBe(2258.55)
+
+    // Quote side: the Hardi line is out of the finished sqft too.
+    expect(fin.originalFinishSqft).toBeCloseTo((1874 + 5696) * 1.02, 0)
+    expect(fin.originalFinishSqft).toBeLessThan(fin.originalSqft)
+  })
+
+  it('a job without hang-only board is unchanged: finished sqft equals sqft', () => {
+    const catalogs = catalogsForStearns()
+    const v3 = stearnsQuote()
+    const flattened = projectV3QuoteToV2Shape(v3, catalogs)
+    const fin = buildOrderFinancialComparison(flattened, emptyTakeoff(144), [], emptyRates(flattened), {
+      v3Quote: v3,
+      catalogs,
+    })
+    expect(fin.originalFinishSqft).toBe(fin.originalSqft)
+    expect(fin.revisedFinishSqft).toBe(fin.revisedSqft)
+    expect(fin.revisedFinisherPay).toBe(fin.revisedSqft * fin.revisedFinisherRate)
+  })
+})
