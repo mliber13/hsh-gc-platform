@@ -17,6 +17,7 @@ import {
   quoteInputFromDrywallQuote,
   totalManualCornerBeadQuantity,
 } from '@/lib/drywall/accessoryCalc'
+import { isBeadRow } from '@/lib/drywall/fieldBeadGrid'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import {
   FIELD_MATERIAL_OPTIONS,
@@ -66,6 +67,18 @@ export function FieldAccessoriesSection({
   )
 
   const hasAutoRows = takeoff.accessories.some((acc) => acc.autoCalculated)
+
+  // Corner bead has its own section (FieldBeadSection). Its rows stay in `accessories` — the
+  // compound calc above, the order PDF and the crew materials card all read them there — but
+  // they are entered and shown in one place only, so this list leaves them out.
+  const listed = useMemo(
+    () => takeoff.accessories.filter((acc) => !isBeadRow(acc)),
+    [takeoff.accessories],
+  )
+  const typeOptions = useMemo(
+    () => FIELD_MATERIAL_OPTIONS.filter((cat) => cat.category !== 'Corner Bead'),
+    [],
+  )
 
   /** True when the stored accessories no longer match the measurements on screen. */
   const staleVsMeasurements = useMemo(() => {
@@ -205,7 +218,7 @@ export function FieldAccessoriesSection({
         <CardDescription>
           {disableAutoCalc
             ? 'Add accessories manually. The office can auto-calculate during review.'
-            : 'Calculated from measured sqft and ceiling finish. Add corner bead manually, then recalculate when the measurements are settled — quantities you have edited by hand are kept.'}
+            : 'Calculated from measured sqft, ceiling finish and the corner bead count above. Recalculate when the measurements are settled — quantities you have edited by hand are kept.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -252,7 +265,7 @@ export function FieldAccessoriesSection({
           )}
         </div>
 
-        {takeoff.accessories.length === 0 ? (
+        {listed.length === 0 ? (
           <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-6 text-center">
             {disableAutoCalc
               ? 'No accessories yet. Tap Add manual to enter items.'
@@ -262,7 +275,7 @@ export function FieldAccessoriesSection({
           </p>
         ) : (
           <div className="space-y-3">
-            {takeoff.accessories.map((acc, index) => (
+            {listed.map((acc, index) => (
               <div
                 key={acc.id}
                 className={`p-4 rounded-lg border space-y-3 ${
@@ -332,7 +345,7 @@ export function FieldAccessoriesSection({
                         <SelectValue placeholder="Type" />
                       </SelectTrigger>
                       <SelectContent>
-                        {FIELD_MATERIAL_OPTIONS.map((cat) => (
+                        {typeOptions.map((cat) => (
                           <SelectItem key={cat.category} value={cat.category}>
                             {cat.category}
                           </SelectItem>

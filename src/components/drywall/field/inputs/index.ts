@@ -1,4 +1,5 @@
 export { FieldAccessoriesSection } from './FieldAccessoriesSection'
+export { FieldBeadSection } from './FieldBeadSection'
 export { FieldChecklistSection } from './FieldChecklistSection'
 export type { FieldChecklistSectionProps } from './FieldChecklistSection'
 export { FieldMeasurementsSection } from './FieldMeasurementsSection'

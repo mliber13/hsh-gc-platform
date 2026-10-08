@@ -6,6 +6,7 @@ import { usePageTitle } from '@/contexts/PageTitleContext'
 import { CrewScopeOfWorkCard } from '@/components/crew/CrewScopeOfWorkCard'
 import {
   FieldAccessoriesSection,
+  FieldBeadSection,
   FieldChecklistSection,
   FieldMeasurementsSection,
   FieldPhotosSection,
@@ -481,6 +482,8 @@ export function CrewMeasurePage() {
         readOnly={formReadOnly}
         onChange={setTakeoffField}
       />
+
+      <FieldBeadSection takeoff={takeoff} readOnly={formReadOnly} onChange={setTakeoffField} />
 
       <FieldPhotosSection
         projectId={projectId}

@@ -33,6 +33,7 @@ import { v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
 import type { DrywallChangeOrder, DrywallQuote, DrywallQuoteV2V3, FieldTakeoff } from '@/types/drywall'
 import {
   FieldAccessoriesSection,
+  FieldBeadSection,
   FieldChecklistSection,
   FieldMeasurementsSection,
   FieldPhotosSection,
@@ -420,6 +421,7 @@ export function FieldMeasurementPage() {
           held nothing, a narrow column of measurement tables served no one, least of all a
           phone. */}
       <FieldMeasurementsSection takeoff={takeoff} readOnly={readOnly} onChange={setTakeoffField} />
+      <FieldBeadSection takeoff={takeoff} readOnly={readOnly} onChange={setTakeoffField} />
       <FieldAccessoriesSection
         takeoff={takeoff}
         measuredSqft={measuredSqft}
