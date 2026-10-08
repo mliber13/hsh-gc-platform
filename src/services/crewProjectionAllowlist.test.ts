@@ -78,16 +78,17 @@ function deployedAllowlist(fnName: string, keyMarker: string): Set<string> {
   let found: Set<string> | null = null
   for (const f of files) {
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8')
-    const marker = `FUNCTION public.${fnName}(`
+    const marker = `CREATE OR REPLACE FUNCTION public.${fnName}(`
     let from = sql.indexOf(marker)
     while (from !== -1) {
-      const end = sql.indexOf('$$;', from)
-      const body = sql.slice(from, end === -1 ? undefined : end)
+      const body = functionBody(sql, from)
       const keysAt = body.indexOf(keyMarker)
       if (keysAt !== -1) {
-        const keys = [...body.slice(keysAt).matchAll(/'([A-Za-z_][A-Za-z0-9_]*)'/g)].map(
-          (m) => m[1],
-        )
+        // Only the IN list itself. Reading on to the end of the body would also collect the
+        // nested-array allowlists further down, and count `face` or `gauge` as top-level.
+        const list = body.slice(keysAt + keyMarker.length)
+        const keys = [...list.slice(0, list.indexOf(')')).matchAll(/'([A-Za-z_][A-Za-z0-9_]*)'/g)]
+          .map((m) => m[1])
         found = new Set(keys)
       }
       from = sql.indexOf(marker, from + marker.length)
@@ -96,6 +97,44 @@ function deployedAllowlist(fnName: string, keyMarker: string): Set<string> {
 
   if (!found) throw new Error(`no allowlist found for ${fnName} in ${MIGRATIONS_DIR}`)
   return found
+}
+
+/** A function body from its CREATE to its closing `$$;`, with `--` comments removed. */
+function functionBody(sql: string, from: number): string {
+  const end = sql.indexOf('$$;', from)
+  return sql
+    .slice(from, end === -1 ? undefined : end)
+    .split('\n')
+    .map((line) => line.replace(/--.*$/, ''))
+    .join('\n')
+}
+
+/** The last crew_safe_quote body across all migrations — what the database runs. */
+function deployedQuoteBody(): string {
+  let found: string | null = null
+  for (const f of fs.readdirSync(MIGRATIONS_DIR).filter((x) => x.endsWith('.sql')).sort()) {
+    const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8')
+    // CREATE only: COMMENT ON and REVOKE also say 'FUNCTION public.crew_safe_quote(', and
+    // slicing from those to the next $; would take the DO block for the body.
+    const marker = 'CREATE OR REPLACE FUNCTION public.crew_safe_quote('
+    let from = sql.indexOf(marker)
+    while (from !== -1) {
+      found = functionBody(sql, from)
+      from = sql.indexOf(marker, from + marker.length)
+    }
+  }
+  if (!found) throw new Error('no crew_safe_quote definition found')
+  return found
+}
+
+/** The key allowlist a nested array is narrowed to, or null if it passes through whole. */
+function nestedAllowlist(body: string, arrayKey: string): Set<string> | null {
+  const call = new RegExp(
+    String.raw`crew_safe_entries\(\s*v\s*->\s*'${arrayKey}'\s*,\s*ARRAY\[([^\]]*)\]`,
+  )
+  const m = body.match(call)
+  if (!m) return null
+  return new Set([...m[1].matchAll(/'([A-Za-z_][A-Za-z0-9_]*)'/g)].map((x) => x[1]))
 }
 
 function fieldReads(): Map<string, Set<string>> {
@@ -164,8 +203,46 @@ describe('crew_safe_quote allowlist', () => {
       'calculations',
       'takeoffData',
       'rateAdjustmentLog',
+      // Nothing in the crew path reads alternates, and each one nests whole priced line items.
+      'alternates',
     ]) {
       expect(allowed.has(key), `${key} must NOT be allowlisted`).toBe(false)
     }
+  })
+})
+
+/**
+ * Allowlisting an ARRAY used to pass its elements through whole. breakdowns[] carried
+ * itemTotal / drywallTotal / rcChannelTotal on 47 breakdowns, and insulationEntries[] carried
+ * materialRate — all of it reaching crew phones past a top-level list that looked clean.
+ */
+describe('crew_safe_quote nested arrays', () => {
+  const body = deployedQuoteBody()
+  const allowed = deployedAllowlist('crew_safe_quote', 'key IN (')
+
+  it('narrows every allowlisted array of objects, rather than passing it through', () => {
+    for (const key of ['breakdowns', 'insulationEntries', 'metalStudEntries', 'rcChannelWallEntries']) {
+      expect(allowed.has(key), `${key} is expected in the top-level list`).toBe(true)
+      expect(nestedAllowlist(body, key), `${key} is allowlisted but never narrowed`).not.toBeNull()
+    }
+    expect(body).toMatch(/crew_safe_line_items\(\s*v\s*->\s*'lineItems'/)
+  })
+
+  it('keeps breakdowns[].sqft, which the crew pay basis sums', () => {
+    expect(nestedAllowlist(body, 'breakdowns')?.has('sqft')).toBe(true)
+  })
+
+  it('withholds the dollar totals and material rates nested inside them', () => {
+    const breakdowns = nestedAllowlist(body, 'breakdowns')!
+    for (const key of ['itemTotal', 'drywallTotal', 'rcChannelTotal']) {
+      expect(breakdowns.has(key), `breakdowns[].${key} must NOT be allowlisted`).toBe(false)
+    }
+    expect(nestedAllowlist(body, 'insulationEntries')!.has('materialRate')).toBe(false)
+  })
+
+  it('projects the frozen v2 snapshot through the same function', () => {
+    // The snapshot carries the whole v2 rate card. Leaving it to the caller is what let a
+    // check of this function disagree with what crew actually receive.
+    expect(body).toMatch(/crew_safe_quote\(\s*v\s*->\s*'legacyV2Snapshot'\s*\)/)
   })
 })
