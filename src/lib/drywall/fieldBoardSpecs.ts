@@ -9,6 +9,8 @@ export const FIELD_BOARD_TYPES = [
 
 export function getAvailableWidths(boardType: string, thickness: string): string[] {
   if (boardType === 'Moisture-Resistant') return ['48']
+  // Hardi / cement backer also comes in 3x5 sheets (36" wide, 5' long).
+  if (boardType === 'Cement') return ['36', '48', '54']
   if (thickness === '1/4') return ['48']
   return ['48', '54']
 }
@@ -21,6 +23,7 @@ export function getAvailableThicknesses(boardType: string): string[] {
 
 export function getAvailableLengths(boardType: string, width: string, thickness: string): string[] {
   // Lengths always run long → short for consistency.
+  if (boardType === 'Cement' && width === '36') return ['5']
   if (width === '54') return ['16', '14', '12', '10']
   if (boardType === 'Moisture-Resistant') return ['12', '10', '8']
   if (thickness === '1/4') return ['10', '8']
