@@ -32,11 +32,31 @@ export function catalogColumnLabel(type: QuoteLineItemType): string {
   }
 }
 
-export function resolveBoard(line: QuoteLineItem, catalogs: OrgDrywallCatalogs) {
+/**
+ * The slice of the catalogs the hang and finish rate rules actually read.
+ *
+ * Crew get only these two fields — their own piece rates — from
+ * `crew_drywall_labor_rates()`, never the whole price book. Widening the rate resolvers to
+ * accept the slice keeps ONE copy of the precedence rules (line override → project rate →
+ * catalog default) for both operator and crew; `OrgDrywallCatalogs` satisfies it structurally,
+ * so operator callers are unchanged.
+ */
+export interface LaborRateCatalogSlice {
+  boards: Array<{ id: string; hanger_rate: number }>
+  finish_scopes: Array<{ id: string; finisher_rate: number }>
+}
+
+export function resolveBoard<B extends { id: string }>(
+  line: QuoteLineItem,
+  catalogs: { boards: B[] },
+): B | undefined {
   return catalogs.boards.find((b) => b.id === line.catalog_id)
 }
 
-export function resolveFinishScope(line: QuoteLineItem, catalogs: OrgDrywallCatalogs) {
+export function resolveFinishScope<F extends { id: string }>(
+  line: QuoteLineItem,
+  catalogs: { finish_scopes: F[] },
+): F | undefined {
   if (!line.finish_scope_id) return undefined
   return catalogs.finish_scopes.find((f) => f.id === line.finish_scope_id)
 }
@@ -80,7 +100,7 @@ export function getCatalogDefaultMaterialRate(
 
 export function getCatalogDefaultFinisherRate(
   line: QuoteLineItem,
-  catalogs: OrgDrywallCatalogs,
+  catalogs: LaborRateCatalogSlice,
 ): number {
   if (line.type !== 'drywall') return 0
   return resolveFinishScope(line, catalogs)?.finisher_rate ?? 0
@@ -88,7 +108,7 @@ export function getCatalogDefaultFinisherRate(
 
 export function getCatalogDefaultHangerRate(
   line: QuoteLineItem,
-  catalogs: OrgDrywallCatalogs,
+  catalogs: LaborRateCatalogSlice,
 ): number {
   if (line.type !== 'drywall') return 0
   return resolveBoard(line, catalogs)?.hanger_rate ?? 0
@@ -96,7 +116,7 @@ export function getCatalogDefaultHangerRate(
 
 export function getEffectiveHangerRate(
   line: QuoteLineItem,
-  catalogs: OrgDrywallCatalogs,
+  catalogs: LaborRateCatalogSlice,
   projectRate?: number,
 ): number {
   if (line.type !== 'drywall') return 0
@@ -108,7 +128,7 @@ export function getEffectiveHangerRate(
 
 export function getEffectiveFinisherRate(
   line: QuoteLineItem,
-  catalogs: OrgDrywallCatalogs,
+  catalogs: LaborRateCatalogSlice,
   projectRate?: number,
 ): number {
   if (line.type !== 'drywall') return 0

@@ -8,6 +8,7 @@ import { DRYWALL_QUOTE_BASE_DEFAULTS } from '@/lib/drywall/drywallQuoteDefaults'
 import {
   getEffectiveFinisherRate,
   getEffectiveHangerRate,
+  type LaborRateCatalogSlice,
 } from '@/lib/drywall/quoteV3CatalogResolve'
 import { belongsInDrywallWorkspace } from '@/services/projectVisibility'
 import {
@@ -15,7 +16,6 @@ import {
   getPoDataFromLegacy,
   parseLegacyOrders,
 } from '@/services/drywallProjectsService'
-import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import { parseScheduleItemTasks } from '@/services/scheduleService'
 import { hydrateDrywallQuoteV3 } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
@@ -964,6 +964,45 @@ function readOrderApprovedLaborRates(field: FieldTakeoff | null): {
   }
 }
 
+/**
+ * The two catalog rates a crew pay estimate needs, and nothing else.
+ *
+ * Crew used to call `fetchOrgDrywallCatalogs()` here — the operator Catalogs read — which
+ * handed a crew phone the whole price book plus the org margin floor, PO cost basis and
+ * dashboard revenue goals. They were entitled to it: the SELECT predicate on
+ * `org_drywall_catalogs` listed 'crew'. Migration 20261008120000 removes that and projects
+ * board `hanger_rate` and finish scope `finisher_rate` through a SECURITY DEFINER RPC, so a
+ * catalog field added later is withheld by default rather than shipped by default.
+ *
+ * Operators reach this too, through the "view as" crew preview, and the RPC serves them the
+ * same slice — one code path, so the preview cannot show rates the crew app would not.
+ */
+async function fetchCrewLaborRateCatalog(): Promise<LaborRateCatalogSlice> {
+  const empty: LaborRateCatalogSlice = { boards: [], finish_scopes: [] }
+
+  const { data, error } = await supabase.rpc('crew_drywall_labor_rates')
+  if (error) {
+    console.error('crew_drywall_labor_rates:', error)
+    return empty
+  }
+
+  const row = (data ?? {}) as {
+    boards?: Array<{ id?: unknown; hanger_rate?: unknown }>
+    finish_scopes?: Array<{ id?: unknown; finisher_rate?: unknown }>
+  }
+
+  return {
+    boards: (row.boards ?? []).flatMap((b) => {
+      const id = typeof b?.id === 'string' ? b.id : null
+      return id ? [{ id, hanger_rate: num(b.hanger_rate) ?? 0 }] : []
+    }),
+    finish_scopes: (row.finish_scopes ?? []).flatMap((f) => {
+      const id = typeof f?.id === 'string' ? f.id : null
+      return id ? [{ id, finisher_rate: num(f.finisher_rate) ?? 0 }] : []
+    }),
+  }
+}
+
 async function resolveQuoteCatalogLaborRates(legacy: Record<string, unknown>): Promise<{
   hangerRate: number | null
   finisherRate: number | null
@@ -972,7 +1011,7 @@ async function resolveQuoteCatalogLaborRates(legacy: Record<string, unknown>): P
 }> {
   const v3 = v3QuoteFromLegacy(legacy)
   if (v3) {
-    const catalogs = await fetchOrgDrywallCatalogs()
+    const catalogs = await fetchCrewLaborRateCatalog()
     const drywallLines = v3.lineItems.filter((l) => l.type === 'drywall')
     const projectHanger = num(v3.project_hanger_rate)
     const projectFinisher = num(v3.project_finisher_rate)
@@ -1035,7 +1074,7 @@ async function resolveQuoteCatalogLaborRates(legacy: Record<string, unknown>): P
     }
   }
 
-  const catalogs = await fetchOrgDrywallCatalogs()
+  const catalogs = await fetchCrewLaborRateCatalog()
   const defaultBoard = catalogs.boards.find((b) => (b.hanger_rate ?? 0) > 0)
   const defaultFinish = catalogs.finish_scopes.find((f) => (f.finisher_rate ?? 0) > 0)
   return {
