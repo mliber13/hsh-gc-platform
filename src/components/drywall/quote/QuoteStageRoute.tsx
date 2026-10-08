@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { toast } from 'sonner'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
+import { Button } from '@/components/ui/button'
 import { PoSummaryCard } from '@/components/drywall/quote/PoSummaryCard'
 import { shouldUseV2QuoteStage } from '@/lib/drywall/createEmptyDrywallQuote'
 import {
@@ -20,15 +21,16 @@ export function QuoteStageRoute() {
   const [loading, setLoading] = useState(true)
   const [intakeSource, setIntakeSource] = useState<'po' | 'quote' | null>(null)
   const [isV3, setIsV3] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const detectVersion = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const project = await fetchDrywallProjectById(projectId)
       if (!project) {
-        toast.error('Project not found')
         setIntakeSource('quote')
-        setIsV3(false)
+        setLoadError('Project not found')
         return
       }
 
@@ -54,9 +56,13 @@ export function QuoteStageRoute() {
       await convertQuoteToV3(projectId, project.updatedAtRaw)
       setIsV3(true)
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Failed to load quote')
+      // Never fall back to the v2 editor here. A failure used to render it, so a project
+      // whose quote was already version 3 on the row looked like it had "defaulted to v2" —
+      // with the real error gone by the time anyone looked. Say what went wrong instead.
+      const message = e instanceof Error ? e.message : 'Failed to load quote'
+      toast.error(message)
       setIntakeSource('quote')
-      setIsV3(false)
+      setLoadError(message)
     } finally {
       setLoading(false)
     }
@@ -73,6 +79,18 @@ export function QuoteStageRoute() {
 
   if (loading) {
     return <p className="text-muted-foreground p-6">Loading quote…</p>
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-3 p-6">
+        <p className="text-sm font-medium">Could not open the quote</p>
+        <p className="text-muted-foreground text-sm">{loadError}</p>
+        <Button variant="outline" size="sm" onClick={() => void detectVersion()}>
+          Try again
+        </Button>
+      </div>
+    )
   }
 
   // Change orders moved to their own stage. They shared this route for a day, which needed a

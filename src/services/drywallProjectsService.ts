@@ -993,8 +993,23 @@ export async function convertQuoteToV3(
   if (isDrywallQuoteV3(current)) return { quote: current, updatedAtRaw: loadedAt }
 
   const v3 = buildV3FromV2(current)
-  const updatedAtRaw = await saveDrywallQuoteV3(projectId, v3, loadedAt)
-  return { quote: v3, updatedAtRaw }
+  try {
+    const updatedAtRaw = await saveDrywallQuoteV3(projectId, v3, loadedAt)
+    return { quote: v3, updatedAtRaw }
+  } catch (e: unknown) {
+    // Converting means "this project should be on v3", not "apply my edit", so losing the
+    // updated_at race to a writer that produced the same outcome is success, not a conflict.
+    // StrictMode mounts the quote route twice; both runs read an unconverted quote and wrote
+    // with the same loadedAt, so the loser threw and QuoteStageRoute rendered the v2 editor
+    // over a quote that was already version 3 on the row. Only a row that is still not v3
+    // afterwards is a real conflict worth surfacing.
+    if (!(e instanceof DrywallProjectStaleError)) throw e
+    const after = await fetchDrywallProjectById(projectId)
+    if (!after) throw e
+    const settled = quoteV2V3FromLegacy(after.legacy)
+    if (!isDrywallQuoteV3(settled)) throw e
+    return { quote: settled, updatedAtRaw: after.updatedAtRaw }
+  }
 }
 
 /** JSONB-merge quote into metadata.legacy (preserves fieldTakeoff, orders, etc.). */
