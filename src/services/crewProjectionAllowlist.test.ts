@@ -240,6 +240,30 @@ describe('crew_safe_quote nested arrays', () => {
     expect(nestedAllowlist(body, 'insulationEntries')!.has('materialRate')).toBe(false)
   })
 
+  /**
+   * jsonb_set is STRICT: a NULL value erases the whole object instead of skipping the key.
+   * crew_project_detail did jsonb_set(v_quote, '{lineItems}', crew_safe_line_items(NULL)) on
+   * every v2 quote — none has lineItems — and returned an empty job for 92 projects. The
+   * assembly now lives in crew_safe_legacy, which the migration checks against every live
+   * project; this pins the wrapper to it so a rewrite cannot quietly reintroduce the inline
+   * version.
+   */
+  it('assembles the crew blob through crew_safe_legacy, not inline jsonb_set', () => {
+    let detail: string | null = null
+    for (const f of fs.readdirSync(MIGRATIONS_DIR).filter((x) => x.endsWith('.sql')).sort()) {
+      const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8')
+      const marker = 'CREATE OR REPLACE FUNCTION public.crew_project_detail('
+      let from = sql.indexOf(marker)
+      while (from !== -1) {
+        detail = functionBody(sql, from)
+        from = sql.indexOf(marker, from + marker.length)
+      }
+    }
+    expect(detail).not.toBeNull()
+    expect(detail).toMatch(/crew_safe_legacy\(/)
+    expect(detail).not.toMatch(/jsonb_set\(/)
+  })
+
   it('projects the frozen v2 snapshot through the same function', () => {
     // The snapshot carries the whole v2 rate card. Leaving it to the caller is what let a
     // check of this function disagree with what crew actually receive.

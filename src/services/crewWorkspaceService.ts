@@ -1227,13 +1227,22 @@ async function fetchCrewProjectView(projectId: string): Promise<CrewProjectView 
   if (error) throw new Error(error.message || 'Failed to load the job')
   if (!data) return null
   const row = data as Record<string, unknown>
+  // A missing blob is a server fault, never an empty job. Defaulting it to {} is what let
+  // crew_project_detail return NULL legacy for every v2-quote project for a day: the page
+  // rendered "Sqft not set yet" and "Pay rate is set by the office" over data that existed,
+  // which reads as the office's mistake rather than ours.
+  const legacy = row.legacy
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) {
+    console.error('crew_project_detail returned no legacy blob for', projectId, row)
+    throw new Error('This job’s details could not be loaded. Tell the office.')
+  }
   return {
     id: String(row.id ?? projectId),
     name: String(row.name ?? ''),
     address: String(row.address ?? ''),
     client: String(row.client ?? ''),
     status: String(row.status ?? ''),
-    legacy: (row.legacy as Record<string, unknown>) ?? {},
+    legacy: legacy as Record<string, unknown>,
   }
 }
 
