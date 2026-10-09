@@ -3,6 +3,7 @@
 // ============================================================================
 
 import React, { useCallback, useEffect, useState } from 'react'
+import { usersMissingContact } from '@/lib/contactDirectoryGaps'
 import { toast } from 'sonner'
 import { ArrowLeft, Plus, ChevronDown, ChevronRight, Edit, Trash2, RefreshCw, Archive, ArchiveRestore, MoreHorizontal, Upload } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -387,15 +388,12 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
       .catch(() => setHrCandidates([]))
   }, [isAdmin])
 
-  const usersWithoutContact = React.useMemo(() => {
-    if (!isAdmin) return []
-    const emailSet = new Set(
-      allContactsForOrg
-        .map((c) => c.email?.toLowerCase().trim())
-        .filter(Boolean) as string[]
-    )
-    return orgUsersList.filter((u) => u.email && !emailSet.has(u.email.toLowerCase().trim()))
-  }, [isAdmin, orgUsersList, allContactsForOrg])
+  // Logins with no record anywhere. Crew live in the HR roster, not here, so a roster-linked
+  // login is not a gap; nor is an inactive one. See contactDirectoryGaps.
+  const usersWithoutContact = React.useMemo(
+    () => (isAdmin ? usersMissingContact(orgUsersList, allContactsForOrg) : []),
+    [isAdmin, orgUsersList, allContactsForOrg],
+  )
 
   useEffect(() => {
     if (!addUserAsContactProfile || addUserAsContactMode !== 'under_entity' || !addUserAsContactEntityType) return
@@ -1250,22 +1248,22 @@ export function ContactDirectory({ onBack, userProfile }: ContactDirectoryProps)
         </div>
 
         {isAdmin && usersWithoutContact.length > 0 && (
-          <Card className="mb-6 border-amber-200 bg-amber-50/50">
+          <Card className="mb-6 border-amber-500/30 bg-amber-500/10">
             <CardHeader>
               <CardTitle className="text-base">Users without a contact</CardTitle>
               <CardDescription>
-                These app users don&apos;t have a directory contact yet. Add them as a standalone contact or under a partner.
+                These app users aren&apos;t in the directory or on the HR roster. Add them as a standalone contact or under a partner.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {usersWithoutContact.map((u) => (
-                  <div key={u.id} className="flex items-center justify-between border border-amber-200 rounded-lg p-3 text-sm bg-white">
+                  <div key={u.id} className="flex items-center justify-between border border-amber-500/30 rounded-lg p-3 text-sm bg-background">
                     <div>
                       <span className="font-medium">{u.full_name?.trim() || u.email}</span>
                       <div className="text-muted-foreground text-xs mt-0.5">{u.email}</div>
                       {u.is_active === false && (
-                        <span className="text-xs text-amber-700">Inactive</span>
+                        <span className="text-xs text-amber-700 dark:text-amber-300">Inactive</span>
                       )}
                     </div>
                     <Button variant="outline" size="sm" onClick={() => openAddUserAsContact(u)}>
