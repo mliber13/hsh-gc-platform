@@ -270,3 +270,49 @@ describe('crew_safe_quote nested arrays', () => {
     expect(body).toMatch(/crew_safe_quote\(\s*v\s*->\s*'legacyV2Snapshot'\s*\)/)
   })
 })
+
+/**
+ * crew_project_detail is SECURITY DEFINER, so the projects SELECT policy never applies to it.
+ * Until 20261009120000 its only check was "same organisation", so any crew login could fetch
+ * any job's crew view by id. It now carries the policy's predicate term for term; this keeps
+ * the two from drifting apart, in either direction.
+ */
+describe('crew_project_detail admits who the projects policy admits', () => {
+  function latest(marker: string, endMarker: string): string {
+    let found: string | null = null
+    for (const f of fs.readdirSync(MIGRATIONS_DIR).filter((x) => x.endsWith('.sql')).sort()) {
+      const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8')
+      let from = sql.indexOf(marker)
+      while (from !== -1) {
+        const end = sql.indexOf(endMarker, from)
+        found = sql
+          .slice(from, end === -1 ? undefined : end)
+          .split('\n')
+          .map((l) => l.replace(/--.*$/, ''))
+          .join('\n')
+        from = sql.indexOf(marker, from + marker.length)
+      }
+    }
+    if (!found) throw new Error(`not found: ${marker}`)
+    return found
+  }
+
+  const policy = latest('CREATE POLICY "Users can view organization projects"', ');')
+  const detail = latest('CREATE OR REPLACE FUNCTION public.crew_project_detail(', '$$;')
+
+  const TERMS = [
+    'user_has_crew_role()',
+    'user_can_edit()',
+    'user_is_field_foreman()',
+    'crew_is_assigned_to_project(',
+    'is_user_active()',
+  ]
+
+  it('the policy still carries every term (so the test reads the rule it means to)', () => {
+    for (const term of TERMS) expect(policy, term).toContain(term)
+  })
+
+  it('crew_project_detail carries every term of the policy', () => {
+    for (const term of TERMS) expect(detail, term).toContain(term)
+  })
+})
