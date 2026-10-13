@@ -2,7 +2,8 @@
 // Drywall project labor — Supabase read layer (D.1.3)
 // ============================================================================
 
-import { isOnlineMode } from '@/lib/supabase'
+import { isOnlineMode, supabase } from '@/lib/supabase'
+import { buildLaborDivisionContext, type LaborDivisionContext } from '@/lib/payrollLaborDivision'
 import {
   extractProjectLaborEntries,
   summarizeProjectLabor,
@@ -75,6 +76,23 @@ export async function buildSpecialtyByPersonKeyForLabor(): Promise<Map<string, D
   return out
 }
 
+/**
+ * Which payroll lines are GC labor: the roster's dated division splits plus every project's
+ * type. Not caught-and-defaulted — guessing "all drywall" on a failed read is the exact
+ * mistake this exists to stop, so a failure here fails the labor read.
+ */
+export async function fetchLaborDivisionContext(): Promise<LaborDivisionContext> {
+  const orgId = await requireUserOrgId()
+  const [team, projectsRes] = await Promise.all([
+    fetchTeam(),
+    supabase.from('projects').select('id, type').eq('organization_id', orgId),
+  ])
+  if (projectsRes.error) {
+    throw new Error(projectsRes.error.message || 'Failed to load project types for labor')
+  }
+  return buildLaborDivisionContext(team, projectsRes.data ?? [], personKey)
+}
+
 export async function fetchPayPeriodsForDrywallLabor(): Promise<PayPeriodForLabor[]> {
   if (!isOnlineMode()) {
     throw new Error('Drywall labor summary requires an online connection to Supabase.')
@@ -100,15 +118,17 @@ export interface DrywallLaborContext {
   catalogs: Awaited<ReturnType<typeof fetchOrgDrywallCatalogs>> | null
   profileRates: ProfileRatesByPersonKey
   specialtyByPersonKey: Map<string, DrywallLaborCategory>
+  division: LaborDivisionContext
   timestamps: ReturnType<typeof getProductionTimestampsFromLegacy>
 }
 
 export async function buildDrywallLaborContext(projectId: string): Promise<DrywallLaborContext> {
-  const [periods, catalogs, profileRates, specialtyByPersonKey, project] = await Promise.all([
+  const [periods, catalogs, profileRates, specialtyByPersonKey, division, project] = await Promise.all([
     fetchPayPeriodsForDrywallLabor(),
     fetchOrgDrywallCatalogs().catch(() => null),
     buildProfileRatesByPersonKey().catch(() => ({} as ProfileRatesByPersonKey)),
     buildSpecialtyByPersonKeyForLabor().catch(() => new Map<string, DrywallLaborCategory>()),
+    fetchLaborDivisionContext(),
     fetchDrywallProjectById(projectId),
   ])
   return {
@@ -116,6 +136,7 @@ export async function buildDrywallLaborContext(projectId: string): Promise<Drywa
     catalogs,
     profileRates,
     specialtyByPersonKey,
+    division,
     timestamps: getProductionTimestampsFromLegacy(project?.legacy ?? {}),
   }
 }
@@ -130,16 +151,17 @@ export async function fetchDrywallProjectLaborSummary(
 
   await requireUserOrgId()
 
-  const { periods, catalogs, profileRates, specialtyByPersonKey } =
+  const { periods, catalogs, profileRates, specialtyByPersonKey, division } =
     options?.context ??
     (await (async () => {
-      const [p, c, r, s] = await Promise.all([
+      const [p, c, r, s, d] = await Promise.all([
         fetchPayPeriodsForDrywallLabor(),
         fetchOrgDrywallCatalogs().catch(() => null),
         buildProfileRatesByPersonKey().catch(() => ({} as ProfileRatesByPersonKey)),
         buildSpecialtyByPersonKeyForLabor().catch(() => new Map<string, DrywallLaborCategory>()),
+        fetchLaborDivisionContext(),
       ])
-      return { periods: p, catalogs: c, profileRates: r, specialtyByPersonKey: s }
+      return { periods: p, catalogs: c, profileRates: r, specialtyByPersonKey: s, division: d }
     })())
 
   let entries = extractProjectLaborEntries(
@@ -148,6 +170,7 @@ export async function fetchDrywallProjectLaborSummary(
     catalogs,
     profileRates,
     specialtyByPersonKey,
+    division,
   )
 
   const window = options?.window ?? 'all'

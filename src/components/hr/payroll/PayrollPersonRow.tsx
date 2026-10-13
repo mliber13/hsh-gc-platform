@@ -49,6 +49,15 @@ import type {
 import { formatCurrency } from './payrollFormat'
 import { JobCombobox } from './JobCombobox'
 import { defaultPieceTypeForPositionName } from '@/lib/drywall/payrollPieceKeys'
+import {
+  LABOR_DIVISION_LABELS,
+  defaultLaborLineDivision,
+  isLaborDivision,
+  isSharedLaborProjectType,
+  laborLineDivision,
+  type LaborDivision,
+  type LaborDivisionContext,
+} from '@/lib/payrollLaborDivision'
 
 interface PayrollPersonRowProps {
   person: PayrollRowPerson
@@ -65,6 +74,9 @@ interface PayrollPersonRowProps {
   drywallCatalogs: OrgDrywallCatalogs | null
   /** HR position name, so a new piece row starts on the trade this person does. */
   positionName?: string | null
+  /** Who a line on a shared job is labor for — see payrollLaborDivision. */
+  laborDivision: LaborDivisionContext
+  periodStart: string
   onChange: (entry: PayrollEntry) => void
   onToggleDone: () => void
 }
@@ -123,6 +135,54 @@ function pieceTypePatchForSelection(
   }
 }
 
+/**
+ * Drywall or GC, on a line whose job both divisions work. Hidden everywhere else: on a
+ * drywall job every line is drywall labor. Only Drywall lines count as drywall job cost.
+ */
+function LaborDivisionSelect({
+  line,
+  personKey,
+  periodStart,
+  ctx,
+  disabled,
+  onChange,
+}: {
+  line: { jobId?: string; division?: unknown }
+  personKey: string
+  periodStart: string
+  ctx: LaborDivisionContext
+  disabled: boolean
+  onChange: (division: LaborDivision) => void
+}) {
+  const jobId = String(line.jobId ?? '').trim()
+  if (!jobId || !ctx.projectTypeById.has(jobId)) return null
+  if (!isSharedLaborProjectType(ctx.projectTypeById.get(jobId))) return null
+  const fallback = defaultLaborLineDivision(jobId, personKey, periodStart, ctx)
+  const tagged = isLaborDivision(line.division)
+  return (
+    <Select
+      disabled={disabled}
+      value={laborLineDivision(line, personKey, periodStart, ctx)}
+      onValueChange={(v) => onChange(v as LaborDivision)}
+    >
+      <SelectTrigger
+        className="w-[7.5rem] shrink-0"
+        title="This job is shared with the GC. Only Drywall lines count as drywall job cost."
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {(['drywall', 'gc'] as const).map((d) => (
+          <SelectItem key={d} value={d}>
+            {LABOR_DIVISION_LABELS[d]}
+            {!tagged && d === fallback ? ' (default)' : ''}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
 export function PayrollPersonRow({
   person,
   entry,
@@ -136,6 +196,8 @@ export function PayrollPersonRow({
   allEntries,
   drywallCatalogs,
   positionName,
+  laborDivision,
+  periodStart,
   onChange,
   onToggleDone,
 }: PayrollPersonRowProps) {
@@ -346,13 +408,27 @@ export function PayrollPersonRow({
                     : 'md:grid-cols-6',
                 )}
               >
-                <JobCombobox
-                  jobId={he.jobId}
-                  jobName={he.jobName}
-                  projects={projects}
-                  disabled={effectiveLocked}
-                  onChange={(sel) => patchHour(idx, { jobId: sel.jobId, jobName: sel.jobName })}
-                />
+                <div className="flex min-w-0 gap-1">
+                  <div className="min-w-0 flex-1">
+                    <JobCombobox
+                      jobId={he.jobId}
+                      jobName={he.jobName}
+                      projects={projects}
+                      disabled={effectiveLocked}
+                      onChange={(sel) =>
+                        patchHour(idx, { jobId: sel.jobId, jobName: sel.jobName, division: undefined })
+                      }
+                    />
+                  </div>
+                  <LaborDivisionSelect
+                    line={he}
+                    personKey={person.personKey}
+                    periodStart={periodStart}
+                    ctx={laborDivision}
+                    disabled={effectiveLocked}
+                    onChange={(division) => patchHour(idx, { division })}
+                  />
+                </div>
                 <Input
                   type="number"
                   min={0}
@@ -545,6 +621,8 @@ export function PayrollPersonRow({
               return (
               <div key={pe.id || idx} className="space-y-1">
               <div className="grid gap-2 rounded border bg-card p-2 md:grid-cols-8">
+                <div className="flex min-w-0 gap-1">
+                <div className="min-w-0 flex-1">
                 <JobCombobox
                   jobId={pe.jobId}
                   jobName={pe.jobName}
@@ -552,11 +630,11 @@ export function PayrollPersonRow({
                   disabled={effectiveLocked}
                   onChange={(sel) => {
                     if (!sel.jobId) {
-                      patchPiece(idx, { jobId: '', jobName: '' })
+                      patchPiece(idx, { jobId: '', jobName: '', division: undefined })
                       return
                     }
                     if (sel.jobId === 'other') {
-                      patchPiece(idx, { jobId: 'other', jobName: sel.jobName })
+                      patchPiece(idx, { jobId: 'other', jobName: sel.jobName, division: undefined })
                       return
                     }
                     const project = projects.find((p) => p.id === sel.jobId)
@@ -576,11 +654,22 @@ export function PayrollPersonRow({
                     patchPiece(idx, {
                       jobId: sel.jobId,
                       jobName: sel.jobName,
+                      division: undefined,
                       rate: rate != null ? String(rate) : pe.rate,
                       jobTotalSqft: sqft != null ? String(sqft) : pe.jobTotalSqft,
                     })
                   }}
                 />
+                </div>
+                <LaborDivisionSelect
+                  line={pe}
+                  personKey={person.personKey}
+                  periodStart={periodStart}
+                  ctx={laborDivision}
+                  disabled={effectiveLocked}
+                  onChange={(division) => patchPiece(idx, { division })}
+                />
+                </div>
                 <Select
                   disabled={effectiveLocked}
                   value={pieceKey}

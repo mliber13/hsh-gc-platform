@@ -44,6 +44,7 @@ import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import {
   buildPayrollProfileRatesForLabor,
   buildSpecialtyByPersonKeyForLabor,
+  fetchLaborDivisionContext,
   fetchPayPeriodsForDrywallLabor,
 } from '@/services/drywallLaborService'
 import {
@@ -900,7 +901,7 @@ export async function fetchDivisionExecution(now = new Date()): Promise<Division
     return { jobs: [], computedAt }
   }
 
-  const [periods, materialByProject, subByProject, catalogs, profileRates, specialtyByPersonKey] =
+  const [periods, materialByProject, subByProject, catalogs, profileRates, specialtyByPersonKey, division] =
     await Promise.all([
       fetchPayPeriodsForDrywallLabor(),
       fetchAllDrywallMaterialByProject().catch(() => new Map<string, MaterialEntryFlat[]>()),
@@ -908,6 +909,7 @@ export async function fetchDivisionExecution(now = new Date()): Promise<Division
       fetchOrgDrywallCatalogs().catch(() => null),
       buildPayrollProfileRatesForLabor().catch(() => ({})),
       buildSpecialtyByPersonKeyForLabor().catch(() => new Map<string, DrywallLaborCategory>()),
+      fetchLaborDivisionContext(),
     ])
 
   const laborBuckets = extractAllProjectLaborEntries(
@@ -915,6 +917,7 @@ export async function fetchDivisionExecution(now = new Date()): Promise<Division
     catalogs,
     profileRates,
     specialtyByPersonKey,
+    division,
   )
 
   const jobs = activeJobs.map((row) => {

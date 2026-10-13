@@ -24,6 +24,7 @@ import {
 import type { PayrollPersonType } from '@/types/payroll'
 import type { PayrollEntry, PayrollHourEntry, PayrollPieceEntry } from '@/types/payroll'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
+import { laborLineDivision, type LaborDivisionContext } from '@/lib/payrollLaborDivision'
 
 export interface PayPeriodForLabor {
   id: string
@@ -217,11 +218,19 @@ function buildRunEntriesMap(entries: PayrollEntry[]): Record<string, PayrollEntr
   return out
 }
 
+/**
+ * Drywall labor per project, from every pay run.
+ *
+ * `division` is required, not defaulted: a line on a job both divisions work can be GC
+ * labor, and a reader that forgot to ask counted it as drywall cost — Goodwill Multi-1's
+ * carpentry, 2026-10-13. GC lines are left out here so no caller has to remember.
+ */
 export function extractAllProjectLaborEntries(
   periods: PayPeriodForLabor[],
   catalogs: OrgDrywallCatalogs | null,
-  profileRates: ProfileRatesByPersonKey = {},
-  specialtyByPersonKey: Map<string, DrywallLaborCategory> = new Map(),
+  profileRates: ProfileRatesByPersonKey,
+  specialtyByPersonKey: Map<string, DrywallLaborCategory>,
+  division: LaborDivisionContext,
 ): Map<string, DrywallProjectLaborEntryFlat[]> {
   const byProject = new Map<string, DrywallProjectLaborEntryFlat[]>()
 
@@ -236,6 +245,7 @@ export function extractAllProjectLaborEntries(
       hourEntries.forEach((he, idx) => {
         const hours = num(he.hours)
         if (hours <= 0) return
+        if (laborLineDivision(he, pk, period.startDate, division) !== 'drywall') return
         const amount = hourEntryPay(he, idx, entry, profileRate)
         if (amount <= 0) return
 
@@ -260,6 +270,7 @@ export function extractAllProjectLaborEntries(
       })
 
       ;(entry.pieceEntries || []).forEach((pe, idx) => {
+        if (laborLineDivision(pe, pk, period.startDate, division) !== 'drywall') return
         const amount = pieceEntryNetAmount(pe, entry, allEntries, pk)
         if (amount <= 0) return
         const pieces = pieceEntryPieces(pe)
@@ -296,10 +307,11 @@ export function extractProjectLaborEntries(
   periods: PayPeriodForLabor[],
   projectId: string,
   catalogs: OrgDrywallCatalogs | null,
-  profileRates: ProfileRatesByPersonKey = {},
-  specialtyByPersonKey: Map<string, DrywallLaborCategory> = new Map(),
+  profileRates: ProfileRatesByPersonKey,
+  specialtyByPersonKey: Map<string, DrywallLaborCategory>,
+  division: LaborDivisionContext,
 ): DrywallProjectLaborEntryFlat[] {
-  return extractAllProjectLaborEntries(periods, catalogs, profileRates, specialtyByPersonKey).get(
+  return extractAllProjectLaborEntries(periods, catalogs, profileRates, specialtyByPersonKey, division).get(
     projectId,
   ) ?? []
 }

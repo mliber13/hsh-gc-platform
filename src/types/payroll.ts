@@ -16,6 +16,11 @@ export interface PayrollHourEntry {
   assignRate?: number | string
   assignAmount?: number | string
   helperPayReceived?: unknown[]
+  /**
+   * Whose labor this line is, on a job both divisions work. Absent means the default — see
+   * payrollLaborDivision. Set only by a person; never derived and written back.
+   */
+  division?: 'drywall' | 'gc'
 }
 
 /** Whether piece_key came from v3 drywall catalogs or legacy v2 quote work types. */
@@ -45,6 +50,8 @@ export interface PayrollPieceEntry {
   netAmount?: number | string
   /** The part of `amount` that went to a helper. `amount` − `netAmount`. */
   helperDeduction?: number | string
+  /** Whose labor this line is, on a shared job. See PayrollHourEntry.division. */
+  division?: 'drywall' | 'gc'
 }
 
 export interface PayrollEntry {
@@ -105,4 +112,6 @@ export interface PayrollProjectOption {
     finisherRate: number | null
     prepCleanRate: number | null
   }
+  /** Project type. A non-drywall type is a shared job, whose lines take a Drywall/GC tag. */
+  type?: string | null
 }

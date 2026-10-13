@@ -564,7 +564,7 @@ export async function fetchProjectsForList(): Promise<Project[]> {
 
 /** All org projects for HR payroll job picker (includes DRYWALL_ONLY). */
 export async function fetchAllOrgProjectsForPayroll(): Promise<
-  { id: string; name: string; metadata?: Record<string, unknown> }[]
+  { id: string; name: string; type: string | null; metadata?: Record<string, unknown> }[]
 > {
   if (!isOnlineMode()) return []
 
@@ -582,7 +582,7 @@ export async function fetchAllOrgProjectsForPayroll(): Promise<
 
   const { data, error } = await supabase
     .from('projects')
-    .select('id, name, metadata')
+    .select('id, name, type, metadata')
     .eq('organization_id', orgId)
     .order('name', { ascending: true })
 
@@ -594,6 +594,7 @@ export async function fetchAllOrgProjectsForPayroll(): Promise<
   return (data ?? []).map((row) => ({
     id: row.id,
     name: row.name,
+    type: (row as { type?: string | null }).type ?? null,
     metadata:
       row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
         ? (row.metadata as Record<string, unknown>)

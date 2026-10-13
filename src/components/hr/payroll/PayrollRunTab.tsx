@@ -30,6 +30,7 @@ import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type { PayPeriod, PayrollEntry, PayrollProjectOption } from '@/types/payroll'
 import type { Contractor1099, Employee, JobPosition } from '@/types/hr'
+import { buildLaborDivisionContext } from '@/lib/payrollLaborDivision'
 import { PayrollPersonRow } from './PayrollPersonRow'
 import { PayrollSummaryBar } from './PayrollSummaryBar'
 
@@ -167,6 +168,12 @@ export function PayrollRunTab({
   const people = useMemo(
     () => buildPayrollPeople(employees, contractors, false, retainedPersonKeys),
     [employees, contractors, retainedPersonKeys],
+  )
+
+  // Who a line on a shared job is labor for. Same rule the drywall cost reads use.
+  const laborDivision = useMemo(
+    () => buildLaborDivisionContext({ employees, contractors1099: contractors }, projects, personKey),
+    [employees, contractors, projects],
   )
 
   // personKey → HR position name, so a new piece row can start on the right trade.
@@ -459,6 +466,8 @@ export function PayrollRunTab({
               allEntries={entries}
               drywallCatalogs={drywallCatalogs}
               positionName={positionNameByPersonKey.get(r.person.personKey) ?? null}
+              laborDivision={laborDivision}
+              periodStart={periodStart}
               onChange={(e) => setEntry(r.person.personKey, e)}
               onToggleDone={() => togglePersonDone(r.person.personKey)}
             />

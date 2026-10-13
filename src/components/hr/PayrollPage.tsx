@@ -243,6 +243,8 @@ export function PayrollPage() {
 
           name: p.name,
 
+          type: p.type,
+
           quote: quoteFromProjectMetadata(p.metadata),
 
           fieldMeasuredSqft: fieldMeasuredSqftFromProjectMetadata(p.metadata),

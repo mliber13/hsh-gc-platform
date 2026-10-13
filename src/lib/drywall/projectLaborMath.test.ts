@@ -10,6 +10,7 @@ import {
 } from './projectLaborMath'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { DEFAULT_DASHBOARD_TARGETS } from '@/lib/drywall/dashboardTargets'
+import { ALL_DRYWALL_LABOR } from '@/lib/payrollLaborDivision'
 
 const emptyCatalogs: OrgDrywallCatalogs = {
   boards: [],
@@ -132,7 +133,7 @@ describe('extractProjectLaborEntries', () => {
   it('extracts matched hour and piece rows and excludes reimbursements', () => {
     const flat = extractProjectLaborEntries(periods, projectId, emptyCatalogs, {
       'w2-emp-1': 25,
-    })
+    }, new Map(), ALL_DRYWALL_LABOR)
     expect(flat).toHaveLength(3)
     expect(flat.filter((e) => e.source === 'hour')).toHaveLength(1)
     expect(flat.find((e) => e.source === 'hour')?.amount).toBe(200)
@@ -155,6 +156,7 @@ describe('extractProjectLaborEntries', () => {
       emptyCatalogs,
       { 'w2-emp-1': 25 },
       specialtyMap,
+      ALL_DRYWALL_LABOR,
     )
     const hourWithSpecialty = flatWithSpecialty.find((e) => e.source === 'hour')
     expect(hourWithSpecialty?.category).toBe('hanger')
@@ -166,7 +168,7 @@ describe('extractProjectLaborEntries', () => {
 
     const flatDefault = extractProjectLaborEntries(periods, projectId, emptyCatalogs, {
       'w2-emp-1': 25,
-    })
+    }, new Map(), ALL_DRYWALL_LABOR)
     expect(flatDefault.find((e) => e.source === 'hour')?.category).toBe('hourly')
     const summaryDefault = summarizeProjectLabor(flatDefault)
     expect(summaryDefault.byCategory.hourly).toBeCloseTo(w2HourBurdened, 2)
@@ -175,7 +177,7 @@ describe('extractProjectLaborEntries', () => {
   it('summarizes totals and groups by pay period with W2 burden on actuals', () => {
     const flat = extractProjectLaborEntries(periods, projectId, emptyCatalogs, {
       'w2-emp-1': 25,
-    })
+    }, new Map(), ALL_DRYWALL_LABOR)
     const summary = summarizeProjectLabor(flat)
     const w2Hour = 200 * (1 + LABOR_TAX_RATE)
     const w2Piece = 500 * (1 + LABOR_TAX_RATE)
@@ -253,12 +255,12 @@ describe('extractAllProjectLaborEntries', () => {
   ]
 
   it('buckets labor entries by jobId and skips unassigned rows', () => {
-    const byProject = extractAllProjectLaborEntries(periods, emptyCatalogs, { 'w2-emp-1': 25 })
+    const byProject = extractAllProjectLaborEntries(periods, emptyCatalogs, { 'w2-emp-1': 25 }, new Map(), ALL_DRYWALL_LABOR)
     expect(byProject.get(projectA)).toHaveLength(1)
     expect(byProject.get(projectB)).toHaveLength(1)
     expect(byProject.get('')).toBeUndefined()
     expect(byProject.get('unassigned')).toBeUndefined()
-    expect(extractProjectLaborEntries(periods, projectA, emptyCatalogs, { 'w2-emp-1': 25 })).toEqual(
+    expect(extractProjectLaborEntries(periods, projectA, emptyCatalogs, { 'w2-emp-1': 25 }, new Map(), ALL_DRYWALL_LABOR)).toEqual(
       byProject.get(projectA) ?? [],
     )
   })
