@@ -124,6 +124,12 @@ export function mergeFieldTakeoff(
                 width: board.width ?? '',
                 length: board.length ?? '',
                 quantity: board.quantity ?? '',
+                // Rebuilt field by field, so a field left off this list is dropped on every
+                // load — and gone for good on the next save. hangOnly was, from 2026-10-08
+                // to 10-13: a ticked double-layer base read as finished board, and only
+                // cement (hang only by default) looked right. Absent stays absent so the
+                // board-type default still applies (isHangOnlyBoard).
+                ...(typeof board.hangOnly === 'boolean' ? { hangOnly: board.hangOnly } : {}),
               }))
             : [],
         }))
