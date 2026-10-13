@@ -35,6 +35,7 @@ import {
   fetchMaterialEntries,
   fetchSubcontractorEntries,
 } from './supabaseService'
+import { fetchGcPayrollLabor } from './gcPayrollLaborService'
 
 // ============================================================================
 // LABOR ENTRY OPERATIONS
@@ -243,6 +244,7 @@ function buildProjectActuals(
   laborEntries: any[],
   materialEntries: any[],
   subcontractorEntries: any[],
+  payrollLaborHidden = false,
 ): ProjectActuals {
   const totals = computeActualsTotals(
     laborEntries,
@@ -255,6 +257,7 @@ function buildProjectActuals(
     laborEntries,
     materialEntries,
     subcontractorEntries,
+    payrollLaborHidden,
     ...totals,
     variance: 0,
     variancePercentage: 0,
@@ -276,7 +279,7 @@ export async function getActualsForProjects_Hybrid(
   if (uniqueIds.length === 0) return map
 
   if (isOnlineMode()) {
-    const [laborRes, materialRes, subcontractorRes] = await Promise.all([
+    const [laborRes, materialRes, subcontractorRes, gcPayroll] = await Promise.all([
       supabase
         .from('labor_entries')
         .select('*')
@@ -292,6 +295,7 @@ export async function getActualsForProjects_Hybrid(
         .select('*')
         .in('project_id', uniqueIds)
         .order('date', { ascending: false }),
+      fetchGcPayrollLabor(uniqueIds),
     ])
 
     if (laborRes.error) {
@@ -306,7 +310,7 @@ export async function getActualsForProjects_Hybrid(
       )
     }
 
-    const laborEntries = (laborRes.data ?? []).map((entry) => ({
+    const laborEntries = (laborRes.data ?? []).filter((entry) => !entry.superseded_at).map((entry) => ({
       id: entry.id,
       projectId: entry.project_id,
       tradeId: entry.trade_id,
@@ -364,6 +368,9 @@ export async function getActualsForProjects_Hybrid(
       existing.push(entry)
       laborByProject.set(entry.projectId, existing)
     }
+    for (const [projectId, entries] of gcPayroll.byProject) {
+      laborByProject.set(projectId, [...(laborByProject.get(projectId) ?? []), ...entries])
+    }
     for (const entry of materialEntries) {
       const existing = materialsByProject.get(entry.projectId) ?? []
       existing.push(entry)
@@ -383,6 +390,7 @@ export async function getActualsForProjects_Hybrid(
           laborByProject.get(projectId) ?? [],
           materialsByProject.get(projectId) ?? [],
           subcontractorsByProject.get(projectId) ?? [],
+          !gcPayroll.visible,
         ),
       )
     }
@@ -399,8 +407,13 @@ export async function getProjectActuals_Hybrid(projectId: string): Promise<any |
   
   if (isOnlineMode()) {
     try {
-      // Fetch all entries from Supabase
-      const laborEntries = await fetchLaborEntries(projectId)
+      // Fetch all entries from Supabase. Labor = the QBO import's history plus GC payroll,
+      // read live (gcPayrollLaborService).
+      const [qboLabor, gcPayroll] = await Promise.all([
+        fetchLaborEntries(projectId),
+        fetchGcPayrollLabor([projectId]),
+      ])
+      const laborEntries = [...qboLabor, ...(gcPayroll.byProject.get(projectId) ?? [])]
       
       const materialEntries = await fetchMaterialEntries(projectId)
       
@@ -419,6 +432,7 @@ export async function getProjectActuals_Hybrid(projectId: string): Promise<any |
         laborEntries,
         materialEntries,
         subcontractorEntries,
+        !gcPayroll.visible,
       )
       
       return result

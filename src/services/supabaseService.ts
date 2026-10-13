@@ -1818,7 +1818,8 @@ export async function fetchLaborEntries(projectId: string): Promise<any[]> {
     return []
   }
 
-  return data.map(entry => ({
+  // A superseded QBO row is the same wages a payroll line already counts — history, not cost.
+  return data.filter(entry => !entry.superseded_at).map(entry => ({
     id: entry.id,
     projectId: entry.project_id,
     tradeId: entry.trade_id,

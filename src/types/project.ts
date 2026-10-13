@@ -311,6 +311,11 @@ export interface ProjectActuals {
   laborEntries: LaborEntry[]
   materialEntries: MaterialEntry[]
   subcontractorEntries: SubcontractorEntry[]
+  /**
+   * True when labor paid through payroll could not be shown: this user cannot read payroll.
+   * Labor is then short by that amount — say so on screen. See gcPayrollLaborService.
+   */
+  payrollLaborHidden?: boolean
   
   // Summary totals
   totalLaborCost: number

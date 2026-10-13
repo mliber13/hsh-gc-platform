@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { toast } from 'sonner'
+import { isPayrollLaborEntryId } from '@/services/gcPayrollLaborService'
 import { fetchChangeOrders } from '@/services/changeOrderService'
 import { v4 as uuidv4 } from 'uuid'
 import {
@@ -158,6 +159,8 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
   } | null>(null)
   const [subItemsByTrade, setSubItemsByTrade] = useState<Record<string, SubItem[]>>({})
   const [actualsRefreshKey, setActualsRefreshKey] = useState(0)
+  // This user cannot read payroll, so labor paid through it is missing from the totals.
+  const [payrollLaborHidden, setPayrollLaborHidden] = useState(false)
   /** 'all' = grouped Labor/Material/Sub; 'labor'|'material'|'subcontractor' = only that type */
   const [allEntriesModalType, setAllEntriesModalType] = useState<null | 'all' | 'labor' | 'material' | 'subcontractor'>(null)
   const [reassignEntry, setReassignEntry] = useState<{ entry: ActualEntry; type: 'material' | 'subcontractor' } | null>(null)
@@ -228,6 +231,7 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     const loadActuals = async () => {
       try {
         const actuals = await getProjectActuals_Hybrid(project.id)
+        setPayrollLaborHidden(Boolean(actuals?.payrollLaborHidden))
       
         if (actuals) {
           const entries: ActualEntry[] = []
@@ -540,13 +544,22 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
     }
   }
 
+  // Payroll labor is read live from pay runs; editing a copy here would change nothing.
+  const refusePayrollEntry = (entry: ActualEntry): boolean => {
+    if (!isPayrollLaborEntryId(entry.id)) return false
+    toast.info('This labor comes from payroll. Change it in the payroll editor.')
+    return true
+  }
+
   const handleEditEntry = (entry: ActualEntry) => {
+    if (refusePayrollEntry(entry)) return
     setEditingEntry(entry)
     setEntryType(entry.type)
     setShowEntryForm(true)
   }
 
   const handleDeleteEntry = async (entry: ActualEntry) => {
+    if (refusePayrollEntry(entry)) return
     try {
       // Check if this is a parent entry with split children
       const splitChildren = ((entry.type === 'material' || entry.type === 'subcontractor') && entry.invoiceNumber)
@@ -1004,6 +1017,11 @@ export function ProjectActuals({ project, onBack }: ProjectActualsProps) {
                         </div>
                       )
                     })()}
+                    {payrollLaborHidden ? (
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                        Excludes labor paid through payroll — you don&apos;t have payroll access.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 rounded-lg border border-teal-500/30 bg-teal-500/10 p-3">

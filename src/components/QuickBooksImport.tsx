@@ -41,6 +41,14 @@ import {
   importLaborFromQBO,
   type LaborImportBatch,
 } from '@/services/laborImportService'
+
+/**
+ * The first week HSH payroll ran in the app. From here on GC labor is read live from payroll
+ * (gcPayrollLaborService), so importing QuickBooks payroll journal entries for these weeks
+ * would count the same wages twice. The import stays for earlier, pre-app history only.
+ * Decided 2026-10-13 — docs/briefs/GC_LABOR_SOURCE_DECISION.md.
+ */
+const PAYROLL_LABOR_START = '2026-01-26'
 import { useTradeCategories } from '@/contexts/TradeCategoriesContext'
 import type { Project, Trade, SubItem } from '@/types'
 
@@ -937,6 +945,10 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                 <p className="text-sm text-muted-foreground">
                   Choose a date range, preview matching Journal Entry lines, then confirm to import.
                 </p>
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  GC labor from {PAYROLL_LABOR_START} on comes from HSH payroll. Import only ranges that end
+                  before then — later weeks would count the same wages twice.
+                </p>
                 <div className="flex flex-wrap items-end gap-3">
                   <div>
                     <Label className="block text-xs mb-1">From</Label>
@@ -981,7 +993,14 @@ export function QuickBooksImport({ trigger = 'card', preSelectedProject, onSucce
                   </Button>
                   <Button
                     size="sm"
-                    disabled={laborImporting || !laborDateStart || !laborDateEnd || laborWageAccountCount === 0}
+                    disabled={
+                      laborImporting ||
+                      !laborDateStart ||
+                      !laborDateEnd ||
+                      laborWageAccountCount === 0 ||
+                      laborDateEnd >= PAYROLL_LABOR_START
+                    }
+                    title={laborDateEnd >= PAYROLL_LABOR_START ? `Payroll covers ${PAYROLL_LABOR_START} on` : undefined}
                     onClick={async () => {
                       setLaborImporting(true)
                       setLaborResult(null)

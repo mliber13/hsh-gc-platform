@@ -114,3 +114,64 @@ describe('extractAllProjectLaborEntries with a shared job', () => {
     expect(byProject.get('goodwill')?.map((e) => e.personId)).toEqual(['rich', 'roberto'])
   })
 })
+
+/**
+ * GC actuals read the 'gc' half of the same lines drywall cost reads the 'drywall' half of
+ * (gcPayrollLaborService). Every line must land on exactly one side.
+ */
+describe('drywall and GC partition payroll', () => {
+  const periods: PayPeriodForLabor[] = [
+    {
+      id: 'p1',
+      startDate: '2026-08-31',
+      endDate: '2026-09-06',
+      locked: true,
+      completedAt: null,
+      entries: [
+        { personId: 'rich', personType: 'w2', hourEntries: [{ jobId: 'goodwill', hours: 40 }] },
+        { personId: 'yuri', personType: 'w2', hourEntries: [{ jobId: 'goodwill', hours: 40, division: 'gc' }] },
+        {
+          personId: 'roberto',
+          personType: 'w2',
+          hourEntries: [{ jobId: 'goodwill', hours: 30 }, { jobId: 'kent', hours: 10 }],
+          pieceEntries: [{ jobId: 'goodwill', amount: 500, netAmount: 500 }],
+        },
+      ],
+    },
+  ]
+  const rates = { [rich]: 55, [yuri]: 25, [roberto]: 30 }
+  const total = (m: Map<string, { amount: number }[]>, id: string) =>
+    (m.get(id) ?? []).reduce((s, e) => s + e.amount, 0)
+  const everything = { projectTypeById: new Map<string, string | null>(), personDivisionAt: () => 'drywall' as const }
+
+  it('drywall + GC equals all payroll on every project', () => {
+    const drywall = extractAllProjectLaborEntries(periods, null, rates, new Map(), ctx, 'drywall')
+    const gc = extractAllProjectLaborEntries(periods, null, rates, new Map(), ctx, 'gc')
+    // Untagged, unknown-project context counts every line, but still honours Yuri's GC tag —
+    // so add the GC half back to get all of payroll.
+    const all = extractAllProjectLaborEntries(periods, null, rates, new Map(), everything, 'drywall')
+    const allGc = extractAllProjectLaborEntries(periods, null, rates, new Map(), everything, 'gc')
+    for (const id of ['goodwill', 'kent']) {
+      expect(total(drywall, id) + total(gc, id)).toBeCloseTo(total(all, id) + total(allGc, id), 6)
+    }
+    expect(total(gc, 'goodwill')).toBe(40 * 55 + 40 * 25)
+    expect(total(drywall, 'goodwill')).toBe(30 * 30 + 500)
+  })
+
+  it('flipping a tag moves the dollars, it does not add them', () => {
+    const flipped = periods.map((p) => ({
+      ...p,
+      entries: p.entries.map((e) =>
+        e.personId === 'roberto'
+          ? { ...e, hourEntries: e.hourEntries?.map((h, i) => (i === 0 ? { ...h, division: 'gc' as const } : h)) }
+          : e,
+      ),
+    }))
+    const before = extractAllProjectLaborEntries(periods, null, rates, new Map(), ctx, 'gc')
+    const after = extractAllProjectLaborEntries(flipped, null, rates, new Map(), ctx, 'gc')
+    const dwBefore = extractAllProjectLaborEntries(periods, null, rates, new Map(), ctx, 'drywall')
+    const dwAfter = extractAllProjectLaborEntries(flipped, null, rates, new Map(), ctx, 'drywall')
+    expect(total(after, 'goodwill') - total(before, 'goodwill')).toBe(30 * 30)
+    expect(total(dwBefore, 'goodwill') - total(dwAfter, 'goodwill')).toBe(30 * 30)
+  })
+})

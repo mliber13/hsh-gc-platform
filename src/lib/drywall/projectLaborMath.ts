@@ -24,7 +24,11 @@ import {
 import type { PayrollPersonType } from '@/types/payroll'
 import type { PayrollEntry, PayrollHourEntry, PayrollPieceEntry } from '@/types/payroll'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
-import { laborLineDivision, type LaborDivisionContext } from '@/lib/payrollLaborDivision'
+import {
+  laborLineDivision,
+  type LaborDivision,
+  type LaborDivisionContext,
+} from '@/lib/payrollLaborDivision'
 
 export interface PayPeriodForLabor {
   id: string
@@ -95,7 +99,8 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
-function applyW2LaborBurden(
+/** W2 pay plus the 25% labor burden (Mark, 2026-10-13: both divisions); 1099 carries none. */
+export function applyW2LaborBurden(
   amount: number,
   personType: PayrollPersonType | string,
 ): { burdened: number; burdenAdded: number } {
@@ -224,6 +229,9 @@ function buildRunEntriesMap(entries: PayrollEntry[]): Record<string, PayrollEntr
  * `division` is required, not defaulted: a line on a job both divisions work can be GC
  * labor, and a reader that forgot to ask counted it as drywall cost — Goodwill Multi-1's
  * carpentry, 2026-10-13. GC lines are left out here so no caller has to remember.
+ *
+ * `want` = 'gc' returns the other half instead, for GC actuals. Every line resolves to exactly
+ * one division, so the two calls partition payroll.
  */
 export function extractAllProjectLaborEntries(
   periods: PayPeriodForLabor[],
@@ -231,6 +239,7 @@ export function extractAllProjectLaborEntries(
   profileRates: ProfileRatesByPersonKey,
   specialtyByPersonKey: Map<string, DrywallLaborCategory>,
   division: LaborDivisionContext,
+  want: LaborDivision = 'drywall',
 ): Map<string, DrywallProjectLaborEntryFlat[]> {
   const byProject = new Map<string, DrywallProjectLaborEntryFlat[]>()
 
@@ -245,7 +254,7 @@ export function extractAllProjectLaborEntries(
       hourEntries.forEach((he, idx) => {
         const hours = num(he.hours)
         if (hours <= 0) return
-        if (laborLineDivision(he, pk, period.startDate, division) !== 'drywall') return
+        if (laborLineDivision(he, pk, period.startDate, division) !== want) return
         const amount = hourEntryPay(he, idx, entry, profileRate)
         if (amount <= 0) return
 
@@ -270,7 +279,7 @@ export function extractAllProjectLaborEntries(
       })
 
       ;(entry.pieceEntries || []).forEach((pe, idx) => {
-        if (laborLineDivision(pe, pk, period.startDate, division) !== 'drywall') return
+        if (laborLineDivision(pe, pk, period.startDate, division) !== want) return
         const amount = pieceEntryNetAmount(pe, entry, allEntries, pk)
         if (amount <= 0) return
         const pieces = pieceEntryPieces(pe)
