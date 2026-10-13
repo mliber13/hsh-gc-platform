@@ -186,7 +186,8 @@ export async function syncDrywallQbMaterials(
 
   // Match against every project the edge function let through, not just the drywall
   // workspace — projects shared with the GC used to come back unmatched. Shared projects match
-  // but are not auto-accepted: most of their lines are GC material. See qbMaterialProjectMatch.
+  // but are not auto-accepted: most of their lines are GC material — even when the project has a
+  // drywall quote and so sits in the workspace (Goodwill). See qbMaterialProjectMatch.
   const projects = await fetchDrywallProjects()
   const { data: visibleRows, error: visibleError } = await supabase
     .from('projects')
@@ -229,7 +230,7 @@ export async function syncDrywallQbMaterials(
     const project = jobName ? projectByName.get(normalizeName(jobName)) : undefined
     const isOffSystemInvoiceJob =
       !project && !!jobName && offSystemInvoiceByName.has(normalizeName(jobName))
-    // Counted without review only on a drywall workspace project or an accepted off-system job.
+    // Counted without review only on a drywall-type project or an accepted off-system job.
     const preBlessed = (!!project && project.autoAccept) || isOffSystemInvoiceJob
 
     if (project) {

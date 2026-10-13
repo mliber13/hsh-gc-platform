@@ -26,6 +26,7 @@ const gcOnly: DrywallVisibilityRow = {
   visibility: { gc: true, drywall: false },
 }
 const workspace = [{ id: 'kent', name: 'Kent - Hills' }]
+const kentRow: DrywallVisibilityRow = { id: 'kent', name: 'Kent - Hills', type: 'drywall', visibility: { gc: true, drywall: true } }
 
 describe('isDrywallVisibleProject', () => {
   it('matches the edge function: drywall visibility, drywall scope or source, drywall type', () => {
@@ -44,7 +45,7 @@ describe('isDrywallVisibleProject', () => {
 })
 
 describe('buildQbMaterialProjectIndex', () => {
-  const index = buildQbMaterialProjectIndex(workspace, [shared, gcOnly], norm)
+  const index = buildQbMaterialProjectIndex(workspace, [kentRow, shared, gcOnly], norm)
 
   it('drywall workspace projects match and are counted without review', () => {
     expect(index.get('kent - hills')).toEqual({ id: 'kent', name: 'Kent - Hills', autoAccept: true })
@@ -55,6 +56,29 @@ describe('buildQbMaterialProjectIndex', () => {
     expect(index.get('135 hillside dr')).toEqual({ id: 'hillside', name: '135 Hillside Dr', autoAccept: false })
   })
 
+  /**
+   * The regression from 2026-10-13: Goodwill Multi is a GC commercial job that also has a
+   * drywall quote, so it sits in the drywall workspace — and all 33 of its QuickBooks lines,
+   * Keim lumber included, were accepted as drywall cost. Workspace membership must not decide.
+   */
+  it('a GC-type project in the drywall workspace still waits for review', () => {
+    const goodwill = buildQbMaterialProjectIndex(
+      [{ id: 'gw', name: 'Goodwill Multi-1' }],
+      [{ id: 'gw', name: 'Goodwill Multi-1', type: 'commercial-renovation', visibility: { gc: true, drywall: true } }],
+      norm,
+    )
+    expect(goodwill.get('goodwill multi-1')?.autoAccept).toBe(false)
+  })
+
+  it('a drywall-created project auto-accepts even though it carries gc: true from the merge', () => {
+    expect(index.get('kent - hills')?.autoAccept).toBe(true)
+  })
+
+  it('an unknown type waits rather than auto-accepting', () => {
+    const unknown = buildQbMaterialProjectIndex([{ id: 'x', name: 'X' }], [], norm)
+    expect(unknown.get('x')?.autoAccept).toBe(false)
+  })
+
   it('GC-only projects do not match at all', () => {
     expect(index.has('gc only job')).toBe(false)
   })
@@ -62,7 +86,10 @@ describe('buildQbMaterialProjectIndex', () => {
   it('on a name clash the workspace project wins, so its lines stay auto-accepted', () => {
     const clash = buildQbMaterialProjectIndex(
       [{ id: 'ws', name: 'Same Name' }],
-      [{ id: 'sh', name: 'Same Name', visibility: { drywall: true } }],
+      [
+        { id: 'ws', name: 'Same Name', type: 'drywall', visibility: { drywall: true } },
+        { id: 'sh', name: 'Same Name', visibility: { drywall: true } },
+      ],
       norm,
     )
     expect(clash.get('same name')).toEqual({ id: 'ws', name: 'Same Name', autoAccept: true })
