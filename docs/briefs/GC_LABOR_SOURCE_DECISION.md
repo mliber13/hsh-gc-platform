@@ -27,7 +27,7 @@ Why not the other two:
 - **(b) Keep QBO as GC's source.** It cannot see the labor. Goodwill's GC payroll is
   **$47,525** across 17 person-weeks; QBO holds **$4,455** on that job, and only
   $4,125 of that is the same wages. The Aug–Oct work (Rich, Yuri; $35.4k) is entirely absent.
-  Drywall cost now excludes those lines, so about $47k of labor is on neither side. QBO is
+  Drywall cost now excludes those lines, so about $43k of labor is on neither side. QBO is
   also a manual button that nobody has pressed since 7/29.
 - **(a) as literally worded, "deduped by a key".** There is no shared key (see Finding 1).
   A QBO row is `JE-id:line` with no person and no pay period. Matching by amount and date
@@ -128,7 +128,7 @@ Homes, Payne & Tompkins...) plus 25 lines with class "General" or "unknown".
 | | Double-count risk | Under-count risk | Cleanup |
 |---|---|---|---|
 | (a) payroll for GC + QBO retired or deduped | Dedupe by amount/date can both miss (10 cross-job rows) and wrongly drop. Retired import: none. | Loses $27.8k of residential GC history if "retired" means deleted | Freeze, don't delete |
-| (b) QBO only | None | **High.** About $47.5k of GC payroll invisible on Goodwill, and growing every payroll | None, but the problem stays |
+| (b) QBO only | None | **High.** About $43k of GC payroll invisible on Goodwill, and growing every payroll | None, but the problem stays |
 | **(c) payroll live + QBO frozen** | $4,125 today (two rows), fixed by flagging. Zero after, if the import stays off. | Residential GC labor not run through payroll has no feed (see below) | Flag 2 rows; decide burden |
 
 ## Decisions for Mark
@@ -152,6 +152,4 @@ Homes, Payne & Tompkins...) plus 25 lines with class "General" or "unknown".
 - Test that for every project, drywall labor + GC labor = all payroll on that project, and
   that flipping one tag moves the dollars rather than adding them. Make it fail on purpose
   first (per CLAUDE.md).
-- Per CLAUDE.md, a GC read must not take a fresh `updated_at` anywhere; it is read-only so
-  it doesn't write the blob, but it should read `pay_periods` rather than the project blob.
 - Net pay: use `netAmount ?? amount` for piece lines (see `piece_amount_is_not_net`).
