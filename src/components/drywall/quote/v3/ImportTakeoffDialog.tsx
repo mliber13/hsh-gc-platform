@@ -77,7 +77,12 @@ export function ImportTakeoffDialog({ open, onOpenChange, catalogs, onApply }: P
     setParsing(true)
     setError(null)
     try {
-      const result = await parseTakeoffFileV3(file)
+      // With exactly one RC product in the catalog there is no choice to make, so preselect it
+      // rather than import RC lines at $0 labor and material.
+      const rc = catalogs.rc_channel ?? []
+      const result = await parseTakeoffFileV3(file, {
+        defaultRcCatalogId: rc.length === 1 ? rc[0].id : undefined,
+      })
       setLines(result.lines)
       setWarnings(result.warnings)
       setFileName(file.name)

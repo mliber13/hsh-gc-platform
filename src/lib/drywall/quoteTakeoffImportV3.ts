@@ -64,9 +64,21 @@ const isFtUom = (uom: unknown): boolean => {
   return s === 'FT' || s === 'LF' || s === 'LINFT' || s === 'L.F.' || s === 'L.F' || s.includes('FEET')
 }
 
-/** Parse the leading height in feet from a classification, e.g. "10' - Type X" → 10. */
+/**
+ * Parse the leading height in feet from a classification: "10' - Type X" → 10, and
+ * "10' 6" 5/8" Walls" → 10.5. Inches only count when they follow the feet directly, so the
+ * 5/8" board thickness after them is never read as a height.
+ */
 function parseHeightFt(classification: string): number | undefined {
-  const m = classification.match(/(\d+(?:\.\d+)?)\s*'/)
+  const m = classification.match(/(\d+(?:\.\d+)?)\s*'(?:\s*(\d+(?:\.\d+)?)\s*")?/)
+  if (!m) return undefined
+  const inches = m[2] ? toNum(m[2]) : 0
+  return toNum(m[1]) + (inches > 0 && inches < 12 ? inches / 12 : 0)
+}
+
+/** RC spacing from a classification, e.g. 'RC 24" OC' → 24. */
+function parseRcSpacingIn(classification: string): number | undefined {
+  const m = classification.match(/(\d+(?:\.\d+)?)\s*(?:"|in\b|inch(?:es)?)\s*o\.?\s*c/i)
   return m ? toNum(m[1]) : undefined
 }
 
@@ -111,11 +123,31 @@ const isCeiling = (s: string) => /ceiling/i.test(s)
  * RC rows (name contains "RC" / "w/RC", or a "Ceiling Assembly") yield a drywall
  * line PLUS an rc_channel line — a ceiling uses SF, a wall uses LF + height.
  */
+/** Location for rows that come before any area header, or under Togal's "Unassigned". */
+const DEFAULT_LOCATION = 'Imported takeoff'
+
+/** Words that mean a row includes board, not just channel. "10' RC 24" OC" has none. */
+const BOARD_WORDS =
+  /drywall|gyp|board|walls?\b|ceilings?\b|soffit|type\s*-?\s*x|\bmr\b|moisture|cement|sound|densglass|\d\/\d/
+
+interface RowContext {
+  /** The Togal area header above this row ("1st Floor"), else DEFAULT_LOCATION. */
+  location: string
+  /**
+   * Quantity 2 in SF. On a Togal 2-layer row this is the second layer — Quantity 1 is the
+   * first. Zero when the row has no second SF quantity.
+   */
+  layer2Sf: number
+  /** RC product to preselect: the catalog's only RC entry, when it has exactly one. */
+  defaultRcCatalogId?: string
+}
+
 function classifyToImportedLines(
   classification: string,
   qtySf: number,
   qtyFt: number,
   sourceRow: number,
+  ctx: RowContext = { location: DEFAULT_LOCATION, layer2Sf: 0 },
 ): ImportedTakeoffLine[] {
   const raw = classification.trim()
   const s = raw.toLowerCase()
@@ -131,7 +163,7 @@ function classifyToImportedLines(
     line,
   })
 
-  const location = 'Imported takeoff'
+  const location = ctx.location
 
   // Metal stud framing — LF driven, with size/gauge/height parsed from the classification.
   if (/metal stud|stud framing/.test(s)) {
@@ -203,31 +235,68 @@ function classifyToImportedLines(
 
   // Everything else is drywall (walls or ceilings). Emit an RC line alongside
   // when the assembly calls for resilient channel.
-  const twoLayer = /2\s*layer|two layer|double layer|2-layer/.test(s)
-  const drywall = createQuoteLineItem('drywall', { location })
-  drywall.quantity = qtySf > 0 ? qtySf : qtyFt
-  drywall.catalog_id = guessBoardCatalogId(raw)
-  drywall.finish_scope_id = DEFAULT_FINISH_SCOPE_ID
-  drywall.description = raw
-  out.push(
-    wrap(
-      drywall,
-      twoLayer ? '2-layer assembly — quantity is single-layer SF; double it or add a second layer line.' : undefined,
-    ),
-  )
+  const twoLayer = /2\s*layers?|two layers?|double layer|2-layer/.test(s)
+  // "10' RC 24" OC" is channel only. It used to produce a phantom drywall line too, with the
+  // channel's LF entered as board SF.
+  const rcOnly = hasRc(s) && !BOARD_WORDS.test(s)
+
+  // A Togal 2-layer row carries the second layer in Quantity 2, which the caller has already
+  // added into qtySf. One layer is the face, finished as usual; the other is the base, hung
+  // and never finished. When Togal gave only one number, both layers are that number.
+  const baseSf = twoLayer ? (ctx.layer2Sf > 0 ? ctx.layer2Sf : qtySf) : 0
+  const faceSf = twoLayer && ctx.layer2Sf > 0 ? qtySf - ctx.layer2Sf : qtySf
+  const board = guessBoardCatalogId(raw)
+
+  if (!rcOnly) {
+    const drywall = createQuoteLineItem('drywall', { location })
+    drywall.quantity = faceSf > 0 ? faceSf : qtyFt
+    drywall.catalog_id = board
+    drywall.finish_scope_id = DEFAULT_FINISH_SCOPE_ID
+    drywall.description = twoLayer ? `Face layer — ${raw}` : raw
+    out.push(wrap(drywall))
+  }
+
+  if (twoLayer && !rcOnly && baseSf > 0) {
+    // Hang Only, and the line's own finisher rate set to 0: a project finisher rate otherwise
+    // outranks the scope, and the base layer would be priced as finished.
+    const base = createQuoteLineItem('drywall', { location })
+    base.quantity = baseSf
+    base.catalog_id = board
+    base.finish_scope_id = 'hang_only'
+    base.custom_finisher_rate = 0
+    base.override_reason = 'Base layer of a 2-layer assembly — hung, not finished'
+    base.description = `Base layer — ${raw}`
+    out.push(
+      wrap(
+        base,
+        'Base layer added as Hang Only, finisher rate 0. If it gets fire-taped, switch it to Firetape Only and set the fire-tape rate.',
+      ),
+    )
+  }
 
   if (hasRc(s) || /ceiling assembly/.test(s)) {
     const rc = createQuoteLineItem('rc_channel', { location })
+    const warnings: string[] = []
+    // One layer of channel, however many layers of board hang on it.
+    const oneLayerSf = twoLayer ? faceSf : qtySf
     if (isCeiling(s)) {
       rc.rc_surface = 'ceiling'
-      rc.quantity = qtySf > 0 ? qtySf : qtyFt // ceiling area drives channel LF internally
+      rc.quantity = oneLayerSf > 0 ? oneLayerSf : qtyFt // ceiling area drives channel LF internally
     } else {
       rc.rc_surface = 'wall'
-      rc.quantity = qtyFt > 0 ? qtyFt : heightFt ? qtySf / heightFt : qtySf // wall LF
+      rc.quantity = qtyFt > 0 ? qtyFt : heightFt ? oneLayerSf / heightFt : oneLayerSf // wall LF
       if (heightFt) rc.rc_wall_height = heightFt
+      if (qtyFt <= 0) warnings.push('RC wall LF derived from SF ÷ height — verify.')
+    }
+    const spacing = parseRcSpacingIn(raw)
+    if (spacing) rc.rc_spacing_in = spacing
+    if (ctx.defaultRcCatalogId) {
+      rc.catalog_id = ctx.defaultRcCatalogId
+    } else {
+      warnings.push('Pick the RC product — labor and material are $0 until you do.')
     }
     rc.description = `RC channel — ${raw}`
-    out.push(wrap(rc, rc.rc_surface === 'wall' && qtyFt <= 0 ? 'RC wall LF derived from SF ÷ height — verify.' : undefined))
+    out.push(wrap(rc, warnings.length ? warnings.join(' ') : undefined))
   }
 
   return out
@@ -237,7 +306,15 @@ function classifyToImportedLines(
 
 const SKIP_CLASSIFICATION = /^(total|unassigned|grand total|subtotal)$/i
 
-export async function parseTakeoffFileV3(file: File): Promise<TakeoffParseResultV3> {
+export interface ParseTakeoffOptionsV3 {
+  /** Preselect this RC product on RC lines (the caller passes the catalog's only RC entry). */
+  defaultRcCatalogId?: string
+}
+
+export async function parseTakeoffFileV3(
+  file: File,
+  options: ParseTakeoffOptionsV3 = {},
+): Promise<TakeoffParseResultV3> {
   const buffer = await file.arrayBuffer()
   const workbook = XLSX.read(buffer, { type: 'array' })
   const sheetName = workbook.SheetNames[0]
@@ -248,6 +325,11 @@ export async function parseTakeoffFileV3(file: File): Promise<TakeoffParseResult
   const lines: ImportedTakeoffLine[] = []
   const warnings: string[] = []
 
+  // Togal groups items under area header rows — a name with no quantities ("1st Floor") —
+  // and closes each group with a Total row. The header becomes the location for the rows
+  // below it; "Unassigned" means no area.
+  let currentArea = DEFAULT_LOCATION
+
   rowsRaw.forEach((row, idx) => {
     const norm: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(row)) norm[normalizeHeader(k)] = v
@@ -255,11 +337,21 @@ export async function parseTakeoffFileV3(file: File): Promise<TakeoffParseResult
     const classification = String(
       firstMatch(norm, ['classification', 'item', 'description', 'name', 'assembly']),
     ).trim()
-    if (!classification || SKIP_CLASSIFICATION.test(classification)) return
+    if (!classification) return
 
-    const qty1 = toNum(firstMatch(norm, ['quantity_1', 'quantity1', 'qty_1', 'qty1', 'quantity']))
+    const rawQty1 = firstMatch(norm, ['quantity_1', 'quantity1', 'qty_1', 'qty1', 'quantity'])
+    const rawQty2 = firstMatch(norm, ['quantity_2', 'quantity2', 'qty_2', 'qty2'])
+    const isHeader = String(rawQty1).trim() === '' && String(rawQty2).trim() === ''
+    if (isHeader) {
+      if (/^unassigned$/i.test(classification)) currentArea = DEFAULT_LOCATION
+      else if (!SKIP_CLASSIFICATION.test(classification)) currentArea = classification
+      return
+    }
+    if (SKIP_CLASSIFICATION.test(classification)) return
+
+    const qty1 = toNum(rawQty1)
     const uom1 = firstMatch(norm, ['quantity1_uom', 'quantity_1_uom', 'uom_1', 'uom1', 'uom'])
-    const qty2 = toNum(firstMatch(norm, ['quantity_2', 'quantity2', 'qty_2', 'qty2']))
+    const qty2 = toNum(rawQty2)
     const uom2 = firstMatch(norm, ['quantity2_uom', 'quantity_2_uom', 'uom_2', 'uom2'])
 
     // Assign SF/LF by unit of measure; if a UOM is missing, infer (qty1 tends to be area).
@@ -273,7 +365,11 @@ export async function parseTakeoffFileV3(file: File): Promise<TakeoffParseResult
 
     if (qtySf <= 0 && qtyFt <= 0) return // nothing to price
 
-    const rowLines = classifyToImportedLines(classification, qtySf, qtyFt, idx + 2)
+    const rowLines = classifyToImportedLines(classification, qtySf, qtyFt, idx + 2, {
+      location: currentArea,
+      layer2Sf: isSqftUom(uom2) ? qty2 : 0,
+      defaultRcCatalogId: options.defaultRcCatalogId,
+    })
     lines.push(...rowLines)
     for (const l of rowLines) {
       if (l.warning) warnings.push(`"${classification}": ${l.warning}`)
