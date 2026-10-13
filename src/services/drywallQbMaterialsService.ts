@@ -1,6 +1,10 @@
 import { supabase } from '@/lib/supabase'
 import { fetchDrywallProjects } from '@/services/drywallProjectsService'
 import { requireUserOrgId } from '@/services/userService'
+import {
+  buildQbMaterialProjectIndex,
+  type DrywallVisibilityRow,
+} from '@/lib/drywall/qbMaterialProjectMatch'
 import { normalizeName, qbJobNameFromCustomerName, fetchAcceptedOffSystemInvoiceJobNames } from '@/services/drywallQbRevenueService'
 
 export type DrywallQbMaterialReviewStatus = 'pending' | 'accepted' | 'rejected'
@@ -180,14 +184,24 @@ export async function syncDrywallQbMaterials(
   const allTransactions = (data?.transactions ?? []) as QbMaterialTransactionFromApi[]
   const transactions = allTransactions.filter((txn) => txn.accountType === 'Job Materials')
 
+  // Match against every project the edge function let through, not just the drywall
+  // workspace — projects shared with the GC used to come back unmatched. Shared projects match
+  // but are not auto-accepted: most of their lines are GC material. See qbMaterialProjectMatch.
   const projects = await fetchDrywallProjects()
-  const projectByName = new Map<string, { id: string; name: string }>()
-  for (const p of projects) {
-    const key = normalizeName(p.name)
-    if (key && !projectByName.has(key)) {
-      projectByName.set(key, { id: p.id, name: p.name })
-    }
+  const { data: visibleRows, error: visibleError } = await supabase
+    .from('projects')
+    .select(
+      'id, name, type, visibility:metadata->visibility, app_scope:metadata->>app_scope, source:metadata->>source',
+    )
+    .eq('organization_id', orgId)
+  if (visibleError) {
+    throw new Error(visibleError.message || 'Failed to load projects for material matching')
   }
+  const projectByName = buildQbMaterialProjectIndex(
+    projects,
+    (visibleRows ?? []) as DrywallVisibilityRow[],
+    normalizeName,
+  )
 
   const { data: existingRows } = await supabase
     .from('drywall_qb_materials')
@@ -215,7 +229,8 @@ export async function syncDrywallQbMaterials(
     const project = jobName ? projectByName.get(normalizeName(jobName)) : undefined
     const isOffSystemInvoiceJob =
       !project && !!jobName && offSystemInvoiceByName.has(normalizeName(jobName))
-    const preBlessed = !!project || isOffSystemInvoiceJob
+    // Counted without review only on a drywall workspace project or an accepted off-system job.
+    const preBlessed = (!!project && project.autoAccept) || isOffSystemInvoiceJob
 
     if (project) {
       matched += 1
