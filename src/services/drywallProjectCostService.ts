@@ -109,43 +109,30 @@ export async function fetchDrywallProjectMaterialEntries(
 
   await requireUserOrgId()
 
-  const [materialResult, qbMaterialResult] = await Promise.all([
-    supabase
-      .from('material_entries')
-      .select('id, date, description, vendor, amount')
-      .eq('project_id', projectId)
-      .order('date', { ascending: false }),
-    supabase
-      .from('drywall_qb_materials')
-      .select('id, txn_date, qb_job_name, vendor_name, doc_number, amount')
-      .eq('matched_project_id', projectId)
-      .eq('review_status', 'accepted'),
-  ])
+  // Drywall material is the drywall QuickBooks ledger only. `material_entries` is the GC
+  // actuals table (see drywallQbMaterialsService): reading it here put GC cost on the drywall
+  // Financials of every project both divisions share — Goodwill Multi showed $60,713.80 of
+  // design fees, lumber and porta potties as drywall material. Drywall-only projects have no
+  // rows there, so dropping the read changes nothing for them.
+  const { data, error } = await supabase
+    .from('drywall_qb_materials')
+    .select('id, txn_date, qb_job_name, vendor_name, doc_number, amount')
+    .eq('matched_project_id', projectId)
+    .eq('review_status', 'accepted')
 
-  if (materialResult.error) {
-    throw new Error(`Failed to fetch material entries: ${materialResult.error.message}`)
-  }
-  if (qbMaterialResult.error) {
-    throw new Error(`Failed to fetch QuickBooks materials: ${qbMaterialResult.error.message}`)
+  if (error) {
+    throw new Error(`Failed to fetch QuickBooks materials: ${error.message}`)
   }
 
-  const fromEntries: MaterialEntryFlat[] = (materialResult.data ?? []).map((row) => ({
-    id: String(row.id),
-    date: toIsoDate(row.date),
-    description: String(row.description ?? ''),
-    vendor: row.vendor != null ? String(row.vendor) : null,
-    amount: num(row.amount),
-  }))
-
-  const fromQb: MaterialEntryFlat[] = (qbMaterialResult.data ?? []).map((row) => ({
-    id: String(row.id),
-    date: toIsoDate(row.txn_date),
-    description: qbMaterialDescription(row),
-    vendor: row.vendor_name != null ? String(row.vendor_name) : null,
-    amount: num(row.amount),
-  }))
-
-  return [...fromEntries, ...fromQb].sort((a, b) => b.date.localeCompare(a.date))
+  return (data ?? [])
+    .map((row) => ({
+      id: String(row.id),
+      date: toIsoDate(row.txn_date),
+      description: qbMaterialDescription(row),
+      vendor: row.vendor_name != null ? String(row.vendor_name) : null,
+      amount: num(row.amount),
+    }))
+    .sort((a, b) => b.date.localeCompare(a.date))
 }
 
 function appendToProjectMap<T>(
@@ -167,40 +154,23 @@ export async function fetchAllDrywallMaterialByProject(): Promise<
     throw new Error('Drywall project cost requires an online connection to Supabase.')
   }
 
-  const organizationId = await requireUserOrgId()
+  await requireUserOrgId()
 
-  const [materialResult, qbMaterialResult] = await Promise.all([
-    supabase
-      .from('material_entries')
-      .select('id, project_id, date, description, vendor, amount')
-      .eq('organization_id', organizationId),
-    supabase
-      .from('drywall_qb_materials')
-      .select('id, matched_project_id, txn_date, qb_job_name, vendor_name, doc_number, amount')
-      .eq('review_status', 'accepted')
-      .not('matched_project_id', 'is', null),
-  ])
+  // Drywall ledger only — see fetchDrywallProjectMaterialEntries. This is the division
+  // margin roll-up's read, so GC cost on shared projects also dragged the KPI hub down.
+  const { data, error } = await supabase
+    .from('drywall_qb_materials')
+    .select('id, matched_project_id, txn_date, qb_job_name, vendor_name, doc_number, amount')
+    .eq('review_status', 'accepted')
+    .not('matched_project_id', 'is', null)
 
-  if (materialResult.error) {
-    throw new Error(`Failed to fetch material entries: ${materialResult.error.message}`)
-  }
-  if (qbMaterialResult.error) {
-    throw new Error(`Failed to fetch QuickBooks materials: ${qbMaterialResult.error.message}`)
+  if (error) {
+    throw new Error(`Failed to fetch QuickBooks materials: ${error.message}`)
   }
 
   const byProject = new Map<string, MaterialEntryFlat[]>()
 
-  for (const row of materialResult.data ?? []) {
-    appendToProjectMap(byProject, row.project_id, {
-      id: String(row.id),
-      date: toIsoDate(row.date),
-      description: String(row.description ?? ''),
-      vendor: row.vendor != null ? String(row.vendor) : null,
-      amount: num(row.amount),
-    })
-  }
-
-  for (const row of qbMaterialResult.data ?? []) {
+  for (const row of data ?? []) {
     appendToProjectMap(byProject, row.matched_project_id, {
       id: String(row.id),
       date: toIsoDate(row.txn_date),
@@ -218,66 +188,27 @@ export async function fetchAllDrywallMaterialByProject(): Promise<
   return byProject
 }
 
+/**
+ * Drywall has no subcontractor ledger. Drywall subs are paid through payroll as 1099
+ * contractors (Mark, 2026-10-13: "no drywall subs go through GC"), so their cost is already
+ * in labor. `subcontractor_entries` is the GC's table: reading it put $776,624.50 of GC subs on
+ * the drywall Financials of the six projects both divisions share, and into the KPI hub's
+ * division margin. Kept as a function so the cost shape and its callers stay unchanged; it
+ * always returns nothing.
+ */
 export async function fetchAllDrywallSubByProject(): Promise<Map<string, SubEntryFlat[]>> {
   if (!isOnlineMode()) {
     throw new Error('Drywall project cost requires an online connection to Supabase.')
   }
-
-  const organizationId = await requireUserOrgId()
-
-  const { data, error } = await supabase
-    .from('subcontractor_entries')
-    .select('id, project_id, date, subcontractor_name, description, amount')
-    .eq('organization_id', organizationId)
-
-  if (error) {
-    throw new Error(`Failed to fetch subcontractor entries: ${error.message}`)
-  }
-
-  const byProject = new Map<string, SubEntryFlat[]>()
-
-  for (const row of data ?? []) {
-    appendToProjectMap(byProject, row.project_id, {
-      id: String(row.id),
-      date: toIsoDate(row.date),
-      subcontractorName: String(row.subcontractor_name ?? ''),
-      description: String(row.description ?? ''),
-      amount: num(row.amount),
-    })
-  }
-
-  for (const [projectId, entries] of byProject) {
-    entries.sort((a, b) => b.date.localeCompare(a.date))
-    byProject.set(projectId, entries)
-  }
-
-  return byProject
+  return new Map()
 }
 
-export async function fetchDrywallProjectSubEntries(projectId: string): Promise<SubEntryFlat[]> {
+/** Always empty — see fetchAllDrywallSubByProject. */
+export async function fetchDrywallProjectSubEntries(_projectId: string): Promise<SubEntryFlat[]> {
   if (!isOnlineMode()) {
     throw new Error('Drywall project cost requires an online connection to Supabase.')
   }
-
-  await requireUserOrgId()
-
-  const { data, error } = await supabase
-    .from('subcontractor_entries')
-    .select('id, date, subcontractor_name, description, amount')
-    .eq('project_id', projectId)
-    .order('date', { ascending: false })
-
-  if (error) {
-    throw new Error(`Failed to fetch subcontractor entries: ${error.message}`)
-  }
-
-  return (data ?? []).map((row) => ({
-    id: String(row.id),
-    date: toIsoDate(row.date),
-    subcontractorName: String(row.subcontractor_name ?? ''),
-    description: String(row.description ?? ''),
-    amount: num(row.amount),
-  }))
+  return []
 }
 
 async function filterMaterialAndSubByWindow(
