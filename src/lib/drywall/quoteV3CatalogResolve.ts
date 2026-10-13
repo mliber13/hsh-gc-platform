@@ -1,6 +1,9 @@
 import type { MetalStudComponent, OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type { QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
 
+/** The Hang Only finish scope id (also in hangOnly.ts HANG_ONLY_FINISH_SCOPES). */
+const HANG_ONLY_SCOPE_ID = 'hang_only'
+
 export const QUOTE_LINE_TYPE_LABELS: Record<QuoteLineItemType, string> = {
   drywall: 'Drywall',
   rc_channel: 'RC Channel',
@@ -133,6 +136,11 @@ export function getEffectiveFinisherRate(
 ): number {
   if (line.type !== 'drywall') return 0
   if (line.custom_finisher_rate != null) return line.custom_finisher_rate
+  // Hang Only has nothing to finish. The project rate is a full-finish rate, and letting it
+  // win priced finishing onto base layers and Hardi unless someone zeroed each line by hand.
+  // Firetape Only is deliberately NOT here: on a fire-tape-only job (Poland, 2026-10) the
+  // project rate IS the fire-tape price that was quoted.
+  if (line.finish_scope_id === HANG_ONLY_SCOPE_ID) return 0
   if (projectRate != null) return projectRate
   return getCatalogDefaultFinisherRate(line, catalogs)
 }
