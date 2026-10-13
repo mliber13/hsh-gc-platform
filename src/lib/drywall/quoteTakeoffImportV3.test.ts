@@ -170,6 +170,13 @@ describe('parseTakeoffFileV3', () => {
       expect(rc.quantity).toBeCloseTo(1050 / 10.5) // wall LF derived from SF ÷ height
     })
 
+    it('reads the ACT tile size from the name instead of leaving it to default to 2x4', async () => {
+      const lines = await parse()
+      const act = lines.find((l) => l.sourceClassification === '2x2 ACT')!
+      expect(act.line.acst_tile_size).toBe('2x2')
+      expect(act.warning).toBeUndefined()
+    })
+
     it('MR walls come in as MR board', async () => {
       const lines = await parse()
       expect(of(lines, '10\' 6" 5/8" MR Walls')[0].catalog_id).toBe('5_8_mr')

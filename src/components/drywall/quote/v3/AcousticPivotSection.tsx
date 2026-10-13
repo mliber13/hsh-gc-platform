@@ -184,7 +184,9 @@ export function AcousticPivotSection({
                     value={line.custom_labor_rate ?? ''}
                     readOnly={readOnly}
                     className="w-[80px]"
-                    placeholder="2.00"
+                    // Blank uses the catalog rate, which is what the math charges — show it,
+                    // rather than a fixed "2.00" that had nothing to do with the catalog.
+                    placeholder={laborRate.toFixed(2)}
                     step={0.01}
                     onChange={(e) => updateLine(line.id, { custom_labor_rate: num(e.target.value) })}
                   />

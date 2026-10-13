@@ -197,10 +197,17 @@ export function RcChannelPivotSection({
                           ))}
                         </select>
                       </SpecField>
+                      {/* Empty means "use the catalog rate", and the math does — so show that
+                          rate as the placeholder. A bare "0.00" read as unpriced when RC was
+                          in fact priced from the catalog (Goodwill Multi, 2026-10-13). */}
                       <SpecField label="Material $/piece">
                         <RateInput
                           value={spec.custom_material_rate}
                           readOnly={readOnly}
+                          placeholder={catalogRatePlaceholder(
+                            catalogs.rc_channel.find((c) => c.id === spec.catalog_id)
+                              ?.material_rate_per_piece,
+                          )}
                           onChange={(v) => updateGroup(ids, { custom_material_rate: v })}
                         />
                       </SpecField>
@@ -208,6 +215,9 @@ export function RcChannelPivotSection({
                         <RateInput
                           value={spec.custom_labor_rate}
                           readOnly={readOnly}
+                          placeholder={catalogRatePlaceholder(
+                            catalogs.rc_channel.find((c) => c.id === spec.catalog_id)?.labor_rate,
+                          )}
                           onChange={(v) => updateGroup(ids, { custom_labor_rate: v })}
                         />
                       </SpecField>
@@ -455,6 +465,11 @@ function SpecField({ label, children }: { label: string; children: React.ReactNo
       {children}
     </div>
   )
+}
+
+/** The catalog rate a blank override falls back to, shown as the input's placeholder. */
+function catalogRatePlaceholder(rate: number | undefined): string {
+  return rate != null && Number.isFinite(rate) ? rate.toFixed(2) : '0.00'
 }
 
 /**

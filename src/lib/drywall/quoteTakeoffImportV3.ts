@@ -211,7 +211,11 @@ function classifyToImportedLines(
     line.quantity = qtySf
     if (qtyFt > 0) line.grid_perimeter = qtyFt
     line.description = raw
-    out.push(wrap(line, 'Verify tile size (2x2 vs 2x4).'))
+    // Read the tile size when the name gives it. Left unset, the acoustic section treats the
+    // ceiling as 2x4 — so "2x2 ACT" priced as 2x4 tiles until someone noticed.
+    if (/2\s*[x×]\s*2/.test(s)) line.acst_tile_size = '2x2'
+    else if (/2\s*[x×]\s*4/.test(s)) line.acst_tile_size = '2x4'
+    out.push(wrap(line, line.acst_tile_size ? undefined : 'Verify tile size (2x2 vs 2x4).'))
     return out
   }
 
