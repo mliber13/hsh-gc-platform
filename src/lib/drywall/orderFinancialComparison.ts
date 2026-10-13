@@ -5,6 +5,12 @@ import { computeContractValue } from '@/lib/drywall/contractValue'
 import { computeQuoteV3Totals } from '@/lib/drywall/quoteV3Math'
 import { computeMeasuredSqft, quotedSqftWithWaste } from '@/lib/drywall/fieldMeasurementUtils'
 import { hangOnlyMeasuredSqft, isHangOnlyQuoteLine } from '@/lib/drywall/hangOnly'
+import {
+  FIRETAPE_SCOPE_ID,
+  fireTapedMeasuredSqft,
+  jobFireTapeRate,
+  quotedFireTapeSqftWithWaste,
+} from '@/lib/drywall/fireTape'
 import type { DrywallChangeOrder, DrywallQuote, DrywallQuoteV3, FieldTakeoff } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 
@@ -36,6 +42,10 @@ export interface OrderFinancialComparison {
    */
   originalFinishSqft: number
   revisedFinishSqft: number
+  /** Fire-taped sqft (fireTape.ts) — paid at fireTapeRate, not the finisher rate. */
+  originalFireTapeSqft: number
+  revisedFireTapeSqft: number
+  fireTapeRate: number
   varianceSqft: number
   variancePercent: number
   originalHangerRate: number
@@ -245,6 +255,16 @@ export function buildOrderFinancialComparison(
       ? Math.max(0, fieldSqft - hangOnlyMeasuredSqft(fieldTakeoff.measurements ?? []))
       : fieldSqft
 
+  // Fire tape: hang-only, so not in finish sqft above, but paid — at the job's fire-tape rate.
+  const quoteFireTapeSqft = v3Quote ? quotedFireTapeSqftWithWaste(v3Quote) : 0
+  const fieldFireTapeSqft = measuredFromAreas > 0 ? fireTapedMeasuredSqft(fieldTakeoff.measurements ?? []) : 0
+  const fireTapeRate =
+    jobFireTapeRate(v3Quote as Record<string, unknown> | null | undefined) ??
+    catalogs?.finish_scopes?.find((f) => f.id === FIRETAPE_SCOPE_ID)?.finisher_rate ??
+    0
+  const fireTapeLabor = (sqft: number) =>
+    applyLaborBurden(sqft * fireTapeRate, quote.finisherIncludeLaborBurden)
+
   const baselineRates = resolveOrderBaselineRates(quote, fieldTakeoff)
   const revisedRates = resolveOrderRevisedRates(quote, fieldTakeoff, reviewLaborRates)
 
@@ -273,18 +293,18 @@ export function buildOrderFinancialComparison(
 
   const effectiveSqft = fieldSqft > 0 ? fieldSqft : quoteSqft
   const effectiveFinishSqft = fieldSqft > 0 ? fieldFinishSqft : quoteFinishSqft
+  const effectiveFireTapeSqft = measuredFromAreas > 0 ? fieldFireTapeSqft : quoteFireTapeSqft
   const sqftScale = quoteSqft > 0 && effectiveSqft > 0 ? effectiveSqft / quoteSqft : 1
 
-  const rateBasedLabor = laborWithBurdenForSqft(quoteSqft, quoteFinishSqft, baselineRates, quote)
+  const rateBasedLabor =
+    laborWithBurdenForSqft(quoteSqft, quoteFinishSqft, baselineRates, quote) +
+    fireTapeLabor(quoteFireTapeSqft)
   const baselineLaborWithTax = v3Direct
     ? v3Direct.labor
     : laborFromQuoteDirectCosts(quote, rateBasedLabor)
-  const adjustedLaborWithTax = laborWithBurdenForSqft(
-    effectiveSqft,
-    effectiveFinishSqft,
-    revisedRates,
-    quote,
-  )
+  const adjustedLaborWithTax =
+    laborWithBurdenForSqft(effectiveSqft, effectiveFinishSqft, revisedRates, quote) +
+    fireTapeLabor(effectiveFireTapeSqft)
 
   const deltaLaborWithTax = adjustedLaborWithTax - baselineLaborWithTax
   const subtractedMaterial = Math.max(0, baselineDirect - baselineLaborWithTax)
@@ -313,6 +333,9 @@ export function buildOrderFinancialComparison(
     revisedSqft: effectiveSqft,
     originalFinishSqft: quoteFinishSqft,
     revisedFinishSqft: effectiveFinishSqft,
+    originalFireTapeSqft: quoteFireTapeSqft,
+    revisedFireTapeSqft: effectiveFireTapeSqft,
+    fireTapeRate,
     varianceSqft,
     variancePercent,
     originalHangerRate: baselineRates.hangerRate,

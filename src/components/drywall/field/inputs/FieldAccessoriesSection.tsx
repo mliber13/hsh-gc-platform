@@ -19,6 +19,7 @@ import {
 } from '@/lib/drywall/accessoryCalc'
 import { isBeadRow } from '@/lib/drywall/fieldBeadGrid'
 import { hangOnlyMeasuredSqft } from '@/lib/drywall/hangOnly'
+import { fireTapedMeasuredSqft } from '@/lib/drywall/fireTape'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import {
   FIELD_MATERIAL_OPTIONS,
@@ -66,14 +67,16 @@ export function FieldAccessoriesSection({
     () => Math.max(0, measuredSqft - hangOnlyMeasuredSqft(takeoff.measurements)),
     [measuredSqft, takeoff.measurements],
   )
+  // Fire-taped board is part of the hang-only sqft above, but does get tape and some mud.
+  const fireTapeSqft = useMemo(() => fireTapedMeasuredSqft(takeoff.measurements), [takeoff.measurements])
 
   /** What the current measurements imply, without writing it anywhere. */
   const autoNow = useMemo(
     () =>
       measuredSqft > 0
-        ? calculateFieldAccessories(measuredSqft, cornerBeadQty, quoteInput, finishSqft)
+        ? calculateFieldAccessories(measuredSqft, cornerBeadQty, quoteInput, finishSqft, fireTapeSqft)
         : [],
-    [measuredSqft, cornerBeadQty, quoteInput, finishSqft],
+    [measuredSqft, cornerBeadQty, quoteInput, finishSqft, fireTapeSqft],
   )
 
   const hasAutoRows = takeoff.accessories.some((acc) => acc.autoCalculated)
@@ -196,6 +199,7 @@ export function FieldAccessoriesSection({
       cornerBeadQty,
       quoteInput,
       finishSqft,
+      fireTapeSqft,
     )
 
     onChange((prev) => {

@@ -1,5 +1,6 @@
 // @ts-nocheck — parity port from FieldMeasurementStage.jsx calculateAccessories + merge
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
+import { FIRETAPE_COMPOUND_SHARE } from '@/lib/drywall/fireTape'
 import type { DrywallQuote, FieldAccessoryEntry } from '@/types/drywall'
 
 export interface AccessoryCalcQuoteInput {
@@ -50,9 +51,15 @@ export function calculateFieldAccessories(
   cornerBeadQty = 0,
   quote: AccessoryCalcQuoteInput = {},
   finishSqft?: number,
+  fireTapeSqft = 0,
 ): FieldAccessoryEntry[] {
   if (sqft === 0) return []
-  const finishBasis = Math.max(0, Math.min(sqft, finishSqft ?? sqft))
+  const finished = Math.max(0, Math.min(sqft, finishSqft ?? sqft))
+  // Fire-taped board (fireTape.ts) is taped like finished board but gets one coat: tape on its
+  // full sqft, compound on a third of it (Mark, 2026-10-13). Hang-only board gets neither.
+  const fireTaped = Math.max(0, Math.min(sqft - finished, fireTapeSqft))
+  const finishBasis = finished + fireTaped * FIRETAPE_COMPOUND_SHARE
+  const tapeBasis = finished + fireTaped
 
   const settings = DEFAULT_SETTINGS
   const actualCeilingFinish = resolveCeilingFinish(quote)
@@ -101,13 +108,13 @@ export function calculateFieldAccessories(
   const easySand90Bags = baseEasySand90Bags + additionalEasySand90Bags
   const titeBondFoamCans = Math.ceil(sqft / settings.adhesives.titeBondRate)
   const screwBoxes = Math.ceil(sqft / settings.fasteners.screwRate)
-  const paperTapeRolls = Math.ceil(finishBasis / settings.tape.paperTapeRate)
+  const paperTapeRolls = Math.ceil(tapeBasis / settings.tape.paperTapeRate)
 
   let meshTapeRolls: number
-  if (finishBasis < settings.tape.meshTapeSmallJobThreshold) {
-    meshTapeRolls = Math.ceil(finishBasis / settings.tape.meshTapeSmallJobRate)
+  if (tapeBasis < settings.tape.meshTapeSmallJobThreshold) {
+    meshTapeRolls = Math.ceil(tapeBasis / settings.tape.meshTapeSmallJobRate)
   } else {
-    meshTapeRolls = Math.ceil(finishBasis / settings.tape.meshTapeLargeJobRate)
+    meshTapeRolls = Math.ceil(tapeBasis / settings.tape.meshTapeLargeJobRate)
   }
 
   return [

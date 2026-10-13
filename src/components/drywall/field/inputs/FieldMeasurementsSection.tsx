@@ -21,11 +21,14 @@ import {
   getAvailableWidths,
 } from '@/lib/drywall/fieldBoardSpecs'
 import { computeMeasuredSqft, generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
+import { defaultHangOnlyForBoardType, hangOnlyMeasuredSqft } from '@/lib/drywall/hangOnly'
 import {
-  defaultHangOnlyForBoardType,
-  hangOnlyMeasuredSqft,
-  isHangOnlyBoard,
-} from '@/lib/drywall/hangOnly'
+  BOARD_FINISH_LABELS,
+  boardFinish,
+  fireTapedMeasuredSqft,
+  withBoardFinish,
+  type BoardFinish,
+} from '@/lib/drywall/fireTape'
 import type { FieldMeasurementArea, FieldMeasurementBoard, FieldTakeoff } from '@/types/drywall'
 import type { SetFieldTakeoff } from '../fieldTakeoffState'
 
@@ -36,20 +39,33 @@ interface FieldMeasurementsSectionProps {
 }
 
 /**
- * UI-only grouping key — one group = boardType + thickness + width + hang-only. Hang-only is
- * part of the identity so a double layer can carry the same board twice in one area: the top
- * layer finished, the base layer hang only.
+ * UI-only grouping key — one group = boardType + thickness + width + finish (finished,
+ * fire-taped, hang only). Finish is part of the identity so a double layer can carry the same
+ * board twice in one area: the top layer finished, the base layer hang only or fire-taped.
  */
 type SpecGroup = {
   id: string
   boardType: string
   thickness: string
   width: string
-  hangOnly: boolean
+  /** Finished, fire-taped or hang only — part of the identity, see above. */
+  finish: BoardFinish
+}
+
+const FINISH_ORDER: BoardFinish[] = ['finished', 'firetape', 'hang_only']
+
+const FINISH_HINTS: Record<BoardFinish, string> = {
+  finished: '',
+  firetape: 'hung, joints fire-taped, not finished (pre-rock, rated walls)',
+  hang_only: 'hung, never taped (Hardi, a base layer)',
+}
+
+function defaultFinishForBoardType(boardType: string): BoardFinish {
+  return defaultHangOnlyForBoardType(boardType) ? 'hang_only' : 'finished'
 }
 
 function specKey(board: FieldMeasurementBoard): string {
-  return `${board.boardType ?? ''}|${board.thickness ?? ''}|${board.width ?? ''}|${isHangOnlyBoard(board)}`
+  return `${board.boardType ?? ''}|${board.thickness ?? ''}|${board.width ?? ''}|${boardFinish(board)}`
 }
 
 function boardMatchesSpec(board: FieldMeasurementBoard, group: SpecGroup): boolean {
@@ -57,7 +73,7 @@ function boardMatchesSpec(board: FieldMeasurementBoard, group: SpecGroup): boole
     (board.boardType ?? '') === group.boardType &&
     (board.thickness ?? '') === group.thickness &&
     (board.width ?? '') === group.width &&
-    isHangOnlyBoard(board) === group.hangOnly
+    boardFinish(board) === group.finish
   )
 }
 
@@ -74,7 +90,7 @@ function deriveGroupsFromBoards(boards: FieldMeasurementBoard[]): SpecGroup[] {
       boardType: board.boardType ?? '',
       thickness: board.thickness ?? '',
       width: board.width ?? '',
-      hangOnly: isHangOnlyBoard(board),
+      finish: boardFinish(board),
     })
   }
   return [...seen.values()]
@@ -96,6 +112,7 @@ export function FieldMeasurementsSection({
 }: FieldMeasurementsSectionProps) {
   const total = computeMeasuredSqft(takeoff.measurements)
   const hangOnlyTotal = hangOnlyMeasuredSqft(takeoff.measurements)
+  const fireTapeTotal = fireTapedMeasuredSqft(takeoff.measurements)
 
   // Spec groups are UI state — empty/in-progress groups have no board rows yet, so they
   // cannot be re-derived from boards alone. Seed from boards when an area first appears.
@@ -158,7 +175,7 @@ export function FieldMeasurementsSection({
       ...prev,
       [areaId]: [
         ...(prev[areaId] ?? []),
-        { id: generateFieldId(), boardType: '', thickness: '', width: '', hangOnly: false },
+        { id: generateFieldId(), boardType: '', thickness: '', width: '', finish: 'finished' },
       ],
     }))
   }
@@ -198,20 +215,23 @@ export function FieldMeasurementsSection({
       value,
     )
     const newType = cascaded.boardType ?? ''
-    // Cement is hang only by default, so picking it ticks the box and leaving it unticks it.
+    // Cement is hang only by default, so picking it sets that and leaving it sets it back.
     // Any other change keeps what the measurer set — a base layer stays a base layer when its
-    // thickness changes.
-    const hangOnly =
-      field === 'boardType' && newType !== oldGroup.boardType
-        ? defaultHangOnlyForBoardType(newType) ||
-          (oldGroup.hangOnly && !defaultHangOnlyForBoardType(oldGroup.boardType))
-        : oldGroup.hangOnly
+    // thickness changes, and a fire-taped spec stays fire-taped.
+    const typeChanged = field === 'boardType' && newType !== oldGroup.boardType
+    const finish: BoardFinish = !typeChanged
+      ? oldGroup.finish
+      : defaultHangOnlyForBoardType(newType)
+        ? 'hang_only'
+        : oldGroup.finish === defaultFinishForBoardType(oldGroup.boardType)
+          ? 'finished'
+          : oldGroup.finish
     const newGroup: SpecGroup = {
       id: groupId,
       boardType: newType,
       thickness: cascaded.thickness ?? '',
       width: cascaded.width ?? '',
-      hangOnly,
+      finish,
     }
     const availableLengths = getAvailableLengths(
       newGroup.boardType,
@@ -237,13 +257,17 @@ export function FieldMeasurementsSection({
           const length = b.length ?? ''
           // Keep quantities only for lengths that still exist under the new spec.
           if (length && availableLengths.includes(length)) {
-            boards.push({
-              ...b,
-              boardType: newGroup.boardType,
-              thickness: newGroup.thickness,
-              width: newGroup.width,
-              hangOnly: newGroup.hangOnly,
-            })
+            boards.push(
+              withBoardFinish(
+                {
+                  ...b,
+                  boardType: newGroup.boardType,
+                  thickness: newGroup.thickness,
+                  width: newGroup.width,
+                },
+                newGroup.finish,
+              ),
+            )
           }
         }
         return { ...m, boards }
@@ -279,25 +303,27 @@ export function FieldMeasurementsSection({
           ...m,
           boards: [
             ...m.boards,
-            {
-              id: generateFieldId(),
-              boardType: group.boardType,
-              thickness: group.thickness,
-              width: group.width,
-              hangOnly: group.hangOnly,
-              length,
-              quantity: qty,
-            },
+            withBoardFinish(
+              {
+                id: generateFieldId(),
+                boardType: group.boardType,
+                thickness: group.thickness,
+                width: group.width,
+                length,
+                quantity: qty,
+              },
+              group.finish,
+            ),
           ],
         }
       }),
     }))
   }
 
-  const setGroupHangOnly = (areaId: string, group: SpecGroup, hangOnly: boolean) => {
+  const setGroupFinish = (areaId: string, group: SpecGroup, finish: BoardFinish) => {
     setGroupsByArea((prev) => ({
       ...prev,
-      [areaId]: (prev[areaId] ?? []).map((g) => (g.id === group.id ? { ...g, hangOnly } : g)),
+      [areaId]: (prev[areaId] ?? []).map((g) => (g.id === group.id ? { ...g, finish } : g)),
     }))
     onChange((prev) => ({
       ...prev,
@@ -305,7 +331,7 @@ export function FieldMeasurementsSection({
         m.id === areaId
           ? {
               ...m,
-              boards: m.boards.map((b) => (boardMatchesSpec(b, group) ? { ...b, hangOnly } : b)),
+              boards: m.boards.map((b) => (boardMatchesSpec(b, group) ? withBoardFinish(b, finish) : b)),
             }
           : m,
       ),
@@ -322,8 +348,11 @@ export function FieldMeasurementsSection({
           {hangOnlyTotal > 0 ? (
             <>
               {' '}
-              — {Math.round(total - hangOnlyTotal).toLocaleString()} finished,{' '}
-              {Math.round(hangOnlyTotal).toLocaleString()} hang only
+              — {Math.round(total - hangOnlyTotal).toLocaleString()} finished
+              {fireTapeTotal > 0 ? `, ${Math.round(fireTapeTotal).toLocaleString()} fire-taped` : ''}
+              {hangOnlyTotal - fireTapeTotal > 0
+                ? `, ${Math.round(hangOnlyTotal - fireTapeTotal).toLocaleString()} hang only`
+                : ''}
             </>
           ) : null}
         </CardDescription>
@@ -344,25 +373,29 @@ export function FieldMeasurementsSection({
           takeoff.measurements.map((area) => {
             const areaSqft = computeMeasuredSqft([area])
             const areaHangOnly = hangOnlyMeasuredSqft([area])
+            const areaFireTape = fireTapedMeasuredSqft([area])
             const groups = groupsByArea[area.id] ?? deriveGroupsFromBoards(area.boards)
             // Flipping a spec onto a twin that already exists would merge two rows' counts
-            // silently, so the box is disabled instead.
-            const twinOf = (group: SpecGroup) =>
+            // silently, so that finish is not offered instead.
+            const finishTakenByTwin = (group: SpecGroup, finish: BoardFinish) =>
               groups.some(
                 (g) =>
                   g.id !== group.id &&
                   g.boardType === group.boardType &&
                   g.thickness === group.thickness &&
                   g.width === group.width &&
-                  g.hangOnly !== group.hangOnly,
+                  g.finish === finish,
               )
             return (
               <div key={area.id} className="rounded-lg border bg-muted/20 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm text-muted-foreground">
                     {areaSqft.toLocaleString()} sqft in this area
-                    {areaHangOnly > 0
-                      ? ` · ${Math.round(areaHangOnly).toLocaleString()} hang only`
+                    {areaFireTape > 0
+                      ? ` · ${Math.round(areaFireTape).toLocaleString()} fire-taped`
+                      : ''}
+                    {areaHangOnly - areaFireTape > 0
+                      ? ` · ${Math.round(areaHangOnly - areaFireTape).toLocaleString()} hang only`
                       : ''}
                   </span>
                   {!readOnly && (
@@ -504,30 +537,33 @@ export function FieldMeasurementsSection({
                             )}
                           </div>
 
-                          <label
-                            className={`flex items-center gap-2 text-xs ${
-                              twinOf(group) ? 'text-muted-foreground' : ''
-                            }`}
-                            title={
-                              twinOf(group)
-                                ? 'This board already has a row for the other setting in this area — enter counts there.'
-                                : undefined
-                            }
-                          >
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4"
-                              checked={group.hangOnly}
-                              disabled={readOnly || !group.boardType || twinOf(group)}
-                              onChange={(e) => setGroupHangOnly(area.id, group, e.target.checked)}
-                            />
-                            <span>
-                              Hang only — not finished{' '}
-                              <span className="text-muted-foreground">
-                                (Hardi, or the base layer of a double layer)
-                              </span>
-                            </span>
-                          </label>
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <Label className="text-xs">Finish</Label>
+                            <Select
+                              value={group.finish}
+                              disabled={readOnly || !group.boardType}
+                              onValueChange={(v) => setGroupFinish(area.id, group, v as BoardFinish)}
+                            >
+                              <SelectTrigger className="h-8 w-[9.5rem]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {FINISH_ORDER.map((f) => (
+                                  <SelectItem
+                                    key={f}
+                                    value={f}
+                                    // A twin row already holds this finish for the same board.
+                                    disabled={f !== group.finish && finishTakenByTwin(group, f)}
+                                  >
+                                    {BOARD_FINISH_LABELS[f]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {FINISH_HINTS[group.finish] ? (
+                              <span className="text-muted-foreground">{FINISH_HINTS[group.finish]}</span>
+                            ) : null}
+                          </div>
 
                           {lengths.length > 0 ? (
                             <div className="space-y-1.5">

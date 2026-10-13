@@ -948,9 +948,9 @@ function resolvePaySqft(
   legacy: Record<string, unknown>,
   intakeSource: 'quote' | 'po',
   po: DrywallPoData | null,
-): { hang: number | null; finish: number | null } {
+): { hang: number | null; finish: number | null; fireTape: number } {
   const r = resolveCrewPaySqft({ legacy, intakeSource, po })
-  return { hang: r.sqft, finish: r.finishSqft }
+  return { hang: r.sqft, finish: r.finishSqft, fireTape: r.fireTapeSqft }
 }
 
 function readOrderApprovedLaborRates(field: FieldTakeoff | null): {
@@ -1474,9 +1474,10 @@ async function mapProjectDetail(
   const paySqft =
     showJobInfo && !isForeman
       ? resolvePaySqft(legacy, intakeSource, po)
-      : { hang: null, finish: null }
+      : { hang: null, finish: null, fireTape: 0 }
   const totalSqft = paySqft.hang
   const finishSqft = paySqft.finish
+  const fireTapeSqft = paySqft.fireTape
   const laborRates =
     showJobInfo && !isForeman ? await resolveLaborRates(legacy, field) : emptyRates
 
@@ -1490,6 +1491,7 @@ async function mapProjectDetail(
     structuredScope: showScope ? resolveStructuredScope(legacy) : null,
     totalSqft,
     finishSqft,
+    fireTapeSqft,
     materials: materialsResult.items,
     materialsEmptyReason: showMaterials ? materialsResult.emptyReason : null,
     // Only when the operator explicitly shared the list, or for an operator

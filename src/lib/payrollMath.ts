@@ -12,6 +12,7 @@ import type {
 import type { Employee, Contractor1099 } from '@/types/hr'
 import { generateHrId, isArchivedMember } from '@/lib/hrTeamUtils'
 import { resolveCrewPaySqftFromMetadata } from '@/lib/drywall/crewPayBasis'
+import { jobFireTapeRate } from '@/lib/drywall/fireTape'
 
 /** First N hours per employee per run at 1× before OT multiplier applies. */
 export const REGULAR_HOURS_CAP = 40
@@ -769,6 +770,8 @@ export function laborRatesFromProjectMetadata(metadata: unknown): {
   hangerRate: number | null
   finisherRate: number | null
   prepCleanRate: number | null
+  /** What the quote priced fire tape at (fireTape.ts jobFireTapeRate); null → catalog rate. */
+  fireTapeRate: number | null
 } {
   const quote = quoteFromProjectMetadata(metadata) ?? {}
   const takeoff = fieldTakeoffFromProjectMetadata(metadata)
@@ -796,6 +799,7 @@ export function laborRatesFromProjectMetadata(metadata: unknown): {
       approvedPrep != null && approvedPrep > 0
         ? approvedPrep
         : numOrNull(quote.prep_clean_rate) ?? numOrNull(quote.prepCleanRate),
+    fireTapeRate: jobFireTapeRate(quote as Record<string, unknown>),
   }
 }
 
@@ -818,7 +822,7 @@ export function fieldMeasuredSqftFromProjectMetadata(metadata: unknown): number 
  * Which sqft a piece is paid on. Hangers hang every board; finishers do not finish hang-only
  * board (Hardi, a double layer's base layer), so a finish piece is paid on less.
  */
-export type PieceSqftBasis = 'hang' | 'finish'
+export type PieceSqftBasis = 'hang' | 'finish' | 'firetape'
 
 export function getSqftFromJob(
   project: { metadata?: unknown; fieldMeasuredSqft?: number | null } | null | undefined,
@@ -829,6 +833,7 @@ export function getSqftFromJob(
   // change-order sqft). Callers that only have the measured number still work.
   if (project.metadata != null) {
     const r = resolveCrewPaySqftFromMetadata(project.metadata)
+    if (basis === 'firetape') return r.fireTapeSqft > 0 ? r.fireTapeSqft : null
     return basis === 'finish' ? r.finishSqft : r.sqft
   }
   const n = project.fieldMeasuredSqft

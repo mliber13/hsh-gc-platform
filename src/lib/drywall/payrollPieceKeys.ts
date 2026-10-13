@@ -13,6 +13,7 @@ import { PAYROLL_WORK_TYPES } from '@/lib/payrollMath'
 import type { FinishScopeCatalogEntry, OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import type { PayrollPieceCatalogSource } from '@/types/payroll'
 import { specialtyFromPositionName } from '@/lib/drywall/crewSpecialty'
+import { FIRETAPE_SCOPE_ID } from '@/lib/drywall/fireTape'
 
 /** Payroll labor buckets used when aggregating project labor costs. */
 export type DrywallLaborCategory =
@@ -187,12 +188,19 @@ export function projectLaborRateForPieceKey(
         hangerRate: number | null
         finisherRate: number | null
         prepCleanRate: number | null
+        fireTapeRate?: number | null
       }
     | null
     | undefined,
   catalogs: OrgDrywallCatalogs | null,
 ): number | null {
   if (!laborRates) return null
+
+  // Fire tape is not a full finish: the job's full finisher rate would pay $0.525/sf on
+  // Goodwill for one coat. Its own rate, else null so the caller takes the catalog rate.
+  if (pieceKey === FIRETAPE_SCOPE_ID) {
+    return laborRates.fireTapeRate != null && laborRates.fireTapeRate > 0 ? laborRates.fireTapeRate : null
+  }
 
   if (isDrywallHangerKey(pieceKey) || pieceKey === 'hang') {
     return laborRates.hangerRate != null && laborRates.hangerRate > 0

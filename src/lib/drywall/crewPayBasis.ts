@@ -1,6 +1,7 @@
 import { hydrateDrywallQuoteV3 } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { quotedSqftWithWaste } from '@/lib/drywall/fieldMeasurementUtils'
 import { hangOnlyMeasuredSqft, quotedFinishSqftWithWaste } from '@/lib/drywall/hangOnly'
+import { fireTapedMeasuredSqft, quotedFireTapeSqftWithWaste } from '@/lib/drywall/fireTape'
 import { getIntakeSourceFromLegacy, getPoDataFromLegacy } from '@/services/drywallProjectsService'
 import type { DrywallPoData, DrywallQuote, DrywallQuoteV3 } from '@/types/drywall'
 
@@ -17,6 +18,12 @@ export interface CrewPaySqftResult {
    * pay. Equal to `sqft` on any job without hang-only board.
    */
   finishSqft: number | null
+  /**
+   * FIRE-TAPE sqft — hang-only board whose joints are fire-taped (fireTape.ts). Inside `sqft`,
+   * outside `finishSqft`. Paid by a Firetape Only piece row, to whoever's row it is. 0 on a
+   * job without fire tape, and on v2 / PO jobs, which have no lines to tell.
+   */
+  fireTapeSqft: number
   baseSqft: number | null
   baseSource: CrewPaySqftBaseSource | null
   acceptedChangeOrderSqft: number
@@ -56,6 +63,7 @@ export function resolveCrewPaySqft(input: {
     return {
       sqft: coOnly,
       finishSqft: coOnly,
+      fireTapeSqft: 0,
       baseSqft: null,
       baseSource: null,
       acceptedChangeOrderSqft,
@@ -66,6 +74,7 @@ export function resolveCrewPaySqft(input: {
   return {
     sqft: base.sqft + acceptedChangeOrderSqft,
     finishSqft: base.finishSqft + acceptedChangeOrderSqft,
+    fireTapeSqft: base.fireTapeSqft,
     baseSqft: base.sqft,
     baseSource: base.source,
     acceptedChangeOrderSqft,
@@ -127,22 +136,32 @@ function resolveBaseSqft(
   intakeSource: 'quote' | 'po',
   po: DrywallPoData | null,
 ):
-  | { sqft: number; finishSqft: number; source: CrewPaySqftBaseSource }
-  | { sqft: null; finishSqft: null; source: null } {
+  | { sqft: number; finishSqft: number; fireTapeSqft: number; source: CrewPaySqftBaseSource }
+  | { sqft: null; finishSqft: null; fireTapeSqft: 0; source: null } {
   const measured = measuredSqft(legacy)
   if (measured != null) {
     // The stored total is every board; take the hang-only boards back out for the finisher.
     const field = legacy.fieldTakeoff as Record<string, unknown>
     const measurements = Array.isArray(field.measurements) ? field.measurements : []
     const hangOnly = hangOnlyMeasuredSqft(measurements)
-    return { sqft: measured, finishSqft: Math.max(0, measured - hangOnly), source: 'measured' }
+    return {
+      sqft: measured,
+      finishSqft: Math.max(0, measured - hangOnly),
+      fireTapeSqft: fireTapedMeasuredSqft(measurements),
+      source: 'measured',
+    }
   }
 
   const v3 = v3Quote(legacy)
   if (v3?.lineItems?.length) {
     const withWaste = quotedSqftWithWaste(v3)
     if (withWaste > 0) {
-      return { sqft: withWaste, finishSqft: quotedFinishSqftWithWaste(v3), source: 'quoted' }
+      return {
+        sqft: withWaste,
+        finishSqft: quotedFinishSqftWithWaste(v3),
+        fireTapeSqft: quotedFireTapeSqftWithWaste(v3),
+        source: 'quoted',
+      }
     }
   }
 
@@ -150,19 +169,21 @@ function resolveBaseSqft(
   const v2 = v2Quote(legacy)
   if (v2) {
     const withWaste = quotedSqftWithWaste(v2)
-    if (withWaste > 0) return { sqft: withWaste, finishSqft: withWaste, source: 'quoted' }
+    if (withWaste > 0) return { sqft: withWaste, finishSqft: withWaste, fireTapeSqft: 0, source: 'quoted' }
     const direct = positive(num(v2.sqft))
-    if (direct != null) return { sqft: direct, finishSqft: direct, source: 'quoted' }
+    if (direct != null) return { sqft: direct, finishSqft: direct, fireTapeSqft: 0, source: 'quoted' }
     const breakdownSum = (v2.breakdowns ?? []).reduce((acc, b) => acc + (num(b.sqft) ?? 0), 0)
-    if (breakdownSum > 0) return { sqft: breakdownSum, finishSqft: breakdownSum, source: 'quoted' }
+    if (breakdownSum > 0) {
+      return { sqft: breakdownSum, finishSqft: breakdownSum, fireTapeSqft: 0, source: 'quoted' }
+    }
   }
 
   if (intakeSource === 'po' && po) {
     const poSqft = positive(num(po.customerSqft))
-    if (poSqft != null) return { sqft: poSqft, finishSqft: poSqft, source: 'po' }
+    if (poSqft != null) return { sqft: poSqft, finishSqft: poSqft, fireTapeSqft: 0, source: 'po' }
   }
 
-  return { sqft: null, finishSqft: null, source: null }
+  return { sqft: null, finishSqft: null, fireTapeSqft: 0, source: null }
 }
 
 /** Sum of accepted change orders' additional crew sqft (scope the crew hangs and finishes). */

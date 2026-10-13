@@ -10,8 +10,9 @@
  * finished ones are paid to the finisher and sized for mud and tape. Before this split one
  * sqft number fed both, so finishers were paid on board nobody finishes.
  *
- * Fire tape is not finisher pay (Mark, 2026-10-08), so a fire-tape-only quote line counts as
- * hang-only here too.
+ * Fire-taped board is hang-only too: not finished, so not in finish sqft. It is paid and ordered
+ * separately (fireTape.ts) — Mark, 2026-10-12: finishers can be paid for fire taping, and
+ * sometimes the hanger does it. A Firetape Only quote line counts as hang-only here.
  */
 import type { FieldMeasurementArea, FieldMeasurementBoard } from '@/types/drywall'
 import { quotedSqftWithWaste } from './fieldMeasurementUtils'

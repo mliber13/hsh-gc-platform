@@ -130,6 +130,7 @@ export function mergeFieldTakeoff(
                 // cement (hang only by default) looked right. Absent stays absent so the
                 // board-type default still applies (isHangOnlyBoard).
                 ...(typeof board.hangOnly === 'boolean' ? { hangOnly: board.hangOnly } : {}),
+                ...(board.fireTaped === true ? { fireTaped: true } : {}),
               }))
             : [],
         }))

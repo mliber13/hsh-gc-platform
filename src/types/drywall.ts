@@ -713,6 +713,12 @@ export interface FieldMeasurementBoard {
    * the material order include them.
    */
   hangOnly?: boolean
+  /**
+   * Hang-only board whose joints are fire-taped (pre-rock, rated assemblies). Only meaningful
+   * with hangOnly true — see fireTape.ts. Paid by a Firetape Only piece row; ordered tape and a
+   * third of the compound.
+   */
+  fireTaped?: boolean
 }
 
 export interface FieldMeasurementArea {

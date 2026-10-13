@@ -111,6 +111,8 @@ export interface PayrollProjectOption {
     hangerRate: number | null
     finisherRate: number | null
     prepCleanRate: number | null
+    /** The job's fire-tape rate; null → the catalog's Firetape Only rate. */
+    fireTapeRate?: number | null
   }
   /** Project type. A non-drywall type is a shared job, whose lines take a Drywall/GC tag. */
   type?: string | null

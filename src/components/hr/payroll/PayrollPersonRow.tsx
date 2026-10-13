@@ -49,6 +49,7 @@ import type {
 import { formatCurrency } from './payrollFormat'
 import { JobCombobox } from './JobCombobox'
 import { defaultPieceTypeForPositionName } from '@/lib/drywall/payrollPieceKeys'
+import { FIRETAPE_SCOPE_ID } from '@/lib/drywall/fireTape'
 import {
   LABOR_DIVISION_LABELS,
   defaultLaborLineDivision,
@@ -102,12 +103,16 @@ function resolvePieceRate(
   return project ? getRateFromJob(project, pieceKey) : null
 }
 
-/** A finish piece is paid on finish sqft; everything else on every board hung. */
+/**
+ * Fire tape is paid on fire-taped sqft, whoever's row it is; a finish piece on finish sqft;
+ * everything else on every board hung.
+ */
 function sqftBasisForPiece(
   pieceKey: string,
   workType: string | undefined,
   catalogs: OrgDrywallCatalogs | null,
 ): PieceSqftBasis {
+  if (pieceKey === FIRETAPE_SCOPE_ID) return 'firetape'
   return classifyLaborCategory('piece', catalogs, pieceKey, workType) === 'finisher'
     ? 'finish'
     : 'hang'

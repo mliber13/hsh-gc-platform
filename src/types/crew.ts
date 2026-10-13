@@ -194,6 +194,11 @@ export interface CrewProjectDetail {
    * layer). Finisher pay. Equal to totalSqft on any job without hang-only board.
    */
   finishSqft: number | null
+  /**
+   * Hang-only board whose joints are fire-taped (fireTape.ts). Inside totalSqft, outside
+   * finishSqft. Paid by a Firetape Only piece row to whoever does it. 0 on most jobs.
+   */
+  fireTapeSqft: number
   /** Total bead sticks on the job — operator's count typically excludes tearaway. */
   /** Materials list filtered by user's specialty (hanger sees install hardware, finisher sees all). */
   materials: CrewMaterial[]

@@ -275,6 +275,8 @@ describe('laborRatesFromProjectMetadata', () => {
       hangerRate: 0.48,
       finisherRate: 0.62,
       prepCleanRate: 0.12,
+      // No Firetape Only quote line: the catalog rate applies (fireTape.ts).
+      fireTapeRate: null,
     })
   })
 
@@ -291,6 +293,8 @@ describe('laborRatesFromProjectMetadata', () => {
       hangerRate: 0.42,
       finisherRate: 0.55,
       prepCleanRate: 0.1,
+      // No Firetape Only quote line: the catalog rate applies (fireTape.ts).
+      fireTapeRate: null,
     })
   })
 
@@ -307,6 +311,8 @@ describe('laborRatesFromProjectMetadata', () => {
       hangerRate: 0.4,
       finisherRate: 0.5,
       prepCleanRate: 0.08,
+      // No Firetape Only quote line: the catalog rate applies (fireTape.ts).
+      fireTapeRate: null,
     })
   })
 })

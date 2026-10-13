@@ -278,6 +278,7 @@ export function CrewProjectDetailPage() {
     detail.totalSqft != null && detail.finishSqft != null
       ? Math.max(0, Math.round(detail.totalSqft - detail.finishSqft))
       : 0
+  const fireTapeSqft = Math.round(detail.fireTapeSqft ?? 0)
 
   // Which task did they tap in from? (the list passes ?item=<scheduleItemId>.) The measure
   // prompt should only surface when they came in from the measure task itself — a measurer
@@ -538,6 +539,12 @@ export function CrewProjectDetailPage() {
                   {hangOnlySqft.toLocaleString()} sqft is hang only (Hardi or a base layer).
                 </p>
               ) : null}
+              {fireTapeSqft > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {fireTapeSqft.toLocaleString()} sqft of that gets fire-taped — paid as Firetape
+                  Only to whoever tapes it.
+                </p>
+              ) : null}
               <p className="text-sm text-muted-foreground">
                 Pay rate is set by the office after measure and order — it will show here once
                 finalized.
@@ -627,6 +634,12 @@ export function CrewProjectDetailPage() {
                     <p className="text-sm text-muted-foreground">
                       {hangOnlySqft.toLocaleString()} sqft is hang only (Hardi or a base layer) and
                       isn&apos;t finished, so it isn&apos;t in finisher pay.
+                    </p>
+                  ) : null}
+                  {fireTapeSqft > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {fireTapeSqft.toLocaleString()} sqft of it gets fire-taped — paid separately as
+                      Firetape Only to whoever tapes it.
                     </p>
                   ) : null}
                 </div>
