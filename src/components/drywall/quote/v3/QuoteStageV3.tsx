@@ -55,6 +55,7 @@ import {
 } from './QuoteMoneyPanels'
 import { quoteMoneySummary } from '@/lib/drywall/quoteMoneySummary'
 import { QuoteV3ConvertBanner } from './QuoteV3ConvertBanner'
+import { hasRealV2Snapshot } from '@/lib/drywall/v2SnapshotPresence'
 import { QuoteV3RevertToV2Button } from './QuoteV3RevertToV2Button'
 
 type QuoteStageV3Props = {
@@ -365,7 +366,7 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {isOwner && !viewerReadOnly && quote.legacyV2Snapshot != null ? (
+          {isOwner && !viewerReadOnly && hasRealV2Snapshot(quote.legacyV2Snapshot) ? (
             <QuoteV3RevertToV2Button
               legacyV2Snapshot={quote.legacyV2Snapshot}
               v3LineCount={quote.lineItems.length}
@@ -459,7 +460,8 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
         </DialogContent>
       </Dialog>
 
-      {quote.legacyV2Snapshot != null ? (
+      {/* Only a real v2 quote — new jobs carry a blank snapshot (v2SnapshotPresence.ts). */}
+      {hasRealV2Snapshot(quote.legacyV2Snapshot) ? (
         <QuoteV3ConvertBanner
           projectId={projectId}
           legacyV2Snapshot={quote.legacyV2Snapshot}
