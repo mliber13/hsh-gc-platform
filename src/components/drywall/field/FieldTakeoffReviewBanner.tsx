@@ -12,6 +12,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { isMeasurementApproved } from '@/lib/drywall/fieldReview'
 import type { FieldTakeoff } from '@/types/drywall'
 
 function formatReviewTimestamp(iso: string | null | undefined): string | null {
@@ -25,6 +26,8 @@ function formatReviewTimestamp(iso: string | null | undefined): string | null {
 
 export interface FieldTakeoffReviewBannerProps {
   takeoff: FieldTakeoff
+  /** Nothing to approve until something is measured. */
+  measuredSqft: number
   /** Owner + office_drywall — approve/reject actions. */
   canReview: boolean
   busy?: boolean
@@ -34,6 +37,7 @@ export interface FieldTakeoffReviewBannerProps {
 
 export function FieldTakeoffReviewBanner({
   takeoff,
+  measuredSqft,
   canReview,
   busy = false,
   onApprove,
@@ -50,8 +54,32 @@ export function FieldTakeoffReviewBanner({
     }
   }, [rejectOpen, takeoff.rejectionNotes])
 
+  // No review status: an office-measured takeoff. It used to have no approval step at all —
+  // saving the labor rates stood in for one — so offer the approval here, and read a takeoff
+  // whose rates were already saved under the old flow as approved (fieldReview.ts).
   if (status !== 'pending_review' && status !== 'approved' && status !== 'rejected') {
-    return null
+    if (measuredSqft <= 0) return null
+    if (isMeasurementApproved(takeoff)) {
+      return (
+        <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-950 dark:text-emerald-100">
+          Approved with the labor rates, before measurement review was its own step
+        </div>
+      )
+    }
+    return (
+      <div className="rounded-lg border px-4 py-4 space-y-3">
+        <p className="text-sm font-medium">Not reviewed yet</p>
+        <p className="text-sm text-muted-foreground">
+          Check the measurements against the quote, then approve them. Approving locks the takeoff
+          for the measurer and opens the labor rates.
+        </p>
+        {canReview ? (
+          <Button type="button" size="sm" disabled={busy} onClick={() => void onApprove()}>
+            Approve measurement
+          </Button>
+        ) : null}
+      </div>
+    )
   }
 
   const submittedLabel = formatReviewTimestamp(takeoff.submittedForReviewAt)

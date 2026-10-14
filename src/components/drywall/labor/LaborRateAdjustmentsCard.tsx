@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
-import { CheckCircle2, Clock, TrendingUp, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock, TrendingUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -18,6 +18,7 @@ import {
 } from '@/lib/drywall/orderFinancialComparison'
 import { projectV3QuoteToV2Shape } from '@/lib/drywall/projectV3QuoteToV2Shape'
 import { computeMeasuredSqft } from '@/lib/drywall/fieldMeasurementUtils'
+import { isLaborRatesApproved, isMeasurementApproved } from '@/lib/drywall/fieldReview'
 import type {
   DrywallChangeOrder,
   DrywallQuote,
@@ -213,8 +214,9 @@ export function LaborRateAdjustmentsCard({
     v3Quote,
     catalogs,
   })
-  const reviewStatus = fieldTakeoff.reviewStatus
-  const isPending = reviewStatus === 'pending_review'
+  // Rates come after the measurement is approved (fieldReview.ts, IA §13).
+  const measurementApproved = isMeasurementApproved(fieldTakeoff)
+  const ratesApproved = isLaborRatesApproved(fieldTakeoff)
   const logEntries = parseRateAdjustmentLog(fieldTakeoff.rateAdjustmentLog)
 
   const persistRates = async (patch: Partial<FieldTakeoff>) => {
@@ -298,56 +300,10 @@ export function LaborRateAdjustmentsCard({
     await persistRates({
       reviewBaselineRates: baseline ? asStoredRateRecord(baseline) : undefined,
       reviewApprovedRates: asStoredRateRecord(next),
-      rejectionNotes: laborRates.reviewNotes || undefined,
+      ratesApprovedAt: new Date().toISOString(),
       rateAdjustmentLog: nextLog,
     })
-    toast.success('Labor rates saved')
-  }
-
-  const handleApprove = async () => {
-    const storedBaseline = fieldTakeoff.reviewBaselineRates as Record<string, unknown> | undefined
-    const baselineSet: OrderLaborRateSet =
-      storedBaseline?.hangerRate != null
-        ? {
-            hangerRate: Number(storedBaseline.hangerRate),
-            finisherRate: Number(storedBaseline.finisherRate ?? baselineRates?.finisherRate ?? 0),
-            prepCleanRate: Number(storedBaseline.prepCleanRate ?? baselineRates?.prepCleanRate ?? 0),
-          }
-        : baselineRates ?? resolveOrderBaselineRates(v2Quote, fieldTakeoff)
-
-    const next = {
-      hangerRate: parseFloat(laborRates.hangerRate) || baselineSet.hangerRate,
-      finisherRate: parseFloat(laborRates.finisherRate) || baselineSet.finisherRate,
-      prepCleanRate: parseFloat(laborRates.prepCleanRate) || baselineSet.prepCleanRate,
-    }
-    const from = previousStoredRates()
-    const to = rateTriple(next.hangerRate, next.finisherRate, next.prepCleanRate)
-    const changed = ratesChanged(from, to)
-    const reason = laborRates.reviewNotes?.trim() ?? ''
-    if (changed && !reason) {
-      toast.error('Add a reason before changing labor rates.')
-      return
-    }
-    const nextLog = changed ? [buildLogEntry(from, to, reason), ...logEntries] : logEntries
-
-    await persistRates({
-      reviewStatus: 'approved',
-      approvedAt: new Date().toISOString(),
-      reviewBaselineRates: asStoredRateRecord(baselineSet),
-      reviewApprovedRates: asStoredRateRecord(next),
-      rejectionNotes: laborRates.reviewNotes || undefined,
-      rateAdjustmentLog: nextLog,
-    })
-    toast.success('Field measurement approved — labor rates saved')
-  }
-
-  const handleReject = async () => {
-    await persistRates({
-      reviewStatus: 'rejected',
-      rejectedAt: new Date().toISOString(),
-      rejectionNotes: laborRates.reviewNotes || undefined,
-    })
-    toast.error('Field measurement rejected')
+    toast.success('Labor rates approved')
   }
 
   const comparisonRows = [
@@ -452,18 +408,7 @@ export function LaborRateAdjustmentsCard({
                 quote toggles per trade.
               </CardDescription>
             </div>
-            {isPending && (
-              <span
-                className={cn(
-                  'inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                  'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-                )}
-              >
-                <Clock className="mr-1 h-3 w-3" />
-                Pending review
-              </span>
-            )}
-            {reviewStatus === 'approved' && (
+            {ratesApproved ? (
               <span
                 className={cn(
                   'inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
@@ -471,18 +416,17 @@ export function LaborRateAdjustmentsCard({
                 )}
               >
                 <CheckCircle2 className="mr-1 h-3 w-3" />
-                Approved
+                Rates approved
               </span>
-            )}
-            {reviewStatus === 'rejected' && (
+            ) : (
               <span
                 className={cn(
                   'inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                  'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300',
+                  'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
                 )}
               >
-                <XCircle className="mr-1 h-3 w-3" />
-                Rejected
+                <Clock className="mr-1 h-3 w-3" />
+                {measurementApproved ? 'Rates not approved' : 'Waiting on measurement approval'}
               </span>
             )}
           </div>
@@ -539,29 +483,21 @@ export function LaborRateAdjustmentsCard({
               onChange={(e) => setLaborRates((p) => ({ ...p, reviewNotes: e.target.value }))}
             />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {!readOnly && (
-              <Button type="button" variant="secondary" disabled={saving} onClick={() => void handleSaveRates()}>
-                {saving ? 'Saving…' : 'Save labor rates'}
+              <Button
+                type="button"
+                disabled={saving || !measurementApproved}
+                title={measurementApproved ? undefined : 'Approve the measurement first'}
+                onClick={() => void handleSaveRates()}
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                {saving ? 'Saving…' : ratesApproved ? 'Re-approve labor rates' : 'Approve labor rates'}
               </Button>
             )}
-            {!readOnly && isPending && (
-              <>
-                <Button type="button" disabled={saving} onClick={() => void handleApprove()}>
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Approve field measurement
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={saving}
-                  onClick={() => void handleReject()}
-                >
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Reject
-                </Button>
-              </>
-            )}
+            {!readOnly && !measurementApproved ? (
+              <span className="text-xs text-muted-foreground">Approve the measurement first.</span>
+            ) : null}
           </div>
         </CardContent>
       </Card>

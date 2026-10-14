@@ -791,6 +791,8 @@ export interface FieldTakeoff {
   rejectionNotes?: string | null
   reviewBaselineRates?: Record<string, unknown>
   reviewApprovedRates?: Record<string, unknown>
+  /** When the labor rates were last approved (step 3 of Field — fieldReview.ts). */
+  ratesApprovedAt?: string | null
   rateAdjustmentLog?: LaborRateAdjustmentLogEntry[]
   [key: string]: unknown
 }
