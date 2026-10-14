@@ -32,6 +32,14 @@ export interface QuoteMoneySummary {
   marginPct: number | null
   indicator: ReturnType<typeof marginFloorIndicator>
   floorPct: number
+  /**
+   * Scope sold: drywall sqft and sqft with waste — the accepted scope when an alternate is
+   * accepted, as the quote header computed it (moved into the bar, Mark 2026-10-14).
+   */
+  sqft: number
+  sqftWithWaste: number
+  /** Price per sqft with waste, against the scope sold; null with no sqft. */
+  pricePerSqft: number | null
 }
 
 export function quoteMoneySummary(totals: QuoteV3TotalsSummary, marginFloorTarget: number): QuoteMoneySummary {
@@ -42,7 +50,14 @@ export function quoteMoneySummary(totals: QuoteV3TotalsSummary, marginFloorTarge
   // selected deduct lowers the bid the customer gets. Equal to routine.total with none selected.
   const evaluation = evaluateMarginVsFloor(totals.acceptedTotal, cost, marginFloorTarget)
   const anyAccepted = totals.alternates.some((a) => a.selected)
+  // Per-sqft only means anything against the scope actually sold (QuoteHeaderV3's rule).
+  const sqft = anyAccepted ? totals.acceptedSqft : totals.totalSqft
+  const sqftWithWaste = anyAccepted ? totals.acceptedSqftWithWaste : totals.totalSqftWithWaste
+  const priced = anyAccepted ? totals.acceptedTotal : routine.total
   return {
+    sqft,
+    sqftWithWaste,
+    pricePerSqft: sqftWithWaste > 0 ? priced / sqftWithWaste : null,
     total: routine.total,
     contractTotal: anyAccepted ? totals.acceptedTotal : null,
     cost,

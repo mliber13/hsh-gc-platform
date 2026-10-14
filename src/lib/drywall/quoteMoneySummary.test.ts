@@ -59,4 +59,13 @@ describe('quote money summary', () => {
     expect(s.marginPct).toBeCloseTo((totals.acceptedTotal - s.cost) / totals.acceptedTotal, 6)
     expect(s.contractTotal).toBeNull()
   })
+
+  it('carries the header's sqft and price per sqft: total over sqft with waste', () => {
+    const q = quote()
+    const totals = computeQuoteV3Totals(q, catalogs)
+    const s = quoteMoneySummary(totals, 0.3)
+    expect(s.sqft).toBe(totals.totalSqft)
+    expect(s.sqftWithWaste).toBe(totals.totalSqftWithWaste)
+    expect(s.pricePerSqft).toBeCloseTo(totals.routine.total / totals.totalSqftWithWaste, 6)
+  })
 })

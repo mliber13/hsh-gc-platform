@@ -62,6 +62,20 @@ export function QuoteSummaryLine({
           </span>
         ) : null}
       </span>
+      {summary.sqftWithWaste > 0 ? (
+        <span>
+          <span className="font-medium">{Math.round(summary.sqft).toLocaleString()}</span>
+          <span className="text-muted-foreground"> sqft · </span>
+          <span className="font-medium">{Math.round(summary.sqftWithWaste).toLocaleString()}</span>
+          <span className="text-muted-foreground"> w/ waste</span>
+        </span>
+      ) : null}
+      {summary.pricePerSqft != null ? (
+        <span>
+          <span className="font-medium">{formatQuoteMoney(summary.pricePerSqft)}</span>
+          <span className="text-muted-foreground">/sqft</span>
+        </span>
+      ) : null}
       <span>
         <span className="text-muted-foreground">Cost </span>
         <span className="font-medium">{formatQuoteMoney(summary.cost)}</span>
@@ -87,7 +101,7 @@ export function QuoteSummaryLine({
  */
 export function QuoteSummaryBar({ summary }: { summary: QuoteMoneySummary }) {
   return (
-    <div className="fixed bottom-4 left-1/2 z-40 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border bg-background/95 px-5 py-2.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85">
+    <div className="fixed bottom-4 left-1/2 z-40 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border bg-background/95 px-5 py-2.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85">
       <QuoteSummaryLine summary={summary} />
     </div>
   )

@@ -21,10 +21,6 @@ export function QuoteHeaderV3({ project, quoteNumber, totals }: Props) {
   const acceptedSqftDelta = totals.acceptedSqft - totals.totalSqft
   const acceptedMoneyDelta = totals.acceptedTotal - totals.routine.total
 
-  // Per-sqft only means anything against the scope actually sold.
-  const perSqftBase = hasAccepted ? totals.acceptedSqftWithWaste : totals.totalSqftWithWaste
-  const perSqftTotal = hasAccepted ? totals.acceptedTotal : totals.routine.total
-  const pricePerSqft = perSqftBase > 0 ? perSqftTotal / perSqftBase : null
 
   return (
     <div className="rounded-lg border bg-muted/30 px-4 py-3">
@@ -40,24 +36,8 @@ export function QuoteHeaderV3({ project, quoteNumber, totals }: Props) {
           Quote # {drywallQuoteNumberLabel(quoteNumber) || 'Assigned on save'}
         </p>
       </div>
-      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm tabular-nums">
-        <span>
-          {hasAccepted ? 'Base sqft' : 'Total sqft'}:{' '}
-          <strong>{fmtSqft(totals.totalSqft)}</strong>
-        </span>
-        <span>
-          With waste: <strong>{fmtSqft(totals.totalSqftWithWaste)}</strong>
-        </span>
-        <span>
-          Base price: <strong>{formatQuoteMoney(totals.routine.total)}</strong>
-        </span>
-        {pricePerSqft != null ? (
-          <span>
-            Price per sqft:{' '}
-            <strong>{formatQuoteMoney(pricePerSqft)}/sqft</strong>
-          </span>
-        ) : null}
-      </div>
+      {/* Sqft, sqft with waste and price per sqft moved to the floating money bar, which
+          stays in view while editing (Mark, 2026-10-14). */}
       {hasAccepted ? (
         <div className="mt-2 border-t border-border/60 pt-2 text-sm tabular-nums">
           <p className="text-muted-foreground text-xs">
