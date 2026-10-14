@@ -62,24 +62,34 @@ export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChang
   }
 
   return (
-    <div className="rounded-lg border">
+    // Same card as Rates & markup — left accent, header weight, value chips — in violet, the
+    // Quote stage's colour, so the two blocks read as siblings but stay distinguishable.
+    <div className="rounded-lg border border-l-4 border-l-violet-500 bg-card shadow-sm">
       <button
         type="button"
-        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
       >
-        {open ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
         <span className="font-semibold">Scope of work</span>
         {!open ? (
-          <span className="flex min-w-0 flex-wrap gap-1.5">
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {scopeSummary.map((part) => (
-              <span key={part} className="rounded-md border bg-muted/40 px-2 py-0.5 text-xs">
+              <span
+                key={part}
+                className="rounded-md border border-border bg-background px-1.5 py-0.5 text-sm font-semibold text-foreground"
+              >
                 {part}
               </span>
             ))}
           </span>
-        ) : null}
+        ) : (
+          <span className="flex-1" />
+        )}
+        <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+          {open ? 'Collapse' : 'Expand'}
+          {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+        </span>
       </button>
       {open ? (
     <div className="space-y-6 border-t p-4">
