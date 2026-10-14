@@ -18,6 +18,7 @@ import {
   saveOrder,
 } from '@/services/drywallProjectsService'
 import { suggestOrderItemsFromFieldTakeoff } from '@/lib/drywall/orderSuggest'
+import { orderForScheduleItem } from '@/lib/drywall/adoptDraftOrder'
 import { downloadDrywallFieldMaterialsPdf } from '@/lib/drywall/fieldMaterialsOrderPdf'
 import { downloadDrywallOrderPdf } from '@/lib/drywallOrderPdf'
 import { fetchSuppliers } from '@/services/partnerDirectoryService'
@@ -45,6 +46,9 @@ export function ScheduleItemOrderSheet({
   const [loading, setLoading] = useState(true)
   const [order, setOrder] = useState<DrywallOrder | null>(null)
   const [otherOrders, setOtherOrders] = useState<DrywallOrder[]>([])
+  // The draft the field → order advance seeded, waiting for a schedule item. Attaching here
+  // takes it over instead of creating a second order beside it (adoptDraftOrder.ts).
+  const [adoptable, setAdoptable] = useState<DrywallOrder | null>(null)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [projectMeta, setProjectMeta] = useState<ProjectMeta>({ name: '', address: '', client: '' })
   const [loadedAt, setLoadedAt] = useState('')
@@ -65,10 +69,15 @@ export function ScheduleItemOrderSheet({
         setProjectMeta({ name: project.name, address: project.address, client: project.client })
         setLoadedAt(project.updatedAtRaw)
         const orders = getOrdersFromLegacy(project.legacy)
-        setOrder(orders.find((o) => o.scheduleItemId === scheduleItemId) ?? null)
+        const resolved = orderForScheduleItem(orders, scheduleItemId)
+        const waiting = resolved.adopted ? resolved.order : null
+        setOrder(resolved.adopted ? null : resolved.order)
+        setAdoptable(waiting)
         // Every other order on the job, so the suggestion can subtract what is already
         // committed — this sheet is the usual way a second delivery gets created.
-        setOtherOrders(orders.filter((o) => o.scheduleItemId !== scheduleItemId))
+        setOtherOrders(
+          orders.filter((o) => o.scheduleItemId !== scheduleItemId && o.id !== waiting?.id),
+        )
       }
     } finally {
       setLoading(false)
@@ -85,6 +94,20 @@ export function ScheduleItemOrderSheet({
     // Existing order that already has line items → open as-is.
     if (order && (order.items?.length ?? 0) > 0) {
       setDraft(order)
+      setEditorOpen(true)
+      return
+    }
+    // The seeded draft, with its items and any edits made on the supplier board, becomes this
+    // item's order. Saving links it (saveOrder replaces by id), so no second order appears.
+    if (!order && adoptable && (adoptable.items?.length ?? 0) > 0) {
+      setDraft({
+        ...adoptable,
+        scheduleItemId,
+        deliveryDate: scheduleItemDate || adoptable.deliveryDate,
+        deliveryAddress: adoptable.deliveryAddress || projectMeta.address,
+        updatedAt: new Date().toISOString(),
+      })
+      toast.message('Using the draft order created when the job moved to Order')
       setEditorOpen(true)
       return
     }
@@ -110,6 +133,16 @@ export function ScheduleItemOrderSheet({
       if (order) {
         // Keep the existing (empty) linked order, just fill in the suggested items.
         setDraft({ ...order, items: suggestedItems, updatedAt: now })
+      } else if (adoptable) {
+        // An empty seeded draft: take it over and fill it, rather than add a second order.
+        setDraft({
+          ...adoptable,
+          scheduleItemId,
+          deliveryDate: scheduleItemDate || adoptable.deliveryDate,
+          deliveryAddress: adoptable.deliveryAddress || projectMeta.address,
+          items: suggestedItems,
+          updatedAt: now,
+        })
       } else {
         setDraft({
           id: generateFieldId(),
@@ -145,6 +178,7 @@ export function ScheduleItemOrderSheet({
       const nextRaw = await saveOrder(projectId, toSave, loadedAt)
       setLoadedAt(nextRaw)
       setOrder(toSave)
+      if (adoptable?.id === toSave.id) setAdoptable(null)
       toast.success('Order sheet saved')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to save order sheet')
@@ -247,8 +281,9 @@ export function ScheduleItemOrderSheet({
         !readOnly && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
-              Attach a supplier order for this stock item — items are suggested from the field
-              measurements, and the delivery date follows this schedule item.
+              {adoptable
+                ? `The draft order from the field measurement (${adoptable.items?.length ?? 0} items) will be attached here — the delivery date follows this schedule item.`
+                : 'Attach a supplier order for this stock item — items are suggested from the field measurements, and the delivery date follows this schedule item.'}
             </p>
             <Button
               type="button"
