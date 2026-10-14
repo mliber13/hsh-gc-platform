@@ -482,3 +482,56 @@ them first-class. Do the subtraction now because it is small and stops a real er
 
 Create the second order, delete every line that is not on this delivery, then send. Nothing
 financial is at stake — the only cost of getting it wrong is a wrong truck.
+
+---
+
+## 13. Field becomes the hub — decided 2026-10-14
+
+Mark: the Field page should carry the whole run from measuring to material, as a flow.
+Today showed why: the two ways of creating a job's first order (the field → order auto-seed and
+"attach order to a stock item") left five orphan drafts (fixed `ef4a5c2`). The Order page is
+mostly emptied already — change orders and Financials moved out, orders start from the Stock
+schedule item, the supplier board shows orders across jobs.
+
+### Decisions
+
+| Question | Answer |
+|---|---|
+| Pages | Overview · Info · Quote · Schedule · **Field** · Change Orders · Financials · Photos & Files. **Order tab goes.** |
+| Status tags | **Unchanged** — Info / Quote / Field / Order / Prod. *Order* = measured and rates approved, waiting on material. |
+| Field flow | **1 Measure → 2 Approve measurement → 3 Approve labor rates → 4 Material orders** |
+| Gate | **Rates before ordering.** Step 4 opens only after rates are approved. |
+| Phased takeoffs (Goodwill) | Out of scope — §10 still holds: wait for 3–4 real cases. |
+
+### The approval split
+
+Today one record carries one approval, reached two ways: `FieldTakeoffReviewBanner` (only
+shown for crew-submitted takeoffs) and `LaborRateAdjustmentsCard`'s Approve, which writes
+`reviewStatus: 'approved'` AND the rates in one click. The flow needs them apart:
+
+- **Step 2 approves the measurement** — `reviewStatus`/`approvedAt`, for every takeoff, not
+  only crew-submitted ones. Reject (with notes back to the measurer) lives here.
+- **Step 3 approves the rates** — `reviewApprovedRates` + new `ratesApprovedAt`. Requires the
+  measurement approved. The rate card loses its Reject; rejecting is a measurement act.
+- Existing jobs: rates count as approved when `reviewApprovedRates` exists (derived — no
+  backfill), so every job approved under the old one-click flow reads as both.
+- "Continue to order" (status → `order`, PO below-floor gate unchanged) moves to the end of
+  step 3 and requires rates approved.
+
+### Step 4 — what moves in from the Order page
+
+One order sheet per stock schedule item (`ScheduleItemOrderSheet` — the same component the
+schedule uses, so the two cannot disagree), plus the job-level blocks: the order-vs-bid
+financial card, material reconcile, the field materials PDF, and send-to-supplier email.
+
+### What retires (same change — see memory "two paths, one record")
+
+- The **Order tab**; `/order` redirects to Field's step 4 so old links land somewhere.
+- The **auto-seeded draft** on field → order (`buildAutoDraftOrderFromTakeoff`): step 4 is where
+  orders are made now. `ef4a5c2`'s adoption stays for drafts already waiting.
+
+### Build order
+
+1. Approval split (data + both components) — the foundation, testable alone.
+2. Field page as a four-step flow; steps 1–3 from today's sections.
+3. Step 4 with the Order page's blocks; then retire the Order tab and the auto-seed.
