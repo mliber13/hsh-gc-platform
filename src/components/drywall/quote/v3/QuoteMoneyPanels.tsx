@@ -78,9 +78,16 @@ export function QuoteSummaryLine({
   )
 }
 
+/**
+ * Floats at the bottom of the screen. Not `sticky`: the app's content wrapper is
+ * `overflow-auto` with no fixed height, so it never scrolls itself — the window does — and a
+ * sticky child pins to a box that never moves (Mark, 2026-10-14: "doesn't seem to be scrolling
+ * with me"). `fixed` ignores those ancestors. Sized to its content and centred, so it clears
+ * the sidebar; the page adds bottom padding so the last section is not hidden behind it.
+ */
 export function QuoteSummaryBar({ summary }: { summary: QuoteMoneySummary }) {
   return (
-    <div className="sticky top-0 z-30 -mx-1 rounded-lg border bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div className="fixed bottom-4 left-1/2 z-40 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border bg-background/95 px-5 py-2.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85">
       <QuoteSummaryLine summary={summary} />
     </div>
   )
@@ -146,13 +153,22 @@ function NumberField({
 export function QuoteRatesMarkupPanel({
   quote,
   readOnly,
+  lockedNote,
   onChange,
 }: {
   quote: DrywallQuoteV3
   readOnly: boolean
+  /** Why the inputs are text — a sent or approved quote is locked, which looks broken unsaid. */
+  lockedNote?: string | null
   onChange: (patch: Partial<DrywallQuoteV3>) => void
 }) {
   return (
+    <div className="space-y-2">
+      {lockedNote ? (
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+          {lockedNote}
+        </p>
+      ) : null}
     <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-3 lg:grid-cols-6">
       <NumberField
         id="project-hanger-rate"
@@ -208,6 +224,7 @@ export function QuoteRatesMarkupPanel({
         suffix="%"
         onChange={(sales_tax_pct) => onChange({ sales_tax_pct })}
       />
+    </div>
     </div>
   )
 }

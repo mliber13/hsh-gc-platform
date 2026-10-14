@@ -332,7 +332,7 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
   }
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-6 pb-24">
       <QuoteOutcomeBar
         projectId={projectId}
         // acceptedTotal, not routine.total. The base total ignores accepted alternates,
@@ -467,9 +467,6 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
 
       <QuoteHeaderV3 project={project} quoteNumber={quote.quoteNumber} totals={totals} />
 
-      {/* Pinned: total, cost and margin vs floor stay in view while editing lines or markup
-          (Mark, 2026-10-14). Replaces the right-hand sidebar. */}
-      {moneySummary ? <QuoteSummaryBar summary={moneySummary} /> : null}
 
       <QuoteStructuredScopeSection
         quote={quote}
@@ -478,7 +475,18 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
         onChange={patchQuote}
       />
 
-      <QuoteRatesMarkupPanel quote={quote} readOnly={readOnly} onChange={patchQuote} />
+      {/* The money block: rates and markup, then the lines they price, then the breakdown.
+          Scope sits above it, not in the middle of it (Mark, 2026-10-14). */}
+      <QuoteRatesMarkupPanel
+        quote={quote}
+        readOnly={readOnly}
+        lockedNote={
+          outcomeLocked && !viewerReadOnly
+            ? 'This quote is locked because it has been sent. Click "Unlock for Revision" at the top of the page to change rates, markup or lines.'
+            : null
+        }
+        onChange={patchQuote}
+      />
 
       <div className="space-y-6 min-w-0">
           <Card className="min-w-0 overflow-hidden">
@@ -519,6 +527,9 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
       </div>
 
       <QuoteCostBreakdownCard quote={quote} totals={totals} />
+      {/* Floats at the bottom of the screen: total, cost, margin vs floor while editing lines or
+          markup (Mark, 2026-10-14). Replaces the right-hand sidebar. */}
+      {moneySummary ? <QuoteSummaryBar summary={moneySummary} /> : null}
       <QuoteDurationCard quote={quote} totals={totals} readOnly={readOnly} onChange={patchQuote} />
 
       <QuotePdfOptionsSectionV3 quote={quote} readOnly={readOnly} onChange={patchQuote} />
