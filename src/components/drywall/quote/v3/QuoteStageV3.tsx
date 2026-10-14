@@ -54,6 +54,8 @@ import {
   scrollToQuoteRates,
 } from './QuoteMoneyPanels'
 import { quoteMoneySummary } from '@/lib/drywall/quoteMoneySummary'
+import { buildQuoteChecklist, type QuoteCheckKey } from '@/lib/drywall/quoteChecklist'
+import { QuoteChecklistStrip } from './QuoteChecklistStrip'
 import { QuoteV3ConvertBanner } from './QuoteV3ConvertBanner'
 import { hasRealV2Snapshot } from '@/lib/drywall/v2SnapshotPresence'
 import { QuoteV3RevertToV2Button } from './QuoteV3RevertToV2Button'
@@ -164,6 +166,8 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
 
   // Rates & markup open for editing — by its Edit button, or the floating bar's margin.
   const [ratesOpen, setRatesOpen] = useState(false)
+  // Bumped to open the scope section from the checklist strip.
+  const [scopeOpenSignal, setScopeOpenSignal] = useState(0)
 
   // Total · cost · margin vs floor — the pinned bar, and the line dialog's live preview.
   const moneySummary = useMemo(
@@ -473,12 +477,49 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
 
       <QuoteHeaderV3 project={project} quoteNumber={quote.quoteNumber} totals={totals} />
 
+      {moneySummary ? (
+        <QuoteChecklistStrip
+          items={buildQuoteChecklist({
+            lineCount: quote.lineItems.length,
+            total: moneySummary.contractTotal ?? moneySummary.total,
+            useCustomScope: Boolean(quote.use_custom_scope_of_work),
+            customScopeText: String(quote.custom_scope_of_work ?? ''),
+            ceilingFinish: String(quote.ceiling_finish ?? ''),
+            wallFinish: String(quote.wall_finish ?? ''),
+            marginPct: moneySummary.marginPct,
+            marginIndicator: moneySummary.indicator,
+            floorPct: moneySummary.floorPct,
+            client: project.client ?? '',
+            address: project.address ?? '',
+            outcome: quoteOutcome,
+            ...getQuoteOutcomeFromLegacy(project.legacy).outcomeTimestamps,
+          })}
+          onSelect={(key: QuoteCheckKey) => {
+            if (key === 'lines') {
+              document.getElementById('quote-lines')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            } else if (key === 'scope') {
+              setScopeOpenSignal((n) => n + 1)
+              document.getElementById('quote-scope')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            } else if (key === 'margin') {
+              if (!readOnly) setRatesOpen(true)
+              scrollToQuoteRates()
+            } else if (key === 'customer') {
+              navigate(`/drywall/projects/${projectId}/info`)
+            } else {
+              // Sent / outcome: the outcome bar sits at the top of the page.
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+          }}
+        />
+      ) : null}
+
 
       <QuoteStructuredScopeSection
         quote={quote}
         catalogs={catalogs}
         readOnly={readOnly}
         onChange={patchQuote}
+        openSignal={scopeOpenSignal}
       />
 
       {/* The money block: rates and markup, then the lines they price, then the breakdown.
@@ -497,7 +538,7 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
       />
 
       <div className="space-y-6 min-w-0">
-          <Card className="min-w-0 overflow-hidden">
+          <Card id="quote-lines" className="min-w-0 scroll-mt-4 overflow-hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Line items</CardTitle>
             </CardHeader>

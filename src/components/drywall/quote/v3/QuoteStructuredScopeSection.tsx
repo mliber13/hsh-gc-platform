@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Calendar, ChevronDown, ChevronRight, FileText, Package, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,15 +31,20 @@ type Props = {
   catalogs: OrgDrywallCatalogs
   readOnly: boolean
   onChange: (patch: Partial<DrywallQuoteV3>) => void
+  /** Bumped by the quote checklist's Scope chip to open this section. */
+  openSignal?: number
 }
 
-export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChange }: Props) {
+export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChange, openSignal }: Props) {
   const useCustom = Boolean(quote.use_custom_scope_of_work)
   const ceilingFinish = String(quote.ceiling_finish ?? '')
   const wallFinish = String(quote.wall_finish ?? '')
   // Folds to one line (Mark, 2026-10-14: "quite cumbersome"). A quote whose finishes are set
   // starts folded; a new one starts open, since that is when the scope is being written.
   const [open, setOpen] = useState(() => !ceilingFinish && !wallFinish)
+  useEffect(() => {
+    if (openSignal) setOpen(true)
+  }, [openSignal])
   const scopeSummary = [
     ceilingFinish || quote.ceiling_thickness
       ? `Ceilings ${[String(quote.ceiling_thickness ?? ''), ceilingFinish].filter(Boolean).join(' · ')}`
@@ -64,7 +69,7 @@ export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChang
   return (
     // Same card as Rates & markup — left accent, header weight, value chips — in violet, the
     // Quote stage's colour, so the two blocks read as siblings but stay distinguishable.
-    <div className="rounded-lg border border-l-4 border-l-violet-500 bg-card shadow-sm">
+    <div id="quote-scope" className="scroll-mt-4 rounded-lg border border-l-4 border-l-violet-500 bg-card shadow-sm">
       <button
         type="button"
         className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm"
