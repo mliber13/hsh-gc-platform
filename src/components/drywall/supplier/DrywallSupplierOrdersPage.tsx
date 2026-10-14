@@ -344,7 +344,7 @@ export function DrywallSupplierOrdersPage() {
                     <button
                       key={o.orderId}
                       type="button"
-                      onClick={() => navigate(`/drywall/projects/${o.projectId}/order`)}
+                      onClick={() => navigate(`/drywall/projects/${o.projectId}/field?step=order`)}
                       className="grid w-full grid-cols-12 items-center gap-2 px-4 py-3 text-left text-sm hover:bg-muted/50"
                     >
                       <span className="col-span-5 min-w-0 sm:col-span-4">

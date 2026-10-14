@@ -117,7 +117,6 @@ const SupplierOrderSharePage = lazyRoute(() => import('@/routes/SupplierOrderSha
 const CustomerSchedulePage = lazyRoute(() => import('@/routes/CustomerSchedulePage'), 'CustomerSchedulePage')
 import { DrywallProjectShell } from '@/components/drywall/DrywallProjectShell'
 const JobFilesPage = lazyRoute(() => import('@/components/drywall/files/JobFilesPage'), 'JobFilesPage')
-const OrderPage = lazyRoute(() => import('@/components/drywall/order/OrderPage'), 'OrderPage')
 const ChangeOrdersStagePage = lazyRoute(() => import('@/components/drywall/changeorders/ChangeOrdersStagePage'), 'ChangeOrdersStagePage')
 const JobFinancialsPage = lazyRoute(() => import('@/components/drywall/financials/JobFinancialsPage'), 'JobFinancialsPage')
 const FieldMeasurementPage = lazyRoute(() => import('@/components/drywall/field/FieldMeasurementPage'), 'FieldMeasurementPage')
@@ -386,7 +385,9 @@ export function AppRoutes() {
             <Route path="quote" element={<QuoteStageRoute />} />
             <Route path="field" element={<FieldMeasurementPage />} />
             <Route path="schedule" element={<DrywallScheduleEditor />} />
-            <Route path="order" element={<OrderPage />} />
+            {/* The Order page folded into Field step 4 (docs/DRYWALL_PROJECT_IA.md §13). Kept as a
+                redirect so bookmarks and links still land on the job's orders. */}
+            <Route path="order" element={<Navigate to="../field?step=order" replace />} />
             <Route path="change-orders" element={<ChangeOrdersStagePage />} />
             <Route path="financials" element={<JobFinancialsPage />} />
             {/* Production and Closeout merged into one money screen. Kept as redirects so

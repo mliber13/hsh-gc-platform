@@ -21,7 +21,6 @@ const STAGE_ROUTES: { key: DrywallStageRouteKey; path: string; label: string }[]
   { key: 'quote', path: 'quote', label: DRYWALL_STATUS_LABELS.quote },
   { key: 'schedule', path: 'schedule', label: 'Schedule' },
   { key: 'field', path: 'field', label: DRYWALL_STATUS_LABELS['field-measurement'] },
-  { key: 'order', path: 'order', label: DRYWALL_STATUS_LABELS.order },
   // Change orders get their own stage rather than living inside the quote. Measured: all 16
   // live change orders sit on jobs already in production, so they are a build-time activity
   // and the quote is the wrong moment to go looking for them.

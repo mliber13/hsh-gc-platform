@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type SetStateAction } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
 import { ArrowRight, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,7 @@ import {
   fetchDrywallProjectById,
   fetchDrywallQuoteV2V3,
   fetchFieldTakeoff,
+  fetchOrders,
   getIntakeSourceFromLegacy,
   getOrdersFromLegacy,
   getQuoteOutcomeFromLegacy,
@@ -64,6 +65,9 @@ import type { SetFieldTakeoff } from './fieldTakeoffState'
 export function FieldMeasurementPage() {
   const { projectId, setProjectName } = useOutletContext<DrywallProjectShellContext>()
   const navigate = useNavigate()
+  // ?step=order — where the retired Order tab and the supplier board send people.
+  const [searchParams] = useSearchParams()
+  const requestedStep = searchParams.get('step') === 'order' ? ('order' as const) : null
   const { effectiveRole } = usePermissions()
   const readOnly = !canWriteDrywallField(effectiveRole)
   const canReview = canReviewDrywallFieldTakeoff(effectiveRole)
@@ -175,8 +179,8 @@ export function FieldMeasurementPage() {
     projectStatus === 'project-info' || projectStatus === 'quote' || projectStatus === 'field-measurement'
 
   useEffect(() => {
-    if (!loading && takeoff && openSteps === null) setOpenSteps(new Set([step]))
-  }, [loading, takeoff, openSteps, step])
+    if (!loading && takeoff && openSteps === null) setOpenSteps(new Set([requestedStep ?? step]))
+  }, [loading, takeoff, openSteps, step, requestedStep])
 
   const toggleStep = (s: FieldStep) =>
     setOpenSteps((prev) => {
@@ -575,9 +579,17 @@ export function FieldMeasurementPage() {
       >
         <FieldOrdersStep
           projectId={projectId}
+          project={{ name: projectInfo.name, address: projectAddress, client: projectInfo.client }}
+          fieldTakeoff={takeoff}
           orders={orders}
           ratesApproved={ratesApproved}
           readOnly={ratesReadOnly}
+          loadedAt={loadedAt}
+          onChanged={(next) => {
+            // Adopt the sheet's write so the takeoff's next save is not refused as stale.
+            setLoadedAt(next)
+            void fetchOrders(projectId).then(setOrders).catch(() => undefined)
+          }}
         />
       </FieldFlowStep>
 

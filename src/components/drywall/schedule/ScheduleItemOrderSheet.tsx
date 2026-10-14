@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react'
-import { FileDown, Package, Plus } from 'lucide-react'
+import { FileDown, Mail, Package, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -15,6 +15,7 @@ import {
   fetchDrywallProjectById,
   fetchFieldTakeoff,
   getOrdersFromLegacy,
+  markOrderStatus,
   saveOrder,
 } from '@/services/drywallProjectsService'
 import { suggestOrderItemsFromFieldTakeoff } from '@/lib/drywall/orderSuggest'
@@ -26,6 +27,7 @@ import type { DrywallOrder, DrywallProject } from '@/types/drywall'
 import type { Supplier } from '@/types/partners'
 import { OrderEditorDialog } from '@/components/drywall/order/OrderEditorDialog'
 import { OrderStatusBadge } from '@/components/drywall/order/OrderStatusBadge'
+import { SendOrderToSupplierDialog } from '@/components/drywall/order/SendOrderToSupplierDialog'
 
 type ProjectMeta = Pick<DrywallProject, 'name' | 'address' | 'client'>
 
@@ -35,6 +37,12 @@ interface ScheduleItemOrderSheetProps {
   /** The schedule item's start date — defaults the order's delivery date. */
   scheduleItemDate: string
   readOnly: boolean
+  /**
+   * After this sheet writes the project, with the new timestamp. A page showing several sheets
+   * (Field step 4) needs it: each holds its own updated_at, and one sheet's write leaves the
+   * others' stale — their next save would be refused as "changed somewhere else".
+   */
+  onChanged?: (nextLoadedAt: string) => void
 }
 
 export function ScheduleItemOrderSheet({
@@ -42,6 +50,7 @@ export function ScheduleItemOrderSheet({
   scheduleItemId,
   scheduleItemDate,
   readOnly,
+  onChanged,
 }: ScheduleItemOrderSheetProps) {
   const [loading, setLoading] = useState(true)
   const [order, setOrder] = useState<DrywallOrder | null>(null)
@@ -56,6 +65,8 @@ export function ScheduleItemOrderSheet({
   const [editorOpen, setEditorOpen] = useState(false)
   const [attaching, setAttaching] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [sendOpen, setSendOpen] = useState(false)
+  const [confirming, setConfirming] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -180,6 +191,7 @@ export function ScheduleItemOrderSheet({
       setOrder(toSave)
       if (adoptable?.id === toSave.id) setAdoptable(null)
       toast.success('Order sheet saved')
+      onChanged?.(nextRaw)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to save order sheet')
     }
@@ -193,6 +205,7 @@ export function ScheduleItemOrderSheet({
       setOrder(null)
       setEditorOpen(false)
       toast.success('Order sheet removed')
+      onChanged?.(nextRaw)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to remove order sheet')
     }
@@ -234,6 +247,25 @@ export function ScheduleItemOrderSheet({
     }
   }
 
+  const markConfirmed = async () => {
+    if (!order) return
+    setConfirming(true)
+    try {
+      const next = await markOrderStatus(projectId, order.id, 'confirmed', loadedAt)
+      setLoadedAt(next)
+      toast.success('Order marked confirmed')
+      await load()
+      onChanged?.(next)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update the order')
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  const recipientEmail =
+    (order?.supplierId && suppliers.find((s) => s.id === order.supplierId)?.email?.trim()) || ''
+
   // Nothing to show for a read-only viewer with no attached order.
   if (readOnly && !order) return null
 
@@ -272,9 +304,35 @@ export function ScheduleItemOrderSheet({
             {(order.items?.length ?? 0) === 1 ? '' : 's'}
           </span>
           {!readOnly && (
-            <Button type="button" size="sm" variant="outline" onClick={() => void openEditor()}>
-              Edit order sheet
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {order.status === 'draft' ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={(order.items?.length ?? 0) === 0}
+                  title={(order.items?.length ?? 0) === 0 ? 'Add line items first' : undefined}
+                  onClick={() => setSendOpen(true)}
+                >
+                  <Mail className="mr-1.5 h-3.5 w-3.5" />
+                  Send to supplier
+                </Button>
+              ) : null}
+              {order.status === 'sent' ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={confirming}
+                  onClick={() => void markConfirmed()}
+                >
+                  Mark confirmed
+                </Button>
+              ) : null}
+              <Button type="button" size="sm" variant="outline" onClick={() => void openEditor()}>
+                Edit order sheet
+              </Button>
+            </div>
           )}
         </div>
       ) : (
@@ -298,6 +356,21 @@ export function ScheduleItemOrderSheet({
           </div>
         )
       )}
+
+      <SendOrderToSupplierDialog
+        projectId={projectId}
+        project={projectMeta}
+        order={sendOpen ? order : null}
+        recipientEmail={recipientEmail}
+        loadedAt={loadedAt}
+        onClose={() => setSendOpen(false)}
+        onSent={(next) => {
+          setLoadedAt(next)
+          setSendOpen(false)
+          void load()
+          onChanged?.(next)
+        }}
+      />
 
       <OrderEditorDialog
         open={editorOpen}

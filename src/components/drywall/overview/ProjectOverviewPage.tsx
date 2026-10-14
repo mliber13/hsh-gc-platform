@@ -170,7 +170,7 @@ export function orderTile(legacy: Record<string, unknown>): OverviewTile {
       value: null,
       caption: 'nothing ordered',
       status: null,
-      path: 'order',
+      path: 'field?step=order',
     }
   }
 
@@ -191,7 +191,7 @@ export function orderTile(legacy: Record<string, unknown>): OverviewTile {
             : `${delivered} of ${orders.length} delivered`,
     // A draft order is one nobody has actually sent to a supplier.
     status: drafts > 0 ? 'yellow' : delivered === orders.length ? 'green' : null,
-    path: 'order',
+    path: 'field?step=order',
   }
 }
 

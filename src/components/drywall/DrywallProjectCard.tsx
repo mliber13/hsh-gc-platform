@@ -162,7 +162,8 @@ const STAGE_BUTTONS: {
   },
   {
     stage: 'order',
-    path: 'order',
+    // The Order tab became Field step 4; the status tag stays (IA §13).
+    path: 'field?step=order',
     label: 'Order',
     icon: Package,
     iconColor: 'text-amber-500',

@@ -7,20 +7,32 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, FileDown } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ScheduleItemOrderSheet } from '@/components/drywall/schedule/ScheduleItemOrderSheet'
 import { phaseForScheduleItem } from '@/components/drywall/schedule/scheduleItemStatusStyles'
 import { fetchScheduleItemsForProject } from '@/services/scheduleService'
+import { MaterialReconcileCard } from '@/components/drywall/order/MaterialReconcileCard'
+import { extractMaterialsFromFieldTakeoff } from '@/lib/drywall/fieldMaterialsPdfData'
+import { downloadDrywallFieldMaterialsPdf } from '@/lib/drywallOrderPdf'
 import type { DrywallProjectScheduleItem } from '@/services/scheduleService'
-import type { DrywallOrder } from '@/types/drywall'
+import type { DrywallOrder, DrywallProject, FieldTakeoff } from '@/types/drywall'
 
 interface FieldOrdersStepProps {
   projectId: string
+  project: Pick<DrywallProject, 'name' | 'address' | 'client'>
+  fieldTakeoff: FieldTakeoff
   orders: DrywallOrder[]
   /** Rates before ordering (IA §13). Existing orders still show; nothing new can be attached. */
   ratesApproved: boolean
   readOnly: boolean
+  /**
+   * The page's current updated_at. Sheets remount when it changes, so after any write — the
+   * page's or another sheet's — each one reloads instead of saving against a stale timestamp.
+   */
+  loadedAt: string
+  onChanged: (nextLoadedAt: string) => void
 }
 
 type DeliveryItem = Pick<DrywallProjectScheduleItem, 'id' | 'name' | 'start_date' | 'type'>
@@ -33,7 +45,16 @@ function formatDay(iso: string): string {
   }
 }
 
-export function FieldOrdersStep({ projectId, orders, ratesApproved, readOnly }: FieldOrdersStepProps) {
+export function FieldOrdersStep({
+  projectId,
+  project,
+  fieldTakeoff,
+  orders,
+  ratesApproved,
+  readOnly,
+  loadedAt,
+  onChanged,
+}: FieldOrdersStepProps) {
   const [items, setItems] = useState<DeliveryItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,8 +86,26 @@ export function FieldOrdersStep({ projectId, orders, ratesApproved, readOnly }: 
   )
   const locked = !ratesApproved
 
+  // The whole takeoff by area — not any one order. For whoever is making the delivery, with no
+  // supplier needed.
+  const downloadFieldMaterials = () => {
+    const { boards, accessories } = extractMaterialsFromFieldTakeoff(fieldTakeoff)
+    if (boards.length === 0 && accessories.length === 0) {
+      toast.error('Add field measurements or accessories first')
+      return
+    }
+    downloadDrywallFieldMaterialsPdf(project, fieldTakeoff)
+  }
+
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button type="button" size="sm" variant="outline" onClick={downloadFieldMaterials}>
+          <FileDown className="mr-2 h-4 w-4" />
+          Field materials PDF
+        </Button>
+      </div>
+
       {locked ? (
         <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
           Approve the labor rates first — orders are made after the rates are settled.
@@ -88,7 +127,7 @@ export function FieldOrdersStep({ projectId, orders, ratesApproved, readOnly }: 
         </div>
       ) : (
         deliveries.map((d) => (
-          <div key={d.id} className="space-y-2">
+          <div key={`${d.id}:${loadedAt}`} className="space-y-2">
             <p className="text-sm font-medium">
               {d.name} <span className="text-muted-foreground">· {formatDay(d.start_date)}</span>
             </p>
@@ -97,10 +136,14 @@ export function FieldOrdersStep({ projectId, orders, ratesApproved, readOnly }: 
               scheduleItemId={d.id}
               scheduleItemDate={d.start_date}
               readOnly={readOnly || locked}
+              onChanged={onChanged}
             />
           </div>
         ))
       )}
+
+      {/* What the takeoff calls for that no order covers yet — or that is ordered twice. */}
+      <MaterialReconcileCard fieldTakeoff={fieldTakeoff} orders={orders} />
 
       {unlinked.length > 0 ? (
         <div className="rounded-md border p-3 text-sm">

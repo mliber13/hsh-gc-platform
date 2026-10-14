@@ -28,8 +28,6 @@ import { isValidDrywallQuoteNumber } from '@/lib/drywall/drywallQuoteNumber'
 import { normalizeQuoteToV2, quoteV2ToLegacyCompat } from '@/lib/drywall/drywallQuoteSchema'
 import { fieldTakeoffWithTotals, mergeFieldTakeoff } from '@/lib/drywall/fieldMeasurementUtils'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
-import { suggestOrderItemsFromFieldTakeoff } from '@/lib/drywall/orderSuggest'
-import { fetchSuppliers } from '@/services/partnerDirectoryService'
 import { isDrywallQuoteV3, normalizeDrywallProjectStatus } from '@/types/drywall'
 import type {
   BidSnapshot,
@@ -1232,15 +1230,10 @@ export async function saveFieldTakeoffAndAdvance(
   const withTotals = fieldTakeoffWithTotals(takeoff)
   const nextStatus: DrywallProjectStatus = 'order'
 
-  // Auto-seed a draft supplier order from the completed field takeoff so the job
-  // lands on the Supplier Orders board immediately — the office just reviews and
-  // marks it sent. Only when no orders exist yet (don't duplicate on re-advance)
-  // and the takeoff actually has materials to order.
-  const existingOrders = parseLegacyOrders(prevLegacy)
-  const autoOrder =
-    existingOrders.length === 0
-      ? await buildAutoDraftOrderFromTakeoff(withTotals)
-      : null
+  // No order is seeded here any more. This used to add a draft from the takeoff so the job
+  // showed on the supplier board at once; orders now start from a stock delivery in Field
+  // step 4 (docs/DRYWALL_PROJECT_IA.md §13), and the seed was the second path that left
+  // orphan drafts beside the real order (ef4a5c2). Drafts already seeded are adopted there.
 
   const mergedLegacy = {
     ...prevLegacy,
@@ -1250,53 +1243,9 @@ export async function saveFieldTakeoffAndAdvance(
       ...withTotals,
       updatedAt: new Date().toISOString(),
     },
-    ...(autoOrder ? { orders: [autoOrder, ...existingOrders] } : {}),
   }
 
   return persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, loadedAt, nextStatus)
-}
-
-/**
- * Build a draft order pre-filled from the field takeoff for the field → order
- * advance. Returns null when there's nothing to order. Defaults the supplier to
- * the division's single active supplier (L&W) so the board groups it and the
- * share link works; leaves it unset when there are zero or multiple suppliers.
- */
-async function buildAutoDraftOrderFromTakeoff(
-  takeoff: FieldTakeoff,
-): Promise<DrywallOrder | null> {
-  // No committed orders to subtract: the caller only reaches here when the job has none
-  // at all (see the existingOrders guard), which is what stops a re-advance duplicating.
-  const { items } = suggestOrderItemsFromFieldTakeoff(takeoff)
-  if (items.length === 0) return null
-
-  let supplierFields: Partial<DrywallOrder> = {}
-  try {
-    const suppliers = await fetchSuppliers()
-    if (suppliers.length === 1) {
-      const s = suppliers[0]
-      supplierFields = {
-        supplierId: s.id,
-        supplier: s.name,
-        supplierContact:
-          [s.contactName, s.phone].filter(Boolean).join(' · ') || undefined,
-      }
-    }
-  } catch (e) {
-    // A supplier lookup failure shouldn't block advancing the stage — leave the
-    // order unassigned (still shows on the board under "No supplier").
-    console.warn('buildAutoDraftOrderFromTakeoff: supplier lookup failed', e)
-  }
-
-  const now = new Date().toISOString()
-  return {
-    id: generateFieldId(),
-    status: 'draft',
-    items,
-    ...supplierFields,
-    createdAt: now,
-    updatedAt: now,
-  }
 }
 
 function normalizeOrderItem(raw: unknown): DrywallOrderItem | null {
@@ -1491,43 +1440,16 @@ export async function saveOrder(projectId: string, order: DrywallOrder, loadedAt
   return persistLegacyMetadata(projectId, orgId, mergedLegacy, prevMeta, loadedAt)
 }
 
-/** Explicit-save snapshot: replace orders + changeOrders arrays (JSONB-merge siblings). */
-/**
- * Persist the orders on a project.
- *
- * It used to write change orders in the same call, because both lived on the Order page.
- * They now live with the quote and have their own writer — see saveChangeOrders. Two
- * surfaces sharing one snapshot is how each would overwrite the other half.
- */
-export async function saveOrderStageSnapshot(
-  projectId: string,
-  snapshot: { orders: DrywallOrder[] },
-  loadedAt: string,
-): Promise<string> {
-  if (!isOnlineMode()) throw new Error('Orders require an online connection.')
-
-  const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
-  const now = new Date().toISOString()
-  const orders = snapshot.orders.map((o) => ({
-    ...o,
-    updatedAt: o.updatedAt || now,
-    createdAt: o.createdAt || now,
-  }))
-
-  return persistLegacyMetadata(projectId, orgId, { ...prevLegacy, orders }, prevMeta, loadedAt)
-}
-
 /**
  * Persist change orders on their own.
  *
- * They used to be written by `saveOrderStageSnapshot`, alongside orders, because both lived
- * on the Order page. They no longer do — a change order restates the contract, so it sits
+ * They used to be written by the Order page's whole-array save (retired with the page,
+ * IA §13), alongside orders, because both lived on the Order page. They no longer do — a change order restates the contract, so it sits
  * with the quote. Two pages writing one snapshot is how each would overwrite the other's
  * half, so the write is split the same way the surfaces are.
  *
  * Workflow fields are read back from what is stored rather than taken from the caller, the
- * same rule `saveOrderStageSnapshot` applies: a page that has been open a while must not be
+ * same rule that save applied: a page that has been open a while must not be
  * able to un-accept a change order by saving a stale copy of it. `transitionDrywallChangeOrder`
  * is the only thing that moves that status.
  */
