@@ -199,8 +199,18 @@ function Value({
   usualText?: string
 }) {
   const changed = usual != null && Math.abs(current - usual) > 1e-9
+  // A chip, so the value reads as data rather than grey label text (Mark: "need to stand out");
+  // amber when it differs from the usual.
   return (
-    <span className="inline-flex items-center gap-1 font-medium tabular-nums" title={changed ? `Usual: ${usualText}` : undefined}>
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-sm font-semibold tabular-nums',
+        changed
+          ? 'border-amber-500/50 bg-amber-500/15 text-amber-900 dark:text-amber-100'
+          : 'border-border bg-background text-foreground',
+      )}
+      title={changed ? `Usual: ${usualText}` : undefined}
+    >
       {text}
       {changed ? <span className="size-1.5 rounded-full bg-amber-500" aria-label={`Changed from usual ${usualText}`} /> : null}
     </span>
@@ -240,11 +250,11 @@ export function QuoteRatesMarkupPanel({
   const editing = open && !readOnly
 
   return (
-    <div id={RATES_ANCHOR_ID} className="scroll-mt-4 rounded-lg border bg-muted/20">
+    <div id={RATES_ANCHOR_ID} className="scroll-mt-4 rounded-lg border border-l-4 border-l-primary bg-card shadow-sm">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5 text-sm">
         <span className="font-semibold">Rates &amp; markup</span>
         {!editing ? (
-          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
             <span>
               Hanger <Value text={money(quote.project_hanger_rate)} current={Number(quote.project_hanger_rate ?? 0)} />
             </span>

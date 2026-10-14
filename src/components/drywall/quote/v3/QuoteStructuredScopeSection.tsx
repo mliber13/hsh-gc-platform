@@ -1,4 +1,5 @@
-import { Calendar, FileText, Package, Sparkles } from 'lucide-react'
+import { useState } from 'react'
+import { Calendar, ChevronDown, ChevronRight, FileText, Package, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -36,6 +37,20 @@ export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChang
   const useCustom = Boolean(quote.use_custom_scope_of_work)
   const ceilingFinish = String(quote.ceiling_finish ?? '')
   const wallFinish = String(quote.wall_finish ?? '')
+  // Folds to one line (Mark, 2026-10-14: "quite cumbersome"). A quote whose finishes are set
+  // starts folded; a new one starts open, since that is when the scope is being written.
+  const [open, setOpen] = useState(() => !ceilingFinish && !wallFinish)
+  const scopeSummary = [
+    ceilingFinish || quote.ceiling_thickness
+      ? `Ceilings ${[String(quote.ceiling_thickness ?? ''), ceilingFinish].filter(Boolean).join(' · ')}`
+      : null,
+    wallFinish || quote.wall_thickness
+      ? `Walls ${[String(quote.wall_thickness ?? ''), wallFinish].filter(Boolean).join(' · ')}`
+      : null,
+    String(quote.build_type || 'new_build') === 'new_build' ? 'New build' : 'Renovation',
+    String(quote.hang_exceptions ?? '').trim() ? 'Exceptions noted' : null,
+    useCustom ? 'Custom scope text' : null,
+  ].filter(Boolean) as string[]
 
   const handleAutoGenerate = () => {
     const generated = generateScopeOfWorkFromLineItems(quote.lineItems, catalogs)
@@ -47,7 +62,27 @@ export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChang
   }
 
   return (
-    <div className="space-y-6">
+    <div className="rounded-lg border">
+      <button
+        type="button"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        {open ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
+        <span className="font-semibold">Scope of work</span>
+        {!open ? (
+          <span className="flex min-w-0 flex-wrap gap-1.5">
+            {scopeSummary.map((part) => (
+              <span key={part} className="rounded-md border bg-muted/40 px-2 py-0.5 text-xs">
+                {part}
+              </span>
+            ))}
+          </span>
+        ) : null}
+      </button>
+      {open ? (
+    <div className="space-y-6 border-t p-4">
       {/* Row 1 — Hang | Ceiling | Wall | Duration (4-col at lg+) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Hang specifications */}
@@ -362,6 +397,8 @@ export function QuoteStructuredScopeSection({ quote, catalogs, readOnly, onChang
           )}
         </CardContent>
       </Card>
+    </div>
+      ) : null}
     </div>
   )
 }
