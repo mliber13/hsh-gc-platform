@@ -69,6 +69,17 @@ import type { DrywallChangeOrder, DrywallQuoteV2V3, FieldTakeoff } from '@/types
 import { normalizeDrywallProjectStatus } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { cn } from '@/lib/utils'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { buildCloseoutChecklist, openCloseoutItems } from '@/lib/drywall/closeoutChecklist'
+import { fetchCloseoutSignals, type CloseoutSignals } from '@/services/drywallCloseoutService'
+import { CloseoutChecklistCard } from './CloseoutChecklistCard'
 
 function todayDateInput(): string {
   return format(new Date(), 'yyyy-MM-dd')
@@ -125,14 +136,19 @@ export function JobFinancialsPage() {
   const [changeOrders, setChangeOrders] = useState<DrywallChangeOrder[]>([])
   const [catalogs, setCatalogs] = useState<OrgDrywallCatalogs | null>(null)
   const [loadedAt, setLoadedAt] = useState('')
+  const [signals, setSignals] = useState<CloseoutSignals | null>(null)
+  const [projectType, setProjectType] = useState<string | null>(null)
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [project, nextAssessment, cats] = await Promise.all([
+      const [project, nextAssessment, cats, nextSignals] = await Promise.all([
         fetchDrywallProjectById(projectId),
         fetchDrywallProjectAssessment(projectId).catch(() => null),
         fetchOrgDrywallCatalogs().catch(() => null),
+        // A failed count must not read as "nothing pending" — the card is left out instead.
+        fetchCloseoutSignals(projectId).catch(() => null),
       ])
       if (!project) {
         toast.error('Project not found')
@@ -155,6 +171,8 @@ export function JobFinancialsPage() {
       setFieldTakeoff(fieldTakeoffFromLegacy(project.legacy))
       setChangeOrders(getChangeOrdersFromLegacy(project.legacy))
       setCatalogs(cats)
+      setSignals(nextSignals)
+      setProjectType(project.type ?? null)
       setLoadedAt(project.updatedAtRaw)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to load project')
@@ -214,6 +232,31 @@ export function JobFinancialsPage() {
   // answer. Closeout already resolved it this way and it is right for both.
   const cost = assessment?.final ?? assessment?.currentCost
   const finalTotal = cost?.totalCost ?? 0
+
+  // Close-out checklist (closeoutChecklist.ts) — from production on, when the counts loaded.
+  const closeoutItems =
+    (inProduction || productionDone) && signals && assessment
+      ? buildCloseoutChecklist({
+          productionComplete: productionDone,
+          materialPending: signals.materialPending,
+          materialAccepted: signals.materialAccepted,
+          afterProductionCost: assessment.afterProductionCost,
+          openChangeOrders: changeOrders.filter((c) => c.status === 'draft' || c.status === 'submitted').length,
+          invoicePending: signals.invoicePending,
+          billedToDate: assessment.billedToDate,
+          remainingToBill: assessment.remainingToBill,
+          overbilledAmount: assessment.overbilledAmount,
+          sharedWithGc: projectType != null && projectType !== 'drywall',
+        })
+      : null
+  const openItems = closeoutItems ? openCloseoutItems(closeoutItems) : []
+
+  const closeJob = () =>
+    void runLifecycle(
+      () => markFullyClosed(projectId, loadedAt, isoFromDateInput(closeDateInput)),
+      'Project fully closed',
+      'Failed to close the project',
+    )
 
   const statusLabel = isClosed
     ? 'Closed'
@@ -341,6 +384,10 @@ export function JobFinancialsPage() {
         }}
       />
 
+      {closeoutItems ? (
+        <CloseoutChecklistCard projectId={projectId} items={closeoutItems} closed={isClosed} />
+      ) : null}
+
       {/* The lifecycle lives at the bottom: one button for wherever the job actually is,
           instead of a page per step. */}
       {!readOnly && (
@@ -408,13 +455,8 @@ export function JobFinancialsPage() {
                 />
               </div>
               <Button
-                onClick={() =>
-                  void runLifecycle(
-                    () => markFullyClosed(projectId, loadedAt, isoFromDateInput(closeDateInput)),
-                    'Project fully closed',
-                    'Failed to close the project',
-                  )
-                }
+                // Loose ends still open → say what they are before closing over them.
+                onClick={() => (openItems.length > 0 ? setCloseConfirmOpen(true) : closeJob())}
                 disabled={busy || !closeDateInput}
               >
                 {busy ? 'Updating…' : 'Mark fully closed'}
@@ -501,6 +543,39 @@ export function JobFinancialsPage() {
           )}
         </div>
       )}
+
+      <Dialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Close with loose ends?</DialogTitle>
+            <DialogDescription>
+              {openItems.length === 1 ? 'This is' : 'These are'} still open on the close-out checklist:
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="list-disc space-y-1 pl-5 text-sm">
+            {openItems.map((i) => (
+              <li key={i.key}>
+                <span className="font-medium">{i.label}</span> — {i.detail}
+              </li>
+            ))}
+          </ul>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setCloseConfirmOpen(false)} disabled={busy}>
+              Go back
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                setCloseConfirmOpen(false)
+                closeJob()
+              }}
+            >
+              Close anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -96,6 +96,9 @@ function ReviewSections<T extends { id: string; reviewStatus: QbReviewStatus }>(
 
 export function DrywallQuickBooksPage() {
   usePageTitle('Drywall — QuickBooks')
+  // ?tab=materials — where a job's close-out checklist sends you to review its bills.
+  const [searchParams] = useSearchParams()
+  const initialTab = searchParams.get('tab') === 'materials' ? 'materials' : 'revenue'
   const [connected, setConnected] = useState<boolean | null>(null)
   const [invoices, setInvoices] = useState<DrywallQbInvoice[]>([])
   const [materials, setMaterials] = useState<DrywallQbMaterial[]>([])
@@ -219,7 +222,7 @@ export function DrywallQuickBooksPage() {
             </div>
           ) : null}
 
-          <Tabs defaultValue="revenue">
+          <Tabs defaultValue={initialTab}>
             <TabsList>
               <TabsTrigger value="revenue">Revenue</TabsTrigger>
               <TabsTrigger value="materials">Materials</TabsTrigger>
