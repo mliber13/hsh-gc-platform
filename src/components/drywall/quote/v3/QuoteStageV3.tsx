@@ -36,7 +36,7 @@ import {
   saveDrywallQuoteV3,
 } from '@/services/drywallProjectsService'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
-import type { DrywallProject, DrywallQuoteOutcome, DrywallQuoteV3 } from '@/types/drywall'
+import type { DrywallProject, DrywallQuoteOutcome, DrywallQuoteV3, QuoteLineItem } from '@/types/drywall'
 import { isDrywallQuoteV3 } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { AlternatesSection } from './AlternatesSection'
@@ -45,7 +45,14 @@ import { LineItemsTable } from './LineItemsTable'
 import { QuoteHeaderV3 } from './QuoteHeaderV3'
 import { QuotePdfOptionsSectionV3 } from './QuotePdfOptionsSectionV3'
 import { QuoteStructuredScopeSection } from './QuoteStructuredScopeSection'
-import { QuoteTotalsSidebar } from './QuoteTotalsSidebar'
+import {
+  QuoteCostBreakdownCard,
+  QuoteDurationCard,
+  QuoteRatesMarkupPanel,
+  QuoteSummaryBar,
+  QuoteSummaryLine,
+} from './QuoteMoneyPanels'
+import { quoteMoneySummary } from '@/lib/drywall/quoteMoneySummary'
 import { QuoteV3ConvertBanner } from './QuoteV3ConvertBanner'
 import { QuoteV3RevertToV2Button } from './QuoteV3RevertToV2Button'
 
@@ -152,6 +159,29 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
     if (!quote || !catalogs) return null
     return computeQuoteV3Totals(quote, catalogs)
   }, [quote, catalogs])
+
+  // Total · cost · margin vs floor — the pinned bar, and the line dialog's live preview.
+  const moneySummary = useMemo(
+    () => (totals && catalogs ? quoteMoneySummary(totals, catalogs.marginFloorTarget) : null),
+    [totals, catalogs],
+  )
+
+  /** The same three numbers with one line swapped for its unsaved draft. */
+  const previewLineSummary = useCallback(
+    (draft: QuoteLineItem) => {
+      if (!quote || !catalogs || !moneySummary) return null
+      if (!quote.lineItems.some((l) => l.id === draft.id)) {
+        // An alternate's line, or a new one not yet in the quote: show where the quote stands.
+        return <QuoteSummaryLine summary={moneySummary} />
+      }
+      const next = { ...quote, lineItems: quote.lineItems.map((l) => (l.id === draft.id ? draft : l)) }
+      const preview = quoteMoneySummary(computeQuoteV3Totals(next, catalogs), catalogs.marginFloorTarget)
+      const now = moneySummary.contractTotal ?? moneySummary.total
+      const then = preview.contractTotal ?? preview.total
+      return <QuoteSummaryLine summary={preview} deltaTotal={then - now} />
+    },
+    [quote, catalogs, moneySummary],
+  )
 
   /**
    * Refreshing rebuilds the quote from the v2 snapshot and overwrites the live
@@ -437,6 +467,10 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
 
       <QuoteHeaderV3 project={project} quoteNumber={quote.quoteNumber} totals={totals} />
 
+      {/* Pinned: total, cost and margin vs floor stay in view while editing lines or markup
+          (Mark, 2026-10-14). Replaces the right-hand sidebar. */}
+      {moneySummary ? <QuoteSummaryBar summary={moneySummary} /> : null}
+
       <QuoteStructuredScopeSection
         quote={quote}
         catalogs={catalogs}
@@ -444,8 +478,9 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
         onChange={patchQuote}
       />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(240px,280px)] lg:gap-6">
-        <div className="space-y-6 min-w-0">
+      <QuoteRatesMarkupPanel quote={quote} readOnly={readOnly} onChange={patchQuote} />
+
+      <div className="space-y-6 min-w-0">
           <Card className="min-w-0 overflow-hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Line items</CardTitle>
@@ -459,6 +494,7 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
                 projectFinisherRate={quote.project_finisher_rate}
                 quoteBeadSticks={quote.bead_sticks}
                 onChange={(lineItems) => patchQuote({ lineItems })}
+                previewSummary={previewLineSummary}
               />
             </CardContent>
           </Card>
@@ -480,16 +516,10 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
               }
             />
           )}
-        </div>
-
-        <QuoteTotalsSidebar
-          quote={quote}
-          totals={totals}
-          catalogs={catalogs}
-          readOnly={readOnly}
-          onChange={patchQuote}
-        />
       </div>
+
+      <QuoteCostBreakdownCard quote={quote} totals={totals} />
+      <QuoteDurationCard quote={quote} totals={totals} readOnly={readOnly} onChange={patchQuote} />
 
       <QuotePdfOptionsSectionV3 quote={quote} readOnly={readOnly} onChange={patchQuote} />
 

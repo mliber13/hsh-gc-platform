@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import { Button } from '@/components/ui/button'
 
@@ -50,6 +50,10 @@ type Props = {
 
   onSave: (line: QuoteLineItem) => void
 
+  /** Total and margin with this edit applied — so the money stays in view while editing. */
+
+  previewSummary?: (draft: QuoteLineItem) => ReactNode
+
 }
 
 
@@ -82,6 +86,7 @@ export function LineItemEditDialog({
   projectFinisherRate,
   readOnly,
   onSave,
+  previewSummary,
 }: Props) {
 
   const [draft, setDraft] = useState<QuoteLineItem | null>(line)
@@ -661,6 +666,12 @@ export function LineItemEditDialog({
           </div>
 
         </div>
+
+        {draft && previewSummary ? (
+
+          <div className="rounded-md border bg-muted/30 px-3 py-2">{previewSummary(draft)}</div>
+
+        ) : null}
 
         <DialogFooter>
 

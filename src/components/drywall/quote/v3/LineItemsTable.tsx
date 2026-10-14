@@ -1,4 +1,4 @@
-import { useMemo, useState, Fragment } from 'react'
+import { useMemo, useState, Fragment, type ReactNode } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -71,6 +71,8 @@ type Props = {
   projectFinisherRate?: number
   quoteBeadSticks?: string | number | null
   onChange: (lines: QuoteLineItem[]) => void
+  /** Passed to the line-edit dialog: the quote's total and margin with the draft applied. */
+  previewSummary?: (draft: QuoteLineItem) => ReactNode
 }
 
 type TypeSection = {
@@ -91,6 +93,7 @@ export function LineItemsTable({
   projectFinisherRate,
   quoteBeadSticks,
   onChange,
+  previewSummary,
 }: Props) {
   const [editLine, setEditLine] = useState<QuoteLineItem | null>(null)
   const [editOpen, setEditOpen] = useState(false)
@@ -225,6 +228,7 @@ export function LineItemsTable({
         projectFinisherRate={projectFinisherRate}
         readOnly={readOnly}
         onSave={saveEdit}
+        previewSummary={previewSummary}
       />
     </div>
   )
