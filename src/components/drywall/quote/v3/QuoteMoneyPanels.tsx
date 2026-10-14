@@ -11,6 +11,7 @@
 
 import { useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -42,11 +43,14 @@ export function QuoteSummaryLine({
   summary,
   deltaTotal,
   className,
+  onMarginClick,
 }: {
   summary: QuoteMoneySummary
   /** In the line dialog: how much the edit moves the total. */
   deltaTotal?: number
   className?: string
+  /** In the floating bar: margin is the way into the rates and markup. */
+  onMarginClick?: () => void
 }) {
   const Icon = summary.indicator === 'red' ? AlertTriangle : CheckCircle2
   const total = summary.contractTotal ?? summary.total
@@ -80,7 +84,14 @@ export function QuoteSummaryLine({
         <span className="text-muted-foreground">Cost </span>
         <span className="font-medium">{formatQuoteMoney(summary.cost)}</span>
       </span>
-      <span className="inline-flex items-center gap-1.5">
+      <span
+        className={cn('inline-flex items-center gap-1.5', onMarginClick && 'cursor-pointer rounded-md px-1 -mx-1 hover:bg-muted')}
+        role={onMarginClick ? 'button' : undefined}
+        tabIndex={onMarginClick ? 0 : undefined}
+        title={onMarginClick ? 'Rates & markup' : undefined}
+        onClick={onMarginClick}
+        onKeyDown={onMarginClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onMarginClick() } } : undefined}
+      >
         <Icon className={cn('size-4', marginColor(summary.indicator))} />
         <span className="text-muted-foreground">Margin </span>
         <span className={cn('font-semibold', marginColor(summary.indicator))}>
@@ -99,10 +110,10 @@ export function QuoteSummaryLine({
  * with me"). `fixed` ignores those ancestors. Sized to its content and centred, so it clears
  * the sidebar; the page adds bottom padding so the last section is not hidden behind it.
  */
-export function QuoteSummaryBar({ summary }: { summary: QuoteMoneySummary }) {
+export function QuoteSummaryBar({ summary, onMarginClick }: { summary: QuoteMoneySummary; onMarginClick?: () => void }) {
   return (
     <div className="fixed bottom-4 left-1/2 z-40 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border bg-background/95 px-5 py-2.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85">
-      <QuoteSummaryLine summary={summary} />
+      <QuoteSummaryLine summary={summary} onMarginClick={onMarginClick} />
     </div>
   )
 }
@@ -164,81 +175,137 @@ function NumberField({
   )
 }
 
+/**
+ * Values with a real "usual" across live quotes (2026-10-14, 88 v3 quotes): cleanup $0.03 (68),
+ * overhead 10% (70), profit 30% (52). A different value gets a marker, so a job-specific choice —
+ * or a slip — is visible at a glance. Hanger and finisher rates are priced per job ($0.27–$0.55)
+ * and sales tax follows the job's location (6.75% ×43, 7.25% ×36), so they carry none.
+ */
+const USUAL: Partial<Record<'prep_clean_rate' | 'overhead_pct' | 'profit_pct', number>> = {
+  prep_clean_rate: 0.03,
+  overhead_pct: 10,
+  profit_pct: 30,
+}
+
+function Value({
+  text,
+  usual,
+  current,
+  usualText,
+}: {
+  text: string
+  usual?: number
+  current: number
+  usualText?: string
+}) {
+  const changed = usual != null && Math.abs(current - usual) > 1e-9
+  return (
+    <span className="inline-flex items-center gap-1 font-medium tabular-nums" title={changed ? `Usual: ${usualText}` : undefined}>
+      {text}
+      {changed ? <span className="size-1.5 rounded-full bg-amber-500" aria-label={`Changed from usual ${usualText}`} /> : null}
+    </span>
+  )
+}
+
+const RATES_ANCHOR_ID = 'quote-rates-markup'
+
+/** Scroll the rates section into view — the floating bar's margin links here. */
+export function scrollToQuoteRates() {
+  document.getElementById(RATES_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+/**
+ * Rates & markup — one read-only line until Edit (Mark, 2026-10-14: "spread out", "something
+ * that could be accidentally messed with"). Editing is deliberate; the floating bar updates
+ * live while it is open, so a profit nudge shows its margin as it is typed.
+ */
 export function QuoteRatesMarkupPanel({
   quote,
   readOnly,
   lockedNote,
+  open,
+  onOpenChange,
   onChange,
 }: {
   quote: DrywallQuoteV3
   readOnly: boolean
   /** Why the inputs are text — a sent or approved quote is locked, which looks broken unsaid. */
   lockedNote?: string | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onChange: (patch: Partial<DrywallQuoteV3>) => void
 }) {
+  const money = (n: number | undefined) => `$${Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}`
+  const pct = (n: number | undefined) => `${Number(n ?? 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}%`
+  const editing = open && !readOnly
+
   return (
-    <div className="space-y-2">
+    <div id={RATES_ANCHOR_ID} className="scroll-mt-4 rounded-lg border bg-muted/20">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5 text-sm">
+        <span className="font-semibold">Rates &amp; markup</span>
+        {!editing ? (
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+            <span>
+              Hanger <Value text={money(quote.project_hanger_rate)} current={Number(quote.project_hanger_rate ?? 0)} />
+            </span>
+            <span>
+              Finisher <Value text={money(quote.project_finisher_rate)} current={Number(quote.project_finisher_rate ?? 0)} />
+            </span>
+            <span>
+              Cleanup{' '}
+              <Value text={money(quote.prep_clean_rate)} current={Number(quote.prep_clean_rate ?? 0)} usual={USUAL.prep_clean_rate} usualText={money(USUAL.prep_clean_rate)} />
+            </span>
+            <span className="text-border">│</span>
+            <span>
+              OH <Value text={pct(quote.overhead_pct)} current={Number(quote.overhead_pct ?? 0)} usual={USUAL.overhead_pct} usualText={pct(USUAL.overhead_pct)} />
+            </span>
+            <span>
+              Profit <Value text={pct(quote.profit_pct)} current={Number(quote.profit_pct ?? 0)} usual={USUAL.profit_pct} usualText={pct(USUAL.profit_pct)} />
+            </span>
+            <span className="text-border">│</span>
+            <span>
+              Tax <Value text={pct(quote.sales_tax_pct)} current={Number(quote.sales_tax_pct ?? 0)} />
+            </span>
+          </span>
+        ) : (
+          <span className="flex-1 text-xs text-muted-foreground">The money bar below updates as you type.</span>
+        )}
+        {!readOnly ? (
+          <Button type="button" size="sm" variant={editing ? 'default' : 'outline'} className="ml-auto h-7" onClick={() => onOpenChange(!editing)}>
+            {editing ? 'Done' : 'Edit'}
+          </Button>
+        ) : null}
+      </div>
+
       {lockedNote ? (
-        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+        <p className="border-t border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200">
           {lockedNote}
         </p>
       ) : null}
-    <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-3 lg:grid-cols-6">
-      <NumberField
-        id="project-hanger-rate"
-        label="Hanger $/sqft"
-        value={quote.project_hanger_rate ?? 0}
-        readOnly={readOnly}
-        step={0.001}
-        prefix="$"
-        onChange={(project_hanger_rate) => onChange({ project_hanger_rate })}
-      />
-      <NumberField
-        id="project-finisher-rate"
-        label="Finisher $/sqft"
-        value={quote.project_finisher_rate ?? 0}
-        readOnly={readOnly}
-        step={0.001}
-        prefix="$"
-        onChange={(project_finisher_rate) => onChange({ project_finisher_rate })}
-      />
-      <NumberField
-        id="prep-clean-rate"
-        label="Cleanup $/sqft"
-        value={quote.prep_clean_rate}
-        readOnly={readOnly}
-        step={0.001}
-        prefix="$"
-        onChange={(prep_clean_rate) => onChange({ prep_clean_rate })}
-      />
-      <NumberField
-        id="oh-pct"
-        label="Overhead"
-        value={quote.overhead_pct}
-        readOnly={readOnly}
-        step={0.1}
-        suffix="%"
-        onChange={(overhead_pct) => onChange({ overhead_pct })}
-      />
-      <NumberField
-        id="profit-pct"
-        label="Profit"
-        value={quote.profit_pct}
-        readOnly={readOnly}
-        step={0.1}
-        suffix="%"
-        onChange={(profit_pct) => onChange({ profit_pct })}
-      />
-      <NumberField
-        id="tax-pct"
-        label="Sales tax"
-        value={quote.sales_tax_pct}
-        readOnly={readOnly}
-        step={0.01}
-        suffix="%"
-        onChange={(sales_tax_pct) => onChange({ sales_tax_pct })}
-      />
-    </div>
+
+      {editing ? (
+        <div className="grid gap-4 border-t px-3 py-3 md:grid-cols-[3fr_2fr_1fr]">
+          <fieldset className="space-y-2">
+            <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Labor rates ($/sqft)</legend>
+            <div className="grid grid-cols-3 gap-2">
+              <NumberField id="project-hanger-rate" label="Hanger" value={quote.project_hanger_rate ?? 0} readOnly={false} step={0.001} prefix="$" onChange={(project_hanger_rate) => onChange({ project_hanger_rate })} />
+              <NumberField id="project-finisher-rate" label="Finisher" value={quote.project_finisher_rate ?? 0} readOnly={false} step={0.001} prefix="$" onChange={(project_finisher_rate) => onChange({ project_finisher_rate })} />
+              <NumberField id="prep-clean-rate" label="Cleanup" value={quote.prep_clean_rate} readOnly={false} step={0.001} prefix="$" onChange={(prep_clean_rate) => onChange({ prep_clean_rate })} />
+            </div>
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Markup</legend>
+            <div className="grid grid-cols-2 gap-2">
+              <NumberField id="oh-pct" label="Overhead" value={quote.overhead_pct} readOnly={false} step={0.1} suffix="%" onChange={(overhead_pct) => onChange({ overhead_pct })} />
+              <NumberField id="profit-pct" label="Profit" value={quote.profit_pct} readOnly={false} step={0.1} suffix="%" onChange={(profit_pct) => onChange({ profit_pct })} />
+            </div>
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tax</legend>
+            <NumberField id="tax-pct" label="Sales tax" value={quote.sales_tax_pct} readOnly={false} step={0.01} suffix="%" onChange={(sales_tax_pct) => onChange({ sales_tax_pct })} />
+          </fieldset>
+        </div>
+      ) : null}
     </div>
   )
 }

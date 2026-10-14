@@ -51,6 +51,7 @@ import {
   QuoteRatesMarkupPanel,
   QuoteSummaryBar,
   QuoteSummaryLine,
+  scrollToQuoteRates,
 } from './QuoteMoneyPanels'
 import { quoteMoneySummary } from '@/lib/drywall/quoteMoneySummary'
 import { QuoteV3ConvertBanner } from './QuoteV3ConvertBanner'
@@ -159,6 +160,9 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
     if (!quote || !catalogs) return null
     return computeQuoteV3Totals(quote, catalogs)
   }, [quote, catalogs])
+
+  // Rates & markup open for editing — by its Edit button, or the floating bar's margin.
+  const [ratesOpen, setRatesOpen] = useState(false)
 
   // Total · cost · margin vs floor — the pinned bar, and the line dialog's live preview.
   const moneySummary = useMemo(
@@ -480,6 +484,8 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
       <QuoteRatesMarkupPanel
         quote={quote}
         readOnly={readOnly}
+        open={ratesOpen}
+        onOpenChange={setRatesOpen}
         lockedNote={
           outcomeLocked && !viewerReadOnly
             ? 'This quote is locked because it has been sent. Click "Unlock for Revision" at the top of the page to change rates, markup or lines.'
@@ -529,7 +535,15 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
       <QuoteCostBreakdownCard quote={quote} totals={totals} />
       {/* Floats at the bottom of the screen: total, cost, margin vs floor while editing lines or
           markup (Mark, 2026-10-14). Replaces the right-hand sidebar. */}
-      {moneySummary ? <QuoteSummaryBar summary={moneySummary} /> : null}
+      {moneySummary ? (
+        <QuoteSummaryBar
+          summary={moneySummary}
+          onMarginClick={() => {
+            if (!readOnly) setRatesOpen(true)
+            scrollToQuoteRates()
+          }}
+        />
+      ) : null}
       <QuoteDurationCard quote={quote} totals={totals} readOnly={readOnly} onChange={patchQuote} />
 
       <QuotePdfOptionsSectionV3 quote={quote} readOnly={readOnly} onChange={patchQuote} />
