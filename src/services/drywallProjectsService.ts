@@ -6,6 +6,7 @@ import { supabase, isOnlineMode } from '@/lib/supabase'
 import { belongsInDrywallWorkspaceFromListScalars } from '@/services/projectVisibility'
 import { requireUserOrgId, getCurrentUserProfile } from '@/services/userService'
 import { hydrateDrywallQuote } from '@/lib/drywall/createEmptyDrywallQuote'
+import { initialV3Quote } from '@/lib/drywall/initialV3Quote'
 import { hydrateDrywallQuoteV3, prepareDrywallQuoteV3ForSave } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { buildV3FromV2, v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
 import { buildBidSnapshotForQuote } from '@/lib/drywall/bidSnapshot'
@@ -987,10 +988,14 @@ export async function convertQuoteToV3(
 ): Promise<{ quote: DrywallQuoteV3; updatedAtRaw: string }> {
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
-  const current = await fetchDrywallQuoteV2V3(projectId)
+  const project = await fetchDrywallProjectById(projectId)
+  if (!project) throw new Error('Project not found')
+  const current = quoteV2V3FromLegacy(project.legacy)
   if (isDrywallQuoteV3(current)) return { quote: current, updatedAtRaw: loadedAt }
 
-  const v3 = buildV3FromV2(current)
+  // A quote never started (a new job's {}) is built as v3 directly — no blank v2 snapshot
+  // (initialV3Quote.ts). Anything stored converts as before, keeping its snapshot.
+  const v3 = initialV3Quote(project.legacy.quote, current)
   try {
     const updatedAtRaw = await saveDrywallQuoteV3(projectId, v3, loadedAt)
     return { quote: v3, updatedAtRaw }

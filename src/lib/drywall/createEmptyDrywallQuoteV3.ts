@@ -3,6 +3,7 @@ import { buildV3FromV2, v2QuoteFromV3Snapshot, V3_LINE_MIGRATION_OVERRIDE_REASON
 import type { DrywallQuotePdfSettings, DrywallQuoteV3, QuoteAlternate, QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
 import { generateQuoteId } from './drywallQuoteHelpers'
 import { DURATION_LINE_KEYS, parseDurationOverride } from './durationService'
+import { mapV2PdfSettingsToV3 } from './quoteV3PdfSettings'
 
 export function createEmptyDrywallQuoteV3(): DrywallQuoteV3 {
   const d = DRYWALL_QUOTE_BASE_DEFAULTS
@@ -16,6 +17,17 @@ export function createEmptyDrywallQuoteV3(): DrywallQuoteV3 {
     profit_pct: d.profitPercentage,
     sales_tax_pct: d.salesTaxRate,
     component_include_labor_burden: true,
+    // What a quote converted from a blank v2 has always carried. New jobs are built straight
+    // as v3 now (initialV3Quote.ts), so these must match it field for field — a test holds
+    // the two equal. Without them a new quote lost its PDF document settings and build type.
+    hanger_include_labor_burden: true,
+    finisher_include_labor_burden: true,
+    prep_clean_include_labor_burden: true,
+    build_type: 'new_build',
+    complexity: 'normal',
+    paper_floors_required: false,
+    use_custom_scope_of_work: false,
+    pdf_settings: mapV2PdfSettingsToV3(),
     lineItems: [],
     alternates: [],
     notes: '',
