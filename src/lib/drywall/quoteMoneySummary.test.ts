@@ -60,7 +60,7 @@ describe('quote money summary', () => {
     expect(s.contractTotal).toBeNull()
   })
 
-  it('carries the header's sqft and price per sqft: total over sqft with waste', () => {
+  it('carries the header sqft and price per sqft: total over sqft with waste', () => {
     const q = quote()
     const totals = computeQuoteV3Totals(q, catalogs)
     const s = quoteMoneySummary(totals, 0.3)
