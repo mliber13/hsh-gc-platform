@@ -33,3 +33,18 @@ export function quoteToFieldBlockReason(
     ? 'Mark the quote approved to move this job to Field — approval is what moves it.'
     : `The quote is ${outcome}, not approved. Approve it on the Quote tab to move the job to Field.`
 }
+
+/**
+ * Move to Order buys material for the job, so it waits on the customer too. A job measured
+ * before it is quoted can have its measurement and labor rates approved while still in Quote,
+ * and Move to Order used to jump it straight past approval (Mark, 2026-10-15). Once the quote
+ * is approved the job is in Field and this no longer applies. Returns why, or null.
+ */
+export function moveToOrderBlockReason(
+  status: DrywallProjectStatus,
+  outcome: DrywallQuoteOutcome,
+): string | null {
+  if (status !== 'project-info' && status !== 'quote') return null
+  if (outcome === 'approved') return null
+  return 'The quote is not approved yet. Mark it approved when the customer accepts, then move to Order.'
+}

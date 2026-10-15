@@ -4,7 +4,7 @@
  * into Field by hand.
  */
 import { describe, expect, it } from 'vitest'
-import { quoteToFieldBlockReason, statusAfterQuoteUnlock } from './quoteStageGate'
+import { moveToOrderBlockReason, quoteToFieldBlockReason, statusAfterQuoteUnlock } from './quoteStageGate'
 
 describe('quote stage gate', () => {
   it('unlocking a quote sends a job in Field back to Quote', () => {
@@ -30,5 +30,20 @@ describe('quote stage gate', () => {
     expect(quoteToFieldBlockReason('field-measurement', 'quote', 'sent')).toBeNull()
     expect(quoteToFieldBlockReason('project-info', 'quote', 'drafted')).toBeNull()
     expect(quoteToFieldBlockReason('field-measurement', 'order', 'sent')).toBeNull()
+  })
+})
+
+describe('move to order', () => {
+  it('a job still in Quote waits for the quote to be approved', () => {
+    for (const outcome of ['drafted', 'sent', 'lost'] as const) {
+      expect(moveToOrderBlockReason('quote', outcome)).toMatch(/approved/)
+      expect(moveToOrderBlockReason('project-info', outcome)).toMatch(/approved/)
+    }
+  })
+
+  it('an approved quote, or a job already in Field, goes ahead', () => {
+    expect(moveToOrderBlockReason('quote', 'approved')).toBeNull()
+    expect(moveToOrderBlockReason('field-measurement', 'sent')).toBeNull()
+    expect(moveToOrderBlockReason('field-measurement', 'approved')).toBeNull()
   })
 })

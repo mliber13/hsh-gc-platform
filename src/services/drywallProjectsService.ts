@@ -6,7 +6,7 @@ import { supabase, isOnlineMode } from '@/lib/supabase'
 import { belongsInDrywallWorkspaceFromListScalars } from '@/services/projectVisibility'
 import { requireUserOrgId, getCurrentUserProfile } from '@/services/userService'
 import { hydrateDrywallQuote } from '@/lib/drywall/createEmptyDrywallQuote'
-import { quoteToFieldBlockReason, statusAfterQuoteUnlock } from '@/lib/drywall/quoteStageGate'
+import { moveToOrderBlockReason, quoteToFieldBlockReason, statusAfterQuoteUnlock } from '@/lib/drywall/quoteStageGate'
 import { initialV3Quote } from '@/lib/drywall/initialV3Quote'
 import { hydrateDrywallQuoteV3, prepareDrywallQuoteV3ForSave } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { buildV3FromV2, v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
@@ -1224,7 +1224,12 @@ export async function saveFieldTakeoffAndAdvance(
   if (!isOnlineMode()) throw new Error('Field measurement requires an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevMeta, prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevMeta, prevLegacy, status: rawStatus } = await loadProjectLegacyForMerge(projectId, orgId)
+  const blocked = moveToOrderBlockReason(
+    normalizeDrywallProjectStatus(rawStatus),
+    normalizeQuoteOutcome(parseQuoteRecord(prevLegacy).outcome),
+  )
+  if (blocked) throw new Error(blocked)
 
   const prevTakeoff =
     prevLegacy.fieldTakeoff &&

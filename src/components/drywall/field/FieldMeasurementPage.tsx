@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type SetStateAction } from 'react'
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
+import { moveToOrderBlockReason } from '@/lib/drywall/quoteStageGate'
 import { rememberSiteContact } from '@/services/siteContactsService'
 import { ArrowRight, Save } from 'lucide-react'
 import { toast } from 'sonner'
@@ -166,6 +167,8 @@ export function FieldMeasurementPage() {
   const canContinue =
     measuredSqft > 0 && checklistComplete && Boolean(projectAddress?.trim()) && ratesApproved
   // Only a job not yet at Order moves there; a job in production must not be sent back.
+  // A job measured before it is quoted stays out of Order until the customer accepts.
+  const orderBlocked = projectStatus ? moveToOrderBlockReason(projectStatus, quote?.outcome ?? 'drafted') : null
   const preOrder =
     projectStatus === 'project-info' || projectStatus === 'quote' || projectStatus === 'field-measurement'
 
@@ -547,13 +550,15 @@ export function FieldMeasurementPage() {
           <div className="flex flex-wrap items-center gap-3 border-t pt-4">
             <Button
               type="button"
-              disabled={!canContinue || saving || checkingMargin || isDirty}
+              disabled={!canContinue || saving || checkingMargin || isDirty || Boolean(orderBlocked)}
               onClick={() => void handleContinueOrder()}
             >
               {checkingMargin ? 'Checking margin…' : 'Move to Order'}
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
-            {!ratesApproved ? (
+            {orderBlocked ? (
+              <span className="text-xs text-muted-foreground">{orderBlocked}</span>
+            ) : !ratesApproved ? (
               <span className="text-xs text-muted-foreground">Approve the labor rates first.</span>
             ) : !checklistComplete || !projectAddress?.trim() ? (
               <span className="text-xs text-muted-foreground">
