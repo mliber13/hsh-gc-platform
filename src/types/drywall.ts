@@ -524,6 +524,12 @@ export interface QuoteLineItem {
    * Absent on lines saved before 2026-10-15 — read from custom_material_rate (componentPricingMode).
    */
   pricing_mode?: 'itemized' | 'flat_rate'
+  /**
+   * Drywall only: ceiling height of the space this board is in, in feet (Mark, 2026-10-15). A
+   * Togal import fills it from the wall label, and a ceiling from its area's walls; absent means
+   * the quote's default_height_ft. 10' and up is tall — see ceilingHeights.ts.
+   */
+  height_ft?: number
   /** Finisher pay override ($/sqft); default from finish scope catalog. */
   custom_finisher_rate?: number
   /** Hanger pay override ($/sqft); default from board catalog. */
@@ -622,19 +628,6 @@ export interface DrywallQuoteV3PdfSettings {
   signature_lines?: boolean
 }
 
-/**
- * A tall space on a quote (Mark, 2026-10-15): the great room, the garage — anything 10' and up.
- * Kept apart from the line items, which are written by board type, not by floor; the tall-wall
- * factors and labor adder apply to these sqft only. See ceilingHeights.ts.
- */
-export interface QuoteTallArea {
-  id: string
-  name: string
-  height_ft: number
-  /** Roughly how much board is in it, from the prints or the field areas. */
-  sqft: number
-}
-
 export interface DrywallQuoteV3 {
   version: 3
   /** Customer-facing quote id — carried from v2 on convert. */
@@ -665,10 +658,11 @@ export interface DrywallQuoteV3 {
    * Absent key = use the calculated number. See durationService.
    */
   duration_overrides?: Record<string, number>
-  /** Ceiling height most of the job is at, in feet (e.g. 9). Absent on quotes before 2026-10-15. */
+  /**
+   * Ceiling height most of the job is at, in feet (e.g. 9) — the height of any drywall line
+   * that has none of its own. Absent on quotes before 2026-10-15. See ceilingHeights.ts.
+   */
   default_height_ft?: number
-  /** Spaces 10' and up, with their sqft — see QuoteTallArea. */
-  tall_areas?: QuoteTallArea[]
   /** Custom scope override — replaces structured scope on PDF when true */
   use_custom_scope_of_work?: boolean
   custom_scope_of_work?: string

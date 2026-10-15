@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, FileSpreadsheet, Loader2, Upload } from 'lucide-react'
+import { heightBand } from '@/lib/drywall/ceilingHeights'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -246,6 +247,19 @@ export function ImportTakeoffDialog({ open, onOpenChange, catalogs, onApply }: P
                               {l.line.rc_surface === 'ceiling'
                                 ? 'ceiling'
                                 : `wall${l.line.rc_wall_height ? ` @ ${l.line.rc_wall_height}'` : ''}`}
+                            </div>
+                          )}
+                          {l.line.type === 'drywall' && (
+                            <div
+                              className={cn(
+                                'mt-0.5 text-xs',
+                                heightBand(l.line.height_ft)
+                                  ? 'font-medium text-amber-700 dark:text-amber-300'
+                                  : 'text-muted-foreground',
+                              )}
+                            >
+                              {l.line.location}
+                              {l.line.height_ft ? ` · ${l.line.height_ft}'` : ' · job height'}
                             </div>
                           )}
                         </td>

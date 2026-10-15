@@ -12,6 +12,7 @@
 
 import * as XLSX from 'xlsx'
 import { createQuoteLineItem } from './createEmptyDrywallQuoteV3'
+import { withCeilingHeights } from './ceilingHeights'
 import type { QuoteLineItem } from '@/types/drywall'
 
 /** Default board when the classification doesn't name a type (owner decision: 5/8" Type X). */
@@ -256,6 +257,8 @@ function classifyToImportedLines(
     drywall.quantity = faceSf > 0 ? faceSf : qtyFt
     drywall.catalog_id = board
     drywall.finish_scope_id = DEFAULT_FINISH_SCOPE_ID
+    // "9' 1/2" walls" → 9 (ceilingHeights.ts). A ceiling has none; it takes its area's below.
+    if (heightFt) drywall.height_ft = heightFt
     drywall.description = twoLayer ? `Face layer — ${raw}` : raw
     out.push(wrap(drywall))
   }
@@ -266,6 +269,7 @@ function classifyToImportedLines(
     const base = createQuoteLineItem('drywall', { location })
     base.quantity = baseSf
     base.catalog_id = board
+    if (heightFt) base.height_ft = heightFt
     base.finish_scope_id = 'hang_only'
     base.custom_finisher_rate = 0
     base.override_reason = 'Base layer of a 2-layer assembly — hung, not finished'
@@ -378,6 +382,13 @@ export async function parseTakeoffFileV3(
     for (const l of rowLines) {
       if (l.warning) warnings.push(`"${classification}": ${l.warning}`)
     }
+  })
+
+  // Ceilings carry no height in their label; each takes its Togal area's wall height. Mark
+  // breaks tall rooms out as their own area (2026-10-15), so an area's walls share one height.
+  const heightened = withCeilingHeights(lines.map((l) => l.line))
+  lines.forEach((l, i) => {
+    l.line = heightened[i]!
   })
 
   if (lines.length === 0) {

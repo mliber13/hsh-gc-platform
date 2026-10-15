@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type SetStateAction } from 'react'
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
+import { quoteAreasForField } from '@/lib/drywall/ceilingHeights'
 import { moveToOrderBlockReason } from '@/lib/drywall/quoteStageGate'
 import { rememberSiteContact } from '@/services/siteContactsService'
 import { ArrowRight, Save } from 'lucide-react'
@@ -32,7 +33,7 @@ import {
   saveFieldTakeoffAndAdvance,
   updateDrywallProjectInfo,
 } from '@/services/drywallProjectsService'
-import { normalizeDrywallProjectStatus } from '@/types/drywall'
+import { isDrywallQuoteV3, normalizeDrywallProjectStatus } from '@/types/drywall'
 import type {
   DrywallChangeOrder,
   DrywallOrder,
@@ -146,6 +147,11 @@ export function FieldMeasurementPage() {
   }, [load])
 
   const quoteSqft = useMemo(() => quotedSqftWithWaste(quote), [quote])
+  // The quote's areas and heights, to start an empty measurement laid out as quoted.
+  const quoteAreas = useMemo(
+    () => (quote && isDrywallQuoteV3(quote) ? quoteAreasForField(quote) : []),
+    [quote],
+  )
   const measuredSqft = useMemo(
     () => (takeoff ? computeMeasuredSqft(takeoff.measurements) : 0),
     [takeoff],
@@ -482,7 +488,12 @@ export function FieldMeasurementPage() {
           readOnly={readOnly}
           client={projectInfo.client}
         />
-        <FieldMeasurementsSection takeoff={takeoff} readOnly={readOnly} onChange={setTakeoffField} />
+        <FieldMeasurementsSection
+          takeoff={takeoff}
+          readOnly={readOnly}
+          onChange={setTakeoffField}
+          quoteAreas={quoteAreas}
+        />
         <FieldBeadSection takeoff={takeoff} readOnly={readOnly} onChange={setTakeoffField} />
         <FieldAccessoriesSection
           takeoff={takeoff}

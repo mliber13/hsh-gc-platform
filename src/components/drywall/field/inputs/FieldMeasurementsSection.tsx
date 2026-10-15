@@ -37,6 +37,11 @@ interface FieldMeasurementsSectionProps {
   takeoff: FieldTakeoff
   readOnly: boolean
   onChange: SetFieldTakeoff
+  /**
+   * The quote's areas with their heights (quoteAreasForField) — offered to start an empty
+   * measurement laid out the way the job was quoted. Omitted where the quote is not at hand.
+   */
+  quoteAreas?: { name: string; heightFt?: number }[]
 }
 
 /**
@@ -110,6 +115,7 @@ export function FieldMeasurementsSection({
   takeoff,
   readOnly,
   onChange,
+  quoteAreas = [],
 }: FieldMeasurementsSectionProps) {
   const total = computeMeasuredSqft(takeoff.measurements)
   const hangOnlyTotal = hangOnlyMeasuredSqft(takeoff.measurements)
@@ -150,6 +156,19 @@ export function FieldMeasurementsSection({
       ],
     }))
     setGroupsByArea((prev) => ({ ...prev, [id]: [] }))
+  }
+
+  /** One area per quote area, named and at its height, ready for boards. */
+  const startFromQuote = () => {
+    const created = quoteAreas.map((qa) => ({
+      id: generateFieldId(),
+      area: qa.name,
+      ...(qa.heightFt ? { heightFt: qa.heightFt } : {}),
+      notes: '',
+      boards: [],
+    }))
+    onChange((prev) => ({ ...prev, measurements: [...prev.measurements, ...created] }))
+    setGroupsByArea((prev) => ({ ...prev, ...Object.fromEntries(created.map((a) => [a.id, []])) }))
   }
 
   const removeArea = (id: string) => {
@@ -367,9 +386,21 @@ export function FieldMeasurementsSection({
         )}
 
         {takeoff.measurements.length === 0 ? (
-          <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-6 text-center">
-            No measurements yet.
-          </p>
+          <div className="space-y-3 rounded-lg border border-dashed p-6 text-center">
+            <p className="text-sm text-muted-foreground">No measurements yet.</p>
+            {!readOnly && quoteAreas.length > 0 ? (
+              <div className="space-y-1">
+                <Button type="button" size="sm" onClick={startFromQuote}>
+                  Start from the quote's areas
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  {quoteAreas
+                    .map((qa) => (qa.heightFt ? `${qa.name} ${qa.heightFt}'` : qa.name))
+                    .join(' · ')}
+                </p>
+              </div>
+            ) : null}
+          </div>
         ) : (
           takeoff.measurements.map((area) => {
             const areaSqft = computeMeasuredSqft([area])

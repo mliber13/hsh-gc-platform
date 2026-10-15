@@ -24,6 +24,7 @@ import type { QuoteLineItem } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { V3_LINE_MIGRATION_OVERRIDE_REASON } from '@/lib/drywall/convertQuoteV2ToV3'
 import { ITEMIZABLE_LINE_TYPES } from '@/lib/drywall/quoteV3CatalogResolve'
+import { HEIGHT_BAND_LABEL, heightBand, parseHeightFt } from '@/lib/drywall/ceilingHeights'
 import { ComponentPricingModeField } from './ComponentPricingModeField'
 import { calcAcousticCeilingGridCounts } from '@/lib/drywall/calculations/acousticCeilingGridCalc'
 import {
@@ -245,6 +246,28 @@ export function LineItemEditDialog({
 
             </div>
 
+          )}
+          {/* Ceiling height of the space this board is in (ceilingHeights.ts). */}
+          {draft.type === 'drywall' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="line-height-ft">Ceiling height (ft)</Label>
+              <Input
+                id="line-height-ft"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.5}
+                disabled={readOnly}
+                placeholder="Job default"
+                value={draft.height_ft ?? ''}
+                onChange={(e) => patch({ height_ft: parseHeightFt(e.target.value) })}
+              />
+              <p className="text-xs text-muted-foreground">
+                {heightBand(draft.height_ft)
+                  ? `Tall: ${HEIGHT_BAND_LABEL[heightBand(draft.height_ft)!]}`
+                  : 'Blank uses the job’s height. A takeoff import fills this from the wall label.'}
+              </p>
+            </div>
           )}
           {draft.type === 'rc_channel' && (
             <>

@@ -37,19 +37,28 @@ Starting numbers — Mark will see each before it changes a quote, and can edit 
 already split by floor (1st floor, 2nd floor, Garage, Basement in the live data), and each has
 its sqft, so tall sqft is exact once measured.
 
-**Quote (Mark approved 2026-10-15):** a *Heights* box apart from the line items —
-a job default height plus optional tall-area rows (name · height · approx sqft). The factor and
-adder apply to those sqft only. Lines stay as Mark writes them.
-_Why not per line location:_ 57 of 92 live v3 quotes put every line under one location
-("Main Scope"); Mark prices by board type, not by floor, and only 2 of 39 jobs share a name
-between quote locations and field areas. Height by line location would force re-splitting
-quotes. A quote written after measuring can fill the Heights box from the field areas.
+**Quote — a height on every drywall line (Mark, 2026-10-15, revised the same day).** Mark builds
+quotes from a Togal takeoff: each floor, and each tall room broken out, is a Togal **area**
+(→ the line's location), walls are labelled with their height (`9' 1/2" Walls` → 9'), and
+ceilings are just `Ceiling`. So the import fills `QuoteLineItem.height_ft`: walls from the label,
+ceilings from their area's wall height (the height carrying the most wall sqft in that area —
+`wallHeightByArea`). Lines typed by hand show a height field in their edit dialog; blank means
+the quote's `default_height_ft` (the strip above Pricing). Heights then price line by line, which
+is how the quote already computes mud, tape and labor.
+
+_Superseded the same day:_ a separate box of tall-area rows (name · height · sqft). It entered tall
+sqft twice with nothing checking the two agreed, and Mark found it confusing next to the lines.
+
+**Field from the quote:** an empty Field measurement offers "Start from the quote's areas" —
+one area per quote location at its height (`quoteAreasForField`), so the measurer starts with the
+job laid out as quoted.
 
 ## Steps
 
-1. **Record heights** — no price changes. **Done 2026-10-15:** Field area height (office and
-   crew measure pages); the quote's Ceiling heights box (job default + tall-area rows, filled
-   from the field heights on request). Both survive load (`ceilingHeights.test.ts`).
+1. **Record heights** — no price changes. **Done 2026-10-15:** line heights (import fills them;
+   edit dialog; shown under each line's location), the quote's default height + tall-board
+   summary, Field area heights (office and crew), and Field areas started from the quote.
+   Hydration of every new key is tested (`ceilingHeights.test.ts`).
 2. **Mud & tape factors** — quote material and Field order quantities for tall sqft. Show
    before/after on real jobs to tune before it goes live.
 3. **Tall-wall labor line** — one $/sqft per band on tall sqft, its own line on the Pricing

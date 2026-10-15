@@ -1,5 +1,6 @@
 import { useMemo, useState, Fragment, type ReactNode } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { heightBand } from '@/lib/drywall/ceilingHeights'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -522,6 +523,18 @@ function LineRow({
           compact={compact}
           onChange={(location) => patch({ location })}
         />
+        {/* The line's ceiling height, set in its edit dialog or by a takeoff import. */}
+        {line.type === 'drywall' && line.height_ft ? (
+          <span
+            className={cn(
+              'mt-0.5 block text-[11px] tabular-nums',
+              heightBand(line.height_ft) ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
+            )}
+            title="Ceiling height — edit it in the line's details"
+          >
+            {line.height_ft}' ceiling
+          </span>
+        ) : null}
       </td>
       {line.type !== 'suspended_grid' && (
         <td className="px-1.5 py-1">

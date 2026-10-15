@@ -1,6 +1,6 @@
 import { DRYWALL_QUOTE_BASE_DEFAULTS } from './drywallQuoteDefaults'
 import { buildV3FromV2, v2QuoteFromV3Snapshot, V3_LINE_MIGRATION_OVERRIDE_REASON } from './convertQuoteV2ToV3'
-import { hydrateQuoteHeights } from './ceilingHeights'
+import { hydrateHeightFt, hydrateQuoteHeights } from './ceilingHeights'
 import type { DrywallQuotePdfSettings, DrywallQuoteV3, QuoteAlternate, QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
 import { generateQuoteId } from './drywallQuoteHelpers'
 import { DURATION_LINE_KEYS, parseDurationOverride } from './durationService'
@@ -312,6 +312,7 @@ function hydrateLineItem(raw: QuoteLineItem): QuoteLineItem {
     finish_scope_id: raw.finish_scope_id,
     custom_material_rate:
       raw.custom_material_rate != null ? num(raw.custom_material_rate) : undefined,
+    ...(hydrateHeightFt(raw.height_ft) !== undefined ? { height_ft: hydrateHeightFt(raw.height_ft) } : {}),
     ...(raw.pricing_mode === 'itemized' || raw.pricing_mode === 'flat_rate'
       ? { pricing_mode: raw.pricing_mode }
       : {}),
