@@ -19,7 +19,7 @@ Full per-domain reports (with every finding, table, and line ref) are in `docs/a
 | Item | Why it waits |
 |---|---|
 | **P1-QA-2** migration baseline | Needs Docker to verify; the reconstruction is historical, not a live dump — see the grounding above. Least urgent item here: Supabase backups already cover the recovery case |
-| **P1-MONEY-5** pricing-mode flag | A data-model decision. Batch 2B added the warning at the point of typing; the flag itself is unmade |
+| ~~**P1-MONEY-5** pricing-mode flag~~ **CLOSED 2026-10-15** (`e5c0e26`) | Mark chose an explicit per-line switch: "Itemized from catalog" / "One rate I'll enter" on grid, acoustic and metal-stud lines. Old lines read as the engine priced them; no price moved. |
 | `work_packages` / `project_milestones` table drops | Irreversible and inert. Recommended: never |
 | `drywallLaborEntryEditService` repoint | A payroll behaviour change, not a deletion. Wants its own smoke test |
 | ~~`dfp_auth_insert` org-wide~~ **DECIDED, not a gap** | Org-wide upload is Mark's call (2026-09-14: crew photograph jobs they are not scheduled on). `20260930120000` re-scoped it without noting that; Mark re-confirmed org-wide 2026-10-15 and `20261015120000` restores it, with a policy comment and a verify block. DELETE stays assignment-scoped — that is what protects photos. **Do not re-open.** |
