@@ -22,7 +22,7 @@ Full per-domain reports (with every finding, table, and line ref) are in `docs/a
 | **P1-MONEY-5** pricing-mode flag | A data-model decision. Batch 2B added the warning at the point of typing; the flag itself is unmade |
 | `work_packages` / `project_milestones` table drops | Irreversible and inert. Recommended: never |
 | `drywallLaborEntryEditService` repoint | A payroll behaviour change, not a deletion. Wants its own smoke test |
-| `dfp_auth_insert` org-wide | Crew can upload a photo into any project's folder — same shape as the DELETE policy fixed in 1B |
+| ~~`dfp_auth_insert` org-wide~~ **DECIDED, not a gap** | Org-wide upload is Mark's call (2026-09-14: crew photograph jobs they are not scheduled on). `20260930120000` re-scoped it without noting that; Mark re-confirmed org-wide 2026-10-15 and `20261015120000` restores it, with a policy comment and a verify block. DELETE stays assignment-scoped — that is what protects photos. **Do not re-open.** |
 | `qb-suggest-allocation` | Live at v14 with source only in the Dashboard. Recover into git, or delete the remote function |
 | Deal workspace | Parked by Mark's decision 2026-09-29, not dead — P2-DEL-2 and P2-DEL-9 withdrawn |
 | The §7 structural list | v2 quote dual-path, the offline/localStorage fossil, the two service splits, time-clock unification, type generation |
