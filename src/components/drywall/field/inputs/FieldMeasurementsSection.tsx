@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
+import { HEIGHT_BAND_LABEL, heightBand, parseHeightFt } from '@/lib/drywall/ceilingHeights'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -409,14 +410,42 @@ export function FieldMeasurementsSection({
                     </Button>
                   )}
                 </div>
-                <div className="space-y-2">
-                  <Label>Area name</Label>
-                  <Input
-                    value={area.area ?? ''}
-                    disabled={readOnly}
-                    placeholder="e.g. 2nd floor — east wing"
-                    onChange={(e) => updateArea(area.id, { area: e.target.value })}
-                  />
+                <div className="grid gap-3 sm:grid-cols-[1fr_9rem]">
+                  <div className="space-y-2">
+                    <Label>Area name</Label>
+                    <Input
+                      value={area.area ?? ''}
+                      disabled={readOnly}
+                      placeholder="e.g. 2nd floor — east wing"
+                      onChange={(e) => updateArea(area.id, { area: e.target.value })}
+                    />
+                  </div>
+                  {/* Walls and ceiling together; 10' and up is tall (ceilingHeights.ts). */}
+                  <div className="space-y-2">
+                    <Label htmlFor={`area-height-${area.id}`}>Ceiling height</Label>
+                    <div className="relative">
+                      <Input
+                        id={`area-height-${area.id}`}
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step={0.5}
+                        className="pr-8"
+                        value={area.heightFt ?? ''}
+                        disabled={readOnly}
+                        placeholder="9"
+                        onChange={(e) => updateArea(area.id, { heightFt: parseHeightFt(e.target.value) })}
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        ft
+                      </span>
+                    </div>
+                    {heightBand(area.heightFt) ? (
+                      <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                        Tall: {HEIGHT_BAND_LABEL[heightBand(area.heightFt)!]}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="space-y-3">

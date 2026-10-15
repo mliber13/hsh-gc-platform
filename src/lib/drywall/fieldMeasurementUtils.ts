@@ -115,6 +115,8 @@ export function mergeFieldTakeoff(
       ? existing.measurements.map((item) => ({
           id: item.id || generateFieldId(),
           area: item.area ?? '',
+          // Field by field, like the boards below: a key left off this list is lost on load.
+          ...(typeof item.heightFt === 'number' && item.heightFt > 0 ? { heightFt: item.heightFt } : {}),
           notes: item.notes ?? '',
           boards: Array.isArray(item.boards)
             ? item.boards.map((board) => ({

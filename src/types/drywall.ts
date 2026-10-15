@@ -729,6 +729,11 @@ export interface FieldMeasurementBoard {
 export interface FieldMeasurementArea {
   id: string
   area?: string
+  /**
+   * Ceiling height of the area in feet, walls and ceiling together (Mark, 2026-10-15). From
+   * 10' up an area is tall — see ceilingHeights.ts. Absent on areas measured before it existed.
+   */
+  heightFt?: number
   notes?: string
   boards: FieldMeasurementBoard[]
 }
