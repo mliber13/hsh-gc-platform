@@ -3,7 +3,7 @@
 // heights; the material factors and the tall-wall labor line come after (docs/briefs/
 // CEILING_HEIGHTS.md).
 
-import type { FieldMeasurementArea } from '@/types/drywall'
+import type { DrywallQuoteV3, FieldMeasurementArea, QuoteTallArea } from '@/types/drywall'
 import { computeMeasuredSqft } from './fieldMeasurementUtils'
 
 /** Below this an area prices and orders as it always has. */
@@ -38,6 +38,63 @@ export function tallSqftByBand(areas: FieldMeasurementArea[]): Partial<Record<He
     const band = heightBand(area.heightFt)
     if (!band) continue
     out[band] = (out[band] ?? 0) + computeMeasuredSqft([area])
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------- the quote
+
+const positive = (v: unknown): number | undefined => {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v) : NaN
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}
+
+/**
+ * The quote's height fields as stored, for hydrateDrywallQuoteV3. Keys appear only when set, so
+ * a quote saved before heights existed loads exactly as it did.
+ */
+export function hydrateQuoteHeights(
+  q: Record<string, unknown>,
+): Pick<DrywallQuoteV3, 'default_height_ft' | 'tall_areas'> {
+  const out: Pick<DrywallQuoteV3, 'default_height_ft' | 'tall_areas'> = {}
+  const def = positive(q.default_height_ft)
+  if (def !== undefined) out.default_height_ft = def
+  if (Array.isArray(q.tall_areas)) {
+    out.tall_areas = q.tall_areas
+      .filter((r): r is Record<string, unknown> => Boolean(r) && typeof r === 'object')
+      .map((r) => ({
+        id: typeof r.id === 'string' && r.id ? r.id : newTallAreaId(),
+        name: typeof r.name === 'string' ? r.name : '',
+        height_ft: positive(r.height_ft) ?? 0,
+        sqft: positive(r.sqft) ?? 0,
+      }))
+  }
+  return out
+}
+
+export function newTallAreaId(): string {
+  return `ta-${Math.random().toString(36).slice(2, 10)}`
+}
+
+/** The tall areas a measured job implies: each field area 10' and up, with its measured sqft. */
+export function tallAreasFromField(areas: FieldMeasurementArea[]): QuoteTallArea[] {
+  return areas
+    .filter((a) => heightBand(a.heightFt) !== null)
+    .map((a) => ({
+      id: newTallAreaId(),
+      name: a.area?.trim() || 'Measured area',
+      height_ft: a.heightFt!,
+      sqft: Math.round(computeMeasuredSqft([a])),
+    }))
+}
+
+/** Tall sqft on a quote, per band — what the material factors and labor adder will price. */
+export function quoteTallSqftByBand(quote: Pick<DrywallQuoteV3, 'tall_areas'>): Partial<Record<HeightBand, number>> {
+  const out: Partial<Record<HeightBand, number>> = {}
+  for (const row of quote.tall_areas ?? []) {
+    const band = heightBand(row.height_ft)
+    if (!band || !(row.sqft > 0)) continue
+    out[band] = (out[band] ?? 0) + row.sqft
   }
   return out
 }

@@ -37,7 +37,7 @@ Starting numbers — Mark will see each before it changes a quote, and can edit 
 already split by floor (1st floor, 2nd floor, Garage, Basement in the live data), and each has
 its sqft, so tall sqft is exact once measured.
 
-**Quote (proposed 2026-10-15, awaiting Mark's OK):** a *Heights* box apart from the line items —
+**Quote (Mark approved 2026-10-15):** a *Heights* box apart from the line items —
 a job default height plus optional tall-area rows (name · height · approx sqft). The factor and
 adder apply to those sqft only. Lines stay as Mark writes them.
 _Why not per line location:_ 57 of 92 live v3 quotes put every line under one location
@@ -47,9 +47,9 @@ quotes. A quote written after measuring can fill the Heights box from the field 
 
 ## Steps
 
-1. **Record heights** — no price changes. Field half done 2026-10-15 (area height box, office
-   and crew measure pages, survives load: `ceilingHeights.test.ts`). Quote Heights box after
-   Mark's OK.
+1. **Record heights** — no price changes. **Done 2026-10-15:** Field area height (office and
+   crew measure pages); the quote's Ceiling heights box (job default + tall-area rows, filled
+   from the field heights on request). Both survive load (`ceilingHeights.test.ts`).
 2. **Mud & tape factors** — quote material and Field order quantities for tall sqft. Show
    before/after on real jobs to tune before it goes live.
 3. **Tall-wall labor line** — one $/sqft per band on tall sqft, its own line on the Pricing

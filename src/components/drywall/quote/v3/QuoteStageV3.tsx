@@ -37,7 +37,7 @@ import {
   saveDrywallQuoteV3,
 } from '@/services/drywallProjectsService'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
-import type { DrywallProject, DrywallQuoteOutcome, DrywallQuoteV3, QuoteLineItem } from '@/types/drywall'
+import type { DrywallProject, DrywallQuoteOutcome, DrywallQuoteV3, FieldTakeoff, QuoteLineItem } from '@/types/drywall'
 import { isDrywallQuoteV3 } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { AlternatesSection } from './AlternatesSection'
@@ -46,6 +46,8 @@ import { LineItemsTable } from './LineItemsTable'
 import { QuoteHeaderV3 } from './QuoteHeaderV3'
 import { QuotePdfOptionsSectionV3 } from './QuotePdfOptionsSectionV3'
 import { QuoteStructuredScopeSection } from './QuoteStructuredScopeSection'
+import { QuoteHeightsSection } from './QuoteHeightsSection'
+import { mergeFieldTakeoff } from '@/lib/drywall/fieldMeasurementUtils'
 import {
   QuoteDurationCard,
   QuotePricingCard,
@@ -72,6 +74,11 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
   const viewerReadOnly = !canWriteDrywallProject(effectiveRole)
 
   const [project, setProject] = useState<DrywallProject | null>(null)
+  // Measured areas, for filling the quote's tall areas from their heights.
+  const fieldAreas = useMemo(
+    () => mergeFieldTakeoff(project?.legacy.fieldTakeoff as FieldTakeoff | undefined).measurements,
+    [project],
+  )
   const [quote, setQuote] = useState<DrywallQuoteV3 | null>(null)
   const [quoteOutcome, setQuoteOutcome] = useState<DrywallQuoteOutcome>('drafted')
   const [catalogs, setCatalogs] = useState<OrgDrywallCatalogs | null>(null)
@@ -527,6 +534,13 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
         readOnly={readOnly}
         onChange={patchQuote}
         openSignal={scopeOpenSignal}
+      />
+
+      <QuoteHeightsSection
+        quote={quote}
+        readOnly={readOnly}
+        fieldAreas={fieldAreas}
+        onChange={patchQuote}
       />
 
       {/* The money block: pricing (rates beside the breakdown they drive), then the lines they

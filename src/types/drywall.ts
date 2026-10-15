@@ -622,6 +622,19 @@ export interface DrywallQuoteV3PdfSettings {
   signature_lines?: boolean
 }
 
+/**
+ * A tall space on a quote (Mark, 2026-10-15): the great room, the garage — anything 10' and up.
+ * Kept apart from the line items, which are written by board type, not by floor; the tall-wall
+ * factors and labor adder apply to these sqft only. See ceilingHeights.ts.
+ */
+export interface QuoteTallArea {
+  id: string
+  name: string
+  height_ft: number
+  /** Roughly how much board is in it, from the prints or the field areas. */
+  sqft: number
+}
+
 export interface DrywallQuoteV3 {
   version: 3
   /** Customer-facing quote id — carried from v2 on convert. */
@@ -652,6 +665,10 @@ export interface DrywallQuoteV3 {
    * Absent key = use the calculated number. See durationService.
    */
   duration_overrides?: Record<string, number>
+  /** Ceiling height most of the job is at, in feet (e.g. 9). Absent on quotes before 2026-10-15. */
+  default_height_ft?: number
+  /** Spaces 10' and up, with their sqft — see QuoteTallArea. */
+  tall_areas?: QuoteTallArea[]
   /** Custom scope override — replaces structured scope on PDF when true */
   use_custom_scope_of_work?: boolean
   custom_scope_of_work?: string

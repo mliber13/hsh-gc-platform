@@ -1,5 +1,6 @@
 import { DRYWALL_QUOTE_BASE_DEFAULTS } from './drywallQuoteDefaults'
 import { buildV3FromV2, v2QuoteFromV3Snapshot, V3_LINE_MIGRATION_OVERRIDE_REASON } from './convertQuoteV2ToV3'
+import { hydrateQuoteHeights } from './ceilingHeights'
 import type { DrywallQuotePdfSettings, DrywallQuoteV3, QuoteAlternate, QuoteLineItem, QuoteLineItemType } from '@/types/drywall'
 import { generateQuoteId } from './drywallQuoteHelpers'
 import { DURATION_LINE_KEYS, parseDurationOverride } from './durationService'
@@ -76,6 +77,8 @@ export function hydrateDrywallQuoteV3(raw: unknown): DrywallQuoteV3 {
     paper_floors_required: hydrateScopeBool(q.paper_floors_required, v2Snap?.paperFloorsRequired),
     bead_sticks: hydrateScopeBeadSticks(q.bead_sticks, v2Snap?.beadSticks),
     duration_overrides: hydrateDurationOverrides(q.duration_overrides),
+    // Field by field like everything here: a key missing from this list is lost on load.
+    ...hydrateQuoteHeights(q),
     use_custom_scope_of_work:
       q.use_custom_scope_of_work === true
         ? true

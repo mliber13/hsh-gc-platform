@@ -42,3 +42,45 @@ describe('ceiling heights', () => {
     expect('heightFt' in loaded.measurements[1]).toBe(false)
   })
 })
+
+describe('quote heights', () => {
+  it('a quote keeps its default height and tall areas through loading', async () => {
+    const { hydrateDrywallQuoteV3 } = await import('./createEmptyDrywallQuoteV3')
+    const q = hydrateDrywallQuoteV3({
+      version: 3,
+      default_height_ft: 9,
+      tall_areas: [{ id: 'g', name: 'Great room', height_ft: 18, sqft: 800 }],
+    })
+    expect(q.default_height_ft).toBe(9)
+    expect(q.tall_areas).toEqual([{ id: 'g', name: 'Great room', height_ft: 18, sqft: 800 }])
+  })
+
+  it('a quote saved before heights existed loads with no height keys at all', async () => {
+    const { hydrateDrywallQuoteV3 } = await import('./createEmptyDrywallQuoteV3')
+    const q = hydrateDrywallQuoteV3({ version: 3 })
+    expect('default_height_ft' in q).toBe(false)
+    expect('tall_areas' in q).toBe(false)
+  })
+
+  it('the field areas fill the tall rows with their measured sqft', async () => {
+    const { tallAreasFromField } = await import('./ceilingHeights')
+    const rows = tallAreasFromField([area('1st floor', 9, 100), area('Great room', 18, 10)])
+    expect(rows.map(({ name, height_ft, sqft }) => ({ name, height_ft, sqft }))).toEqual([
+      { name: 'Great room', height_ft: 18, sqft: 480 },
+    ])
+  })
+
+  it('tall sqft by band ignores rows under 10 ft or with no sqft', async () => {
+    const { quoteTallSqftByBand } = await import('./ceilingHeights')
+    expect(
+      quoteTallSqftByBand({
+        tall_areas: [
+          { id: '1', name: 'Garage', height_ft: 10, sqft: 900 },
+          { id: '2', name: 'Great room', height_ft: 18, sqft: 800 },
+          { id: '3', name: 'Den', height_ft: 9, sqft: 300 },
+          { id: '4', name: 'Foyer', height_ft: 16, sqft: 0 },
+        ],
+      }),
+    ).toEqual({ '10-11': 900, '15+': 800 })
+  })
+})
