@@ -52,10 +52,10 @@ that way. Display code falls back `full_name || email`, which hides it perfectly
 
 ## Don't
 
-- Delete `supabase/functions/accept-invitation`, `invite-user` or `qb-suggest-allocation`
-  because they look empty. `qb-suggest-allocation` is **deployed and live**; the directory
-  is empty because its source was never committed. Recovering or removing it is a
-  decision, not cleanup.
+- Delete `supabase/functions/accept-invitation` or `invite-user` because they look empty.
+  Both are **deployed and live**; the directories are empty because their source was never
+  committed. Recovering or removing them is a decision, not cleanup. (`qb-suggest-allocation`
+  was the third — unused, and Mark deleted the remote function 2026-10-15.)
 - Commit `.claude/settings.local.json`.
 - Run commits here while Cursor is also committing to master — it flattens history.
 

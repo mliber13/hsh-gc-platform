@@ -25,10 +25,9 @@ The working to-do list after v1.0. Update this section as items close; the histo
 
 ### Mark to do or check
 
-- Delete the unused edge function: `npx supabase functions delete qb-suggest-allocation` (no logs, no caller — confirmed 2026-10-15).
 - Contact Directory → Site Contacts: Michael Cerimele was typed with two numbers (440-310-2257 kept, 440-610-2257 in notes). 6813 Wakefield Rd has a number (330-614-1127) with no name, so it was left out.
 - Before ordering on MC Townhouse 106, Cleveland – Adamson and Page and Chagrin Falls – Campbell: open Field and press Recalculate. Their compound was sized at the default rate instead of Level 4 Smooth (fixed in `5774d20`).
-- Nicodemus Rd and Limeridge Rd: send the quotes; Mark Approved when the customer accepts; then Move to Order.
+- Nicodemus Rd and Limeridge Rd: quotes sent 2026-10-15. Mark Approved when the customer accepts; then Move to Order (measurement and rates are already approved).
 
 ### Watch — confirm the first time it happens
 
@@ -63,7 +62,7 @@ The working to-do list after v1.0. Update this section as items close; the histo
 | `work_packages` / `project_milestones` table drops | Irreversible and inert. Recommended: never |
 | `drywallLaborEntryEditService` repoint | A payroll behaviour change, not a deletion. Wants its own smoke test |
 | ~~`dfp_auth_insert` org-wide~~ **DECIDED, not a gap** | Org-wide upload is Mark's call (2026-09-14: crew photograph jobs they are not scheduled on). `20260930120000` re-scoped it without noting that; Mark re-confirmed org-wide 2026-10-15 and `20261015120000` restores it, with a policy comment and a verify block. DELETE stays assignment-scoped — that is what protects photos. **Do not re-open.** |
-| `qb-suggest-allocation` | Live at v14 with source only in the Dashboard. Recover into git, or delete the remote function |
+| ~~`qb-suggest-allocation`~~ **CLOSED 2026-10-15** | No caller and no logs; Mark deleted the remote function, and its empty directory went with it. |
 | Deal workspace | Parked by Mark's decision 2026-09-29, not dead — P2-DEL-2 and P2-DEL-9 withdrawn |
 | The §7 structural list | v2 quote dual-path, the offline/localStorage fossil, the two service splits, time-clock unification, type generation |
 
