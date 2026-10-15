@@ -165,8 +165,8 @@ function RateField({
   const usualText = usual != null ? `${prefix ?? ''}${trimNumber(usual)}${suffix ?? ''}` : ''
 
   return (
-    <div className="flex items-center justify-between gap-3">
-      <Label htmlFor={id} className="flex items-center gap-1.5 text-sm font-normal">
+    <div className="min-w-0 space-y-1">
+      <Label htmlFor={id} className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
         {label}
         {changed ? (
           <span
@@ -176,7 +176,7 @@ function RateField({
           />
         ) : null}
       </Label>
-      <div className="relative w-28 shrink-0">
+      <div className="relative">
         {prefix ? (
           <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
             {prefix}
@@ -212,9 +212,9 @@ function RateField({
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <fieldset className="space-y-2">
-      <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</legend>
-      {children}
+    <fieldset>
+      <legend className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</legend>
+      <div className="grid grid-cols-3 gap-2">{children}</div>
     </fieldset>
   )
 }
@@ -235,20 +235,32 @@ function CostBreakdown({ quote, totals }: { quote: DrywallQuoteV3; totals: Quote
   const anyAccepted = alternates.some((a) => a.selected)
 
   return (
-    <div className="space-y-4 text-sm">
+    <div className="grid gap-6 text-sm md:grid-cols-2">
       <div className="space-y-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Direct costs by trade</p>
         {breakdown.trades.map((t) => (
-          <div key={t.type} className="space-y-0.5 rounded-md border bg-muted/20 px-2 py-1.5">
+          <div key={t.type} className="rounded-md border bg-muted/20 px-2 py-1.5">
             <div className="flex items-center justify-between gap-2 text-xs font-semibold">
               <span>{t.label}</span>
               <span className="tabular-nums">{formatQuoteMoney(t.subtotal)}</span>
             </div>
-            {t.material > 0 && <Row label="Material" value={t.material} muted indent />}
-            {t.hangerWages > 0 && <Row label="Hanger labor" value={t.hangerWages} muted indent />}
-            {t.finisherWages > 0 && <Row label="Finisher labor" value={t.finisherWages} muted indent />}
-            {t.componentWages > 0 && <Row label="Labor" value={t.componentWages} muted indent />}
-            {t.accessories > 0 && <Row label="Accessories" value={t.accessories} muted indent />}
+            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
+              {(
+                [
+                  ['Material', t.material],
+                  ['Hanger', t.hangerWages],
+                  ['Finisher', t.finisherWages],
+                  ['Labor', t.componentWages],
+                  ['Accessories', t.accessories],
+                ] as const
+              )
+                .filter(([, v]) => v > 0)
+                .map(([label, v]) => (
+                  <span key={label}>
+                    {label} <span className="text-foreground">{formatQuoteMoney(v)}</span>
+                  </span>
+                ))}
+            </div>
           </div>
         ))}
         {breakdown.cleanupWages > 0 ? (
@@ -263,7 +275,8 @@ function CostBreakdown({ quote, totals }: { quote: DrywallQuoteV3; totals: Quote
         ) : null}
       </div>
 
-      <div className="space-y-1.5 border-t pt-3">
+      <div className="space-y-1.5 border-t pt-3 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Totals</p>
         <Row label="Direct cost before markup" value={markupBase} />
         <Row
           label={`Overhead (${formatPctLabel(quote.overhead_pct)}% of ${formatQuoteMoney(markupBase)})`}
@@ -329,24 +342,22 @@ export function QuotePricingCard({
 }) {
   return (
     <div id={PRICING_ANCHOR_ID} className="scroll-mt-4 rounded-lg border border-l-4 border-l-primary bg-card shadow-sm">
-      <div className="px-4 py-2.5 text-sm font-semibold">Pricing</div>
+      <div className="px-4 py-2 text-sm font-semibold">Pricing</div>
       {lockedNote ? (
         <p className="border-t border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-800 dark:text-amber-200">
           {lockedNote}
         </p>
       ) : null}
-      <div className="grid gap-6 border-t px-4 py-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="space-y-5 lg:border-r lg:pr-6">
+      <div className="grid gap-6 border-t px-4 py-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <div className="grid gap-x-6 gap-y-3 md:grid-cols-2 xl:grid-cols-1 xl:border-r xl:pr-6">
           <Group title="Labor rates ($/sqft)">
             <RateField id="project-hanger-rate" label="Hanger" value={Number(quote.project_hanger_rate ?? 0)} readOnly={readOnly} prefix="$" onChange={(project_hanger_rate) => onChange({ project_hanger_rate })} />
             <RateField id="project-finisher-rate" label="Finisher" value={Number(quote.project_finisher_rate ?? 0)} readOnly={readOnly} prefix="$" onChange={(project_finisher_rate) => onChange({ project_finisher_rate })} />
             <RateField id="prep-clean-rate" label="Cleanup" value={Number(quote.prep_clean_rate ?? 0)} readOnly={readOnly} prefix="$" usual={USUAL.prep_clean_rate} onChange={(prep_clean_rate) => onChange({ prep_clean_rate })} />
           </Group>
-          <Group title="Markup">
+          <Group title="Markup & tax">
             <RateField id="oh-pct" label="Overhead" value={Number(quote.overhead_pct ?? 0)} readOnly={readOnly} suffix="%" usual={USUAL.overhead_pct} onChange={(overhead_pct) => onChange({ overhead_pct })} />
             <RateField id="profit-pct" label="Profit" value={Number(quote.profit_pct ?? 0)} readOnly={readOnly} suffix="%" usual={USUAL.profit_pct} onChange={(profit_pct) => onChange({ profit_pct })} />
-          </Group>
-          <Group title="Tax">
             <RateField id="tax-pct" label="Sales tax" value={Number(quote.sales_tax_pct ?? 0)} readOnly={readOnly} suffix="%" onChange={(sales_tax_pct) => onChange({ sales_tax_pct })} />
           </Group>
         </div>
