@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
+import { SiteContactField } from '@/components/drywall/SiteContactField'
+import { rememberSiteContact } from '@/services/siteContactsService'
 import {
   AlertTriangle,
   ArrowRight,
@@ -177,6 +179,11 @@ export function ProjectInfoPage() {
         setLoadedAt(nextRaw)
         setSite(trimmedSite)
         setSavedSiteSnapshot(JSON.stringify(trimmedSite))
+        void rememberSiteContact({
+          name: trimmedSite.siteContact,
+          phone: trimmedSite.contactPhone,
+          company: form.client,
+        })
       }
       const next = toForm(updated)
       setForm(next)
@@ -322,12 +329,13 @@ export function ProjectInfoPage() {
                 <User className="h-4 w-4" />
                 Site Contact
               </Label>
-              <Input
+              <SiteContactField
                 id="drywall-site-contact"
-                value={site.siteContact}
-                onChange={(e) => setSite((s) => ({ ...s, siteContact: e.target.value }))}
-                placeholder="On-site contact name"
-                disabled={readOnly}
+                name={site.siteContact}
+                client={form.client}
+                readOnly={readOnly}
+                onNameChange={(v) => setSite((s) => ({ ...s, siteContact: v }))}
+                onPick={(c) => setSite((s) => ({ ...s, siteContact: c.name, contactPhone: c.phone }))}
               />
             </div>
             <div className="space-y-2">

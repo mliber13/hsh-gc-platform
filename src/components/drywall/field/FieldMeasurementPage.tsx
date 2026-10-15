@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type SetStateAction } from 'react'
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
+import { rememberSiteContact } from '@/services/siteContactsService'
 import { ArrowRight, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -230,6 +231,11 @@ export function FieldMeasurementPage() {
       setTakeoff(stored)
       setSavedSnapshot(JSON.stringify(stored))
       toast.success('Field measurement saved')
+      void rememberSiteContact({
+        name: stored.siteContact ?? '',
+        phone: stored.contactPhone ?? '',
+        company: projectInfo.client,
+      })
     } catch (e) {
       if (
         e instanceof DrywallProjectPermissionError ||
@@ -471,6 +477,7 @@ export function FieldMeasurementPage() {
           takeoff={takeoff}
           onPatchTakeoff={patchTakeoff}
           readOnly={readOnly}
+          client={projectInfo.client}
         />
         <FieldMeasurementsSection takeoff={takeoff} readOnly={readOnly} onChange={setTakeoffField} />
         <FieldBeadSection takeoff={takeoff} readOnly={readOnly} onChange={setTakeoffField} />

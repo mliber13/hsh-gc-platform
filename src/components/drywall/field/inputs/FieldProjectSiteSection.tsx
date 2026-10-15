@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { SiteContactField } from '@/components/drywall/SiteContactField'
 import type { FieldTakeoff } from '@/types/drywall'
 
 export interface FieldProjectSiteSectionProps {
@@ -12,6 +13,8 @@ export interface FieldProjectSiteSectionProps {
   readOnly: boolean
   /** Operator field stage shows address + variance; crew measure omits those. */
   variant?: 'operator' | 'crew'
+  /** The job's client — its people lead the site contact list (operator only). */
+  client?: string
 }
 
 /** Job address + site contact / visit notes (operator + crew measure). */
@@ -22,6 +25,7 @@ export function FieldProjectSiteSection({
   onPatchTakeoff,
   readOnly,
   variant = 'operator',
+  client,
 }: FieldProjectSiteSectionProps) {
   const isCrew = variant === 'crew'
 
@@ -52,11 +56,21 @@ export function FieldProjectSiteSection({
         <div className={isCrew ? 'space-y-4' : 'grid md:grid-cols-2 gap-4'}>
           <div className="space-y-2">
             <Label>Site contact</Label>
-            <Input
-              value={takeoff.siteContact ?? ''}
-              disabled={readOnly}
-              onChange={(e) => onPatchTakeoff({ siteContact: e.target.value })}
-            />
+            {isCrew ? (
+              <Input
+                value={takeoff.siteContact ?? ''}
+                disabled={readOnly}
+                onChange={(e) => onPatchTakeoff({ siteContact: e.target.value })}
+              />
+            ) : (
+              <SiteContactField
+                name={takeoff.siteContact ?? ''}
+                client={client}
+                readOnly={readOnly}
+                onNameChange={(v) => onPatchTakeoff({ siteContact: v })}
+                onPick={(c) => onPatchTakeoff({ siteContact: c.name, contactPhone: c.phone })}
+              />
+            )}
           </div>
           <div className="space-y-2">
             <Label>Contact phone</Label>
