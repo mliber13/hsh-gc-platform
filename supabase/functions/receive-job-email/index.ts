@@ -18,7 +18,9 @@
  * Every email is written to inbound_email_log, which is also the guard against Resend's
  * retries filing the same attachments twice.
  *
- * Secrets: RESEND_API_KEY, RESEND_INBOUND_WEBHOOK_SECRET, FROM_EMAIL (replies; optional).
+ * Secrets: RESEND_RECEIVING_API_KEY (a FULL-access key — the app's RESEND_API_KEY is send-only,
+ * and Resend refuses it on the receiving API with 401 restricted_api_key, 2026-10-15),
+ * RESEND_API_KEY (replies), RESEND_INBOUND_WEBHOOK_SECRET, FROM_EMAIL (replies; optional).
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -147,8 +149,10 @@ serve(async (req) => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const resendKey = Deno.env.get('RESEND_API_KEY')
   const webhookSecret = Deno.env.get('RESEND_INBOUND_WEBHOOK_SECRET')
+  // Reading received mail needs full access; sending keeps its own restricted key.
+  const receivingKey = Deno.env.get('RESEND_RECEIVING_API_KEY')
   const fromEmail = Deno.env.get('FROM_EMAIL')
-  if (!supabaseUrl || !serviceKey || !resendKey || !webhookSecret) {
+  if (!supabaseUrl || !serviceKey || !resendKey || !webhookSecret || !receivingKey) {
     console.error('receive-job-email: missing secrets')
     return new Response('Not configured', { status: 500 })
   }
@@ -261,7 +265,7 @@ serve(async (req) => {
 
   // 3. The attachments. The webhook carries metadata only; the list call gives download URLs.
   const listRes = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}/attachments`, {
-    headers: { Authorization: `Bearer ${resendKey}` },
+    headers: { Authorization: `Bearer ${receivingKey}` },
   })
   if (!listRes.ok) {
     const detail = `Attachment list failed: ${listRes.status} ${(await listRes.text()).slice(0, 300)}`
