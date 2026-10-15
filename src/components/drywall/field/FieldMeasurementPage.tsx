@@ -512,14 +512,12 @@ export function FieldMeasurementPage() {
         <FieldTakeoffReviewBanner
           takeoff={takeoff}
           measuredSqft={measuredSqft}
-          canReview={canReview && !isDirty}
+          canReview={canReview}
+          unsaved={isDirty}
           busy={reviewBusy || saving}
           onApprove={handleApproveTakeoff}
           onReject={handleRejectTakeoff}
         />
-        {isDirty && canReview ? (
-          <p className="text-xs text-muted-foreground">Save your changes before approving.</p>
-        ) : null}
       </FieldFlowStep>
 
       {/* Rates are decided after digesting the measurement and notes, and before anything is
@@ -561,6 +559,8 @@ export function FieldMeasurementPage() {
               <span className="text-xs text-muted-foreground">
                 Finish the checklist and set the job address first.
               </span>
+            ) : isDirty ? (
+              <span className="text-xs text-muted-foreground">Save your changes first.</span>
             ) : null}
           </div>
         ) : null}

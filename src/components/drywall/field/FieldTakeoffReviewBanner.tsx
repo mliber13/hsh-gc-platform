@@ -31,6 +31,12 @@ export interface FieldTakeoffReviewBannerProps {
   /** Owner + office_drywall — approve/reject actions. */
   canReview: boolean
   busy?: boolean
+  /**
+   * The page holds changes not yet saved. Approving writes the whole takeoff on screen with the
+   * approval, so the button says so rather than hiding — a crew-submitted takeoff always opens
+   * with unsaved changes, because the page fills in its accessories on first open.
+   */
+  unsaved?: boolean
   onApprove: () => void | Promise<void>
   onReject: (notes: string) => void | Promise<void>
 }
@@ -40,9 +46,11 @@ export function FieldTakeoffReviewBanner({
   measuredSqft,
   canReview,
   busy = false,
+  unsaved = false,
   onApprove,
   onReject,
 }: FieldTakeoffReviewBannerProps) {
+  const approveLabel = (base: string) => (unsaved ? `Save & ${base.toLowerCase()}` : base)
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectNotes, setRejectNotes] = useState('')
 
@@ -75,7 +83,7 @@ export function FieldTakeoffReviewBanner({
         </p>
         {canReview ? (
           <Button type="button" size="sm" disabled={busy} onClick={() => void onApprove()}>
-            Approve measurement
+            {approveLabel('Approve measurement')}
           </Button>
         ) : null}
       </div>
@@ -105,7 +113,7 @@ export function FieldTakeoffReviewBanner({
             {canReview ? (
               <div className="flex flex-wrap gap-2">
                 <Button type="button" size="sm" disabled={busy} onClick={() => void onApprove()}>
-                  Approve
+                  {approveLabel('Approve')}
                 </Button>
                 <Button
                   type="button"
@@ -137,7 +145,7 @@ export function FieldTakeoffReviewBanner({
             ) : null}
             {canReview ? (
               <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void onApprove()}>
-                Mark approved
+                {approveLabel('Mark approved')}
               </Button>
             ) : null}
           </>
