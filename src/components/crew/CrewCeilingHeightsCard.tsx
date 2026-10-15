@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { CrewCeilingHeight } from '@/types/crew'
 
+const sqftLabel = (n: number) => `${n.toLocaleString('en-US')} sqft`
+
 export function CrewCeilingHeightsCard({ heights }: { heights: CrewCeilingHeight[] }) {
   if (heights.length === 0) return null
   const tall = heights.filter((h) => h.tall)
@@ -24,16 +26,24 @@ export function CrewCeilingHeightsCard({ heights }: { heights: CrewCeilingHeight
         {tall.length > 0 ? (
           <p className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 font-medium text-amber-900 dark:text-amber-100">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            Tall work: {tall.map((h) => `${h.area} ${h.heightFt}'`).join(', ')}
+            <span>
+              Tall work:{' '}
+              {tall
+                .map((h) => `${h.area} ${h.heightFt}'${h.sqft != null ? ` (${sqftLabel(h.sqft)})` : ''}`)
+                .join(', ')}
+            </span>
           </p>
         ) : null}
         <ul className="divide-y rounded-md border">
           {heights.map((h, i) => (
             <li key={`${h.area}-${i}`} className="flex items-center justify-between gap-3 px-3 py-2">
-              <span className="min-w-0 truncate">{h.area}</span>
+              <span className="min-w-0 flex-1 truncate">{h.area}</span>
+              {h.sqft != null ? (
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{sqftLabel(h.sqft)}</span>
+              ) : null}
               <span
                 className={cn(
-                  'shrink-0 tabular-nums',
+                  'w-10 shrink-0 text-right tabular-nums',
                   h.tall ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
                 )}
               >

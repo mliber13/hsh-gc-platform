@@ -183,6 +183,11 @@ export interface CrewCeilingHeight {
   heightFt: number
   /** 10' and up — see ceilingHeights.ts. */
   tall: boolean
+  /**
+   * Board in the area (measured, else quoted before waste). Null for anyone who may not see the
+   * job's size — the same rule as totalSqft: job info on, and not a field foreman.
+   */
+  sqft: number | null
   /** Where it came from: the measurer on site, or the quote's takeoff. */
   source: 'measured' | 'quoted'
 }

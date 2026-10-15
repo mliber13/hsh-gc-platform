@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { format } from 'date-fns'
-import { heightBand, quoteAreasForField } from '@/lib/drywall/ceilingHeights'
+import { heightBand, quoteAreaSqft, quoteAreasForField } from '@/lib/drywall/ceilingHeights'
 import { supabase, isOnlineMode } from '@/lib/supabase'
 import { DRYWALL_QUOTE_BASE_DEFAULTS } from '@/lib/drywall/drywallQuoteDefaults'
 import {
@@ -41,6 +41,7 @@ import {
   type CrewProjectScalarRow,
 } from '@/lib/drywall/crewProjectScalars'
 import {
+  computeMeasuredSqft,
   fieldTakeoffWithTotals,
   mergeFieldTakeoff,
 } from '@/lib/drywall/fieldMeasurementUtils'
@@ -1135,19 +1136,36 @@ async function resolveLaborRates(
 export function resolveCeilingHeights(
   legacy: Record<string, unknown>,
   field: FieldTakeoff | null,
+  /** Whether this person may see the job's size — sqft per area is withheld otherwise. */
+  showSize: boolean,
 ): CrewProjectDetail['ceilingHeights'] {
   const measured = (field?.measurements ?? [])
     .filter((a) => typeof a.heightFt === 'number' && a.heightFt > 0)
-    .map((a) => ({ area: a.area?.trim() || 'Area', heightFt: a.heightFt!, source: 'measured' as const }))
+    .map((a) => ({
+      area: a.area?.trim() || 'Area',
+      heightFt: a.heightFt!,
+      source: 'measured' as const,
+      sqft: Math.round(computeMeasuredSqft([a])),
+    }))
   const v3 = v3QuoteFromLegacy(legacy)
+  const quotedSqft = v3 ? quoteAreaSqft(v3) : new Map<string, number>()
   const rows = measured.length
     ? measured
     : v3
       ? quoteAreasForField(v3)
           .filter((a) => a.heightFt)
-          .map((a) => ({ area: a.name, heightFt: a.heightFt!, source: 'quoted' as const }))
+          .map((a) => ({
+            area: a.name,
+            heightFt: a.heightFt!,
+            source: 'quoted' as const,
+            sqft: Math.round(quotedSqft.get(a.name) ?? 0),
+          }))
       : []
-  return rows.map((r) => ({ ...r, tall: heightBand(r.heightFt) !== null }))
+  return rows.map((r) => ({
+    ...r,
+    tall: heightBand(r.heightFt) !== null,
+    sqft: showSize && r.sqft > 0 ? r.sqft : null,
+  }))
 }
 
 function resolveFieldNotes(field: FieldTakeoff | null): CrewProjectDetail['fieldNotes'] {
@@ -1558,7 +1576,7 @@ async function mapProjectDetail(
             preview: context.preview,
           })
         : { hanger: null, finisher: null },
-    ceilingHeights: resolveCeilingHeights(legacy, field),
+    ceilingHeights: resolveCeilingHeights(legacy, field, showJobInfo && !isForeman),
     fieldNotes: resolveFieldNotes(field),
     scheduleEntries: scheduleRows.map(mapScheduleEntry),
     intakeSource,

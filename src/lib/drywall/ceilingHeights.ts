@@ -138,3 +138,15 @@ export function quoteAreasForField(
   }
   return out
 }
+
+/** Drywall sqft quoted in each area (location), before waste — the size beside each height. */
+export function quoteAreaSqft(quote: Pick<DrywallQuoteV3, 'lineItems'>): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const line of quote.lineItems) {
+    if (line.type !== 'drywall') continue
+    const name = (line.location ?? '').trim()
+    if (!name) continue
+    out.set(name, (out.get(name) ?? 0) + (Number(line.quantity) || 0))
+  }
+  return out
+}
