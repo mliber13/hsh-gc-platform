@@ -6,6 +6,7 @@ import { supabase, isOnlineMode } from '@/lib/supabase'
 import { belongsInDrywallWorkspaceFromListScalars } from '@/services/projectVisibility'
 import { requireUserOrgId, getCurrentUserProfile } from '@/services/userService'
 import { hydrateDrywallQuote } from '@/lib/drywall/createEmptyDrywallQuote'
+import { quoteToFieldBlockReason, statusAfterQuoteUnlock } from '@/lib/drywall/quoteStageGate'
 import { initialV3Quote } from '@/lib/drywall/initialV3Quote'
 import { hydrateDrywallQuoteV3, prepareDrywallQuoteV3ForSave } from '@/lib/drywall/createEmptyDrywallQuoteV3'
 import { buildV3FromV2, v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
@@ -1611,6 +1612,12 @@ export async function updateDrywallProjectStatus(
       `A job moves one stage at a time. ${current} → ${status} skips a step; take it through the stages instead.`,
     )
   }
+  const blocked = quoteToFieldBlockReason(
+    current,
+    status,
+    normalizeQuoteOutcome(parseQuoteRecord(prevLegacy).outcome),
+  )
+  if (blocked) throw new Error(blocked)
 
   // The four boundaries that carry a timestamp — production start, production complete,
   // closeout, and their reverts. Anything earlier in the flow has none to keep.
@@ -1956,7 +1963,7 @@ export async function unlockQuoteForRevision(projectId: string, loadedAt: string
   if (!isOnlineMode()) throw new Error('Drywall quotes require an online connection.')
 
   const orgId = await requireUserOrgId()
-  const { prevLegacy } = await loadProjectLegacyForMerge(projectId, orgId)
+  const { prevLegacy, status: rawStatus } = await loadProjectLegacyForMerge(projectId, orgId)
   const prevQuote = parseQuoteRecord(prevLegacy)
   const outcome = normalizeQuoteOutcome(prevQuote.outcome)
   if (outcome === 'drafted') {
@@ -1973,7 +1980,8 @@ export async function unlockQuoteForRevision(projectId: string, loadedAt: string
       outcomeTimestamps: {},
     },
     loadedAt,
-    undefined,
+    // The revision undoes the approval that moved the job into Field (quoteStageGate).
+    statusAfterQuoteUnlock(normalizeDrywallProjectStatus(rawStatus), getIntakeSourceFromLegacy(prevLegacy)),
     ['bidSnapshot', 'outcomeReason'],
   )
 }

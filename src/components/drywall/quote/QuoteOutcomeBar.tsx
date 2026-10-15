@@ -545,9 +545,9 @@ export function QuoteOutcomeBar({
           <DialogHeader>
             <DialogTitle>Unlock for revision?</DialogTitle>
             <DialogDescription>
-              Unlocking clears the bid snapshot and outcome timestamps. The project status badge is
-              NOT reverted — if approval already advanced this project to Field Measurement, it
-              stays there. Continue?
+              Unlocking clears the bid snapshot and outcome timestamps. A job in Field Measurement
+              goes back to Quote until the revised quote is approved again; a job already at Order
+              or later stays where it is. Continue?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
