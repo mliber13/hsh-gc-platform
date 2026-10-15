@@ -46,9 +46,8 @@ import { QuoteHeaderV3 } from './QuoteHeaderV3'
 import { QuotePdfOptionsSectionV3 } from './QuotePdfOptionsSectionV3'
 import { QuoteStructuredScopeSection } from './QuoteStructuredScopeSection'
 import {
-  QuoteCostBreakdownCard,
   QuoteDurationCard,
-  QuoteRatesMarkupPanel,
+  QuotePricingCard,
   QuoteSummaryBar,
   QuoteSummaryLine,
   scrollToQuoteRates,
@@ -165,7 +164,6 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
   }, [quote, catalogs])
 
   // Rates & markup open for editing — by its Edit button, or the floating bar's margin.
-  const [ratesOpen, setRatesOpen] = useState(false)
   // Bumped to open the scope section from the checklist strip.
   const [scopeOpenSignal, setScopeOpenSignal] = useState(0)
 
@@ -501,7 +499,6 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
               setScopeOpenSignal((n) => n + 1)
               document.getElementById('quote-scope')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
             } else if (key === 'margin') {
-              if (!readOnly) setRatesOpen(true)
               scrollToQuoteRates()
             } else if (key === 'customer') {
               navigate(`/drywall/projects/${projectId}/info`)
@@ -522,13 +519,12 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
         openSignal={scopeOpenSignal}
       />
 
-      {/* The money block: rates and markup, then the lines they price, then the breakdown.
-          Scope sits above it, not in the middle of it (Mark, 2026-10-14). */}
-      <QuoteRatesMarkupPanel
+      {/* The money block: pricing (rates beside the breakdown they drive), then the lines they
+          price. Scope sits above it, not in the middle of it (Mark, 2026-10-14/15). */}
+      <QuotePricingCard
         quote={quote}
+        totals={totals}
         readOnly={readOnly}
-        open={ratesOpen}
-        onOpenChange={setRatesOpen}
         lockedNote={
           outcomeLocked && !viewerReadOnly
             ? 'This quote is locked because it has been sent. Click "Unlock for Revision" at the top of the page to change rates, markup or lines.'
@@ -575,16 +571,12 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
           )}
       </div>
 
-      <QuoteCostBreakdownCard quote={quote} totals={totals} />
       {/* Floats at the bottom of the screen: total, cost, margin vs floor while editing lines or
           markup (Mark, 2026-10-14). Replaces the right-hand sidebar. */}
       {moneySummary ? (
         <QuoteSummaryBar
           summary={moneySummary}
-          onMarginClick={() => {
-            if (!readOnly) setRatesOpen(true)
-            scrollToQuoteRates()
-          }}
+          onMarginClick={scrollToQuoteRates}
         />
       ) : null}
       <QuoteDurationCard quote={quote} totals={totals} readOnly={readOnly} onChange={patchQuote} />

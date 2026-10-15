@@ -3,17 +3,15 @@
 //
 //   QuoteSummaryBar          — total · cost · margin vs floor, pinned while scrolling; the
 //                              line-edit dialog shows the same numbers (QuoteSummaryLine)
-//   QuoteRatesMarkupPanel    — project rates and markup inputs, next to the bar
-//   QuoteCostBreakdownCard   — direct costs by trade as WAGES, one labour-burden line
+//   QuotePricingCard         — rates and markup, always editable, beside the cost breakdown
+//                              (direct costs by trade as WAGES, one labour-burden line)
 //   QuoteDurationCard        — the duration summary, foldable
 //
 // The numbers come from quoteMoneySummary.ts; the pricing engine is unchanged.
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { formatMarginFloorPct } from '@/lib/drywall/marginFloor'
@@ -118,63 +116,6 @@ export function QuoteSummaryBar({ summary, onMarginClick }: { summary: QuoteMone
   )
 }
 
-function NumberField({
-  id,
-  label,
-  value,
-  readOnly,
-  step,
-  prefix,
-  suffix,
-  onChange,
-}: {
-  id: string
-  label: string
-  value: number
-  readOnly: boolean
-  step: number
-  prefix?: string
-  suffix?: string
-  onChange: (value: number) => void
-}) {
-  return (
-    <div className="space-y-1">
-      <Label htmlFor={id} className="text-xs text-muted-foreground">
-        {label}
-      </Label>
-      {readOnly ? (
-        <p className="text-sm font-medium tabular-nums">
-          {prefix}
-          {value}
-          {suffix}
-        </p>
-      ) : (
-        <div className="relative">
-          {prefix ? (
-            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-              {prefix}
-            </span>
-          ) : null}
-          <Input
-            id={id}
-            type="number"
-            min={0}
-            step={step}
-            className={cn('h-8 tabular-nums', prefix && 'pl-5', suffix && 'pr-6')}
-            value={value}
-            onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          />
-          {suffix ? (
-            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-              {suffix}
-            </span>
-          ) : null}
-        </div>
-      )}
-    </div>
-  )
-}
-
 /**
  * Values with a real "usual" across live quotes (2026-10-14, 88 v3 quotes): cleanup $0.03 (68),
  * overhead 10% (70), profit 30% (52). A different value gets a marker, so a job-specific choice —
@@ -187,136 +128,94 @@ const USUAL: Partial<Record<'prep_clean_rate' | 'overhead_pct' | 'profit_pct', n
   profit_pct: 30,
 }
 
-function Value({
-  text,
+const PRICING_ANCHOR_ID = 'quote-pricing'
+
+/** Scroll the pricing card into view — the floating bar's margin links here. */
+export function scrollToQuoteRates() {
+  document.getElementById(PRICING_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+const trimNumber = (n: number) => String(Number(n.toFixed(4)))
+
+/**
+ * One rate or percentage, always editable. Holds its own text while focused, so "0." or a
+ * cleared box survives the keystroke instead of snapping back to a number mid-typing.
+ */
+function RateField({
+  id,
+  label,
+  value,
+  readOnly,
+  prefix,
+  suffix,
   usual,
-  current,
-  usualText,
+  onChange,
 }: {
-  text: string
+  id: string
+  label: string
+  value: number
+  readOnly: boolean
+  prefix?: string
+  suffix?: string
   usual?: number
-  current: number
-  usualText?: string
+  onChange: (value: number) => void
 }) {
-  const changed = usual != null && Math.abs(current - usual) > 1e-9
-  // A chip, so the value reads as data rather than grey label text (Mark: "need to stand out");
-  // amber when it differs from the usual.
+  const [draft, setDraft] = useState<string | null>(null)
+  const changed = usual != null && Math.abs(value - usual) > 1e-9
+  const usualText = usual != null ? `${prefix ?? ''}${trimNumber(usual)}${suffix ?? ''}` : ''
+
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-sm font-semibold tabular-nums',
-        changed
-          ? 'border-amber-500/50 bg-amber-500/15 text-amber-900 dark:text-amber-100'
-          : 'border-border bg-background text-foreground',
-      )}
-      title={changed ? `Usual: ${usualText}` : undefined}
-    >
-      {text}
-      {changed ? <span className="size-1.5 rounded-full bg-amber-500" aria-label={`Changed from usual ${usualText}`} /> : null}
-    </span>
+    <div className="flex items-center justify-between gap-3">
+      <Label htmlFor={id} className="flex items-center gap-1.5 text-sm font-normal">
+        {label}
+        {changed ? (
+          <span
+            className="size-1.5 rounded-full bg-amber-500"
+            title={`Usual: ${usualText}`}
+            aria-label={`Changed from usual ${usualText}`}
+          />
+        ) : null}
+      </Label>
+      <div className="relative w-28 shrink-0">
+        {prefix ? (
+          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+            {prefix}
+          </span>
+        ) : null}
+        <NumericInput
+          id={id}
+          disabled={readOnly}
+          className={cn(
+            'h-8 text-right tabular-nums',
+            prefix && 'pl-5',
+            suffix && 'pr-6',
+            changed && 'border-amber-500/60 bg-amber-500/10',
+          )}
+          title={changed ? `Usual: ${usualText}` : undefined}
+          value={draft ?? trimNumber(value)}
+          onFocus={() => setDraft(trimNumber(value))}
+          onBlur={() => setDraft(null)}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            onChange(parseFloat(e.target.value) || 0)
+          }}
+        />
+        {suffix ? (
+          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+            {suffix}
+          </span>
+        ) : null}
+      </div>
+    </div>
   )
 }
 
-const RATES_ANCHOR_ID = 'quote-rates-markup'
-
-/** Scroll the rates section into view — the floating bar's margin links here. */
-export function scrollToQuoteRates() {
-  document.getElementById(RATES_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-}
-
-/**
- * Rates & markup — one read-only line until Edit (Mark, 2026-10-14: "spread out", "something
- * that could be accidentally messed with"). Editing is deliberate; the floating bar updates
- * live while it is open, so a profit nudge shows its margin as it is typed.
- */
-export function QuoteRatesMarkupPanel({
-  quote,
-  readOnly,
-  lockedNote,
-  open,
-  onOpenChange,
-  onChange,
-}: {
-  quote: DrywallQuoteV3
-  readOnly: boolean
-  /** Why the inputs are text — a sent or approved quote is locked, which looks broken unsaid. */
-  lockedNote?: string | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onChange: (patch: Partial<DrywallQuoteV3>) => void
-}) {
-  const money = (n: number | undefined) => `$${Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}`
-  const pct = (n: number | undefined) => `${Number(n ?? 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}%`
-  const editing = open && !readOnly
-
+function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div id={RATES_ANCHOR_ID} className="scroll-mt-4 rounded-lg border border-l-4 border-l-primary bg-card shadow-sm">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5 text-sm">
-        <span className="font-semibold">Rates &amp; markup</span>
-        {!editing ? (
-          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
-            <span>
-              Hanger <Value text={money(quote.project_hanger_rate)} current={Number(quote.project_hanger_rate ?? 0)} />
-            </span>
-            <span>
-              Finisher <Value text={money(quote.project_finisher_rate)} current={Number(quote.project_finisher_rate ?? 0)} />
-            </span>
-            <span>
-              Cleanup{' '}
-              <Value text={money(quote.prep_clean_rate)} current={Number(quote.prep_clean_rate ?? 0)} usual={USUAL.prep_clean_rate} usualText={money(USUAL.prep_clean_rate)} />
-            </span>
-            <span className="text-border">│</span>
-            <span>
-              OH <Value text={pct(quote.overhead_pct)} current={Number(quote.overhead_pct ?? 0)} usual={USUAL.overhead_pct} usualText={pct(USUAL.overhead_pct)} />
-            </span>
-            <span>
-              Profit <Value text={pct(quote.profit_pct)} current={Number(quote.profit_pct ?? 0)} usual={USUAL.profit_pct} usualText={pct(USUAL.profit_pct)} />
-            </span>
-            <span className="text-border">│</span>
-            <span>
-              Tax <Value text={pct(quote.sales_tax_pct)} current={Number(quote.sales_tax_pct ?? 0)} />
-            </span>
-          </span>
-        ) : (
-          <span className="flex-1 text-xs text-muted-foreground">The money bar below updates as you type.</span>
-        )}
-        {!readOnly ? (
-          <Button type="button" size="sm" variant={editing ? 'default' : 'outline'} className="ml-auto h-7" onClick={() => onOpenChange(!editing)}>
-            {editing ? 'Done' : 'Edit'}
-          </Button>
-        ) : null}
-      </div>
-
-      {lockedNote ? (
-        <p className="border-t border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200">
-          {lockedNote}
-        </p>
-      ) : null}
-
-      {editing ? (
-        <div className="grid gap-4 border-t px-3 py-3 md:grid-cols-[3fr_2fr_1fr]">
-          <fieldset className="space-y-2">
-            <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Labor rates ($/sqft)</legend>
-            <div className="grid grid-cols-3 gap-2">
-              <NumberField id="project-hanger-rate" label="Hanger" value={quote.project_hanger_rate ?? 0} readOnly={false} step={0.001} prefix="$" onChange={(project_hanger_rate) => onChange({ project_hanger_rate })} />
-              <NumberField id="project-finisher-rate" label="Finisher" value={quote.project_finisher_rate ?? 0} readOnly={false} step={0.001} prefix="$" onChange={(project_finisher_rate) => onChange({ project_finisher_rate })} />
-              <NumberField id="prep-clean-rate" label="Cleanup" value={quote.prep_clean_rate} readOnly={false} step={0.001} prefix="$" onChange={(prep_clean_rate) => onChange({ prep_clean_rate })} />
-            </div>
-          </fieldset>
-          <fieldset className="space-y-2">
-            <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Markup</legend>
-            <div className="grid grid-cols-2 gap-2">
-              <NumberField id="oh-pct" label="Overhead" value={quote.overhead_pct} readOnly={false} step={0.1} suffix="%" onChange={(overhead_pct) => onChange({ overhead_pct })} />
-              <NumberField id="profit-pct" label="Profit" value={quote.profit_pct} readOnly={false} step={0.1} suffix="%" onChange={(profit_pct) => onChange({ profit_pct })} />
-            </div>
-          </fieldset>
-          <fieldset className="space-y-2">
-            <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tax</legend>
-            <NumberField id="tax-pct" label="Sales tax" value={quote.sales_tax_pct} readOnly={false} step={0.01} suffix="%" onChange={(sales_tax_pct) => onChange({ sales_tax_pct })} />
-          </fieldset>
-        </div>
-      ) : null}
-    </div>
+    <fieldset className="space-y-2">
+      <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</legend>
+      {children}
+    </fieldset>
   )
 }
 
@@ -329,88 +228,131 @@ function Row({ label, value, muted, strong, indent }: { label: string; value: nu
   )
 }
 
-export function QuoteCostBreakdownCard({ quote, totals }: { quote: DrywallQuoteV3; totals: QuoteV3TotalsSummary }) {
+function CostBreakdown({ quote, totals }: { quote: DrywallQuoteV3; totals: QuoteV3TotalsSummary }) {
   const { routine, alternates } = totals
   const breakdown = useMemo(() => quoteCostBreakdown(quote, totals), [quote, totals])
   const markupBase = routine.markupBase
   const anyAccepted = alternates.some((a) => a.selected)
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Cost breakdown</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-6 text-sm lg:grid-cols-2">
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Direct costs by trade</p>
-          {breakdown.trades.map((t) => (
-            <div key={t.type} className="space-y-0.5 rounded-md border bg-muted/20 px-2 py-1.5">
-              <div className="flex items-center justify-between gap-2 text-xs font-semibold">
-                <span>{t.label}</span>
-                <span className="tabular-nums">{formatQuoteMoney(t.subtotal)}</span>
-              </div>
-              {t.material > 0 && <Row label="Material" value={t.material} muted indent />}
-              {t.hangerWages > 0 && <Row label="Hanger labor" value={t.hangerWages} muted indent />}
-              {t.finisherWages > 0 && <Row label="Finisher labor" value={t.finisherWages} muted indent />}
-              {t.componentWages > 0 && <Row label="Labor" value={t.componentWages} muted indent />}
-              {t.accessories > 0 && <Row label="Accessories" value={t.accessories} muted indent />}
+    <div className="space-y-4 text-sm">
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Direct costs by trade</p>
+        {breakdown.trades.map((t) => (
+          <div key={t.type} className="space-y-0.5 rounded-md border bg-muted/20 px-2 py-1.5">
+            <div className="flex items-center justify-between gap-2 text-xs font-semibold">
+              <span>{t.label}</span>
+              <span className="tabular-nums">{formatQuoteMoney(t.subtotal)}</span>
             </div>
-          ))}
-          {breakdown.cleanupWages > 0 ? (
-            <Row
-              label={`Cleanup labor (${routine.cleanupDrywallSqft.toLocaleString('en-US', { maximumFractionDigits: 0 })} sqft × $${routine.prepCleanRate})`}
-              value={breakdown.cleanupWages}
-              muted
-            />
-          ) : null}
-          {breakdown.laborBurden > 0 ? (
-            <Row label={`Labor burden (${Math.round(LABOR_TAX_RATE * 100)}% on wages)`} value={breakdown.laborBurden} muted />
-          ) : null}
-        </div>
-
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Totals</p>
-          <Row label="Direct cost before markup" value={markupBase} />
-          <Row
-            label={`Overhead (${formatPctLabel(quote.overhead_pct)}% of ${formatQuoteMoney(markupBase)})`}
-            value={routine.overheadAmount}
-            muted
-          />
-          <Row
-            label={`Profit (${formatPctLabel(quote.profit_pct)}% of ${formatQuoteMoney(markupBase + routine.overheadAmount)})`}
-            value={routine.profitAmount}
-            muted
-          />
-          <Row label={`Sales tax (${formatPctLabel(quote.sales_tax_pct)}% on materials)`} value={routine.salesTaxAmount} muted />
-          <div className="border-t pt-1.5">
-            <Row label="Grand total" value={routine.total} strong />
+            {t.material > 0 && <Row label="Material" value={t.material} muted indent />}
+            {t.hangerWages > 0 && <Row label="Hanger labor" value={t.hangerWages} muted indent />}
+            {t.finisherWages > 0 && <Row label="Finisher labor" value={t.finisherWages} muted indent />}
+            {t.componentWages > 0 && <Row label="Labor" value={t.componentWages} muted indent />}
+            {t.accessories > 0 && <Row label="Accessories" value={t.accessories} muted indent />}
           </div>
-          {alternates.length > 0 ? (
-            <div className="space-y-1 border-t pt-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer alternates</p>
-              {alternates.map((alt) => (
-                <Row
-                  key={alt.id}
-                  label={`${alt.selected ? '✓ ' : '○ '}${alt.pricingMode === 'deduct' ? 'Deduct' : 'Add'}: ${alt.name}`}
-                  value={alt.pricingMode === 'deduct' ? -Math.abs(alt.totalAdd) : Math.abs(alt.totalAdd)}
-                  muted={!alt.selected}
-                />
-              ))}
-              {anyAccepted ? (
-                <>
-                  <Row label="Contract total (accepted)" value={totals.acceptedTotal} strong />
-                  <p className="text-right text-xs text-muted-foreground tabular-nums">
-                    {totals.acceptedSqft.toLocaleString(undefined, { maximumFractionDigits: 2 })} sqft accepted
-                  </p>
-                </>
-              ) : (
-                <Row label="Grand total (all alternates)" value={totals.grandTotalAllAlternates} strong />
-              )}
-            </div>
-          ) : null}
+        ))}
+        {breakdown.cleanupWages > 0 ? (
+          <Row
+            label={`Cleanup labor (${routine.cleanupDrywallSqft.toLocaleString('en-US', { maximumFractionDigits: 0 })} sqft × $${routine.prepCleanRate})`}
+            value={breakdown.cleanupWages}
+            muted
+          />
+        ) : null}
+        {breakdown.laborBurden > 0 ? (
+          <Row label={`Labor burden (${Math.round(LABOR_TAX_RATE * 100)}% on wages)`} value={breakdown.laborBurden} muted />
+        ) : null}
+      </div>
+
+      <div className="space-y-1.5 border-t pt-3">
+        <Row label="Direct cost before markup" value={markupBase} />
+        <Row
+          label={`Overhead (${formatPctLabel(quote.overhead_pct)}% of ${formatQuoteMoney(markupBase)})`}
+          value={routine.overheadAmount}
+          muted
+        />
+        <Row
+          label={`Profit (${formatPctLabel(quote.profit_pct)}% of ${formatQuoteMoney(markupBase + routine.overheadAmount)})`}
+          value={routine.profitAmount}
+          muted
+        />
+        <Row label={`Sales tax (${formatPctLabel(quote.sales_tax_pct)}% on materials)`} value={routine.salesTaxAmount} muted />
+        <div className="border-t pt-1.5">
+          <Row label="Grand total" value={routine.total} strong />
         </div>
-      </CardContent>
-    </Card>
+        {alternates.length > 0 ? (
+          <div className="space-y-1 border-t pt-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer alternates</p>
+            {alternates.map((alt) => (
+              <Row
+                key={alt.id}
+                label={`${alt.selected ? '✓ ' : '○ '}${alt.pricingMode === 'deduct' ? 'Deduct' : 'Add'}: ${alt.name}`}
+                value={alt.pricingMode === 'deduct' ? -Math.abs(alt.totalAdd) : Math.abs(alt.totalAdd)}
+                muted={!alt.selected}
+              />
+            ))}
+            {anyAccepted ? (
+              <>
+                <Row label="Contract total (accepted)" value={totals.acceptedTotal} strong />
+                <p className="text-right text-xs text-muted-foreground tabular-nums">
+                  {totals.acceptedSqft.toLocaleString(undefined, { maximumFractionDigits: 2 })} sqft accepted
+                </p>
+              </>
+            ) : (
+              <Row label="Grand total (all alternates)" value={totals.grandTotalAllAlternates} strong />
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Rates and markup beside the cost breakdown they drive (Mark, 2026-10-15: "I like to see the
+ * breakdown while I adjust rates"; the Edit button was "annoying"). The inputs are always live
+ * — a locked quote disables them and says why — and the breakdown recomputes as you type.
+ * Replaces the separate Rates & markup strip and Cost breakdown card.
+ */
+export function QuotePricingCard({
+  quote,
+  totals,
+  readOnly,
+  lockedNote,
+  onChange,
+}: {
+  quote: DrywallQuoteV3
+  totals: QuoteV3TotalsSummary
+  readOnly: boolean
+  /** Why the inputs are disabled — a sent or approved quote is locked, which looks broken unsaid. */
+  lockedNote?: string | null
+  onChange: (patch: Partial<DrywallQuoteV3>) => void
+}) {
+  return (
+    <div id={PRICING_ANCHOR_ID} className="scroll-mt-4 rounded-lg border border-l-4 border-l-primary bg-card shadow-sm">
+      <div className="px-4 py-2.5 text-sm font-semibold">Pricing</div>
+      {lockedNote ? (
+        <p className="border-t border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+          {lockedNote}
+        </p>
+      ) : null}
+      <div className="grid gap-6 border-t px-4 py-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div className="space-y-5 lg:border-r lg:pr-6">
+          <Group title="Labor rates ($/sqft)">
+            <RateField id="project-hanger-rate" label="Hanger" value={Number(quote.project_hanger_rate ?? 0)} readOnly={readOnly} prefix="$" onChange={(project_hanger_rate) => onChange({ project_hanger_rate })} />
+            <RateField id="project-finisher-rate" label="Finisher" value={Number(quote.project_finisher_rate ?? 0)} readOnly={readOnly} prefix="$" onChange={(project_finisher_rate) => onChange({ project_finisher_rate })} />
+            <RateField id="prep-clean-rate" label="Cleanup" value={Number(quote.prep_clean_rate ?? 0)} readOnly={readOnly} prefix="$" usual={USUAL.prep_clean_rate} onChange={(prep_clean_rate) => onChange({ prep_clean_rate })} />
+          </Group>
+          <Group title="Markup">
+            <RateField id="oh-pct" label="Overhead" value={Number(quote.overhead_pct ?? 0)} readOnly={readOnly} suffix="%" usual={USUAL.overhead_pct} onChange={(overhead_pct) => onChange({ overhead_pct })} />
+            <RateField id="profit-pct" label="Profit" value={Number(quote.profit_pct ?? 0)} readOnly={readOnly} suffix="%" usual={USUAL.profit_pct} onChange={(profit_pct) => onChange({ profit_pct })} />
+          </Group>
+          <Group title="Tax">
+            <RateField id="tax-pct" label="Sales tax" value={Number(quote.sales_tax_pct ?? 0)} readOnly={readOnly} suffix="%" onChange={(sales_tax_pct) => onChange({ sales_tax_pct })} />
+          </Group>
+        </div>
+        <CostBreakdown quote={quote} totals={totals} />
+      </div>
+    </div>
   )
 }
 
