@@ -8,6 +8,46 @@ Full per-domain reports (with every finding, table, and line ref) are in `docs/a
 
 ---
 
+## Open work — as of 2026-10-15
+
+The working to-do list after v1.0. Update this section as items close; the history below stays as it is.
+
+### To design with Mark, then build
+
+| Item | Notes |
+|---|---|
+| **Create the QuickBooks project when a job is created** _(new 2026-10-15)_ | The QB connection already has write scope (`qb-create-check` writes). Creating the QB side at birth replaces name matching (`qbProjectMatch`) with a stored id. Check first: the standard API makes a **sub-customer** under the client; a true QBO "Project" may need Intuit's separate Projects API. The client must exist as a QB customer (find or create). |
+| **Billing from the app via QuickBooks** | Raised again 2026-10-15. Design forks already written 2026-08-03 in `docs/history/VERSION_1_5_ROADMAP.md` (P2, "Drywall billing"): lump sum vs draws (likely draws; `ProjectedBillingsSection` already forecasts them), customer mapping, item/account mapping, QB `SendInvoice` vs app email, storing the invoice id against double-billing, a billing permission. Also ask: retainage on GC customers. Start with a QB **draft** Mark reviews. |
+| **Job documents — stop hand-saving to Google Drive** | Raised again 2026-10-15: prints, emailed quotes, POs. **Decided 2026-08-03 (roadmap P2, "Per-project job documents"): hybrid** — heavy print sets stay in Drive and the job stores the link; the app holds the light files (quote PDF, scope doc, POs) in `project_documents`. Today's additions: file the quote PDF automatically each time it is marked sent (per revision), email the quote from the app, file PO-intake POs. Watch storage egress (July 2026 overrun). Re-confirm the hybrid split with Mark before building. |
+| **Ceiling height per area for estimating** | Tape and mud are a flat $/sqft and drift with wall height. Add a height to each measured area and quote space; first question is how height changes price (a multiplier above a height, or bands). See memory note "Drywall Estimating Detail". |
+| **KPI Hub and project Overview card sections** | Mark wants to revisit the look and what each card shows. |
+| **Crew "Request more"** _(tabled 2026-10-15)_ | A field shortage becomes a takeoff change and an add-on order in one step. Three questions open: who starts it (crew or office), whether the extra changes the takeoff or only the order, where it is bought. |
+
+### Mark to do or check
+
+- Delete the unused edge function: `npx supabase functions delete qb-suggest-allocation` (no logs, no caller — confirmed 2026-10-15).
+- Contact Directory → Site Contacts: Michael Cerimele was typed with two numbers (440-310-2257 kept, 440-610-2257 in notes). 6813 Wakefield Rd has a number (330-614-1127) with no name, so it was left out.
+- Before ordering on MC Townhouse 106, Cleveland – Adamson and Page and Chagrin Falls – Campbell: open Field and press Recalculate. Their compound was sized at the default rate instead of Level 4 Smooth (fixed in `5774d20`).
+- Nicodemus Rd and Limeridge Rd: send the quotes; Mark Approved when the customer accepts; then Move to Order.
+
+### Watch — confirm the first time it happens
+
+- The first job taken through the four Field steps produces exactly one order.
+- The first Firetape Only payroll row fills in (Goodwill 5,384 sqft at $0.10; Poland 3,379 sqft at $0.57).
+
+### Held or later — decided, not forgotten
+
+- Production close-out sweep — jobs may still have work (Mark, 2026-10-15).
+- Payroll "extra" line — skipped for now.
+- Retire the v2 quote editor — held until the 91 sent/approved v2 quotes age out (§7).
+- Phased / multi-round takeoffs.
+- Customer texting (A2P 10DLC campaign) — not now.
+- P1-QA-2 migration baseline (needs Docker).
+- Trim the remaining full-metadata readers — polish, not urgent since the July cleanup.
+- The rest of the §7 structural list.
+
+---
+
 ## v1.0 — tagged 2026-09-30
 
 **This document is now the changelog anchor.** The batch records below are the history; this is the line under them.
