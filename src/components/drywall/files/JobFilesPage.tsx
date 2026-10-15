@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
-import { Camera, ImageOff, RefreshCw } from 'lucide-react'
+import { Camera, Copy, ImageOff, Mail, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ProjectDocuments } from '@/components/ProjectDocuments'
 import { cn } from '@/lib/utils'
+import { jobEmailAddress } from '@/lib/drywall/jobEmailAddress'
 import {
   getSignedPhotoUrl,
   listJobPhotos,
@@ -14,6 +15,43 @@ import {
 } from '@/services/drywallPhotosService'
 
 type ShellContext = { projectId: string; projectName?: string }
+
+/**
+ * Forward an email here and its attachments land in this job's documents (receive-job-email).
+ * Mark, 2026-10-15: prints come by email; downloading and re-uploading them was the step to cut.
+ */
+function JobEmailAddressCard({ projectId, projectName }: { projectId: string; projectName?: string }) {
+  const address = jobEmailAddress(projectId, projectName ?? '')
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(address)
+      toast.success('Address copied — forward the email to it')
+    } catch {
+      toast.error('Could not copy — select the address and copy it')
+    }
+  }
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-0.5">
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <Mail className="h-4 w-4 text-muted-foreground" />
+            Forward files to this job
+          </p>
+          <p className="truncate font-mono text-sm select-all">{address}</p>
+          <p className="text-xs text-muted-foreground">
+            Attachments are filed below — PDFs as Plans, so crew see them. Forward from your office
+            email; links (Dropbox, Drive) are not picked up yet.
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => void copy()}>
+          <Copy className="mr-2 h-4 w-4" />
+          Copy address
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
 
 function formatWhen(at?: string): string {
   if (!at) return 'Date unknown'
@@ -209,6 +247,7 @@ export function JobFilesPage() {
         </CardContent>
       </Card>
 
+      <JobEmailAddressCard projectId={projectId} projectName={projectName} />
       <ProjectDocuments projectId={projectId} projectName={projectName} variant="drywall" />
     </div>
   )
