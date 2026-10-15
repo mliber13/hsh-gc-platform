@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { format } from 'date-fns'
+import { heightBand, quoteAreasForField } from '@/lib/drywall/ceilingHeights'
 import { supabase, isOnlineMode } from '@/lib/supabase'
 import { DRYWALL_QUOTE_BASE_DEFAULTS } from '@/lib/drywall/drywallQuoteDefaults'
 import {
@@ -1127,6 +1128,28 @@ async function resolveLaborRates(
   }
 }
 
+/**
+ * The job's areas and ceiling heights for the crew card. The measurer's heights win — they
+ * are what is on site; a job not yet measured shows the quote's takeoff areas instead.
+ */
+export function resolveCeilingHeights(
+  legacy: Record<string, unknown>,
+  field: FieldTakeoff | null,
+): CrewProjectDetail['ceilingHeights'] {
+  const measured = (field?.measurements ?? [])
+    .filter((a) => typeof a.heightFt === 'number' && a.heightFt > 0)
+    .map((a) => ({ area: a.area?.trim() || 'Area', heightFt: a.heightFt!, source: 'measured' as const }))
+  const v3 = v3QuoteFromLegacy(legacy)
+  const rows = measured.length
+    ? measured
+    : v3
+      ? quoteAreasForField(v3)
+          .filter((a) => a.heightFt)
+          .map((a) => ({ area: a.name, heightFt: a.heightFt!, source: 'quoted' as const }))
+      : []
+  return rows.map((r) => ({ ...r, tall: heightBand(r.heightFt) !== null }))
+}
+
 function resolveFieldNotes(field: FieldTakeoff | null): CrewProjectDetail['fieldNotes'] {
   return {
     siteContact: field?.siteContact?.trim() || null,
@@ -1535,6 +1558,7 @@ async function mapProjectDetail(
             preview: context.preview,
           })
         : { hanger: null, finisher: null },
+    ceilingHeights: resolveCeilingHeights(legacy, field),
     fieldNotes: resolveFieldNotes(field),
     scheduleEntries: scheduleRows.map(mapScheduleEntry),
     intakeSource,

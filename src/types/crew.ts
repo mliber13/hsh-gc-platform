@@ -178,6 +178,15 @@ export interface CrewMeasurePageContext {
   structuredScope: CrewStructuredScope | null
 }
 
+export interface CrewCeilingHeight {
+  area: string
+  heightFt: number
+  /** 10' and up — see ceilingHeights.ts. */
+  tall: boolean
+  /** Where it came from: the measurer on site, or the quote's takeoff. */
+  source: 'measured' | 'quoted'
+}
+
 export interface CrewProjectDetail {
   projectId: string
   projectName: string
@@ -227,6 +236,12 @@ export interface CrewProjectDetail {
     hanger: number | null
     finisher: number | null
   }
+  /**
+   * Each area of the job and its ceiling height (2026-10-15), so the crew know what to expect
+   * on arrival — tall rooms flagged. From the field measurement when it has heights, else from
+   * the quote's areas. Empty when neither carries a height.
+   */
+  ceilingHeights: CrewCeilingHeight[]
   fieldNotes: {
     siteContact: string | null
     contactPhone: string | null

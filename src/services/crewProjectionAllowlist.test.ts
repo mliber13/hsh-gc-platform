@@ -32,6 +32,8 @@ const CREW_PATH_FILES = [
   'src/services/crewWorkspaceService.ts',
   'src/lib/drywall/structuredScopePdf.ts',
   'src/lib/drywall/crewPayBasis.ts',
+  // quoteAreasForField reads quote.lineItems and quote.default_height_ft for the crew card.
+  'src/lib/drywall/ceilingHeights.ts',
 ]
 
 /** Receivers in those files that hold a projected quote. */
