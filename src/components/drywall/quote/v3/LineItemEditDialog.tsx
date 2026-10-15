@@ -23,6 +23,8 @@ import { Label } from '@/components/ui/label'
 import type { QuoteLineItem } from '@/types/drywall'
 import type { OrgDrywallCatalogs } from '@/types/drywallCatalogs'
 import { V3_LINE_MIGRATION_OVERRIDE_REASON } from '@/lib/drywall/convertQuoteV2ToV3'
+import { ITEMIZABLE_LINE_TYPES } from '@/lib/drywall/quoteV3CatalogResolve'
+import { ComponentPricingModeField } from './ComponentPricingModeField'
 import { calcAcousticCeilingGridCounts } from '@/lib/drywall/calculations/acousticCeilingGridCalc'
 import {
   getCatalogDefaultFinisherRate,
@@ -494,6 +496,9 @@ export function LineItemEditDialog({
             </>
           )}
 
+          {ITEMIZABLE_LINE_TYPES.has(draft.type) ? (
+            <ComponentPricingModeField line={draft} catalogs={catalogs} readOnly={readOnly} onPatch={patch} />
+          ) : (
           <div className="space-y-1.5">
 
             <Label htmlFor="custom-mat">Custom material rate (optional)</Label>
@@ -535,6 +540,7 @@ export function LineItemEditDialog({
             ) : null}
 
           </div>
+          )}
 
           {draft.type === 'drywall' && (
 

@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 import {
+  ITEMIZABLE_LINE_TYPES,
+  componentPricingMode,
 
   getCatalogDefaultComponentLaborRate,
 
@@ -99,6 +101,33 @@ export function MaterialRateCell({
   onPatch,
 
 }: MaterialRateCellProps) {
+
+  // Grid / acoustic / metal stud: the pricing mode is chosen in the line's edit dialog, not by
+  // typing here (P1-MONEY-5). Itemised lines have no single rate to edit; one-rate lines keep it.
+  if (ITEMIZABLE_LINE_TYPES.has(line.type)) {
+    if (componentPricingMode(line) === 'itemized') {
+      return (
+        <span
+          className={cn('text-xs text-muted-foreground', compact && 'text-[11px]')}
+          title="Priced from catalog components — switch to one rate in the line's edit dialog"
+        >
+          Itemized
+        </span>
+      )
+    }
+    const flat = line.custom_material_rate ?? 0
+    if (readOnly) return <span className="tabular-nums" title="One rate per unit">${flat.toFixed(2)}</span>
+    return (
+      <RateInput
+        value={formatRateInput(flat)}
+        compact={compact}
+        isOverridden={false}
+        catalogUnset={false}
+        unitSuffix={materialRateUnitSuffix(line, catalogs)}
+        onChange={(raw) => onPatch({ pricing_mode: 'flat_rate', custom_material_rate: parseRateInput(raw) ?? 0 })}
+      />
+    )
+  }
 
   const enabled = isMaterialRateEnabled(line)
 

@@ -112,7 +112,7 @@ export function AcousticPivotSection({
       {lines.some(isBlendedComponentLine) && (
         <p className="border-b bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
           Some ceilings carry a flat material rate, so they are priced as a lump sum and their
-          tile and grid counts below read 0. Clear the material rate to price from the itemised takeoff instead.
+          tile and grid counts below read 0. To price one from the itemised takeoff, open the line and choose "Itemized from catalog".
         </p>
       )}
 

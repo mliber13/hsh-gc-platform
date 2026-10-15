@@ -103,8 +103,8 @@ export function MetalStudPivotSection({
       {anyBlended && (
         <p className="border-b bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
           Some runs carry a flat material $/LF, so they are priced as a lump sum and their stud and
-          track counts below read 0. Clear the material rate on a run to price it from the itemised
-          takeoff instead.
+          track counts below read 0. To price a run from the itemised takeoff, open it and choose
+          "Itemized from catalog".
         </p>
       )}
 

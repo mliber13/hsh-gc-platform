@@ -174,6 +174,26 @@ export function getCatalogDefaultComponentLaborRate(
   }
 }
 
+/** Line types the engine can price either from catalog components or as one rate per unit. */
+export const ITEMIZABLE_LINE_TYPES: ReadonlySet<string> = new Set(['suspended_grid', 'acoustic', 'metal_stud'])
+
+/**
+ * How a grid / acoustic / metal-stud line is priced (P1-MONEY-5, decided Mark 2026-10-15): an
+ * explicit choice on the line. Typing a material rate used to switch a line to one blended rate
+ * as a side effect, and the itemised breakdown vanished; now the mode is chosen in the line's
+ * edit dialog. Lines saved before the setting existed read exactly as the engine priced them —
+ * a typed rate is one rate, none is itemised — so no price moves.
+ */
+export function componentPricingMode(line: QuoteLineItem): 'itemized' | 'flat_rate' {
+  if (line.pricing_mode === 'itemized' || line.pricing_mode === 'flat_rate') return line.pricing_mode
+  return line.custom_material_rate != null ? 'flat_rate' : 'itemized'
+}
+
+/** The engine's question: does this itemisable line price as qty × one rate? */
+export function usesFlatMaterialRate(line: QuoteLineItem): boolean {
+  return ITEMIZABLE_LINE_TYPES.has(line.type) && componentPricingMode(line) === 'flat_rate'
+}
+
 /**
  * True when a component line is priced as one blended rate rather than from its
  * itemised takeoff.
@@ -187,6 +207,7 @@ export function getCatalogDefaultComponentLaborRate(
  */
 export function isBlendedComponentLine(line: QuoteLineItem): boolean {
   if (line.type === 'drywall') return false
+  if (ITEMIZABLE_LINE_TYPES.has(line.type)) return componentPricingMode(line) === 'flat_rate'
   return line.custom_material_rate != null
 }
 

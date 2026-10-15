@@ -309,6 +309,9 @@ function hydrateLineItem(raw: QuoteLineItem): QuoteLineItem {
     finish_scope_id: raw.finish_scope_id,
     custom_material_rate:
       raw.custom_material_rate != null ? num(raw.custom_material_rate) : undefined,
+    ...(raw.pricing_mode === 'itemized' || raw.pricing_mode === 'flat_rate'
+      ? { pricing_mode: raw.pricing_mode }
+      : {}),
     custom_hanger_rate:
       raw.custom_hanger_rate != null ? num(raw.custom_hanger_rate) : undefined,
     custom_finisher_rate:

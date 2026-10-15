@@ -9,6 +9,7 @@ import { calcAcousticCeilingGridCounts } from '@/lib/drywall/calculations/acoust
 import {
   getEffectiveComponentLaborRate,
   getEffectiveFinisherRate,
+  usesFlatMaterialRate,
   getEffectiveHangerRate,
   getLineCatalogLabel,
   getLineMaterialRate,
@@ -314,9 +315,9 @@ export function computeLineItem(
     const lags = ov.lags ?? Math.ceil(wire / 8)
     const wall_angle = ov.wall_angle ?? Math.ceil(perimeterWasted / 8)
 
-    if (line.custom_material_rate != null) {
-      // Converted/blended line — preserve v2→v3 parity; don't retro-itemize.
-      materialTotal = qty * line.custom_material_rate
+    if (usesFlatMaterialRate(line)) {
+      // One rate per unit — chosen on the line, or a converted v2 line (parity; don't retro-itemize).
+      materialTotal = qty * (line.custom_material_rate ?? 0)
     } else {
       const rate = (ct: SuspendedGridComponentType) =>
         catalogs.suspended_grid.find((e) => e.component_type === ct)?.material_rate ?? 0
@@ -361,9 +362,9 @@ export function computeLineItem(
     const lags = ov.lags ?? counts?.lagsCount ?? 0
     const wall_angle = ov.wall_angle ?? counts?.wallAngleCount ?? 0
 
-    if (line.custom_material_rate != null) {
-      // Converted/blended line — preserve parity; don't retro-itemize.
-      materialTotal = qty * line.custom_material_rate
+    if (usesFlatMaterialRate(line)) {
+      // One rate per unit — chosen on the line, or a converted v2 line (parity; don't retro-itemize).
+      materialTotal = qty * (line.custom_material_rate ?? 0)
     } else {
       const find = (ct: AcousticComponentType) =>
         catalogs.acoustic.find((e) => e.component_type === ct)
@@ -410,10 +411,10 @@ export function computeLineItem(
         ? line.custom_labor_rate
         : getMetalStudLaborRate(catalogs, size, gauge)
 
-    if (line.custom_material_rate != null) {
-      // Converted/blended v2 line (quantity = total wall LF, rate = blended $/LF).
-      // Preserve v2→v3 parity — don't retro-itemize into stud/track pieces.
-      materialTotal = qty * line.custom_material_rate
+    if (usesFlatMaterialRate(line)) {
+      // One rate per wall LF — chosen on the line, or a converted v2 line (quantity = total wall
+      // LF, rate = blended $/LF). Preserve parity — don't retro-itemize into stud/track pieces.
+      materialTotal = qty * (line.custom_material_rate ?? 0)
       laborTotal = applyLaborBurden(
         qty * wasteMult * laborRate,
         laborBurden?.componentIncludeLaborBurden ?? true,

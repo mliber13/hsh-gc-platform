@@ -519,6 +519,11 @@ export interface QuoteLineItem {
   catalog_id: string
   finish_scope_id?: string
   custom_material_rate?: number
+  /**
+   * Grid / acoustic / metal-stud only: price from the catalog components, or one rate per unit.
+   * Absent on lines saved before 2026-10-15 — read from custom_material_rate (componentPricingMode).
+   */
+  pricing_mode?: 'itemized' | 'flat_rate'
   /** Finisher pay override ($/sqft); default from finish scope catalog. */
   custom_finisher_rate?: number
   /** Hanger pay override ($/sqft); default from board catalog. */
