@@ -1,6 +1,6 @@
 import { useMemo, useState, Fragment, type ReactNode } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
-import { heightBand } from '@/lib/drywall/ceilingHeights'
+import { heightBand, parseHeightFt } from '@/lib/drywall/ceilingHeights'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -276,7 +276,7 @@ function TypeSectionTable({
   const hideComponent = type === 'suspended_grid'
   // Drywall = 14 cols (incl. its own Hang rate + Finish rate); components drop Description
   // and those two (11); grid also drops Component + Mat rate (9).
-  const colSpan = isDrywall ? 14 : 11 - (hideMatRate ? 1 : 0) - (hideComponent ? 1 : 0)
+  const colSpan = isDrywall ? 15 : 11 - (hideMatRate ? 1 : 0) - (hideComponent ? 1 : 0)
   const matRateHeader = materialRateHeaderForType(type)
   const laborRateHeader = componentLaborRateHeaderForType(type)
   const theme = TRADE_SECTION_THEMES[type]
@@ -305,13 +305,15 @@ function TypeSectionTable({
       </div>
       <table
         className={`w-full table-fixed text-sm ${compact ? 'text-xs' : ''}`}
-        style={{ minWidth: isDrywall ? 1210 : hideComponent ? 1080 : 1170 }}
+        style={{ minWidth: isDrywall ? 1270 : hideComponent ? 1080 : 1170 }}
       >
         <colgroup>
           {/* Location holds scope names the operator types — "Tennis Building", "Finished
               Basement" — which clipped at 110. The 20px comes off the drywall Board select,
               which truncates gracefully and keeps the full name in its title. */}
           <col style={{ width: isDrywall ? 130 : 110 }} />
+          {/* Ceiling height (ceilingHeights.ts) — its own column so tall lines read down the table. */}
+          {isDrywall && <col style={{ width: 64 }} />}
           {/* Catalog/Component: drywall boards need room; short for RC; hidden for grid (itemized). */}
           {!hideComponent && <col style={{ width: isDrywall ? 128 : 100 }} />}
           {!hideMatRate && <col style={{ width: 82 }} />}
@@ -350,6 +352,11 @@ function TypeSectionTable({
             >
               Location
             </th>
+            {isDrywall && (
+              <th className="px-1.5 py-2 font-medium" title="Ceiling height of the space, in feet — 10' and up is tall. Blank uses the job's height.">
+                Height
+              </th>
+            )}
             {!hideComponent && <th className="px-1.5 py-2 font-medium">{catalogLabel}</th>}
             {!hideMatRate && (
               <th className="px-1.5 py-2 font-medium" title={matRateHeader}>
@@ -523,19 +530,44 @@ function LineRow({
           compact={compact}
           onChange={(location) => patch({ location })}
         />
-        {/* The line's ceiling height, set in its edit dialog or by a takeoff import. */}
-        {line.type === 'drywall' && line.height_ft ? (
-          <span
-            className={cn(
-              'mt-0.5 block text-[11px] tabular-nums',
-              heightBand(line.height_ft) ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
-            )}
-            title="Ceiling height — edit it in the line's details"
-          >
-            {line.height_ft}' ceiling
-          </span>
-        ) : null}
       </td>
+      {line.type === 'drywall' && (
+        <td className="px-1.5 py-1">
+          {/* A takeoff import fills this from the wall label; blank uses the job's height. */}
+          {readOnly ? (
+            <span
+              className={cn(
+                'tabular-nums',
+                heightBand(line.height_ft) ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
+              )}
+            >
+              {line.height_ft ? `${line.height_ft}'` : '—'}
+            </span>
+          ) : (
+            <div className="relative">
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.5}
+                aria-label="Ceiling height in feet"
+                placeholder="—"
+                className={cn(
+                  'flex h-7 w-full rounded-md border bg-background pl-1.5 pr-3.5 text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
+                  heightBand(line.height_ft)
+                    ? 'border-amber-500/60 bg-amber-500/10 font-semibold text-amber-800 dark:text-amber-200'
+                    : 'border-input',
+                )}
+                value={line.height_ft ?? ''}
+                onChange={(e) => patch({ height_ft: parseHeightFt(e.target.value) })}
+              />
+              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
+                '
+              </span>
+            </div>
+          )}
+        </td>
+      )}
       {line.type !== 'suspended_grid' && (
         <td className="px-1.5 py-1">
           {readOnly ? (
