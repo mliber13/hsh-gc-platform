@@ -59,6 +59,11 @@ interface QuoteOutcomeBarProps {
   loadedAt: string
   onLoadedAtChange: (next: string) => void
   onOutcomeChange: () => void | Promise<void>
+  /**
+   * After a successful Mark Sent, on either path — the v3 page files the sent PDF on the job.
+   * Runs after the outcome is saved and reports its own result; a failure here never un-sends.
+   */
+  onSent?: () => void | Promise<void>
 }
 
 function formatOutcomeDate(iso: string | undefined): string {
@@ -141,6 +146,7 @@ export function QuoteOutcomeBar({
   loadedAt,
   onLoadedAtChange,
   onOutcomeChange,
+  onSent,
 }: QuoteOutcomeBarProps) {
   const { effectiveRole } = usePermissions()
   const canWrite = canWriteDrywallProject(effectiveRole)
@@ -195,7 +201,10 @@ export function QuoteOutcomeBar({
   const money = (n: number | null | undefined) =>
     n != null && Number.isFinite(n) ? formatQuoteMoney(n) : '—'
 
-  const runAction = async (fn: (at: string) => Promise<string>) => {
+  const runAction = async (
+    fn: (at: string) => Promise<string>,
+    afterSuccess?: () => void | Promise<void>,
+  ) => {
     setBusy(true)
     try {
       const next = await fn(loadedAt)
@@ -208,6 +217,7 @@ export function QuoteOutcomeBar({
       setEffectiveDate('')
       setMarginEval(null)
       toast.success('Quote outcome updated')
+      void afterSuccess?.()
     } catch (e: unknown) {
       if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
         toast.error(e.message)
@@ -269,6 +279,7 @@ export function QuoteOutcomeBar({
       setEffectiveDate('')
       setMarginEval(null)
       toast.success('Quote marked sent (below floor approval recorded)')
+      void onSent?.()
     } catch (e: unknown) {
       if (e instanceof DrywallProjectPermissionError || e instanceof DrywallProjectStaleError) {
         toast.error(e.message)
@@ -419,8 +430,9 @@ export function QuoteOutcomeBar({
             <Button
               type="button"
               onClick={() =>
-                void runAction((at) =>
-                  markQuoteSent(projectId, at, effectiveDateToIso(effectiveDate)),
+                void runAction(
+                  (at) => markQuoteSent(projectId, at, effectiveDateToIso(effectiveDate)),
+                  onSent,
                 )
               }
               disabled={busy}

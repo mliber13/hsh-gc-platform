@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { formatCurrency } from '@/components/hr/payroll/payrollFormat'
 import { DEFAULT_PO_SCOPE_TEXT } from '@/lib/drywall/poBidSnapshot'
+import { attachCustomerPo } from '@/services/jobDocumentsService'
 import {
   createDrywallProjectFromPo,
   DrywallProjectPermissionError,
@@ -108,11 +109,14 @@ export function PoIntakeDialog({
 }: PoIntakeDialogProps) {
   const [form, setForm] = useState<PoIntakeFormValues>(() => formFromInitial(initialValues))
   const [busy, setBusy] = useState(false)
+  /** The customer's PO file, filed on the new job (Photos & Files) — create only. */
+  const [poFile, setPoFile] = useState<File | null>(null)
   const nameTouchedRef = useRef(false)
 
   useEffect(() => {
     if (!open) return
     setForm(formFromInitial(initialValues))
+    setPoFile(null)
     nameTouchedRef.current = Boolean(initialValues?.name?.trim())
   }, [open, initialValues])
 
@@ -154,7 +158,19 @@ export function PoIntakeDialog({
         await onUpdated?.()
       } else {
         const id = await createDrywallProjectFromPo(input)
-        toast.success('Project created from PO')
+        // The job exists from here on; a failed attachment is reported, never undone.
+        if (poFile) {
+          try {
+            await attachCustomerPo(id, poFile, input.poData.poReference)
+            toast.success('Project created from PO — PO file saved to Photos & Files')
+          } catch (attachErr: unknown) {
+            toast.warning(
+              `Project created, but the PO file was not saved${attachErr instanceof Error ? ` (${attachErr.message})` : ''}. Add it from Photos & Files.`,
+            )
+          }
+        } else {
+          toast.success('Project created from PO')
+        }
         onOpenChange(false)
         onCreated?.(id)
       }
@@ -256,6 +272,20 @@ export function PoIntakeDialog({
                 onChange={(e) => setField('agreedUnitRate', e.target.value)}
               />
             </div>
+            {mode === 'create' && (
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="po-file">Attach the PO (optional)</Label>
+                <Input
+                  id="po-file"
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                  onChange={(e) => setPoFile(e.target.files?.[0] ?? null)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Saved on the job under Photos &amp; Files. The office sees it; crew do not.
+                </p>
+              </div>
+            )}
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="po-scope">Scope Text</Label>
               <Textarea

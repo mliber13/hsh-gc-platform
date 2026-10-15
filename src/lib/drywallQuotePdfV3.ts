@@ -61,7 +61,8 @@ export interface QuoteV3PdfInput {
   }
 }
 
-const DEFAULT_COMPANY = {
+/** The company block on a quote PDF — the download and the copy filed on Mark Sent share it. */
+export const DEFAULT_COMPANY = {
   name: 'HSH Drywall',
   address: 'PO Box 102 Lisbon, OH 44432',
   phone: '330-614-1127',

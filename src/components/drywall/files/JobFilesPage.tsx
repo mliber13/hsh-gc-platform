@@ -209,7 +209,7 @@ export function JobFilesPage() {
         </CardContent>
       </Card>
 
-      <ProjectDocuments projectId={projectId} projectName={projectName} />
+      <ProjectDocuments projectId={projectId} projectName={projectName} variant="drywall" />
     </div>
   )
 }

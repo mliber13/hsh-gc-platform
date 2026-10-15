@@ -23,7 +23,8 @@ import { QuoteOutcomeBar, isQuoteOutcomeLocked } from '@/components/drywall/quot
 import { computeQuoteEstimatedCost } from '@/lib/drywall/marginFloor'
 import { usePermissions } from '@/hooks/usePermissions'
 import { canWriteDrywallProject } from '@/routes/RequirePermission'
-import { downloadDrywallQuoteV3Pdf } from '@/lib/drywallQuotePdfV3'
+import { DEFAULT_COMPANY, downloadDrywallQuoteV3Pdf } from '@/lib/drywallQuotePdfV3'
+import { fileSentQuotePdf } from '@/services/jobDocumentsService'
 import { computeQuoteV3Totals } from '@/lib/drywall/quoteV3Math'
 import {
   DrywallProjectPermissionError,
@@ -116,6 +117,19 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
 
   const outcomeLocked = isQuoteOutcomeLocked(quoteOutcome)
   const readOnly = viewerReadOnly || outcomeLocked
+
+  // File the PDF that went out on the job (Photos & Files), one per send — so a sent quote is
+  // never downloaded and saved to Google Drive by hand (Mark, 2026-10-15).
+  const handleQuoteSent = useCallback(async () => {
+    try {
+      const name = await fileSentQuotePdf(projectId)
+      toast.success(`Saved to Photos & Files: ${name}`)
+    } catch (e: unknown) {
+      toast.error(
+        `The quote is sent, but its PDF was not saved to the job${e instanceof Error ? ` (${e.message})` : ''}. Download it from this page instead.`,
+      )
+    }
+  }, [projectId])
 
   const handleOutcomeChange = useCallback(async () => {
     const p = await fetchDrywallProjectById(projectId)
@@ -280,12 +294,7 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
         },
         quote,
         catalogs,
-        company: {
-          name: 'HSH Drywall',
-          address: 'PO Box 102 Lisbon, OH 44432',
-          phone: '330-614-1127',
-          email: 'mark@hshdrywall.com',
-        },
+        company: DEFAULT_COMPANY,
       })
       toast.success('PDF downloaded')
     } catch (e: unknown) {
@@ -355,6 +364,7 @@ export function QuoteStageV3({ onRevertToV2 }: QuoteStageV3Props) {
         loadedAt={project.updatedAtRaw}
         onLoadedAtChange={advanceLoadedAt}
         onOutcomeChange={handleOutcomeChange}
+        onSent={handleQuoteSent}
       />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

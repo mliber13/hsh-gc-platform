@@ -37,12 +37,24 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { usePageTitle } from '@/contexts/PageTitleContext'
+import { guessDrywallDocumentType } from '@/lib/drywall/jobDocuments'
 
 interface ProjectDocumentsProps {
   projectId: string
   /** When provided, renders full-page dashboard-style layout with header and back */
   onBack?: () => void
   projectName?: string
+  /**
+   * Drywall jobs embed this on Photos & Files: a PDF defaults to Plan (crew can open it) unless
+   * its name says quote / PO / invoice, and a note says who sees what.
+   */
+  variant?: 'gc' | 'drywall'
+}
+
+/** Only the full-page view owns the page title — embedded, it would rename the drywall job's tab. */
+function DocumentsPageTitle() {
+  usePageTitle('Documents')
+  return null
 }
 
 const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
@@ -59,11 +71,12 @@ const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   photo: 'Photo',
   'subcontractor-agreement': 'Subcontractor Agreement',
   'scope-of-work-signoff': 'Scope of Work Sign-off',
+  quote: 'Quote',
+  'purchase-order': 'Purchase Order',
   other: 'Other',
 }
 
-export function ProjectDocuments({ projectId, onBack, projectName }: ProjectDocumentsProps) {
-  usePageTitle('Documents')
+export function ProjectDocuments({ projectId, onBack, projectName, variant = 'gc' }: ProjectDocumentsProps) {
   const [documents, setDocuments] = useState<ProjectDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -98,6 +111,11 @@ export function ProjectDocuments({ projectId, onBack, projectName }: ProjectDocu
     const file = e.target.files?.[0]
     if (file) {
       setSelectedFile(file)
+      if (variant === 'drywall' && documentType === 'other') {
+        const guess = guessDrywallDocumentType(file.name, file.type)
+        if (guess) setDocumentType(guess)
+        return
+      }
       // Auto-set document type based on filename if not already set
       if (documentType === 'other') {
         const name = file.name.toLowerCase()
@@ -237,6 +255,7 @@ export function ProjectDocuments({ projectId, onBack, projectName }: ProjectDocu
 
   const content = (
     <>
+      {onBack ? <DocumentsPageTitle /> : null}
       <div className="flex items-center justify-between">
         {onBack ? (
           <button
@@ -252,7 +271,15 @@ export function ProjectDocuments({ projectId, onBack, projectName }: ProjectDocu
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-semibold whitespace-nowrap">Project Documents</h2>
+        <div>
+          <h2 className="text-lg font-semibold whitespace-nowrap">Project Documents</h2>
+          {variant === 'drywall' ? (
+            <p className="text-xs text-muted-foreground">
+              Crew see Plans and Specifications on their job screen; everything else stays
+              office-only. Sent quotes are saved here automatically.
+            </p>
+          ) : null}
+        </div>
         <Button
           onClick={() => setShowUploadForm(!showUploadForm)}
           className="flex items-center justify-center gap-2 w-auto"

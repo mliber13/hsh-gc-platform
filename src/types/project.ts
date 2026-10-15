@@ -699,6 +699,8 @@ export type DocumentType =
   | 'photo'
   | 'subcontractor-agreement'
   | 'scope-of-work-signoff'
+  | 'quote'
+  | 'purchase-order'
   | 'other'
 
 export interface ProjectDocument {
