@@ -33,13 +33,13 @@ import {
   shouldShowLength,
   shouldShowThreadType,
 } from '@/lib/drywall/fieldAccessoryUi'
-import type { DrywallQuote, FieldAccessoryEntry, FieldTakeoff } from '@/types/drywall'
+import type { DrywallQuoteV2V3, FieldAccessoryEntry, FieldTakeoff } from '@/types/drywall'
 import type { SetFieldTakeoff } from '../fieldTakeoffState'
 
 interface Props {
   takeoff: FieldTakeoff
   measuredSqft: number
-  quote: DrywallQuote | null
+  quote: DrywallQuoteV2V3 | null
   readOnly: boolean
   onChange: SetFieldTakeoff
   /** Crew measurer V1 — manual entry only; operator keeps auto-calc. */

@@ -1,7 +1,8 @@
 // @ts-nocheck — parity port from FieldMeasurementStage.jsx calculateAccessories + merge
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import { FIRETAPE_COMPOUND_SHARE } from '@/lib/drywall/fireTape'
-import type { DrywallQuote, FieldAccessoryEntry } from '@/types/drywall'
+import { isDrywallQuoteV3 } from '@/types/drywall'
+import type { DrywallQuoteV2V3, FieldAccessoryEntry } from '@/types/drywall'
 
 export interface AccessoryCalcQuoteInput {
   ceilingFinish?: string
@@ -223,8 +224,21 @@ export function mergeAutoAccessories(
   return [...updatedAutoAccessories, ...manualAccessories]
 }
 
-export function quoteInputFromDrywallQuote(quote: DrywallQuote | null | undefined): AccessoryCalcQuoteInput {
+/**
+ * The ceiling finish that sizes the compound. A v3 quote carries its own `ceiling_finish`; the
+ * field page used to hand this the v2 snapshot instead, which is blank on a quote born v3 and
+ * stale on a converted one — so Level 4/5 jobs were sized at the default rate, over twice the
+ * all-purpose compound (fixed 2026-10-15).
+ */
+export function quoteInputFromDrywallQuote(quote: DrywallQuoteV2V3 | null | undefined): AccessoryCalcQuoteInput {
   if (!quote) return {}
+  if (isDrywallQuoteV3(quote)) {
+    const snap = quote.legacyV2Snapshot as { ceilingFinish?: unknown; ceilingFinishOther?: unknown } | undefined
+    return {
+      ceilingFinish: String(quote.ceiling_finish ?? snap?.ceilingFinish ?? ''),
+      ceilingFinishOther: String(quote.ceiling_finish_other ?? snap?.ceilingFinishOther ?? ''),
+    }
+  }
   return {
     ceilingFinish: String(quote.ceilingFinish ?? ''),
     ceilingFinishOther: String(quote.ceilingFinishOther ?? ''),

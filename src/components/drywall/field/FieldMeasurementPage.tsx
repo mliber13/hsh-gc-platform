@@ -30,13 +30,11 @@ import {
   saveFieldTakeoffAndAdvance,
   updateDrywallProjectInfo,
 } from '@/services/drywallProjectsService'
-import { isDrywallQuoteV3, normalizeDrywallProjectStatus } from '@/types/drywall'
-import { v2QuoteFromV3Snapshot } from '@/lib/drywall/convertQuoteV2ToV3'
+import { normalizeDrywallProjectStatus } from '@/types/drywall'
 import type {
   DrywallChangeOrder,
   DrywallOrder,
   DrywallProjectStatus,
-  DrywallQuote,
   DrywallQuoteV2V3,
   FieldTakeoff,
 } from '@/types/drywall'
@@ -146,14 +144,6 @@ export function FieldMeasurementPage() {
   }, [load])
 
   const quoteSqft = useMemo(() => quotedSqftWithWaste(quote), [quote])
-  /** v2-shape projection of the quote for legacy components (FieldAccessoriesSection). */
-  const legacyQuote = useMemo<DrywallQuote | null>(() => {
-    if (!quote) return null
-    if (isDrywallQuoteV3(quote)) {
-      return v2QuoteFromV3Snapshot(quote.legacyV2Snapshot)
-    }
-    return quote
-  }, [quote])
   const measuredSqft = useMemo(
     () => (takeoff ? computeMeasuredSqft(takeoff.measurements) : 0),
     [takeoff],
@@ -487,7 +477,7 @@ export function FieldMeasurementPage() {
         <FieldAccessoriesSection
           takeoff={takeoff}
           measuredSqft={measuredSqft}
-          quote={legacyQuote}
+          quote={quote}
           readOnly={readOnly}
           onChange={setTakeoffField}
         />
