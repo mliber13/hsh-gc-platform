@@ -53,6 +53,11 @@ sqft twice with nothing checking the two agreed, and Mark found it confusing nex
 one area per quote location at its height (`quoteAreasForField`), so the measurer starts with the
 job laid out as quoted.
 
+**Crew see it (2026-10-15):** a Ceiling heights card on the crew job page — each area, its
+height, a "Tall work" banner for 10' and up, and the area's sqft for crew allowed to see job size
+(job info on, not a field foreman). Measured heights win; before measuring, the quote's areas.
+The crew allowlist passes `height_ft` and `default_height_ft` (migration `20261015160000`).
+
 ## Steps
 
 1. **Record heights** — no price changes. **Done 2026-10-15:** line heights (import fills them;
