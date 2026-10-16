@@ -37,12 +37,24 @@ export function isLaborRatesApproved(takeoff: ReviewFields | null | undefined): 
 
 export type FieldStep = 'measure' | 'approve_measurement' | 'approve_rates' | 'order'
 
+/**
+ * Something has been measured: any sqft, or at least one area recorded. A job with no drywall
+ * (Kirtland - Kosem, 2026-10-16: "ceiling patches — no drywall needed") is measured at 0 sqft,
+ * and must still be approvable — 0 sqft is its measurement, not a missing one.
+ */
+export function hasMeasurement(
+  takeoff: { measurements?: unknown[] } | null | undefined,
+  measuredSqft: number,
+): boolean {
+  return measuredSqft > 0 || (takeoff?.measurements?.length ?? 0) > 0
+}
+
 /** The step the job is on — the first one not done. */
 export function currentFieldStep(
-  takeoff: ReviewFields | null | undefined,
+  takeoff: (ReviewFields & { measurements?: unknown[] }) | null | undefined,
   measuredSqft: number,
 ): FieldStep {
-  if (measuredSqft <= 0) return 'measure'
+  if (!hasMeasurement(takeoff, measuredSqft)) return 'measure'
   if (!isMeasurementApproved(takeoff)) return 'approve_measurement'
   if (!isLaborRatesApproved(takeoff)) return 'approve_rates'
   return 'order'

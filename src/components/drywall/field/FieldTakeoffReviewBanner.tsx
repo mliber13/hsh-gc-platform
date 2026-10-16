@@ -12,7 +12,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { isMeasurementApproved } from '@/lib/drywall/fieldReview'
+import { hasMeasurement, isMeasurementApproved } from '@/lib/drywall/fieldReview'
 import type { FieldTakeoff } from '@/types/drywall'
 
 function formatReviewTimestamp(iso: string | null | undefined): string | null {
@@ -91,7 +91,8 @@ export function FieldTakeoffReviewBanner({
   // saving the labor rates stood in for one — so offer the approval here, and read a takeoff
   // whose rates were already saved under the old flow as approved (fieldReview.ts).
   if (status !== 'pending_review' && status !== 'approved' && status !== 'rejected') {
-    if (measuredSqft <= 0) return null
+    // Nothing to approve until something is recorded — an area with no drywall counts.
+    if (!hasMeasurement(takeoff, measuredSqft)) return null
     if (isMeasurementApproved(takeoff)) {
       return (
         <div className="space-y-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-950 dark:text-emerald-100">

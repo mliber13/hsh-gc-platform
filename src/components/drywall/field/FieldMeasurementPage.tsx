@@ -58,6 +58,7 @@ import {
   currentFieldStep,
   isLaborRatesApproved,
   isOrderStepOpen,
+  hasMeasurement,
   recordChangeAfterApproval,
   isMeasurementApproved,
   type FieldStep,
@@ -180,7 +181,10 @@ export function FieldMeasurementPage() {
 
   // Rates before ordering (IA §13): moving to Order now also needs approved rates.
   const canContinue =
-    measuredSqft > 0 && checklistComplete && Boolean(projectAddress?.trim()) && ratesApproved
+    hasMeasurement(takeoff, measuredSqft) &&
+    checklistComplete &&
+    Boolean(projectAddress?.trim()) &&
+    ratesApproved
   // Only a job not yet at Order moves there; a job in production must not be sent back.
   // A job measured before it is quoted stays out of Order until the customer accepts.
   const orderBlocked = projectStatus ? moveToOrderBlockReason(projectStatus, quote?.outcome ?? 'drafted') : null
@@ -443,7 +447,7 @@ export function FieldMeasurementPage() {
           ? (takeoff.changesAfterApproval?.length ?? 0) > 0
             ? `Approved · changed since (${takeoff.changesAfterApproval!.length})`
             : 'Approved'
-          : measuredSqft > 0
+          : hasMeasurement(takeoff, measuredSqft)
             ? 'Not reviewed yet'
             : 'Waiting on measurements'
   const rates = takeoff.reviewApprovedRates as Record<string, unknown> | undefined
@@ -494,7 +498,13 @@ export function FieldMeasurementPage() {
         number={1}
         title="Measure"
         state={stepState('measure')}
-        summary={measuredSqft > 0 ? `${measuredSqft.toLocaleString()} sqft measured` : 'Nothing measured yet'}
+        summary={
+          measuredSqft > 0
+            ? `${measuredSqft.toLocaleString()} sqft measured`
+            : takeoff.measurements.length > 0
+              ? `No drywall — ${takeoff.measurements.length} area${takeoff.measurements.length === 1 ? '' : 's'} recorded`
+              : 'Nothing measured yet'
+        }
         open={isOpen('measure')}
         onToggle={() => toggleStep('measure')}
       >

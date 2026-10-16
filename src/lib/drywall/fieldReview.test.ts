@@ -49,3 +49,19 @@ describe('field review', () => {
     expect(isLaborRatesApproved({ reviewStatus: 'approved', reviewApprovedRates: {} })).toBe(false)
   })
 })
+
+describe('a job with no drywall (Kirtland - Kosem, 2026-10-16)', () => {
+  it('an area recorded at 0 sqft is a measurement, so it can be approved', async () => {
+    const { currentFieldStep, hasMeasurement } = await import('./fieldReview')
+    const noDrywall = { measurements: [{ id: 'p', area: 'Ceiling patches', notes: 'No drywall needed', boards: [] }] }
+    expect(hasMeasurement(noDrywall, 0)).toBe(true)
+    expect(currentFieldStep(noDrywall, 0)).toBe('approve_measurement')
+  })
+
+  it('nothing recorded at all is still waiting on the measure', async () => {
+    const { currentFieldStep, hasMeasurement } = await import('./fieldReview')
+    expect(hasMeasurement({ measurements: [] }, 0)).toBe(false)
+    expect(currentFieldStep({ measurements: [] }, 0)).toBe('measure')
+    expect(currentFieldStep(null, 0)).toBe('measure')
+  })
+})
