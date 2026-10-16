@@ -49,6 +49,30 @@ export function hasMeasurement(
   return measuredSqft > 0 || (takeoff?.measurements?.length ?? 0) > 0
 }
 
+/** Measured, and nothing is drywall: areas recorded at 0 sqft (a patch-only job). */
+export function isNoDrywallMeasurement(
+  takeoff: { measurements?: unknown[] } | null | undefined,
+  measuredSqft: number,
+): boolean {
+  return measuredSqft <= 0 && (takeoff?.measurements?.length ?? 0) > 0
+}
+
+/**
+ * Field step 3 is done: rates approved, or a job with no drywall whose measurement is approved —
+ * there is nothing priced by the sqft to approve, and its work is paid by the hour (Mark,
+ * 2026-10-16, Kirtland - Kosem). Nothing is written: it reads as settled while the job stays at
+ * 0 sqft, and asks for rates again the moment drywall is measured.
+ */
+export function isRatesStepSettled(
+  takeoff: (ReviewFields & { measurements?: unknown[] }) | null | undefined,
+  measuredSqft: number,
+): boolean {
+  return (
+    isLaborRatesApproved(takeoff) ||
+    (isMeasurementApproved(takeoff) && isNoDrywallMeasurement(takeoff, measuredSqft))
+  )
+}
+
 /** The step the job is on — the first one not done. */
 export function currentFieldStep(
   takeoff: (ReviewFields & { measurements?: unknown[] }) | null | undefined,
@@ -56,7 +80,7 @@ export function currentFieldStep(
 ): FieldStep {
   if (!hasMeasurement(takeoff, measuredSqft)) return 'measure'
   if (!isMeasurementApproved(takeoff)) return 'approve_measurement'
-  if (!isLaborRatesApproved(takeoff)) return 'approve_rates'
+  if (!isRatesStepSettled(takeoff, measuredSqft)) return 'approve_rates'
   return 'order'
 }
 

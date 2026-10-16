@@ -56,9 +56,10 @@ import { FieldFlowStep, type FieldFlowStepState } from './FieldFlowStep'
 import { FieldOrdersStep } from './FieldOrdersStep'
 import {
   currentFieldStep,
-  isLaborRatesApproved,
   isOrderStepOpen,
   hasMeasurement,
+  isNoDrywallMeasurement,
+  isRatesStepSettled,
   recordChangeAfterApproval,
   isMeasurementApproved,
   type FieldStep,
@@ -171,7 +172,10 @@ export function FieldMeasurementPage() {
     takeoff?.checklist?.filter((c) => c.completed).length === takeoff?.checklist?.length
 
   const measurementApproved = isMeasurementApproved(takeoff)
-  const ratesApproved = isLaborRatesApproved(takeoff)
+  // Step 3 is settled by approved rates — or, on a job with no drywall, by its approved
+  // measurement alone: nothing there is priced by the sqft (fieldReview.isRatesStepSettled).
+  const noDrywall = isNoDrywallMeasurement(takeoff, measuredSqft)
+  const ratesApproved = isRatesStepSettled(takeoff, measuredSqft)
   // Open once rates are approved, or once the job is past Field (fieldReview.isOrderStepOpen).
   const ordersOpen = isOrderStepOpen(projectStatus, ratesApproved)
   const step = currentFieldStep(takeoff, measuredSqft)
@@ -451,7 +455,9 @@ export function FieldMeasurementPage() {
             ? 'Not reviewed yet'
             : 'Waiting on measurements'
   const rates = takeoff.reviewApprovedRates as Record<string, unknown> | undefined
-  const ratesSummary = ratesApproved
+  const ratesSummary = noDrywall
+    ? 'No drywall — nothing priced by the sqft; pay this work by the hour'
+    : ratesApproved
     ? `Hanger $${Number(rates?.hangerRate ?? 0).toFixed(2)} · finisher $${Number(rates?.finisherRate ?? 0).toFixed(2)} · prep $${Number(rates?.prepCleanRate ?? 0).toFixed(2)} per sqft`
     : measurementApproved
       ? 'Not approved yet'

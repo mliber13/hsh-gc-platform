@@ -200,6 +200,17 @@ export function LaborRateAdjustmentsCard({
   const measuredFromAreas = computeMeasuredSqft(fieldTakeoff.measurements ?? [])
   const fieldSqft = measuredFromAreas > 0 ? measuredFromAreas : fieldTakeoff.totalMeasuredSqft || 0
   if (fieldSqft <= 0) {
+    // Areas recorded at 0 sqft is a job with no drywall (a patch job), not a missing measure.
+    if ((fieldTakeoff.measurements?.length ?? 0) > 0) {
+      return (
+        <Card>
+          <CardContent className="py-6 text-sm text-muted-foreground">
+            No drywall on this job — nothing is priced by the sqft, so there are no labor rates to
+            approve here. Pay this work by the hour, as usual.
+          </CardContent>
+        </Card>
+      )
+    }
     return (
       <Card className="border-amber-500/30 bg-amber-500/5">
         <CardContent className="py-6 text-sm text-amber-800 dark:text-amber-200">

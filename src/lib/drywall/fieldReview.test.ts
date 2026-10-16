@@ -65,3 +65,23 @@ describe('a job with no drywall (Kirtland - Kosem, 2026-10-16)', () => {
     expect(currentFieldStep(null, 0)).toBe('measure')
   })
 })
+
+describe('rates on a job with no drywall', () => {
+  const noDrywall = (review: Record<string, unknown> = {}) => ({
+    measurements: [{ id: 'p', area: 'Ceiling patches', notes: 'No drywall needed', boards: [] }],
+    ...review,
+  })
+
+  it('once its measurement is approved, step 3 is settled — nothing is priced by the sqft', async () => {
+    const { currentFieldStep, isRatesStepSettled } = await import('./fieldReview')
+    const approved = noDrywall({ reviewStatus: 'approved' })
+    expect(isRatesStepSettled(approved, 0)).toBe(true)
+    expect(currentFieldStep(approved, 0)).toBe('order')
+  })
+
+  it('not before the measurement is approved, and not once drywall is measured', async () => {
+    const { isRatesStepSettled } = await import('./fieldReview')
+    expect(isRatesStepSettled(noDrywall(), 0)).toBe(false)
+    expect(isRatesStepSettled(noDrywall({ reviewStatus: 'approved' }), 100)).toBe(false)
+  })
+})
