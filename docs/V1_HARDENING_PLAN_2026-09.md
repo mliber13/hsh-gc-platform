@@ -21,6 +21,7 @@ The working to-do list after v1.0. Update this section as items close; the histo
 | ~~**Job documents — stop hand-saving to Google Drive**~~ **SHIPPED 2026-10-15** | **Decided 2026-10-15, reversing the 2026-08-03 hybrid:** prints live **in the app**, not Drive — most crew have no Drive access, and the egress is small (~4.5 GB/month at 10 jobs × 5 crew × 3 opens × 30 MB, against a 250 GB cap). Shipped: sent quotes file themselves per revision (`09c17f8`); Create from PO takes the PO file; Quote / Purchase Order document types (crew read only Plan / Specification); **forward an email to the job's address** (`<name>-<8 hex>@files.hshdrywall.com`, copy button on Photos & Files) and its attachments are filed (`c605a91`, `307ccc2`; Resend inbound → `receive-job-email`; log in `inbound_email_log`). First real forward: Salem – Hogan, 2 PDFs including a 16.5 MB print set. **Still open:** prints sent as a link (Dropbox / Drive / WeTransfer) are not fetched — the sender gets a reply saying so. Emailing the quote from the app is phase 2. |
 | **Ceiling heights in estimating** _(designed 2026-10-15)_ | Design and decisions in `docs/briefs/CEILING_HEIGHTS.md`: 10' and up is tall; one height covers walls and ceiling; mud & tape factors and one tall-wall labor adder per band, on tall sqft only; whole-house cents stay for non-height difficulty. **Step 1 done** (record heights: Field areas + the quote's Ceiling heights box). Then step 2 (factors, tuned on real jobs), step 3 (labor line). |
 | **KPI Hub and project Overview card sections** | Mark wants to revisit the look and what each card shows. |
+| **Measure, order and pay in phases** _(designed 2026-10-16)_ | Plan in `docs/briefs/FIELD_PHASES.md`: a fresh Field sheet per phase without losing history; orders, approval and labor rates per phase; schedule items naming phase + location ("Finish – Garage"); crew pay by phase/location last, with before/after. Seven steps, each verified on Lisbon Opportunity Homes. Nothing built. |
 | **Crew "Request more"** _(tabled 2026-10-15)_ | A field shortage becomes a takeoff change and an add-on order in one step. Three questions open: who starts it (crew or office), whether the extra changes the takeoff or only the order, where it is bought. |
 
 ### Mark to do or check
@@ -39,7 +40,6 @@ The working to-do list after v1.0. Update this section as items close; the histo
 - Production close-out sweep — jobs may still have work (Mark, 2026-10-15).
 - Payroll "extra" line — skipped for now.
 - Retire the v2 quote editor — held until the 91 sent/approved v2 quotes age out (§7).
-- Phased / multi-round takeoffs.
 - Customer texting (A2P 10DLC campaign) — not now.
 - P1-QA-2 migration baseline (needs Docker).
 - Trim the remaining full-metadata readers — polish, not urgent since the July cleanup.
