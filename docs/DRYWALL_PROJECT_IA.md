@@ -500,7 +500,7 @@ schedule item, the supplier board shows orders across jobs.
 | Pages | Overview · Info · Quote · Schedule · **Field** · Change Orders · Financials · Photos & Files. **Order tab goes.** |
 | Status tags | **Unchanged** — Info / Quote / Field / Order / Prod. *Order* = measured and rates approved, waiting on material. |
 | Field flow | **1 Measure → 2 Approve measurement → 3 Approve labor rates → 4 Material orders** |
-| Gate | **Rates before ordering.** Step 4 opens only after rates are approved. |
+| Gate | **Rates before ordering.** Step 4 opens only after rates are approved — for a job still being set up. A job already past Field (Order, Production, Production complete, Closed) is open regardless (2026-10-16): jobs that went to Order before this flow never recorded approvals, and Lisbon Opportunity Homes was locked out of its third order. `fieldReview.isOrderStepOpen`. |
 | Phased takeoffs (Goodwill) | Out of scope — §10 still holds: wait for 3–4 real cases. |
 
 ### The approval split

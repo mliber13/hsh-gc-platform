@@ -25,7 +25,10 @@ interface FieldOrdersStepProps {
   fieldTakeoff: FieldTakeoff
   orders: DrywallOrder[]
   /** Rates before ordering (IA §13). Existing orders still show; nothing new can be attached. */
-  ratesApproved: boolean
+  /**
+   * Orders can be made: rates approved, or the job already past Field (fieldReview.isOrderStepOpen).
+   */
+  ordersOpen: boolean
   readOnly: boolean
   /**
    * The page's current updated_at. Sheets remount when it changes, so after any write — the
@@ -50,7 +53,7 @@ export function FieldOrdersStep({
   project,
   fieldTakeoff,
   orders,
-  ratesApproved,
+  ordersOpen,
   readOnly,
   loadedAt,
   onChanged,
@@ -84,7 +87,7 @@ export function FieldOrdersStep({
   const unlinked = orders.filter(
     (o) => o.status !== 'cancelled' && (!o.scheduleItemId || !items.some((i) => i.id === o.scheduleItemId)),
   )
-  const locked = !ratesApproved
+  const locked = !ordersOpen
 
   // The whole takeoff by area — not any one order. For whoever is making the delivery, with no
   // supplier needed.

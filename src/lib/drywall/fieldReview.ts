@@ -46,3 +46,17 @@ export function currentFieldStep(
   if (!isLaborRatesApproved(takeoff)) return 'approve_rates'
   return 'order'
 }
+
+/** Job stages past Field: the job already went to Order, so ordering is not ahead of anything. */
+const PAST_FIELD_STATUSES = new Set(['order', 'production', 'production-complete', 'closed'])
+
+/**
+ * Whether Field step 4 (material orders) is open. "Rates before ordering" (Mark, 2026-10-14)
+ * governs a job still being set up. A job already past Field is open regardless: jobs that went
+ * to Order before the four-step flow existed never recorded approved rates, and locking them out
+ * stopped the owner adding an order to Lisbon Opportunity Homes in production (2026-10-16) —
+ * while the Schedule page's order sheet, ungated, would take the same order.
+ */
+export function isOrderStepOpen(projectStatus: string | null | undefined, ratesApproved: boolean): boolean {
+  return ratesApproved || (projectStatus != null && PAST_FIELD_STATUSES.has(projectStatus))
+}

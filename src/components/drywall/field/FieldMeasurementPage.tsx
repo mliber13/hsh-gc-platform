@@ -56,6 +56,7 @@ import { FieldOrdersStep } from './FieldOrdersStep'
 import {
   currentFieldStep,
   isLaborRatesApproved,
+  isOrderStepOpen,
   isMeasurementApproved,
   type FieldStep,
 } from '@/lib/drywall/fieldReview'
@@ -167,7 +168,12 @@ export function FieldMeasurementPage() {
 
   const measurementApproved = isMeasurementApproved(takeoff)
   const ratesApproved = isLaborRatesApproved(takeoff)
+  // Open once rates are approved, or once the job is past Field (fieldReview.isOrderStepOpen).
+  const ordersOpen = isOrderStepOpen(projectStatus, ratesApproved)
   const step = currentFieldStep(takeoff, measuredSqft)
+  // A job already past Field opens on its orders, not on an approval it never needed. The
+  // steps above keep their real state — nothing claims an approval that did not happen.
+  const firstOpenStep: FieldStep = ordersOpen && !ratesApproved ? 'order' : step
 
   // Rates before ordering (IA §13): moving to Order now also needs approved rates.
   const canContinue =
@@ -179,8 +185,8 @@ export function FieldMeasurementPage() {
     projectStatus === 'project-info' || projectStatus === 'quote' || projectStatus === 'field-measurement'
 
   useEffect(() => {
-    if (!loading && takeoff && openSteps === null) setOpenSteps(new Set([requestedStep ?? step]))
-  }, [loading, takeoff, openSteps, step, requestedStep])
+    if (!loading && takeoff && openSteps === null) setOpenSteps(new Set([requestedStep ?? firstOpenStep]))
+  }, [loading, takeoff, openSteps, firstOpenStep, requestedStep])
 
   const toggleStep = (s: FieldStep) =>
     setOpenSteps((prev) => {
@@ -193,7 +199,7 @@ export function FieldMeasurementPage() {
     const order: FieldStep[] = ['measure', 'approve_measurement', 'approve_rates', 'order']
     const at = order.indexOf(step)
     const i = order.indexOf(s)
-    if (s === 'order') return ratesApproved ? 'current' : 'locked'
+    if (s === 'order') return ordersOpen ? 'current' : 'locked'
     if (i < at) return 'done'
     if (i === at) return 'current'
     return 'locked'
@@ -435,7 +441,7 @@ export function FieldMeasurementPage() {
       ? 'Not approved yet'
       : 'Waiting on measurement approval'
   const activeOrders = orders.filter((o) => o.status !== 'cancelled')
-  const ordersSummary = !ratesApproved
+  const ordersSummary = !ordersOpen
     ? 'Waiting on labor rates'
     : activeOrders.length === 0
       ? 'No order yet'
@@ -595,7 +601,7 @@ export function FieldMeasurementPage() {
           project={{ name: projectInfo.name, address: projectAddress, client: projectInfo.client }}
           fieldTakeoff={takeoff}
           orders={orders}
-          ratesApproved={ratesApproved}
+          ordersOpen={ordersOpen}
           readOnly={ratesReadOnly}
           loadedAt={loadedAt}
           onChanged={(next) => {
