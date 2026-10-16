@@ -21,6 +21,7 @@ import { isBeadRow } from '@/lib/drywall/fieldBeadGrid'
 import { hangOnlyMeasuredSqft } from '@/lib/drywall/hangOnly'
 import { fireTapedMeasuredSqft } from '@/lib/drywall/fireTape'
 import { tallFieldMudTapeExtraSqft } from '@/lib/drywall/tallWallPricing'
+import { currentPhase, inPhase, isPhased, phaseOf } from '@/lib/drywall/fieldPhases'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
 import {
   FIELD_MATERIAL_OPTIONS,
@@ -55,6 +56,8 @@ export function FieldAccessoriesSection({
   onChange,
   disableAutoCalc = false,
 }: Props) {
+  // On a phased job each typed line shows its phase; auto rows are still sized for the whole job.
+  const phased = isPhased(takeoff)
   const cornerBeadQty = useMemo(
     () => totalManualCornerBeadQuantity(takeoff.accessories),
     [takeoff.accessories],
@@ -141,17 +144,23 @@ export function FieldAccessoriesSection({
     onChange((prev) => ({
       ...prev,
       accessories: [
-        {
-          id: generateFieldId(),
-          type: '',
-          subtype: '',
-          quantity: '',
-          unit: 'pcs',
-          autoCalculated: false,
-          length: '',
-          threadType: '',
-          facing: '',
-        },
+        // A typed material line belongs to the phase being measured (fieldPhases.ts) — the
+        // grid parts for Phase 2 are Phase 2's. Auto-calculated rows stay whole-job until the
+        // per-phase order step sizes them per phase.
+        inPhase(
+          {
+            id: generateFieldId(),
+            type: '',
+            subtype: '',
+            quantity: '',
+            unit: 'pcs',
+            autoCalculated: false,
+            length: '',
+            threadType: '',
+            facing: '',
+          } as FieldAccessoryEntry,
+          currentPhase(prev),
+        ),
         ...prev.accessories,
       ],
     }))
@@ -319,6 +328,11 @@ export function FieldAccessoriesSection({
                         Edited
                       </span>
                     )}
+                    {phased ? (
+                      <span className="text-xs rounded border px-1.5 py-0.5 font-medium text-muted-foreground">
+                        {acc.autoCalculated ? 'Whole job' : `Phase ${phaseOf(acc)}`}
+                      </span>
+                    ) : null}
                     <span className="text-xs text-muted-foreground">#{index + 1}</span>
                   </div>
                   <div className="flex gap-1">

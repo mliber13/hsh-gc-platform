@@ -750,6 +750,8 @@ export interface FieldMeasurementArea {
    * 10' up an area is tall — see ceilingHeights.ts. Absent on areas measured before it existed.
    */
   heightFt?: number
+  /** The phase this area was measured in (fieldPhases.ts). Absent = Phase 1, as on every older job. */
+  phase?: number
   notes?: string
   boards: FieldMeasurementBoard[]
 }
@@ -766,6 +768,8 @@ export interface FieldAccessoryEntry {
   threadType?: string
   /** Insulation only: 'Unfaced' | 'Faced'. */
   facing?: string
+  /** The phase this material line belongs to (fieldPhases.ts). Absent = Phase 1. */
+  phase?: number
 }
 
 export interface FieldChecklistItem {
@@ -828,6 +832,8 @@ export interface FieldTakeoff {
   reviewApprovedRates?: Record<string, unknown>
   /** When the labor rates were last approved (step 3 of Field — fieldReview.ts). */
   ratesApprovedAt?: string | null
+  /** The phase being measured now (fieldPhases.currentPhase). Absent = 1: a job nobody phased. */
+  currentPhase?: number
   /** Office edits to an approved measurement that moved its sqft — recordChangeAfterApproval. */
   changesAfterApproval?: FieldTakeoffChangeAfterApproval[]
   rateAdjustmentLog?: LaborRateAdjustmentLogEntry[]

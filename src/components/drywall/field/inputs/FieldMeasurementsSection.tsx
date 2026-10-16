@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import {
+  areasInPhase,
+  currentPhase,
+  earlierPhases,
+  inPhase,
+  isPhased,
+  startNextPhase,
+  unmeasuredQuoteAreas,
+} from '@/lib/drywall/fieldPhases'
 import { HEIGHT_BAND_LABEL, heightBand, parseHeightFt } from '@/lib/drywall/ceilingHeights'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -42,6 +51,11 @@ interface FieldMeasurementsSectionProps {
    * measurement laid out the way the job was quoted. Omitted where the quote is not at hand.
    */
   quoteAreas?: { name: string; heightFt?: number }[]
+  /**
+   * The office may start a new phase and edit earlier ones (fieldPhases.ts). The crew measure
+   * page leaves this off: earlier phases show folded and read-only there.
+   */
+  allowNewPhase?: boolean
 }
 
 /**
@@ -116,6 +130,7 @@ export function FieldMeasurementsSection({
   readOnly,
   onChange,
   quoteAreas = [],
+  allowNewPhase = false,
 }: FieldMeasurementsSectionProps) {
   const total = computeMeasuredSqft(takeoff.measurements)
   const hangOnlyTotal = hangOnlyMeasuredSqft(takeoff.measurements)
@@ -146,13 +161,40 @@ export function FieldMeasurementsSection({
     })
   }, [takeoff.measurements])
 
+  // Phases (fieldPhases.ts): the current phase is the open sheet; earlier ones fold, kept whole.
+  const phaseNow = currentPhase(takeoff)
+  const phased = isPhased(takeoff)
+  const earlier = earlierPhases(takeoff)
+  const currentAreas = areasInPhase(takeoff.measurements, phaseNow)
+  const offeredQuoteAreas = unmeasuredQuoteAreas(quoteAreas, takeoff.measurements)
+  const [openPhases, setOpenPhases] = useState<Set<number>>(() => new Set())
+  const [editingPhases, setEditingPhases] = useState<Set<number>>(() => new Set())
+  const toggleIn = (set: Set<number>, n: number) => {
+    const next = new Set(set)
+    if (next.has(n)) next.delete(n)
+    else next.add(n)
+    return next
+  }
+  const togglePhase = (n: number) => setOpenPhases((prev) => toggleIn(prev, n))
+  const toggleEditing = (n: number) => setEditingPhases((prev) => toggleIn(prev, n))
+
+  const beginNextPhase = () => {
+    if (
+      !window.confirm(
+        `Start Phase ${phaseNow + 1}? Phase ${phaseNow}'s areas fold away above — kept, and still counted in the job's totals.`,
+      )
+    )
+      return
+    onChange((prev) => startNextPhase(prev))
+  }
+
   const addArea = () => {
     const id = generateFieldId()
     onChange((prev) => ({
       ...prev,
       measurements: [
         ...prev.measurements,
-        { id, area: '', notes: '', boards: [] },
+        inPhase({ id, area: '', notes: '', boards: [] } as FieldMeasurementArea, currentPhase(prev)),
       ],
     }))
     setGroupsByArea((prev) => ({ ...prev, [id]: [] }))
@@ -160,13 +202,18 @@ export function FieldMeasurementsSection({
 
   /** One area per quote area, named and at its height, ready for boards. */
   const startFromQuote = () => {
-    const created = quoteAreas.map((qa) => ({
-      id: generateFieldId(),
-      area: qa.name,
-      ...(qa.heightFt ? { heightFt: qa.heightFt } : {}),
-      notes: '',
-      boards: [],
-    }))
+    const created = offeredQuoteAreas.map((qa) =>
+      inPhase(
+        {
+          id: generateFieldId(),
+          area: qa.name,
+          ...(qa.heightFt ? { heightFt: qa.heightFt } : {}),
+          notes: '',
+          boards: [],
+        } as FieldMeasurementArea,
+        phaseNow,
+      ),
+    )
     onChange((prev) => ({ ...prev, measurements: [...prev.measurements, ...created] }))
     setGroupsByArea((prev) => ({ ...prev, ...Object.fromEntries(created.map((a) => [a.id, []])) }))
   }
@@ -358,6 +405,289 @@ export function FieldMeasurementsSection({
     }))
   }
 
+  /** One area's card. `readOnly` shadows the prop: an earlier phase shows the same card locked. */
+  const renderArea = (area: FieldMeasurementArea, readOnly: boolean) => {
+    const areaSqft = computeMeasuredSqft([area])
+    const areaHangOnly = hangOnlyMeasuredSqft([area])
+    const areaFireTape = fireTapedMeasuredSqft([area])
+    const groups = groupsByArea[area.id] ?? deriveGroupsFromBoards(area.boards)
+    // Flipping a spec onto a twin that already exists would merge two rows' counts
+    // silently, so that finish is not offered instead.
+    const finishTakenByTwin = (group: SpecGroup, finish: BoardFinish) =>
+      groups.some(
+        (g) =>
+          g.id !== group.id &&
+          g.boardType === group.boardType &&
+          g.thickness === group.thickness &&
+          g.width === group.width &&
+          g.finish === finish,
+      )
+    return (
+      <div key={area.id} className="rounded-lg border bg-muted/20 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm text-muted-foreground">
+            {areaSqft.toLocaleString()} sqft in this area
+            {areaFireTape > 0
+              ? ` · ${Math.round(areaFireTape).toLocaleString()} fire-taped`
+              : ''}
+            {areaHangOnly - areaFireTape > 0
+              ? ` · ${Math.round(areaHangOnly - areaFireTape).toLocaleString()} hang only`
+              : ''}
+          </span>
+          {!readOnly && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => removeArea(area.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-[1fr_9rem]">
+          <div className="space-y-2">
+            <Label>Area name</Label>
+            <Input
+              value={area.area ?? ''}
+              disabled={readOnly}
+              placeholder="e.g. 2nd floor — east wing"
+              onChange={(e) => updateArea(area.id, { area: e.target.value })}
+            />
+          </div>
+          {/* Walls and ceiling together; 10' and up is tall (ceilingHeights.ts). */}
+          <div className="space-y-2">
+            <Label htmlFor={`area-height-${area.id}`}>Ceiling height</Label>
+            <div className="relative">
+              <Input
+                id={`area-height-${area.id}`}
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.5}
+                className="pr-8"
+                value={area.heightFt ?? ''}
+                disabled={readOnly}
+                placeholder="9"
+                onChange={(e) => updateArea(area.id, { heightFt: parseHeightFt(e.target.value) })}
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                ft
+              </span>
+            </div>
+            {heightBand(area.heightFt) ? (
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                Tall: {HEIGHT_BAND_LABEL[heightBand(area.heightFt)!]}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Board specs</Label>
+            {!readOnly && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addSpecGroup(area.id)}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add board spec
+              </Button>
+            )}
+          </div>
+
+          {groups.length === 0 ? (
+            <p className="text-xs text-muted-foreground border border-dashed rounded-md p-3 text-center">
+              No board specs yet.
+            </p>
+          ) : (
+            groups.map((group) => {
+              const lengths =
+                group.boardType && group.width
+                  ? getAvailableLengths(
+                      group.boardType,
+                      group.width,
+                      group.thickness,
+                    )
+                  : []
+              return (
+                <div
+                  key={group.id}
+                  className="rounded-md border bg-background p-3 space-y-3"
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="grid flex-1 grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Board type</Label>
+                        <Select
+                          value={group.boardType || undefined}
+                          disabled={readOnly}
+                          onValueChange={(v) =>
+                            updateGroupSpec(area.id, group.id, 'boardType', v)
+                          }
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {FIELD_BOARD_TYPES.map((t) => (
+                              <SelectItem key={t} value={t}>
+                                {t}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Thickness</Label>
+                        <Select
+                          value={group.thickness || undefined}
+                          disabled={readOnly || !group.boardType}
+                          onValueChange={(v) =>
+                            updateGroupSpec(area.id, group.id, 'thickness', v)
+                          }
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Thickness" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getAvailableThicknesses(group.boardType).map((th) => (
+                              <SelectItem key={th} value={th}>
+                                {formatThicknessLabel(th)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Width</Label>
+                        <Select
+                          value={group.width || undefined}
+                          disabled={readOnly || !group.boardType}
+                          onValueChange={(v) =>
+                            updateGroupSpec(area.id, group.id, 'width', v)
+                          }
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Width" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getAvailableWidths(
+                              group.boardType,
+                              group.thickness,
+                            ).map((w) => (
+                              <SelectItem key={w} value={w}>
+                                {w}&quot;
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    {!readOnly && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 shrink-0 mt-5"
+                        onClick={() => removeSpecGroup(area.id, group)}
+                        aria-label="Remove board spec"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Label className="text-xs">Finish</Label>
+                    <Select
+                      value={group.finish}
+                      disabled={readOnly || !group.boardType}
+                      onValueChange={(v) => setGroupFinish(area.id, group, v as BoardFinish)}
+                    >
+                      <SelectTrigger className="h-8 w-[9.5rem]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FINISH_ORDER.map((f) => (
+                          <SelectItem
+                            key={f}
+                            value={f}
+                            // A twin row already holds this finish for the same board.
+                            disabled={f !== group.finish && finishTakenByTwin(group, f)}
+                          >
+                            {BOARD_FINISH_LABELS[f]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {FINISH_HINTS[group.finish] ? (
+                      <span className="text-muted-foreground">{FINISH_HINTS[group.finish]}</span>
+                    ) : null}
+                  </div>
+
+                  {lengths.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        Quantity by length
+                      </Label>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                        {lengths.map((len) => (
+                          <div
+                            key={len}
+                            className="rounded-md border bg-muted/30 px-2 py-1.5 space-y-1"
+                          >
+                            <div className="text-xs font-medium text-center tabular-nums">
+                              {len}&apos;
+                            </div>
+                            <Input
+                              type="number"
+                              min={0}
+                              inputMode="numeric"
+                              className="h-10 text-center text-base tabular-nums px-1"
+                              disabled={readOnly}
+                              placeholder="—"
+                              value={quantityForLength(area.boards, group, len)}
+                              onChange={(e) =>
+                                setLengthQuantity(
+                                  area.id,
+                                  group,
+                                  len,
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Choose type and width to enter quantities by length.
+                    </p>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Area notes</Label>
+          <Textarea
+            rows={2}
+            value={area.notes ?? ''}
+            disabled={readOnly}
+            onChange={(e) => updateArea(area.id, { notes: e.target.value })}
+          />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -379,22 +709,74 @@ export function FieldMeasurementsSection({
       </CardHeader>
       <CardContent className="space-y-4">
         {!readOnly && (
-          <Button type="button" variant="outline" size="sm" onClick={addArea}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add area
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={addArea}>
+              <Plus className="h-4 w-4 mr-1" />
+              {phased ? `Add area to Phase ${phaseNow}` : 'Add area'}
+            </Button>
+            {allowNewPhase && currentAreas.length > 0 ? (
+              <Button type="button" variant="outline" size="sm" onClick={beginNextPhase}>
+                Start Phase {phaseNow + 1}
+              </Button>
+            ) : null}
+          </div>
         )}
 
-        {takeoff.measurements.length === 0 ? (
+        {earlier.map((ph) => {
+          const open = openPhases.has(ph.phase)
+          const editing = editingPhases.has(ph.phase)
+          return (
+            <div key={ph.phase} className="rounded-lg border">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm"
+                onClick={() => togglePhase(ph.phase)}
+                aria-expanded={open}
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  Phase {ph.phase}
+                </span>
+                <span className="text-muted-foreground tabular-nums">
+                  {ph.areas.length} area{ph.areas.length === 1 ? '' : 's'} ·{' '}
+                  {Math.round(ph.sqft).toLocaleString()} sqft
+                </span>
+              </button>
+              {open ? (
+                <div className="space-y-3 border-t p-3">
+                  {!readOnly && allowNewPhase ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        {editing ? 'Editing an earlier phase.' : 'Kept as measured — read-only.'}
+                      </p>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => toggleEditing(ph.phase)}>
+                        {editing ? 'Done' : 'Edit'}
+                      </Button>
+                    </div>
+                  ) : null}
+                  {ph.areas.map((area) => renderArea(area, readOnly || !editing))}
+                </div>
+              ) : null}
+            </div>
+          )
+        })}
+
+        {phased ? (
+          <p className="text-sm font-semibold">Phase {phaseNow} — measuring now</p>
+        ) : null}
+
+        {currentAreas.length === 0 ? (
           <div className="space-y-3 rounded-lg border border-dashed p-6 text-center">
-            <p className="text-sm text-muted-foreground">No measurements yet.</p>
-            {!readOnly && quoteAreas.length > 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {phased ? `Nothing measured in Phase ${phaseNow} yet.` : 'No measurements yet.'}
+            </p>
+            {!readOnly && offeredQuoteAreas.length > 0 ? (
               <div className="space-y-1">
                 <Button type="button" size="sm" onClick={startFromQuote}>
-                  Start from the quote's areas
+                  {phased ? `Add the quote's other areas to Phase ${phaseNow}` : "Start from the quote's areas"}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  {quoteAreas
+                  {offeredQuoteAreas
                     .map((qa) => (qa.heightFt ? `${qa.name} ${qa.heightFt}'` : qa.name))
                     .join(' · ')}
                 </p>
@@ -402,287 +784,7 @@ export function FieldMeasurementsSection({
             ) : null}
           </div>
         ) : (
-          takeoff.measurements.map((area) => {
-            const areaSqft = computeMeasuredSqft([area])
-            const areaHangOnly = hangOnlyMeasuredSqft([area])
-            const areaFireTape = fireTapedMeasuredSqft([area])
-            const groups = groupsByArea[area.id] ?? deriveGroupsFromBoards(area.boards)
-            // Flipping a spec onto a twin that already exists would merge two rows' counts
-            // silently, so that finish is not offered instead.
-            const finishTakenByTwin = (group: SpecGroup, finish: BoardFinish) =>
-              groups.some(
-                (g) =>
-                  g.id !== group.id &&
-                  g.boardType === group.boardType &&
-                  g.thickness === group.thickness &&
-                  g.width === group.width &&
-                  g.finish === finish,
-              )
-            return (
-              <div key={area.id} className="rounded-lg border bg-muted/20 p-4 space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-muted-foreground">
-                    {areaSqft.toLocaleString()} sqft in this area
-                    {areaFireTape > 0
-                      ? ` · ${Math.round(areaFireTape).toLocaleString()} fire-taped`
-                      : ''}
-                    {areaHangOnly - areaFireTape > 0
-                      ? ` · ${Math.round(areaHangOnly - areaFireTape).toLocaleString()} hang only`
-                      : ''}
-                  </span>
-                  {!readOnly && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeArea(area.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-                <div className="grid gap-3 sm:grid-cols-[1fr_9rem]">
-                  <div className="space-y-2">
-                    <Label>Area name</Label>
-                    <Input
-                      value={area.area ?? ''}
-                      disabled={readOnly}
-                      placeholder="e.g. 2nd floor — east wing"
-                      onChange={(e) => updateArea(area.id, { area: e.target.value })}
-                    />
-                  </div>
-                  {/* Walls and ceiling together; 10' and up is tall (ceilingHeights.ts). */}
-                  <div className="space-y-2">
-                    <Label htmlFor={`area-height-${area.id}`}>Ceiling height</Label>
-                    <div className="relative">
-                      <Input
-                        id={`area-height-${area.id}`}
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        step={0.5}
-                        className="pr-8"
-                        value={area.heightFt ?? ''}
-                        disabled={readOnly}
-                        placeholder="9"
-                        onChange={(e) => updateArea(area.id, { heightFt: parseHeightFt(e.target.value) })}
-                      />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                        ft
-                      </span>
-                    </div>
-                    {heightBand(area.heightFt) ? (
-                      <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                        Tall: {HEIGHT_BAND_LABEL[heightBand(area.heightFt)!]}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>Board specs</Label>
-                    {!readOnly && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => addSpecGroup(area.id)}
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        Add board spec
-                      </Button>
-                    )}
-                  </div>
-
-                  {groups.length === 0 ? (
-                    <p className="text-xs text-muted-foreground border border-dashed rounded-md p-3 text-center">
-                      No board specs yet.
-                    </p>
-                  ) : (
-                    groups.map((group) => {
-                      const lengths =
-                        group.boardType && group.width
-                          ? getAvailableLengths(
-                              group.boardType,
-                              group.width,
-                              group.thickness,
-                            )
-                          : []
-                      return (
-                        <div
-                          key={group.id}
-                          className="rounded-md border bg-background p-3 space-y-3"
-                        >
-                          <div className="flex items-start gap-2">
-                            <div className="grid flex-1 grid-cols-1 sm:grid-cols-3 gap-2">
-                              <div className="space-y-1">
-                                <Label className="text-xs">Board type</Label>
-                                <Select
-                                  value={group.boardType || undefined}
-                                  disabled={readOnly}
-                                  onValueChange={(v) =>
-                                    updateGroupSpec(area.id, group.id, 'boardType', v)
-                                  }
-                                >
-                                  <SelectTrigger className="h-9">
-                                    <SelectValue placeholder="Type" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {FIELD_BOARD_TYPES.map((t) => (
-                                      <SelectItem key={t} value={t}>
-                                        {t}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs">Thickness</Label>
-                                <Select
-                                  value={group.thickness || undefined}
-                                  disabled={readOnly || !group.boardType}
-                                  onValueChange={(v) =>
-                                    updateGroupSpec(area.id, group.id, 'thickness', v)
-                                  }
-                                >
-                                  <SelectTrigger className="h-9">
-                                    <SelectValue placeholder="Thickness" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {getAvailableThicknesses(group.boardType).map((th) => (
-                                      <SelectItem key={th} value={th}>
-                                        {formatThicknessLabel(th)}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs">Width</Label>
-                                <Select
-                                  value={group.width || undefined}
-                                  disabled={readOnly || !group.boardType}
-                                  onValueChange={(v) =>
-                                    updateGroupSpec(area.id, group.id, 'width', v)
-                                  }
-                                >
-                                  <SelectTrigger className="h-9">
-                                    <SelectValue placeholder="Width" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {getAvailableWidths(
-                                      group.boardType,
-                                      group.thickness,
-                                    ).map((w) => (
-                                      <SelectItem key={w} value={w}>
-                                        {w}&quot;
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                            {!readOnly && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 shrink-0 mt-5"
-                                onClick={() => removeSpecGroup(area.id, group)}
-                                aria-label="Remove board spec"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <Label className="text-xs">Finish</Label>
-                            <Select
-                              value={group.finish}
-                              disabled={readOnly || !group.boardType}
-                              onValueChange={(v) => setGroupFinish(area.id, group, v as BoardFinish)}
-                            >
-                              <SelectTrigger className="h-8 w-[9.5rem]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {FINISH_ORDER.map((f) => (
-                                  <SelectItem
-                                    key={f}
-                                    value={f}
-                                    // A twin row already holds this finish for the same board.
-                                    disabled={f !== group.finish && finishTakenByTwin(group, f)}
-                                  >
-                                    {BOARD_FINISH_LABELS[f]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            {FINISH_HINTS[group.finish] ? (
-                              <span className="text-muted-foreground">{FINISH_HINTS[group.finish]}</span>
-                            ) : null}
-                          </div>
-
-                          {lengths.length > 0 ? (
-                            <div className="space-y-1.5">
-                              <Label className="text-xs text-muted-foreground">
-                                Quantity by length
-                              </Label>
-                              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                                {lengths.map((len) => (
-                                  <div
-                                    key={len}
-                                    className="rounded-md border bg-muted/30 px-2 py-1.5 space-y-1"
-                                  >
-                                    <div className="text-xs font-medium text-center tabular-nums">
-                                      {len}&apos;
-                                    </div>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      inputMode="numeric"
-                                      className="h-10 text-center text-base tabular-nums px-1"
-                                      disabled={readOnly}
-                                      placeholder="—"
-                                      value={quantityForLength(area.boards, group, len)}
-                                      onChange={(e) =>
-                                        setLengthQuantity(
-                                          area.id,
-                                          group,
-                                          len,
-                                          e.target.value,
-                                        )
-                                      }
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              Choose type and width to enter quantities by length.
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Area notes</Label>
-                  <Textarea
-                    rows={2}
-                    value={area.notes ?? ''}
-                    disabled={readOnly}
-                    onChange={(e) => updateArea(area.id, { notes: e.target.value })}
-                  />
-                </div>
-              </div>
-            )
-          })
+          currentAreas.map((area) => renderArea(area, readOnly))
         )}
       </CardContent>
     </Card>

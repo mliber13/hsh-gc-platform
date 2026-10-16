@@ -117,6 +117,7 @@ export function mergeFieldTakeoff(
           area: item.area ?? '',
           // Field by field, like the boards below: a key left off this list is lost on load.
           ...(typeof item.heightFt === 'number' && item.heightFt > 0 ? { heightFt: item.heightFt } : {}),
+          ...(typeof item.phase === 'number' && item.phase > 1 ? { phase: item.phase } : {}),
           notes: item.notes ?? '',
           boards: Array.isArray(item.boards)
             ? item.boards.map((board) => ({
@@ -152,6 +153,8 @@ export function mergeFieldTakeoff(
           length: acc.length ?? '',
           threadType: acc.threadType ?? '',
           facing: acc.facing ?? '',
+          // Same allowlist trap as the boards: a key left off here is lost on load.
+          ...(typeof acc.phase === 'number' && acc.phase > 1 ? { phase: acc.phase } : {}),
         }))
       : [],
     checklist:

@@ -1,6 +1,6 @@
 # Measuring, ordering and paying a job in phases
 
-_Designed with Mark, 2026-10-16. Status: **plan — nothing built.** Each step below ships on its
+_Designed with Mark, 2026-10-16. Status: **step 1 built** (2026-10-16); steps 2–7 planned. Each step below ships on its
 own and is checked on a real job (Lisbon Opportunity Homes) before the next starts._
 
 ## Why
@@ -41,7 +41,7 @@ and for setting labor rates.
 
 Each step: existing jobs unchanged (proved by a test), additive data only, verified on Lisbon.
 
-1. **Phases on the Field page.** `phase` on areas and material lines (absent = 1). "Start next
+1. **Phases on the Field page.** _Built 2026-10-16._ `phase` on areas and material lines (absent = 1). "Start next
    phase"; earlier phases fold and go read-only. "Start from the quote's areas" offers the quote
    locations not yet measured, into the current phase. No change to orders, pay or approval.
 2. **Orders per phase.** An order belongs to a phase; "Attach order" suggests only that phase's

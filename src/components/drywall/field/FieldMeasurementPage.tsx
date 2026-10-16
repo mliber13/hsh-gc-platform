@@ -512,6 +512,7 @@ export function FieldMeasurementPage() {
           readOnly={readOnly}
           onChange={setTakeoffField}
           quoteAreas={quoteAreas}
+          allowNewPhase
         />
         <FieldBeadSection takeoff={takeoff} readOnly={readOnly} onChange={setTakeoffField} />
         <FieldAccessoriesSection
