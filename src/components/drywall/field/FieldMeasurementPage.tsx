@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import type { DrywallProjectShellContext } from '@/components/drywall/DrywallProjectShell'
 import { BelowFloorMarginDialog } from '@/components/drywall/margin/BelowFloorMarginDialog'
-import { computeMeasuredSqft, fieldTakeoffWithTotals, quotedSqftWithWaste } from '@/lib/drywall/fieldMeasurementUtils'
+import { incompleteBoardCount, computeMeasuredSqft, fieldTakeoffWithTotals, quotedSqftWithWaste } from '@/lib/drywall/fieldMeasurementUtils'
 import {
   computePoEstimatedCost,
   evaluateMarginVsFloor,
@@ -211,12 +211,11 @@ export function FieldMeasurementPage() {
   const handleSave = async () => {
     if (!takeoff || readOnly) return
 
-    const measurementRows = takeoff.measurements ?? []
-    const hasMeasurementRows = measurementRows.length > 0
-    const measuredFromRows = computeMeasuredSqft(measurementRows)
-    if (hasMeasurementRows && measuredFromRows === 0) {
+    // Half-entered boards block the save; an area with no boards is allowed (fieldMeasurementUtils).
+    const incomplete = incompleteBoardCount(takeoff.measurements ?? [])
+    if (incomplete > 0) {
       toast.error(
-        'Measurement rows have zero total sqft. Check board width, length, and quantity before saving.',
+        `${incomplete} board row${incomplete === 1 ? ' has' : 's have'} no sqft yet — check width, length and quantity before saving.`,
       )
       return
     }

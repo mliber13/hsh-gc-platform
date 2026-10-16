@@ -20,6 +20,26 @@ export function generateFieldId(): string {
   return crypto.randomUUID()
 }
 
+/**
+ * Board rows that were started but come to no sqft — a quantity with no width or length, or a
+ * size with no quantity. These block a save. An area with no boards at all does not: it can be
+ * deliberate (Mark, 2026-10-16, Kirtland - Kosem: "ceiling patches — no drywall needed"), and
+ * the old check, "areas but zero total sqft", refused to save it.
+ */
+export function incompleteBoardCount(measurements: FieldMeasurementArea[]): number {
+  let n = 0
+  for (const area of measurements) {
+    for (const b of area?.boards ?? []) {
+      const width = parseFloat(String(b.width)) || 0
+      const length = parseFloat(String(b.length)) || 0
+      const quantity = parseFloat(String(b.quantity)) || 0
+      const started = Boolean(String(b.quantity ?? '').trim() || String(b.boardType ?? '').trim())
+      if (started && width * length * quantity <= 0) n++
+    }
+  }
+  return n
+}
+
 export function computeMeasuredSqft(measurements: FieldMeasurementArea[]): number {
   return measurements.reduce((total, measurement) => {
     const boards = measurement?.boards ?? []

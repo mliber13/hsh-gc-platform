@@ -82,3 +82,16 @@ describe('order phase', () => {
     expect(orders.map((o) => o.phase)).toEqual([3, undefined])
   })
 })
+
+describe('saving areas with no drywall', async () => {
+  const { incompleteBoardCount } = await import('./fieldMeasurementUtils')
+  it('an area with no boards is fine — Kirtland - Kosem, "ceiling patches, no drywall needed"', () => {
+    expect(incompleteBoardCount([{ id: 'p', area: 'Ceiling patches', notes: 'No drywall needed', boards: [] }])).toBe(0)
+  })
+  it('a board started but missing its size or count still blocks the save', () => {
+    const area = (b: Record<string, string>) => [{ id: 'a', area: 'X', boards: [{ id: 'b', ...b }] }] as FieldMeasurementArea[]
+    expect(incompleteBoardCount(area({ boardType: 'Drywall', width: '48', length: '', quantity: '10' }))).toBe(1)
+    expect(incompleteBoardCount(area({ boardType: 'Drywall', width: '48', length: '12', quantity: '' }))).toBe(1)
+    expect(incompleteBoardCount(area({ boardType: 'Drywall', width: '48', length: '12', quantity: '10' }))).toBe(0)
+  })
+})
