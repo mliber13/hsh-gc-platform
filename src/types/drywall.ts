@@ -869,6 +869,8 @@ export interface DrywallOrderItem {
 export interface DrywallOrder {
   id: string
   orderNumber?: string
+  /** The Field phase this order supplies (fieldPhases.ts). Absent = not tied to a phase. */
+  phase?: number
   /** Links this order sheet to a stock schedule item; the item's date drives the delivery date. */
   scheduleItemId?: string
   /** Suppliers-directory id when picked from the directory; `supplier` caches the name for display. */

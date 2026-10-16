@@ -68,3 +68,17 @@ describe('field phases', () => {
     expect(loaded.accessories[0].phase).toBe(2)
   })
 })
+
+describe('order phase', () => {
+  /** normalizeOrder rebuilds every order on read — a key it does not list is gone on the next save. */
+  it('an order keeps its phase through loading', async () => {
+    const { parseLegacyOrders } = await import('@/services/drywallProjectsService')
+    const orders = parseLegacyOrders({
+      orders: [
+        { id: 'a', status: 'complete', phase: 3, items: [{ id: 'i', description: '5/8" Fire-Resistant (48" x 12\')', quantity: '17' }] },
+        { id: 'b', status: 'draft', items: [] },
+      ],
+    })
+    expect(orders.map((o) => o.phase)).toEqual([3, undefined])
+  })
+})

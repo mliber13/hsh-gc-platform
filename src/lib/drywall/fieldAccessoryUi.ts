@@ -137,6 +137,8 @@ export const FIELD_MATERIAL_OPTIONS: { category: string; items: string[] }[] = [
   },
   { category: 'Hat Channel', items: ['7/8" Hat Channel', '1-1/2" Hat Channel', 'Z-Furring Channel'] },
   { category: 'RC Channel', items: ['RC-1 Channel', 'RC Deluxe'] },
+  // Backing and blocking (Mark, 2026-10-16 — Lisbon's 2x6 backing came from Home Depot).
+  { category: 'Lumber', items: ['2x4', '2x6', '2x8', '2x10', '2x12'] },
 ]
 
 /**
@@ -243,6 +245,7 @@ export function getLengthOptions(type: string, subtype: string): string[] {
   if (type === 'Hat Channel' || type === 'RC Channel') {
     return ["8'", "10'", "12'"]
   }
+  if (type === 'Lumber') return ["8'", "10'", "12'", "14'", "16'"]
   if (type === 'Suspended Drywall Grid' || type === 'Acoustic Ceiling') {
     if (subtype?.includes('Main') || subtype?.includes('Runner')) {
       return ["12'", "14'"]
@@ -283,7 +286,8 @@ export function shouldShowLength(type: string): boolean {
     type === 'Hat Channel' ||
     type === 'RC Channel' ||
     type === 'Suspended Drywall Grid' ||
-    type === 'Acoustic Ceiling'
+    type === 'Acoustic Ceiling' ||
+    type === 'Lumber'
   )
 }
 

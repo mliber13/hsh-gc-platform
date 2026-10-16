@@ -1284,6 +1284,8 @@ function normalizeOrder(raw: unknown): DrywallOrder | null {
   return {
     id,
     orderNumber: asString(r.orderNumber) || undefined,
+    // Rebuilt field by field: a key missing here is lost on the next save (the hangOnly trap).
+    ...(typeof r.phase === 'number' && r.phase >= 1 ? { phase: Math.floor(r.phase) } : {}),
     scheduleItemId: asString(r.scheduleItemId) || undefined,
     supplierId: asString(r.supplierId) || undefined,
     supplier: asString(r.supplier) || undefined,
