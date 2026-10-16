@@ -24,6 +24,31 @@ function formatReviewTimestamp(iso: string | null | undefined): string | null {
   }
 }
 
+/**
+ * Changes to the measurement after it was approved (fieldReview.recordChangeAfterApproval) —
+ * the approval stands, and this says what moved since.
+ */
+function ChangesAfterApproval({ takeoff }: { takeoff: FieldTakeoff }) {
+  const changes = takeoff.changesAfterApproval ?? []
+  if (changes.length === 0) return null
+  return (
+    <div className="space-y-1 border-t border-current/15 pt-2 text-sm">
+      <p className="font-medium">Changed after approval</p>
+      <ul className="space-y-0.5">
+        {changes.map((c, i) => {
+          const delta = c.toSqft - c.fromSqft
+          return (
+            <li key={`${c.at}-${i}`} className="tabular-nums">
+              {c.fromSqft.toLocaleString()} → {c.toSqft.toLocaleString()} sqft ({delta > 0 ? '+' : ''}
+              {delta.toLocaleString()}) · {formatReviewTimestamp(c.at) ?? c.at} · {c.by}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 export interface FieldTakeoffReviewBannerProps {
   takeoff: FieldTakeoff
   /** Nothing to approve until something is measured. */
@@ -69,8 +94,9 @@ export function FieldTakeoffReviewBanner({
     if (measuredSqft <= 0) return null
     if (isMeasurementApproved(takeoff)) {
       return (
-        <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-950 dark:text-emerald-100">
-          Approved with the labor rates, before measurement review was its own step
+        <div className="space-y-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-950 dark:text-emerald-100">
+          <p className="font-medium">Approved with the labor rates, before measurement review was its own step</p>
+          <ChangesAfterApproval takeoff={takeoff} />
         </div>
       )
     }
@@ -130,9 +156,12 @@ export function FieldTakeoffReviewBanner({
         ) : null}
 
         {status === 'approved' ? (
-          <p className="text-sm font-medium">
-            Approved{approvedLabel ? ` · ${approvedLabel}` : ''}
-          </p>
+          <>
+            <p className="text-sm font-medium">
+              Approved{approvedLabel ? ` · ${approvedLabel}` : ''}
+            </p>
+            <ChangesAfterApproval takeoff={takeoff} />
+          </>
         ) : null}
 
         {status === 'rejected' ? (

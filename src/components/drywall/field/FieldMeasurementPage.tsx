@@ -15,6 +15,7 @@ import {
   type MarginFloorEvaluation,
 } from '@/lib/drywall/marginFloor'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useAuth } from '@/contexts/AuthContext'
 import { canReviewDrywallFieldTakeoff, canWriteDrywallField, canWriteDrywallProject } from '@/routes/RequirePermission'
 import { fetchOrgDrywallCatalogs } from '@/services/drywallCatalogsService'
 import {
@@ -57,6 +58,7 @@ import {
   currentFieldStep,
   isLaborRatesApproved,
   isOrderStepOpen,
+  recordChangeAfterApproval,
   isMeasurementApproved,
   type FieldStep,
 } from '@/lib/drywall/fieldReview'
@@ -71,6 +73,7 @@ export function FieldMeasurementPage() {
   const [searchParams] = useSearchParams()
   const requestedStep = searchParams.get('step') === 'order' ? ('order' as const) : null
   const { effectiveRole } = usePermissions()
+  const { profile } = useAuth()
   const readOnly = !canWriteDrywallField(effectiveRole)
   const canReview = canReviewDrywallFieldTakeoff(effectiveRole)
   const ratesReadOnly = !canWriteDrywallProject(effectiveRole)
@@ -223,7 +226,15 @@ export function FieldMeasurementPage() {
       // Publish the new timestamp after each write. A failure in the second must not
       // discard what the first already told us, or the page is wedged on "changed
       // somewhere else" until a reload throws the operator's measurement away.
-      let at = await saveFieldTakeoff(projectId, takeoff, loadedAt)
+      // An approved measurement stays approved, but a change to its sqft is written down.
+      const savedTakeoff = savedSnapshot ? (JSON.parse(savedSnapshot) as FieldTakeoff) : null
+      const toSave = recordChangeAfterApproval(
+        savedTakeoff,
+        takeoff,
+        profile?.full_name?.trim() || profile?.email || 'Office',
+        new Date().toISOString(),
+      )
+      let at = await saveFieldTakeoff(projectId, toSave, loadedAt)
       setLoadedAt(at)
       const addr = projectAddress.trim()
       if (addr !== savedAddress) {
@@ -242,7 +253,7 @@ export function FieldMeasurementPage() {
       // saveFieldTakeoff recomputes totalMeasuredSqft before writing, so page state was
       // left holding whatever the total was at load — stale for the rest of the session
       // once areas were added. Adopt what was actually stored.
-      const stored = fieldTakeoffWithTotals(takeoff)
+      const stored = fieldTakeoffWithTotals(toSave)
       setTakeoff(stored)
       setSavedSnapshot(JSON.stringify(stored))
       toast.success('Field measurement saved')
@@ -430,7 +441,9 @@ export function FieldMeasurementPage() {
       : takeoff.reviewStatus === 'rejected'
         ? 'Sent back to the measurer for changes'
         : measurementApproved
-          ? 'Approved'
+          ? (takeoff.changesAfterApproval?.length ?? 0) > 0
+            ? `Approved · changed since (${takeoff.changesAfterApproval!.length})`
+            : 'Approved'
           : measuredSqft > 0
             ? 'Not reviewed yet'
             : 'Waiting on measurements'

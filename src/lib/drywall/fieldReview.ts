@@ -15,7 +15,8 @@
  * A measurement sent back (rejected / pending) un-approves the rates for ordering purposes; the
  * saved rates themselves stay, so the crew's pay view does not change under them.
  */
-import type { FieldTakeoff } from '@/types/drywall'
+import type { FieldTakeoff, FieldTakeoffChangeAfterApproval } from '@/types/drywall'
+import { computeMeasuredSqft } from './fieldMeasurementUtils'
 
 type ReviewFields = Pick<FieldTakeoff, 'reviewStatus' | 'reviewApprovedRates'>
 
@@ -59,4 +60,25 @@ const PAST_FIELD_STATUSES = new Set(['order', 'production', 'production-complete
  */
 export function isOrderStepOpen(projectStatus: string | null | undefined, ratesApproved: boolean): boolean {
   return ratesApproved || (projectStatus != null && PAST_FIELD_STATUSES.has(projectStatus))
+}
+
+/**
+ * An approval is a stamp, not a snapshot: the office can still change an approved measurement
+ * (a missed area, a second phase), and nothing resets. So each such change is written down —
+ * when, who, and the measured sqft before and after — and shown under the approval (Mark,
+ * 2026-10-16: keep the approval, note the change). Returns `next` with the entry appended when
+ * the measurement was approved as saved and its sqft moved by a whole square foot or more.
+ */
+export function recordChangeAfterApproval(
+  saved: FieldTakeoff | null | undefined,
+  next: FieldTakeoff,
+  by: string,
+  at: string,
+): FieldTakeoff {
+  if (!isMeasurementApproved(saved)) return next
+  const fromSqft = Math.round(computeMeasuredSqft(saved?.measurements ?? []))
+  const toSqft = Math.round(computeMeasuredSqft(next.measurements ?? []))
+  if (fromSqft === toSqft) return next
+  const entry: FieldTakeoffChangeAfterApproval = { at, by, fromSqft, toSqft }
+  return { ...next, changesAfterApproval: [...(next.changesAfterApproval ?? []), entry] }
 }

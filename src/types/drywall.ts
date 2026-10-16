@@ -793,6 +793,15 @@ export interface LaborRateAdjustmentLogEntry {
 }
 
 /** Full field takeoff blob stored at metadata.legacy.fieldTakeoff */
+/** One change to a measurement after it was approved (fieldReview.recordChangeAfterApproval). */
+export interface FieldTakeoffChangeAfterApproval {
+  at: string
+  /** Display name, or email for an account that has no name. */
+  by: string
+  fromSqft: number
+  toSqft: number
+}
+
 export interface FieldTakeoff {
   siteContact?: string
   contactPhone?: string
@@ -819,6 +828,8 @@ export interface FieldTakeoff {
   reviewApprovedRates?: Record<string, unknown>
   /** When the labor rates were last approved (step 3 of Field — fieldReview.ts). */
   ratesApprovedAt?: string | null
+  /** Office edits to an approved measurement that moved its sqft — recordChangeAfterApproval. */
+  changesAfterApproval?: FieldTakeoffChangeAfterApproval[]
   rateAdjustmentLog?: LaborRateAdjustmentLogEntry[]
   [key: string]: unknown
 }
