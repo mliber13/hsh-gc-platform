@@ -51,6 +51,10 @@ Each step: existing jobs unchanged (proved by a test), additive data only, verif
    leaves Phase 2 open for the crew measurer. Needs `save_field_takeoff_as_measurer` to lock per
    phase instead of per job (migration; its guard watched failing before it is trusted).
 4. **Labor rates per phase.** Field step 3 per phase, defaulting to the job's rates.
+   _Why here and not only at payroll time_ (Mark asked, 2026-10-16): payroll already defaults a
+   job's piece rates to the rates approved in Field step 3 (`payrollMath.ts`, falling back to the
+   quote), and the crew view's pay estimate reads them too. Set per phase once, both follow;
+   payroll keeps its own override for true one-offs (a helper split, a bad day).
 5. **Schedule ↔ phase and location.** A schedule item can name the phase and locations it
    covers ("Finish – Garage"); the crew view of that item shows those areas' sqft, heights and
    materials. Needs the crew projection to pass what it reads (allowlist + its test).
