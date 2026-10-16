@@ -470,6 +470,34 @@ export function FieldMeasurementPage() {
       : `${activeOrders.length} order${activeOrders.length === 1 ? '' : 's'} · ${activeOrders.map((o) => o.status).join(', ')}`
   const isOpen = (s: FieldStep) => openSteps?.has(s) ?? false
 
+  // Move to Order sits at the foot of step 3 and again in step 4: once rates read as done, step 3
+  // starts collapsed and step 4 is where the eye already is (Mark, 2026-10-16 — Kirtland - Kosem,
+  // a job with nothing to order, had no visible way on).
+  const moveToOrderBar =
+    !readOnly && preOrder ? (
+      <div className="flex flex-wrap items-center gap-3 border-t pt-4">
+        <Button
+          type="button"
+          disabled={!canContinue || saving || checkingMargin || isDirty || Boolean(orderBlocked)}
+          onClick={() => void handleContinueOrder()}
+        >
+          {checkingMargin ? 'Checking margin…' : 'Move to Order'}
+          <ArrowRight className="h-4 w-4 ml-2" />
+        </Button>
+        {orderBlocked ? (
+          <span className="text-xs text-muted-foreground">{orderBlocked}</span>
+        ) : !ratesApproved ? (
+          <span className="text-xs text-muted-foreground">Approve the labor rates first.</span>
+        ) : !checklistComplete || !projectAddress?.trim() ? (
+          <span className="text-xs text-muted-foreground">
+            Finish the checklist and set the job address first.
+          </span>
+        ) : isDirty ? (
+          <span className="text-xs text-muted-foreground">Save your changes first.</span>
+        ) : null}
+      </div>
+    ) : null
+
   return (
     <div className="space-y-4 p-4 md:p-6 max-w-6xl">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -592,29 +620,7 @@ export function FieldMeasurementPage() {
             setSavedSnapshot(JSON.stringify(next))
           }}
         />
-        {!readOnly && preOrder ? (
-          <div className="flex flex-wrap items-center gap-3 border-t pt-4">
-            <Button
-              type="button"
-              disabled={!canContinue || saving || checkingMargin || isDirty || Boolean(orderBlocked)}
-              onClick={() => void handleContinueOrder()}
-            >
-              {checkingMargin ? 'Checking margin…' : 'Move to Order'}
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-            {orderBlocked ? (
-              <span className="text-xs text-muted-foreground">{orderBlocked}</span>
-            ) : !ratesApproved ? (
-              <span className="text-xs text-muted-foreground">Approve the labor rates first.</span>
-            ) : !checklistComplete || !projectAddress?.trim() ? (
-              <span className="text-xs text-muted-foreground">
-                Finish the checklist and set the job address first.
-              </span>
-            ) : isDirty ? (
-              <span className="text-xs text-muted-foreground">Save your changes first.</span>
-            ) : null}
-          </div>
-        ) : null}
+        {moveToOrderBar}
       </FieldFlowStep>
 
       <FieldFlowStep
@@ -639,6 +645,7 @@ export function FieldMeasurementPage() {
             void fetchOrders(projectId).then(setOrders).catch(() => undefined)
           }}
         />
+        {moveToOrderBar}
       </FieldFlowStep>
 
       {isDirty && !readOnly && (
