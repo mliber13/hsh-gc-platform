@@ -40,6 +40,7 @@ export function emptyComponentLaborByTrade(): QuoteV3ComponentLaborByTrade {
     metal_stud_labor: 0,
     frp_labor: 0,
     door_install_labor: 0,
+    labor_hours_labor: 0,
   }
 }
 
@@ -61,6 +62,8 @@ function componentLaborTradeKey(
       return 'frp_labor'
     case 'door_install':
       return 'door_install_labor'
+    case 'labor_hours':
+      return 'labor_hours_labor'
     default:
       return null
   }
@@ -121,6 +124,8 @@ export interface QuoteV3ComponentLaborByTrade {
   metal_stud_labor: number
   frp_labor: number
   door_install_labor: number
+  /** Labor by the hour (2026-10-16) — hours × the line's $/hr. */
+  labor_hours_labor: number
 }
 
 /** Direct cost split for one trade (for the trade-grouped totals display). */
@@ -475,7 +480,8 @@ export function computeLineItem(
     // where the offcuts are real work — you cut the sheet, then fit it. Doors are counted,
     // not cut: nine doors is nine installs, and paying 10% waste on that was 0.9 of a door
     // nobody hangs. Mark's call 2026-09-29; the only live case was Lisbon at $292.50.
-    const laborWasteMult = line.type === 'door_install' ? 1 : wasteMult
+    // Hourly labor is hours × rate — there is nothing to waste (2026-10-16).
+    const laborWasteMult = line.type === 'door_install' || line.type === 'labor_hours' ? 1 : wasteMult
     const laborRate = getEffectiveComponentLaborRate(line, catalogs)
     laborTotal = applyLaborBurden(
       qty * laborWasteMult * laborRate,

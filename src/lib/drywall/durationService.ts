@@ -41,6 +41,7 @@ export const DURATION_LINE_KEYS = [
   'paperFloors',
   'finish',
   'cleanout',
+  'labor',
 ] as const
 
 export type DurationLineKey = (typeof DURATION_LINE_KEYS)[number]
@@ -49,6 +50,11 @@ export type DurationOverrides = Partial<Record<DurationLineKey, unknown>>
 
 export interface DrywallDurationInput {
   drywallSqft: number
+  /**
+   * Hours on the quote's hourly labor lines (2026-10-16): a "Labor (by the hour)" step of
+   * hours ÷ 8 days. A quote that is only hourly labor has no prep, hang, finish or cleanout.
+   */
+  laborHours?: number
   beadSticks?: number
   buildType?: string
   complexity?: string
@@ -133,8 +139,12 @@ export function computeDrywallDurationSummary(input: DrywallDurationInput): {
   }
 
   const derived: Array<{ key: DurationLineKey; label: string; days: number }> = []
+  const laborHours = Math.max(0, Number(input.laborHours) || 0)
+  const laborDays = laborHours > 0 ? Math.ceil(laborHours / 8) : 0
+  // Only hourly labor (a patch job): its own days are the whole of it.
+  const laborOnly = drywallSqft <= 0 && laborHours > 0
   const prepStockDays = Math.max(1, p.fixedPrep)
-  derived.push({ key: 'prep', label: 'Prep/Scaffold & Stock', days: prepStockDays })
+  if (!laborOnly) derived.push({ key: 'prep', label: 'Prep/Scaffold & Stock', days: prepStockDays })
 
   let hangDays = 0
   if (drywallSqft > 0) {
@@ -146,7 +156,7 @@ export function computeDrywallDurationSummary(input: DrywallDurationInput): {
     hangDays = roundUp ? Math.ceil(rawDays) : Math.floor(rawDays)
     hangDays = Math.max(1, hangDays)
   }
-  derived.push({ key: 'hang', label: 'Hang', days: hangDays })
+  if (!laborOnly) derived.push({ key: 'hang', label: 'Hang', days: hangDays })
 
   let finishDays = 0
   let textureDaysSmall = p.textureDaysSmall
@@ -181,14 +191,23 @@ export function computeDrywallDurationSummary(input: DrywallDurationInput): {
   if (paperFloorsRequired) {
     derived.push({ key: 'paperFloors', label: 'Paper Floors', days: 1 })
   }
-  derived.push({
-    key: 'finish',
-    label: hasTexture
-      ? 'Finish (Tape, Bed, Skim, Texture, Sand)'
-      : 'Finish (Tape, Bed, Skim, Sand)',
-    days: finishDays,
-  })
-  derived.push({ key: 'cleanout', label: 'Cleanout', days: p.fixedCleanout })
+  if (!laborOnly) {
+    derived.push({
+      key: 'finish',
+      label: hasTexture
+        ? 'Finish (Tape, Bed, Skim, Texture, Sand)'
+        : 'Finish (Tape, Bed, Skim, Sand)',
+      days: finishDays,
+    })
+  }
+  if (laborDays > 0) {
+    derived.push({
+      key: 'labor',
+      label: `Labor by the hour (${laborHours.toLocaleString('en-US', { maximumFractionDigits: 1 })} hrs)`,
+      days: laborDays,
+    })
+  }
+  if (!laborOnly) derived.push({ key: 'cleanout', label: 'Cleanout', days: p.fixedCleanout })
 
   const overrides = input.overrides ?? {}
   const lines: DurationLine[] = derived.map((line) => {

@@ -590,9 +590,13 @@ export function ComponentLaborRateCell({
   const enabled = isComponentLaborRateEnabled(line)
   const catalogDefault = getCatalogDefaultComponentLaborRate(line, catalogs)
   const effective = getEffectiveComponentLaborRate(line, catalogs)
+  // Hourly labor has no catalog rate — the rate typed on the line is the rate, not an override.
   const isOverridden =
-    line.custom_labor_rate != null && !ratesEqual(line.custom_labor_rate, catalogDefault)
-  const catalogUnset = enabled && !isOverridden && catalogDefault === 0
+    line.type !== 'labor_hours' &&
+    line.custom_labor_rate != null &&
+    !ratesEqual(line.custom_labor_rate, catalogDefault)
+  const catalogUnset =
+    enabled && (line.type === 'labor_hours' ? effective === 0 : !isOverridden && catalogDefault === 0)
 
   if (readOnly) {
     if (!enabled) return <span className="text-muted-foreground">—</span>

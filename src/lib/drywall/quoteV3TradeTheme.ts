@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import {
+import { Clock,
   Box,
   DoorOpen,
   Grid3x3,
@@ -75,5 +75,12 @@ export const TRADE_SECTION_THEMES: Record<QuoteLineItemType, TradeSectionTheme> 
     headerClass: 'bg-indigo-500/10 text-indigo-950 dark:text-indigo-100',
     subtotalRowClass: 'bg-indigo-500/8 border-t border-indigo-500/20',
     locationSubtotalClass: 'bg-indigo-500/5 border-t border-indigo-500/15',
+  },
+  labor_hours: {
+    icon: Clock,
+    borderClass: 'border-l-stone-500',
+    headerClass: 'bg-stone-500/10 text-stone-950 dark:text-stone-100',
+    subtotalRowClass: 'bg-stone-500/8 border-t border-stone-500/20',
+    locationSubtotalClass: 'bg-stone-500/5 border-t border-stone-500/15',
   },
 }

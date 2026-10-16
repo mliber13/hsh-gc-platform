@@ -36,6 +36,7 @@ const TYPE_LABEL: Record<QuoteLineItemType, string> = {
   metal_stud: 'Metal stud',
   frp: 'FRP',
   door_install: 'Door',
+  labor_hours: 'Labor (hr)',
 }
 
 /** Which catalog list backs the per-line item picker for a given type (undefined = none). */

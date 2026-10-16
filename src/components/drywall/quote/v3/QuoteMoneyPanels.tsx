@@ -419,6 +419,10 @@ export function QuoteDurationCard({
     ])
     return computeDrywallDurationSummary({
       drywallSqft: totals.totalSqft,
+      // Hourly labor lines add their own step here; the customer PDF leaves them out.
+      laborHours: quote.lineItems
+        .filter((l) => l.type === 'labor_hours')
+        .reduce((sum, l) => sum + (Number(l.quantity) || 0), 0),
       beadSticks: Number(quote.bead_sticks) || 0,
       buildType: String(quote.build_type ?? 'new_build'),
       complexity: String(quote.complexity ?? 'normal'),
@@ -437,10 +441,12 @@ export function QuoteDurationCard({
     quote.complexity,
     quote.paper_floors_required,
     quote.duration_overrides,
+    quote.lineItems,
     totals.totalSqft,
   ])
 
-  if (totals.totalSqft <= 0) return null
+  // Nothing to schedule: no drywall and no hourly labor.
+  if (totals.totalSqft <= 0 && !quote.lineItems.some((l) => l.type === 'labor_hours')) return null
 
   const setDurationOverride = (key: string, raw: string) => {
     const next = { ...(quote.duration_overrides ?? {}) }

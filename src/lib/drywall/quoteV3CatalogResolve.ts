@@ -13,6 +13,7 @@ export const QUOTE_LINE_TYPE_LABELS: Record<QuoteLineItemType, string> = {
   metal_stud: 'Metal Stud',
   frp: 'FRP',
   door_install: 'Door Install',
+  labor_hours: 'Labor (by the hour)',
 }
 
 /** Context-aware catalog column header per line type. */
@@ -30,6 +31,8 @@ export function catalogColumnLabel(type: QuoteLineItemType): string {
     case 'frp':
     case 'door_install':
       return 'Component'
+    case 'labor_hours':
+      return 'Work'
     default:
       return 'Catalog'
   }
@@ -301,6 +304,7 @@ export function componentLaborRateUnitSuffix(line: QuoteLineItem, catalogs: OrgD
   if (unit === 'sqft') return '/sqft'
   if (unit === 'lf') return '/LF'
   if (unit === 'piece') return '/piece'
+  if (unit === 'hr') return '/hr'
   return '/each'
 }
 
@@ -314,6 +318,8 @@ export function componentLaborRateHeaderForType(type: QuoteLineItemType): string
       return 'Labor rate ($/LF)'
     case 'door_install':
       return 'Labor rate ($/door)'
+    case 'labor_hours':
+      return 'Rate ($/hr)'
     case 'suspended_grid':
     case 'acoustic':
     case 'frp':
@@ -356,6 +362,8 @@ export function getLineUnit(line: QuoteLineItem, catalogs: OrgDrywallCatalogs): 
       return 'lf'
     case 'door_install':
       return 'each'
+    case 'labor_hours':
+      return 'hr'
     case 'suspended_grid': {
       const e = catalogs.suspended_grid.find((x) => x.id === line.catalog_id)
       return e?.unit ?? 'each'

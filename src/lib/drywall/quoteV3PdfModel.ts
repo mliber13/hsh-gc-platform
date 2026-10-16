@@ -268,6 +268,22 @@ function allocateLineSellTotals(params: {
 
 /** Customer sell price per routine line — proportional share of routine.total. */
 
+/**
+ * Hourly labor never shows on the customer PDF (Mark, 2026-10-16), but its price is in the
+ * total — so its share is spread across the rows that do show, in proportion, and the rows
+ * still add up to the total. A quote that is only hourly labor shows no rows, just its total.
+ */
+export function foldHourlyLaborIntoRows(rows: QuoteV3PdfLineRow[]): QuoteV3PdfLineRow[] {
+  const hidden = rows.filter((r) => r.trade === 'labor_hours')
+  if (hidden.length === 0) return rows
+  const shown = rows.filter((r) => r.trade !== 'labor_hours')
+  const hiddenSell = hidden.reduce((sum, r) => sum + r.sellTotal, 0)
+  const shownSell = shown.reduce((sum, r) => sum + r.sellTotal, 0)
+  if (shownSell <= 0) return shown
+  const scale = 1 + hiddenSell / shownSell
+  return shown.map((r) => ({ ...r, sellTotal: r.sellTotal * scale }))
+}
+
 export function buildQuoteV3PdfLineRows(
 
   quote: DrywallQuoteV3,
@@ -292,7 +308,7 @@ export function buildQuoteV3PdfLineRows(
 
 
 
-  return allocateLineSellTotals({
+  return foldHourlyLaborIntoRows(allocateLineSellTotals({
 
     lineItems: quote.lineItems,
 
@@ -312,7 +328,7 @@ export function buildQuoteV3PdfLineRows(
 
     taxShownSeparately,
 
-  })
+  }))
 
 }
 

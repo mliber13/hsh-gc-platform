@@ -98,6 +98,7 @@ const TRADE_ORDER: { type: QuoteLineItemType; label: string }[] = [
   { type: 'acoustic', label: 'Acoustic Ceiling' },
   { type: 'frp', label: 'FRP' },
   { type: 'door_install', label: 'Door Install' },
+  { type: 'labor_hours', label: 'Labor (by the hour)' },
 ]
 
 export function quoteCostBreakdown(quote: DrywallQuoteV3, totals: QuoteV3TotalsSummary): QuoteCostBreakdown {

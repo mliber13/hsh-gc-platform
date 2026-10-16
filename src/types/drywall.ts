@@ -509,6 +509,12 @@ export type QuoteLineItemType =
   | 'metal_stud'
   | 'frp'
   | 'door_install'
+  /**
+   * Labor by the hour (Mark, 2026-10-16) — patch and service work priced as hours × a rate set
+   * on the line (quantity = hours, custom_labor_rate = $/hr). No sqft, no material; the
+   * customer PDF shows no line for it, only its share of the total.
+   */
+  | 'labor_hours'
 
 export interface QuoteLineItem {
   id: string

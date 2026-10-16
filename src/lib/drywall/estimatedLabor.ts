@@ -33,6 +33,7 @@ const COMPONENT_LABELS: Record<string, string> = {
   metal_stud_labor: 'Metal Stud',
   frp_labor: 'FRP',
   door_install_labor: 'Door Install',
+  labor_hours_labor: 'Labor (by the hour)',
 }
 
 const COMPONENT_KEYS = Object.keys(COMPONENT_LABELS) as Array<keyof QuoteV3ComponentLaborByTrade>

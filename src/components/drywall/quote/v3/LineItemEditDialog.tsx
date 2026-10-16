@@ -519,7 +519,8 @@ export function LineItemEditDialog({
             </>
           )}
 
-          {ITEMIZABLE_LINE_TYPES.has(draft.type) ? (
+          {/* Hourly labor has no material: hours × the rate set in the line's Rate column. */}
+          {draft.type === 'labor_hours' ? null : ITEMIZABLE_LINE_TYPES.has(draft.type) ? (
             <ComponentPricingModeField line={draft} catalogs={catalogs} readOnly={readOnly} onPatch={patch} />
           ) : (
           <div className="space-y-1.5">

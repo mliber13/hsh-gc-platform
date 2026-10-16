@@ -61,6 +61,7 @@ const LINE_TYPES: QuoteLineItemType[] = [
   'metal_stud',
   'frp',
   'door_install',
+  'labor_hours',
 ]
 
 type Props = {
@@ -272,8 +273,9 @@ function TypeSectionTable({
   const { isDrywall, catalogLabel, orderedLines, type } = section
   // Suspended grid is itemized from the catalog, so it has no single component pick and no blended
   // Mat-rate column — both are hidden, freeing room for its Setup (perimeter/waste) and qty.
-  const hideMatRate = type === 'suspended_grid'
-  const hideComponent = type === 'suspended_grid'
+  // Hourly labor has no catalog pick and no material either — hours × the line's $/hr.
+  const hideMatRate = type === 'suspended_grid' || type === 'labor_hours'
+  const hideComponent = type === 'suspended_grid' || type === 'labor_hours'
   // Drywall = 14 cols (incl. its own Hang rate + Finish rate); components drop Description
   // and those two (11); grid also drops Component + Mat rate (9).
   const colSpan = isDrywall ? 15 : 11 - (hideMatRate ? 1 : 0) - (hideComponent ? 1 : 0)
@@ -568,7 +570,7 @@ function LineRow({
           )}
         </td>
       )}
-      {line.type !== 'suspended_grid' && (
+      {line.type !== 'suspended_grid' && line.type !== 'labor_hours' && (
         <td className="px-1.5 py-1">
           {readOnly ? (
             <span className="truncate block" title={computed.catalogLabel}>
@@ -596,7 +598,7 @@ function LineRow({
           )}
         </td>
       )}
-      {line.type !== 'suspended_grid' && (
+      {line.type !== 'suspended_grid' && line.type !== 'labor_hours' && (
         <td className="px-1.5 py-1">
           <MaterialRateCell
             line={line}
@@ -862,6 +864,20 @@ function LineRow({
                   <span className="text-[10px] text-muted-foreground">%</span>
                 </label>
               </div>
+            )
+          ) : line.type === 'labor_hours' ? (
+            // Hourly labor: no waste — say what the work is (it never reaches the customer PDF).
+            readOnly ? (
+              <span className="block truncate text-[11px]" title={line.description}>
+                {line.description || '—'}
+              </span>
+            ) : (
+              <Input
+                className={`h-7 text-xs ${compact ? 'text-[11px]' : ''}`}
+                value={line.description}
+                placeholder="What the work is — e.g. ceiling patches"
+                onChange={(e) => patch({ description: e.target.value })}
+              />
             )
           ) : (
             // insulation / metal_stud / frp / door_install — just a waste input.
