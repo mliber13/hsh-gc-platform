@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Calculator, Package, Plus, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Calculator, Grid3x3, Package, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -23,6 +23,8 @@ import { fireTapedMeasuredSqft } from '@/lib/drywall/fireTape'
 import { tallFieldMudTapeExtraSqft } from '@/lib/drywall/tallWallPricing'
 import { currentPhase, inPhase, isPhased, phaseOf } from '@/lib/drywall/fieldPhases'
 import { generateFieldId } from '@/lib/drywall/fieldMeasurementUtils'
+import { gridInputFromQuoteLines } from '@/lib/drywall/gridOrderCalc'
+import { GridCalculatorDialog } from './GridCalculatorDialog'
 import {
   FIELD_MATERIAL_OPTIONS,
   getDefaultUnit,
@@ -35,7 +37,7 @@ import {
   shouldShowLength,
   shouldShowThreadType,
 } from '@/lib/drywall/fieldAccessoryUi'
-import type { DrywallQuoteV2V3, FieldAccessoryEntry, FieldTakeoff } from '@/types/drywall'
+import { isDrywallQuoteV3, type DrywallQuoteV2V3, type FieldAccessoryEntry, type FieldTakeoff } from '@/types/drywall'
 import type { SetFieldTakeoff } from '../fieldTakeoffState'
 
 interface Props {
@@ -166,6 +168,38 @@ export function FieldAccessoriesSection({
     }))
   }
 
+  // Grid parts sized from sqft and perimeter (gridOrderCalc.ts) — the office's calculator; a crew
+  // measurer types what they count.
+  const [gridOpen, setGridOpen] = useState(false)
+  const gridFromQuote = useMemo(
+    () => (quote && isDrywallQuoteV3(quote) ? gridInputFromQuoteLines(quote.lineItems) : null),
+    [quote],
+  )
+  const addGridLines = (lines: { subtype: string; unit: string; quantity: number }[]) => {
+    onChange((prev) => ({
+      ...prev,
+      accessories: [
+        ...lines.map((l) =>
+          inPhase(
+            {
+              id: generateFieldId(),
+              type: 'Suspended Drywall Grid',
+              subtype: l.subtype,
+              quantity: String(l.quantity),
+              unit: l.unit,
+              autoCalculated: false,
+              length: '',
+              threadType: '',
+              facing: '',
+            } as FieldAccessoryEntry,
+            currentPhase(prev),
+          ),
+        ),
+        ...prev.accessories,
+      ],
+    }))
+  }
+
   const handleAccessoryChange = (id: string, field: keyof FieldAccessoryEntry, value: string) => {
     onChange((prev) => ({
       ...prev,
@@ -254,6 +288,13 @@ export function FieldAccessoriesSection({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <GridCalculatorDialog
+          open={gridOpen}
+          onOpenChange={setGridOpen}
+          fromQuote={gridFromQuote}
+          phaseLabel={phased ? `Phase ${currentPhase(takeoff)}` : null}
+          onAdd={addGridLines}
+        />
         {/* The prompt that replaces the old constant rewriting: it says when recalculating
             would change something, so stale counts cannot quietly reach a material order. */}
         {!readOnly && !disableAutoCalc && staleVsMeasurements && hasAutoRows && (
@@ -287,6 +328,12 @@ export function FieldAccessoriesSection({
                 >
                   <Calculator className="mr-1 h-3 w-3" />
                   Recalculate
+                </Button>
+              )}
+              {!disableAutoCalc && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setGridOpen(true)}>
+                  <Grid3x3 className="mr-1 h-3 w-3" />
+                  Grid calculator
                 </Button>
               )}
               <Button type="button" variant="outline" size="sm" onClick={handleAddAccessory}>

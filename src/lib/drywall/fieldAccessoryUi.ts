@@ -107,6 +107,7 @@ export const FIELD_MATERIAL_OPTIONS: { category: string; items: string[] }[] = [
       "Cross Tees 2'",
       'Wall Angle',
       'Hanger Wire',
+      'Lags',
       'Transition Molding',
     ],
   },
@@ -217,7 +218,9 @@ export function getDefaultUnit(type: string, subtype: string): string {
     return 'pcs'
   }
   if (type === 'Suspended Drywall Grid') {
-    if (subtype?.includes('Wire')) return 'roll'
+    // Drywall grid wire is bought in 4' pieces, one per hanger; lags by the box of 100 (Mark,
+    // 2026-10-16). Acoustic ceiling wire above stays by the roll.
+    if (subtype === 'Lags') return 'box'
     return 'pcs'
   }
   if (type === 'FRP (Fiber Reinforced Panels)') {
