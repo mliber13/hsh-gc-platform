@@ -663,6 +663,11 @@ export interface DrywallQuoteV3 {
    * that has none of its own. Absent on quotes before 2026-10-15. See ceilingHeights.ts.
    */
   default_height_ft?: number
+  /**
+   * Tall-wall labor, $/sqft of tall board per height band, where this quote departs from the
+   * defaults (ceilingHeights.ts TALL_WALL_LABOR_DEFAULT: 3¢ / 6¢ / 12¢). Absent = defaults.
+   */
+  tall_wall_labor_rates?: Partial<Record<'10-11' | '12-14' | '15+', number>>
   /** Custom scope override — replaces structured scope on PDF when true */
   use_custom_scope_of_work?: boolean
   custom_scope_of_work?: string

@@ -83,7 +83,9 @@ export interface TradeCostRow {
 export interface QuoteCostBreakdown {
   trades: TradeCostRow[]
   cleanupWages: number
-  /** Every trade's burden plus cleanup's, as one line. */
+  /** Tall-wall labor wages (tallWallPricing.ts); its burden is in laborBurden. 0 without tall board. */
+  tallWallWages: number
+  /** Every trade's burden plus cleanup's and tall-wall's, as one line. */
   laborBurden: number
 }
 
@@ -124,5 +126,8 @@ export function quoteCostBreakdown(quote: DrywallQuoteV3, totals: QuoteV3TotalsS
   }
   const cleanup = splitLaborBurden(routine.cleanupTotal, quote.prep_clean_include_labor_burden)
   laborBurden += cleanup.burden
-  return { trades, cleanupWages: cleanup.wages, laborBurden }
+  // Burdened with finishing in quoteV3Math, so split back out the same way.
+  const tallWall = splitLaborBurden(routine.tallWallLaborSubtotal ?? 0, quote.finisher_include_labor_burden)
+  laborBurden += tallWall.burden
+  return { trades, cleanupWages: cleanup.wages, tallWallWages: tallWall.wages, laborBurden }
 }

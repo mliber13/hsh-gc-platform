@@ -53,14 +53,19 @@ export function calculateFieldAccessories(
   quote: AccessoryCalcQuoteInput = {},
   finishSqft?: number,
   fireTapeSqft = 0,
+  /**
+   * Extra finished sqft-equivalent for tall areas (tallFieldMudTapeExtraSqft): tall board takes
+   * more mud and tape, by the same factors the quote prices. 0 = no tall areas.
+   */
+  tallExtraSqft = 0,
 ): FieldAccessoryEntry[] {
   if (sqft === 0) return []
   const finished = Math.max(0, Math.min(sqft, finishSqft ?? sqft))
   // Fire-taped board (fireTape.ts) is taped like finished board but gets one coat: tape on its
   // full sqft, compound on a third of it (Mark, 2026-10-13). Hang-only board gets neither.
   const fireTaped = Math.max(0, Math.min(sqft - finished, fireTapeSqft))
-  const finishBasis = finished + fireTaped * FIRETAPE_COMPOUND_SHARE
-  const tapeBasis = finished + fireTaped
+  const finishBasis = finished + fireTaped * FIRETAPE_COMPOUND_SHARE + Math.max(0, tallExtraSqft)
+  const tapeBasis = finished + fireTaped + Math.max(0, tallExtraSqft)
 
   const settings = DEFAULT_SETTINGS
   const actualCeilingFinish = resolveCeilingFinish(quote)

@@ -10,6 +10,7 @@ import type {
   OrgDrywallCatalogs,
 } from '@/types/drywallCatalogs'
 import { resolveFinishScope } from './quoteV3CatalogResolve'
+import { mudTapeFactor } from './tallWallPricing'
 
 /** v2 accessoryCalc.ts DEFAULT_SETTINGS — do not change without Q.C.4 parity review. */
 export const ACCESSORY_CALC_CONSTANTS = {
@@ -264,6 +265,8 @@ export function computeLineAccessories(
   finishScope: FinishScopeCatalogEntry | null | undefined,
   accessoryCatalog: AccessoryCatalogEntry[],
   allocatedBeadSticks = 0,
+  /** Tall board takes more mud and tape (ceilingHeights.mudTapeFactor); 1 = as always. */
+  tallMudTapeFactor = 1,
 ): LineAccessoryResult {
   if (line.type !== 'drywall' || !finishScope) return emptyLineResult()
   if (line.accessories_in_material_rate) return emptyLineResult()
@@ -284,20 +287,20 @@ export function computeLineAccessories(
       items,
       byCategory,
       catalog.get('joint_compound_all_purpose'),
-      computeAllPurposeBoxes(sqft, finishId),
+      computeAllPurposeBoxes(sqft * tallMudTapeFactor, finishId),
     )
     if (!isFiretapeScope(finishId)) {
       pushItem(
         items,
         byCategory,
         catalog.get('joint_compound_lite_weight'),
-        computeLiteWeightBoxes(sqft, cornerBeadQty),
+        computeLiteWeightBoxes(sqft * tallMudTapeFactor, cornerBeadQty),
       )
       pushItem(
         items,
         byCategory,
         catalog.get('joint_compound_easy_sand_90'),
-        computeEasySand90Bags(sqft, cornerBeadQty),
+        computeEasySand90Bags(sqft * tallMudTapeFactor, cornerBeadQty),
       )
     }
   }
@@ -307,8 +310,8 @@ export function computeLineAccessories(
   }
 
   if (flags.tape) {
-    pushItem(items, byCategory, catalog.get('tape_paper_500ft'), computePaperTapeRolls(sqft))
-    pushItem(items, byCategory, catalog.get('tape_mesh_300ft'), computeMeshTapeRolls(sqft))
+    pushItem(items, byCategory, catalog.get('tape_paper_500ft'), computePaperTapeRolls(sqft * tallMudTapeFactor))
+    pushItem(items, byCategory, catalog.get('tape_mesh_300ft'), computeMeshTapeRolls(sqft * tallMudTapeFactor))
   }
 
   if (flags.corner_bead) {
@@ -399,6 +402,7 @@ export function computeQuoteAccessoryRollup(
           finishScope,
           accessoryCatalog,
           beadAllocation.get(line.id) ?? 0,
+          mudTapeFactor(line.height_ft ?? quote.default_height_ft),
         )
       } else if (line.type === 'rc_channel') {
         const lf = rcChannelLfFromLine(line)

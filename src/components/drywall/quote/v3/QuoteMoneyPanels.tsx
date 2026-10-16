@@ -23,6 +23,8 @@ import {
 } from '@/lib/drywall/durationService'
 import { formatPctLabel, formatQuoteMoney, type QuoteV3TotalsSummary } from '@/lib/drywall/quoteV3Math'
 import { quoteCostBreakdown, type QuoteMoneySummary } from '@/lib/drywall/quoteMoneySummary'
+import { HEIGHT_BAND_LABEL, quoteTallSqftByBand } from '@/lib/drywall/ceilingHeights'
+import { HEIGHT_BANDS, TALL_WALL_LABOR_DEFAULT, tallWallLaborRates } from '@/lib/drywall/tallWallPricing'
 import type { DrywallQuoteV3 } from '@/types/drywall'
 import { cn } from '@/lib/utils'
 
@@ -265,8 +267,17 @@ function CostBreakdown({ quote, totals }: { quote: DrywallQuoteV3; totals: Quote
         ))}
         {breakdown.cleanupWages > 0 ? (
           <Row
-            label={`Cleanup labor (${routine.cleanupDrywallSqft.toLocaleString('en-US', { maximumFractionDigits: 0 })} sqft × $${routine.prepCleanRate})`}
+            label={`Cleanup labor (${routine.cleanupDrywallSqft.toLocaleString('en-US', { maximumFractionDigits: 0 })} sqft × ${routine.prepCleanRate})`}
             value={breakdown.cleanupWages}
+            muted
+          />
+        ) : null}
+        {breakdown.tallWallWages > 0 ? (
+          <Row
+            label={`Tall-wall labor (${Object.values(quoteTallSqftByBand(quote))
+              .reduce((a, b) => a + (b ?? 0), 0)
+              .toLocaleString('en-US', { maximumFractionDigits: 0 })} sqft 10' and up)`}
+            value={breakdown.tallWallWages}
             muted
           />
         ) : null}
@@ -355,6 +366,25 @@ export function QuotePricingCard({
             <RateField id="project-finisher-rate" label="Finisher" value={Number(quote.project_finisher_rate ?? 0)} readOnly={readOnly} prefix="$" onChange={(project_finisher_rate) => onChange({ project_finisher_rate })} />
             <RateField id="prep-clean-rate" label="Cleanup" value={Number(quote.prep_clean_rate ?? 0)} readOnly={readOnly} prefix="$" usual={USUAL.prep_clean_rate} onChange={(prep_clean_rate) => onChange({ prep_clean_rate })} />
           </Group>
+          {/* Only on a quote with tall board — 10' and up (ceilingHeights.ts, tallWallPricing.ts). */}
+          {Object.values(quoteTallSqftByBand(quote)).some((n) => (n ?? 0) > 0) ? (
+            <Group title="Tall-wall labor ($/sqft)">
+              {HEIGHT_BANDS.map((band) => (
+                <RateField
+                  key={band}
+                  id={`tall-wall-${band}`}
+                  label={HEIGHT_BAND_LABEL[band]}
+                  value={tallWallLaborRates(quote)[band]}
+                  readOnly={readOnly}
+                  prefix="$"
+                  usual={TALL_WALL_LABOR_DEFAULT[band]}
+                  onChange={(v) =>
+                    onChange({ tall_wall_labor_rates: { ...(quote.tall_wall_labor_rates ?? {}), [band]: v } })
+                  }
+                />
+              ))}
+            </Group>
+          ) : null}
           <Group title="Markup & tax">
             <RateField id="oh-pct" label="Overhead" value={Number(quote.overhead_pct ?? 0)} readOnly={readOnly} suffix="%" usual={USUAL.overhead_pct} onChange={(overhead_pct) => onChange({ overhead_pct })} />
             <RateField id="profit-pct" label="Profit" value={Number(quote.profit_pct ?? 0)} readOnly={readOnly} suffix="%" usual={USUAL.profit_pct} onChange={(profit_pct) => onChange({ profit_pct })} />

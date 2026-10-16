@@ -27,6 +27,7 @@ import {
   type LineAccessoryResult,
 } from './quoteV3Accessories'
 import { applyLaborBurden } from './calculations/quantityUtils'
+import { mudTapeFactor, tallWallLaborWages } from './tallWallPricing'
 
 export const DEFAULT_PREP_CLEAN_RATE = DRYWALL_QUOTE_BASE_DEFAULTS.prepCleanRate
 
@@ -152,6 +153,11 @@ export interface QuoteV3MarkupBreakdown {
   accessoriesSubtotal: number
   accessoryByCategory: AccessoryCategoryMap
   cleanupTotal: number
+  /**
+   * Tall-wall labor, burden included (ceilingHeights.tallWallLaborWages, 2026-10-16). Part of
+   * linesSubtotal and of the labor in the markup base. 0 on a quote with no tall board.
+   */
+  tallWallLaborSubtotal?: number
   cleanupDrywallSqft: number
   prepCleanRate: number
   markupBase: number
@@ -205,6 +211,8 @@ export interface QuoteV3LaborBurdenOptions {
   projectFinisherRate?: number
   /** Bead sticks allocated to this line from quote.bead_sticks (quote-level scope field). */
   allocatedBeadSticks?: number
+  /** The quote's height for lines with none of their own — drives tall-board mud and tape. */
+  defaultHeightFt?: number
 }
 
 const RC_DEFAULT_SPACING_IN = 24
@@ -271,6 +279,7 @@ export function computeLineItem(
       finishScope,
       catalogs.accessories ?? [],
       laborBurden?.allocatedBeadSticks ?? 0,
+      mudTapeFactor(line.height_ft ?? laborBurden?.defaultHeightFt),
     )
     accessoriesTotal = accessories.totalCost
   } else if (line.type === 'rc_channel') {
@@ -501,6 +510,7 @@ export function computeMarkupBreakdown(
   directCosts?: QuoteV3LineDirectCosts & {
     accessoryByCategory?: AccessoryCategoryMap
     byTrade?: QuoteV3CostByTrade
+    tallWallLaborSubtotal?: number
   },
 ): QuoteV3MarkupBreakdown {
   const materialSubtotal = directCosts?.materialSubtotal ?? 0
@@ -513,8 +523,9 @@ export function computeMarkupBreakdown(
     ? materialSubtotal + accessoriesSubtotal
     : Math.max(0, linesSubtotal - cleanupTotal)
   const salesTaxAmount = taxableMaterial * (salesTaxPct / 100)
+  const tallWallLabor = directCosts?.tallWallLaborSubtotal ?? 0
   const laborSubtotal = directCosts
-    ? hangerLabor + finisherLabor + componentLabor + cleanupTotal
+    ? hangerLabor + finisherLabor + componentLabor + tallWallLabor + cleanupTotal
     : cleanupTotal
   const directCost = directCosts
     ? taxableMaterial + salesTaxAmount + laborSubtotal
@@ -542,6 +553,7 @@ export function computeMarkupBreakdown(
       other: [],
     },
     cleanupTotal,
+    tallWallLaborSubtotal: tallWallLabor,
     cleanupDrywallSqft,
     prepCleanRate,
     markupBase,
@@ -670,8 +682,10 @@ export function laborBurdenFromQuote(quote: {
   component_include_labor_burden?: boolean
   project_hanger_rate?: number
   project_finisher_rate?: number
+  default_height_ft?: number
 }): QuoteV3LaborBurdenOptions {
   return {
+    defaultHeightFt: quote.default_height_ft,
     hangerIncludeLaborBurden: quote.hanger_include_labor_burden,
     finisherIncludeLaborBurden: quote.finisher_include_labor_burden,
     prepCleanIncludeLaborBurden: quote.prep_clean_include_labor_burden,
@@ -693,12 +707,18 @@ export function computeQuoteV3Totals(
     laborBurden,
     quote.bead_sticks,
   )
+  // Tall board's extra labor (ceilingHeights.ts) — burdened like finishing, the work it slows.
+  const tallWallLaborSubtotal = applyLaborBurden(
+    tallWallLaborWages(quote),
+    laborBurden.finisherIncludeLaborBurden,
+  )
   const linesSubtotal =
     directCosts.materialSubtotal +
     directCosts.hangerLaborSubtotal +
     directCosts.finisherLaborSubtotal +
     directCosts.componentLaborSubtotal +
-    directCosts.accessoriesSubtotal
+    directCosts.accessoriesSubtotal +
+    tallWallLaborSubtotal
   const accessoryRollup = computeQuoteAccessoryRollup(quote, catalogs)
   const cleanupDrywallSqft = sumDrywallSqftWithWaste(quote.lineItems)
   const cleanupTotal = computeCleanupTotal(quote.lineItems, prepCleanRate, laborBurden)
@@ -713,6 +733,7 @@ export function computeQuoteV3Totals(
     {
       ...directCosts,
       accessoryByCategory: accessoryRollup.byCategory,
+      tallWallLaborSubtotal,
     },
   )
 

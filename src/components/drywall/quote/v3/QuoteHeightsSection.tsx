@@ -1,7 +1,7 @@
 // Ceiling heights on a quote (Mark, 2026-10-15). Each drywall line carries its own height — a
 // Togal import fills them from the wall labels — and this strip holds the height for most of
-// the job (any line without one) and sums up how much board is tall. Recording only for now;
-// the tall-wall factors and labor line that read these come next (CEILING_HEIGHTS.md).
+// the job (any line without one) and sums up how much board is tall. Tall lines are priced by
+// tallWallPricing.ts (CEILING_HEIGHTS.md).
 
 import { Ruler } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -74,7 +74,7 @@ export function QuoteHeightsSection({
         )}
       </span>
       <span className="text-xs text-muted-foreground">
-        Each line has its own height (a takeoff import fills it in). Not priced yet.
+        Each line has its own height (a takeoff import fills it in). Lines 10&apos; and up add mud, tape and tall-wall labor — see Pricing.
       </span>
     </div>
   )
