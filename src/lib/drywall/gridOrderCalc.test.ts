@@ -12,11 +12,11 @@ import type { FieldTakeoff } from '@/types/drywall'
 const lisbon = { sqft: 507, perimeter: 288.13, wastePct: 10 }
 
 describe('grid calculator', () => {
-  it('sizes Lisbon’s grid — the quote’s mains and wall angle, tees at the spacing chosen', () => {
+  it('sizes Lisbon’s grid — the quote’s mains, 12-foot wall angle, tees at the spacing chosen', () => {
     expect(gridOrderCounts({ ...lisbon, teeSpacingIn: 24 })).toEqual({
       mains: 12, // 557.7 sqft ÷ (4' apart × 12')
       tees4ft: 70, // ÷ 8 sqft per tee — what the quote prices
-      wallAngle: 40, // 316.9' ÷ 8'
+      wallAngle: 27, // 316.9' ÷ 12' pieces
       hangerWire: 36, // 3 hangers per 12' main
       lagBoxes: 1,
     })
@@ -24,7 +24,7 @@ describe('grid calculator', () => {
   })
 
   it('a missing perimeter is a square room’s, as on the quote', () => {
-    expect(gridOrderCounts({ sqft: 400, wastePct: 0, teeSpacingIn: 24 })?.wallAngle).toBe(10) // 80' ÷ 8'
+    expect(gridOrderCounts({ sqft: 576, wastePct: 0, teeSpacingIn: 24 })?.wallAngle).toBe(8) // 96' ÷ 12'
   })
 
   it('lags go by the box of 100', () => {
